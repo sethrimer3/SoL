@@ -614,11 +614,12 @@ export class GameRenderer {
 
         // Draw controls help
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, this.canvas.height - 80, 350, 70);
+        this.ctx.fillRect(10, this.canvas.height - 100, 450, 90);
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px Arial';
-        this.ctx.fillText('Controls: Click/Tap to interact', 20, this.canvas.height - 55);
-        this.ctx.fillText('Scroll/Pinch to zoom, Drag to pan', 20, this.canvas.height - 35);
+        this.ctx.fillText('Controls: Click/Tap to interact', 20, this.canvas.height - 75);
+        this.ctx.fillText('Pan: WASD/Arrows or mouse edge or click+drag', 20, this.canvas.height - 55);
+        this.ctx.fillText('Zoom: Scroll/Pinch (zooms toward cursor)', 20, this.canvas.height - 35);
         this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
     }
 
