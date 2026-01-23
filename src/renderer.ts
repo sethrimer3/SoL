@@ -121,16 +121,16 @@ export class GameRenderer {
         const screenRadius = sun.radius * this.zoom;
         
         // Check if sun is within or near the viewport
-        const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
-        const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+        const dpr = window.devicePixelRatio || 1;
+        const canvasWidth = this.canvas.width / dpr;
+        const canvasHeight = this.canvas.height / dpr;
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
         
-        // Calculate distance from sun to screen center
-        const distanceFromCenter = Math.sqrt(
-            Math.pow(screenPos.x - centerX, 2) + 
-            Math.pow(screenPos.y - centerY, 2)
-        );
+        // Calculate direction vector from screen center to sun
+        const dx = screenPos.x - centerX;
+        const dy = screenPos.y - centerY;
+        const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
         
         // Only draw lens flare if sun is reasonably visible
         const maxDistance = Math.sqrt(canvasWidth * canvasWidth + canvasHeight * canvasHeight) / 2;
@@ -138,17 +138,15 @@ export class GameRenderer {
             return; // Sun is too far off screen
         }
         
-        // Calculate normalized direction from screen center to sun
-        const dx = screenPos.x - centerX;
-        const dy = screenPos.y - centerY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        // Draw multiple subtle flare rings at different positions along the sun-center axis
+        // Draw multiple subtle flare spots at different positions along the sun-center axis
+        // offset: position multiplier along the axis (-1 = opposite side, 0 = center, 1 = sun)
+        // size: flare radius as a fraction of sun radius
+        // alpha: opacity of the flare center
         const flarePositions = [
-            { offset: -0.3, size: 0.4, alpha: 0.15, color: 'rgba(255, 200, 100, ' },
-            { offset: -0.5, size: 0.25, alpha: 0.12, color: 'rgba(100, 150, 255, ' },
-            { offset: 0.4, size: 0.3, alpha: 0.1, color: 'rgba(255, 150, 150, ' },
-            { offset: 0.7, size: 0.2, alpha: 0.08, color: 'rgba(150, 255, 200, ' }
+            { offset: -0.3, size: 0.4, alpha: 0.15, color: 'rgba(255, 200, 100, ' },  // Warm yellow-orange
+            { offset: -0.5, size: 0.25, alpha: 0.12, color: 'rgba(100, 150, 255, ' }, // Cool blue
+            { offset: 0.4, size: 0.3, alpha: 0.1, color: 'rgba(255, 150, 150, ' },    // Pink
+            { offset: 0.7, size: 0.2, alpha: 0.08, color: 'rgba(150, 255, 200, ' }    // Teal
         ];
         
         for (const flare of flarePositions) {
@@ -162,9 +160,9 @@ export class GameRenderer {
                 flareX, flareY, 0,
                 flareX, flareY, flareRadius
             );
-            flareGradient.addColorStop(0, flare.color + flare.alpha + ')');
-            flareGradient.addColorStop(0.5, flare.color + (flare.alpha * 0.5) + ')');
-            flareGradient.addColorStop(1, flare.color + '0)');
+            flareGradient.addColorStop(0, `${flare.color}${flare.alpha})`);
+            flareGradient.addColorStop(0.5, `${flare.color}${flare.alpha * 0.5})`);
+            flareGradient.addColorStop(1, `${flare.color}0)`);
             
             this.ctx.fillStyle = flareGradient;
             this.ctx.beginPath();
