@@ -10,6 +10,9 @@ export class GameRenderer {
     private ctx: CanvasRenderingContext2D;
     public camera: Vector2D = new Vector2D(0, 0);
     public zoom: number = 1.0;
+    public selectionStart: Vector2D | null = null;
+    public selectionEnd: Vector2D | null = null;
+    public selectedUnits: Set<Unit> = new Set();
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -219,39 +222,8 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw light rays from each sun
+        // Draw asteroid shadows cast by sunlight
         for (const sun of game.suns) {
-            const sunScreenPos = this.worldToScreen(sun.position);
-
-            for (let i = 0; i < Constants.RAYTRACING_NUM_RAYS; i++) {
-                const angle = (Math.PI * 2 * i) / Constants.RAYTRACING_NUM_RAYS;
-                const direction = new Vector2D(Math.cos(angle), Math.sin(angle));
-                const ray = new LightRay(sun.position, direction, sun.intensity);
-
-                // Find the closest intersection with asteroids
-                let closestDistance = Constants.MAX_RAY_DISTANCE;
-                
-                for (const asteroid of game.asteroids) {
-                    const intersectionDistance = ray.getIntersectionDistance(asteroid.getWorldVertices());
-                    if (intersectionDistance !== null && intersectionDistance < closestDistance) {
-                        closestDistance = intersectionDistance;
-                    }
-                }
-
-                // Draw the ray up to the intersection point
-                const endX = sun.position.x + direction.x * closestDistance;
-                const endY = sun.position.y + direction.y * closestDistance;
-                const endScreenPos = this.worldToScreen(new Vector2D(endX, endY));
-
-                // Draw ray with gradient
-                this.ctx.strokeStyle = `rgba(255, 255, 150, ${0.02 * sun.intensity})`;
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
-                this.ctx.lineTo(endScreenPos.x, endScreenPos.y);
-                this.ctx.stroke();
-            }
-
             // Draw shadow regions behind asteroids
             for (const asteroid of game.asteroids) {
                 const worldVertices = asteroid.getWorldVertices();
@@ -386,11 +358,21 @@ export class GameRenderer {
     private drawUnit(unit: Unit, color: string): void {
         const screenPos = this.worldToScreen(unit.position);
         const size = 8 * this.zoom;
+        const isSelected = this.selectedUnits.has(unit);
+
+        // Draw selection indicator for selected units
+        if (isSelected) {
+            this.ctx.strokeStyle = '#00FF00';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size + 4, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
 
         // Draw unit body (circle)
         this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 1;
+        this.ctx.strokeStyle = isSelected ? '#00FF00' : '#FFFFFF';
+        this.ctx.lineWidth = isSelected ? 2 : 1;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
@@ -617,10 +599,34 @@ export class GameRenderer {
         this.ctx.fillRect(10, this.canvas.height - 100, 450, 90);
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px Arial';
-        this.ctx.fillText('Controls: Click/Tap to interact', 20, this.canvas.height - 75);
-        this.ctx.fillText('Pan: WASD/Arrows or mouse edge or click+drag', 20, this.canvas.height - 55);
+        this.ctx.fillText('Controls: Drag to select units', 20, this.canvas.height - 75);
+        this.ctx.fillText('Pan: WASD/Arrows or mouse edge or two-finger drag', 20, this.canvas.height - 55);
         this.ctx.fillText('Zoom: Scroll/Pinch (zooms toward cursor)', 20, this.canvas.height - 35);
         this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
+    }
+
+    /**
+     * Draw selection rectangle
+     */
+    private drawSelectionRectangle(): void {
+        if (!this.selectionStart || !this.selectionEnd) return;
+
+        const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
+        const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
+        const width = Math.abs(this.selectionEnd.x - this.selectionStart.x);
+        const height = Math.abs(this.selectionEnd.y - this.selectionStart.y);
+
+        // Draw selection rectangle
+        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
+        this.ctx.lineWidth = 2;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.strokeRect(x, y, width, height);
+        
+        // Draw filled background
+        this.ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+        this.ctx.fillRect(x, y, width, height);
+        
+        this.ctx.setLineDash([]);
     }
 
     /**
@@ -727,6 +733,9 @@ export class GameRenderer {
 
         // Draw UI
         this.drawUI(game);
+
+        // Draw selection rectangle
+        this.drawSelectionRectangle();
 
         // Check for victory
         const winner = game.checkVictoryConditions();
