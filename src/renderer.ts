@@ -172,7 +172,7 @@ export class GameRenderer {
      */
     private drawSpaceDust(particle: SpaceDustParticle): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = 1.5 * this.zoom;
+        const size = 2 * this.zoom; // Increased from 1.5 to 2
 
         this.ctx.fillStyle = particle.currentColor;
         this.ctx.beginPath();
@@ -295,14 +295,16 @@ export class GameRenderer {
      */
     private drawUI(game: GameState): void {
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, 10, 300, 150);
+        this.ctx.fillRect(10, 10, 300, 200);
 
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '16px Arial';
         this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
         this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
+        this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
+        this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 90);
 
-        let y = 80;
+        let y = 120;
         for (const player of game.players) {
             const color = this.getFactionColor(player.faction);
             this.ctx.fillStyle = color;
@@ -320,11 +322,12 @@ export class GameRenderer {
 
         // Draw controls help
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, this.canvas.height - 60, 300, 50);
+        this.ctx.fillRect(10, this.canvas.height - 80, 350, 70);
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px Arial';
-        this.ctx.fillText('Controls: Touch/Click to interact', 20, this.canvas.height - 35);
-        this.ctx.fillText('Scroll/Pinch to zoom', 20, this.canvas.height - 15);
+        this.ctx.fillText('Controls: Click/Tap to interact', 20, this.canvas.height - 55);
+        this.ctx.fillText('Scroll/Pinch to zoom, Drag to pan', 20, this.canvas.height - 35);
+        this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
     }
 
     /**

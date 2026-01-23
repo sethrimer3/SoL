@@ -52,7 +52,6 @@ class GameController {
 
         // Touch/Mouse pan
         const startPan = (x: number, y: number) => {
-            isPanning = true;
             lastX = x;
             lastY = y;
             
@@ -62,17 +61,16 @@ class GameController {
         };
 
         const movePan = (x: number, y: number) => {
-            if (isPanning) {
-                const dx = x - lastX;
-                const dy = y - lastY;
-                
-                // If moved too much, cancel warp gate
-                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+            const dx = x - lastX;
+            const dy = y - lastY;
+            const totalMovement = Math.sqrt(dx * dx + dy * dy);
+            
+            // If moved significantly, enable panning and cancel hold
+            if (totalMovement > 5) {
+                if (!isPanning) {
+                    isPanning = true;
                     this.cancelHold();
                 }
-                
-                lastX = x;
-                lastY = y;
                 
                 // Update camera position (inverted for natural panning)
                 const currentCamera = this.renderer.camera;
@@ -81,6 +79,9 @@ class GameController {
                     currentCamera.y - dy / this.renderer.zoom
                 ));
             }
+            
+            lastX = x;
+            lastY = y;
         };
 
         const endPan = () => {
