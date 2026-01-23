@@ -2,14 +2,18 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate } from './game-core';
 import { GameRenderer } from './renderer';
+import * as Constants from './constants';
 
 class GameController {
     private game: GameState;
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
+    private holdStartTime: number | null = null;
+    private holdPosition: Vector2D | null = null;
+    private currentWarpGate: WarpGate | null = null;
 
     constructor() {
         // Create canvas
@@ -49,17 +53,25 @@ class GameController {
 
         // Touch/Mouse pan
         const startPan = (x: number, y: number) => {
-            isPanning = true;
             lastX = x;
             lastY = y;
+            
+            // Start warp gate hold timer
+            const worldPos = this.renderer.screenToWorld(x, y);
+            this.startHold(worldPos);
         };
 
         const movePan = (x: number, y: number) => {
-            if (isPanning) {
-                const dx = x - lastX;
-                const dy = y - lastY;
-                lastX = x;
-                lastY = y;
+            const dx = x - lastX;
+            const dy = y - lastY;
+            const totalMovement = Math.sqrt(dx * dx + dy * dy);
+            
+            // If moved significantly, enable panning and cancel hold
+            if (totalMovement > 5) {
+                if (!isPanning) {
+                    isPanning = true;
+                    this.cancelHold();
+                }
                 
                 // Update camera position (inverted for natural panning)
                 const currentCamera = this.renderer.camera;
@@ -68,10 +80,14 @@ class GameController {
                     currentCamera.y - dy / this.renderer.zoom
                 ));
             }
+            
+            lastX = x;
+            lastY = y;
         };
 
         const endPan = () => {
             isPanning = false;
+            this.endHold();
         };
 
         // Mouse events
@@ -111,9 +127,77 @@ class GameController {
         });
     }
 
+    private startHold(worldPos: Vector2D): void {
+        // Check if position is in player's influence
+        const player = this.game.players[0]; // Assume player 1 is the human player
+        if (!player.stellarForge) return;
+
+        const distance = worldPos.distanceTo(player.stellarForge.position);
+        if (distance < Constants.INFLUENCE_RADIUS) { // Within influence radius
+            this.holdStartTime = Date.now();
+            this.holdPosition = worldPos;
+        }
+    }
+
+    private cancelHold(): void {
+        if (this.currentWarpGate) {
+            this.currentWarpGate.cancel();
+            this.scatterParticles(this.currentWarpGate.position);
+            const index = this.game.warpGates.indexOf(this.currentWarpGate);
+            if (index > -1) {
+                this.game.warpGates.splice(index, 1);
+            }
+        }
+        this.holdStartTime = null;
+        this.holdPosition = null;
+        this.currentWarpGate = null;
+    }
+
+    private endHold(): void {
+        this.holdStartTime = null;
+        this.holdPosition = null;
+        // Don't remove currentWarpGate here, it might still be charging
+    }
+
+    private scatterParticles(position: Vector2D): void {
+        // Scatter nearby particles
+        for (const particle of this.game.spaceDust) {
+            const distance = particle.position.distanceTo(position);
+            if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
+                const direction = new Vector2D(
+                    particle.position.x - position.x,
+                    particle.position.y - position.y
+                ).normalize();
+                particle.applyForce(new Vector2D(
+                    direction.x * Constants.PARTICLE_SCATTER_FORCE,
+                    direction.y * Constants.PARTICLE_SCATTER_FORCE
+                ));
+            }
+        }
+    }
+
     private update(deltaTime: number): void {
         if (this.game.isRunning) {
             this.game.update(deltaTime);
+        }
+
+        // Update warp gate hold mechanic
+        if (this.holdStartTime && this.holdPosition) {
+            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
+            
+            if (holdDuration >= Constants.WARP_GATE_INITIAL_DELAY && !this.currentWarpGate) {
+                // Create warp gate after initial delay
+                const player = this.game.players[0];
+                this.currentWarpGate = new WarpGate(this.holdPosition, player);
+                this.currentWarpGate.startCharging();
+                this.game.warpGates.push(this.currentWarpGate);
+            }
+        }
+
+        // Update current warp gate
+        if (this.currentWarpGate) {
+            const isStillHolding = this.holdStartTime !== null && this.holdPosition !== null;
+            this.currentWarpGate.update(deltaTime, isStillHolding);
         }
     }
 

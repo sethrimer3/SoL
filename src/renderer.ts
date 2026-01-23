@@ -2,7 +2,8 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate } from './game-core';
+import * as Constants from './constants';
 
 export class GameRenderer {
     private canvas: HTMLCanvasElement;
@@ -35,6 +36,18 @@ export class GameRenderer {
         return new Vector2D(
             centerX + (worldPos.x - this.camera.x) * this.zoom,
             centerY + (worldPos.y - this.camera.y) * this.zoom
+        );
+    }
+
+    /**
+     * Convert screen coordinates to world coordinates
+     */
+    screenToWorld(screenX: number, screenY: number): Vector2D {
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        return new Vector2D(
+            this.camera.x + (screenX - centerX) / this.zoom,
+            this.camera.y + (screenY - centerY) / this.zoom
         );
     }
 
@@ -156,6 +169,104 @@ export class GameRenderer {
     }
 
     /**
+     * Draw space dust particle
+     */
+    private drawSpaceDust(particle: SpaceDustParticle): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const size = Constants.DUST_PARTICLE_SIZE * this.zoom;
+
+        this.ctx.fillStyle = particle.currentColor;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    /**
+     * Draw influence circle for a base
+     */
+    private drawInfluenceCircle(position: Vector2D, radius: number, color: string): void {
+        const screenPos = this.worldToScreen(position);
+        const screenRadius = radius * this.zoom;
+
+        // Draw outer ring
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a warp gate
+     */
+    private drawWarpGate(gate: WarpGate): void {
+        const screenPos = this.worldToScreen(gate.position);
+        const maxRadius = Constants.WARP_GATE_RADIUS * this.zoom;
+        const chargeProgress = gate.chargeTime / Constants.WARP_GATE_CHARGE_TIME;
+        const currentRadius = Math.min(maxRadius, chargeProgress * maxRadius);
+
+        if (!gate.isComplete) {
+            // Draw charging effect
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 3;
+            this.ctx.globalAlpha = 0.5 + Math.sin(gate.chargeTime * 5) * 0.2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+
+            // Draw charge progress
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 5;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, chargeProgress * Math.PI * 2);
+            this.ctx.stroke();
+        } else {
+            // Draw completed warp gate
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+
+            // Draw 4 build buttons around the gate
+            const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
+            const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
+            const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+            
+            for (let i = 0; i < 4; i++) {
+                const angle = angles[i];
+                const btnX = screenPos.x + Math.cos(angle) * buttonDistance;
+                const btnY = screenPos.y + Math.sin(angle) * buttonDistance;
+
+                this.ctx.fillStyle = '#444444';
+                this.ctx.strokeStyle = '#00FFFF';
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.arc(btnX, btnY, buttonRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.stroke();
+
+                // Draw button icon (placeholder)
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${12 * this.zoom}px Arial`;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(`B${i + 1}`, btnX, btnY);
+            }
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
+        }
+    }
+
+    /**
      * Draw connection lines
      */
     private drawConnections(player: Player, suns: Sun[]): void {
@@ -186,14 +297,16 @@ export class GameRenderer {
      */
     private drawUI(game: GameState): void {
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, 10, 300, 150);
+        this.ctx.fillRect(10, 10, 300, 200);
 
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '16px Arial';
         this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
         this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
+        this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
+        this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 90);
 
-        let y = 80;
+        let y = 120;
         for (const player of game.players) {
             const color = this.getFactionColor(player.faction);
             this.ctx.fillStyle = color;
@@ -211,11 +324,12 @@ export class GameRenderer {
 
         // Draw controls help
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, this.canvas.height - 60, 300, 50);
+        this.ctx.fillRect(10, this.canvas.height - 80, 350, 70);
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '14px Arial';
-        this.ctx.fillText('Controls: Touch/Click to interact', 20, this.canvas.height - 35);
-        this.ctx.fillText('Scroll/Pinch to zoom', 20, this.canvas.height - 15);
+        this.ctx.fillText('Controls: Click/Tap to interact', 20, this.canvas.height - 55);
+        this.ctx.fillText('Scroll/Pinch to zoom, Drag to pan', 20, this.canvas.height - 35);
+        this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
     }
 
     /**
@@ -235,9 +349,23 @@ export class GameRenderer {
             this.ctx.fillRect(x, y, size, size);
         }
 
+        // Draw space dust particles
+        for (const particle of game.spaceDust) {
+            this.drawSpaceDust(particle);
+        }
+
         // Draw suns
         for (const sun of game.suns) {
             this.drawSun(sun);
+        }
+
+        // Draw influence circles
+        for (let i = 0; i < game.players.length; i++) {
+            const player = game.players[i];
+            if (player.stellarForge && !player.isDefeated()) {
+                const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                this.drawInfluenceCircle(player.stellarForge.position, Constants.INFLUENCE_RADIUS, color);
+            }
         }
 
         // Draw connections first (so they appear behind structures)
@@ -262,6 +390,11 @@ export class GameRenderer {
             if (player.stellarForge) {
                 this.drawStellarForge(player.stellarForge, color);
             }
+        }
+
+        // Draw warp gates
+        for (const gate of game.warpGates) {
+            this.drawWarpGate(gate);
         }
 
         // Draw UI
