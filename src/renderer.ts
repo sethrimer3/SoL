@@ -114,6 +114,92 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a subtle lens flare effect when a sun is visible on screen
+     */
+    private drawLensFlare(sun: Sun): void {
+        const screenPos = this.worldToScreen(sun.position);
+        const screenRadius = sun.radius * this.zoom;
+        
+        // Check if sun is within or near the viewport
+        const dpr = window.devicePixelRatio || 1;
+        const canvasWidth = this.canvas.width / dpr;
+        const canvasHeight = this.canvas.height / dpr;
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+        
+        // Calculate direction vector from screen center to sun
+        const dx = screenPos.x - centerX;
+        const dy = screenPos.y - centerY;
+        const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
+        
+        // Only draw lens flare if sun is reasonably visible
+        const maxDistance = Math.sqrt(canvasWidth * canvasWidth + canvasHeight * canvasHeight) / 2;
+        if (distanceFromCenter > maxDistance + screenRadius) {
+            return; // Sun is too far off screen
+        }
+        
+        // Draw multiple subtle flare spots at different positions along the sun-center axis
+        // offset: position multiplier along the axis (-1 = opposite side, 0 = center, 1 = sun)
+        // size: flare radius as a fraction of sun radius
+        // alpha: opacity of the flare center
+        const flarePositions = [
+            { offset: -0.3, size: 0.4, alpha: 0.15, color: 'rgba(255, 200, 100, ' },  // Warm yellow-orange
+            { offset: -0.5, size: 0.25, alpha: 0.12, color: 'rgba(100, 150, 255, ' }, // Cool blue
+            { offset: 0.4, size: 0.3, alpha: 0.1, color: 'rgba(255, 150, 150, ' },    // Pink
+            { offset: 0.7, size: 0.2, alpha: 0.08, color: 'rgba(150, 255, 200, ' }    // Teal
+        ];
+        
+        for (const flare of flarePositions) {
+            // Calculate position along the sun-center line
+            const flareX = centerX + dx * flare.offset;
+            const flareY = centerY + dy * flare.offset;
+            const flareRadius = screenRadius * flare.size;
+            
+            // Draw flare spot with radial gradient
+            const flareGradient = this.ctx.createRadialGradient(
+                flareX, flareY, 0,
+                flareX, flareY, flareRadius
+            );
+            flareGradient.addColorStop(0, `${flare.color}${flare.alpha})`);
+            flareGradient.addColorStop(0.5, `${flare.color}${flare.alpha * 0.5})`);
+            flareGradient.addColorStop(1, `${flare.color}0)`);
+            
+            this.ctx.fillStyle = flareGradient;
+            this.ctx.beginPath();
+            this.ctx.arc(flareX, flareY, flareRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Draw subtle hexagonal starburst around the sun
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.2;
+        this.ctx.strokeStyle = 'rgba(255, 255, 200, 0.3)';
+        this.ctx.lineWidth = 2;
+        
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const rayLength = screenRadius * 1.5;
+            const startX = screenPos.x + Math.cos(angle) * screenRadius * 0.7;
+            const startY = screenPos.y + Math.sin(angle) * screenRadius * 0.7;
+            const endX = screenPos.x + Math.cos(angle) * rayLength;
+            const endY = screenPos.y + Math.sin(angle) * rayLength;
+            
+            // Create gradient for each ray
+            const rayGradient = this.ctx.createLinearGradient(startX, startY, endX, endY);
+            rayGradient.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
+            rayGradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
+            
+            this.ctx.strokeStyle = rayGradient;
+            this.ctx.beginPath();
+            this.ctx.moveTo(startX, startY);
+            this.ctx.lineTo(endX, endY);
+            this.ctx.stroke();
+        }
+        
+        this.ctx.restore();
+    }
+
+    /**
      * Draw a Stellar Forge
      */
     private drawStellarForge(forge: StellarForge, color: string, game: GameState, isEnemy: boolean): void {
@@ -1192,6 +1278,11 @@ export class GameRenderer {
 
         // Draw sun rays with raytracing (light and shadows)
         this.drawSunRays(game);
+
+        // Draw lens flare effects for visible suns
+        for (const sun of game.suns) {
+            this.drawLensFlare(sun);
+        }
 
         // Draw asteroids
         for (const asteroid of game.asteroids) {
