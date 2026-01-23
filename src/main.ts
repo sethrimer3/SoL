@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -291,6 +291,58 @@ class GameController {
                     this.renderer.selectionEnd = null;
                     this.endHold();
                     return;
+                }
+
+                // Check if clicked on a warp gate button
+                for (const gate of this.game.warpGates) {
+                    if (!gate.isComplete) continue;
+                    
+                    // Check if player owns this gate
+                    if (gate.owner !== player) continue;
+                    
+                    // Calculate button positions
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS;
+                    const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
+                    const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+                    
+                    for (let i = 0; i < 4; i++) {
+                        const angle = angles[i];
+                        const buttonPos = new Vector2D(
+                            gate.position.x + Math.cos(angle) * buttonDistance,
+                            gate.position.y + Math.sin(angle) * buttonDistance
+                        );
+                        
+                        const distance = worldPos.distanceTo(buttonPos);
+                        if (distance <= buttonRadius) {
+                            // Button clicked!
+                            if (i === 0) {
+                                // First button - create Minigun building
+                                if (player.spendSolarium(Constants.MINIGUN_COST)) {
+                                    const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(minigun);
+                                    console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    
+                                    // Remove the warp gate
+                                    const gateIndex = this.game.warpGates.indexOf(gate);
+                                    if (gateIndex > -1) {
+                                        this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                } else {
+                                    console.log('Not enough solarium to build Minigun');
+                                }
+                            }
+                            // Other buttons can be added later for different building types
+                            
+                            isPanning = false;
+                            isMouseDown = false;
+                            this.isSelecting = false;
+                            this.selectionStartScreen = null;
+                            this.renderer.selectionStart = null;
+                            this.renderer.selectionEnd = null;
+                            this.endHold();
+                            return;
+                        }
+                    }
                 }
                 
                 // If forge is selected and clicked elsewhere, move it

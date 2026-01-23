@@ -1921,6 +1921,75 @@ export class GameState {
                 }
             }
 
+            // Update building construction
+            for (const building of player.buildings) {
+                if (building.isComplete) continue; // Skip completed buildings
+                
+                // Check if building is inside player's influence (near stellar forge)
+                const isInInfluence = player.stellarForge && 
+                                     building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
+                
+                if (isInInfluence && player.stellarForge) {
+                    // Building inside influence: take solarium from forge
+                    // Calculate build progress per second (inverse of build time)
+                    const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
+                    const buildProgress = buildRate * deltaTime;
+                    
+                    // TODO: Split solarium between buildings and hero units
+                    // For now, buildings get solarium if available
+                    building.addBuildProgress(buildProgress);
+                } else {
+                    // Building outside influence: powered by mirrors shining on it
+                    // Calculate total light from all mirrors pointing at this building
+                    let totalLight = 0;
+                    
+                    for (const mirror of player.solarMirrors) {
+                        // Check if mirror has line of sight to light source
+                        if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
+                        
+                        // Check if mirror has line of sight to building
+                        const ray = new LightRay(
+                            mirror.position,
+                            new Vector2D(
+                                building.position.x - mirror.position.x,
+                                building.position.y - mirror.position.y
+                            ).normalize(),
+                            1.0
+                        );
+                        
+                        let hasLineOfSight = true;
+                        for (const asteroid of this.asteroids) {
+                            if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
+                                hasLineOfSight = false;
+                                break;
+                            }
+                        }
+                        
+                        if (hasLineOfSight) {
+                            // Mirror can shine on building - calculate efficiency based on distance from light
+                            const closestSun = this.suns.reduce((closest, sun) => {
+                                const distToSun = mirror.position.distanceTo(sun.position);
+                                const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
+                                return distToSun < distToClosest ? sun : closest;
+                            }, null as Sun | null);
+                            
+                            if (closestSun) {
+                                const distanceToSun = mirror.position.distanceTo(closestSun.position);
+                                const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE)));
+                                totalLight += distanceMultiplier;
+                            }
+                        }
+                    }
+                    
+                    // Convert light to build progress
+                    if (totalLight > 0) {
+                        const buildRate = (totalLight / 10.0) * (1.0 / Constants.BUILDING_BUILD_TIME);
+                        const buildProgress = buildRate * deltaTime;
+                        building.addBuildProgress(buildProgress);
+                    }
+                }
+            }
+
             // Remove destroyed buildings
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
         }
