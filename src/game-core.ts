@@ -202,6 +202,16 @@ export class Asteroid {
 export class SolarMirror {
     health: number = 100.0;
     efficiency: number = 1.0; // 0.0 to 1.0
+    isSelected: boolean = false;
+    targetPosition: Vector2D | null = null;
+    velocity: Vector2D = new Vector2D(0, 0);
+    reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
+    closestSunDistance: number = Infinity; // Distance to closest visible sun
+
+    // Movement constants for mirrors (slower than Stellar Forge)
+    private readonly MAX_SPEED = 50; // Pixels per second - slower than forge
+    private readonly ACCELERATION = 25; // Pixels per second squared
+    private readonly DECELERATION = 50; // Pixels per second squared
 
     constructor(
         public position: Vector2D,
@@ -273,11 +283,118 @@ export class SolarMirror {
     }
 
     /**
-     * Generate Solarium based on light received
+     * Generate Solarium based on light received and distance to closest sun
      */
     generateSolarium(deltaTime: number): number {
         const baseGenerationRate = 10.0; // Sol per second
-        return baseGenerationRate * this.efficiency * deltaTime;
+        
+        // Apply distance-based multiplier (closer = more efficient)
+        // At distance 0: 2x multiplier, at distance 1000: 1x multiplier
+        const maxDistance = 1000;
+        const distanceMultiplier = Math.max(1.0, 2.0 - (this.closestSunDistance / maxDistance));
+        
+        return baseGenerationRate * this.efficiency * distanceMultiplier * deltaTime;
+    }
+
+    /**
+     * Set target position for mirror movement
+     */
+    setTarget(target: Vector2D): void {
+        this.targetPosition = target;
+    }
+
+    /**
+     * Update mirror reflection angle based on closest sun and forge
+     */
+    updateReflectionAngle(forge: StellarForge | null, suns: Sun[], asteroids: Asteroid[] = []): void {
+        if (!forge) return;
+        
+        const closestSun = this.getClosestVisibleSun(suns, asteroids);
+        if (!closestSun) {
+            this.closestSunDistance = Infinity;
+            return;
+        }
+        
+        // Store distance to closest sun for brightness and generation calculations
+        this.closestSunDistance = this.position.distanceTo(closestSun.position);
+        
+        // Calculate the reflection angle as if reflecting light from sun to forge
+        // The mirror surface should be perpendicular to the bisector of sun-mirror-forge angle
+        const sunDirection = new Vector2D(
+            closestSun.position.x - this.position.x,
+            closestSun.position.y - this.position.y
+        ).normalize();
+        
+        const forgeDirection = new Vector2D(
+            forge.position.x - this.position.x,
+            forge.position.y - this.position.y
+        ).normalize();
+        
+        // The bisector direction (average of both directions)
+        const bisectorX = sunDirection.x + forgeDirection.x;
+        const bisectorY = sunDirection.y + forgeDirection.y;
+        
+        // The mirror surface should be perpendicular to the bisector
+        // So we rotate by 90 degrees
+        this.reflectionAngle = Math.atan2(bisectorY, bisectorX);
+    }
+
+    /**
+     * Update mirror position based on target and velocity
+     */
+    update(deltaTime: number): void {
+        if (!this.targetPosition) return;
+        
+        const dx = this.targetPosition.x - this.position.x;
+        const dy = this.targetPosition.y - this.position.y;
+        const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+        
+        // If we're close enough to target, stop
+        if (distanceToTarget < 5) {
+            this.position = this.targetPosition;
+            this.targetPosition = null;
+            this.velocity = new Vector2D(0, 0);
+            return;
+        }
+        
+        // Calculate desired direction
+        const directionX = dx / distanceToTarget;
+        const directionY = dy / distanceToTarget;
+        
+        // Calculate distance needed to decelerate to stop
+        const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        const decelerationDistance = (currentSpeed * currentSpeed) / (2 * this.DECELERATION);
+        
+        // Should we accelerate or decelerate?
+        if (distanceToTarget > decelerationDistance && currentSpeed < this.MAX_SPEED) {
+            // Accelerate toward target
+            this.velocity.x += directionX * this.ACCELERATION * deltaTime;
+            this.velocity.y += directionY * this.ACCELERATION * deltaTime;
+        } else {
+            // Decelerate
+            const decelerationFactor = Math.max(0, 1 - (this.DECELERATION * deltaTime) / currentSpeed);
+            this.velocity.x *= decelerationFactor;
+            this.velocity.y *= decelerationFactor;
+        }
+        
+        // Cap speed at MAX_SPEED
+        const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        if (speed > this.MAX_SPEED) {
+            this.velocity.x = (this.velocity.x / speed) * this.MAX_SPEED;
+            this.velocity.y = (this.velocity.y / speed) * this.MAX_SPEED;
+        }
+        
+        // Update position
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Check if a point is within the mirror's clickable area
+     */
+    containsPoint(point: Vector2D): boolean {
+        const distance = this.position.distanceTo(point);
+        return distance < 20; // Match the rendering size
     }
 }
 
@@ -1298,8 +1415,11 @@ export class GameState {
                 player.stellarForge.update(deltaTime); // Update forge movement
             }
 
-            // Generate Solarium from mirrors
+            // Update solar mirrors - position and reflection angle
             for (const mirror of player.solarMirrors) {
+                mirror.update(deltaTime); // Update mirror movement
+                mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids);
+                
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids)) {
