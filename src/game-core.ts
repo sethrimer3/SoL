@@ -209,47 +209,17 @@ export class SolarMirror {
     ) {}
 
     /**
-     * Check if mirror has clear view of any light source
-     * Returns true if at least one sun is visible
+     * Check if ray from mirror to target is blocked by asteroids
+     * Helper method to avoid code duplication
      */
-    hasLineOfSightToLight(lightSources: Sun[], asteroids: Asteroid[] = []): boolean {
-        for (const sun of lightSources) {
-            const direction = new Vector2D(
-                sun.position.x - this.position.x,
-                sun.position.y - this.position.y
-            ).normalize();
-            
-            const ray = new LightRay(this.position, direction);
-            const distance = this.position.distanceTo(sun.position);
-            
-            let blocked = false;
-            for (const asteroid of asteroids) {
-                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-                if (intersectionDist !== null && intersectionDist < distance) {
-                    blocked = true;
-                    break;
-                }
-            }
-            
-            if (!blocked) {
-                return true; // Found at least one clear path to a sun
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Check if mirror has clear path to Stellar Forge
-     * Returns true if path is not blocked by asteroids
-     */
-    hasLineOfSightToForge(forge: StellarForge, asteroids: Asteroid[] = []): boolean {
+    private isPathClear(target: Vector2D, asteroids: Asteroid[] = []): boolean {
         const direction = new Vector2D(
-            forge.position.x - this.position.x,
-            forge.position.y - this.position.y
+            target.x - this.position.x,
+            target.y - this.position.y
         ).normalize();
         
         const ray = new LightRay(this.position, direction);
-        const distance = this.position.distanceTo(forge.position);
+        const distance = this.position.distanceTo(target);
         
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
@@ -262,6 +232,27 @@ export class SolarMirror {
     }
 
     /**
+     * Check if mirror has clear view of any light source
+     * Returns true if at least one sun is visible
+     */
+    hasLineOfSightToLight(lightSources: Sun[], asteroids: Asteroid[] = []): boolean {
+        for (const sun of lightSources) {
+            if (this.isPathClear(sun.position, asteroids)) {
+                return true; // Found at least one clear path to a sun
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Check if mirror has clear path to Stellar Forge
+     * Returns true if path is not blocked by asteroids
+     */
+    hasLineOfSightToForge(forge: StellarForge, asteroids: Asteroid[] = []): boolean {
+        return this.isPathClear(forge.position, asteroids);
+    }
+
+    /**
      * Get the closest visible sun (for visual indicators)
      */
     getClosestVisibleSun(lightSources: Sun[], asteroids: Asteroid[] = []): Sun | null {
@@ -269,26 +260,12 @@ export class SolarMirror {
         let closestDistance = Infinity;
         
         for (const sun of lightSources) {
-            const direction = new Vector2D(
-                sun.position.x - this.position.x,
-                sun.position.y - this.position.y
-            ).normalize();
-            
-            const ray = new LightRay(this.position, direction);
-            const distance = this.position.distanceTo(sun.position);
-            
-            let blocked = false;
-            for (const asteroid of asteroids) {
-                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-                if (intersectionDist !== null && intersectionDist < distance) {
-                    blocked = true;
-                    break;
+            if (this.isPathClear(sun.position, asteroids)) {
+                const distance = this.position.distanceTo(sun.position);
+                if (distance < closestDistance) {
+                    closestSun = sun;
+                    closestDistance = distance;
                 }
-            }
-            
-            if (!blocked && distance < closestDistance) {
-                closestSun = sun;
-                closestDistance = distance;
             }
         }
         

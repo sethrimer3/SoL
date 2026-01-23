@@ -2,6 +2,8 @@
  * Main Menu for SoL game
  */
 
+import * as Constants from './constants';
+
 export interface MapConfig {
     id: string;
     name: string;
@@ -401,7 +403,7 @@ export class MainMenu {
             optionElement.value = option;
             optionElement.textContent = option.charAt(0).toUpperCase() + option.slice(1);
             optionElement.selected = option === currentValue;
-            optionElement.style.backgroundColor = '#000011';
+            optionElement.style.backgroundColor = Constants.UI_BACKGROUND_COLOR;
             select.appendChild(optionElement);
         }
 

@@ -584,7 +584,7 @@ export class GameRenderer {
                 // Both clear - draw bright yellow glow
                 this.ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
                 this.ctx.beginPath();
-                this.ctx.arc(mirrorScreenPos.x, mirrorScreenPos.y, 15 * this.zoom, 0, Math.PI * 2);
+                this.ctx.arc(mirrorScreenPos.x, mirrorScreenPos.y, Constants.MIRROR_ACTIVE_GLOW_RADIUS * this.zoom, 0, Math.PI * 2);
                 this.ctx.fill();
             }
         }
