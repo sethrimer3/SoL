@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -699,6 +699,52 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Starling unit (minion from stellar forge)
+     */
+    private drawStarling(starling: Starling, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(starling.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(starling.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw the base unit
+        this.drawUnit(starling, color, game, isEnemy);
+        
+        // Draw a distinctive star/bird symbol for starling
+        const screenPos = this.worldToScreen(starling.position);
+        const size = 6 * this.zoom;
+        
+        // Draw a simple bird-like wing pattern
+        this.ctx.strokeStyle = '#FFD700'; // Golden color for starlings
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        // Left wing
+        this.ctx.moveTo(screenPos.x - size, screenPos.y);
+        this.ctx.lineTo(screenPos.x - size * 0.3, screenPos.y - size * 0.5);
+        this.ctx.lineTo(screenPos.x, screenPos.y);
+        // Right wing
+        this.ctx.lineTo(screenPos.x + size * 0.3, screenPos.y - size * 0.5);
+        this.ctx.lineTo(screenPos.x + size, screenPos.y);
+        this.ctx.stroke();
+        
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
@@ -1080,6 +1126,8 @@ export class GameRenderer {
             for (const unit of player.units) {
                 if (unit instanceof Grave) {
                     this.drawGrave(unit, color, game, isEnemy);
+                } else if (unit instanceof Starling) {
+                    this.drawStarling(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
