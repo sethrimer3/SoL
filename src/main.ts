@@ -154,7 +154,8 @@ class GameController {
             const dy = y - lastY;
             const totalMovement = Math.sqrt(dx * dx + dy * dy);
             
-            // Two-finger touch should always pan the camera (no threshold)
+            // Two-finger touch should always pan the camera immediately (no threshold)
+            // This provides smooth, native-like panning behavior on mobile devices
             if (isTwoFinger) {
                 if (!isPanning) {
                     isPanning = true;
@@ -170,7 +171,7 @@ class GameController {
                     currentCamera.y - dy / this.renderer.zoom
                 ));
             } else if (totalMovement > 5) {
-                // Single-finger/mouse drag should start selection (with threshold)
+                // Single-finger/mouse drag needs a threshold to distinguish from taps
                 if (!this.isSelecting && !isPanning) {
                     this.isSelecting = true;
                     this.cancelHold();

@@ -39,7 +39,8 @@ export class GameRenderer {
         this.canvas.style.width = `${window.innerWidth}px`;
         this.canvas.style.height = `${window.innerHeight}px`;
         
-        // Scale the context to match device pixel ratio
+        // Reset transform and scale the context to match device pixel ratio
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(dpr, dpr);
     }
 
@@ -775,7 +776,7 @@ export class GameRenderer {
         // Update and draw each tap effect
         for (let i = this.tapEffects.length - 1; i >= 0; i--) {
             const effect = this.tapEffects[i];
-            effect.progress += 0.05; // Increment progress (0 to 1)
+            effect.progress += Constants.TAP_EFFECT_SPEED; // Increment progress (0 to 1)
 
             if (effect.progress >= 1) {
                 // Remove completed effects
@@ -784,8 +785,7 @@ export class GameRenderer {
             }
 
             // Draw expanding ripple
-            const maxRadius = 40;
-            const radius = maxRadius * effect.progress;
+            const radius = Constants.TAP_EFFECT_MAX_RADIUS * effect.progress;
             const alpha = 1 - effect.progress; // Fade out
 
             this.ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
@@ -815,7 +815,7 @@ export class GameRenderer {
         // Update and draw each swipe effect
         for (let i = this.swipeEffects.length - 1; i >= 0; i--) {
             const effect = this.swipeEffects[i];
-            effect.progress += 0.08; // Increment progress (0 to 1)
+            effect.progress += Constants.SWIPE_EFFECT_SPEED; // Increment progress (0 to 1)
 
             if (effect.progress >= 1) {
                 // Remove completed effects
@@ -847,19 +847,18 @@ export class GameRenderer {
 
             // Draw arrow head at the end
             if (effect.progress > 0.3) {
-                const arrowSize = 15;
                 const angle = Math.atan2(dy, dx);
                 
                 this.ctx.fillStyle = `rgba(255, 200, 100, ${alpha})`;
                 this.ctx.beginPath();
                 this.ctx.moveTo(endX, endY);
                 this.ctx.lineTo(
-                    endX - arrowSize * Math.cos(angle - Math.PI / 6),
-                    endY - arrowSize * Math.sin(angle - Math.PI / 6)
+                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle - Math.PI / 6),
+                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle - Math.PI / 6)
                 );
                 this.ctx.lineTo(
-                    endX - arrowSize * Math.cos(angle + Math.PI / 6),
-                    endY - arrowSize * Math.sin(angle + Math.PI / 6)
+                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle + Math.PI / 6),
+                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle + Math.PI / 6)
                 );
                 this.ctx.closePath();
                 this.ctx.fill();
