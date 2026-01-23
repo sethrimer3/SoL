@@ -1245,7 +1245,7 @@ export class Grave extends Unit {
             position,
             owner,
             Constants.GRAVE_MAX_HEALTH,
-            Constants.GRAVE_ATTACK_RANGE * 0.25, // Reduced by 75% (400 → 100)
+            Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER, // Hero units have reduced range
             Constants.GRAVE_ATTACK_DAMAGE,
             Constants.GRAVE_ATTACK_SPEED,
             5.0 // Default ability cooldown

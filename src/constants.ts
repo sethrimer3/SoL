@@ -45,6 +45,7 @@ export const MARINE_ATTACK_SPEED = 5; // Attacks per second (fast shooting)
 // Grave unit constants
 export const GRAVE_MAX_HEALTH = 150;
 export const GRAVE_ATTACK_RANGE = 400;
+export const GRAVE_HERO_ATTACK_RANGE_MULTIPLIER = 0.25; // Hero Grave units have 75% reduced attack range
 export const GRAVE_ATTACK_DAMAGE = 15;
 export const GRAVE_ATTACK_SPEED = 2; // Attacks per second (projectile launch rate)
 export const GRAVE_NUM_PROJECTILES = 5;
@@ -96,6 +97,7 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
 export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
+export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 
 // Visual effect constants
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect

@@ -527,7 +527,7 @@ export class GameRenderer {
             const attackRangeScreenRadius = unit.attackRange * this.zoom;
             this.ctx.strokeStyle = color;
             this.ctx.lineWidth = 1;
-            this.ctx.globalAlpha = 0.2;
+            this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, attackRangeScreenRadius, 0, Math.PI * 2);
             this.ctx.stroke();
