@@ -90,17 +90,24 @@ export class MainMenu {
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
 
-        this.renderMainScreen(menu);
+        // Render main screen content into the menu element
+        this.renderMainScreenContent(menu);
         
         return menu;
     }
 
     private clearMenu(): void {
-        this.menuElement.innerHTML = '';
+        if (this.menuElement) {
+            this.menuElement.innerHTML = '';
+        }
     }
 
     private renderMainScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.renderMainScreenContent(container);
+    }
+
+    private renderMainScreenContent(container: HTMLElement): void {
         
         // Title
         const title = document.createElement('h1');
