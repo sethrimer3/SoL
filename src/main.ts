@@ -156,11 +156,7 @@ class GameController {
             } else if (!this.isSelecting && this.selectedUnits.size > 0 && this.selectionStartScreen && this.game) {
                 // If units are selected and player clicked (not dragged), set rally point
                 const clickPos = new Vector2D(lastX, lastY);
-                const startPos = this.selectionStartScreen;
-                const totalMovement = Math.sqrt(
-                    (clickPos.x - startPos.x) ** 2 + 
-                    (clickPos.y - startPos.y) ** 2
-                );
+                const totalMovement = this.selectionStartScreen.distanceTo(clickPos);
                 
                 // Only treat as rally point click if movement was minimal (< 5 pixels)
                 if (totalMovement < 5) {

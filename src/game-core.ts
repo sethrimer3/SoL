@@ -584,12 +584,11 @@ export class Unit {
                 // Calculate direction vector
                 const dx = this.rallyPoint.x - this.position.x;
                 const dy = this.rallyPoint.y - this.position.y;
-                const length = Math.sqrt(dx * dx + dy * dy);
                 
-                // Normalize and move
+                // Normalize and move (reuse distance to avoid redundant calculation)
                 const moveDistance = Constants.UNIT_MOVE_SPEED * deltaTime;
-                this.position.x += (dx / length) * moveDistance;
-                this.position.y += (dy / length) * moveDistance;
+                this.position.x += (dx / distance) * moveDistance;
+                this.position.y += (dy / distance) * moveDistance;
             } else {
                 // Arrived at rally point
                 this.rallyPoint = null;
