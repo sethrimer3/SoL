@@ -78,3 +78,4 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
+export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
