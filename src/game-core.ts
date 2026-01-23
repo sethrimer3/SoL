@@ -438,7 +438,7 @@ export class BulletCasing {
     rotation: number = 0;
     rotationSpeed: number;
     lifetime: number = 0;
-    maxLifetime: number = 2.0; // Despawn after 2 seconds
+    maxLifetime: number = Constants.BULLET_CASING_LIFETIME;
     
     constructor(
         public position: Vector2D,
@@ -474,8 +474,8 @@ export class BulletCasing {
      * Apply collision response when hitting spacedust
      */
     applyCollision(force: Vector2D): void {
-        this.velocity.x += force.x * 0.3;
-        this.velocity.y += force.y * 0.3;
+        this.velocity.x += force.x * Constants.CASING_COLLISION_DAMPING;
+        this.velocity.y += force.y * Constants.CASING_COLLISION_DAMPING;
     }
 }
 
@@ -484,7 +484,7 @@ export class BulletCasing {
  */
 export class MuzzleFlash {
     lifetime: number = 0;
-    maxLifetime: number = 0.05; // Very short flash, 50ms
+    maxLifetime: number = Constants.MUZZLE_FLASH_DURATION;
     
     constructor(
         public position: Vector2D,
@@ -512,7 +512,7 @@ export class MuzzleFlash {
 export class BouncingBullet {
     velocity: Vector2D;
     lifetime: number = 0;
-    maxLifetime: number = 0.5; // Despawn after 0.5 seconds
+    maxLifetime: number = Constants.BOUNCING_BULLET_LIFETIME;
     
     constructor(
         public position: Vector2D,
@@ -660,10 +660,10 @@ export class Marine extends Unit {
         super(
             position,
             owner,
-            100, // maxHealth
-            300, // attackRange
-            10, // attackDamage
-            5 // attackSpeed (5 shots per second = fast)
+            Constants.MARINE_MAX_HEALTH,
+            Constants.MARINE_ATTACK_RANGE,
+            Constants.MARINE_ATTACK_DAMAGE,
+            Constants.MARINE_ATTACK_SPEED
         );
     }
 
@@ -687,7 +687,8 @@ export class Marine extends Unit {
 
         // Create bullet casing with slight angle deviation
         const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Eject to the side
-        const casingSpeed = 100 + Math.random() * 50;
+        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
+                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
         this.lastShotEffects.casing = new BulletCasing(
             new Vector2D(this.position.x, this.position.y),
             new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
@@ -695,7 +696,8 @@ export class Marine extends Unit {
 
         // Create bouncing bullet at target position
         const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0; // Bounce away from impact
-        const bounceSpeed = 150 + Math.random() * 100;
+        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
+                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
         this.lastShotEffects.bouncingBullet = new BouncingBullet(
             new Vector2D(target.position.x, target.position.y),
             new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
@@ -913,7 +915,7 @@ export class GameState {
             // Check collision with space dust particles
             for (const particle of this.spaceDust) {
                 const distance = casing.position.distanceTo(particle.position);
-                if (distance < 5) {
+                if (distance < Constants.CASING_SPACEDUST_COLLISION_DISTANCE) {
                     // Apply force to both casing and particle
                     const direction = new Vector2D(
                         particle.position.x - casing.position.x,
@@ -921,13 +923,14 @@ export class GameState {
                     ).normalize();
                     
                     particle.applyForce(new Vector2D(
-                        direction.x * 50,
-                        direction.y * 50
+                        direction.x * Constants.CASING_SPACEDUST_FORCE,
+                        direction.y * Constants.CASING_SPACEDUST_FORCE
                     ));
                     
+                    // Apply counter-force to casing (damping applied in applyCollision method)
                     casing.applyCollision(new Vector2D(
-                        -direction.x * 30,
-                        -direction.y * 30
+                        -direction.x * Constants.CASING_SPACEDUST_FORCE,
+                        -direction.y * Constants.CASING_SPACEDUST_FORCE
                     ));
                 }
             }
