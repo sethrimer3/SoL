@@ -969,7 +969,7 @@ class CarouselMenuView {
         this.velocity = deltaX * CarouselMenuView.VELOCITY_MULTIPLIER; // Track velocity for momentum
         
         // Track if we've dragged significantly
-        if (Math.abs(deltaX) > 5) {
+        if (Math.abs(deltaX) > Constants.CLICK_DRAG_THRESHOLD) {
             this.hasDragged = true;
         }
     }

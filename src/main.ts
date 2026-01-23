@@ -193,8 +193,8 @@ class GameController {
         const endDrag = () => {
             // Check if this was a simple click (no dragging)
             const wasClick = this.selectionStartScreen && 
-                             Math.abs(lastX - this.selectionStartScreen.x) < 5 && 
-                             Math.abs(lastY - this.selectionStartScreen.y) < 5;
+                             Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
+                             Math.abs(lastY - this.selectionStartScreen.y) < Constants.CLICK_DRAG_THRESHOLD;
             
             if (this.game && wasClick) {
                 const worldPos = this.renderer.screenToWorld(lastX, lastY);
