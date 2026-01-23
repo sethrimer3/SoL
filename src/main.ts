@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu } from './menu';
 import * as Constants from './constants';
@@ -16,7 +16,7 @@ class GameController {
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
     private menu: MainMenu;
-    private selectedUnits: Set<any> = new Set();
+    private selectedUnits: Set<Unit> = new Set();
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
 
@@ -320,6 +320,9 @@ class GameController {
                 this.selectedUnits.add(unit);
             }
         }
+
+        // Update renderer's selected units
+        this.renderer.selectedUnits = this.selectedUnits;
 
         // Log selection for debugging
         console.log(`Selected ${this.selectedUnits.size} units`);

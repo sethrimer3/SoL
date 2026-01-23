@@ -12,6 +12,7 @@ export class GameRenderer {
     public zoom: number = 1.0;
     public selectionStart: Vector2D | null = null;
     public selectionEnd: Vector2D | null = null;
+    public selectedUnits: Set<Unit> = new Set();
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -221,7 +222,7 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw shadow regions from suns
+        // Draw asteroid shadows cast by sunlight
         for (const sun of game.suns) {
             // Draw shadow regions behind asteroids
             for (const asteroid of game.asteroids) {
@@ -357,11 +358,21 @@ export class GameRenderer {
     private drawUnit(unit: Unit, color: string): void {
         const screenPos = this.worldToScreen(unit.position);
         const size = 8 * this.zoom;
+        const isSelected = this.selectedUnits.has(unit);
+
+        // Draw selection indicator for selected units
+        if (isSelected) {
+            this.ctx.strokeStyle = '#00FF00';
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size + 4, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
 
         // Draw unit body (circle)
         this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 1;
+        this.ctx.strokeStyle = isSelected ? '#00FF00' : '#FFFFFF';
+        this.ctx.lineWidth = isSelected ? 2 : 1;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
