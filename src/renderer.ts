@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -182,6 +182,124 @@ export class GameRenderer {
     }
 
     /**
+     * Draw an asteroid
+     */
+    private drawAsteroid(asteroid: Asteroid): void {
+        const worldVertices = asteroid.getWorldVertices();
+        if (worldVertices.length === 0) return;
+
+        const screenVertices = worldVertices.map(v => this.worldToScreen(v));
+
+        // Draw asteroid body
+        this.ctx.fillStyle = '#666666';
+        this.ctx.strokeStyle = '#888888';
+        this.ctx.lineWidth = 2;
+        
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenVertices[0].x, screenVertices[0].y);
+        for (let i = 1; i < screenVertices.length; i++) {
+            this.ctx.lineTo(screenVertices[i].x, screenVertices[i].y);
+        }
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+    }
+
+    /**
+     * Draw sun rays with raytracing (brightens field and casts shadows)
+     */
+    private drawSunRays(game: GameState): void {
+        // Draw ambient lighting layer
+        const gradient = this.ctx.createRadialGradient(
+            this.canvas.width / 2, this.canvas.height / 2, 0,
+            this.canvas.width / 2, this.canvas.height / 2, Math.max(this.canvas.width, this.canvas.height)
+        );
+        gradient.addColorStop(0, 'rgba(255, 255, 200, 0.1)');
+        gradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Draw light rays from each sun
+        for (const sun of game.suns) {
+            const sunScreenPos = this.worldToScreen(sun.position);
+            const numRays = 64; // Number of rays to cast
+
+            for (let i = 0; i < numRays; i++) {
+                const angle = (Math.PI * 2 * i) / numRays;
+                const direction = new Vector2D(Math.cos(angle), Math.sin(angle));
+                const ray = new LightRay(sun.position, direction, sun.intensity);
+
+                // Find the closest intersection with asteroids
+                let closestDistance = 2000; // Max ray distance
+                
+                for (const asteroid of game.asteroids) {
+                    if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
+                        const distance = sun.position.distanceTo(asteroid.position);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                        }
+                    }
+                }
+
+                // Draw the ray up to the intersection point
+                const endX = sun.position.x + direction.x * closestDistance;
+                const endY = sun.position.y + direction.y * closestDistance;
+                const endScreenPos = this.worldToScreen(new Vector2D(endX, endY));
+
+                // Draw ray with gradient
+                this.ctx.strokeStyle = `rgba(255, 255, 150, ${0.02 * sun.intensity})`;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
+                this.ctx.lineTo(endScreenPos.x, endScreenPos.y);
+                this.ctx.stroke();
+            }
+
+            // Draw shadow regions behind asteroids
+            for (const asteroid of game.asteroids) {
+                const worldVertices = asteroid.getWorldVertices();
+                
+                // For each edge of the asteroid, cast a shadow
+                for (let i = 0; i < worldVertices.length; i++) {
+                    const v1 = worldVertices[i];
+                    const v2 = worldVertices[(i + 1) % worldVertices.length];
+                    
+                    // Calculate if this edge faces away from the sun
+                    const edgeCenter = new Vector2D((v1.x + v2.x) / 2, (v1.y + v2.y) / 2);
+                    const toSun = new Vector2D(sun.position.x - edgeCenter.x, sun.position.y - edgeCenter.y);
+                    const edgeNormal = new Vector2D(-(v2.y - v1.y), v2.x - v1.x);
+                    const dot = toSun.x * edgeNormal.x + toSun.y * edgeNormal.y;
+                    
+                    if (dot < 0) {
+                        // This edge is facing away from the sun, cast shadow
+                        const shadowLength = 500;
+                        const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
+                        const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
+                        
+                        const shadow1 = new Vector2D(v1.x + dirFromSun1.x * shadowLength, v1.y + dirFromSun1.y * shadowLength);
+                        const shadow2 = new Vector2D(v2.x + dirFromSun2.x * shadowLength, v2.y + dirFromSun2.y * shadowLength);
+                        
+                        const sv1 = this.worldToScreen(v1);
+                        const sv2 = this.worldToScreen(v2);
+                        const ss1 = this.worldToScreen(shadow1);
+                        const ss2 = this.worldToScreen(shadow2);
+                        
+                        // Draw shadow polygon
+                        this.ctx.fillStyle = 'rgba(0, 0, 20, 0.5)';
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(sv1.x, sv1.y);
+                        this.ctx.lineTo(sv2.x, sv2.y);
+                        this.ctx.lineTo(ss2.x, ss2.y);
+                        this.ctx.lineTo(ss1.x, ss1.y);
+                        this.ctx.closePath();
+                        this.ctx.fill();
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Draw influence circle for a base
      */
     private drawInfluenceCircle(position: Vector2D, radius: number, color: string): void {
@@ -304,9 +422,10 @@ export class GameRenderer {
         this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
         this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
         this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
-        this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 90);
+        this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, 90);
+        this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 110);
 
-        let y = 120;
+        let y = 140;
         for (const player of game.players) {
             const color = this.getFactionColor(player.faction);
             this.ctx.fillStyle = color;
@@ -357,6 +476,14 @@ export class GameRenderer {
         // Draw suns
         for (const sun of game.suns) {
             this.drawSun(sun);
+        }
+
+        // Draw sun rays with raytracing (light and shadows)
+        this.drawSunRays(game);
+
+        // Draw asteroids
+        for (const asteroid of game.asteroids) {
+            this.drawAsteroid(asteroid);
         }
 
         // Draw influence circles
