@@ -51,11 +51,148 @@ export class LightRay {
 
     /**
      * Check if ray intersects with a circular object
-     * TODO: Implement full ray-circle intersection algorithm
      */
     intersects(position: Vector2D, radius: number): boolean {
-        // Placeholder - needs ray tracing implementation
-        return true;
+        // Ray-circle intersection using vector math
+        const oc = new Vector2D(this.origin.x - position.x, this.origin.y - position.y);
+        const a = this.direction.x * this.direction.x + this.direction.y * this.direction.y;
+        const b = 2.0 * (oc.x * this.direction.x + oc.y * this.direction.y);
+        const c = oc.x * oc.x + oc.y * oc.y - radius * radius;
+        const discriminant = b * b - 4 * a * c;
+        return discriminant >= 0;
+    }
+
+    /**
+     * Check if ray intersects with a polygon and return the distance to the closest intersection
+     */
+    intersectsPolygon(vertices: Vector2D[]): boolean {
+        // Check each edge of the polygon
+        for (let i = 0; i < vertices.length; i++) {
+            const v1 = vertices[i];
+            const v2 = vertices[(i + 1) % vertices.length];
+            
+            if (this.intersectsLineSegment(v1, v2) !== null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get the distance to the closest intersection with a polygon, or null if no intersection
+     */
+    getIntersectionDistance(vertices: Vector2D[]): number | null {
+        let closestDistance: number | null = null;
+        
+        // Check each edge of the polygon
+        for (let i = 0; i < vertices.length; i++) {
+            const v1 = vertices[i];
+            const v2 = vertices[(i + 1) % vertices.length];
+            
+            const distance = this.intersectsLineSegment(v1, v2);
+            if (distance !== null) {
+                if (closestDistance === null || distance < closestDistance) {
+                    closestDistance = distance;
+                }
+            }
+        }
+        
+        return closestDistance;
+    }
+
+    /**
+     * Check if ray intersects with a line segment and return the distance, or null if no intersection
+     */
+    private intersectsLineSegment(p1: Vector2D, p2: Vector2D): number | null {
+        const v1 = new Vector2D(p2.x - p1.x, p2.y - p1.y);
+        const v2 = new Vector2D(p1.x - this.origin.x, p1.y - this.origin.y);
+        const cross1 = this.direction.x * v1.y - this.direction.y * v1.x;
+        
+        if (Math.abs(cross1) < 0.0001) return null; // Parallel
+        
+        const t1 = (v2.x * v1.y - v2.y * v1.x) / cross1;
+        const t2 = (v2.x * this.direction.y - v2.y * this.direction.x) / cross1;
+        
+        if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
+            return t1; // Return the distance along the ray
+        }
+        
+        return null;
+    }
+}
+
+/**
+ * Asteroid - Polygon obstacle that blocks light and casts shadows
+ */
+export class Asteroid {
+    vertices: Vector2D[] = [];
+    rotation: number = 0;
+    rotationSpeed: number;
+
+    constructor(
+        public position: Vector2D,
+        public sides: number, // 3-9 sides (triangle to nonagon)
+        public size: number
+    ) {
+        this.generateVertices();
+        this.rotationSpeed = (Math.random() - 0.5) * 0.5; // Random rotation speed
+    }
+
+    /**
+     * Generate polygon vertices
+     */
+    private generateVertices(): void {
+        this.vertices = [];
+        for (let i = 0; i < this.sides; i++) {
+            const angle = (Math.PI * 2 * i) / this.sides;
+            // Add some randomness to make asteroids less uniform
+            const radiusVariation = 0.8 + Math.random() * 0.4;
+            const radius = this.size * radiusVariation;
+            this.vertices.push(new Vector2D(
+                Math.cos(angle) * radius,
+                Math.sin(angle) * radius
+            ));
+        }
+    }
+
+    /**
+     * Get world-space vertices (with position and rotation)
+     */
+    getWorldVertices(): Vector2D[] {
+        return this.vertices.map(v => {
+            const cos = Math.cos(this.rotation);
+            const sin = Math.sin(this.rotation);
+            return new Vector2D(
+                this.position.x + v.x * cos - v.y * sin,
+                this.position.y + v.x * sin + v.y * cos
+            );
+        });
+    }
+
+    /**
+     * Update asteroid rotation
+     */
+    update(deltaTime: number): void {
+        this.rotation += this.rotationSpeed * deltaTime;
+    }
+
+    /**
+     * Check if a point is inside the asteroid (for collision detection)
+     */
+    containsPoint(point: Vector2D): boolean {
+        const worldVertices = this.getWorldVertices();
+        let inside = false;
+        
+        for (let i = 0, j = worldVertices.length - 1; i < worldVertices.length; j = i++) {
+            const xi = worldVertices[i].x, yi = worldVertices[i].y;
+            const xj = worldVertices[j].x, yj = worldVertices[j].y;
+            
+            const intersect = ((yi > point.y) !== (yj > point.y))
+                && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+            if (intersect) inside = !inside;
+        }
+        
+        return inside;
     }
 }
 
@@ -383,6 +520,7 @@ export class GameState {
     suns: Sun[] = [];
     spaceDust: SpaceDustParticle[] = [];
     warpGates: WarpGate[] = [];
+    asteroids: Asteroid[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
 
@@ -391,6 +529,11 @@ export class GameState {
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+
+        // Update asteroids
+        for (const asteroid of this.asteroids) {
+            asteroid.update(deltaTime);
+        }
 
         // Update each player
         for (const player of this.players) {
@@ -494,6 +637,28 @@ export class GameState {
     }
 
     /**
+     * Initialize asteroids at random positions
+     */
+    initializeAsteroids(count: number, width: number, height: number): void {
+        this.asteroids = [];
+        for (let i = 0; i < count; i++) {
+            // Random position avoiding the center (where players start)
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 200 + Math.random() * (Math.min(width, height) / 2 - 300);
+            const x = Math.cos(angle) * distance;
+            const y = Math.sin(angle) * distance;
+            
+            // Random polygon sides (3-9)
+            const sides = 3 + Math.floor(Math.random() * 7);
+            
+            // Random size (30-80)
+            const size = 30 + Math.random() * 50;
+            
+            this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
+        }
+    }
+
+    /**
      * Check if any player has won
      */
     checkVictoryConditions(): Player | null {
@@ -547,6 +712,9 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
 
     // Initialize space dust particles
     game.initializeSpaceDust(1000, 2000, 2000);
+
+    // Initialize asteroids
+    game.initializeAsteroids(10, 2000, 2000);
 
     game.isRunning = true;
     return game;

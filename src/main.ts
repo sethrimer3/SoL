@@ -4,16 +4,18 @@
 
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate } from './game-core';
 import { GameRenderer } from './renderer';
+import { MainMenu } from './menu';
 import * as Constants from './constants';
 
 class GameController {
-    private game: GameState;
+    private game: GameState | null = null;
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
     private holdStartTime: number | null = null;
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
+    private menu: MainMenu;
 
     constructor() {
         // Create canvas
@@ -25,14 +27,20 @@ class GameController {
         // Initialize renderer
         this.renderer = new GameRenderer(canvas);
 
+        // Create and show main menu
+        this.menu = new MainMenu();
+        this.menu.onStart(() => this.startNewGame());
+
+        // Set up input handlers
+        this.setupInputHandlers(canvas);
+    }
+
+    private startNewGame(): void {
         // Create game
         this.game = createStandardGame([
             ['Player 1', Faction.RADIANT],
             ['Player 2', Faction.AURUM]
         ]);
-
-        // Set up input handlers
-        this.setupInputHandlers(canvas);
 
         // Start game loop
         this.start();
@@ -128,6 +136,8 @@ class GameController {
     }
 
     private startHold(worldPos: Vector2D): void {
+        if (!this.game) return;
+        
         // Check if position is in player's influence
         const player = this.game.players[0]; // Assume player 1 is the human player
         if (!player.stellarForge) return;
@@ -140,6 +150,8 @@ class GameController {
     }
 
     private cancelHold(): void {
+        if (!this.game) return;
+        
         if (this.currentWarpGate) {
             this.currentWarpGate.cancel();
             this.scatterParticles(this.currentWarpGate.position);
@@ -160,6 +172,8 @@ class GameController {
     }
 
     private scatterParticles(position: Vector2D): void {
+        if (!this.game) return;
+        
         // Scatter nearby particles
         for (const particle of this.game.spaceDust) {
             const distance = particle.position.distanceTo(position);
@@ -177,6 +191,8 @@ class GameController {
     }
 
     private update(deltaTime: number): void {
+        if (!this.game) return;
+        
         if (this.game.isRunning) {
             this.game.update(deltaTime);
         }
@@ -202,7 +218,9 @@ class GameController {
     }
 
     private render(): void {
-        this.renderer.render(this.game);
+        if (this.game) {
+            this.renderer.render(this.game);
+        }
     }
 
     private gameLoop(currentTime: number): void {
@@ -221,6 +239,8 @@ class GameController {
     }
 
     start(): void {
+        if (!this.game) return;
+        
         this.isRunning = true;
         this.lastTime = 0;
         requestAnimationFrame((time) => this.gameLoop(time));
