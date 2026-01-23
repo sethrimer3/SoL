@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate } from './game-core';
 import { GameRenderer } from './renderer';
 
 class GameController {
@@ -10,6 +10,9 @@ class GameController {
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
+    private holdStartTime: number | null = null;
+    private holdPosition: Vector2D | null = null;
+    private currentWarpGate: WarpGate | null = null;
 
     constructor() {
         // Create canvas
@@ -52,12 +55,22 @@ class GameController {
             isPanning = true;
             lastX = x;
             lastY = y;
+            
+            // Start warp gate hold timer
+            const worldPos = this.renderer.screenToWorld(x, y);
+            this.startHold(worldPos);
         };
 
         const movePan = (x: number, y: number) => {
             if (isPanning) {
                 const dx = x - lastX;
                 const dy = y - lastY;
+                
+                // If moved too much, cancel warp gate
+                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                    this.cancelHold();
+                }
+                
                 lastX = x;
                 lastY = y;
                 
@@ -72,6 +85,7 @@ class GameController {
 
         const endPan = () => {
             isPanning = false;
+            this.endHold();
         };
 
         // Mouse events
@@ -111,9 +125,84 @@ class GameController {
         });
     }
 
+    private startHold(worldPos: Vector2D): void {
+        // Check if position is in player's influence
+        const player = this.game.players[0]; // Assume player 1 is the human player
+        if (!player.stellarForge) return;
+
+        const distance = worldPos.distanceTo(player.stellarForge.position);
+        if (distance < 300) { // Within influence radius
+            this.holdStartTime = Date.now();
+            this.holdPosition = worldPos;
+        }
+    }
+
+    private cancelHold(): void {
+        if (this.currentWarpGate) {
+            this.currentWarpGate.cancel();
+            this.scatterParticles(this.currentWarpGate.position);
+            const index = this.game.warpGates.indexOf(this.currentWarpGate);
+            if (index > -1) {
+                this.game.warpGates.splice(index, 1);
+            }
+        }
+        this.holdStartTime = null;
+        this.holdPosition = null;
+        this.currentWarpGate = null;
+    }
+
+    private endHold(): void {
+        this.holdStartTime = null;
+        this.holdPosition = null;
+        // Don't remove currentWarpGate here, it might still be charging
+    }
+
+    private scatterParticles(position: Vector2D): void {
+        // Scatter nearby particles
+        for (const particle of this.game.spaceDust) {
+            const distance = particle.position.distanceTo(position);
+            if (distance < 150) {
+                const direction = new Vector2D(
+                    particle.position.x - position.x,
+                    particle.position.y - position.y
+                ).normalize();
+                particle.applyForce(new Vector2D(
+                    direction.x * 200,
+                    direction.y * 200
+                ));
+            }
+        }
+    }
+
     private update(deltaTime: number): void {
         if (this.game.isRunning) {
             this.game.update(deltaTime);
+        }
+
+        // Update warp gate hold mechanic
+        if (this.holdStartTime && this.holdPosition) {
+            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
+            
+            if (holdDuration >= 1.0 && !this.currentWarpGate) {
+                // Create warp gate after 1 second
+                const player = this.game.players[0];
+                this.currentWarpGate = new WarpGate(this.holdPosition, player);
+                this.currentWarpGate.startCharging();
+                this.game.warpGates.push(this.currentWarpGate);
+            }
+        }
+
+        // Update current warp gate
+        if (this.currentWarpGate) {
+            const isStillHolding = this.holdStartTime !== null && this.holdPosition !== null;
+            this.currentWarpGate.update(deltaTime, isStillHolding);
+            
+            // Check if gate is complete
+            if (this.currentWarpGate.isComplete) {
+                // Gate is ready for building selection
+                // For now, just remove it after a moment
+                // In a full implementation, you'd show the building UI
+            }
         }
     }
 
