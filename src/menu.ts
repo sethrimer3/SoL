@@ -3,6 +3,7 @@
  */
 
 import * as Constants from './constants';
+import { Faction } from './game-core';
 
 export interface MenuOption {
     id: string;
@@ -20,19 +21,73 @@ export interface MapConfig {
     mapSize: number;
 }
 
+export interface HeroUnit {
+    id: string;
+    name: string;
+    description: string;
+    faction: Faction;
+}
+
 export interface GameSettings {
     selectedMap: MapConfig;
     difficulty: 'easy' | 'normal' | 'hard';
     soundEnabled: boolean;
     musicEnabled: boolean;
+    selectedFaction: Faction | null;
+    selectedHeroes: string[]; // Hero IDs
 }
 
 export class MainMenu {
     private menuElement: HTMLElement;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-select' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
+    
+    // Hero unit data - stubs for now
+    private heroUnits: HeroUnit[] = [
+        // Radiant faction heroes
+        { id: 'radiant-1', name: 'Luminar', description: 'Master of light manipulation', faction: Faction.RADIANT },
+        { id: 'radiant-2', name: 'Prismara', description: 'Rainbow warrior', faction: Faction.RADIANT },
+        { id: 'radiant-3', name: 'Solstice', description: 'Sun-caller', faction: Faction.RADIANT },
+        { id: 'radiant-4', name: 'Beamforge', description: 'Laser specialist', faction: Faction.RADIANT },
+        { id: 'radiant-5', name: 'Photonix', description: 'Speed of light incarnate', faction: Faction.RADIANT },
+        { id: 'radiant-6', name: 'Glowbringer', description: 'Illumination support', faction: Faction.RADIANT },
+        { id: 'radiant-7', name: 'Radiance', description: 'Pure light entity', faction: Faction.RADIANT },
+        { id: 'radiant-8', name: 'Stellaris', description: 'Star-born warrior', faction: Faction.RADIANT },
+        { id: 'radiant-9', name: 'Luxarion', description: 'Light shield bearer', faction: Faction.RADIANT },
+        { id: 'radiant-10', name: 'Dawnbringer', description: 'Herald of morning', faction: Faction.RADIANT },
+        { id: 'radiant-11', name: 'Shimmerwind', description: 'Swift light dancer', faction: Faction.RADIANT },
+        { id: 'radiant-12', name: 'Eclipsar', description: 'Master of light and shadow', faction: Faction.RADIANT },
+        
+        // Aurum faction heroes
+        { id: 'aurum-1', name: 'Goldhart', description: 'Golden commander', faction: Faction.AURUM },
+        { id: 'aurum-2', name: 'Wealthweaver', description: 'Economic mastermind', faction: Faction.AURUM },
+        { id: 'aurum-3', name: 'Coinforge', description: 'Resource multiplier', faction: Faction.AURUM },
+        { id: 'aurum-4', name: 'Gilded Guardian', description: 'Defensive specialist', faction: Faction.AURUM },
+        { id: 'aurum-5', name: 'Treasureheart', description: 'Loot collector', faction: Faction.AURUM },
+        { id: 'aurum-6', name: 'Aurumancer', description: 'Gold magic user', faction: Faction.AURUM },
+        { id: 'aurum-7', name: 'Mintmaster', description: 'Economy booster', faction: Faction.AURUM },
+        { id: 'aurum-8', name: 'Goldstrike', description: 'Heavy hitter', faction: Faction.AURUM },
+        { id: 'aurum-9', name: 'Vaultkeeper', description: 'Resource protector', faction: Faction.AURUM },
+        { id: 'aurum-10', name: 'Prosperion', description: 'Wealth incarnate', faction: Faction.AURUM },
+        { id: 'aurum-11', name: 'Opulence', description: 'Luxury warrior', faction: Faction.AURUM },
+        { id: 'aurum-12', name: 'Bullionaire', description: 'Market dominator', faction: Faction.AURUM },
+        
+        // Solari faction heroes
+        { id: 'solari-1', name: 'Sunwarden', description: 'Solar defender', faction: Faction.SOLARI },
+        { id: 'solari-2', name: 'Flareborn', description: 'Fire warrior', faction: Faction.SOLARI },
+        { id: 'solari-3', name: 'Heliarch', description: 'Sun priest', faction: Faction.SOLARI },
+        { id: 'solari-4', name: 'Coronax', description: 'Solar storm bringer', faction: Faction.SOLARI },
+        { id: 'solari-5', name: 'Pyroclast', description: 'Lava manipulator', faction: Faction.SOLARI },
+        { id: 'solari-6', name: 'Solarion', description: 'Sun champion', faction: Faction.SOLARI },
+        { id: 'solari-7', name: 'Infernova', description: 'Supernova wielder', faction: Faction.SOLARI },
+        { id: 'solari-8', name: 'Dawnkeeper', description: 'Morning guardian', faction: Faction.SOLARI },
+        { id: 'solari-9', name: 'Sunscorch', description: 'Burning blade', faction: Faction.SOLARI },
+        { id: 'solari-10', name: 'Heliorax', description: 'Solar dragon', faction: Faction.SOLARI },
+        { id: 'solari-11', name: 'Blazeheart', description: 'Fire soul', faction: Faction.SOLARI },
+        { id: 'solari-12', name: 'Solarflare', description: 'Burst specialist', faction: Faction.SOLARI },
+    ];
     
     private availableMaps: MapConfig[] = [
         {
@@ -75,7 +130,9 @@ export class MainMenu {
             selectedMap: this.availableMaps[0],
             difficulty: 'normal',
             soundEnabled: true,
-            musicEnabled: true
+            musicEnabled: true,
+            selectedFaction: null,
+            selectedHeroes: []
         };
         
         this.menuElement = this.createMenuElement();
@@ -160,6 +217,11 @@ export class MainMenu {
         // Create carousel menu with main menu options
         const menuOptions: MenuOption[] = [
             {
+                id: 'loadout',
+                name: 'LOADOUT',
+                description: 'Select faction & heroes'
+            },
+            {
                 id: 'start',
                 name: 'START',
                 description: 'Begin game'
@@ -179,6 +241,10 @@ export class MainMenu {
         this.carouselMenu = new CarouselMenuView(carouselContainer, menuOptions);
         this.carouselMenu.onSelect((option: MenuOption) => {
             switch (option.id) {
+                case 'loadout':
+                    this.currentScreen = 'faction-select';
+                    this.renderFactionSelectionScreen(this.menuElement);
+                    break;
                 case 'start':
                     this.hide();
                     if (this.onStartCallback) {
@@ -196,13 +262,26 @@ export class MainMenu {
             }
         });
 
-        // Current map indicator
-        const mapInfo = document.createElement('div');
-        mapInfo.style.marginTop = '20px';
-        mapInfo.style.fontSize = '14px';
-        mapInfo.style.color = '#AAAAAA';
-        mapInfo.innerHTML = `<div style="text-align: center;">Current Map: <span style="color: #FFD700;">${this.settings.selectedMap.name}</span></div>`;
-        container.appendChild(mapInfo);
+        // Current loadout and map indicators
+        const statusInfo = document.createElement('div');
+        statusInfo.style.marginTop = '20px';
+        statusInfo.style.fontSize = '14px';
+        statusInfo.style.color = '#AAAAAA';
+        
+        let loadoutStatus = 'Not configured';
+        if (this.settings.selectedFaction && this.settings.selectedHeroes.length === 4) {
+            loadoutStatus = `<span style="color: #00FF88;">${this.settings.selectedFaction} - 4 heroes</span>`;
+        } else if (this.settings.selectedFaction) {
+            loadoutStatus = `<span style="color: #FFA500;">${this.settings.selectedFaction} - ${this.settings.selectedHeroes.length}/4 heroes</span>`;
+        }
+        
+        statusInfo.innerHTML = `
+            <div style="text-align: center;">
+                <div>Loadout: ${loadoutStatus}</div>
+                <div style="margin-top: 5px;">Map: <span style="color: #FFD700;">${this.settings.selectedMap.name}</span></div>
+            </div>
+        `;
+        container.appendChild(statusInfo);
 
         // Features list
         const features = document.createElement('div');
@@ -370,6 +449,256 @@ export class MainMenu {
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
+    }
+
+    private renderFactionSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Select Your Faction';
+        title.style.fontSize = '48px';
+        title.style.marginBottom = '30px';
+        title.style.color = '#FFD700';
+        container.appendChild(title);
+
+        // Faction grid
+        const factionGrid = document.createElement('div');
+        factionGrid.style.display = 'grid';
+        factionGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
+        factionGrid.style.gap = '20px';
+        factionGrid.style.maxWidth = '900px';
+        factionGrid.style.padding = '20px';
+        factionGrid.style.marginBottom = '30px';
+
+        const factions = [
+            { 
+                id: Faction.RADIANT, 
+                name: 'Radiant', 
+                description: 'Masters of light manipulation. Enhanced mirror efficiency and faster light-based attacks.',
+                color: '#00AAFF'
+            },
+            { 
+                id: Faction.AURUM, 
+                name: 'Aurum', 
+                description: 'Wealth-oriented civilization. Economic bonuses and resource multiplication.',
+                color: '#FFD700'
+            },
+            { 
+                id: Faction.SOLARI, 
+                name: 'Solari', 
+                description: 'Sun-worshipping empire. Stronger structures and enhanced solar collection.',
+                color: '#FF6600'
+            }
+        ];
+
+        for (const faction of factions) {
+            const factionCard = document.createElement('div');
+            factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            factionCard.style.border = this.settings.selectedFaction === faction.id ? `3px solid ${faction.color}` : '2px solid rgba(255, 255, 255, 0.2)';
+            factionCard.style.borderRadius = '10px';
+            factionCard.style.padding = '20px';
+            factionCard.style.cursor = 'pointer';
+            factionCard.style.transition = 'all 0.3s';
+            factionCard.style.minHeight = '200px';
+
+            factionCard.addEventListener('mouseenter', () => {
+                if (this.settings.selectedFaction !== faction.id) {
+                    factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                    factionCard.style.transform = 'scale(1.02)';
+                }
+            });
+
+            factionCard.addEventListener('mouseleave', () => {
+                factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+                factionCard.style.transform = 'scale(1)';
+            });
+
+            factionCard.addEventListener('click', () => {
+                this.settings.selectedFaction = faction.id;
+                this.settings.selectedHeroes = []; // Reset hero selection when faction changes
+                this.renderFactionSelectionScreen(this.menuElement);
+            });
+
+            // Faction name
+            const factionName = document.createElement('h3');
+            factionName.textContent = faction.name;
+            factionName.style.fontSize = '28px';
+            factionName.style.marginBottom = '15px';
+            factionName.style.color = this.settings.selectedFaction === faction.id ? faction.color : '#FFFFFF';
+            factionCard.appendChild(factionName);
+
+            // Faction description
+            const factionDesc = document.createElement('p');
+            factionDesc.textContent = faction.description;
+            factionDesc.style.fontSize = '14px';
+            factionDesc.style.lineHeight = '1.5';
+            factionDesc.style.color = '#CCCCCC';
+            factionCard.appendChild(factionDesc);
+
+            factionGrid.appendChild(factionCard);
+        }
+
+        container.appendChild(factionGrid);
+
+        // Action buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '20px';
+        buttonContainer.style.marginTop = '20px';
+
+        // Continue button (only enabled if faction is selected)
+        if (this.settings.selectedFaction) {
+            const continueButton = this.createButton('SELECT HEROES', () => {
+                this.currentScreen = 'loadout-select';
+                this.renderLoadoutSelectionScreen(this.menuElement);
+            }, '#00FF88');
+            buttonContainer.appendChild(continueButton);
+        }
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'main';
+            this.renderMainScreen(this.menuElement);
+        }, '#666666');
+        buttonContainer.appendChild(backButton);
+
+        container.appendChild(buttonContainer);
+    }
+
+    private renderLoadoutSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+
+        if (!this.settings.selectedFaction) {
+            // Shouldn't happen, but handle gracefully
+            this.renderFactionSelectionScreen(container);
+            return;
+        }
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = `Select 4 Heroes - ${this.settings.selectedFaction}`;
+        title.style.fontSize = '42px';
+        title.style.marginBottom = '20px';
+        title.style.color = '#FFD700';
+        container.appendChild(title);
+
+        // Selection counter
+        const counter = document.createElement('div');
+        counter.textContent = `Selected: ${this.settings.selectedHeroes.length} / 4`;
+        counter.style.fontSize = '18px';
+        counter.style.marginBottom = '30px';
+        counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
+        container.appendChild(counter);
+
+        // Hero grid
+        const heroGrid = document.createElement('div');
+        heroGrid.style.display = 'grid';
+        heroGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+        heroGrid.style.gap = '15px';
+        heroGrid.style.maxWidth = '1000px';
+        heroGrid.style.padding = '20px';
+        heroGrid.style.marginBottom = '20px';
+        heroGrid.style.maxHeight = '500px';
+        heroGrid.style.overflowY = 'auto';
+
+        // Filter heroes by selected faction
+        const factionHeroes = this.heroUnits.filter(hero => hero.faction === this.settings.selectedFaction);
+
+        for (const hero of factionHeroes) {
+            const isSelected = this.settings.selectedHeroes.includes(hero.id);
+            const canSelect = isSelected || this.settings.selectedHeroes.length < 4;
+
+            const heroCard = document.createElement('div');
+            heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
+            heroCard.style.border = isSelected ? '3px solid #00FF88' : '2px solid rgba(255, 255, 255, 0.2)';
+            heroCard.style.borderRadius = '10px';
+            heroCard.style.padding = '15px';
+            heroCard.style.cursor = canSelect ? 'pointer' : 'not-allowed';
+            heroCard.style.transition = 'all 0.3s';
+            heroCard.style.opacity = canSelect ? '1' : '0.5';
+            heroCard.style.minHeight = '120px';
+
+            if (canSelect) {
+                heroCard.addEventListener('mouseenter', () => {
+                    if (!isSelected) {
+                        heroCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+                        heroCard.style.transform = 'scale(1.02)';
+                    }
+                });
+
+                heroCard.addEventListener('mouseleave', () => {
+                    heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
+                    heroCard.style.transform = 'scale(1)';
+                });
+
+                heroCard.addEventListener('click', () => {
+                    if (isSelected) {
+                        // Deselect hero
+                        this.settings.selectedHeroes = this.settings.selectedHeroes.filter(id => id !== hero.id);
+                    } else if (this.settings.selectedHeroes.length < 4) {
+                        // Select hero
+                        this.settings.selectedHeroes.push(hero.id);
+                    }
+                    this.renderLoadoutSelectionScreen(this.menuElement);
+                });
+            }
+
+            // Hero name
+            const heroName = document.createElement('h4');
+            heroName.textContent = hero.name;
+            heroName.style.fontSize = '18px';
+            heroName.style.marginBottom = '8px';
+            heroName.style.color = isSelected ? '#00FF88' : '#FFFFFF';
+            heroCard.appendChild(heroName);
+
+            // Hero description
+            const heroDesc = document.createElement('p');
+            heroDesc.textContent = hero.description;
+            heroDesc.style.fontSize = '12px';
+            heroDesc.style.lineHeight = '1.4';
+            heroDesc.style.color = '#AAAAAA';
+            heroCard.appendChild(heroDesc);
+
+            // Selection indicator
+            if (isSelected) {
+                const indicator = document.createElement('div');
+                indicator.textContent = '✓ Selected';
+                indicator.style.fontSize = '12px';
+                indicator.style.marginTop = '8px';
+                indicator.style.color = '#00FF88';
+                indicator.style.fontWeight = 'bold';
+                heroCard.appendChild(indicator);
+            }
+
+            heroGrid.appendChild(heroCard);
+        }
+
+        container.appendChild(heroGrid);
+
+        // Action buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '20px';
+        buttonContainer.style.marginTop = '20px';
+
+        // Confirm button (only enabled if 4 heroes selected)
+        if (this.settings.selectedHeroes.length === 4) {
+            const confirmButton = this.createButton('CONFIRM LOADOUT', () => {
+                this.currentScreen = 'main';
+                this.renderMainScreen(this.menuElement);
+            }, '#00FF88');
+            buttonContainer.appendChild(confirmButton);
+        }
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'faction-select';
+            this.renderFactionSelectionScreen(this.menuElement);
+        }, '#666666');
+        buttonContainer.appendChild(backButton);
+
+        container.appendChild(buttonContainer);
     }
 
     private createButton(text: string, onClick: () => void, color: string = '#FFD700'): HTMLButtonElement {
