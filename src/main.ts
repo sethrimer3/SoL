@@ -153,6 +153,30 @@ class GameController {
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
+            } else if (!this.isSelecting && this.selectedUnits.size > 0 && this.selectionStartScreen && this.game) {
+                // If units are selected and player clicked (not dragged), set rally point
+                const clickPos = new Vector2D(lastX, lastY);
+                const startPos = this.selectionStartScreen;
+                const totalMovement = Math.sqrt(
+                    (clickPos.x - startPos.x) ** 2 + 
+                    (clickPos.y - startPos.y) ** 2
+                );
+                
+                // Only treat as rally point click if movement was minimal (< 5 pixels)
+                if (totalMovement < 5) {
+                    const worldPos = this.renderer.screenToWorld(lastX, lastY);
+                    
+                    // Set rally point for all selected units
+                    for (const unit of this.selectedUnits) {
+                        unit.rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                    }
+                    
+                    // Deselect all units immediately
+                    this.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
+                    
+                    console.log(`Rally point set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                }
             }
             
             isPanning = false;

@@ -60,3 +60,7 @@ export const BOUNCING_BULLET_SPEED_MAX = 250;
 export const CASING_SPACEDUST_COLLISION_DISTANCE = 5;
 export const CASING_SPACEDUST_FORCE = 50;
 export const CASING_COLLISION_DAMPING = 0.3;
+
+// Unit movement constants
+export const UNIT_MOVE_SPEED = 100; // Pixels per second
+export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
