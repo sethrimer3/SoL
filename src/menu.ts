@@ -535,6 +535,14 @@ export class MainMenu {
  * Carousel menu view - displays menu options in a horizontal carousel
  */
 class CarouselMenuView {
+    // Animation constants
+    private static readonly ITEM_WIDTH = 200;
+    private static readonly BASE_SIZE = 120;
+    private static readonly VELOCITY_MULTIPLIER = 0.1;
+    private static readonly VELOCITY_FACTOR = 0.001;
+    private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
+    private static readonly VELOCITY_DECAY_FACTOR = 0.9;
+    
     private container: HTMLElement;
     private options: MenuOption[];
     private currentIndex: number = 0;
@@ -633,7 +641,7 @@ class CarouselMenuView {
         
         const deltaX = x - this.dragStartX;
         this.scrollOffset = this.dragStartOffset + deltaX;
-        this.velocity = deltaX * 0.1; // Track velocity for momentum
+        this.velocity = deltaX * CarouselMenuView.VELOCITY_MULTIPLIER; // Track velocity for momentum
     }
 
     private endDrag(x: number): void {
@@ -643,9 +651,8 @@ class CarouselMenuView {
         this.container.style.cursor = 'grab';
         
         // Snap to nearest option based on current position and velocity
-        const itemWidth = 200; // Approximate width between items
-        const targetIndexFloat = -this.scrollOffset / itemWidth;
-        let targetIndex = Math.round(targetIndexFloat + this.velocity * 0.001);
+        const targetIndexFloat = -this.scrollOffset / CarouselMenuView.ITEM_WIDTH;
+        let targetIndex = Math.round(targetIndexFloat + this.velocity * CarouselMenuView.VELOCITY_FACTOR);
         
         // Clamp to valid range
         targetIndex = Math.max(0, Math.min(this.options.length - 1, targetIndex));
@@ -660,8 +667,7 @@ class CarouselMenuView {
         const offsetFromCenter = relativeX - centerX;
         
         // Determine which option was clicked based on position
-        const itemWidth = 200;
-        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / itemWidth);
+        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / CarouselMenuView.ITEM_WIDTH);
         const clickedIndex = Math.max(0, Math.min(this.options.length - 1, clickedOffset));
         
         if (clickedIndex === this.currentIndex) {
@@ -687,13 +693,13 @@ class CarouselMenuView {
 
     private update(): void {
         // Smooth scrolling towards target
-        const targetScrollOffset = -this.currentIndex * 200;
+        const targetScrollOffset = -this.currentIndex * CarouselMenuView.ITEM_WIDTH;
         const diff = targetScrollOffset - this.scrollOffset;
-        this.scrollOffset += diff * 0.15; // Smooth interpolation
+        this.scrollOffset += diff * CarouselMenuView.SMOOTH_INTERPOLATION_FACTOR;
         
         // Apply velocity decay when not dragging
         if (!this.isDragging && Math.abs(this.velocity) > 0.1) {
-            this.velocity *= 0.9;
+            this.velocity *= CarouselMenuView.VELOCITY_DECAY_FACTOR;
             this.scrollOffset += this.velocity;
         } else {
             this.velocity = 0;
@@ -708,9 +714,6 @@ class CarouselMenuView {
         const centerX = rect.width / 2;
         const centerY = rect.height / 2;
         
-        const baseSize = 120;
-        const spacing = 200;
-        
         // Render each option
         for (let i = 0; i < this.options.length; i++) {
             const option = this.options[i];
@@ -718,7 +721,7 @@ class CarouselMenuView {
             const distance = Math.abs(offsetFromCenter);
             
             // Calculate position
-            const x = centerX + this.scrollOffset + i * spacing;
+            const x = centerX + this.scrollOffset + i * CarouselMenuView.ITEM_WIDTH;
             
             // Calculate size and opacity based on distance from center
             let scale = 1.0;
@@ -738,7 +741,7 @@ class CarouselMenuView {
                 opacity = Math.max(0.25, 1.0 - distance * 0.25);
             }
             
-            const size = baseSize * scale;
+            const size = CarouselMenuView.BASE_SIZE * scale;
             
             // Create option element
             const optionElement = document.createElement('div');

@@ -79,6 +79,12 @@ class GameController {
     }
 
     private setupInputHandlers(canvas: HTMLCanvasElement): void {
+        // Helper function to detect mobile/tablet devices
+        const isMobileDevice = (): boolean => {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || ('ontouchstart' in window);
+        };
+
         // Touch/Mouse support for mobile and desktop
         let isPanning = false;
         let isMouseDown = false;
@@ -94,6 +100,9 @@ class GameController {
         
         // Mobile touch constants
         const PINCH_ZOOM_THRESHOLD = 1; // minimum pixel change to trigger zoom
+
+        // Store mobile detection result
+        const isMobile = isMobileDevice();
 
         // Keyboard panning state
         const keysPressed = new Set<string>();
@@ -354,10 +363,6 @@ class GameController {
             lastPinchDistance = 0;
         });
 
-        // Detect if device is mobile/tablet to disable edge panning
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-            || ('ontouchstart' in window);
-
         // Keyboard controls (WASD and arrow keys) - Desktop only
         const KEYBOARD_PAN_SPEED = 10;
         
@@ -379,7 +384,7 @@ class GameController {
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
             // Disable edge panning on mobile devices
-            const hasEdgeInput = !isMobileDevice && !isMouseDown && !isPanning && (
+            const hasEdgeInput = !isMobile && !isMouseDown && !isPanning && (
                 lastMouseX < EDGE_PAN_THRESHOLD ||
                 lastMouseX > canvas.width - EDGE_PAN_THRESHOLD ||
                 lastMouseY < EDGE_PAN_THRESHOLD ||
