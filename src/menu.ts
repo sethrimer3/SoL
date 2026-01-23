@@ -554,6 +554,7 @@ class CarouselMenuView {
     private velocity: number = 0;
     private onSelectCallback: ((option: MenuOption) => void) | null = null;
     private animationFrameId: number | null = null;
+    private hasDragged: boolean = false;
 
     constructor(container: HTMLElement, options: MenuOption[]) {
         this.container = container;
@@ -620,12 +621,6 @@ class CarouselMenuView {
                 e.preventDefault();
             }
         }, { passive: false });
-
-        // Click to select
-        this.container.addEventListener('click', (e: MouseEvent | TouchEvent) => {
-            const clickX = 'clientX' in e ? e.clientX : e.changedTouches[0].clientX;
-            this.handleClick(clickX);
-        });
     }
 
     private startDrag(x: number): void {
@@ -633,6 +628,7 @@ class CarouselMenuView {
         this.dragStartX = x;
         this.dragStartOffset = this.scrollOffset;
         this.velocity = 0;
+        this.hasDragged = false;
         this.container.style.cursor = 'grabbing';
     }
 
@@ -642,6 +638,11 @@ class CarouselMenuView {
         const deltaX = x - this.dragStartX;
         this.scrollOffset = this.dragStartOffset + deltaX;
         this.velocity = deltaX * CarouselMenuView.VELOCITY_MULTIPLIER; // Track velocity for momentum
+        
+        // Track if we've dragged significantly
+        if (Math.abs(deltaX) > 5) {
+            this.hasDragged = true;
+        }
     }
 
     private endDrag(x: number): void {
@@ -649,6 +650,12 @@ class CarouselMenuView {
         
         this.isDragging = false;
         this.container.style.cursor = 'grab';
+        
+        // If not dragged significantly, treat as a click/tap
+        if (!this.hasDragged) {
+            this.handleClick(x);
+            return;
+        }
         
         // Snap to nearest option based on current position and velocity
         const targetIndexFloat = -this.scrollOffset / CarouselMenuView.ITEM_WIDTH;
