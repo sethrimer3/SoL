@@ -522,6 +522,18 @@ export class GameRenderer {
             }
         }
 
+        // Draw attack range circle for selected hero units (only friendly units)
+        if (isSelected && unit.isHero && !isEnemy) {
+            const attackRangeScreenRadius = unit.attackRange * this.zoom;
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 1;
+            this.ctx.globalAlpha = 0.2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, attackRangeScreenRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = shouldDim ? Constants.SHADE_OPACITY : 1.0;
+        }
+
         // Draw selection indicator for selected units
         if (isSelected) {
             this.ctx.strokeStyle = '#00FF00';

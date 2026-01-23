@@ -378,13 +378,13 @@ class GameController {
                     
                     // Set target for all selected mirrors
                     for (const mirror of this.selectedMirrors) {
-                        mirror.setTarget(worldPos);
+                        mirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
                         mirror.isSelected = false;
                     }
                     
                     // Set target for selected base
                     if (this.selectedBase) {
-                        this.selectedBase.setTarget(worldPos);
+                        this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
                         this.selectedBase.isSelected = false;
                     }
                     
