@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, MuzzleFlash, BulletCasing, BouncingBullet } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -484,6 +484,78 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Grave unit with its orbiting projectiles
+     */
+    private drawGrave(grave: Grave, color: string): void {
+        // Draw the base unit
+        this.drawUnit(grave, color);
+        
+        // Draw a distinctive grave symbol
+        const screenPos = this.worldToScreen(grave.position);
+        const size = 10 * this.zoom;
+        
+        // Draw cross symbol
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y - size);
+        this.ctx.lineTo(screenPos.x, screenPos.y + size);
+        this.ctx.moveTo(screenPos.x - size * 0.7, screenPos.y - size * 0.3);
+        this.ctx.lineTo(screenPos.x + size * 0.7, screenPos.y - size * 0.3);
+        this.ctx.stroke();
+        
+        // Draw projectiles
+        for (const projectile of grave.getProjectiles()) {
+            this.drawGraveProjectile(projectile, color);
+        }
+    }
+
+    /**
+     * Draw a Grave projectile with trail
+     */
+    private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
+        const screenPos = this.worldToScreen(projectile.position);
+        const size = 4 * this.zoom;
+        
+        // Draw trail if attacking
+        if (projectile.isAttacking && projectile.trail.length > 1) {
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.beginPath();
+            
+            for (let i = 0; i < projectile.trail.length; i++) {
+                const trailPos = this.worldToScreen(projectile.trail[i]);
+                if (i === 0) {
+                    this.ctx.moveTo(trailPos.x, trailPos.y);
+                } else {
+                    this.ctx.lineTo(trailPos.x, trailPos.y);
+                }
+            }
+            
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+        
+        // Draw projectile as a circle
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        // Add a glow effect when attacking
+        if (projectile.isAttacking) {
+            this.ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+
+    /**
      * Draw connection lines
      */
     private drawConnections(player: Player, suns: Sun[]): void {
@@ -629,7 +701,11 @@ export class GameRenderer {
             
             const color = this.getFactionColor(player.faction);
             for (const unit of player.units) {
-                this.drawUnit(unit, color);
+                if (unit instanceof Grave) {
+                    this.drawGrave(unit, color);
+                } else {
+                    this.drawUnit(unit, color);
+                }
             }
         }
 
