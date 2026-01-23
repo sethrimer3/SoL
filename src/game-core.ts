@@ -554,6 +554,7 @@ export class Unit {
     maxHealth: number;
     attackCooldown: number = 0;
     target: Unit | StellarForge | null = null;
+    rallyPoint: Vector2D | null = null;
     
     constructor(
         public position: Vector2D,
@@ -574,6 +575,24 @@ export class Unit {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
+        }
+
+        // Move toward rally point if set
+        if (this.rallyPoint) {
+            const distance = this.position.distanceTo(this.rallyPoint);
+            if (distance > Constants.UNIT_ARRIVAL_THRESHOLD) {
+                // Calculate direction vector
+                const dx = this.rallyPoint.x - this.position.x;
+                const dy = this.rallyPoint.y - this.position.y;
+                
+                // Normalize and move (reuse distance to avoid redundant calculation)
+                const moveDistance = Constants.UNIT_MOVE_SPEED * deltaTime;
+                this.position.x += (dx / distance) * moveDistance;
+                this.position.y += (dy / distance) * moveDistance;
+            } else {
+                // Arrived at rally point
+                this.rallyPoint = null;
+            }
         }
 
         // Find target if don't have one or current target is dead
