@@ -471,7 +471,7 @@ export class GameRenderer {
     private drawAbilityBullet(bullet: AbilityBullet): void {
         const screenPos = this.worldToScreen(bullet.position);
         const size = 4 * this.zoom;
-        const opacity = 1.0 - (bullet.lifetime / bullet.maxLifetime);
+        const opacity = bullet.lifetime / bullet.maxLifetime;
 
         // Draw bullet with owner's faction color
         const color = this.getFactionColor(bullet.owner.faction);

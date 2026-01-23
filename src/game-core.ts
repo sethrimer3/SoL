@@ -880,7 +880,8 @@ export class Marine extends Unit {
         for (let i = 0; i < bulletCount; i++) {
             // Calculate angle for this bullet within the spread
             // Distribute bullets evenly within the spread angle
-            const angleOffset = (i / (bulletCount - 1) - 0.5) * spreadAngle * 2;
+            // Use max to avoid division by zero if bulletCount is 1
+            const angleOffset = (i / Math.max(bulletCount - 1, 1) - 0.5) * spreadAngle * 2;
             const bulletAngle = baseAngle + angleOffset;
             
             // Calculate velocity
