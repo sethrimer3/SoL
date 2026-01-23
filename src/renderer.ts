@@ -79,6 +79,17 @@ export class GameRenderer {
     }
 
     /**
+     * Get canvas dimensions accounting for device pixel ratio
+     */
+    private getCanvasDimensions(): { width: number; height: number } {
+        const dpr = window.devicePixelRatio || 1;
+        return {
+            width: this.canvas.width / dpr,
+            height: this.canvas.height / dpr
+        };
+    }
+
+    /**
      * Get faction color
      */
     private getFactionColor(faction: Faction): string {
@@ -129,12 +140,11 @@ export class GameRenderer {
      * Check if a position is visible on screen
      */
     private isOnScreen(screenPos: Vector2D, margin: number = 200): boolean {
-        const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
-        const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+        const { width, height } = this.getCanvasDimensions();
         return screenPos.x > -margin && 
-               screenPos.x < canvasWidth + margin &&
+               screenPos.x < width + margin &&
                screenPos.y > -margin && 
-               screenPos.y < canvasHeight + margin;
+               screenPos.y < height + margin;
     }
 
     /**
@@ -146,8 +156,7 @@ export class GameRenderer {
             return;
         }
 
-        const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
-        const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+        const { width: canvasWidth, height: canvasHeight } = this.getCanvasDimensions();
         const centerX = canvasWidth / 2;
         const centerY = canvasHeight / 2;
 
