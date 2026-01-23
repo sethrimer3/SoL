@@ -4,6 +4,13 @@
 
 import * as Constants from './constants';
 
+export interface MenuOption {
+    id: string;
+    name: string;
+    description: string;
+    icon?: string;
+}
+
 export interface MapConfig {
     id: string;
     name: string;
@@ -25,6 +32,7 @@ export class MainMenu {
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
     private currentScreen: 'main' | 'maps' | 'settings' = 'main';
     private settings: GameSettings;
+    private carouselMenu: CarouselMenuView | null = null;
     
     private availableMaps: MapConfig[] = [
         {
@@ -99,6 +107,10 @@ export class MainMenu {
     }
 
     private clearMenu(): void {
+        if (this.carouselMenu) {
+            this.carouselMenu.destroy();
+            this.carouselMenu = null;
+        }
         if (this.menuElement) {
             this.menuElement.innerHTML = '';
         }
@@ -124,13 +136,13 @@ export class MainMenu {
         const subtitle = document.createElement('h2');
         subtitle.textContent = 'Speed of Light RTS';
         subtitle.style.fontSize = '24px';
-        subtitle.style.marginBottom = '50px';
+        subtitle.style.marginBottom = '30px';
         subtitle.style.color = '#AAAAAA';
         container.appendChild(subtitle);
 
         // Description
         const description = document.createElement('p');
-        description.textContent = 'Battle for supremacy around stars using light as a resource';
+        description.textContent = 'Select a menu option below';
         description.style.fontSize = '16px';
         description.style.marginBottom = '40px';
         description.style.maxWidth = '500px';
@@ -138,34 +150,55 @@ export class MainMenu {
         description.style.lineHeight = '1.5';
         container.appendChild(description);
 
-        // Start button
-        const startButton = this.createButton('START GAME', () => {
-            this.hide();
-            if (this.onStartCallback) {
-                this.onStartCallback(this.settings);
+        // Create carousel menu container
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = '900px';
+        carouselContainer.style.marginBottom = '40px';
+        container.appendChild(carouselContainer);
+
+        // Create carousel menu with main menu options
+        const menuOptions: MenuOption[] = [
+            {
+                id: 'start',
+                name: 'START',
+                description: 'Begin game'
+            },
+            {
+                id: 'maps',
+                name: 'MAPS',
+                description: 'Select map'
+            },
+            {
+                id: 'settings',
+                name: 'SETTINGS',
+                description: 'Configure game'
+            }
+        ];
+
+        this.carouselMenu = new CarouselMenuView(carouselContainer, menuOptions);
+        this.carouselMenu.onSelect((option: MenuOption) => {
+            switch (option.id) {
+                case 'start':
+                    this.hide();
+                    if (this.onStartCallback) {
+                        this.onStartCallback(this.settings);
+                    }
+                    break;
+                case 'maps':
+                    this.currentScreen = 'maps';
+                    this.renderMapSelectionScreen(this.menuElement);
+                    break;
+                case 'settings':
+                    this.currentScreen = 'settings';
+                    this.renderSettingsScreen(this.menuElement);
+                    break;
             }
         });
-        container.appendChild(startButton);
-
-        // Map Selection button
-        const mapButton = this.createButton('SELECT MAP', () => {
-            this.currentScreen = 'maps';
-            this.renderMapSelectionScreen(this.menuElement);
-        }, '#00AAFF');
-        mapButton.style.marginTop = '20px';
-        container.appendChild(mapButton);
-
-        // Settings button
-        const settingsButton = this.createButton('SETTINGS', () => {
-            this.currentScreen = 'settings';
-            this.renderSettingsScreen(this.menuElement);
-        }, '#00FF88');
-        settingsButton.style.marginTop = '20px';
-        container.appendChild(settingsButton);
 
         // Current map indicator
         const mapInfo = document.createElement('div');
-        mapInfo.style.marginTop = '40px';
+        mapInfo.style.marginTop = '20px';
         mapInfo.style.fontSize = '14px';
         mapInfo.style.color = '#AAAAAA';
         mapInfo.innerHTML = `<div style="text-align: center;">Current Map: <span style="color: #FFD700;">${this.settings.selectedMap.name}</span></div>`;
@@ -481,6 +514,10 @@ export class MainMenu {
      * Remove the menu from DOM
      */
     destroy(): void {
+        if (this.carouselMenu) {
+            this.carouselMenu.destroy();
+            this.carouselMenu = null;
+        }
         if (this.menuElement.parentNode) {
             this.menuElement.parentNode.removeChild(this.menuElement);
         }
@@ -491,5 +528,286 @@ export class MainMenu {
      */
     getSettings(): GameSettings {
         return this.settings;
+    }
+}
+
+/**
+ * Carousel menu view - displays menu options in a horizontal carousel
+ */
+class CarouselMenuView {
+    // Animation constants
+    private static readonly ITEM_WIDTH = 200;
+    private static readonly BASE_SIZE = 120;
+    private static readonly VELOCITY_MULTIPLIER = 0.1;
+    private static readonly VELOCITY_FACTOR = 0.001;
+    private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
+    private static readonly VELOCITY_DECAY_FACTOR = 0.9;
+    
+    private container: HTMLElement;
+    private options: MenuOption[];
+    private currentIndex: number = 0;
+    private targetIndex: number = 0;
+    private scrollOffset: number = 0;
+    private isDragging: boolean = false;
+    private dragStartX: number = 0;
+    private dragStartOffset: number = 0;
+    private velocity: number = 0;
+    private onSelectCallback: ((option: MenuOption) => void) | null = null;
+    private animationFrameId: number | null = null;
+
+    constructor(container: HTMLElement, options: MenuOption[]) {
+        this.container = container;
+        this.options = options;
+        this.setupContainer();
+        this.setupEventHandlers();
+        this.startAnimation();
+    }
+
+    private setupContainer(): void {
+        this.container.style.position = 'relative';
+        this.container.style.width = '100%';
+        this.container.style.height = '400px';
+        this.container.style.overflow = 'hidden';
+        this.container.style.cursor = 'grab';
+        this.container.style.userSelect = 'none';
+        this.container.style.touchAction = 'pan-y'; // Allow vertical scrolling but handle horizontal ourselves
+    }
+
+    private setupEventHandlers(): void {
+        // Mouse events
+        this.container.addEventListener('mousedown', (e: MouseEvent) => {
+            this.startDrag(e.clientX);
+            e.preventDefault();
+        });
+
+        this.container.addEventListener('mousemove', (e: MouseEvent) => {
+            if (this.isDragging) {
+                this.updateDrag(e.clientX);
+                e.preventDefault();
+            }
+        });
+
+        this.container.addEventListener('mouseup', (e: MouseEvent) => {
+            this.endDrag(e.clientX);
+            e.preventDefault();
+        });
+
+        this.container.addEventListener('mouseleave', () => {
+            if (this.isDragging) {
+                this.endDrag(this.dragStartX);
+            }
+        });
+
+        // Touch events
+        this.container.addEventListener('touchstart', (e: TouchEvent) => {
+            if (e.touches.length === 1) {
+                this.startDrag(e.touches[0].clientX);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        this.container.addEventListener('touchmove', (e: TouchEvent) => {
+            if (this.isDragging && e.touches.length === 1) {
+                this.updateDrag(e.touches[0].clientX);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        this.container.addEventListener('touchend', (e: TouchEvent) => {
+            if (this.isDragging) {
+                const touch = e.changedTouches[0];
+                this.endDrag(touch.clientX);
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        // Click to select
+        this.container.addEventListener('click', (e: MouseEvent | TouchEvent) => {
+            const clickX = 'clientX' in e ? e.clientX : e.changedTouches[0].clientX;
+            this.handleClick(clickX);
+        });
+    }
+
+    private startDrag(x: number): void {
+        this.isDragging = true;
+        this.dragStartX = x;
+        this.dragStartOffset = this.scrollOffset;
+        this.velocity = 0;
+        this.container.style.cursor = 'grabbing';
+    }
+
+    private updateDrag(x: number): void {
+        if (!this.isDragging) return;
+        
+        const deltaX = x - this.dragStartX;
+        this.scrollOffset = this.dragStartOffset + deltaX;
+        this.velocity = deltaX * CarouselMenuView.VELOCITY_MULTIPLIER; // Track velocity for momentum
+    }
+
+    private endDrag(x: number): void {
+        if (!this.isDragging) return;
+        
+        this.isDragging = false;
+        this.container.style.cursor = 'grab';
+        
+        // Snap to nearest option based on current position and velocity
+        const targetIndexFloat = -this.scrollOffset / CarouselMenuView.ITEM_WIDTH;
+        let targetIndex = Math.round(targetIndexFloat + this.velocity * CarouselMenuView.VELOCITY_FACTOR);
+        
+        // Clamp to valid range
+        targetIndex = Math.max(0, Math.min(this.options.length - 1, targetIndex));
+        this.targetIndex = targetIndex;
+        this.currentIndex = targetIndex;
+    }
+
+    private handleClick(x: number): void {
+        const rect = this.container.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const relativeX = x - rect.left;
+        const offsetFromCenter = relativeX - centerX;
+        
+        // Determine which option was clicked based on position
+        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / CarouselMenuView.ITEM_WIDTH);
+        const clickedIndex = Math.max(0, Math.min(this.options.length - 1, clickedOffset));
+        
+        if (clickedIndex === this.currentIndex) {
+            // Clicked on center option - select it
+            if (this.onSelectCallback) {
+                this.onSelectCallback(this.options[this.currentIndex]);
+            }
+        } else {
+            // Clicked on different option - slide to it
+            this.targetIndex = clickedIndex;
+            this.currentIndex = clickedIndex;
+        }
+    }
+
+    private startAnimation(): void {
+        const animate = () => {
+            this.update();
+            this.render();
+            this.animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    private update(): void {
+        // Smooth scrolling towards target
+        const targetScrollOffset = -this.currentIndex * CarouselMenuView.ITEM_WIDTH;
+        const diff = targetScrollOffset - this.scrollOffset;
+        this.scrollOffset += diff * CarouselMenuView.SMOOTH_INTERPOLATION_FACTOR;
+        
+        // Apply velocity decay when not dragging
+        if (!this.isDragging && Math.abs(this.velocity) > 0.1) {
+            this.velocity *= CarouselMenuView.VELOCITY_DECAY_FACTOR;
+            this.scrollOffset += this.velocity;
+        } else {
+            this.velocity = 0;
+        }
+    }
+
+    private render(): void {
+        // Clear container
+        this.container.innerHTML = '';
+        
+        const rect = this.container.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        
+        // Render each option
+        for (let i = 0; i < this.options.length; i++) {
+            const option = this.options[i];
+            const offsetFromCenter = i - this.currentIndex;
+            const distance = Math.abs(offsetFromCenter);
+            
+            // Calculate position
+            const x = centerX + this.scrollOffset + i * CarouselMenuView.ITEM_WIDTH;
+            
+            // Calculate size and opacity based on distance from center
+            let scale = 1.0;
+            let opacity = 1.0;
+            
+            if (distance === 0) {
+                scale = 1.0;
+                opacity = 1.0;
+            } else if (distance === 1) {
+                scale = 0.75;
+                opacity = 0.75;
+            } else if (distance === 2) {
+                scale = 0.5;
+                opacity = 0.5;
+            } else {
+                scale = Math.max(0.25, 1.0 - distance * 0.25);
+                opacity = Math.max(0.25, 1.0 - distance * 0.25);
+            }
+            
+            const size = CarouselMenuView.BASE_SIZE * scale;
+            
+            // Create option element
+            const optionElement = document.createElement('div');
+            optionElement.style.position = 'absolute';
+            optionElement.style.left = `${x - size / 2}px`;
+            optionElement.style.top = `${centerY - size / 2}px`;
+            optionElement.style.width = `${size}px`;
+            optionElement.style.height = `${size}px`;
+            optionElement.style.backgroundColor = distance === 0 ? '#FFD700' : '#00AAFF';
+            optionElement.style.border = '3px solid rgba(255, 255, 255, 0.5)';
+            optionElement.style.borderRadius = '10px';
+            optionElement.style.opacity = opacity.toString();
+            optionElement.style.transition = 'background-color 0.2s';
+            optionElement.style.display = 'flex';
+            optionElement.style.flexDirection = 'column';
+            optionElement.style.justifyContent = 'center';
+            optionElement.style.alignItems = 'center';
+            optionElement.style.pointerEvents = 'none'; // Let container handle events
+            optionElement.style.color = '#000000';
+            optionElement.style.fontWeight = 'bold';
+            optionElement.style.textAlign = 'center';
+            optionElement.style.padding = '10px';
+            optionElement.style.boxSizing = 'border-box';
+            
+            // Add option name
+            const nameElement = document.createElement('div');
+            nameElement.textContent = option.name;
+            nameElement.style.fontSize = `${Math.max(12, 16 * scale)}px`;
+            nameElement.style.marginBottom = '5px';
+            optionElement.appendChild(nameElement);
+            
+            // Add option description (only for center item)
+            if (distance === 0) {
+                const descElement = document.createElement('div');
+                descElement.textContent = option.description;
+                descElement.style.fontSize = `${Math.max(8, 10 * scale)}px`;
+                descElement.style.color = '#333333';
+                descElement.style.overflow = 'hidden';
+                descElement.style.textOverflow = 'ellipsis';
+                optionElement.appendChild(descElement);
+            }
+            
+            this.container.appendChild(optionElement);
+        }
+        
+        // Add instruction text
+        const instructionElement = document.createElement('div');
+        instructionElement.textContent = 'Drag to browse • Click center to select';
+        instructionElement.style.position = 'absolute';
+        instructionElement.style.bottom = '20px';
+        instructionElement.style.left = '50%';
+        instructionElement.style.transform = 'translateX(-50%)';
+        instructionElement.style.color = '#AAAAAA';
+        instructionElement.style.fontSize = '14px';
+        instructionElement.style.pointerEvents = 'none';
+        this.container.appendChild(instructionElement);
+    }
+
+    public onSelect(callback: (option: MenuOption) => void): void {
+        this.onSelectCallback = callback;
+    }
+
+    public destroy(): void {
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
     }
 }

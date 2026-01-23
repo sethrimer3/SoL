@@ -79,6 +79,12 @@ class GameController {
     }
 
     private setupInputHandlers(canvas: HTMLCanvasElement): void {
+        // Helper function to detect mobile/tablet devices
+        const isMobileDevice = (): boolean => {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || ('ontouchstart' in window);
+        };
+
         // Touch/Mouse support for mobile and desktop
         let isPanning = false;
         let isMouseDown = false;
@@ -94,6 +100,9 @@ class GameController {
         
         // Mobile touch constants
         const PINCH_ZOOM_THRESHOLD = 1; // minimum pixel change to trigger zoom
+
+        // Store mobile detection result
+        const isMobile = isMobileDevice();
 
         // Keyboard panning state
         const keysPressed = new Set<string>();
@@ -374,7 +383,8 @@ class GameController {
         const updateCameraPanning = () => {
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
-            const hasEdgeInput = !isMouseDown && !isPanning && (
+            // Disable edge panning on mobile devices
+            const hasEdgeInput = !isMobile && !isMouseDown && !isPanning && (
                 lastMouseX < EDGE_PAN_THRESHOLD ||
                 lastMouseX > canvas.width - EDGE_PAN_THRESHOLD ||
                 lastMouseY < EDGE_PAN_THRESHOLD ||
@@ -392,7 +402,7 @@ class GameController {
                 if (keysPressed.has('a') || keysPressed.has('arrowleft')) dx -= KEYBOARD_PAN_SPEED;
                 if (keysPressed.has('d') || keysPressed.has('arrowright')) dx += KEYBOARD_PAN_SPEED;
 
-                // Edge panning (only if not dragging with mouse)
+                // Edge panning (only if not dragging with mouse and not on mobile)
                 if (hasEdgeInput) {
                     if (lastMouseX < EDGE_PAN_THRESHOLD) dx -= EDGE_PAN_SPEED;
                     if (lastMouseX > canvas.width - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
