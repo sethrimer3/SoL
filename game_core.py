@@ -42,9 +42,10 @@ class LightRay:
     
     def intersects(self, position: Vector2D, radius: float) -> bool:
         """Check if ray intersects with a circular object"""
-        # Simplified intersection test for circular objects
-        # This is a basic implementation for the game mechanics
-        return True  # Placeholder for full ray-circle intersection
+        # TODO: Implement full ray-circle intersection algorithm
+        # For now, simplified to allow basic gameplay testing
+        # Future implementation should use proper geometric intersection
+        return True  # Placeholder - needs ray tracing implementation
 
 
 @dataclass
@@ -57,13 +58,17 @@ class SolarMirror:
     
     def has_line_of_sight_to_light(self, light_sources: List['Sun']) -> bool:
         """Check if mirror has clear view of any light source"""
-        # Placeholder - will implement ray tracing
-        return len(light_sources) > 0
+        # TODO: Implement ray tracing to check for obstacles blocking light
+        # For now, assumes clear line-of-sight if any light sources exist
+        # Future implementation should cast rays and check for occlusion
+        return len(light_sources) > 0  # Placeholder - needs ray casting
     
     def has_line_of_sight_to_forge(self, forge: 'StellarForge', obstacles: List) -> bool:
         """Check if mirror has clear path to Stellar Forge"""
-        # Placeholder - will implement collision detection
-        return True
+        # TODO: Implement collision detection with obstacles parameter
+        # For now, assumes clear line-of-sight for basic gameplay
+        # Future implementation should check obstacle intersections
+        return True  # Placeholder - needs collision detection
     
     def generate_solarium(self, delta_time: float) -> float:
         """Generate Solarium based on light received"""
