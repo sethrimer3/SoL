@@ -91,6 +91,9 @@ class GameController {
         // Edge panning constants (desktop only)
         const EDGE_PAN_THRESHOLD = 20; // pixels from edge
         const EDGE_PAN_SPEED = 5; // pixels per frame
+        
+        // Mobile touch constants
+        const PINCH_ZOOM_THRESHOLD = 1; // minimum pixel change to trigger zoom
 
         // Keyboard panning state
         const keysPressed = new Set<string>();
@@ -257,7 +260,7 @@ class GameController {
             endDrag();
         });
 
-        // Touch events - two fingers for pan and zoom, one finger for selection
+        // Touch events - pinch zoom and center-point panning with two fingers, one finger for selection
         canvas.addEventListener('touchstart', (e: TouchEvent) => {
             if (e.touches.length === 1) {
                 e.preventDefault();
@@ -304,7 +307,7 @@ class GameController {
                 const currentPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 
                 // Handle pinch zoom if distance changed significantly
-                if (Math.abs(currentPinchDistance - lastPinchDistance) > 1) {
+                if (Math.abs(currentPinchDistance - lastPinchDistance) > PINCH_ZOOM_THRESHOLD) {
                     // Get world position under pinch center before zoom
                     const worldPosBeforeZoom = this.renderer.screenToWorld(currentX, currentY);
                     
