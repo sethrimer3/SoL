@@ -78,8 +78,8 @@ class GameController {
         game.asteroids = [];
         game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
         
-        // For default map, add strategic asteroids back
-        if (map.id === 'default') {
+        // For standard map, add strategic asteroids back
+        if (map.id === 'standard') {
             game.asteroids.push(...strategicAsteroids);
         }
         

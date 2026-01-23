@@ -1687,7 +1687,7 @@ export class GameState {
             }
         }
         
-        return false; // In shadow and not close to any player unit or influence
+        return false; // Not visible: in shadow and not within proximity or influence range
     }
 
     /**
@@ -1795,17 +1795,17 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
     game.initializeAsteroids(10, 2000, 2000);
     
     // Add two large strategic asteroids that cast shadows between bases
-    // Position them close to the sun, on opposite sides, between the player bases
-    // Left strategic asteroid (blocks view from left player to right)
-    const leftAsteroidAngle = Math.PI; // 180 degrees (left side)
+    // Position them close to the sun, on opposite sides along the x-axis
+    // Left strategic asteroid (at negative x-axis, 180 degrees from origin)
+    const leftAsteroidAngle = Math.PI; // Points to negative x-axis (left)
     const leftAsteroidPos = new Vector2D(
         Math.cos(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
         Math.sin(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
     );
     game.asteroids.push(new Asteroid(leftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
     
-    // Right strategic asteroid (blocks view from right player to left)
-    const rightAsteroidAngle = 0; // 0 degrees (right side)
+    // Right strategic asteroid (at positive x-axis, 0 degrees from origin)
+    const rightAsteroidAngle = 0; // Points to positive x-axis (right)
     const rightAsteroidPos = new Vector2D(
         Math.cos(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
         Math.sin(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE

@@ -121,6 +121,7 @@ export class GameRenderer {
         const size = 40 * this.zoom;
 
         // Check visibility for enemy forges
+        let shouldDim = false;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
             if (!isVisible) {
@@ -130,6 +131,7 @@ export class GameRenderer {
             // Check if in shadow for dimming effect
             const inShadow = game.isPointInShadow(forge.position);
             if (inShadow) {
+                shouldDim = true;
                 this.ctx.globalAlpha = Constants.SHADE_OPACITY;
             }
         }
@@ -180,8 +182,10 @@ export class GameRenderer {
         this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
         this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
         
-        // Reset alpha
-        this.ctx.globalAlpha = 1.0;
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
     }
 
     /**
@@ -503,6 +507,7 @@ export class GameRenderer {
         const isSelected = this.selectedUnits.has(unit);
 
         // Check visibility for enemy units
+        let shouldDim = false;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer);
             if (!isVisible) {
@@ -512,6 +517,7 @@ export class GameRenderer {
             // Check if in shadow for dimming effect
             const inShadow = game.isPointInShadow(unit.position);
             if (inShadow) {
+                shouldDim = true;
                 this.ctx.globalAlpha = Constants.SHADE_OPACITY;
             }
         }
@@ -564,8 +570,10 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
-        // Reset alpha
-        this.ctx.globalAlpha = 1.0;
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
     }
 
     /**
@@ -647,6 +655,7 @@ export class GameRenderer {
      */
     private drawGrave(grave: Grave, color: string, game: GameState, isEnemy: boolean): void {
         // Check visibility for enemy units
+        let shouldDim = false;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(grave.position, this.viewingPlayer);
             if (!isVisible) {
@@ -656,6 +665,7 @@ export class GameRenderer {
             // Check if in shadow for dimming effect
             const inShadow = game.isPointInShadow(grave.position);
             if (inShadow) {
+                shouldDim = true;
                 this.ctx.globalAlpha = Constants.SHADE_OPACITY;
             }
         }
@@ -682,8 +692,10 @@ export class GameRenderer {
             this.drawGraveProjectile(projectile, color);
         }
         
-        // Reset alpha
-        this.ctx.globalAlpha = 1.0;
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
     }
 
     /**
