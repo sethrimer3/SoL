@@ -47,7 +47,7 @@ export const GRAVE_PROJECTILE_MIN_SPEED = 80; // Minimum speed to keep orbiting
 export const GRAVE_PROJECTILE_ATTRACTION_FORCE = 300;
 export const GRAVE_PROJECTILE_LAUNCH_SPEED = 400;
 export const GRAVE_PROJECTILE_TRAIL_LENGTH = 15; // Number of trail particles
-export const GRAVE_PROJECTILE_TRAIL_LIFETIME = 0.5; // Seconds
+export const GRAVE_PROJECTILE_HIT_DISTANCE = 10; // Distance at which projectile hits target
 
 // Weapon effect constants
 export const MUZZLE_FLASH_DURATION = 0.05; // 50ms - very brief

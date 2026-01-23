@@ -540,7 +540,7 @@ export class GameRenderer {
         // Draw projectile as a circle
         this.ctx.fillStyle = color;
         this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 1;
+        this.ctx.lineWidth = 1 * this.zoom;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();

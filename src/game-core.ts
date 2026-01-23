@@ -782,7 +782,7 @@ export class GraveProjectile {
         // Check if hit target
         if (this.isAttacking && this.targetEnemy) {
             const distance = this.position.distanceTo(this.targetEnemy.position);
-            if (distance < 10) {
+            if (distance < Constants.GRAVE_PROJECTILE_HIT_DISTANCE) {
                 // Hit the target
                 if ('health' in this.targetEnemy) {
                     this.targetEnemy.health -= Constants.GRAVE_ATTACK_DAMAGE;
