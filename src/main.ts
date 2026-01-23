@@ -354,6 +354,10 @@ class GameController {
             lastPinchDistance = 0;
         });
 
+        // Detect if device is mobile/tablet to disable edge panning
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+            || ('ontouchstart' in window);
+
         // Keyboard controls (WASD and arrow keys) - Desktop only
         const KEYBOARD_PAN_SPEED = 10;
         
@@ -374,7 +378,8 @@ class GameController {
         const updateCameraPanning = () => {
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
-            const hasEdgeInput = !isMouseDown && !isPanning && (
+            // Disable edge panning on mobile devices
+            const hasEdgeInput = !isMobileDevice && !isMouseDown && !isPanning && (
                 lastMouseX < EDGE_PAN_THRESHOLD ||
                 lastMouseX > canvas.width - EDGE_PAN_THRESHOLD ||
                 lastMouseY < EDGE_PAN_THRESHOLD ||
@@ -392,7 +397,7 @@ class GameController {
                 if (keysPressed.has('a') || keysPressed.has('arrowleft')) dx -= KEYBOARD_PAN_SPEED;
                 if (keysPressed.has('d') || keysPressed.has('arrowright')) dx += KEYBOARD_PAN_SPEED;
 
-                // Edge panning (only if not dragging with mouse)
+                // Edge panning (only if not dragging with mouse and not on mobile)
                 if (hasEdgeInput) {
                     if (lastMouseX < EDGE_PAN_THRESHOLD) dx -= EDGE_PAN_SPEED;
                     if (lastMouseX > canvas.width - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
