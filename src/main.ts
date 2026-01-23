@@ -17,6 +17,8 @@ class GameController {
     private currentWarpGate: WarpGate | null = null;
     private menu: MainMenu;
     private selectedUnits: Set<Unit> = new Set();
+    private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
+    private selectedBase: any | null = null; // StellarForge or null
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
 
@@ -220,11 +222,14 @@ class GameController {
                     if (player.stellarForge.isSelected) {
                         // Deselect forge
                         player.stellarForge.isSelected = false;
+                        this.selectedBase = null;
                         console.log('Stellar Forge deselected');
                     } else {
                         // Select forge, deselect units and mirrors
                         player.stellarForge.isSelected = true;
+                        this.selectedBase = player.stellarForge;
                         this.selectedUnits.clear();
+                        this.selectedMirrors.clear();
                         this.renderer.selectedUnits = this.selectedUnits;
                         // Deselect all mirrors
                         for (const mirror of player.solarMirrors) {
@@ -256,13 +261,17 @@ class GameController {
                     if (clickedMirror.isSelected) {
                         // Deselect mirror
                         clickedMirror.isSelected = false;
+                        this.selectedMirrors.delete(clickedMirror);
                         console.log('Solar Mirror deselected');
                     } else {
                         // Select mirror, deselect forge and units
                         clickedMirror.isSelected = true;
+                        this.selectedMirrors.clear();
+                        this.selectedMirrors.add(clickedMirror);
                         if (player.stellarForge) {
                             player.stellarForge.isSelected = false;
                         }
+                        this.selectedBase = null;
                         this.selectedUnits.clear();
                         this.renderer.selectedUnits = this.selectedUnits;
                         // Deselect other mirrors
@@ -322,13 +331,13 @@ class GameController {
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
-            } else if (!this.isSelecting && this.selectedUnits.size > 0 && this.selectionStartScreen && this.game) {
-                // If units are selected and player dragged/clicked
+            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
+                // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 
-                // If dragged significantly (> 5 pixels), use ability
-                if (totalMovement >= 5) {
+                // If dragged significantly (> 5 pixels), use ability (for units only)
+                if (totalMovement >= 5 && this.selectedUnits.size > 0) {
                     // Create swipe visual effect
                     this.renderer.createSwipeEffect(
                         this.selectionStartScreen.x,
@@ -359,7 +368,7 @@ class GameController {
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
                 } else {
-                    // If movement was minimal (< 5 pixels), set rally point
+                    // If movement was minimal (< 5 pixels) or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
                     
                     // Set rally point for all selected units
@@ -367,11 +376,25 @@ class GameController {
                         unit.rallyPoint = new Vector2D(worldPos.x, worldPos.y);
                     }
                     
+                    // Set target for all selected mirrors
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.setTarget(worldPos);
+                        mirror.isSelected = false;
+                    }
+                    
+                    // Set target for selected base
+                    if (this.selectedBase) {
+                        this.selectedBase.setTarget(worldPos);
+                        this.selectedBase.isSelected = false;
+                    }
+                    
                     // Deselect all units immediately
                     this.selectedUnits.clear();
+                    this.selectedMirrors.clear();
+                    this.selectedBase = null;
                     this.renderer.selectedUnits = this.selectedUnits;
                     
-                    console.log(`Rally point set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                 }
             }
             
@@ -588,6 +611,8 @@ class GameController {
 
         // Clear previous selection
         this.selectedUnits.clear();
+        this.selectedMirrors.clear();
+        this.selectedBase = null;
 
         // Get the player's units (assume player 1 is the human player)
         const player = this.game.players[0];
@@ -601,11 +626,33 @@ class GameController {
             }
         }
 
+        // Select solar mirrors within the rectangle
+        for (const mirror of player.solarMirrors) {
+            if (mirror.position.x >= minX && mirror.position.x <= maxX &&
+                mirror.position.y >= minY && mirror.position.y <= maxY) {
+                this.selectedMirrors.add(mirror);
+                mirror.isSelected = true;
+            } else {
+                mirror.isSelected = false;
+            }
+        }
+
+        // Select base if within rectangle and no units are selected
+        if (player.stellarForge && 
+            player.stellarForge.position.x >= minX && player.stellarForge.position.x <= maxX &&
+            player.stellarForge.position.y >= minY && player.stellarForge.position.y <= maxY &&
+            this.selectedUnits.size === 0) {
+            this.selectedBase = player.stellarForge;
+            player.stellarForge.isSelected = true;
+        } else if (player.stellarForge) {
+            player.stellarForge.isSelected = false;
+        }
+
         // Update renderer's selected units
         this.renderer.selectedUnits = this.selectedUnits;
 
         // Log selection for debugging
-        console.log(`Selected ${this.selectedUnits.size} units`);
+        console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}`);
     }
 
     private cancelHold(): void {
