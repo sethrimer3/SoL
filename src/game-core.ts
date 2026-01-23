@@ -862,6 +862,7 @@ export class Unit {
     target: Unit | StellarForge | null = null;
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
+    isHero: boolean = false; // Flag to mark unit as hero
     
     constructor(
         public position: Vector2D,
@@ -1025,6 +1026,7 @@ export class Marine extends Unit {
             Constants.MARINE_ATTACK_SPEED,
             Constants.MARINE_ABILITY_COOLDOWN
         );
+        this.isHero = true; // Marine is a hero unit for Radiant faction
     }
 
     /**
@@ -1243,11 +1245,12 @@ export class Grave extends Unit {
             position,
             owner,
             Constants.GRAVE_MAX_HEALTH,
-            Constants.GRAVE_ATTACK_RANGE,
+            Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER, // Hero units have reduced range
             Constants.GRAVE_ATTACK_DAMAGE,
             Constants.GRAVE_ATTACK_SPEED,
             5.0 // Default ability cooldown
         );
+        this.isHero = true; // Grave is a hero unit for Aurum faction
         
         // Initialize orbiting projectiles
         for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {
@@ -2033,16 +2036,8 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         const [forgePos, mirrorPositions] = startingPositions[i];
         game.initializePlayer(player, forgePos, mirrorPositions);
         
-        // Add some initial marine units for testing (positioned closer to center for combat)
-        const marineOffset = i === 0 ? 200 : -200; // Closer to center
-        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y - 80), player));
-        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y), player));
-        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y + 80), player));
-        
-        // Add Grave units for testing (positioned slightly behind marines)
-        const graveOffset = i === 0 ? 150 : -150; // Behind the marines
-        player.units.push(new Grave(new Vector2D(forgePos.x + graveOffset, forgePos.y - 50), player));
-        player.units.push(new Grave(new Vector2D(forgePos.x + graveOffset, forgePos.y + 50), player));
+        // Hero units (Marine and Grave) are no longer spawned automatically
+        // They must be obtained through other game mechanics
         
         game.players.push(player);
     }
