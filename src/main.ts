@@ -16,6 +16,9 @@ class GameController {
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
     private menu: MainMenu;
+    private selectedUnits: Set<any> = new Set();
+    private isSelecting: boolean = false;
+    private selectionStartScreen: Vector2D | null = null;
 
     constructor() {
         // Create canvas
@@ -85,19 +88,21 @@ class GameController {
             ));
         });
 
-        // Touch/Mouse pan
-        const startPan = (x: number, y: number) => {
+        // Touch/Mouse selection and pan
+        const startDrag = (x: number, y: number) => {
             lastX = x;
             lastY = y;
+            this.selectionStartScreen = new Vector2D(x, y);
+            this.isSelecting = false;
             
             // Start warp gate hold timer
             const worldPos = this.renderer.screenToWorld(x, y);
             this.startHold(worldPos);
         };
 
-        const movePan = (x: number, y: number) => {
-            if (!isPanning && !isMouseDown) {
-                // Not panning, just tracking mouse position
+        const moveDrag = (x: number, y: number, isTwoFinger: boolean = false) => {
+            if (!isMouseDown) {
+                // Not dragging, just tracking mouse position
                 lastX = x;
                 lastY = y;
                 return;
@@ -107,90 +112,111 @@ class GameController {
             const dy = y - lastY;
             const totalMovement = Math.sqrt(dx * dx + dy * dy);
             
-            // If moved significantly, enable panning and cancel hold
+            // If moved significantly
             if (totalMovement > 5) {
-                if (!isPanning) {
-                    isPanning = true;
-                    this.cancelHold();
+                // Two-finger touch should pan the camera
+                if (isTwoFinger) {
+                    if (!isPanning) {
+                        isPanning = true;
+                        this.cancelHold();
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                    }
+                    
+                    // Update camera position (inverted for natural panning)
+                    const currentCamera = this.renderer.camera;
+                    this.renderer.setCameraPosition(new Vector2D(
+                        currentCamera.x - dx / this.renderer.zoom,
+                        currentCamera.y - dy / this.renderer.zoom
+                    ));
+                } else {
+                    // Single-finger/mouse drag should start selection
+                    if (!this.isSelecting && !isPanning) {
+                        this.isSelecting = true;
+                        this.cancelHold();
+                    }
+                    
+                    if (this.isSelecting) {
+                        // Update selection rectangle
+                        this.renderer.selectionStart = this.selectionStartScreen;
+                        this.renderer.selectionEnd = new Vector2D(x, y);
+                    }
                 }
-                
-                // Update camera position (inverted for natural panning)
-                const currentCamera = this.renderer.camera;
-                this.renderer.setCameraPosition(new Vector2D(
-                    currentCamera.x - dx / this.renderer.zoom,
-                    currentCamera.y - dy / this.renderer.zoom
-                ));
             }
             
             lastX = x;
             lastY = y;
         };
 
-        const endPan = () => {
+        const endDrag = () => {
+            // If we were selecting, finalize the selection
+            if (this.isSelecting && this.selectionStartScreen && this.game) {
+                const endPos = new Vector2D(lastX, lastY);
+                this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
+            }
+            
             isPanning = false;
             isMouseDown = false;
+            this.isSelecting = false;
+            this.selectionStartScreen = null;
+            this.renderer.selectionStart = null;
+            this.renderer.selectionEnd = null;
             this.endHold();
         };
 
         // Mouse events
         canvas.addEventListener('mousedown', (e: MouseEvent) => {
             isMouseDown = true;
-            startPan(e.clientX, e.clientY);
+            startDrag(e.clientX, e.clientY);
         });
 
         canvas.addEventListener('mousemove', (e: MouseEvent) => {
             lastMouseX = e.clientX;
             lastMouseY = e.clientY;
-            movePan(e.clientX, e.clientY);
+            moveDrag(e.clientX, e.clientY, false);
         });
 
         canvas.addEventListener('mouseup', () => {
-            endPan();
+            endDrag();
         });
 
         canvas.addEventListener('mouseleave', () => {
-            endPan();
+            endDrag();
         });
 
-        // Touch events (always pan on touch devices)
+        // Touch events - two fingers for pan, one finger for selection
         canvas.addEventListener('touchstart', (e: TouchEvent) => {
             if (e.touches.length === 1) {
                 e.preventDefault();
-                // For touch, don't require significant movement to start panning
-                startPan(e.touches[0].clientX, e.touches[0].clientY);
+                isMouseDown = true;
+                startDrag(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                e.preventDefault();
+                // Two finger touch - prepare for panning
+                isMouseDown = true;
+                isPanning = false;
+                const touch = e.touches[0];
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+                this.cancelHold();
             }
         }, { passive: false });
 
         canvas.addEventListener('touchmove', (e: TouchEvent) => {
-            if (e.touches.length === 1) {
+            if (e.touches.length === 1 && isMouseDown) {
                 e.preventDefault();
                 const touch = e.touches[0];
-                const dx = touch.clientX - lastX;
-                const dy = touch.clientY - lastY;
-                const totalMovement = Math.sqrt(dx * dx + dy * dy);
-                
-                // For touch, start panning immediately on movement
-                if (totalMovement > 5) {
-                    if (!isPanning) {
-                        isPanning = true;
-                        this.cancelHold();
-                    }
-                    
-                    // Update camera position
-                    const currentCamera = this.renderer.camera;
-                    this.renderer.setCameraPosition(new Vector2D(
-                        currentCamera.x - dx / this.renderer.zoom,
-                        currentCamera.y - dy / this.renderer.zoom
-                    ));
-                }
-                
-                lastX = touch.clientX;
-                lastY = touch.clientY;
+                moveDrag(touch.clientX, touch.clientY, false);
+            } else if (e.touches.length === 2) {
+                e.preventDefault();
+                // Two finger drag - pan the camera
+                const touch = e.touches[0];
+                moveDrag(touch.clientX, touch.clientY, true);
             }
         }, { passive: false });
 
         canvas.addEventListener('touchend', () => {
-            endPan();
+            endDrag();
         });
 
         // Keyboard controls (WASD and arrow keys) - Desktop only
@@ -265,6 +291,38 @@ class GameController {
             this.holdStartTime = Date.now();
             this.holdPosition = worldPos;
         }
+    }
+
+    private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
+        if (!this.game) return;
+
+        // Convert screen coordinates to world coordinates
+        const worldStart = this.renderer.screenToWorld(screenStart.x, screenStart.y);
+        const worldEnd = this.renderer.screenToWorld(screenEnd.x, screenEnd.y);
+
+        // Calculate rectangle bounds
+        const minX = Math.min(worldStart.x, worldEnd.x);
+        const maxX = Math.max(worldStart.x, worldEnd.x);
+        const minY = Math.min(worldStart.y, worldEnd.y);
+        const maxY = Math.max(worldStart.y, worldEnd.y);
+
+        // Clear previous selection
+        this.selectedUnits.clear();
+
+        // Get the player's units (assume player 1 is the human player)
+        const player = this.game.players[0];
+        if (!player || player.isDefeated()) return;
+
+        // Select units within the rectangle
+        for (const unit of player.units) {
+            if (unit.position.x >= minX && unit.position.x <= maxX &&
+                unit.position.y >= minY && unit.position.y <= maxY) {
+                this.selectedUnits.add(unit);
+            }
+        }
+
+        // Log selection for debugging
+        console.log(`Selected ${this.selectedUnits.size} units`);
     }
 
     private cancelHold(): void {
