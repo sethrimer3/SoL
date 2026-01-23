@@ -105,6 +105,18 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(forge.position);
         const size = 40 * this.zoom;
 
+        // Draw selection circle if selected
+        if (forge.isSelected) {
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 4;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            // Draw hero production buttons around the forge
+            this.drawHeroButtons(forge, screenPos, size);
+        }
+
         // Draw base structure
         this.ctx.fillStyle = color;
         this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
@@ -138,6 +150,54 @@ export class GameRenderer {
         const healthPercent = forge.health / 1000.0;
         this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
         this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+    }
+
+    /**
+     * Draw hero production buttons around selected Stellar Forge
+     */
+    private drawHeroButtons(forge: StellarForge, screenPos: Vector2D, forgeSize: number): void {
+        const buttonRadius = 20 * this.zoom;
+        const buttonDistance = (forgeSize * 2.5);
+        
+        // Draw 4 buttons in cardinal directions
+        const positions = [
+            { x: 0, y: -1, label: 'H1' },  // Top
+            { x: 1, y: 0, label: 'H2' },   // Right
+            { x: 0, y: 1, label: 'H3' },   // Bottom
+            { x: -1, y: 0, label: 'H4' }   // Left
+        ];
+        
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            const buttonX = screenPos.x + pos.x * buttonDistance;
+            const buttonY = screenPos.y + pos.y * buttonDistance;
+            
+            // TODO: Check if hero is already alive and grey out if so
+            const isAvailable = true; // Stub - would check if hero is alive
+            
+            // Draw button background
+            this.ctx.fillStyle = isAvailable ? 'rgba(0, 255, 136, 0.3)' : 'rgba(128, 128, 128, 0.3)';
+            this.ctx.strokeStyle = isAvailable ? '#00FF88' : '#888888';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            // Draw button label
+            this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#666666';
+            this.ctx.font = `${12 * this.zoom}px Arial`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(pos.label, buttonX, buttonY);
+        }
+        
+        // Draw instruction text
+        this.ctx.fillStyle = '#AAAAAA';
+        this.ctx.font = `${10 * this.zoom}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'top';
+        this.ctx.fillText('Hero Production (Stub)', screenPos.x, screenPos.y + forgeSize * 2.5);
     }
 
     /**

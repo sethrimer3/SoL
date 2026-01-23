@@ -288,6 +288,13 @@ export class StellarForge {
     health: number = 1000.0;
     isReceivingLight: boolean = false;
     unitQueue: string[] = [];
+    isSelected: boolean = false;
+    targetPosition: Vector2D | null = null;
+    velocity: Vector2D = new Vector2D(0, 0);
+    private readonly maxSpeed: number = 50; // pixels per second
+    private readonly acceleration: number = 30; // pixels per second^2
+    private readonly deceleration: number = 50; // pixels per second^2
+    readonly radius: number = 40; // For rendering and selection
 
     constructor(
         public position: Vector2D,
@@ -327,6 +334,80 @@ export class StellarForge {
                 break;
             }
         }
+    }
+
+    /**
+     * Update forge movement
+     */
+    update(deltaTime: number): void {
+        if (!this.targetPosition) {
+            // No target, apply deceleration
+            const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+            if (speed > 0.1) {
+                const decelAmount = this.deceleration * deltaTime;
+                const factor = Math.max(0, (speed - decelAmount) / speed);
+                this.velocity.x *= factor;
+                this.velocity.y *= factor;
+            } else {
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+            }
+        } else {
+            // Moving toward target
+            const dx = this.targetPosition.x - this.position.x;
+            const dy = this.targetPosition.y - this.position.y;
+            const distanceToTarget = Math.sqrt(dx ** 2 + dy ** 2);
+
+            if (distanceToTarget < 5) {
+                // Reached target
+                this.position.x = this.targetPosition.x;
+                this.position.y = this.targetPosition.y;
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+                this.targetPosition = null;
+            } else {
+                // Calculate desired velocity direction
+                const directionX = dx / distanceToTarget;
+                const directionY = dy / distanceToTarget;
+
+                // Apply acceleration toward target
+                this.velocity.x += directionX * this.acceleration * deltaTime;
+                this.velocity.y += directionY * this.acceleration * deltaTime;
+
+                // Clamp to max speed
+                const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+                if (currentSpeed > this.maxSpeed) {
+                    this.velocity.x = (this.velocity.x / currentSpeed) * this.maxSpeed;
+                    this.velocity.y = (this.velocity.y / currentSpeed) * this.maxSpeed;
+                }
+            }
+        }
+
+        // Update position
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Set movement target
+     */
+    setTarget(target: Vector2D): void {
+        this.targetPosition = new Vector2D(target.x, target.y);
+    }
+
+    /**
+     * Toggle selection state
+     */
+    toggleSelection(): void {
+        this.isSelected = !this.isSelected;
+    }
+
+    /**
+     * Check if a point is inside the forge (for click detection)
+     */
+    containsPoint(point: Vector2D): boolean {
+        const distance = this.position.distanceTo(point);
+        return distance <= this.radius;
     }
 }
 
@@ -1214,6 +1295,7 @@ export class GameState {
             // Update light status for Stellar Forge
             if (player.stellarForge) {
                 player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids);
+                player.stellarForge.update(deltaTime); // Update forge movement
             }
 
             // Generate Solarium from mirrors

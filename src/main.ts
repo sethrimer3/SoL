@@ -191,6 +191,56 @@ class GameController {
         };
 
         const endDrag = () => {
+            // Check if this was a simple click (no dragging)
+            const wasClick = this.selectionStartScreen && 
+                             Math.abs(lastX - this.selectionStartScreen.x) < 5 && 
+                             Math.abs(lastY - this.selectionStartScreen.y) < 5;
+            
+            if (this.game && wasClick) {
+                const worldPos = this.renderer.screenToWorld(lastX, lastY);
+                const player = this.game.players[0]; // Assume player 1 is human
+                
+                // Check if clicked on stellar forge
+                if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
+                    if (player.stellarForge.isSelected) {
+                        // Deselect forge
+                        player.stellarForge.isSelected = false;
+                        console.log('Stellar Forge deselected');
+                    } else {
+                        // Select forge, deselect units
+                        player.stellarForge.isSelected = true;
+                        this.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectedUnits;
+                        console.log('Stellar Forge selected');
+                    }
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+                
+                // If forge is selected and clicked elsewhere, move it
+                if (player.stellarForge && player.stellarForge.isSelected) {
+                    player.stellarForge.setTarget(worldPos);
+                    player.stellarForge.isSelected = false; // Auto-deselect after setting target
+                    console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+            }
+            
             // If we were selecting, finalize the selection
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
