@@ -3,6 +3,8 @@
  * A 2D real-time strategy game with light-based mechanics
  */
 
+import * as Constants from './constants';
+
 /**
  * Three playable factions in the game
  */
@@ -262,9 +264,18 @@ export class SpaceDustParticle {
      * Blend two hex colors
      */
     private blendColors(color1: string, color2: string, factor: number): string {
+        // Validate hex color format
+        if (!color1 || !color2 || !color1.startsWith('#') || !color2.startsWith('#')) {
+            return this.baseColor;
+        }
+        
         // Simple hex color blending
         const c1 = parseInt(color1.slice(1), 16);
         const c2 = parseInt(color2.slice(1), 16);
+        
+        if (isNaN(c1) || isNaN(c2)) {
+            return this.baseColor;
+        }
         
         const r1 = (c1 >> 16) & 0xff;
         const g1 = (c1 >> 8) & 0xff;
@@ -290,7 +301,7 @@ export class WarpGate {
     isCharging: boolean = false;
     isComplete: boolean = false;
     health: number = 100;
-    particles: SpaceDustParticle[] = []; // Particles being sucked in
+    hasEmittedShockwave: boolean = false; // Track if shockwave was emitted
     
     constructor(
         public position: Vector2D,
@@ -313,8 +324,8 @@ export class WarpGate {
 
         this.chargeTime += deltaTime;
 
-        // After 6 seconds total (1 second for shockwave + 5 for charging)
-        if (this.chargeTime >= 6.0) {
+        // Check if fully charged
+        if (this.chargeTime >= Constants.WARP_GATE_CHARGE_TIME) {
             this.isComplete = true;
             this.isCharging = false;
         }
@@ -353,7 +364,14 @@ export class WarpGate {
      * Check if shockwave should be emitted (at 1 second mark)
      */
     shouldEmitShockwave(): boolean {
-        return this.chargeTime >= 1.0 && this.chargeTime < 1.1;
+        if (this.hasEmittedShockwave) {
+            return false;
+        }
+        if (this.chargeTime >= 1.0) {
+            this.hasEmittedShockwave = true;
+            return true;
+        }
+        return false;
     }
 }
 
@@ -398,17 +416,12 @@ export class GameState {
 
         // Update space dust particles
         this.updateSpaceDust(deltaTime);
-
-        // Update warp gates
-        this.updateWarpGates(deltaTime);
     }
 
     /**
      * Update space dust particles with physics and color influences
      */
     private updateSpaceDust(deltaTime: number): void {
-        const influenceRadius = 300; // Radius of influence for bases
-
         for (const particle of this.spaceDust) {
             // Update particle position
             particle.update(deltaTime);
@@ -421,8 +434,8 @@ export class GameState {
                 if (player.stellarForge && !player.isDefeated()) {
                     const distance = particle.position.distanceTo(player.stellarForge.position);
                     
-                    if (distance < influenceRadius) {
-                        const color = i === 0 ? '#0066FF' : '#FF0000'; // Blue for player 1, red for player 2
+                    if (distance < Constants.INFLUENCE_RADIUS) {
+                        const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
                         if (!closestInfluence || distance < closestInfluence.distance) {
                             closestInfluence = { color, distance };
                         }
@@ -432,7 +445,7 @@ export class GameState {
 
             // Update particle color based on influence
             if (closestInfluence) {
-                const blendFactor = 1.0 - (closestInfluence.distance / influenceRadius);
+                const blendFactor = 1.0 - (closestInfluence.distance / Constants.INFLUENCE_RADIUS);
                 particle.updateColor(closestInfluence.color, blendFactor);
             } else {
                 particle.updateColor(null, 0);
@@ -441,11 +454,10 @@ export class GameState {
 
         // Apply forces from warp gates (spiral effect)
         for (const gate of this.warpGates) {
-            if (gate.isCharging && gate.chargeTime >= 1.0) {
-                const spiralRadius = 200;
+            if (gate.isCharging && gate.chargeTime >= Constants.WARP_GATE_INITIAL_DELAY) {
                 for (const particle of this.spaceDust) {
                     const distance = particle.position.distanceTo(gate.position);
-                    if (distance < spiralRadius && distance > 5) {
+                    if (distance < Constants.WARP_GATE_SPIRAL_RADIUS && distance > Constants.WARP_GATE_SPIRAL_MIN_DISTANCE) {
                         // Calculate spiral force
                         const direction = new Vector2D(
                             gate.position.x - particle.position.x,
@@ -455,8 +467,8 @@ export class GameState {
                         // Add tangential component for spiral
                         const tangent = new Vector2D(-direction.y, direction.x);
                         const force = new Vector2D(
-                            direction.x * 50 + tangent.x * 20,
-                            direction.y * 50 + tangent.y * 20
+                            direction.x * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.x * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT,
+                            direction.y * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.y * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT
                         );
                         
                         particle.applyForce(new Vector2D(
@@ -467,14 +479,6 @@ export class GameState {
                 }
             }
         }
-    }
-
-    /**
-     * Update warp gates
-     */
-    private updateWarpGates(deltaTime: number): void {
-        // Warp gates will be updated by input handlers in main.ts
-        // This is a placeholder for future gate-specific updates
     }
 
     /**

@@ -3,6 +3,7 @@
  */
 
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate } from './game-core';
+import * as Constants from './constants';
 
 export class GameRenderer {
     private canvas: HTMLCanvasElement;
@@ -172,7 +173,7 @@ export class GameRenderer {
      */
     private drawSpaceDust(particle: SpaceDustParticle): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = 2 * this.zoom; // Increased from 1.5 to 2
+        const size = Constants.DUST_PARTICLE_SIZE * this.zoom;
 
         this.ctx.fillStyle = particle.currentColor;
         this.ctx.beginPath();
@@ -202,8 +203,9 @@ export class GameRenderer {
      */
     private drawWarpGate(gate: WarpGate): void {
         const screenPos = this.worldToScreen(gate.position);
-        const maxRadius = 50 * this.zoom;
-        const currentRadius = Math.min(maxRadius, (gate.chargeTime / 6.0) * maxRadius);
+        const maxRadius = Constants.WARP_GATE_RADIUS * this.zoom;
+        const chargeProgress = gate.chargeTime / Constants.WARP_GATE_CHARGE_TIME;
+        const currentRadius = Math.min(maxRadius, chargeProgress * maxRadius);
 
         if (!gate.isComplete) {
             // Draw charging effect
@@ -219,7 +221,7 @@ export class GameRenderer {
             this.ctx.strokeStyle = '#FFFFFF';
             this.ctx.lineWidth = 5;
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, (gate.chargeTime / 6.0) * Math.PI * 2);
+            this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, chargeProgress * Math.PI * 2);
             this.ctx.stroke();
         } else {
             // Draw completed warp gate
@@ -235,8 +237,8 @@ export class GameRenderer {
             this.ctx.stroke();
 
             // Draw 4 build buttons around the gate
-            const buttonRadius = 20 * this.zoom;
-            const buttonDistance = maxRadius + 30 * this.zoom;
+            const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
+            const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
             const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
             
             for (let i = 0; i < 4; i++) {
@@ -361,8 +363,8 @@ export class GameRenderer {
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
             if (player.stellarForge && !player.isDefeated()) {
-                const color = i === 0 ? '#0066FF' : '#FF0000';
-                this.drawInfluenceCircle(player.stellarForge.position, 300, color);
+                const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                this.drawInfluenceCircle(player.stellarForge.position, Constants.INFLUENCE_RADIUS, color);
             }
         }
 

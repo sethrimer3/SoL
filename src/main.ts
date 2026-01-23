@@ -4,6 +4,7 @@
 
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate } from './game-core';
 import { GameRenderer } from './renderer';
+import * as Constants from './constants';
 
 class GameController {
     private game: GameState;
@@ -132,18 +133,14 @@ class GameController {
         if (!player.stellarForge) return;
 
         const distance = worldPos.distanceTo(player.stellarForge.position);
-        if (distance < 300) { // Within influence radius
+        if (distance < Constants.INFLUENCE_RADIUS) { // Within influence radius
             this.holdStartTime = Date.now();
             this.holdPosition = worldPos;
-            console.log(`Hold started at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - distance: ${distance.toFixed(0)}`);
-        } else {
-            console.log(`Click outside influence zone - distance: ${distance.toFixed(0)}`);
         }
     }
 
     private cancelHold(): void {
         if (this.currentWarpGate) {
-            console.log('Warp gate cancelled');
             this.currentWarpGate.cancel();
             this.scatterParticles(this.currentWarpGate.position);
             const index = this.game.warpGates.indexOf(this.currentWarpGate);
@@ -157,10 +154,6 @@ class GameController {
     }
 
     private endHold(): void {
-        if (this.holdStartTime) {
-            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
-            console.log(`Hold ended after ${holdDuration.toFixed(1)}s`);
-        }
         this.holdStartTime = null;
         this.holdPosition = null;
         // Don't remove currentWarpGate here, it might still be charging
@@ -170,14 +163,14 @@ class GameController {
         // Scatter nearby particles
         for (const particle of this.game.spaceDust) {
             const distance = particle.position.distanceTo(position);
-            if (distance < 150) {
+            if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
                 const direction = new Vector2D(
                     particle.position.x - position.x,
                     particle.position.y - position.y
                 ).normalize();
                 particle.applyForce(new Vector2D(
-                    direction.x * 200,
-                    direction.y * 200
+                    direction.x * Constants.PARTICLE_SCATTER_FORCE,
+                    direction.y * Constants.PARTICLE_SCATTER_FORCE
                 ));
             }
         }
@@ -192,13 +185,12 @@ class GameController {
         if (this.holdStartTime && this.holdPosition) {
             const holdDuration = (Date.now() - this.holdStartTime) / 1000;
             
-            if (holdDuration >= 1.0 && !this.currentWarpGate) {
-                // Create warp gate after 1 second
+            if (holdDuration >= Constants.WARP_GATE_INITIAL_DELAY && !this.currentWarpGate) {
+                // Create warp gate after initial delay
                 const player = this.game.players[0];
                 this.currentWarpGate = new WarpGate(this.holdPosition, player);
                 this.currentWarpGate.startCharging();
                 this.game.warpGates.push(this.currentWarpGate);
-                console.log(`Warp gate created at (${this.holdPosition.x.toFixed(0)}, ${this.holdPosition.y.toFixed(0)})`);
             }
         }
 
@@ -206,14 +198,6 @@ class GameController {
         if (this.currentWarpGate) {
             const isStillHolding = this.holdStartTime !== null && this.holdPosition !== null;
             this.currentWarpGate.update(deltaTime, isStillHolding);
-            
-            // Check if gate is complete
-            if (this.currentWarpGate.isComplete) {
-                console.log('Warp gate complete! Ready for building selection.');
-                // Gate is ready for building selection
-                // For now, just remove it after a moment
-                // In a full implementation, you'd show the building UI
-            }
         }
     }
 
