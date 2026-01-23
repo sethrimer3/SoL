@@ -1336,8 +1336,7 @@ export class Starling extends Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(gameState: GameState, enemies: (Unit | StellarForge)[]): void {
-        // Update exploration timer
-        this.explorationTimer -= 0.016; // Approximate deltaTime for AI decisions
+        // No need to update exploration timer here, it's updated in the main update loop
 
         // AI behavior: prioritize enemy base, then buildings, then explore
         let targetPosition: Vector2D | null = null;
@@ -1404,6 +1403,9 @@ export class Starling extends Unit {
         if (this.abilityCooldown > 0) {
             this.abilityCooldown -= deltaTime;
         }
+
+        // Update exploration timer
+        this.explorationTimer -= deltaTime;
 
         // Move toward rally point if set (using custom starling speed)
         if (this.rallyPoint) {
