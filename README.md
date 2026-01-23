@@ -2,6 +2,8 @@
 
 A 2D real-time strategy game set in space with unique light-based mechanics.
 
+**Play it now:** [https://sethrimer3.github.io/SoL/](https://sethrimer3.github.io/SoL/)
+
 ## Overview
 
 SoL is a cross-platform (mobile & desktop) RTS game where players battle for supremacy around stars using light as a resource. The game features ray-traced lighting, strategic positioning, and economy management based on solar energy collection.
@@ -40,38 +42,53 @@ Three unique civilizations, each with distinct bonuses:
 
 ## Getting Started
 
-### Running Tests
+### Play Online
+Visit [https://sethrimer3.github.io/SoL/](https://sethrimer3.github.io/SoL/) to play instantly in your browser on mobile or desktop!
+
+### Local Development
+
+#### Prerequisites
+- Node.js (v14 or higher)
+- npm
+
+#### Installation
 ```bash
-python -m unittest test_game_core -v
+npm install
 ```
 
-### Example Usage
-```python
-from game_core import create_standard_game, Faction
-
-# Create a game with two players
-game = create_standard_game([
-    ("Player1", Faction.RADIANT),
-    ("Player2", Faction.AURUM)
-])
-
-# Run game loop
-while game.is_running:
-    game.update(delta_time=0.016)  # ~60 FPS
-    
-    # Check for victory
-    winner = game.check_victory_conditions()
-    if winner:
-        print(f"{winner.name} wins!")
-        break
+#### Build for Production
+```bash
+npm run build
 ```
+
+#### Development Mode (with watch)
+```bash
+npm run dev
+```
+
+#### Serve Locally
+```bash
+# After building, serve the dist folder
+cd dist
+python3 -m http.server 8080
+# Or use any other static file server
+```
+
+## Technology Stack
+
+- **TypeScript** - Type-safe game logic
+- **HTML5 Canvas** - 2D rendering
+- **Webpack** - Build and bundling
+- **GitHub Pages** - Deployment
 
 ## Game Files
 
-- `game_core.py` - Core game mechanics and classes
+- `src/game-core.ts` - Core game mechanics and classes
+- `src/renderer.ts` - HTML5 Canvas renderer
+- `src/main.ts` - Game controller and main entry point
+- `src/index.html` - HTML template
 - `game_config.json` - Game configuration and balance settings
 - `GAME_DESIGN.md` - Detailed game design document
-- `test_game_core.py` - Unit tests for game mechanics
 
 ## Features
 
@@ -90,5 +107,11 @@ while game.is_running:
 - Unit types and combat system
 - AI opponents
 - Multiplayer with crossplay
-- Mobile and desktop clients
 - Advanced lighting effects
+
+## Legacy Python Implementation
+
+The original Python implementation is preserved in the repository:
+- `game_core.py` - Python game core (legacy)
+- `demo.py` - Python demo (legacy)
+- `test_game_core.py` - Python tests (legacy)
