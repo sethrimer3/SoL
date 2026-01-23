@@ -1557,8 +1557,17 @@ export class GameState {
 
             // Update light status for Stellar Forge
             if (player.stellarForge) {
+                const oldForgePos = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
                 player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids);
                 player.stellarForge.update(deltaTime); // Update forge movement
+                
+                // Check collision for forge (larger radius)
+                if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius)) {
+                    // Revert to old position and stop movement
+                    player.stellarForge.position = oldForgePos;
+                    player.stellarForge.targetPosition = null;
+                    player.stellarForge.velocity = new Vector2D(0, 0);
+                }
                 
                 // Spawn starlings if timer is ready
                 if (player.stellarForge.shouldSpawnStarling()) {
@@ -1576,7 +1585,17 @@ export class GameState {
 
             // Update solar mirrors - position and reflection angle
             for (const mirror of player.solarMirrors) {
+                const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
                 mirror.update(deltaTime); // Update mirror movement
+                
+                // Check collision for mirror
+                if (this.checkCollision(mirror.position, 20)) {
+                    // Revert to old position and stop movement
+                    mirror.position = oldMirrorPos;
+                    mirror.targetPosition = null;
+                    mirror.velocity = new Vector2D(0, 0);
+                }
+                
                 mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids);
                 
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
@@ -1645,6 +1664,37 @@ export class GameState {
                 // Collect ability effects from all units
                 const abilityEffects = unit.getAndClearLastAbilityEffects();
                 this.abilityBullets.push(...abilityEffects);
+            }
+
+            // Check and resolve collisions for all units
+            for (const unit of player.units) {
+                const oldPosition = new Vector2D(unit.position.x, unit.position.y);
+                
+                // Check if current position is in collision
+                if (this.checkCollision(unit.position)) {
+                    // Try to find a valid position nearby
+                    let foundValidPosition = false;
+                    const searchRadius = 15; // Search within 15 pixels
+                    const searchSteps = 8; // Check 8 directions
+                    
+                    for (let i = 0; i < searchSteps; i++) {
+                        const angle = (i / searchSteps) * Math.PI * 2;
+                        const testX = oldPosition.x + Math.cos(angle) * searchRadius;
+                        const testY = oldPosition.y + Math.sin(angle) * searchRadius;
+                        const testPos = new Vector2D(testX, testY);
+                        
+                        if (!this.checkCollision(testPos)) {
+                            unit.position = testPos;
+                            foundValidPosition = true;
+                            break;
+                        }
+                    }
+                    
+                    // If no valid position found, stop movement
+                    if (!foundValidPosition) {
+                        unit.rallyPoint = null; // Cancel movement
+                    }
+                }
             }
 
             // Remove dead units
@@ -1853,6 +1903,48 @@ export class GameState {
         }
         
         return false; // Not visible: in shadow and not within proximity or influence range
+    }
+
+    /**
+     * Check if a position would collide with any obstacle (sun, asteroid, or building)
+     * Returns true if collision detected
+     */
+    checkCollision(position: Vector2D, unitRadius: number = 8): boolean {
+        // Check collision with suns
+        for (const sun of this.suns) {
+            const distance = position.distanceTo(sun.position);
+            if (distance < sun.radius + unitRadius) {
+                return true; // Collision with sun
+            }
+        }
+
+        // Check collision with asteroids
+        for (const asteroid of this.asteroids) {
+            if (asteroid.containsPoint(position)) {
+                return true; // Inside asteroid
+            }
+        }
+
+        // Check collision with all players' buildings
+        for (const player of this.players) {
+            // Check collision with stellar forge
+            if (player.stellarForge) {
+                const distance = position.distanceTo(player.stellarForge.position);
+                if (distance < player.stellarForge.radius + unitRadius) {
+                    return true; // Collision with forge
+                }
+            }
+
+            // Check collision with solar mirrors (using approximate radius)
+            for (const mirror of player.solarMirrors) {
+                const distance = position.distanceTo(mirror.position);
+                if (distance < 20 + unitRadius) { // Mirror has ~20 pixel radius
+                    return true; // Collision with mirror
+                }
+            }
+        }
+
+        return false; // No collision
     }
 
     /**
