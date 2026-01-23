@@ -111,6 +111,70 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
         this.ctx.fill();
+        
+        // Draw lens flare effect if sun is visible on screen
+        this.drawLensFlare(sun, screenPos);
+    }
+
+    /**
+     * Check if a position is visible on screen
+     */
+    private isOnScreen(screenPos: Vector2D, margin: number = 200): boolean {
+        const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+        const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+        return screenPos.x > -margin && 
+               screenPos.x < canvasWidth + margin &&
+               screenPos.y > -margin && 
+               screenPos.y < canvasHeight + margin;
+    }
+
+    /**
+     * Draw subtle lens flare effect for a sun
+     */
+    private drawLensFlare(sun: Sun, screenPos: Vector2D): void {
+        // Only draw lens flare if sun is on screen
+        if (!this.isOnScreen(screenPos)) {
+            return;
+        }
+
+        const canvasWidth = this.canvas.width / (window.devicePixelRatio || 1);
+        const canvasHeight = this.canvas.height / (window.devicePixelRatio || 1);
+        const centerX = canvasWidth / 2;
+        const centerY = canvasHeight / 2;
+
+        // Calculate vector from sun to screen center
+        const dx = centerX - screenPos.x;
+        const dy = centerY - screenPos.y;
+
+        // Create lens flare elements along the line from sun to opposite side
+        const flareElements = [
+            { distance: 0.3, size: 15, color: 'rgba(255, 220, 150, 0.3)' },
+            { distance: 0.5, size: 20, color: 'rgba(255, 180, 100, 0.2)' },
+            { distance: 0.7, size: 12, color: 'rgba(200, 150, 255, 0.25)' },
+            { distance: 1.0, size: 25, color: 'rgba(150, 200, 255, 0.15)' },
+            { distance: 1.2, size: 18, color: 'rgba(255, 150, 150, 0.2)' },
+        ];
+
+        // Draw each flare element
+        for (const element of flareElements) {
+            const x = screenPos.x + dx * element.distance;
+            const y = screenPos.y + dy * element.distance;
+
+            // Skip if this flare element is off screen
+            if (x < 0 || x > canvasWidth || y < 0 || y > canvasHeight) {
+                continue;
+            }
+
+            // Draw the flare with a soft gradient
+            const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, element.size);
+            gradient.addColorStop(0, element.color);
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, element.size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
     }
 
     /**
