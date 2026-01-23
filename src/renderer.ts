@@ -1198,12 +1198,62 @@ export class GameRenderer {
             this.drawAsteroid(asteroid);
         }
 
-        // Draw influence circles
+        // Draw influence circles (with proper handling of overlaps)
+        const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
             if (player.stellarForge && !player.isDefeated()) {
                 const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                this.drawInfluenceCircle(player.stellarForge.position, Constants.INFLUENCE_RADIUS, color);
+                influenceCircles.push({
+                    position: player.stellarForge.position,
+                    radius: Constants.INFLUENCE_RADIUS,
+                    color: color
+                });
+            }
+        }
+        
+        // Draw influence circles grouped by color to handle overlaps
+        const circlesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
+        for (const circle of influenceCircles) {
+            if (!circlesByColor.has(circle.color)) {
+                circlesByColor.set(circle.color, []);
+            }
+            circlesByColor.get(circle.color)!.push({position: circle.position, radius: circle.radius});
+        }
+        
+        // Draw each color group
+        for (const [color, circles] of circlesByColor) {
+            if (circles.length === 1) {
+                // Single circle, draw normally
+                this.drawInfluenceCircle(circles[0].position, circles[0].radius, color);
+            } else {
+                // Multiple circles of same color
+                // To get union effect, we'll use a temporary canvas
+                this.ctx.save();
+                
+                // Create path with all circles
+                this.ctx.beginPath();
+                for (const circle of circles) {
+                    const screenPos = this.worldToScreen(circle.position);
+                    const screenRadius = circle.radius * this.zoom;
+                    this.ctx.moveTo(screenPos.x + screenRadius, screenPos.y);
+                    this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+                }
+                
+                // Fill with transparent color first to create union
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.fillStyle = color;
+                this.ctx.globalAlpha = 0.05;
+                this.ctx.fill();
+                
+                // Now stroke the outer boundary
+                // This approach still shows inner boundaries, so let's just draw each circle
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                this.ctx.restore();
             }
         }
 

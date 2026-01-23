@@ -1659,7 +1659,7 @@ export class WarpGate {
     /**
      * Update warp gate charging
      */
-    update(deltaTime: number, isStillHolding: boolean): void {
+    update(deltaTime: number, isStillHolding: boolean, chargeMultiplier: number = 1.0): void {
         if (!this.isCharging || this.isComplete) {
             return;
         }
@@ -1670,7 +1670,7 @@ export class WarpGate {
             return;
         }
 
-        this.chargeTime += deltaTime;
+        this.chargeTime += deltaTime * chargeMultiplier;
 
         // Check if fully charged
         if (this.chargeTime >= Constants.WARP_GATE_CHARGE_TIME) {
