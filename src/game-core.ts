@@ -2166,6 +2166,14 @@ export class GameState {
                     return true; // Collision with mirror
                 }
             }
+
+            // Check collision with buildings
+            for (const building of player.buildings) {
+                const distance = position.distanceTo(building.position);
+                if (distance < building.radius + unitRadius) {
+                    return true; // Collision with building
+                }
+            }
         }
 
         return false; // No collision
