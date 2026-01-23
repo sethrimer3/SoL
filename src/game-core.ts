@@ -63,7 +63,7 @@ export class LightRay {
     }
 
     /**
-     * Check if ray intersects with a polygon
+     * Check if ray intersects with a polygon and return the distance to the closest intersection
      */
     intersectsPolygon(vertices: Vector2D[]): boolean {
         // Check each edge of the polygon
@@ -71,7 +71,7 @@ export class LightRay {
             const v1 = vertices[i];
             const v2 = vertices[(i + 1) % vertices.length];
             
-            if (this.intersectsLineSegment(v1, v2)) {
+            if (this.intersectsLineSegment(v1, v2) !== null) {
                 return true;
             }
         }
@@ -79,19 +79,45 @@ export class LightRay {
     }
 
     /**
-     * Check if ray intersects with a line segment
+     * Get the distance to the closest intersection with a polygon, or null if no intersection
      */
-    private intersectsLineSegment(p1: Vector2D, p2: Vector2D): boolean {
+    getIntersectionDistance(vertices: Vector2D[]): number | null {
+        let closestDistance: number | null = null;
+        
+        // Check each edge of the polygon
+        for (let i = 0; i < vertices.length; i++) {
+            const v1 = vertices[i];
+            const v2 = vertices[(i + 1) % vertices.length];
+            
+            const distance = this.intersectsLineSegment(v1, v2);
+            if (distance !== null) {
+                if (closestDistance === null || distance < closestDistance) {
+                    closestDistance = distance;
+                }
+            }
+        }
+        
+        return closestDistance;
+    }
+
+    /**
+     * Check if ray intersects with a line segment and return the distance, or null if no intersection
+     */
+    private intersectsLineSegment(p1: Vector2D, p2: Vector2D): number | null {
         const v1 = new Vector2D(p2.x - p1.x, p2.y - p1.y);
         const v2 = new Vector2D(p1.x - this.origin.x, p1.y - this.origin.y);
         const cross1 = this.direction.x * v1.y - this.direction.y * v1.x;
         
-        if (Math.abs(cross1) < 0.0001) return false; // Parallel
+        if (Math.abs(cross1) < 0.0001) return null; // Parallel
         
         const t1 = (v2.x * v1.y - v2.y * v1.x) / cross1;
         const t2 = (v2.x * this.direction.y - v2.y * this.direction.x) / cross1;
         
-        return t1 >= 0 && t2 >= 0 && t2 <= 1;
+        if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
+            return t1; // Return the distance along the ray
+        }
+        
+        return null;
     }
 }
 

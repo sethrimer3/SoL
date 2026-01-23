@@ -24,3 +24,8 @@ export const PARTICLE_SCATTER_FORCE = 200;
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;
+
+// Raytracing constants
+export const RAYTRACING_NUM_RAYS = 64; // Number of rays to cast per sun
+export const MAX_RAY_DISTANCE = 2000; // Maximum distance for ray casting
+export const SHADOW_LENGTH = 500; // Length of shadows cast by asteroids

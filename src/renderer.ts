@@ -222,22 +222,19 @@ export class GameRenderer {
         // Draw light rays from each sun
         for (const sun of game.suns) {
             const sunScreenPos = this.worldToScreen(sun.position);
-            const numRays = 64; // Number of rays to cast
 
-            for (let i = 0; i < numRays; i++) {
-                const angle = (Math.PI * 2 * i) / numRays;
+            for (let i = 0; i < Constants.RAYTRACING_NUM_RAYS; i++) {
+                const angle = (Math.PI * 2 * i) / Constants.RAYTRACING_NUM_RAYS;
                 const direction = new Vector2D(Math.cos(angle), Math.sin(angle));
                 const ray = new LightRay(sun.position, direction, sun.intensity);
 
                 // Find the closest intersection with asteroids
-                let closestDistance = 2000; // Max ray distance
+                let closestDistance = Constants.MAX_RAY_DISTANCE;
                 
                 for (const asteroid of game.asteroids) {
-                    if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                        const distance = sun.position.distanceTo(asteroid.position);
-                        if (distance < closestDistance) {
-                            closestDistance = distance;
-                        }
+                    const intersectionDistance = ray.getIntersectionDistance(asteroid.getWorldVertices());
+                    if (intersectionDistance !== null && intersectionDistance < closestDistance) {
+                        closestDistance = intersectionDistance;
                     }
                 }
 
@@ -272,12 +269,11 @@ export class GameRenderer {
                     
                     if (dot < 0) {
                         // This edge is facing away from the sun, cast shadow
-                        const shadowLength = 500;
                         const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
                         const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
                         
-                        const shadow1 = new Vector2D(v1.x + dirFromSun1.x * shadowLength, v1.y + dirFromSun1.y * shadowLength);
-                        const shadow2 = new Vector2D(v2.x + dirFromSun2.x * shadowLength, v2.y + dirFromSun2.y * shadowLength);
+                        const shadow1 = new Vector2D(v1.x + dirFromSun1.x * Constants.SHADOW_LENGTH, v1.y + dirFromSun1.y * Constants.SHADOW_LENGTH);
+                        const shadow2 = new Vector2D(v2.x + dirFromSun2.x * Constants.SHADOW_LENGTH, v2.y + dirFromSun2.y * Constants.SHADOW_LENGTH);
                         
                         const sv1 = this.worldToScreen(v1);
                         const sv2 = this.worldToScreen(v2);
