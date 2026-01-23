@@ -135,11 +135,15 @@ class GameController {
         if (distance < 300) { // Within influence radius
             this.holdStartTime = Date.now();
             this.holdPosition = worldPos;
+            console.log(`Hold started at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - distance: ${distance.toFixed(0)}`);
+        } else {
+            console.log(`Click outside influence zone - distance: ${distance.toFixed(0)}`);
         }
     }
 
     private cancelHold(): void {
         if (this.currentWarpGate) {
+            console.log('Warp gate cancelled');
             this.currentWarpGate.cancel();
             this.scatterParticles(this.currentWarpGate.position);
             const index = this.game.warpGates.indexOf(this.currentWarpGate);
@@ -153,6 +157,10 @@ class GameController {
     }
 
     private endHold(): void {
+        if (this.holdStartTime) {
+            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
+            console.log(`Hold ended after ${holdDuration.toFixed(1)}s`);
+        }
         this.holdStartTime = null;
         this.holdPosition = null;
         // Don't remove currentWarpGate here, it might still be charging
@@ -190,6 +198,7 @@ class GameController {
                 this.currentWarpGate = new WarpGate(this.holdPosition, player);
                 this.currentWarpGate.startCharging();
                 this.game.warpGates.push(this.currentWarpGate);
+                console.log(`Warp gate created at (${this.holdPosition.x.toFixed(0)}, ${this.holdPosition.y.toFixed(0)})`);
             }
         }
 
@@ -200,6 +209,7 @@ class GameController {
             
             // Check if gate is complete
             if (this.currentWarpGate.isComplete) {
+                console.log('Warp gate complete! Ready for building selection.');
                 // Gate is ready for building selection
                 // For now, just remove it after a moment
                 // In a full implementation, you'd show the building UI
