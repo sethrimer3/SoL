@@ -1,0 +1,69 @@
+{
+  "game": {
+    "title": "SoL - Speed of Light",
+    "version": "0.1.0",
+    "description": "2D Real-time Strategy Game with Light Mechanics"
+  },
+  "factions": {
+    "Radiant": {
+      "description": "Light-focused civilization",
+      "color": "#FFD700",
+      "bonuses": {
+        "mirror_efficiency": 1.1,
+        "light_detection_range": 1.2
+      }
+    },
+    "Aurum": {
+      "description": "Gold/wealth-oriented faction",
+      "color": "#DAA520",
+      "bonuses": {
+        "starting_solarium": 1.5,
+        "solarium_generation": 1.1
+      }
+    },
+    "Solari": {
+      "description": "Sun-worshipping empire",
+      "color": "#FF8C00",
+      "bonuses": {
+        "forge_health": 1.2,
+        "unit_production_speed": 1.1
+      }
+    }
+  },
+  "structures": {
+    "stellar_forge": {
+      "name": "Stellar Forge",
+      "health": 1000,
+      "cost": 0,
+      "build_time": 0,
+      "description": "Main base that produces units when receiving light"
+    },
+    "solar_mirror": {
+      "name": "Solar Mirror",
+      "health": 100,
+      "cost": 50,
+      "build_time": 10,
+      "description": "Reflects sunlight to generate Solarium",
+      "generation_rate": 10
+    }
+  },
+  "resources": {
+    "solarium": {
+      "name": "Solarium",
+      "short_name": "Sol",
+      "description": "Primary currency generated from solar mirrors",
+      "starting_amount": 100
+    }
+  },
+  "gameplay": {
+    "starting_mirrors": 2,
+    "unit_production_requires_light": true,
+    "light_ray_tracing_enabled": true,
+    "shadow_mechanics_enabled": true
+  },
+  "platform": {
+    "mobile": true,
+    "desktop": true,
+    "crossplay": true
+  }
+}
