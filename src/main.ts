@@ -196,6 +196,11 @@ class GameController {
                              Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
                              Math.abs(lastY - this.selectionStartScreen.y) < Constants.CLICK_DRAG_THRESHOLD;
             
+            // Create tap visual effect for clicks
+            if (wasClick && this.selectionStartScreen) {
+                this.renderer.createTapEffect(lastX, lastY);
+            }
+            
             if (this.game && wasClick) {
                 const worldPos = this.renderer.screenToWorld(lastX, lastY);
                 const player = this.game.players[0]; // Assume player 1 is human
@@ -252,6 +257,14 @@ class GameController {
                 
                 // If dragged significantly (> 5 pixels), use ability
                 if (totalMovement >= 5) {
+                    // Create swipe visual effect
+                    this.renderer.createSwipeEffect(
+                        this.selectionStartScreen.x,
+                        this.selectionStartScreen.y,
+                        endPos.x,
+                        endPos.y
+                    );
+                    
                     // Calculate swipe direction
                     const dx = endPos.x - this.selectionStartScreen.x;
                     const dy = endPos.y - this.selectionStartScreen.y;
