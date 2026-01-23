@@ -64,3 +64,9 @@ export const CASING_COLLISION_DAMPING = 0.3;
 // Unit movement constants
 export const UNIT_MOVE_SPEED = 100; // Pixels per second
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
+
+// Solar mirror visual constants
+export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
+
+// UI constants
+export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI

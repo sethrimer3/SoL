@@ -209,21 +209,67 @@ export class SolarMirror {
     ) {}
 
     /**
-     * Check if mirror has clear view of any light source
-     * TODO: Implement ray tracing to check for obstacles blocking light
+     * Check if ray from mirror to target is blocked by asteroids
+     * Helper method to avoid code duplication
      */
-    hasLineOfSightToLight(lightSources: Sun[]): boolean {
-        // Placeholder - needs ray casting
-        return lightSources.length > 0;
+    private isPathClear(target: Vector2D, asteroids: Asteroid[] = []): boolean {
+        const direction = new Vector2D(
+            target.x - this.position.x,
+            target.y - this.position.y
+        ).normalize();
+        
+        const ray = new LightRay(this.position, direction);
+        const distance = this.position.distanceTo(target);
+        
+        for (const asteroid of asteroids) {
+            const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+            if (intersectionDist !== null && intersectionDist < distance) {
+                return false; // Path is blocked
+            }
+        }
+        
+        return true; // Path is clear
+    }
+
+    /**
+     * Check if mirror has clear view of any light source
+     * Returns true if at least one sun is visible
+     */
+    hasLineOfSightToLight(lightSources: Sun[], asteroids: Asteroid[] = []): boolean {
+        for (const sun of lightSources) {
+            if (this.isPathClear(sun.position, asteroids)) {
+                return true; // Found at least one clear path to a sun
+            }
+        }
+        return false;
     }
 
     /**
      * Check if mirror has clear path to Stellar Forge
-     * TODO: Implement collision detection with obstacles
+     * Returns true if path is not blocked by asteroids
      */
-    hasLineOfSightToForge(forge: StellarForge, obstacles: any[]): boolean {
-        // Placeholder - needs collision detection
-        return true;
+    hasLineOfSightToForge(forge: StellarForge, asteroids: Asteroid[] = []): boolean {
+        return this.isPathClear(forge.position, asteroids);
+    }
+
+    /**
+     * Get the closest visible sun (for visual indicators)
+     */
+    getClosestVisibleSun(lightSources: Sun[], asteroids: Asteroid[] = []): Sun | null {
+        let closestSun: Sun | null = null;
+        let closestDistance = Infinity;
+        
+        for (const sun of lightSources) {
+            if (this.isPathClear(sun.position, asteroids)) {
+                const distance = this.position.distanceTo(sun.position);
+                if (distance < closestDistance) {
+                    closestSun = sun;
+                    closestDistance = distance;
+                }
+            }
+        }
+        
+        return closestSun;
     }
 
     /**
@@ -272,11 +318,11 @@ export class StellarForge {
     /**
      * Update whether forge is receiving light from mirrors
      */
-    updateLightStatus(mirrors: SolarMirror[], suns: Sun[]): void {
+    updateLightStatus(mirrors: SolarMirror[], suns: Sun[], asteroids: Asteroid[] = []): void {
         this.isReceivingLight = false;
         for (const mirror of mirrors) {
-            if (mirror.hasLineOfSightToLight(suns) &&
-                mirror.hasLineOfSightToForge(this, [])) {
+            if (mirror.hasLineOfSightToLight(suns, asteroids) &&
+                mirror.hasLineOfSightToForge(this, asteroids)) {
                 this.isReceivingLight = true;
                 break;
             }
@@ -1043,14 +1089,14 @@ export class GameState {
 
             // Update light status for Stellar Forge
             if (player.stellarForge) {
-                player.stellarForge.updateLightStatus(player.solarMirrors, this.suns);
+                player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids);
             }
 
             // Generate Solarium from mirrors
             for (const mirror of player.solarMirrors) {
-                if (mirror.hasLineOfSightToLight(this.suns) &&
+                if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
-                    mirror.hasLineOfSightToForge(player.stellarForge, [])) {
+                    mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids)) {
                     const solariumGenerated = mirror.generateSolarium(deltaTime);
                     player.addSolarium(solariumGenerated);
                 }

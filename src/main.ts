@@ -2,9 +2,9 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun } from './game-core';
 import { GameRenderer } from './renderer';
-import { MainMenu } from './menu';
+import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
 
 class GameController {
@@ -32,21 +32,50 @@ class GameController {
 
         // Create and show main menu
         this.menu = new MainMenu();
-        this.menu.onStart(() => this.startNewGame());
+        this.menu.onStart((settings: GameSettings) => this.startNewGame(settings));
 
         // Set up input handlers
         this.setupInputHandlers(canvas);
     }
 
-    private startNewGame(): void {
-        // Create game
-        this.game = createStandardGame([
+    private startNewGame(settings: GameSettings): void {
+        // Create game based on selected map
+        this.game = this.createGameFromSettings(settings);
+
+        // Start game loop
+        this.start();
+    }
+
+    private createGameFromSettings(settings: GameSettings): GameState {
+        const game = createStandardGame([
             ['Player 1', Faction.RADIANT],
             ['Player 2', Faction.AURUM]
         ]);
 
-        // Start game loop
-        this.start();
+        // Clear and recreate based on map settings
+        const map = settings.selectedMap;
+        
+        // Clear existing suns and add new ones based on map
+        game.suns = [];
+        
+        if (map.id === 'twin-suns') {
+            // Two suns positioned diagonally
+            game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
+            game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else {
+            // Single sun at center (default for all other maps)
+            game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        }
+        
+        // Reinitialize asteroids based on map
+        game.asteroids = [];
+        game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
+        
+        // Reinitialize space dust
+        game.spaceDust = [];
+        game.initializeSpaceDust(1000, map.mapSize, map.mapSize);
+        
+        return game;
     }
 
     private setupInputHandlers(canvas: HTMLCanvasElement): void {
