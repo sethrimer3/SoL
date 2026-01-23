@@ -411,11 +411,15 @@ export class StellarForge {
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
     readonly radius: number = 40; // For rendering and selection
+    starlingSpawnTimer: number = 0; // Timer for spawning starlings
 
     constructor(
         public position: Vector2D,
         public owner: Player
-    ) {}
+    ) {
+        // Initialize starling spawn timer with random offset to stagger spawns
+        this.starlingSpawnTimer = Math.random() * Constants.STARLING_SPAWN_INTERVAL;
+    }
 
     /**
      * Check if forge can produce units (needs light)
@@ -453,9 +457,14 @@ export class StellarForge {
     }
 
     /**
-     * Update forge movement
+     * Update forge movement and starling spawning
      */
     update(deltaTime: number): void {
+        // Update starling spawn timer
+        if (this.health > 0 && this.isReceivingLight) {
+            this.starlingSpawnTimer -= deltaTime;
+        }
+
         if (!this.targetPosition) {
             // No target, apply deceleration
             const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
@@ -502,6 +511,17 @@ export class StellarForge {
         // Update position
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Check if starling should be spawned and reset timer
+     */
+    shouldSpawnStarling(): boolean {
+        if (this.starlingSpawnTimer <= 0 && this.health > 0 && this.isReceivingLight) {
+            this.starlingSpawnTimer = Constants.STARLING_SPAWN_INTERVAL;
+            return true;
+        }
+        return false;
     }
 
     /**
@@ -906,7 +926,7 @@ export class Unit {
     /**
      * Check if target is dead
      */
-    private isTargetDead(target: Unit | StellarForge): boolean {
+    protected isTargetDead(target: Unit | StellarForge): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -916,7 +936,7 @@ export class Unit {
     /**
      * Find nearest enemy
      */
-    private findNearestEnemy(enemies: (Unit | StellarForge)[]): Unit | StellarForge | null {
+    protected findNearestEnemy(enemies: (Unit | StellarForge)[]): Unit | StellarForge | null {
         let nearest: Unit | StellarForge | null = null;
         let minDistance = Infinity;
 
@@ -1294,6 +1314,133 @@ export class Grave extends Unit {
 }
 
 /**
+ * Starling unit - minion that spawns from stellar forge and has AI behavior
+ */
+export class Starling extends Unit {
+    private explorationTarget: Vector2D | null = null;
+    private explorationTimer: number = 0;
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.STARLING_MAX_HEALTH,
+            Constants.STARLING_ATTACK_RANGE,
+            Constants.STARLING_ATTACK_DAMAGE,
+            Constants.STARLING_ATTACK_SPEED,
+            0 // No special ability
+        );
+    }
+
+    /**
+     * Update starling AI behavior (call this before regular update)
+     */
+    updateAI(gameState: GameState, enemies: (Unit | StellarForge)[]): void {
+        // Update exploration timer
+        this.explorationTimer -= 0.016; // Approximate deltaTime for AI decisions
+
+        // AI behavior: prioritize enemy base, then buildings, then explore
+        let targetPosition: Vector2D | null = null;
+
+        // 1. Try to target enemy base if visible
+        for (const enemy of enemies) {
+            if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
+                // Check if enemy base is visible (not in shadow)
+                if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
+                    targetPosition = enemy.position;
+                    break;
+                }
+            }
+        }
+
+        // 2. If no visible enemy base, target visible enemy buildings (mirrors)
+        if (!targetPosition) {
+            for (const player of gameState.players) {
+                if (player !== this.owner) {
+                    for (const mirror of player.solarMirrors) {
+                        if (gameState.isObjectVisibleToPlayer(mirror.position, this.owner)) {
+                            targetPosition = mirror.position;
+                            break;
+                        }
+                    }
+                    if (targetPosition) break;
+                }
+            }
+        }
+
+        // 3. If no visible structures, explore shadows randomly
+        if (!targetPosition) {
+            // Generate new random exploration target every few seconds or if we've reached current target
+            if (this.explorationTimer <= 0 || !this.explorationTarget ||
+                this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
+                // Pick a random position in shadow
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 300 + Math.random() * 500;
+                this.explorationTarget = new Vector2D(
+                    this.position.x + Math.cos(angle) * distance,
+                    this.position.y + Math.sin(angle) * distance
+                );
+                this.explorationTimer = Constants.STARLING_EXPLORATION_CHANGE_INTERVAL;
+            }
+            targetPosition = this.explorationTarget;
+        }
+
+        // Set rally point for movement
+        if (targetPosition) {
+            this.rallyPoint = targetPosition;
+        }
+    }
+
+    /**
+     * Override update to use custom movement speed
+     */
+    update(deltaTime: number, enemies: (Unit | StellarForge)[]): void {
+        // Update attack cooldown
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= deltaTime;
+        }
+
+        // Update ability cooldown
+        if (this.abilityCooldown > 0) {
+            this.abilityCooldown -= deltaTime;
+        }
+
+        // Move toward rally point if set (using custom starling speed)
+        if (this.rallyPoint) {
+            const distance = this.position.distanceTo(this.rallyPoint);
+            if (distance > Constants.UNIT_ARRIVAL_THRESHOLD) {
+                // Calculate direction vector
+                const dx = this.rallyPoint.x - this.position.x;
+                const dy = this.rallyPoint.y - this.position.y;
+                
+                // Normalize and move (using starling speed)
+                const moveDistance = Constants.STARLING_MOVE_SPEED * deltaTime;
+                this.position.x += (dx / distance) * moveDistance;
+                this.position.y += (dy / distance) * moveDistance;
+            } else {
+                // Arrived at rally point
+                this.rallyPoint = null;
+            }
+        }
+
+        // Use base class methods for targeting and attacking
+        // Find target if don't have one or current target is dead
+        if (!this.target || this.isTargetDead(this.target)) {
+            this.target = this.findNearestEnemy(enemies);
+        }
+
+        // Attack if target in range and cooldown ready
+        if (this.target && this.attackCooldown <= 0) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= this.attackRange) {
+                this.attack(this.target);
+                this.attackCooldown = 1.0 / this.attackSpeed;
+            }
+        }
+    }
+}
+
+/**
  * Warp gate being conjured by player
  */
 export class WarpGate {
@@ -1412,6 +1559,19 @@ export class GameState {
             if (player.stellarForge) {
                 player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids);
                 player.stellarForge.update(deltaTime); // Update forge movement
+                
+                // Spawn starlings if timer is ready
+                if (player.stellarForge.shouldSpawnStarling()) {
+                    const spawnOffset = 60; // Spawn 60 pixels away from forge
+                    const angle = Math.random() * Math.PI * 2;
+                    const spawnPosition = new Vector2D(
+                        player.stellarForge.position.x + Math.cos(angle) * spawnOffset,
+                        player.stellarForge.position.y + Math.sin(angle) * spawnOffset
+                    );
+                    const starling = new Starling(spawnPosition, player);
+                    player.units.push(starling);
+                    console.log(`${player.name} spawned a Starling at (${spawnPosition.x.toFixed(0)}, ${spawnPosition.y.toFixed(0)})`);
+                }
             }
 
             // Update solar mirrors - position and reflection angle
@@ -1461,6 +1621,11 @@ export class GameState {
 
             // Update each unit
             for (const unit of player.units) {
+                // Starlings need special AI update before regular update
+                if (unit instanceof Starling) {
+                    unit.updateAI(this, enemies);
+                }
+                
                 unit.update(deltaTime, enemies);
 
                 // If unit is a Marine, collect its effects

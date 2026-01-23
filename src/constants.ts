@@ -55,6 +55,15 @@ export const GRAVE_PROJECTILE_LAUNCH_SPEED = 400;
 export const GRAVE_PROJECTILE_TRAIL_LENGTH = 15; // Number of trail particles
 export const GRAVE_PROJECTILE_HIT_DISTANCE = 10; // Distance at which projectile hits target
 
+// Starling unit constants (minions from stellar forge)
+export const STARLING_MAX_HEALTH = 50;
+export const STARLING_ATTACK_RANGE = 150;
+export const STARLING_ATTACK_DAMAGE = 5;
+export const STARLING_ATTACK_SPEED = 2; // Attacks per second
+export const STARLING_MOVE_SPEED = 120; // Pixels per second (faster than regular units)
+export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
+export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
+
 // Weapon effect constants
 export const MUZZLE_FLASH_DURATION = 0.05; // 50ms - very brief
 export const BULLET_CASING_LIFETIME = 2.0; // 2 seconds
