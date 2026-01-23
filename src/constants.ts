@@ -29,3 +29,21 @@ export const DUST_PARTICLE_SIZE = 2;
 export const RAYTRACING_NUM_RAYS = 64; // Number of rays to cast per sun
 export const MAX_RAY_DISTANCE = 2000; // Maximum distance for ray casting
 export const SHADOW_LENGTH = 500; // Length of shadows cast by asteroids
+
+// Marine unit constants
+export const MARINE_MAX_HEALTH = 100;
+export const MARINE_ATTACK_RANGE = 300;
+export const MARINE_ATTACK_DAMAGE = 10;
+export const MARINE_ATTACK_SPEED = 5; // Attacks per second (fast shooting)
+
+// Weapon effect constants
+export const MUZZLE_FLASH_DURATION = 0.05; // 50ms - very brief
+export const BULLET_CASING_LIFETIME = 2.0; // 2 seconds
+export const BULLET_CASING_SPEED_MIN = 100;
+export const BULLET_CASING_SPEED_MAX = 150;
+export const BOUNCING_BULLET_LIFETIME = 0.5; // 0.5 seconds
+export const BOUNCING_BULLET_SPEED_MIN = 150;
+export const BOUNCING_BULLET_SPEED_MAX = 250;
+export const CASING_SPACEDUST_COLLISION_DISTANCE = 5;
+export const CASING_SPACEDUST_FORCE = 50;
+export const CASING_COLLISION_DAMPING = 0.3;
