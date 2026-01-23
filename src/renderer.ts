@@ -1452,6 +1452,27 @@ export class GameRenderer {
             this.ctx.fillText(`${winner.name} WINS!`, this.canvas.width / 2, this.canvas.height / 2);
             this.ctx.textAlign = 'left';
         }
+
+        // Draw countdown overlay
+        if (game.isCountdownActive) {
+            // Semi-transparent overlay
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            
+            // Countdown text
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.font = 'bold 120px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            const countdownValue = Math.ceil(game.countdownTime);
+            const displayText = countdownValue > 0 ? countdownValue.toString() : 'Go!';
+            
+            this.ctx.fillText(displayText, this.canvas.width / 2, this.canvas.height / 2);
+            
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
+        }
     }
 
     /**

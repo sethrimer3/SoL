@@ -1738,12 +1738,32 @@ export class GameState {
     abilityBullets: AbilityBullet[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
+    countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
+    isCountdownActive: boolean = true; // Start with countdown active
+    mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
 
     /**
      * Update game state
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+
+        // Handle countdown
+        if (this.isCountdownActive) {
+            this.countdownTime -= deltaTime;
+            
+            // Initialize mirror movement at the start of countdown
+            if (!this.mirrorsMovedToSun) {
+                this.initializeMirrorMovement();
+                this.mirrorsMovedToSun = true;
+            }
+            
+            // End countdown when timer reaches 0
+            if (this.countdownTime <= 0) {
+                this.isCountdownActive = false;
+                this.countdownTime = 0;
+            }
+        }
 
         // Update asteroids
         for (const asteroid of this.asteroids) {
@@ -1760,18 +1780,22 @@ export class GameState {
             if (player.stellarForge) {
                 const oldForgePos = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
                 player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids);
-                player.stellarForge.update(deltaTime); // Update forge movement
                 
-                // Check collision for forge (larger radius)
-                if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius)) {
-                    // Revert to old position and stop movement
-                    player.stellarForge.position = oldForgePos;
-                    player.stellarForge.targetPosition = null;
-                    player.stellarForge.velocity = new Vector2D(0, 0);
+                // Only allow forge movement after countdown
+                if (!this.isCountdownActive) {
+                    player.stellarForge.update(deltaTime); // Update forge movement
+                    
+                    // Check collision for forge (larger radius)
+                    if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius)) {
+                        // Revert to old position and stop movement
+                        player.stellarForge.position = oldForgePos;
+                        player.stellarForge.targetPosition = null;
+                        player.stellarForge.velocity = new Vector2D(0, 0);
+                    }
                 }
                 
-                // Spawn starlings if timer is ready
-                if (player.stellarForge.shouldSpawnStarling()) {
+                // Spawn starlings if timer is ready (only after countdown)
+                if (!this.isCountdownActive && player.stellarForge.shouldSpawnStarling()) {
                     const spawnOffset = 60; // Spawn 60 pixels away from forge
                     const angle = Math.random() * Math.PI * 2;
                     const spawnPosition = new Vector2D(
@@ -1785,6 +1809,7 @@ export class GameState {
             }
 
             // Update solar mirrors - position and reflection angle
+            // Mirrors can move during countdown to reach the sun
             for (const mirror of player.solarMirrors) {
                 const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
                 mirror.update(deltaTime); // Update mirror movement
@@ -1799,6 +1824,7 @@ export class GameState {
                 
                 mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids);
                 
+                // Generate solarium even during countdown once mirrors reach position
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids)) {
@@ -1840,14 +1866,15 @@ export class GameState {
                 }
             }
 
-            // Update each unit
-            for (const unit of player.units) {
-                // Starlings need special AI update before regular update
-                if (unit instanceof Starling) {
-                    unit.updateAI(this, enemies);
-                }
-                
-                unit.update(deltaTime, enemies);
+            // Update each unit (only after countdown)
+            if (!this.isCountdownActive) {
+                for (const unit of player.units) {
+                    // Starlings need special AI update before regular update
+                    if (unit instanceof Starling) {
+                        unit.updateAI(this, enemies);
+                    }
+                    
+                    unit.update(deltaTime, enemies);
 
                 // If unit is a Marine, collect its effects
                 if (unit instanceof Marine) {
@@ -1867,10 +1894,12 @@ export class GameState {
                 const abilityEffects = unit.getAndClearLastAbilityEffects();
                 this.abilityBullets.push(...abilityEffects);
             }
+            } // End of countdown check
 
-            // Check and resolve collisions for all units
-            for (const unit of player.units) {
-                const oldPosition = new Vector2D(unit.position.x, unit.position.y);
+            // Check and resolve collisions for all units (only after countdown)
+            if (!this.isCountdownActive) {
+                for (const unit of player.units) {
+                    const oldPosition = new Vector2D(unit.position.x, unit.position.y);
                 
                 // Check if current position is in collision
                 if (this.checkCollision(unit.position)) {
@@ -1898,13 +1927,15 @@ export class GameState {
                     }
                 }
             }
+            } // End of countdown check for collisions
 
             // Remove dead units
             player.units = player.units.filter(unit => !unit.isDead());
 
-            // Update each building
-            for (const building of player.buildings) {
-                building.update(deltaTime, enemies);
+            // Update each building (only after countdown)
+            if (!this.isCountdownActive) {
+                for (const building of player.buildings) {
+                    building.update(deltaTime, enemies);
 
                 // If building is a Minigun, collect its effects
                 if (building instanceof Minigun) {
@@ -1920,10 +1951,12 @@ export class GameState {
                     }
                 }
             }
+            } // End of countdown check for buildings
 
-            // Update building construction
-            for (const building of player.buildings) {
-                if (building.isComplete) continue; // Skip completed buildings
+            // Update building construction (only after countdown)
+            if (!this.isCountdownActive) {
+                for (const building of player.buildings) {
+                    if (building.isComplete) continue; // Skip completed buildings
                 
                 // Check if building is inside player's influence (near stellar forge)
                 const isInInfluence = player.stellarForge && 
@@ -1989,6 +2022,7 @@ export class GameState {
                     }
                 }
             }
+            } // End of countdown check for building construction
 
             // Remove destroyed buildings
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
@@ -2124,6 +2158,48 @@ export class GameState {
                         ));
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Initialize mirror movement at the start of countdown
+     * Moves mirrors outward perpendicular to base position
+     */
+    initializeMirrorMovement(): void {
+        if (this.suns.length === 0) return;
+        
+        const sun = this.suns[0]; // Use first sun as reference
+        
+        for (const player of this.players) {
+            if (!player.stellarForge || player.solarMirrors.length < 2) continue;
+            
+            const forgePos = player.stellarForge.position;
+            
+            // Calculate angle from sun to forge
+            const dx = forgePos.x - sun.position.x;
+            const dy = forgePos.y - sun.position.y;
+            const angleToForge = Math.atan2(dy, dx);
+            
+            // Calculate perpendicular angles (left and right relative to sun-to-forge direction)
+            const leftAngle = angleToForge + Math.PI / 2;
+            const rightAngle = angleToForge - Math.PI / 2;
+            
+            // Set target positions for the two mirrors
+            if (player.solarMirrors.length >= 1) {
+                const leftTarget = new Vector2D(
+                    forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
+                    forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
+                );
+                player.solarMirrors[0].setTarget(leftTarget);
+            }
+            
+            if (player.solarMirrors.length >= 2) {
+                const rightTarget = new Vector2D(
+                    forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
+                    forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
+                );
+                player.solarMirrors[1].setTarget(rightTarget);
             }
         }
     }
@@ -2265,20 +2341,47 @@ export class GameState {
      */
     initializeAsteroids(count: number, width: number, height: number): void {
         this.asteroids = [];
+        const minGap = 100; // Minimum distance between asteroid centers
+        const maxAttempts = 50; // Maximum attempts to find a valid position
+        
         for (let i = 0; i < count; i++) {
-            // Random position avoiding the center (where players start)
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 200 + Math.random() * (Math.min(width, height) / 2 - 300);
-            const x = Math.cos(angle) * distance;
-            const y = Math.sin(angle) * distance;
+            let validPosition = false;
+            let attempts = 0;
+            let x = 0, y = 0, size = 0;
             
-            // Random polygon sides (3-9)
-            const sides = 3 + Math.floor(Math.random() * 7);
+            while (!validPosition && attempts < maxAttempts) {
+                // Random position avoiding the center (where players start)
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 200 + Math.random() * (Math.min(width, height) / 2 - 300);
+                x = Math.cos(angle) * distance;
+                y = Math.sin(angle) * distance;
+                
+                // Random size (30-80)
+                size = 30 + Math.random() * 50;
+                
+                // Check if this position has enough gap from existing asteroids
+                validPosition = true;
+                for (const asteroid of this.asteroids) {
+                    const dx = x - asteroid.position.x;
+                    const dy = y - asteroid.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const requiredGap = minGap + size + asteroid.size;
+                    
+                    if (dist < requiredGap) {
+                        validPosition = false;
+                        break;
+                    }
+                }
+                
+                attempts++;
+            }
             
-            // Random size (30-80)
-            const size = 30 + Math.random() * 50;
-            
-            this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
+            // If we found a valid position, add the asteroid
+            if (validPosition) {
+                // Random polygon sides (3-9)
+                const sides = 3 + Math.floor(Math.random() * 7);
+                this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
+            }
         }
     }
 
@@ -2317,19 +2420,29 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
     // Add sun at center
     game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
 
-    // Create players with starting positions
-    const startingPositions: Array<[Vector2D, Vector2D[]]> = [
-        [new Vector2D(-500, 0), [new Vector2D(-450, 0), new Vector2D(-400, 0)]],
-        [new Vector2D(500, 0), [new Vector2D(450, 0), new Vector2D(400, 0)]],
-    ];
+    // Create players with starting positions in bottom-left and top-right
+    // Randomly assign which player gets which position
+    const bottomLeft = new Vector2D(-700, 700);
+    const topRight = new Vector2D(700, -700);
+    
+    // Randomly decide player assignment
+    const randomizePositions = Math.random() < 0.5;
+    const positions = randomizePositions 
+        ? [bottomLeft, topRight]
+        : [topRight, bottomLeft];
 
     for (let i = 0; i < playerNames.length; i++) {
-        if (i >= startingPositions.length) {
+        if (i >= positions.length) {
             break;
         }
         const [name, faction] = playerNames[i];
         const player = new Player(name, faction);
-        const [forgePos, mirrorPositions] = startingPositions[i];
+        const forgePos = positions[i];
+        
+        // Mirrors will be spawned at the forge position initially
+        // They will immediately move outward during countdown (via initializeMirrorMovement)
+        // This prevents any visual confusion as movement starts on first frame
+        const mirrorPositions = [forgePos, forgePos];
         game.initializePlayer(player, forgePos, mirrorPositions);
         
         // Hero units (Marine and Grave) are no longer spawned automatically
@@ -2344,23 +2457,23 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
     // Initialize random asteroids
     game.initializeAsteroids(10, 2000, 2000);
     
-    // Add two large strategic asteroids that cast shadows between bases
-    // Position them close to the sun, on opposite sides along the x-axis
-    // Left strategic asteroid (at negative x-axis, 180 degrees from origin)
-    const leftAsteroidAngle = Math.PI; // Points to negative x-axis (left)
-    const leftAsteroidPos = new Vector2D(
-        Math.cos(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
-        Math.sin(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    // Add two large strategic asteroids that cast shadows on the bases
+    // Position them close to the sun to cast shadows toward bottom-left and top-right
+    // Bottom-left shadow: asteroid positioned at top-right of sun (angle ~-45 degrees or 315 degrees)
+    const bottomLeftShadowAngle = -Math.PI / 4; // -45 degrees (top-right quadrant)
+    const bottomLeftAsteroidPos = new Vector2D(
+        Math.cos(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
     );
-    game.asteroids.push(new Asteroid(leftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
+    game.asteroids.push(new Asteroid(bottomLeftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
     
-    // Right strategic asteroid (at positive x-axis, 0 degrees from origin)
-    const rightAsteroidAngle = 0; // Points to positive x-axis (right)
-    const rightAsteroidPos = new Vector2D(
-        Math.cos(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
-        Math.sin(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    // Top-right shadow: asteroid positioned at bottom-left of sun (angle ~135 degrees)
+    const topRightShadowAngle = (3 * Math.PI) / 4; // 135 degrees (bottom-left quadrant)
+    const topRightAsteroidPos = new Vector2D(
+        Math.cos(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
     );
-    game.asteroids.push(new Asteroid(rightAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
+    game.asteroids.push(new Asteroid(topRightAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
 
     game.isRunning = true;
     return game;
