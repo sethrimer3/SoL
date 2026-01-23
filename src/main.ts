@@ -86,6 +86,7 @@ class GameController {
         let lastY = 0;
         let lastMouseX = 0;
         let lastMouseY = 0;
+        let lastPinchDistance = 0;
 
         // Edge panning constants (desktop only)
         const EDGE_PAN_THRESHOLD = 20; // pixels from edge
@@ -256,7 +257,7 @@ class GameController {
             endDrag();
         });
 
-        // Touch events - two fingers for pan, one finger for selection
+        // Touch events - two fingers for pan and zoom, one finger for selection
         canvas.addEventListener('touchstart', (e: TouchEvent) => {
             if (e.touches.length === 1) {
                 e.preventDefault();
@@ -264,12 +265,21 @@ class GameController {
                 startDrag(e.touches[0].clientX, e.touches[0].clientY);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
-                // Two finger touch - prepare for panning
+                // Two finger touch - prepare for panning and zooming
                 isMouseDown = true;
                 isPanning = false;
-                const touch = e.touches[0];
-                lastX = touch.clientX;
-                lastY = touch.clientY;
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                
+                // Calculate center point between two touches
+                lastX = (touch1.clientX + touch2.clientX) / 2;
+                lastY = (touch1.clientY + touch2.clientY) / 2;
+                
+                // Calculate initial distance for pinch zoom
+                const dx = touch2.clientX - touch1.clientX;
+                const dy = touch2.clientY - touch1.clientY;
+                lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
+                
                 this.cancelHold();
             }
         }, { passive: false });
@@ -281,14 +291,64 @@ class GameController {
                 moveDrag(touch.clientX, touch.clientY, false);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
+                const touch1 = e.touches[0];
+                const touch2 = e.touches[1];
+                
+                // Calculate current center point
+                const currentX = (touch1.clientX + touch2.clientX) / 2;
+                const currentY = (touch1.clientY + touch2.clientY) / 2;
+                
+                // Calculate current distance for pinch zoom
+                const dx = touch2.clientX - touch1.clientX;
+                const dy = touch2.clientY - touch1.clientY;
+                const currentPinchDistance = Math.sqrt(dx * dx + dy * dy);
+                
+                // Handle pinch zoom if distance changed significantly
+                if (Math.abs(currentPinchDistance - lastPinchDistance) > 1) {
+                    // Get world position under pinch center before zoom
+                    const worldPosBeforeZoom = this.renderer.screenToWorld(currentX, currentY);
+                    
+                    // Apply zoom based on pinch distance change
+                    const zoomDelta = currentPinchDistance / lastPinchDistance;
+                    const oldZoom = this.renderer.zoom;
+                    this.renderer.setZoom(oldZoom * zoomDelta);
+                    
+                    // Get world position under pinch center after zoom
+                    const worldPosAfterZoom = this.renderer.screenToWorld(currentX, currentY);
+                    
+                    // Adjust camera to keep world position under pinch center the same
+                    const currentCamera = this.renderer.camera;
+                    this.renderer.setCameraPosition(new Vector2D(
+                        currentCamera.x + (worldPosBeforeZoom.x - worldPosAfterZoom.x),
+                        currentCamera.y + (worldPosBeforeZoom.y - worldPosAfterZoom.y)
+                    ));
+                    
+                    lastPinchDistance = currentPinchDistance;
+                }
+                
                 // Two finger drag - pan the camera
-                const touch = e.touches[0];
-                moveDrag(touch.clientX, touch.clientY, true);
+                moveDrag(currentX, currentY, true);
             }
         }, { passive: false });
 
-        canvas.addEventListener('touchend', () => {
+        canvas.addEventListener('touchend', (e: TouchEvent) => {
+            if (e.touches.length === 0) {
+                // All touches ended
+                endDrag();
+                lastPinchDistance = 0;
+            } else if (e.touches.length === 1) {
+                // One touch remaining, transition from two-finger to one-finger mode
+                const touch = e.touches[0];
+                lastX = touch.clientX;
+                lastY = touch.clientY;
+                isPanning = false;
+                lastPinchDistance = 0;
+            }
+        });
+
+        canvas.addEventListener('touchcancel', () => {
             endDrag();
+            lastPinchDistance = 0;
         });
 
         // Keyboard controls (WASD and arrow keys) - Desktop only
