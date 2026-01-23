@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D } from './game-core';
 import { GameRenderer } from './renderer';
 
 class GameController {
@@ -44,8 +44,7 @@ class GameController {
         canvas.addEventListener('wheel', (e: WheelEvent) => {
             e.preventDefault();
             const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
-            // Zoom functionality placeholder - renderer doesn't expose current zoom
-            console.log('Zoom:', zoomDelta);
+            this.renderer.setZoom(this.renderer.zoom * zoomDelta);
         });
 
         // Touch/Mouse pan
@@ -61,7 +60,13 @@ class GameController {
                 const dy = y - lastY;
                 lastX = x;
                 lastY = y;
-                console.log('Pan:', dx, dy);
+                
+                // Update camera position (inverted for natural panning)
+                const currentCamera = this.renderer.camera;
+                this.renderer.setCameraPosition(new Vector2D(
+                    currentCamera.x - dx / this.renderer.zoom,
+                    currentCamera.y - dy / this.renderer.zoom
+                ));
             }
         };
 

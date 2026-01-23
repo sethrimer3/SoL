@@ -7,8 +7,8 @@ import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction } 
 export class GameRenderer {
     private canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
-    private camera: Vector2D = new Vector2D(0, 0);
-    private zoom: number = 1.0;
+    public camera: Vector2D = new Vector2D(0, 0);
+    public zoom: number = 1.0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
