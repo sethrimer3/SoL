@@ -183,12 +183,35 @@ class GameController {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
             } else if (!this.isSelecting && this.selectedUnits.size > 0 && this.selectionStartScreen && this.game) {
-                // If units are selected and player clicked (not dragged), set rally point
-                const clickPos = new Vector2D(lastX, lastY);
-                const totalMovement = this.selectionStartScreen.distanceTo(clickPos);
+                // If units are selected and player dragged/clicked
+                const endPos = new Vector2D(lastX, lastY);
+                const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 
-                // Only treat as rally point click if movement was minimal (< 5 pixels)
-                if (totalMovement < 5) {
+                // If dragged significantly (> 5 pixels), use ability
+                if (totalMovement >= 5) {
+                    // Calculate swipe direction
+                    const dx = endPos.x - this.selectionStartScreen.x;
+                    const dy = endPos.y - this.selectionStartScreen.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const direction = new Vector2D(dx / distance, dy / distance);
+                    
+                    // Activate ability for all selected units
+                    let anyAbilityUsed = false;
+                    for (const unit of this.selectedUnits) {
+                        if (unit.useAbility(direction)) {
+                            anyAbilityUsed = true;
+                        }
+                    }
+                    
+                    if (anyAbilityUsed) {
+                        console.log(`Ability activated in direction (${direction.x.toFixed(2)}, ${direction.y.toFixed(2)})`);
+                    }
+                    
+                    // Deselect all units after using ability
+                    this.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
+                } else {
+                    // If movement was minimal (< 5 pixels), set rally point
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
                     
                     // Set rally point for all selected units

@@ -68,5 +68,13 @@ export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
 
+// Ability constants
+export const MARINE_ABILITY_COOLDOWN = 5.0; // 5 seconds
+export const MARINE_ABILITY_BULLET_COUNT = 15; // Number of bullets in storm
+export const MARINE_ABILITY_BULLET_SPEED = 500; // Speed of ability bullets
+export const MARINE_ABILITY_BULLET_LIFETIME = 1.0; // Lifetime of ability bullets
+export const MARINE_ABILITY_SPREAD_ANGLE = (10 * Math.PI) / 180; // 10 degrees in radians
+export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
+
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI

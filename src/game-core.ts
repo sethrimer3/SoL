@@ -593,14 +593,58 @@ export class BouncingBullet {
 }
 
 /**
+ * Ability bullet for special attacks
+ */
+export class AbilityBullet {
+    velocity: Vector2D;
+    lifetime: number = 0;
+    maxLifetime: number = Constants.MARINE_ABILITY_BULLET_LIFETIME;
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D,
+        public owner: Player,
+        public damage: number = Constants.MARINE_ABILITY_BULLET_DAMAGE
+    ) {
+        this.velocity = velocity;
+    }
+
+    /**
+     * Update bullet position
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if bullet should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+
+    /**
+     * Check if bullet hits a target
+     */
+    checkHit(target: Unit | StellarForge): boolean {
+        const distance = this.position.distanceTo(target.position);
+        return distance < 10; // Hit radius
+    }
+}
+
+/**
  * Base Unit class
  */
 export class Unit {
     health: number;
     maxHealth: number;
     attackCooldown: number = 0;
+    abilityCooldown: number = 0; // Cooldown for special ability
     target: Unit | StellarForge | null = null;
     rallyPoint: Vector2D | null = null;
+    protected lastAbilityEffects: AbilityBullet[] = [];
     
     constructor(
         public position: Vector2D,
@@ -608,7 +652,8 @@ export class Unit {
         maxHealth: number,
         public attackRange: number,
         public attackDamage: number,
-        public attackSpeed: number // attacks per second
+        public attackSpeed: number, // attacks per second
+        public abilityCooldownTime: number = 5.0 // Default ability cooldown time
     ) {
         this.health = maxHealth;
         this.maxHealth = maxHealth;
@@ -621,6 +666,11 @@ export class Unit {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
+        }
+
+        // Update ability cooldown
+        if (this.abilityCooldown > 0) {
+            this.abilityCooldown -= deltaTime;
         }
 
         // Move toward rally point if set
@@ -697,6 +747,33 @@ export class Unit {
     }
 
     /**
+     * Use special ability in a direction (to be overridden by subclasses)
+     * @param direction The normalized direction vector for the ability
+     * @returns true if ability was used, false if on cooldown
+     */
+    useAbility(direction: Vector2D): boolean {
+        // Check if ability is ready
+        if (this.abilityCooldown > 0) {
+            return false;
+        }
+
+        // Set cooldown
+        this.abilityCooldown = this.abilityCooldownTime;
+        
+        // Base implementation does nothing
+        return true;
+    }
+
+    /**
+     * Get effects from last ability use (for game state to manage)
+     */
+    getAndClearLastAbilityEffects(): AbilityBullet[] {
+        const effects = this.lastAbilityEffects;
+        this.lastAbilityEffects = [];
+        return effects;
+    }
+
+    /**
      * Take damage
      */
     takeDamage(amount: number): void {
@@ -728,7 +805,8 @@ export class Marine extends Unit {
             Constants.MARINE_MAX_HEALTH,
             Constants.MARINE_ATTACK_RANGE,
             Constants.MARINE_ATTACK_DAMAGE,
-            Constants.MARINE_ATTACK_SPEED
+            Constants.MARINE_ATTACK_SPEED,
+            Constants.MARINE_ABILITY_COOLDOWN
         );
     }
 
@@ -780,6 +858,50 @@ export class Marine extends Unit {
         const effects = this.lastShotEffects;
         this.lastShotEffects = {};
         return effects;
+    }
+
+    /**
+     * Use special ability: Bullet Storm
+     * Fires a spread of bullets in the specified direction
+     */
+    useAbility(direction: Vector2D): boolean {
+        // Check if ability is ready
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+
+        // Calculate base angle from direction
+        const baseAngle = Math.atan2(direction.y, direction.x);
+        
+        // Create bullets with spread
+        const spreadAngle = Constants.MARINE_ABILITY_SPREAD_ANGLE;
+        const bulletCount = Constants.MARINE_ABILITY_BULLET_COUNT;
+        
+        for (let i = 0; i < bulletCount; i++) {
+            // Calculate angle for this bullet within the spread
+            // Distribute bullets evenly within the spread angle
+            // Use max to avoid division by zero if bulletCount is 1
+            const angleOffset = (i / Math.max(bulletCount - 1, 1) - 0.5) * spreadAngle * 2;
+            const bulletAngle = baseAngle + angleOffset;
+            
+            // Calculate velocity
+            const speed = Constants.MARINE_ABILITY_BULLET_SPEED;
+            const velocity = new Vector2D(
+                Math.cos(bulletAngle) * speed,
+                Math.sin(bulletAngle) * speed
+            );
+            
+            // Create bullet
+            const bullet = new AbilityBullet(
+                new Vector2D(this.position.x, this.position.y),
+                velocity,
+                this.owner
+            );
+            
+            this.lastAbilityEffects.push(bullet);
+        }
+
+        return true;
     }
 }
 
@@ -906,7 +1028,8 @@ export class Grave extends Unit {
             Constants.GRAVE_MAX_HEALTH,
             Constants.GRAVE_ATTACK_RANGE,
             Constants.GRAVE_ATTACK_DAMAGE,
-            Constants.GRAVE_ATTACK_SPEED
+            Constants.GRAVE_ATTACK_SPEED,
+            5.0 // Default ability cooldown
         );
         
         // Initialize orbiting projectiles
@@ -1067,6 +1190,7 @@ export class GameState {
     muzzleFlashes: MuzzleFlash[] = [];
     bulletCasings: BulletCasing[] = [];
     bouncingBullets: BouncingBullet[] = [];
+    abilityBullets: AbilityBullet[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
 
@@ -1151,6 +1275,10 @@ export class GameState {
                         this.bouncingBullets.push(effects.bouncingBullet);
                     }
                 }
+
+                // Collect ability effects from all units
+                const abilityEffects = unit.getAndClearLastAbilityEffects();
+                this.abilityBullets.push(...abilityEffects);
             }
 
             // Remove dead units
@@ -1197,6 +1325,35 @@ export class GameState {
             bullet.update(deltaTime);
         }
         this.bouncingBullets = this.bouncingBullets.filter(bullet => !bullet.shouldDespawn());
+
+        // Update ability bullets and check for hits
+        for (const bullet of this.abilityBullets) {
+            bullet.update(deltaTime);
+
+            // Check hits against enemies
+            for (const player of this.players) {
+                // Skip if same team as bullet
+                if (player === bullet.owner) {
+                    continue;
+                }
+
+                // Check hits on units
+                for (const unit of player.units) {
+                    if (bullet.checkHit(unit)) {
+                        unit.takeDamage(bullet.damage);
+                        bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                        break;
+                    }
+                }
+
+                // Check hits on Stellar Forge
+                if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
+                    player.stellarForge.health -= bullet.damage;
+                    bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                }
+            }
+        }
+        this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
     }
 
     /**

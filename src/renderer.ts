@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -466,6 +466,24 @@ export class GameRenderer {
     }
 
     /**
+     * Draw an ability bullet
+     */
+    private drawAbilityBullet(bullet: AbilityBullet): void {
+        const screenPos = this.worldToScreen(bullet.position);
+        const size = 4 * this.zoom;
+        const opacity = bullet.lifetime / bullet.maxLifetime;
+
+        // Draw bullet with owner's faction color
+        const color = this.getFactionColor(bullet.owner.faction);
+        this.ctx.fillStyle = `${color}`;
+        this.ctx.globalAlpha = opacity;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
      * Draw a Grave unit with its orbiting projectiles
      */
     private drawGrave(grave: Grave, color: string): void {
@@ -756,6 +774,11 @@ export class GameRenderer {
         // Draw bouncing bullets
         for (const bullet of game.bouncingBullets) {
             this.drawBouncingBullet(bullet);
+        }
+
+        // Draw ability bullets
+        for (const bullet of game.abilityBullets) {
+            this.drawAbilityBullet(bullet);
         }
 
         // Draw UI
