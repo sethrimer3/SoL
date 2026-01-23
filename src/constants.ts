@@ -65,6 +65,17 @@ export const STARLING_MOVE_SPEED = 120; // Pixels per second (faster than regula
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
 
+// Minigun building constants (offensive building for Radiant faction)
+export const MINIGUN_MAX_HEALTH = 200;
+export const MINIGUN_ATTACK_RANGE = 350;
+export const MINIGUN_ATTACK_DAMAGE = 12;
+export const MINIGUN_ATTACK_SPEED = 6; // Attacks per second (very fast)
+export const MINIGUN_RADIUS = 30; // Building size
+
+// Building costs
+export const MINIGUN_COST = 150;
+export const BUILDING_BUILD_TIME = 5.0; // Base build time in seconds
+
 // Weapon effect constants
 export const MUZZLE_FLASH_DURATION = 0.05; // 50ms - very brief
 export const BULLET_CASING_LIFETIME = 2.0; // 2 seconds

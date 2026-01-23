@@ -548,6 +548,201 @@ export class StellarForge {
 }
 
 /**
+ * Base class for all buildings
+ */
+export class Building {
+    health: number;
+    maxHealth: number;
+    attackCooldown: number = 0;
+    target: Unit | StellarForge | Building | null = null;
+    buildProgress: number = 0; // 0 to 1, building is complete at 1
+    isComplete: boolean = false;
+    
+    constructor(
+        public position: Vector2D,
+        public owner: Player,
+        maxHealth: number,
+        public radius: number,
+        public attackRange: number,
+        public attackDamage: number,
+        public attackSpeed: number // attacks per second
+    ) {
+        this.health = maxHealth;
+        this.maxHealth = maxHealth;
+    }
+
+    /**
+     * Update building logic
+     */
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+        // Update attack cooldown
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= deltaTime;
+        }
+
+        // Only attack if building is complete
+        if (!this.isComplete) {
+            return;
+        }
+
+        // Find target if don't have one or current target is dead
+        if (!this.target || this.isTargetDead(this.target)) {
+            this.target = this.findNearestEnemy(enemies);
+        }
+
+        // Attack if target in range and cooldown ready
+        if (this.target && this.attackCooldown <= 0) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= this.attackRange) {
+                this.attack(this.target);
+                this.attackCooldown = 1.0 / this.attackSpeed;
+            }
+        }
+    }
+
+    /**
+     * Check if target is dead
+     */
+    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
+        if ('health' in target) {
+            return target.health <= 0;
+        }
+        return false;
+    }
+
+    /**
+     * Find nearest enemy
+     */
+    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
+        let nearest: Unit | StellarForge | Building | null = null;
+        let minDistance = Infinity;
+
+        for (const enemy of enemies) {
+            if ('health' in enemy && enemy.health <= 0) continue;
+            
+            const distance = this.position.distanceTo(enemy.position);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearest = enemy;
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
+     * Attack target (to be overridden by subclasses)
+     */
+    attack(target: Unit | StellarForge | Building): void {
+        // Base implementation
+        if ('health' in target) {
+            target.health -= this.attackDamage;
+        }
+    }
+
+    /**
+     * Take damage
+     */
+    takeDamage(amount: number): void {
+        this.health -= amount;
+    }
+
+    /**
+     * Check if building is destroyed
+     */
+    isDestroyed(): boolean {
+        return this.health <= 0;
+    }
+
+    /**
+     * Add build progress (from solarium or mirror light)
+     */
+    addBuildProgress(amount: number): void {
+        if (this.isComplete) return;
+        
+        this.buildProgress += amount;
+        if (this.buildProgress >= 1.0) {
+            this.buildProgress = 1.0;
+            this.isComplete = true;
+        }
+    }
+}
+
+/**
+ * Minigun Building - Offensive building for Radiant faction
+ * Fast-shooting defensive turret with visual effects like Marine
+ */
+export class Minigun extends Building {
+    private lastShotEffects: { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } = {};
+
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.MINIGUN_MAX_HEALTH,
+            Constants.MINIGUN_RADIUS,
+            Constants.MINIGUN_ATTACK_RANGE,
+            Constants.MINIGUN_ATTACK_DAMAGE,
+            Constants.MINIGUN_ATTACK_SPEED
+        );
+    }
+
+    /**
+     * Attack with visual effects like Marine
+     */
+    attack(target: Unit | StellarForge | Building): void {
+        // Apply damage
+        super.attack(target);
+
+        // Calculate angle to target
+        const dx = target.position.x - this.position.x;
+        const dy = target.position.y - this.position.y;
+        const angle = Math.atan2(dy, dx);
+
+        // Create muzzle flash
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
+            new Vector2D(this.position.x, this.position.y),
+            angle
+        );
+
+        // Create bullet casing with slight angle deviation
+        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
+                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
+        this.lastShotEffects.casing = new BulletCasing(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
+        );
+
+        // Create bouncing bullet at target position
+        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
+        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
+                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(
+            new Vector2D(target.position.x, target.position.y),
+            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
+        );
+    }
+
+    /**
+     * Get effects from last shot (for game state to manage)
+     */
+    getAndClearLastShotEffects(): { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } {
+        const effects = this.lastShotEffects;
+        this.lastShotEffects = {};
+        return effects;
+    }
+}
+
+/**
  * Sun/Star - Light source
  */
 export class Sun {
@@ -573,6 +768,7 @@ export class Player {
     stellarForge: StellarForge | null = null;
     solarMirrors: SolarMirror[] = [];
     units: Unit[] = [];
+    buildings: Building[] = []; // Offensive and defensive buildings
 
     constructor(
         public name: string,
@@ -859,7 +1055,7 @@ export class Unit {
     maxHealth: number;
     attackCooldown: number = 0;
     abilityCooldown: number = 0; // Cooldown for special ability
-    target: Unit | StellarForge | null = null;
+    target: Unit | StellarForge | Building | null = null;
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
@@ -880,7 +1076,7 @@ export class Unit {
     /**
      * Update unit logic
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -927,7 +1123,7 @@ export class Unit {
     /**
      * Check if target is dead
      */
-    protected isTargetDead(target: Unit | StellarForge): boolean {
+    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -937,8 +1133,8 @@ export class Unit {
     /**
      * Find nearest enemy
      */
-    protected findNearestEnemy(enemies: (Unit | StellarForge)[]): Unit | StellarForge | null {
-        let nearest: Unit | StellarForge | null = null;
+    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
+        let nearest: Unit | StellarForge | Building | null = null;
         let minDistance = Infinity;
 
         for (const enemy of enemies) {
@@ -957,7 +1153,7 @@ export class Unit {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: Unit | StellarForge): void {
+    attack(target: Unit | StellarForge | Building): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -1032,7 +1228,7 @@ export class Marine extends Unit {
     /**
      * Attack with visual effects
      */
-    attack(target: Unit | StellarForge): void {
+    attack(target: Unit | StellarForge | Building): void {
         // Apply damage
         super.attack(target);
 
@@ -1131,7 +1327,7 @@ export class GraveProjectile {
     velocity: Vector2D;
     lifetime: number = 0;
     isAttacking: boolean = false;
-    targetEnemy: Unit | StellarForge | null = null;
+    targetEnemy: Unit | StellarForge | Building | null = null;
     trail: Vector2D[] = []; // Trail of positions
     
     constructor(
@@ -1204,7 +1400,7 @@ export class GraveProjectile {
     /**
      * Launch projectile toward target
      */
-    launchAtTarget(target: Unit | StellarForge): void {
+    launchAtTarget(target: Unit | StellarForge | Building): void {
         this.isAttacking = true;
         this.targetEnemy = target;
         this.trail = [];
@@ -1304,7 +1500,7 @@ export class Grave extends Unit {
     /**
      * Grave doesn't use the base attack (projectiles do the damage)
      */
-    attack(target: Unit | StellarForge): void {
+    attack(target: Unit | StellarForge | Building): void {
         // Projectiles handle the actual attacking
     }
 
@@ -1338,7 +1534,7 @@ export class Starling extends Unit {
     /**
      * Update starling AI behavior (call this before regular update)
      */
-    updateAI(gameState: GameState, enemies: (Unit | StellarForge)[]): void {
+    updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
         // No need to update exploration timer here, it's updated in the main update loop
 
         // AI behavior: prioritize enemy base, then buildings, then explore
@@ -1396,7 +1592,7 @@ export class Starling extends Unit {
     /**
      * Override update to use custom movement speed
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1463,7 +1659,7 @@ export class WarpGate {
     /**
      * Update warp gate charging
      */
-    update(deltaTime: number, isStillHolding: boolean): void {
+    update(deltaTime: number, isStillHolding: boolean, chargeMultiplier: number = 1.0): void {
         if (!this.isCharging || this.isComplete) {
             return;
         }
@@ -1474,7 +1670,7 @@ export class WarpGate {
             return;
         }
 
-        this.chargeTime += deltaTime;
+        this.chargeTime += deltaTime * chargeMultiplier;
 
         // Check if fully charged
         if (this.chargeTime >= Constants.WARP_GATE_CHARGE_TIME) {
@@ -1633,10 +1829,11 @@ export class GameState {
             if (player.isDefeated()) continue;
 
             // Get enemies (units and structures not owned by this player)
-            const enemies: (Unit | StellarForge)[] = [];
+            const enemies: (Unit | StellarForge | Building)[] = [];
             for (const otherPlayer of this.players) {
                 if (otherPlayer !== player && !otherPlayer.isDefeated()) {
                     enemies.push(...otherPlayer.units);
+                    enemies.push(...otherPlayer.buildings);
                     if (otherPlayer.stellarForge) {
                         enemies.push(otherPlayer.stellarForge);
                     }
@@ -1704,6 +1901,97 @@ export class GameState {
 
             // Remove dead units
             player.units = player.units.filter(unit => !unit.isDead());
+
+            // Update each building
+            for (const building of player.buildings) {
+                building.update(deltaTime, enemies);
+
+                // If building is a Minigun, collect its effects
+                if (building instanceof Minigun) {
+                    const effects = building.getAndClearLastShotEffects();
+                    if (effects.muzzleFlash) {
+                        this.muzzleFlashes.push(effects.muzzleFlash);
+                    }
+                    if (effects.casing) {
+                        this.bulletCasings.push(effects.casing);
+                    }
+                    if (effects.bouncingBullet) {
+                        this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                }
+            }
+
+            // Update building construction
+            for (const building of player.buildings) {
+                if (building.isComplete) continue; // Skip completed buildings
+                
+                // Check if building is inside player's influence (near stellar forge)
+                const isInInfluence = player.stellarForge && 
+                                     building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
+                
+                if (isInInfluence && player.stellarForge) {
+                    // Building inside influence: take solarium from forge
+                    // Calculate build progress per second (inverse of build time)
+                    const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
+                    const buildProgress = buildRate * deltaTime;
+                    
+                    // TODO: Split solarium between buildings and hero units
+                    // For now, buildings get solarium if available
+                    building.addBuildProgress(buildProgress);
+                } else {
+                    // Building outside influence: powered by mirrors shining on it
+                    // Calculate total light from all mirrors pointing at this building
+                    let totalLight = 0;
+                    
+                    for (const mirror of player.solarMirrors) {
+                        // Check if mirror has line of sight to light source
+                        if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
+                        
+                        // Check if mirror has line of sight to building
+                        const ray = new LightRay(
+                            mirror.position,
+                            new Vector2D(
+                                building.position.x - mirror.position.x,
+                                building.position.y - mirror.position.y
+                            ).normalize(),
+                            1.0
+                        );
+                        
+                        let hasLineOfSight = true;
+                        for (const asteroid of this.asteroids) {
+                            if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
+                                hasLineOfSight = false;
+                                break;
+                            }
+                        }
+                        
+                        if (hasLineOfSight) {
+                            // Mirror can shine on building - calculate efficiency based on distance from light
+                            const closestSun = this.suns.reduce((closest, sun) => {
+                                const distToSun = mirror.position.distanceTo(sun.position);
+                                const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
+                                return distToSun < distToClosest ? sun : closest;
+                            }, null as Sun | null);
+                            
+                            if (closestSun) {
+                                const distanceToSun = mirror.position.distanceTo(closestSun.position);
+                                const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE)));
+                                totalLight += distanceMultiplier;
+                            }
+                        }
+                    }
+                    
+                    // Convert light to build progress
+                    if (totalLight > 0) {
+                        const buildRate = (totalLight / 10.0) * (1.0 / Constants.BUILDING_BUILD_TIME);
+                        const buildProgress = buildRate * deltaTime;
+                        building.addBuildProgress(buildProgress);
+                    }
+                }
+            }
+
+            // Remove destroyed buildings
+            player.buildings = player.buildings.filter(building => !building.isDestroyed());
         }
 
         // Update muzzle flashes
@@ -1945,6 +2233,14 @@ export class GameState {
                 const distance = position.distanceTo(mirror.position);
                 if (distance < 20 + unitRadius) { // Mirror has ~20 pixel radius
                     return true; // Collision with mirror
+                }
+            }
+
+            // Check collision with buildings
+            for (const building of player.buildings) {
+                const distance = position.distanceTo(building.position);
+                if (distance < building.radius + unitRadius) {
+                    return true; // Collision with building
                 }
             }
         }

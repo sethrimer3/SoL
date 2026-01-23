@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, Building, Minigun } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -757,6 +757,115 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Minigun building
+     */
+    private drawMinigun(building: Minigun, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        
+        // Check visibility for enemy buildings
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy buildings
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(building.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+
+        // Draw build progress indicator if not complete
+        if (!building.isComplete) {
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            // Draw progress bar
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#00FF00';
+            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
+            
+            // Reset alpha
+            if (shouldDim) {
+                this.ctx.globalAlpha = 1.0;
+            }
+            return;
+        }
+
+        // Draw base (circular platform)
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw turret base (smaller circle in center)
+        const turretBaseRadius = radius * 0.6;
+        this.ctx.fillStyle = '#666666';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, turretBaseRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw minigun barrel (pointing toward target if exists)
+        let gunAngle = 0;
+        if (building.target) {
+            const dx = building.target.position.x - building.position.x;
+            const dy = building.target.position.y - building.position.y;
+            gunAngle = Math.atan2(dy, dx);
+        }
+        
+        const barrelLength = radius * 1.2;
+        const barrelWidth = 4 * this.zoom;
+        
+        this.ctx.strokeStyle = '#333333';
+        this.ctx.lineWidth = barrelWidth;
+        this.ctx.lineCap = 'round';
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y);
+        this.ctx.lineTo(
+            screenPos.x + Math.cos(gunAngle) * barrelLength,
+            screenPos.y + Math.sin(gunAngle) * barrelLength
+        );
+        this.ctx.stroke();
+
+        // Draw health bar
+        const healthBarWidth = radius * 2;
+        const healthBarHeight = 4;
+        const healthBarX = screenPos.x - healthBarWidth / 2;
+        const healthBarY = screenPos.y - radius - 10;
+        
+        this.ctx.fillStyle = '#FF0000';
+        this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+        
+        const healthPercent = building.health / building.maxHealth;
+        this.ctx.fillStyle = '#00FF00';
+        this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+        
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
@@ -1089,12 +1198,62 @@ export class GameRenderer {
             this.drawAsteroid(asteroid);
         }
 
-        // Draw influence circles
+        // Draw influence circles (with proper handling of overlaps)
+        const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
             if (player.stellarForge && !player.isDefeated()) {
                 const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                this.drawInfluenceCircle(player.stellarForge.position, Constants.INFLUENCE_RADIUS, color);
+                influenceCircles.push({
+                    position: player.stellarForge.position,
+                    radius: Constants.INFLUENCE_RADIUS,
+                    color: color
+                });
+            }
+        }
+        
+        // Draw influence circles grouped by color to handle overlaps
+        const circlesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
+        for (const circle of influenceCircles) {
+            if (!circlesByColor.has(circle.color)) {
+                circlesByColor.set(circle.color, []);
+            }
+            circlesByColor.get(circle.color)!.push({position: circle.position, radius: circle.radius});
+        }
+        
+        // Draw each color group
+        for (const [color, circles] of circlesByColor) {
+            if (circles.length === 1) {
+                // Single circle, draw normally
+                this.drawInfluenceCircle(circles[0].position, circles[0].radius, color);
+            } else {
+                // Multiple circles of same color
+                // To get union effect, we'll use a temporary canvas
+                this.ctx.save();
+                
+                // Create path with all circles
+                this.ctx.beginPath();
+                for (const circle of circles) {
+                    const screenPos = this.worldToScreen(circle.position);
+                    const screenRadius = circle.radius * this.zoom;
+                    this.ctx.moveTo(screenPos.x + screenRadius, screenPos.y);
+                    this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+                }
+                
+                // Fill with transparent color first to create union
+                this.ctx.globalCompositeOperation = 'source-over';
+                this.ctx.fillStyle = color;
+                this.ctx.globalAlpha = 0.05;
+                this.ctx.fill();
+                
+                // Now stroke the outer boundary
+                // This approach still shows inner boundaries, so let's just draw each circle
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.strokeStyle = color;
+                this.ctx.lineWidth = 2;
+                this.ctx.stroke();
+                
+                this.ctx.restore();
             }
         }
 
@@ -1142,6 +1301,20 @@ export class GameRenderer {
                     this.drawStarling(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
+                }
+            }
+        }
+
+        // Draw buildings
+        for (const player of game.players) {
+            if (player.isDefeated()) continue;
+            
+            const color = this.getFactionColor(player.faction);
+            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+            
+            for (const building of player.buildings) {
+                if (building instanceof Minigun) {
+                    this.drawMinigun(building, color, game, isEnemy);
                 }
             }
         }
