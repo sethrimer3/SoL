@@ -28,7 +28,13 @@ export const DUST_PARTICLE_SIZE = 2;
 // Raytracing constants
 export const RAYTRACING_NUM_RAYS = 64; // Number of rays to cast per sun
 export const MAX_RAY_DISTANCE = 2000; // Maximum distance for ray casting
-export const SHADOW_LENGTH = 500; // Length of shadows cast by asteroids
+export const SHADOW_LENGTH = 1500; // Length of shadows cast by asteroids (increased for strategic asteroids)
+
+// Visibility system constants
+export const VISIBILITY_PROXIMITY_RANGE = 150; // Range at which units can see enemies in shade
+export const SHADE_OPACITY = 0.3; // Opacity for rendering objects in shade (0-1)
+export const STRATEGIC_ASTEROID_SIZE = 120; // Size of strategic asteroids that block visibility
+export const STRATEGIC_ASTEROID_DISTANCE = 250; // Distance from sun center for strategic asteroids
 
 // Marine unit constants
 export const MARINE_MAX_HEALTH = 100;

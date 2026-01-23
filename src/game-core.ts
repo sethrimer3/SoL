@@ -1621,6 +1621,76 @@ export class GameState {
     }
 
     /**
+     * Check if a point is in shadow cast by asteroids from all suns
+     * Returns true if the point is in shadow from all light sources
+     */
+    isPointInShadow(point: Vector2D): boolean {
+        // If no suns, everything is in shadow
+        if (this.suns.length === 0) return true;
+        
+        // Point must have line of sight to at least one sun to not be in shadow
+        for (const sun of this.suns) {
+            const direction = new Vector2D(
+                sun.position.x - point.x,
+                sun.position.y - point.y
+            ).normalize();
+            
+            const ray = new LightRay(point, direction);
+            const distanceToSun = point.distanceTo(sun.position);
+            
+            let hasLineOfSight = true;
+            for (const asteroid of this.asteroids) {
+                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+                if (intersectionDist !== null && intersectionDist < distanceToSun) {
+                    hasLineOfSight = false;
+                    break;
+                }
+            }
+            
+            if (hasLineOfSight) {
+                return false; // Can see at least one sun, not in shadow
+            }
+        }
+        
+        return true; // Cannot see any sun, in shadow
+    }
+
+    /**
+     * Check if an enemy object is visible to a player
+     * Objects are visible if:
+     * - They are NOT in shadow (in light), OR
+     * - They are in shadow but within proximity range of player unit, OR
+     * - They are in shadow but within player's influence radius
+     */
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player): boolean {
+        // Check if object is in shadow
+        const inShadow = this.isPointInShadow(objectPos);
+        
+        // If not in shadow, always visible
+        if (!inShadow) {
+            return true;
+        }
+        
+        // In shadow - check proximity to player units
+        for (const unit of player.units) {
+            const distance = unit.position.distanceTo(objectPos);
+            if (distance <= Constants.VISIBILITY_PROXIMITY_RANGE) {
+                return true;
+            }
+        }
+        
+        // In shadow - check if within player's influence
+        if (player.stellarForge) {
+            const distanceToForge = player.stellarForge.position.distanceTo(objectPos);
+            if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
+                return true;
+            }
+        }
+        
+        return false; // Not visible: in shadow and not within proximity or influence range
+    }
+
+    /**
      * Initialize space dust particles
      */
     initializeSpaceDust(count: number, width: number, height: number): void {
@@ -1721,8 +1791,26 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
     // Initialize space dust particles
     game.initializeSpaceDust(1000, 2000, 2000);
 
-    // Initialize asteroids
+    // Initialize random asteroids
     game.initializeAsteroids(10, 2000, 2000);
+    
+    // Add two large strategic asteroids that cast shadows between bases
+    // Position them close to the sun, on opposite sides along the x-axis
+    // Left strategic asteroid (at negative x-axis, 180 degrees from origin)
+    const leftAsteroidAngle = Math.PI; // Points to negative x-axis (left)
+    const leftAsteroidPos = new Vector2D(
+        Math.cos(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(leftAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+    game.asteroids.push(new Asteroid(leftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
+    
+    // Right strategic asteroid (at positive x-axis, 0 degrees from origin)
+    const rightAsteroidAngle = 0; // Points to positive x-axis (right)
+    const rightAsteroidPos = new Vector2D(
+        Math.cos(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(rightAsteroidAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+    game.asteroids.push(new Asteroid(rightAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
 
     game.isRunning = true;
     return game;
