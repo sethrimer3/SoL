@@ -226,8 +226,7 @@ export class GameRenderer {
         
         // Calculate glow intensity based on distance to closest sun
         // Closer = brighter glow (inverse relationship)
-        const maxGlowDistance = 1000; // Maximum distance for glow calculation
-        const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / maxGlowDistance)));
+        const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
         
         // Draw glow if close to a light source
         if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {

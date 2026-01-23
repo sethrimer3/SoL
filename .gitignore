@@ -51,3 +51,4 @@ htmlcov/
 /tmp/
 *.tmp
 *.log
+test-mirrors.html

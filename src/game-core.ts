@@ -289,9 +289,8 @@ export class SolarMirror {
         const baseGenerationRate = 10.0; // Sol per second
         
         // Apply distance-based multiplier (closer = more efficient)
-        // At distance 0: 2x multiplier, at distance 1000: 1x multiplier
-        const maxDistance = 1000;
-        const distanceMultiplier = Math.max(1.0, 2.0 - (this.closestSunDistance / maxDistance));
+        // At distance 0: MIRROR_PROXIMITY_MULTIPLIER, at MIRROR_MAX_GLOW_DISTANCE: 1x multiplier
+        const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER - (this.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE));
         
         return baseGenerationRate * this.efficiency * distanceMultiplier * deltaTime;
     }

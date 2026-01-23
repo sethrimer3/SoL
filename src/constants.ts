@@ -67,6 +67,8 @@ export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at
 
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
+export const MIRROR_MAX_GLOW_DISTANCE = 1000; // Maximum distance for glow and efficiency calculations
+export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum solarium generation multiplier at close range
 
 // Ability constants
 export const MARINE_ABILITY_COOLDOWN = 5.0; // 5 seconds
