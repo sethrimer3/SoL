@@ -41,6 +41,11 @@ class GameController {
     private startNewGame(settings: GameSettings): void {
         // Create game based on selected map
         this.game = this.createGameFromSettings(settings);
+        
+        // Set the viewing player for the renderer (player 1 is the human player)
+        if (this.game.players.length > 0) {
+            this.renderer.viewingPlayer = this.game.players[0];
+        }
 
         // Start game loop
         this.start();
@@ -67,9 +72,16 @@ class GameController {
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
         }
         
-        // Reinitialize asteroids based on map
+        // Reinitialize asteroids based on map (keeps strategic asteroids from createStandardGame)
+        // Clear only the random asteroids (first 10), keep the strategic ones (last 2)
+        const strategicAsteroids = game.asteroids.slice(-2); // Keep last 2 strategic asteroids
         game.asteroids = [];
         game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
+        
+        // For default map, add strategic asteroids back
+        if (map.id === 'default') {
+            game.asteroids.push(...strategicAsteroids);
+        }
         
         // Reinitialize space dust
         game.spaceDust = [];

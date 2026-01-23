@@ -15,6 +15,7 @@ export class GameRenderer {
     public selectedUnits: Set<Unit> = new Set();
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
+    public viewingPlayer: Player | null = null; // The player whose view we're rendering
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -115,9 +116,23 @@ export class GameRenderer {
     /**
      * Draw a Stellar Forge
      */
-    private drawStellarForge(forge: StellarForge, color: string): void {
+    private drawStellarForge(forge: StellarForge, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(forge.position);
         const size = 40 * this.zoom;
+
+        // Check visibility for enemy forges
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy forge
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(forge.position);
+            if (inShadow) {
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
 
         // Draw selection circle if selected
         if (forge.isSelected) {
@@ -164,6 +179,9 @@ export class GameRenderer {
         const healthPercent = forge.health / 1000.0;
         this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
         this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        
+        // Reset alpha
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**
@@ -479,10 +497,24 @@ export class GameRenderer {
     /**
      * Draw a unit
      */
-    private drawUnit(unit: Unit, color: string): void {
+    private drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(unit.position);
         const size = 8 * this.zoom;
         const isSelected = this.selectedUnits.has(unit);
+
+        // Check visibility for enemy units
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(unit.position);
+            if (inShadow) {
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
 
         // Draw selection indicator for selected units
         if (isSelected) {
@@ -531,6 +563,9 @@ export class GameRenderer {
             );
             this.ctx.stroke();
         }
+        
+        // Reset alpha
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**
@@ -610,9 +645,23 @@ export class GameRenderer {
     /**
      * Draw a Grave unit with its orbiting projectiles
      */
-    private drawGrave(grave: Grave, color: string): void {
+    private drawGrave(grave: Grave, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(grave.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(grave.position);
+            if (inShadow) {
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
         // Draw the base unit
-        this.drawUnit(grave, color);
+        this.drawUnit(grave, color, game, isEnemy);
         
         // Draw a distinctive grave symbol
         const screenPos = this.worldToScreen(grave.position);
@@ -632,6 +681,9 @@ export class GameRenderer {
         for (const projectile of grave.getProjectiles()) {
             this.drawGraveProjectile(projectile, color);
         }
+        
+        // Reset alpha
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**
@@ -988,6 +1040,7 @@ export class GameRenderer {
             if (player.isDefeated()) continue;
 
             const color = this.getFactionColor(player.faction);
+            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
             // Draw Solar Mirrors
             for (const mirror of player.solarMirrors) {
@@ -996,7 +1049,7 @@ export class GameRenderer {
 
             // Draw Stellar Forge
             if (player.stellarForge) {
-                this.drawStellarForge(player.stellarForge, color);
+                this.drawStellarForge(player.stellarForge, color, game, isEnemy);
             }
         }
 
@@ -1010,11 +1063,13 @@ export class GameRenderer {
             if (player.isDefeated()) continue;
             
             const color = this.getFactionColor(player.faction);
+            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+            
             for (const unit of player.units) {
                 if (unit instanceof Grave) {
-                    this.drawGrave(unit, color);
+                    this.drawGrave(unit, color, game, isEnemy);
                 } else {
-                    this.drawUnit(unit, color);
+                    this.drawUnit(unit, color, game, isEnemy);
                 }
             }
         }
