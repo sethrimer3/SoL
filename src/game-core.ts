@@ -1738,7 +1738,7 @@ export class GameState {
     abilityBullets: AbilityBullet[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
-    countdownTime: number = 3.0; // Countdown from 3 seconds
+    countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
 
@@ -2185,22 +2185,19 @@ export class GameState {
             const leftAngle = angleToForge + Math.PI / 2;
             const rightAngle = angleToForge - Math.PI / 2;
             
-            // Distance to move mirrors toward the sun edge
-            const targetDistance = 150; // Distance from forge to mirror final position
-            
             // Set target positions for the two mirrors
             if (player.solarMirrors.length >= 1) {
                 const leftTarget = new Vector2D(
-                    forgePos.x + Math.cos(leftAngle) * targetDistance,
-                    forgePos.y + Math.sin(leftAngle) * targetDistance
+                    forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
+                    forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
                 );
                 player.solarMirrors[0].setTarget(leftTarget);
             }
             
             if (player.solarMirrors.length >= 2) {
                 const rightTarget = new Vector2D(
-                    forgePos.x + Math.cos(rightAngle) * targetDistance,
-                    forgePos.y + Math.sin(rightAngle) * targetDistance
+                    forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
+                    forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
                 );
                 player.solarMirrors[1].setTarget(rightTarget);
             }
@@ -2443,7 +2440,8 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         const forgePos = positions[i];
         
         // Mirrors will be spawned at the forge position initially
-        // They will move outward during countdown
+        // They will immediately move outward during countdown (via initializeMirrorMovement)
+        // This prevents any visual confusion as movement starts on first frame
         const mirrorPositions = [forgePos, forgePos];
         game.initializePlayer(player, forgePos, mirrorPositions);
         
