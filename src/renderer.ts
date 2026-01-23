@@ -16,6 +16,15 @@ export class GameRenderer {
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
+    
+    // Lens flare configuration
+    private readonly LENS_FLARE_ELEMENTS = [
+        { distance: 0.3, size: 15, color: 'rgba(255, 220, 150, 0.3)' },
+        { distance: 0.5, size: 20, color: 'rgba(255, 180, 100, 0.2)' },
+        { distance: 0.7, size: 12, color: 'rgba(200, 150, 255, 0.25)' },
+        { distance: 1.0, size: 25, color: 'rgba(150, 200, 255, 0.15)' },
+        { distance: 1.2, size: 18, color: 'rgba(255, 150, 150, 0.2)' },
+    ];
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -146,17 +155,8 @@ export class GameRenderer {
         const dx = centerX - screenPos.x;
         const dy = centerY - screenPos.y;
 
-        // Create lens flare elements along the line from sun to opposite side
-        const flareElements = [
-            { distance: 0.3, size: 15, color: 'rgba(255, 220, 150, 0.3)' },
-            { distance: 0.5, size: 20, color: 'rgba(255, 180, 100, 0.2)' },
-            { distance: 0.7, size: 12, color: 'rgba(200, 150, 255, 0.25)' },
-            { distance: 1.0, size: 25, color: 'rgba(150, 200, 255, 0.15)' },
-            { distance: 1.2, size: 18, color: 'rgba(255, 150, 150, 0.2)' },
-        ];
-
         // Draw each flare element
-        for (const element of flareElements) {
+        for (const element of this.LENS_FLARE_ELEMENTS) {
             const x = screenPos.x + dx * element.distance;
             const y = screenPos.y + dy * element.distance;
 
