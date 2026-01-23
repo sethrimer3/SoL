@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, MuzzleFlash, BulletCasing, BouncingBullet } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -381,6 +381,109 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a unit
+     */
+    private drawUnit(unit: Unit, color: string): void {
+        const screenPos = this.worldToScreen(unit.position);
+        const size = 8 * this.zoom;
+
+        // Draw unit body (circle)
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw health bar
+        const barWidth = size * 3;
+        const barHeight = 3;
+        const barX = screenPos.x - barWidth / 2;
+        const barY = screenPos.y - size - 8;
+        
+        this.ctx.fillStyle = '#333';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        const healthPercent = unit.health / unit.maxHealth;
+        this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+        this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+
+        // Draw direction indicator if unit has a target
+        if (unit.target) {
+            const dx = unit.target.position.x - unit.position.x;
+            const dy = unit.target.position.y - unit.position.y;
+            const angle = Math.atan2(dy, dx);
+            
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(
+                screenPos.x + Math.cos(angle) * size * 1.5,
+                screenPos.y + Math.sin(angle) * size * 1.5
+            );
+            this.ctx.stroke();
+        }
+    }
+
+    /**
+     * Draw a muzzle flash
+     */
+    private drawMuzzleFlash(flash: MuzzleFlash): void {
+        const screenPos = this.worldToScreen(flash.position);
+        const size = 5 * this.zoom;
+        const opacity = 1.0 - (flash.lifetime / flash.maxLifetime);
+
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(flash.angle);
+        
+        // Draw flash as a bright yellow oval
+        this.ctx.fillStyle = `rgba(255, 255, 100, ${opacity})`;
+        this.ctx.beginPath();
+        this.ctx.ellipse(0, 0, size * 2, size, 0, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.restore();
+    }
+
+    /**
+     * Draw a bullet casing
+     */
+    private drawBulletCasing(casing: BulletCasing): void {
+        const screenPos = this.worldToScreen(casing.position);
+        const width = 3 * this.zoom;
+        const height = 5 * this.zoom;
+        const opacity = 1.0 - (casing.lifetime / casing.maxLifetime);
+
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(casing.rotation);
+        
+        // Draw casing as a yellow rectangle
+        this.ctx.fillStyle = `rgba(255, 215, 0, ${opacity})`;
+        this.ctx.fillRect(-width / 2, -height / 2, width, height);
+        
+        this.ctx.restore();
+    }
+
+    /**
+     * Draw a bouncing bullet
+     */
+    private drawBouncingBullet(bullet: BouncingBullet): void {
+        const screenPos = this.worldToScreen(bullet.position);
+        const size = 3 * this.zoom;
+        const opacity = 1.0 - (bullet.lifetime / bullet.maxLifetime);
+
+        // Draw bullet as a yellow circle
+        this.ctx.fillStyle = `rgba(255, 255, 0, ${opacity})`;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    /**
      * Draw connection lines
      */
     private drawConnections(player: Player, suns: Sun[]): void {
@@ -518,6 +621,31 @@ export class GameRenderer {
         // Draw warp gates
         for (const gate of game.warpGates) {
             this.drawWarpGate(gate);
+        }
+
+        // Draw units
+        for (const player of game.players) {
+            if (player.isDefeated()) continue;
+            
+            const color = this.getFactionColor(player.faction);
+            for (const unit of player.units) {
+                this.drawUnit(unit, color);
+            }
+        }
+
+        // Draw muzzle flashes
+        for (const flash of game.muzzleFlashes) {
+            this.drawMuzzleFlash(flash);
+        }
+
+        // Draw bullet casings
+        for (const casing of game.bulletCasings) {
+            this.drawBulletCasing(casing);
+        }
+
+        // Draw bouncing bullets
+        for (const bullet of game.bouncingBullets) {
+            this.drawBouncingBullet(bullet);
         }
 
         // Draw UI

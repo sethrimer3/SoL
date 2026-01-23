@@ -309,7 +309,7 @@ export class Player {
     solarium: number = 100.0; // Starting currency
     stellarForge: StellarForge | null = null;
     solarMirrors: SolarMirror[] = [];
-    units: any[] = [];
+    units: Unit[] = [];
 
     constructor(
         public name: string,
@@ -431,6 +431,292 @@ export class SpaceDustParticle {
 }
 
 /**
+ * Bullet casing that ejects from weapons and interacts with space dust
+ */
+export class BulletCasing {
+    velocity: Vector2D;
+    rotation: number = 0;
+    rotationSpeed: number;
+    lifetime: number = 0;
+    maxLifetime: number = 2.0; // Despawn after 2 seconds
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D
+    ) {
+        this.velocity = velocity;
+        this.rotationSpeed = (Math.random() - 0.5) * 10; // Random spin
+    }
+
+    /**
+     * Update casing position and physics
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.rotation += this.rotationSpeed * deltaTime;
+        
+        // Apply friction
+        this.velocity.x *= 0.95;
+        this.velocity.y *= 0.95;
+        
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if casing should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+
+    /**
+     * Apply collision response when hitting spacedust
+     */
+    applyCollision(force: Vector2D): void {
+        this.velocity.x += force.x * 0.3;
+        this.velocity.y += force.y * 0.3;
+    }
+}
+
+/**
+ * Muzzle flash effect when firing
+ */
+export class MuzzleFlash {
+    lifetime: number = 0;
+    maxLifetime: number = 0.05; // Very short flash, 50ms
+    
+    constructor(
+        public position: Vector2D,
+        public angle: number
+    ) {}
+
+    /**
+     * Update flash lifetime
+     */
+    update(deltaTime: number): void {
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if flash should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Bouncing bullet that appears when hitting an enemy
+ */
+export class BouncingBullet {
+    velocity: Vector2D;
+    lifetime: number = 0;
+    maxLifetime: number = 0.5; // Despawn after 0.5 seconds
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D
+    ) {
+        this.velocity = velocity;
+    }
+
+    /**
+     * Update bullet position
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        
+        // Apply gravity-like effect
+        this.velocity.y += 100 * deltaTime;
+        
+        // Apply friction
+        this.velocity.x *= 0.98;
+        this.velocity.y *= 0.98;
+        
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if bullet should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Base Unit class
+ */
+export class Unit {
+    health: number;
+    maxHealth: number;
+    attackCooldown: number = 0;
+    target: Unit | StellarForge | null = null;
+    
+    constructor(
+        public position: Vector2D,
+        public owner: Player,
+        maxHealth: number,
+        public attackRange: number,
+        public attackDamage: number,
+        public attackSpeed: number // attacks per second
+    ) {
+        this.health = maxHealth;
+        this.maxHealth = maxHealth;
+    }
+
+    /**
+     * Update unit logic
+     */
+    update(deltaTime: number, enemies: (Unit | StellarForge)[]): void {
+        // Update attack cooldown
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= deltaTime;
+        }
+
+        // Find target if don't have one or current target is dead
+        if (!this.target || this.isTargetDead(this.target)) {
+            this.target = this.findNearestEnemy(enemies);
+        }
+
+        // Attack if target in range and cooldown ready
+        if (this.target && this.attackCooldown <= 0) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= this.attackRange) {
+                this.attack(this.target);
+                this.attackCooldown = 1.0 / this.attackSpeed;
+            }
+        }
+    }
+
+    /**
+     * Check if target is dead
+     */
+    private isTargetDead(target: Unit | StellarForge): boolean {
+        if ('health' in target) {
+            return target.health <= 0;
+        }
+        return false;
+    }
+
+    /**
+     * Find nearest enemy
+     */
+    private findNearestEnemy(enemies: (Unit | StellarForge)[]): Unit | StellarForge | null {
+        let nearest: Unit | StellarForge | null = null;
+        let minDistance = Infinity;
+
+        for (const enemy of enemies) {
+            if ('health' in enemy && enemy.health <= 0) continue;
+            
+            const distance = this.position.distanceTo(enemy.position);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearest = enemy;
+            }
+        }
+
+        return nearest;
+    }
+
+    /**
+     * Attack target (to be overridden by subclasses)
+     */
+    attack(target: Unit | StellarForge): void {
+        // Base implementation
+        if ('health' in target) {
+            target.health -= this.attackDamage;
+        }
+    }
+
+    /**
+     * Take damage
+     */
+    takeDamage(amount: number): void {
+        this.health -= amount;
+    }
+
+    /**
+     * Check if unit is dead
+     */
+    isDead(): boolean {
+        return this.health <= 0;
+    }
+}
+
+/**
+ * Marine unit - fast shooting with visual effects
+ */
+export class Marine extends Unit {
+    private lastShotEffects: { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } = {};
+
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            100, // maxHealth
+            300, // attackRange
+            10, // attackDamage
+            5 // attackSpeed (5 shots per second = fast)
+        );
+    }
+
+    /**
+     * Attack with visual effects
+     */
+    attack(target: Unit | StellarForge): void {
+        // Apply damage
+        super.attack(target);
+
+        // Calculate angle to target
+        const dx = target.position.x - this.position.x;
+        const dy = target.position.y - this.position.y;
+        const angle = Math.atan2(dy, dx);
+
+        // Create muzzle flash
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
+            new Vector2D(this.position.x, this.position.y),
+            angle
+        );
+
+        // Create bullet casing with slight angle deviation
+        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Eject to the side
+        const casingSpeed = 100 + Math.random() * 50;
+        this.lastShotEffects.casing = new BulletCasing(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
+        );
+
+        // Create bouncing bullet at target position
+        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0; // Bounce away from impact
+        const bounceSpeed = 150 + Math.random() * 100;
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(
+            new Vector2D(target.position.x, target.position.y),
+            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
+        );
+    }
+
+    /**
+     * Get effects from last shot (for game state to manage)
+     */
+    getAndClearLastShotEffects(): { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } {
+        const effects = this.lastShotEffects;
+        this.lastShotEffects = {};
+        return effects;
+    }
+}
+
+/**
  * Warp gate being conjured by player
  */
 export class WarpGate {
@@ -521,6 +807,9 @@ export class GameState {
     spaceDust: SpaceDustParticle[] = [];
     warpGates: WarpGate[] = [];
     asteroids: Asteroid[] = [];
+    muzzleFlashes: MuzzleFlash[] = [];
+    bulletCasings: BulletCasing[] = [];
+    bouncingBullets: BouncingBullet[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
 
@@ -559,6 +848,97 @@ export class GameState {
 
         // Update space dust particles
         this.updateSpaceDust(deltaTime);
+
+        // Update units and collect enemies for targeting
+        const allUnits: Unit[] = [];
+        const allStructures: StellarForge[] = [];
+        
+        for (const player of this.players) {
+            if (!player.isDefeated()) {
+                allUnits.push(...player.units);
+                if (player.stellarForge) {
+                    allStructures.push(player.stellarForge);
+                }
+            }
+        }
+
+        // Update each player's units
+        for (const player of this.players) {
+            if (player.isDefeated()) continue;
+
+            // Get enemies (units and structures not owned by this player)
+            const enemies: (Unit | StellarForge)[] = [];
+            for (const otherPlayer of this.players) {
+                if (otherPlayer !== player && !otherPlayer.isDefeated()) {
+                    enemies.push(...otherPlayer.units);
+                    if (otherPlayer.stellarForge) {
+                        enemies.push(otherPlayer.stellarForge);
+                    }
+                }
+            }
+
+            // Update each unit
+            for (const unit of player.units) {
+                unit.update(deltaTime, enemies);
+
+                // If unit is a Marine, collect its effects
+                if (unit instanceof Marine) {
+                    const effects = unit.getAndClearLastShotEffects();
+                    if (effects.muzzleFlash) {
+                        this.muzzleFlashes.push(effects.muzzleFlash);
+                    }
+                    if (effects.casing) {
+                        this.bulletCasings.push(effects.casing);
+                    }
+                    if (effects.bouncingBullet) {
+                        this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                }
+            }
+
+            // Remove dead units
+            player.units = player.units.filter(unit => !unit.isDead());
+        }
+
+        // Update muzzle flashes
+        for (const flash of this.muzzleFlashes) {
+            flash.update(deltaTime);
+        }
+        this.muzzleFlashes = this.muzzleFlashes.filter(flash => !flash.shouldDespawn());
+
+        // Update bullet casings and interact with space dust
+        for (const casing of this.bulletCasings) {
+            casing.update(deltaTime);
+
+            // Check collision with space dust particles
+            for (const particle of this.spaceDust) {
+                const distance = casing.position.distanceTo(particle.position);
+                if (distance < 5) {
+                    // Apply force to both casing and particle
+                    const direction = new Vector2D(
+                        particle.position.x - casing.position.x,
+                        particle.position.y - casing.position.y
+                    ).normalize();
+                    
+                    particle.applyForce(new Vector2D(
+                        direction.x * 50,
+                        direction.y * 50
+                    ));
+                    
+                    casing.applyCollision(new Vector2D(
+                        -direction.x * 30,
+                        -direction.y * 30
+                    ));
+                }
+            }
+        }
+        this.bulletCasings = this.bulletCasings.filter(casing => !casing.shouldDespawn());
+
+        // Update bouncing bullets
+        for (const bullet of this.bouncingBullets) {
+            bullet.update(deltaTime);
+        }
+        this.bouncingBullets = this.bouncingBullets.filter(bullet => !bullet.shouldDespawn());
     }
 
     /**
@@ -707,6 +1087,13 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         const player = new Player(name, faction);
         const [forgePos, mirrorPositions] = startingPositions[i];
         game.initializePlayer(player, forgePos, mirrorPositions);
+        
+        // Add some initial marine units for testing (positioned closer to center for combat)
+        const marineOffset = i === 0 ? 200 : -200; // Closer to center
+        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y - 80), player));
+        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y), player));
+        player.units.push(new Marine(new Vector2D(forgePos.x + marineOffset, forgePos.y + 80), player));
+        
         game.players.push(player);
     }
 
