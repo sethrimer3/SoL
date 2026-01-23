@@ -210,11 +210,56 @@ class GameController {
                         player.stellarForge.isSelected = false;
                         console.log('Stellar Forge deselected');
                     } else {
-                        // Select forge, deselect units
+                        // Select forge, deselect units and mirrors
                         player.stellarForge.isSelected = true;
                         this.selectedUnits.clear();
                         this.renderer.selectedUnits = this.selectedUnits;
+                        // Deselect all mirrors
+                        for (const mirror of player.solarMirrors) {
+                            mirror.isSelected = false;
+                        }
                         console.log('Stellar Forge selected');
+                    }
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+                
+                // Check if clicked on a solar mirror
+                let clickedMirror: any = null;
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.containsPoint(worldPos)) {
+                        clickedMirror = mirror;
+                        break;
+                    }
+                }
+                
+                if (clickedMirror) {
+                    if (clickedMirror.isSelected) {
+                        // Deselect mirror
+                        clickedMirror.isSelected = false;
+                        console.log('Solar Mirror deselected');
+                    } else {
+                        // Select mirror, deselect forge and units
+                        clickedMirror.isSelected = true;
+                        if (player.stellarForge) {
+                            player.stellarForge.isSelected = false;
+                        }
+                        this.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectedUnits;
+                        // Deselect other mirrors
+                        for (const mirror of player.solarMirrors) {
+                            if (mirror !== clickedMirror) {
+                                mirror.isSelected = false;
+                            }
+                        }
+                        console.log('Solar Mirror selected');
                     }
                     
                     isPanning = false;
@@ -232,6 +277,23 @@ class GameController {
                     player.stellarForge.setTarget(worldPos);
                     player.stellarForge.isSelected = false; // Auto-deselect after setting target
                     console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+                
+                // If a mirror is selected and clicked elsewhere, move it
+                const selectedMirror = player.solarMirrors.find(m => m.isSelected);
+                if (selectedMirror) {
+                    selectedMirror.setTarget(worldPos);
+                    selectedMirror.isSelected = false; // Auto-deselect after setting target
+                    console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
                     isMouseDown = false;

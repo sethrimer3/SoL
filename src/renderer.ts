@@ -215,32 +215,82 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Solar Mirror
+     * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
     private drawSolarMirror(mirror: SolarMirror, color: string): void {
         const screenPos = this.worldToScreen(mirror.position);
         const size = 20 * this.zoom;
 
-        // Draw mirror
-        this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 2;
+        // Save context state
+        this.ctx.save();
         
-        // Draw as a diamond
+        // Calculate glow intensity based on distance to closest sun
+        // Closer = brighter glow (inverse relationship)
+        const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
+        
+        // Draw glow if close to a light source
+        if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {
+            const glowRadius = Constants.MIRROR_ACTIVE_GLOW_RADIUS * this.zoom * (1 + glowIntensity);
+            const gradient = this.ctx.createRadialGradient(
+                screenPos.x, screenPos.y, 0,
+                screenPos.x, screenPos.y, glowRadius
+            );
+            gradient.addColorStop(0, `rgba(255, 255, 150, ${glowIntensity * 0.8})`);
+            gradient.addColorStop(0.5, `rgba(255, 255, 100, ${glowIntensity * 0.4})`);
+            gradient.addColorStop(1, 'rgba(255, 255, 50, 0)');
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Translate to mirror position and rotate for reflection angle
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(mirror.reflectionAngle);
+        
+        // Draw flat reflective surface (rectangle)
+        const surfaceLength = size * 2;
+        const surfaceThickness = size * 0.3;
+        
+        // Draw surface with gradient to show reflectivity
+        const surfaceGradient = this.ctx.createLinearGradient(0, -surfaceThickness/2, 0, surfaceThickness/2);
+        surfaceGradient.addColorStop(0, '#FFFFFF');
+        surfaceGradient.addColorStop(0.5, '#E0E0E0');
+        surfaceGradient.addColorStop(1, '#C0C0C0');
+        
+        this.ctx.fillStyle = surfaceGradient;
+        this.ctx.fillRect(-surfaceLength/2, -surfaceThickness/2, surfaceLength, surfaceThickness);
+        
+        // Draw border for the surface
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(-surfaceLength/2, -surfaceThickness/2, surfaceLength, surfaceThickness);
+        
+        // Draw small indicator dots at the ends
+        this.ctx.fillStyle = color;
         this.ctx.beginPath();
-        this.ctx.moveTo(screenPos.x, screenPos.y - size);
-        this.ctx.lineTo(screenPos.x + size, screenPos.y);
-        this.ctx.lineTo(screenPos.x, screenPos.y + size);
-        this.ctx.lineTo(screenPos.x - size, screenPos.y);
-        this.ctx.closePath();
+        this.ctx.arc(-surfaceLength/2, 0, 3, 0, Math.PI * 2);
         this.ctx.fill();
-        this.ctx.stroke();
+        this.ctx.beginPath();
+        this.ctx.arc(surfaceLength/2, 0, 3, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw selection indicator if selected
+        if (mirror.isSelected) {
+            this.ctx.strokeStyle = '#FFFF00';
+            this.ctx.lineWidth = 3;
+            this.ctx.strokeRect(-surfaceLength/2 - 3, -surfaceThickness/2 - 3, surfaceLength + 6, surfaceThickness + 6);
+        }
+        
+        // Restore context state
+        this.ctx.restore();
 
-        // Draw efficiency indicator
+        // Draw efficiency indicator (in world space, not rotated)
         if (mirror.efficiency < 1.0) {
             this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.5, 0, Math.PI * 2);
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
             this.ctx.fill();
         }
     }
