@@ -154,35 +154,33 @@ class GameController {
             const dy = y - lastY;
             const totalMovement = Math.sqrt(dx * dx + dy * dy);
             
-            // If moved significantly
-            if (totalMovement > 5) {
-                // Two-finger touch should pan the camera
-                if (isTwoFinger) {
-                    if (!isPanning) {
-                        isPanning = true;
-                        this.cancelHold();
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                    }
-                    
-                    // Update camera position (inverted for natural panning)
-                    const currentCamera = this.renderer.camera;
-                    this.renderer.setCameraPosition(new Vector2D(
-                        currentCamera.x - dx / this.renderer.zoom,
-                        currentCamera.y - dy / this.renderer.zoom
-                    ));
-                } else {
-                    // Single-finger/mouse drag should start selection
-                    if (!this.isSelecting && !isPanning) {
-                        this.isSelecting = true;
-                        this.cancelHold();
-                    }
-                    
-                    if (this.isSelecting) {
-                        // Update selection rectangle
-                        this.renderer.selectionStart = this.selectionStartScreen;
-                        this.renderer.selectionEnd = new Vector2D(x, y);
-                    }
+            // Two-finger touch should always pan the camera immediately (no threshold)
+            // This provides smooth, native-like panning behavior on mobile devices
+            if (isTwoFinger) {
+                if (!isPanning) {
+                    isPanning = true;
+                    this.cancelHold();
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                }
+                
+                // Update camera position (inverted for natural panning)
+                const currentCamera = this.renderer.camera;
+                this.renderer.setCameraPosition(new Vector2D(
+                    currentCamera.x - dx / this.renderer.zoom,
+                    currentCamera.y - dy / this.renderer.zoom
+                ));
+            } else if (totalMovement > 5) {
+                // Single-finger/mouse drag needs a threshold to distinguish from taps
+                if (!this.isSelecting && !isPanning) {
+                    this.isSelecting = true;
+                    this.cancelHold();
+                }
+                
+                if (this.isSelecting) {
+                    // Update selection rectangle
+                    this.renderer.selectionStart = this.selectionStartScreen;
+                    this.renderer.selectionEnd = new Vector2D(x, y);
                 }
             }
             
@@ -195,6 +193,11 @@ class GameController {
             const wasClick = this.selectionStartScreen && 
                              Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
                              Math.abs(lastY - this.selectionStartScreen.y) < Constants.CLICK_DRAG_THRESHOLD;
+            
+            // Create tap visual effect for clicks
+            if (wasClick && this.selectionStartScreen) {
+                this.renderer.createTapEffect(lastX, lastY);
+            }
             
             if (this.game && wasClick) {
                 const worldPos = this.renderer.screenToWorld(lastX, lastY);
@@ -252,6 +255,14 @@ class GameController {
                 
                 // If dragged significantly (> 5 pixels), use ability
                 if (totalMovement >= 5) {
+                    // Create swipe visual effect
+                    this.renderer.createSwipeEffect(
+                        this.selectionStartScreen.x,
+                        this.selectionStartScreen.y,
+                        endPos.x,
+                        endPos.y
+                    );
+                    
                     // Calculate swipe direction
                     const dx = endPos.x - this.selectionStartScreen.x;
                     const dy = endPos.y - this.selectionStartScreen.y;

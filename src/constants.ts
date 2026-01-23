@@ -79,3 +79,9 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
 export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
+
+// Visual effect constants
+export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect
+export const TAP_EFFECT_MAX_RADIUS = 40; // Maximum radius of tap ripple effect
+export const SWIPE_EFFECT_SPEED = 0.08; // Progress increment per frame for swipe effect
+export const SWIPE_ARROW_SIZE = 15; // Size of the arrow head in swipe effect

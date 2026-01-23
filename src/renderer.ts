@@ -13,6 +13,8 @@ export class GameRenderer {
     public selectionStart: Vector2D | null = null;
     public selectionEnd: Vector2D | null = null;
     public selectedUnits: Set<Unit> = new Set();
+    private tapEffects: Array<{position: Vector2D, progress: number}> = [];
+    private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -26,8 +28,20 @@ export class GameRenderer {
     }
 
     private resizeCanvas(): void {
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight;
+        // Get device pixel ratio for high-DPI displays (retina, mobile, etc.)
+        const dpr = window.devicePixelRatio || 1;
+        
+        // Set canvas physical size to match display size * device pixel ratio
+        this.canvas.width = window.innerWidth * dpr;
+        this.canvas.height = window.innerHeight * dpr;
+        
+        // Set canvas CSS size to match window size
+        this.canvas.style.width = `${window.innerWidth}px`;
+        this.canvas.style.height = `${window.innerHeight}px`;
+        
+        // Reset transform and scale the context to match device pixel ratio
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.scale(dpr, dpr);
     }
 
     /**
@@ -735,6 +749,140 @@ export class GameRenderer {
     }
 
     /**
+     * Create a tap visual effect at screen position
+     */
+    createTapEffect(screenX: number, screenY: number): void {
+        this.tapEffects.push({
+            position: new Vector2D(screenX, screenY),
+            progress: 0
+        });
+    }
+
+    /**
+     * Create a swipe visual effect from start to end screen positions
+     */
+    createSwipeEffect(startX: number, startY: number, endX: number, endY: number): void {
+        this.swipeEffects.push({
+            start: new Vector2D(startX, startY),
+            end: new Vector2D(endX, endY),
+            progress: 0
+        });
+    }
+
+    /**
+     * Update and draw tap effects (expanding ripple)
+     */
+    private updateAndDrawTapEffects(): void {
+        // Update and draw each tap effect
+        for (let i = this.tapEffects.length - 1; i >= 0; i--) {
+            const effect = this.tapEffects[i];
+            effect.progress += Constants.TAP_EFFECT_SPEED; // Increment progress (0 to 1)
+
+            if (effect.progress >= 1) {
+                // Remove completed effects
+                this.tapEffects.splice(i, 1);
+                continue;
+            }
+
+            // Draw expanding ripple
+            const radius = Constants.TAP_EFFECT_MAX_RADIUS * effect.progress;
+            const alpha = 1 - effect.progress; // Fade out
+
+            this.ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(effect.position.x, effect.position.y, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+
+            // Draw inner glow
+            const gradient = this.ctx.createRadialGradient(
+                effect.position.x, effect.position.y, 0,
+                effect.position.x, effect.position.y, radius * 0.5
+            );
+            gradient.addColorStop(0, `rgba(100, 200, 255, ${alpha * 0.5})`);
+            gradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(effect.position.x, effect.position.y, radius * 0.5, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+    }
+
+    /**
+     * Update and draw swipe effects (directional trail)
+     */
+    private updateAndDrawSwipeEffects(): void {
+        // Update and draw each swipe effect
+        for (let i = this.swipeEffects.length - 1; i >= 0; i--) {
+            const effect = this.swipeEffects[i];
+            effect.progress += Constants.SWIPE_EFFECT_SPEED; // Increment progress (0 to 1)
+
+            if (effect.progress >= 1) {
+                // Remove completed effects
+                this.swipeEffects.splice(i, 1);
+                continue;
+            }
+
+            // Calculate direction and length
+            const dx = effect.end.x - effect.start.x;
+            const dy = effect.end.y - effect.start.y;
+            const length = Math.sqrt(dx * dx + dy * dy);
+
+            if (length < 5) continue; // Skip very short swipes
+
+            // Draw arrow trail
+            const alpha = 1 - effect.progress;
+            const currentLength = length * effect.progress;
+            
+            // Draw line
+            this.ctx.strokeStyle = `rgba(255, 200, 100, ${alpha * 0.7})`;
+            this.ctx.lineWidth = 4;
+            this.ctx.lineCap = 'round';
+            this.ctx.beginPath();
+            this.ctx.moveTo(effect.start.x, effect.start.y);
+            const endX = effect.start.x + (dx / length) * currentLength;
+            const endY = effect.start.y + (dy / length) * currentLength;
+            this.ctx.lineTo(endX, endY);
+            this.ctx.stroke();
+
+            // Draw arrow head at the end
+            if (effect.progress > 0.3) {
+                const angle = Math.atan2(dy, dx);
+                
+                this.ctx.fillStyle = `rgba(255, 200, 100, ${alpha})`;
+                this.ctx.beginPath();
+                this.ctx.moveTo(endX, endY);
+                this.ctx.lineTo(
+                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle - Math.PI / 6),
+                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle - Math.PI / 6)
+                );
+                this.ctx.lineTo(
+                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle + Math.PI / 6),
+                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle + Math.PI / 6)
+                );
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+
+            // Draw glow trail
+            for (let j = 0; j < 5; j++) {
+                const t = j / 5;
+                const px = effect.start.x + (dx / length) * currentLength * t;
+                const py = effect.start.y + (dy / length) * currentLength * t;
+                const glowAlpha = alpha * (1 - t) * 0.3;
+                
+                const gradient = this.ctx.createRadialGradient(px, py, 0, px, py, 10);
+                gradient.addColorStop(0, `rgba(255, 200, 100, ${glowAlpha})`);
+                gradient.addColorStop(1, 'rgba(255, 200, 100, 0)');
+                this.ctx.fillStyle = gradient;
+                this.ctx.beginPath();
+                this.ctx.arc(px, py, 10, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+    }
+
+    /**
      * Render the entire game state
      */
     render(game: GameState): void {
@@ -846,6 +994,10 @@ export class GameRenderer {
 
         // Draw selection rectangle
         this.drawSelectionRectangle();
+
+        // Draw tap and swipe visual effects
+        this.updateAndDrawTapEffects();
+        this.updateAndDrawSwipeEffects();
 
         // Check for victory
         const winner = game.checkVictoryConditions();
