@@ -1644,7 +1644,7 @@ export class Starling extends Unit {
     /**
      * Override update to use custom movement speed
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits?: Unit[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1658,7 +1658,7 @@ export class Starling extends Unit {
         // Update exploration timer
         this.explorationTimer -= deltaTime;
 
-        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits);
+        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits || []);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -2354,7 +2354,7 @@ export class GameState {
             // Update each building (only after countdown)
             if (!this.isCountdownActive) {
                 for (const building of player.buildings) {
-                    building.update(deltaTime, enemies);
+                    building.update(deltaTime, enemies, allUnits);
 
                 // If building is a Minigun, collect its effects
                 if (building instanceof Minigun) {

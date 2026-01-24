@@ -22,6 +22,15 @@ class GameController {
     private selectedBase: any | null = null; // StellarForge or null
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
+    private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
+
+    /**
+     * Check if only hero units are currently selected
+     */
+    private hasOnlyHeroUnitsSelected(): boolean {
+        return this.selectedUnits.size > 0 && 
+               Array.from(this.selectedUnits).every(unit => unit.isHero);
+    }
 
     constructor() {
         // Create canvas
@@ -194,15 +203,29 @@ class GameController {
                 ));
             } else if (totalMovement > 5) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
-                if (!this.isSelecting && !isPanning) {
-                    this.isSelecting = true;
-                    this.cancelHold();
+                // Check if only hero units are selected - if so, show arrow instead of selection box
+                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                
+                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow) {
+                    if (hasOnlyHeroUnits) {
+                        // For hero units, use arrow dragging mode
+                        this.isDraggingHeroArrow = true;
+                        this.cancelHold();
+                    } else {
+                        // For regular units or no selection, use selection rectangle
+                        this.isSelecting = true;
+                        this.cancelHold();
+                    }
                 }
                 
                 if (this.isSelecting) {
-                    // Update selection rectangle
+                    // Update selection rectangle (for normal unit selection)
                     this.renderer.selectionStart = this.selectionStartScreen;
                     this.renderer.selectionEnd = new Vector2D(x, y);
+                } else if (this.isDraggingHeroArrow) {
+                    // Update arrow direction (for hero ability casting)
+                    this.renderer.abilityArrowStart = this.selectionStartScreen;
+                    this.renderer.abilityArrowEnd = new Vector2D(x, y);
                 }
             }
             
@@ -398,13 +421,18 @@ class GameController {
                 
                 // If dragged significantly (> 5 pixels), use ability (for units only)
                 if (totalMovement >= 5 && this.selectedUnits.size > 0) {
-                    // Create swipe visual effect
-                    this.renderer.createSwipeEffect(
-                        this.selectionStartScreen.x,
-                        this.selectionStartScreen.y,
-                        endPos.x,
-                        endPos.y
-                    );
+                    // Check if these are hero units
+                    const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                    
+                    // Only create swipe effect for non-hero units
+                    if (!hasOnlyHeroUnits) {
+                        this.renderer.createSwipeEffect(
+                            this.selectionStartScreen.x,
+                            this.selectionStartScreen.y,
+                            endPos.x,
+                            endPos.y
+                        );
+                    }
                     
                     // Calculate swipe direction
                     const dx = endPos.x - this.selectionStartScreen.x;
@@ -461,9 +489,12 @@ class GameController {
             isPanning = false;
             isMouseDown = false;
             this.isSelecting = false;
+            this.isDraggingHeroArrow = false;
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
+            this.renderer.abilityArrowStart = null;
+            this.renderer.abilityArrowEnd = null;
             this.endHold();
         };
 
