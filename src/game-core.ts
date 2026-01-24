@@ -1724,6 +1724,374 @@ export class WarpGate {
 }
 
 /**
+ * Ray beam segment for bouncing beam ability
+ */
+export class RayBeamSegment {
+    lifetime: number = 0;
+    maxLifetime: number = 0.5; // 0.5 seconds per segment
+    
+    constructor(
+        public startPos: Vector2D,
+        public endPos: Vector2D,
+        public owner: Player
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Ray hero unit (Solari faction) - shoots bouncing beam
+ */
+export class Ray extends Unit {
+    private beamSegments: RayBeamSegment[] = [];
+    drillDirection: Vector2D | null = null; // Used temporarily to store ability direction
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.RAY_MAX_HEALTH,
+            Constants.RAY_ATTACK_RANGE,
+            Constants.RAY_ATTACK_DAMAGE,
+            Constants.RAY_ATTACK_SPEED,
+            Constants.RAY_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // Ray is a hero unit for Solari faction
+    }
+    
+    /**
+     * Use Ray's bouncing beam ability
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Store direction for GameState to process
+        this.drillDirection = direction;
+        
+        return true;
+    }
+    
+    /**
+     * Get beam segments for rendering
+     */
+    getBeamSegments(): RayBeamSegment[] {
+        return this.beamSegments;
+    }
+    
+    /**
+     * Set beam segments (called by GameState after calculating bounces)
+     */
+    setBeamSegments(segments: RayBeamSegment[]): void {
+        this.beamSegments = segments;
+    }
+    
+    /**
+     * Update beam segments
+     */
+    updateBeamSegments(deltaTime: number): void {
+        this.beamSegments = this.beamSegments.filter(segment => !segment.update(deltaTime));
+    }
+}
+
+/**
+ * Influence zone created by InfluenceBall ability
+ */
+export class InfluenceZone {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public owner: Player,
+        public radius: number = Constants.INFLUENCE_BALL_EXPLOSION_RADIUS,
+        public duration: number = Constants.INFLUENCE_BALL_DURATION
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.duration;
+    }
+    
+    isExpired(): boolean {
+        return this.lifetime >= this.duration;
+    }
+}
+
+/**
+ * Influence Ball projectile
+ */
+export class InfluenceBallProjectile {
+    velocity: Vector2D;
+    lifetime: number = 0;
+    maxLifetime: number = 5.0; // Max 5 seconds before auto-explode
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D,
+        public owner: Player
+    ) {
+        this.velocity = velocity;
+    }
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+    
+    shouldExplode(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Influence Ball hero unit (Solari faction) - creates temporary influence zones
+ */
+export class InfluenceBall extends Unit {
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.INFLUENCE_BALL_MAX_HEALTH,
+            Constants.INFLUENCE_BALL_ATTACK_RANGE,
+            Constants.INFLUENCE_BALL_ATTACK_DAMAGE,
+            Constants.INFLUENCE_BALL_ATTACK_SPEED,
+            Constants.INFLUENCE_BALL_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // InfluenceBall is a hero unit for Solari faction
+    }
+    
+    /**
+     * Use Influence Ball's area control ability
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Create influence ball projectile
+        const velocity = new Vector2D(
+            direction.x * Constants.INFLUENCE_BALL_PROJECTILE_SPEED,
+            direction.y * Constants.INFLUENCE_BALL_PROJECTILE_SPEED
+        );
+        
+        const projectile = new InfluenceBallProjectile(
+            new Vector2D(this.position.x, this.position.y),
+            velocity,
+            this.owner
+        );
+        
+        this.lastAbilityEffects.push(projectile as any);
+        return true;
+    }
+}
+
+/**
+ * Deployed turret that attaches to asteroids
+ */
+export class DeployedTurret {
+    health: number;
+    maxHealth: number = Constants.DEPLOYED_TURRET_MAX_HEALTH;
+    attackCooldown: number = 0;
+    target: Unit | StellarForge | Building | null = null;
+    
+    constructor(
+        public position: Vector2D,
+        public owner: Player,
+        public attachedToAsteroid: Asteroid | null = null
+    ) {
+        this.health = this.maxHealth;
+    }
+    
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+        // Update attack cooldown
+        if (this.attackCooldown > 0) {
+            this.attackCooldown -= deltaTime;
+        }
+        
+        // Find target if don't have one or current target is dead
+        if (!this.target || this.isTargetDead(this.target)) {
+            this.target = this.findNearestEnemy(enemies);
+        }
+        
+        // Attack if target in range and cooldown ready
+        if (this.target && this.attackCooldown <= 0) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= Constants.DEPLOYED_TURRET_ATTACK_RANGE) {
+                this.attack(this.target);
+                this.attackCooldown = 1.0 / Constants.DEPLOYED_TURRET_ATTACK_SPEED;
+            }
+        }
+    }
+    
+    private isTargetDead(target: Unit | StellarForge | Building): boolean {
+        if ('health' in target) {
+            return target.health <= 0;
+        }
+        return false;
+    }
+    
+    private findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
+        let nearest: Unit | StellarForge | Building | null = null;
+        let minDistance = Infinity;
+        
+        for (const enemy of enemies) {
+            if ('health' in enemy && enemy.health <= 0) continue;
+            
+            const distance = this.position.distanceTo(enemy.position);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearest = enemy;
+            }
+        }
+        
+        return nearest;
+    }
+    
+    attack(target: Unit | StellarForge | Building): void {
+        if ('health' in target) {
+            target.health -= Constants.DEPLOYED_TURRET_ATTACK_DAMAGE;
+        }
+    }
+    
+    takeDamage(amount: number): void {
+        this.health -= amount;
+    }
+    
+    isDead(): boolean {
+        return this.health <= 0;
+    }
+}
+
+/**
+ * Turret Deployer hero unit (Solari faction) - deploys turrets on asteroids
+ */
+export class TurretDeployer extends Unit {
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.TURRET_DEPLOYER_MAX_HEALTH,
+            Constants.TURRET_DEPLOYER_ATTACK_RANGE,
+            Constants.TURRET_DEPLOYER_ATTACK_DAMAGE,
+            Constants.TURRET_DEPLOYER_ATTACK_SPEED,
+            Constants.TURRET_DEPLOYER_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // TurretDeployer is a hero unit for Solari faction
+    }
+    
+    /**
+     * Use Turret Deployer's turret placement ability
+     * The turret deployment will be handled by GameState which has access to asteroids
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Signal that ability was used, GameState will handle turret placement
+        return true;
+    }
+}
+
+/**
+ * Driller hero unit (Aurum faction) - drills through asteroids
+ */
+export class Driller extends Unit {
+    isDrilling: boolean = false;
+    isHidden: boolean = false; // Hidden when inside asteroid
+    drillDirection: Vector2D | null = null;
+    drillVelocity: Vector2D = new Vector2D(0, 0);
+    hiddenInAsteroid: Asteroid | null = null;
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.DRILLER_MAX_HEALTH,
+            Constants.DRILLER_ATTACK_RANGE,
+            Constants.DRILLER_ATTACK_DAMAGE,
+            Constants.DRILLER_ATTACK_SPEED,
+            Constants.DRILLER_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // Driller is a hero unit for Aurum faction
+    }
+    
+    /**
+     * Driller has no normal attack
+     */
+    attack(target: Unit | StellarForge | Building): void {
+        // No normal attack
+    }
+    
+    /**
+     * Use Driller's drilling ability
+     */
+    useAbility(direction: Vector2D): boolean {
+        // Check if already drilling
+        if (this.isDrilling) {
+            return false;
+        }
+        
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Start drilling
+        this.isDrilling = true;
+        this.isHidden = false;
+        this.drillDirection = direction.normalize();
+        this.drillVelocity = new Vector2D(
+            this.drillDirection.x * Constants.DRILLER_DRILL_SPEED,
+            this.drillDirection.y * Constants.DRILLER_DRILL_SPEED
+        );
+        
+        return true;
+    }
+    
+    /**
+     * Update drilling movement
+     */
+    updateDrilling(deltaTime: number): void {
+        if (this.isDrilling && this.drillVelocity) {
+            this.position.x += this.drillVelocity.x * deltaTime;
+            this.position.y += this.drillVelocity.y * deltaTime;
+        }
+    }
+    
+    /**
+     * Stop drilling and start cooldown
+     */
+    stopDrilling(): void {
+        this.isDrilling = false;
+        this.drillVelocity = new Vector2D(0, 0);
+        // Cooldown timer already set by useAbility
+    }
+    
+    /**
+     * Hide in asteroid
+     */
+    hideInAsteroid(asteroid: Asteroid): void {
+        this.isHidden = true;
+        this.hiddenInAsteroid = asteroid;
+        this.position = new Vector2D(asteroid.position.x, asteroid.position.y);
+    }
+    
+    /**
+     * Check if driller is hidden
+     */
+    isHiddenInAsteroid(): boolean {
+        return this.isHidden;
+    }
+}
+
+/**
  * Main game state
  */
 export class GameState {
@@ -1736,6 +2104,9 @@ export class GameState {
     bulletCasings: BulletCasing[] = [];
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
+    influenceZones: InfluenceZone[] = [];
+    influenceBallProjectiles: InfluenceBallProjectile[] = [];
+    deployedTurrets: DeployedTurret[] = [];
     gameTime: number = 0.0;
     isRunning: boolean = false;
     countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
@@ -1893,6 +2264,39 @@ export class GameState {
                 // Collect ability effects from all units
                 const abilityEffects = unit.getAndClearLastAbilityEffects();
                 this.abilityBullets.push(...abilityEffects);
+                
+                // Handle InfluenceBall projectiles specifically
+                if (unit instanceof InfluenceBall) {
+                    for (const effect of abilityEffects) {
+                        if (effect instanceof InfluenceBallProjectile) {
+                            this.influenceBallProjectiles.push(effect);
+                        }
+                    }
+                }
+                
+                // Handle Ray beam updates
+                if (unit instanceof Ray) {
+                    unit.updateBeamSegments(deltaTime);
+                    
+                    // Process Ray ability if just used
+                    if (unit.abilityCooldown === unit.abilityCooldownTime - deltaTime) {
+                        this.processRayBeamAbility(unit);
+                    }
+                }
+                
+                // Handle TurretDeployer ability
+                if (unit instanceof TurretDeployer) {
+                    // Check if ability was just used
+                    if (unit.abilityCooldown === unit.abilityCooldownTime - deltaTime) {
+                        this.processTurretDeployment(unit);
+                    }
+                }
+                
+                // Handle Driller movement and collision
+                if (unit instanceof Driller && unit.isDrilling) {
+                    unit.updateDrilling(deltaTime);
+                    this.processDrillerCollisions(unit);
+                }
             }
             } // End of countdown check
 
@@ -2097,6 +2501,52 @@ export class GameState {
             }
         }
         this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
+        
+        // Update influence zones
+        this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
+        
+        // Update influence ball projectiles
+        for (const projectile of this.influenceBallProjectiles) {
+            projectile.update(deltaTime);
+            
+            // Check if should explode (max lifetime reached)
+            if (projectile.shouldExplode()) {
+                // Create influence zone
+                const zone = new InfluenceZone(
+                    new Vector2D(projectile.position.x, projectile.position.y),
+                    projectile.owner
+                );
+                this.influenceZones.push(zone);
+            }
+        }
+        this.influenceBallProjectiles = this.influenceBallProjectiles.filter(p => !p.shouldExplode());
+        
+        // Update deployed turrets
+        const allUnitsAndStructures: (Unit | StellarForge | Building)[] = [];
+        for (const player of this.players) {
+            if (!player.isDefeated()) {
+                allUnitsAndStructures.push(...player.units);
+                allUnitsAndStructures.push(...player.buildings);
+                if (player.stellarForge) {
+                    allUnitsAndStructures.push(player.stellarForge);
+                }
+            }
+        }
+        
+        for (const turret of this.deployedTurrets) {
+            // Get enemies for this turret
+            const enemies = allUnitsAndStructures.filter(e => {
+                if (e instanceof Unit || e instanceof Building) {
+                    return e.owner !== turret.owner;
+                } else if (e instanceof StellarForge) {
+                    return e.owner !== turret.owner;
+                }
+                return false;
+            });
+            
+            turret.update(deltaTime, enemies);
+        }
+        this.deployedTurrets = this.deployedTurrets.filter(turret => !turret.isDead());
     }
 
     /**
@@ -2272,6 +2722,321 @@ export class GameState {
         }
         
         return false; // Not visible: in shadow and not within proximity or influence range
+    }
+    
+    /**
+     * Process Ray's bouncing beam ability
+     */
+    private processRayBeamAbility(ray: Ray): void {
+        if (!ray.drillDirection) {
+            return;
+        }
+        
+        const segments: RayBeamSegment[] = [];
+        let currentPos = new Vector2D(ray.position.x, ray.position.y);
+        let currentDir = ray.drillDirection.normalize();
+        let bounces = 0;
+        const maxDistance = 2000; // Max beam travel distance
+        
+        while (bounces < Constants.RAY_BEAM_MAX_BOUNCES) {
+            // Cast ray to find next hit
+            let closestHit: { pos: Vector2D, type: string, target?: any } | null = null;
+            let closestDistance = maxDistance;
+            
+            // Check asteroids
+            for (const asteroid of this.asteroids) {
+                const hitPos = this.rayIntersectsAsteroid(currentPos, currentDir, asteroid);
+                if (hitPos) {
+                    const distance = currentPos.distanceTo(hitPos);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestHit = { pos: hitPos, type: 'asteroid' };
+                    }
+                }
+            }
+            
+            // Check enemy units
+            for (const player of this.players) {
+                if (player === ray.owner) continue;
+                
+                for (const unit of player.units) {
+                    const hitPos = this.rayIntersectsUnit(currentPos, currentDir, unit.position);
+                    if (hitPos) {
+                        const distance = currentPos.distanceTo(hitPos);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestHit = { pos: hitPos, type: 'unit', target: unit };
+                        }
+                    }
+                }
+                
+                // Check enemy forge
+                if (player.stellarForge) {
+                    const hitPos = this.rayIntersectsUnit(currentPos, currentDir, player.stellarForge.position, player.stellarForge.radius);
+                    if (hitPos) {
+                        const distance = currentPos.distanceTo(hitPos);
+                        if (distance < closestDistance) {
+                            closestDistance = distance;
+                            closestHit = { pos: hitPos, type: 'forge', target: player.stellarForge };
+                        }
+                    }
+                }
+            }
+            
+            // Check suns
+            for (const sun of this.suns) {
+                const hitPos = this.rayIntersectsUnit(currentPos, currentDir, sun.position, sun.radius);
+                if (hitPos) {
+                    const distance = currentPos.distanceTo(hitPos);
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestHit = { pos: hitPos, type: 'sun' };
+                    }
+                }
+            }
+            
+            // Check map edges
+            const edgeHit = this.rayIntersectsEdge(currentPos, currentDir);
+            if (edgeHit && currentPos.distanceTo(edgeHit) < closestDistance) {
+                closestDistance = currentPos.distanceTo(edgeHit);
+                closestHit = { pos: edgeHit, type: 'edge' };
+            }
+            
+            if (!closestHit) {
+                // No hit, beam continues to max distance
+                const endPos = new Vector2D(
+                    currentPos.x + currentDir.x * maxDistance,
+                    currentPos.y + currentDir.y * maxDistance
+                );
+                segments.push(new RayBeamSegment(currentPos, endPos, ray.owner));
+                break;
+            }
+            
+            // Add segment to hit point
+            segments.push(new RayBeamSegment(currentPos, closestHit.pos, ray.owner));
+            
+            // Handle hit
+            if (closestHit.type === 'unit' || closestHit.type === 'forge') {
+                // Damage and stop
+                if (closestHit.target) {
+                    closestHit.target.takeDamage(Constants.RAY_BEAM_DAMAGE);
+                }
+                break;
+            } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
+                // Stop at sun or edge
+                break;
+            } else if (closestHit.type === 'asteroid') {
+                // Bounce off asteroid
+                bounces++;
+                currentPos = closestHit.pos;
+                // Calculate reflection direction (simplified)
+                currentDir = new Vector2D(-currentDir.x, -currentDir.y); // Simple bounce for now
+            }
+        }
+        
+        ray.setBeamSegments(segments);
+    }
+    
+    /**
+     * Check if ray intersects with an asteroid
+     */
+    private rayIntersectsAsteroid(origin: Vector2D, direction: Vector2D, asteroid: Asteroid): Vector2D | null {
+        // Simplified ray-polygon intersection
+        // For now, treat asteroid as circle
+        const toAsteroid = new Vector2D(
+            asteroid.position.x - origin.x,
+            asteroid.position.y - origin.y
+        );
+        const projection = toAsteroid.x * direction.x + toAsteroid.y * direction.y;
+        
+        if (projection < 0) return null; // Behind ray
+        
+        const closestPoint = new Vector2D(
+            origin.x + direction.x * projection,
+            origin.y + direction.y * projection
+        );
+        
+        const distance = closestPoint.distanceTo(asteroid.position);
+        if (distance < 60) { // Approximate asteroid radius
+            return closestPoint;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check if ray intersects with a circular unit
+     */
+    private rayIntersectsUnit(origin: Vector2D, direction: Vector2D, targetPos: Vector2D, radius: number = 8): Vector2D | null {
+        const toTarget = new Vector2D(
+            targetPos.x - origin.x,
+            targetPos.y - origin.y
+        );
+        const projection = toTarget.x * direction.x + toTarget.y * direction.y;
+        
+        if (projection < 0) return null; // Behind ray
+        
+        const closestPoint = new Vector2D(
+            origin.x + direction.x * projection,
+            origin.y + direction.y * projection
+        );
+        
+        const distance = closestPoint.distanceTo(targetPos);
+        if (distance < radius) {
+            return closestPoint;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Check if ray intersects with map edge
+     */
+    private rayIntersectsEdge(origin: Vector2D, direction: Vector2D): Vector2D | null {
+        const mapSize = 2000; // Approximate map size
+        let closestHit: Vector2D | null = null;
+        let closestDist = Infinity;
+        
+        // Check all four edges
+        const edges = [
+            { x: 0, normal: new Vector2D(1, 0) },
+            { x: mapSize, normal: new Vector2D(-1, 0) },
+            { y: 0, normal: new Vector2D(0, 1) },
+            { y: mapSize, normal: new Vector2D(0, -1) }
+        ];
+        
+        for (const edge of edges) {
+            let hitPos: Vector2D | null = null;
+            
+            if ('x' in edge && edge.x !== undefined) {
+                if (Math.abs(direction.x) > 0.001) {
+                    const t = (edge.x - origin.x) / direction.x;
+                    if (t > 0) {
+                        hitPos = new Vector2D(edge.x, origin.y + direction.y * t);
+                    }
+                }
+            } else if ('y' in edge && edge.y !== undefined) {
+                if (Math.abs(direction.y) > 0.001) {
+                    const t = (edge.y - origin.y) / direction.y;
+                    if (t > 0) {
+                        hitPos = new Vector2D(origin.x + direction.x * t, edge.y);
+                    }
+                }
+            }
+            
+            if (hitPos) {
+                const dist = origin.distanceTo(hitPos);
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestHit = hitPos;
+                }
+            }
+        }
+        
+        return closestHit;
+    }
+    
+    /**
+     * Process turret deployment for TurretDeployer
+     */
+    private processTurretDeployment(deployer: TurretDeployer): void {
+        // Find nearest asteroid
+        let nearestAsteroid: Asteroid | null = null;
+        let minDistance = Infinity;
+        
+        for (const asteroid of this.asteroids) {
+            const distance = deployer.position.distanceTo(asteroid.position);
+            if (distance < minDistance && distance < 200) { // Within 200 pixels
+                minDistance = distance;
+                nearestAsteroid = asteroid;
+            }
+        }
+        
+        if (nearestAsteroid) {
+            // Deploy turret at asteroid position
+            const turret = new DeployedTurret(
+                new Vector2D(nearestAsteroid.position.x, nearestAsteroid.position.y),
+                deployer.owner,
+                nearestAsteroid
+            );
+            this.deployedTurrets.push(turret);
+        }
+    }
+    
+    /**
+     * Process Driller collisions
+     */
+    private processDrillerCollisions(driller: Driller): void {
+        // Check collision with suns (dies)
+        for (const sun of this.suns) {
+            const distance = driller.position.distanceTo(sun.position);
+            if (distance < sun.radius + 10) {
+                driller.health = 0; // Dies
+                driller.stopDrilling();
+                return;
+            }
+        }
+        
+        // Check collision with asteroids (burrows)
+        for (const asteroid of this.asteroids) {
+            if (asteroid.containsPoint(driller.position)) {
+                driller.hideInAsteroid(asteroid);
+                driller.stopDrilling();
+                return;
+            }
+        }
+        
+        // Check collision with enemy units
+        for (const player of this.players) {
+            if (player === driller.owner) continue;
+            
+            for (const unit of player.units) {
+                const distance = driller.position.distanceTo(unit.position);
+                if (distance < 15) {
+                    unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
+                }
+            }
+            
+            // Check collision with buildings (double damage, pass through)
+            for (const building of player.buildings) {
+                const distance = driller.position.distanceTo(building.position);
+                if (distance < 40) {
+                    building.takeDamage(Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER);
+                    // Continue drilling through building
+                }
+            }
+            
+            // Check collision with forge
+            if (player.stellarForge) {
+                const distance = driller.position.distanceTo(player.stellarForge.position);
+                if (distance < player.stellarForge.radius + 10) {
+                    player.stellarForge.health -= Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    // Continue drilling through
+                }
+            }
+        }
+        
+        // Check collision with map edges (decelerate and stop)
+        const mapSize = 2000;
+        if (driller.position.x < 0 || driller.position.x > mapSize ||
+            driller.position.y < 0 || driller.position.y > mapSize) {
+            // Apply deceleration
+            const speed = Math.sqrt(driller.drillVelocity.x ** 2 + driller.drillVelocity.y ** 2);
+            if (speed > 0) {
+                const decelAmount = Constants.DRILLER_DECELERATION * 0.016; // Approximate deltaTime
+                const newSpeed = Math.max(0, speed - decelAmount);
+                if (newSpeed === 0) {
+                    driller.stopDrilling();
+                } else {
+                    driller.drillVelocity.x = (driller.drillVelocity.x / speed) * newSpeed;
+                    driller.drillVelocity.y = (driller.drillVelocity.y / speed) * newSpeed;
+                }
+            }
+            
+            // Keep within bounds
+            driller.position.x = Math.max(0, Math.min(mapSize, driller.position.x));
+            driller.position.y = Math.max(0, Math.min(mapSize, driller.position.y));
+        }
     }
 
     /**

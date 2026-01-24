@@ -119,3 +119,47 @@ export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap ef
 export const TAP_EFFECT_MAX_RADIUS = 40; // Maximum radius of tap ripple effect
 export const SWIPE_EFFECT_SPEED = 0.08; // Progress increment per frame for swipe effect
 export const SWIPE_ARROW_SIZE = 15; // Size of the arrow head in swipe effect
+
+// Ray unit constants (Solari hero)
+export const RAY_MAX_HEALTH = 120;
+export const RAY_ATTACK_RANGE = 250;
+export const RAY_ATTACK_DAMAGE = 8;
+export const RAY_ATTACK_SPEED = 3; // Attacks per second
+export const RAY_ABILITY_COOLDOWN = 8.0; // 8 seconds
+export const RAY_BEAM_SPEED = 1000; // Speed of the bouncing beam
+export const RAY_BEAM_DAMAGE = 25; // Damage per beam hit
+export const RAY_BEAM_MAX_BOUNCES = 5; // Maximum number of bounces
+export const RAY_BEAM_WIDTH = 3; // Visual width of the beam
+
+// Influence Ball unit constants (Solari hero)
+export const INFLUENCE_BALL_MAX_HEALTH = 100;
+export const INFLUENCE_BALL_ATTACK_RANGE = 200;
+export const INFLUENCE_BALL_ATTACK_DAMAGE = 5;
+export const INFLUENCE_BALL_ATTACK_SPEED = 1.5; // Attacks per second
+export const INFLUENCE_BALL_ABILITY_COOLDOWN = 15.0; // 15 seconds
+export const INFLUENCE_BALL_PROJECTILE_SPEED = 300;
+export const INFLUENCE_BALL_EXPLOSION_RADIUS = 150; // Radius of influence zone
+export const INFLUENCE_BALL_DURATION = 10.0; // 10 seconds influence duration
+
+// Turret Deployer unit constants (Solari hero)
+export const TURRET_DEPLOYER_MAX_HEALTH = 90;
+export const TURRET_DEPLOYER_ATTACK_RANGE = 180;
+export const TURRET_DEPLOYER_ATTACK_DAMAGE = 6;
+export const TURRET_DEPLOYER_ATTACK_SPEED = 2; // Attacks per second
+export const TURRET_DEPLOYER_ABILITY_COOLDOWN = 12.0; // 12 seconds
+export const DEPLOYED_TURRET_MAX_HEALTH = 150;
+export const DEPLOYED_TURRET_ATTACK_RANGE = 300;
+export const DEPLOYED_TURRET_ATTACK_DAMAGE = 12;
+export const DEPLOYED_TURRET_ATTACK_SPEED = 3; // Attacks per second
+export const TURRET_PROJECTILE_SPEED = 400;
+
+// Driller unit constants (Aurum hero)
+export const DRILLER_MAX_HEALTH = 140;
+export const DRILLER_ATTACK_RANGE = 0; // No normal attack, only ability
+export const DRILLER_ATTACK_DAMAGE = 0; // No normal attack
+export const DRILLER_ATTACK_SPEED = 0; // No normal attack
+export const DRILLER_ABILITY_COOLDOWN = 5.0; // 5 seconds after collision
+export const DRILLER_DRILL_SPEED = 500; // Speed when drilling
+export const DRILLER_DRILL_DAMAGE = 30; // Damage to units
+export const DRILLER_BUILDING_DAMAGE_MULTIPLIER = 2.0; // Double damage to buildings
+export const DRILLER_DECELERATION = 200; // Deceleration rate at edge

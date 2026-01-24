@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, Building, Minigun } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, Building, Minigun, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -747,6 +747,92 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.globalAlpha = 1.0;
     }
+    
+    /**
+     * Draw an influence zone
+     */
+    private drawInfluenceZone(zone: InfluenceZone): void {
+        const screenPos = this.worldToScreen(zone.position);
+        const radius = zone.radius * this.zoom;
+        const opacity = Math.max(0.1, 1.0 - (zone.lifetime / zone.duration));
+        
+        const color = this.getFactionColor(zone.owner.faction);
+        
+        // Draw outer ring
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = opacity * 0.6;
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw inner fill
+        const gradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radius);
+        gradient.addColorStop(0, `${color}40`);
+        gradient.addColorStop(1, `${color}10`);
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = opacity * 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw an influence ball projectile
+     */
+    private drawInfluenceBallProjectile(projectile: InfluenceBallProjectile): void {
+        const screenPos = this.worldToScreen(projectile.position);
+        const size = 12 * this.zoom;
+        
+        const color = this.getFactionColor(projectile.owner.faction);
+        
+        // Draw glowing ball
+        const gradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size);
+        gradient.addColorStop(0, color);
+        gradient.addColorStop(0.5, `${color}AA`);
+        gradient.addColorStop(1, `${color}00`);
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw inner core
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+    
+    /**
+     * Draw a deployed turret
+     */
+    private drawDeployedTurret(turret: DeployedTurret): void {
+        const screenPos = this.worldToScreen(turret.position);
+        const size = 15 * this.zoom;
+        
+        const color = this.getFactionColor(turret.owner.faction);
+        
+        // Draw base
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(screenPos.x - size * 0.6, screenPos.y - size * 0.4, size * 1.2, size * 0.8);
+        
+        // Draw barrel
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(screenPos.x - size * 0.3, screenPos.y - size, size * 0.6, size);
+        
+        // Draw health bar
+        const healthBarWidth = size * 1.5;
+        const healthBarHeight = 4 * this.zoom;
+        const healthPercentage = turret.health / turret.maxHealth;
+        
+        this.ctx.fillStyle = '#333333';
+        this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth, healthBarHeight);
+        
+        this.ctx.fillStyle = healthPercentage > 0.3 ? '#00FF00' : '#FF0000';
+        this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth * healthPercentage, healthBarHeight);
+    }
 
     /**
      * Draw a Grave unit with its orbiting projectiles
@@ -837,6 +923,188 @@ export class GameRenderer {
         this.ctx.stroke();
         
         // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a Ray unit (Solari hero)
+     */
+    private drawRay(ray: Ray, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(ray.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            const inShadow = game.isPointInShadow(ray.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(ray, color, game, isEnemy);
+        
+        // Draw Ray symbol (lightning bolt)
+        const screenPos = this.worldToScreen(ray.position);
+        const size = 10 * this.zoom;
+        
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y - size);
+        this.ctx.lineTo(screenPos.x - size * 0.3, screenPos.y);
+        this.ctx.lineTo(screenPos.x + size * 0.3, screenPos.y);
+        this.ctx.lineTo(screenPos.x, screenPos.y + size);
+        this.ctx.stroke();
+        
+        // Draw beam segments
+        const beamSegments = ray.getBeamSegments();
+        for (const segment of beamSegments) {
+            const startScreen = this.worldToScreen(segment.startPos);
+            const endScreen = this.worldToScreen(segment.endPos);
+            
+            const opacity = 1.0 - (segment.lifetime / segment.maxLifetime);
+            this.ctx.strokeStyle = color;
+            this.ctx.globalAlpha = opacity;
+            this.ctx.lineWidth = Constants.RAY_BEAM_WIDTH * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.moveTo(startScreen.x, startScreen.y);
+            this.ctx.lineTo(endScreen.x, endScreen.y);
+            this.ctx.stroke();
+        }
+        
+        // Reset alpha
+        this.ctx.globalAlpha = 1.0;
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw an InfluenceBall unit (Solari hero)
+     */
+    private drawInfluenceBall(ball: InfluenceBall, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(ball.position, this.viewingPlayer);
+            if (!isVisible) {
+                return;
+            }
+            
+            const inShadow = game.isPointInShadow(ball.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(ball, color, game, isEnemy);
+        
+        // Draw sphere symbol
+        const screenPos = this.worldToScreen(ball.position);
+        const size = 12 * this.zoom;
+        
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 0.6, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a TurretDeployer unit (Solari hero)
+     */
+    private drawTurretDeployer(deployer: TurretDeployer, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(deployer.position, this.viewingPlayer);
+            if (!isVisible) {
+                return;
+            }
+            
+            const inShadow = game.isPointInShadow(deployer.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(deployer, color, game, isEnemy);
+        
+        // Draw turret symbol
+        const screenPos = this.worldToScreen(deployer.position);
+        const size = 10 * this.zoom;
+        
+        this.ctx.fillStyle = color;
+        this.ctx.fillRect(screenPos.x - size * 0.5, screenPos.y - size * 0.3, size, size * 0.6);
+        this.ctx.fillRect(screenPos.x - size * 0.2, screenPos.y - size, size * 0.4, size);
+        
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a Driller unit (Aurum hero)
+     */
+    private drawDriller(driller: Driller, color: string, game: GameState, isEnemy: boolean): void {
+        // Don't draw if hidden in asteroid
+        if (driller.isHiddenInAsteroid()) {
+            return;
+        }
+        
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(driller.position, this.viewingPlayer);
+            if (!isVisible) {
+                return;
+            }
+            
+            const inShadow = game.isPointInShadow(driller.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(driller, color, game, isEnemy);
+        
+        // Draw drill symbol
+        const screenPos = this.worldToScreen(driller.position);
+        const size = 10 * this.zoom;
+        
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2 * this.zoom;
+        
+        // Draw drill bit
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x - size, screenPos.y);
+        this.ctx.lineTo(screenPos.x, screenPos.y - size * 0.5);
+        this.ctx.lineTo(screenPos.x + size, screenPos.y);
+        this.ctx.lineTo(screenPos.x, screenPos.y + size * 0.5);
+        this.ctx.closePath();
+        this.ctx.stroke();
+        
         if (shouldDim) {
             this.ctx.globalAlpha = 1.0;
         }
@@ -1390,6 +1658,14 @@ export class GameRenderer {
                     this.drawGrave(unit, color, game, isEnemy);
                 } else if (unit instanceof Starling) {
                     this.drawStarling(unit, color, game, isEnemy);
+                } else if (unit instanceof Ray) {
+                    this.drawRay(unit, color, game, isEnemy);
+                } else if (unit instanceof InfluenceBall) {
+                    this.drawInfluenceBall(unit, color, game, isEnemy);
+                } else if (unit instanceof TurretDeployer) {
+                    this.drawTurretDeployer(unit, color, game, isEnemy);
+                } else if (unit instanceof Driller) {
+                    this.drawDriller(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -1428,6 +1704,21 @@ export class GameRenderer {
         // Draw ability bullets
         for (const bullet of game.abilityBullets) {
             this.drawAbilityBullet(bullet);
+        }
+        
+        // Draw influence zones
+        for (const zone of game.influenceZones) {
+            this.drawInfluenceZone(zone);
+        }
+        
+        // Draw influence ball projectiles
+        for (const projectile of game.influenceBallProjectiles) {
+            this.drawInfluenceBallProjectile(projectile);
+        }
+        
+        // Draw deployed turrets
+        for (const turret of game.deployedTurrets) {
+            this.drawDeployedTurret(turret);
         }
 
         // Draw UI
