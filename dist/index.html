@@ -38,30 +38,87 @@
             z-index: 1000;
         }
 
-        #loading h1 {
-            font-size: 48px;
-            margin-bottom: 20px;
-            text-shadow: 0 0 20px #FFD700;
+        .build-badge {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            padding: 6px 12px;
+            border-radius: 999px;
+            background: rgba(255, 215, 0, 0.15);
+            border: 1px solid rgba(255, 215, 0, 0.35);
+            color: #FFE48C;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
         }
 
-        #loading p {
+        .logo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .logo-title {
+            font-size: 52px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            text-shadow: 0 0 24px rgba(255, 215, 0, 0.6);
+        }
+
+        .logo-subtitle {
             font-size: 18px;
             color: #FFFFFF;
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
         }
 
-        .loader {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 215, 0, 0.3);
-            border-top-color: #FFD700;
+        .orbit {
+            position: relative;
+            width: 220px;
+            height: 140px;
+            margin-top: 30px;
+        }
+
+        .orbit::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            border: 2px dashed rgba(255, 215, 0, 0.35);
             border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-top: 20px;
+            box-shadow: 0 0 18px rgba(255, 215, 0, 0.15);
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }</style><script defer="defer" src="bundle.js"></script></head><body><div id="loading"><h1>SoL</h1><p>Speed of Light RTS</p><div class="loader"></div></div><canvas id="gameCanvas"></canvas><script>// Hide loading screen once game is loaded
+        .orbiting-p {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            font-size: 26px;
+            font-weight: 700;
+            color: #FFD700;
+            text-shadow: 0 0 16px rgba(255, 215, 0, 0.7);
+            animation: ellipticalOrbit 2.8s linear infinite;
+        }
+
+        @keyframes ellipticalOrbit {
+            0% {
+                transform: translate(-50%, -50%) translate(90px, 0);
+            }
+            25% {
+                transform: translate(-50%, -50%) translate(0, 45px);
+            }
+            50% {
+                transform: translate(-50%, -50%) translate(-90px, 0);
+            }
+            75% {
+                transform: translate(-50%, -50%) translate(0, -45px);
+            }
+            100% {
+                transform: translate(-50%, -50%) translate(90px, 0);
+            }
+        }</style><script defer="defer" src="bundle.js"></script></head><body><div id="loading"><div class="build-badge">Build 1</div><div class="logo"><div class="logo-title">Gravy Time</div><div class="logo-subtitle">Speed of Light RTS</div></div><div class="orbit"><div class="orbiting-p">p</div></div></div><canvas id="gameCanvas"></canvas><script>// Hide loading screen once game is loaded
         window.addEventListener('load', () => {
             setTimeout(() => {
                 const loading = document.getElementById('loading');

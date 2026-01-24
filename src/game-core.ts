@@ -3214,10 +3214,24 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         const player = new Player(name, faction);
         const forgePos = positions[i];
         
-        // Mirrors will be spawned at the forge position initially
-        // They will immediately move outward during countdown (via initializeMirrorMovement)
-        // This prevents any visual confusion as movement starts on first frame
-        const mirrorPositions = [forgePos, forgePos];
+        const sun = game.suns[0];
+        const mirrorSpawnDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+        const angleToForge = Math.atan2(
+            forgePos.y - sun.position.y,
+            forgePos.x - sun.position.x
+        );
+        const leftAngle = angleToForge + Math.PI / 2;
+        const rightAngle = angleToForge - Math.PI / 2;
+        const mirrorPositions = [
+            new Vector2D(
+                forgePos.x + Math.cos(leftAngle) * mirrorSpawnDistance,
+                forgePos.y + Math.sin(leftAngle) * mirrorSpawnDistance
+            ),
+            new Vector2D(
+                forgePos.x + Math.cos(rightAngle) * mirrorSpawnDistance,
+                forgePos.y + Math.sin(rightAngle) * mirrorSpawnDistance
+            )
+        ];
         game.initializePlayer(player, forgePos, mirrorPositions);
         
         // Hero units (Marine and Grave) are no longer spawned automatically
