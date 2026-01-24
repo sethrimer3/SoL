@@ -45,6 +45,11 @@ export const SHADE_OPACITY = 0.3; // Opacity for rendering objects in shade (0-1
 export const STRATEGIC_ASTEROID_SIZE = 120; // Size of strategic asteroids that block visibility
 export const STRATEGIC_ASTEROID_DISTANCE = 250; // Distance from sun center for strategic asteroids
 
+// Map boundary constants
+export const MAP_SIZE = 2000; // Total map size in world units (centered at 0,0)
+export const BORDER_FADE_WIDTH = 150; // Width of dark border fade zone
+export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Units cannot move beyond this boundary
+
 // Countdown and mirror constants
 export const COUNTDOWN_DURATION = 3.0; // Countdown duration in seconds
 export const MIRROR_COUNTDOWN_DEPLOY_DISTANCE = 150; // Distance mirrors move from base during countdown
