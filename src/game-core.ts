@@ -411,14 +411,16 @@ export class StellarForge {
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
     readonly radius: number = 40; // For rendering and selection
-    starlingSpawnTimer: number = 0; // Timer for spawning starlings
+    crunchTimer: number = 0; // Timer until next crunch
+    currentCrunch: ForgeCrunch | null = null; // Active crunch effect
+    pendingSolarium: number = 0; // Solarium accumulated since last crunch
 
     constructor(
         public position: Vector2D,
         public owner: Player
     ) {
-        // Initialize starling spawn timer with random offset to stagger spawns
-        this.starlingSpawnTimer = Math.random() * Constants.STARLING_SPAWN_INTERVAL;
+        // Initialize crunch timer with random offset to stagger crunches
+        this.crunchTimer = Math.random() * Constants.FORGE_CRUNCH_INTERVAL;
     }
 
     /**
@@ -457,12 +459,20 @@ export class StellarForge {
     }
 
     /**
-     * Update forge movement and starling spawning
+     * Update forge movement and crunch effects
      */
     update(deltaTime: number): void {
-        // Update starling spawn timer
+        // Update crunch timer
         if (this.health > 0 && this.isReceivingLight) {
-            this.starlingSpawnTimer -= deltaTime;
+            this.crunchTimer -= deltaTime;
+        }
+
+        // Update active crunch effect
+        if (this.currentCrunch) {
+            this.currentCrunch.update(deltaTime);
+            if (!this.currentCrunch.isActive()) {
+                this.currentCrunch = null;
+            }
         }
 
         if (!this.targetPosition) {
@@ -514,14 +524,35 @@ export class StellarForge {
     }
 
     /**
-     * Check if starling should be spawned and reset timer
+     * Check if a crunch should happen and trigger it if ready
+     * Returns the amount of solarium to use for spawning minions
      */
-    shouldSpawnStarling(): boolean {
-        if (this.starlingSpawnTimer <= 0 && this.health > 0 && this.isReceivingLight) {
-            this.starlingSpawnTimer = Constants.STARLING_SPAWN_INTERVAL;
-            return true;
+    shouldCrunch(): number {
+        if (this.crunchTimer <= 0 && this.health > 0 && this.isReceivingLight) {
+            this.crunchTimer = Constants.FORGE_CRUNCH_INTERVAL;
+            this.currentCrunch = new ForgeCrunch(new Vector2D(this.position.x, this.position.y));
+            this.currentCrunch.start();
+            
+            // Return the pending solarium for minion spawning
+            const solariumForMinions = this.pendingSolarium;
+            this.pendingSolarium = 0;
+            return solariumForMinions;
         }
-        return false;
+        return 0;
+    }
+
+    /**
+     * Add solarium to pending amount (called when mirrors generate solarium)
+     */
+    addPendingSolarium(amount: number): void {
+        this.pendingSolarium += amount;
+    }
+
+    /**
+     * Get the current crunch effect if active
+     */
+    getCurrentCrunch(): ForgeCrunch | null {
+        return this.currentCrunch;
     }
 
     /**
@@ -886,6 +917,66 @@ export class SpaceDustParticle {
         const b = Math.round(b1 + (b2 - b1) * factor);
         
         return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    }
+}
+
+/**
+ * Forge crunch effect - periodic event that sucks in dust then pushes it out
+ * Used when the forge "crunches" to spawn minions
+ */
+export class ForgeCrunch {
+    phase: 'suck' | 'wave' | 'idle' = 'idle';
+    phaseTimer: number = 0;
+    
+    constructor(
+        public position: Vector2D
+    ) {}
+
+    /**
+     * Start a new crunch cycle
+     */
+    start(): void {
+        this.phase = 'suck';
+        this.phaseTimer = Constants.FORGE_CRUNCH_SUCK_DURATION;
+    }
+
+    /**
+     * Update crunch phase timers
+     */
+    update(deltaTime: number): void {
+        if (this.phase === 'idle') return;
+
+        this.phaseTimer -= deltaTime;
+        
+        if (this.phaseTimer <= 0) {
+            if (this.phase === 'suck') {
+                // Transition from suck to wave
+                this.phase = 'wave';
+                this.phaseTimer = Constants.FORGE_CRUNCH_WAVE_DURATION;
+            } else if (this.phase === 'wave') {
+                // Crunch complete
+                this.phase = 'idle';
+                this.phaseTimer = 0;
+            }
+        }
+    }
+
+    /**
+     * Check if crunch is active
+     */
+    isActive(): boolean {
+        return this.phase !== 'idle';
+    }
+
+    /**
+     * Get current phase progress (0-1)
+     */
+    getPhaseProgress(): number {
+        if (this.phase === 'idle') return 0;
+        const totalDuration = this.phase === 'suck' 
+            ? Constants.FORGE_CRUNCH_SUCK_DURATION 
+            : Constants.FORGE_CRUNCH_WAVE_DURATION;
+        return 1.0 - (this.phaseTimer / totalDuration);
     }
 }
 
@@ -2214,17 +2305,29 @@ export class GameState {
                     }
                 }
                 
-                // Spawn starlings if timer is ready (only after countdown)
-                if (!this.isCountdownActive && player.stellarForge.shouldSpawnStarling()) {
-                    const spawnOffset = 60; // Spawn 60 pixels away from forge
-                    const angle = Math.random() * Math.PI * 2;
-                    const spawnPosition = new Vector2D(
-                        player.stellarForge.position.x + Math.cos(angle) * spawnOffset,
-                        player.stellarForge.position.y + Math.sin(angle) * spawnOffset
-                    );
-                    const starling = new Starling(spawnPosition, player);
-                    player.units.push(starling);
-                    console.log(`${player.name} spawned a Starling at (${spawnPosition.x.toFixed(0)}, ${spawnPosition.y.toFixed(0)})`);
+                // Check for forge crunch (spawns minions with excess solarium)
+                if (!this.isCountdownActive) {
+                    const solariumForMinions = player.stellarForge.shouldCrunch();
+                    if (solariumForMinions > 0) {
+                        // Calculate number of starlings to spawn based on solarium
+                        const numStarlings = Math.floor(solariumForMinions / Constants.STARLING_COST_PER_SOLARIUM);
+                        
+                        // Spawn starlings at the wave edge during wave phase
+                        for (let i = 0; i < numStarlings; i++) {
+                            const angle = (Math.PI * 2 * i) / numStarlings; // Evenly distribute around forge
+                            const spawnRadius = Constants.FORGE_CRUNCH_WAVE_RADIUS * 0.7; // Spawn at 70% of wave radius
+                            const spawnPosition = new Vector2D(
+                                player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
+                                player.stellarForge.position.y + Math.sin(angle) * spawnRadius
+                            );
+                            const starling = new Starling(spawnPosition, player);
+                            player.units.push(starling);
+                        }
+                        
+                        if (numStarlings > 0) {
+                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${solariumForMinions.toFixed(0)} solarium`);
+                        }
+                    }
                 }
             }
 
@@ -2249,7 +2352,8 @@ export class GameState {
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids)) {
                     const solariumGenerated = mirror.generateSolarium(deltaTime);
-                    player.addSolarium(solariumGenerated);
+                    // Add to forge's pending solarium pool for next crunch
+                    player.stellarForge.addPendingSolarium(solariumGenerated);
                 }
             }
         }
@@ -2632,6 +2736,56 @@ export class GameState {
                             force.x * deltaTime / distance,
                             force.y * deltaTime / distance
                         ));
+                    }
+                }
+            }
+        }
+
+        // Apply forces from forge crunches (suck in, then wave out)
+        for (const player of this.players) {
+            if (player.stellarForge && !player.isDefeated()) {
+                const crunch = player.stellarForge.getCurrentCrunch();
+                if (crunch && crunch.isActive()) {
+                    for (const particle of this.spaceDust) {
+                        const distance = particle.position.distanceTo(crunch.position);
+                        
+                        if (crunch.phase === 'suck' && distance < Constants.FORGE_CRUNCH_SUCK_RADIUS) {
+                            // Suck phase: pull dust toward forge
+                            if (distance > 5) { // Minimum distance to avoid division by zero
+                                const direction = new Vector2D(
+                                    crunch.position.x - particle.position.x,
+                                    crunch.position.y - particle.position.y
+                                ).normalize();
+                                
+                                // Force decreases with distance
+                                const forceMagnitude = Constants.FORGE_CRUNCH_SUCK_FORCE / Math.sqrt(distance);
+                                particle.applyForce(new Vector2D(
+                                    direction.x * forceMagnitude * deltaTime,
+                                    direction.y * forceMagnitude * deltaTime
+                                ));
+                            }
+                        } else if (crunch.phase === 'wave' && distance < Constants.FORGE_CRUNCH_WAVE_RADIUS) {
+                            // Wave phase: push dust away from forge
+                            if (distance > 5) { // Minimum distance to avoid division by zero
+                                const direction = new Vector2D(
+                                    particle.position.x - crunch.position.x,
+                                    particle.position.y - crunch.position.y
+                                ).normalize();
+                                
+                                // Wave effect: stronger push at the wavefront
+                                const waveProgress = crunch.getPhaseProgress();
+                                const wavePosition = waveProgress * Constants.FORGE_CRUNCH_WAVE_RADIUS;
+                                const distanceToWave = Math.abs(distance - wavePosition);
+                                const waveSharpness = 50; // How focused the wave is
+                                const waveStrength = Math.exp(-distanceToWave / waveSharpness);
+                                
+                                const forceMagnitude = Constants.FORGE_CRUNCH_WAVE_FORCE * waveStrength;
+                                particle.applyForce(new Vector2D(
+                                    direction.x * forceMagnitude * deltaTime,
+                                    direction.y * forceMagnitude * deltaTime
+                                ));
+                            }
+                        }
                     }
                 }
             }
