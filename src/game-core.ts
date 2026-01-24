@@ -1005,6 +1005,11 @@ export class Player {
     solarMirrors: SolarMirror[] = [];
     units: Unit[] = [];
     buildings: Building[] = []; // Offensive and defensive buildings
+    
+    // Statistics tracking
+    unitsCreated: number = 0;
+    unitsLost: number = 0;
+    solariumGathered: number = 0;
 
     constructor(
         public name: string,
@@ -1023,6 +1028,7 @@ export class Player {
      */
     addSolarium(amount: number): void {
         this.solarium += amount;
+        this.solariumGathered += amount;
     }
 
     /**
@@ -2563,6 +2569,7 @@ export class GameState {
                             );
                             const starling = new Starling(spawnPosition, player);
                             player.units.push(starling);
+                            player.unitsCreated++;
                         }
                         
                         if (numStarlings > 0) {
@@ -2694,7 +2701,9 @@ export class GameState {
             }
             } // End of countdown check
 
-            // Remove dead units
+            // Remove dead units and track losses
+            const deadUnits = player.units.filter(unit => unit.isDead());
+            player.unitsLost += deadUnits.length;
             player.units = player.units.filter(unit => !unit.isDead());
 
             // Update each building (only after countdown)
