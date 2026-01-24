@@ -979,8 +979,7 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
-        // Reset alpha
-        this.ctx.globalAlpha = 1.0;
+        // Reset alpha if we dimmed
         if (shouldDim) {
             this.ctx.globalAlpha = 1.0;
         }

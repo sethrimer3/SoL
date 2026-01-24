@@ -1852,6 +1852,7 @@ export class InfluenceBallProjectile {
  * Influence Ball hero unit (Solari faction) - creates temporary influence zones
  */
 export class InfluenceBall extends Unit {
+    private projectileToCreate: InfluenceBallProjectile | null = null;
     
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -1880,14 +1881,22 @@ export class InfluenceBall extends Unit {
             direction.y * Constants.INFLUENCE_BALL_PROJECTILE_SPEED
         );
         
-        const projectile = new InfluenceBallProjectile(
+        this.projectileToCreate = new InfluenceBallProjectile(
             new Vector2D(this.position.x, this.position.y),
             velocity,
             this.owner
         );
         
-        this.lastAbilityEffects.push(projectile as any);
         return true;
+    }
+    
+    /**
+     * Get and clear pending projectile
+     */
+    getAndClearProjectile(): InfluenceBallProjectile | null {
+        const proj = this.projectileToCreate;
+        this.projectileToCreate = null;
+        return proj;
     }
 }
 
@@ -2024,10 +2033,11 @@ export class Driller extends Unit {
     }
     
     /**
-     * Driller has no normal attack
+     * Driller has no normal attack - only the drilling ability
      */
     attack(target: Unit | StellarForge | Building): void {
-        // No normal attack
+        // Driller does not have a normal attack - it only attacks via drilling ability
+        // This is intentional per the unit design
     }
     
     /**
@@ -2267,10 +2277,9 @@ export class GameState {
                 
                 // Handle InfluenceBall projectiles specifically
                 if (unit instanceof InfluenceBall) {
-                    for (const effect of abilityEffects) {
-                        if (effect instanceof InfluenceBallProjectile) {
-                            this.influenceBallProjectiles.push(effect);
-                        }
+                    const projectile = unit.getAndClearProjectile();
+                    if (projectile) {
+                        this.influenceBallProjectiles.push(projectile);
                     }
                 }
                 
@@ -2296,7 +2305,7 @@ export class GameState {
                 // Handle Driller movement and collision
                 if (unit instanceof Driller && unit.isDrilling) {
                     unit.updateDrilling(deltaTime);
-                    this.processDrillerCollisions(unit);
+                    this.processDrillerCollisions(unit, deltaTime);
                 }
             }
             } // End of countdown check
@@ -2967,7 +2976,7 @@ export class GameState {
     /**
      * Process Driller collisions
      */
-    private processDrillerCollisions(driller: Driller): void {
+    private processDrillerCollisions(driller: Driller, deltaTime: number): void {
         // Check collision with suns (dies)
         for (const sun of this.suns) {
             const distance = driller.position.distanceTo(sun.position);
@@ -3024,7 +3033,7 @@ export class GameState {
             // Apply deceleration
             const speed = Math.sqrt(driller.drillVelocity.x ** 2 + driller.drillVelocity.y ** 2);
             if (speed > 0) {
-                const decelAmount = Constants.DRILLER_DECELERATION * 0.016; // Approximate deltaTime
+                const decelAmount = Constants.DRILLER_DECELERATION * deltaTime;
                 const newSpeed = Math.max(0, speed - decelAmount);
                 if (newSpeed === 0) {
                     driller.stopDrilling();

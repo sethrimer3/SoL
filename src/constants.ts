@@ -126,7 +126,6 @@ export const RAY_ATTACK_RANGE = 250;
 export const RAY_ATTACK_DAMAGE = 8;
 export const RAY_ATTACK_SPEED = 3; // Attacks per second
 export const RAY_ABILITY_COOLDOWN = 8.0; // 8 seconds
-export const RAY_BEAM_SPEED = 1000; // Speed of the bouncing beam
 export const RAY_BEAM_DAMAGE = 25; // Damage per beam hit
 export const RAY_BEAM_MAX_BOUNCES = 5; // Maximum number of bounces
 export const RAY_BEAM_WIDTH = 3; // Visual width of the beam
