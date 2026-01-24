@@ -58,14 +58,6 @@ export class GameRenderer {
      * Initialize star layers with random positions for parallax effect
      */
     private initializeStarLayers(): void {
-        // Create 4 parallax layers with different depths
-        const layers = [
-            { count: 200, parallaxFactor: 0.1, sizeRange: [0.5, 1.0] },   // Far background
-            { count: 150, parallaxFactor: 0.2, sizeRange: [0.8, 1.5] },   // Mid-far
-            { count: 100, parallaxFactor: 0.35, sizeRange: [1.0, 2.0] },  // Mid-near
-            { count: 50, parallaxFactor: 0.5, sizeRange: [1.5, 2.5] }     // Near foreground
-        ];
-        
         // Use a seeded random for consistent star positions
         let seed = 42;
         const seededRandom = () => {
@@ -73,13 +65,13 @@ export class GameRenderer {
             return seed / 233280;
         };
         
-        for (const layerConfig of layers) {
+        for (const layerConfig of Constants.STAR_LAYER_CONFIGS) {
             const stars: Array<{x: number, y: number, size: number, brightness: number}> = [];
             
             for (let i = 0; i < layerConfig.count; i++) {
                 stars.push({
-                    x: seededRandom() * 4000 - 2000,  // Spread across 4000 units
-                    y: seededRandom() * 4000 - 2000,
+                    x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
+                    y: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
                     size: layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]),
                     brightness: 0.3 + seededRandom() * 0.7  // Vary brightness
                 });
@@ -1664,8 +1656,8 @@ export class GameRenderer {
                 const screenY = centerY + (star.y - parallaxY);
                 
                 // Wrap stars around screen edges for infinite scrolling effect
-                const wrappedX = ((screenX + centerX) % (centerX * 2 + 4000)) - centerX;
-                const wrappedY = ((screenY + centerY) % (centerY * 2 + 4000)) - centerY;
+                const wrappedX = ((screenX + centerX) % (centerX * 2 + Constants.STAR_WRAP_SIZE)) - centerX;
+                const wrappedY = ((screenY + centerY) % (centerY * 2 + Constants.STAR_WRAP_SIZE)) - centerY;
                 
                 // Only draw if on screen
                 if (wrappedX >= -100 && wrappedX <= this.canvas.width / dpr + 100 &&

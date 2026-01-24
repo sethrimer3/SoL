@@ -25,6 +25,15 @@ export const PARTICLE_SCATTER_FORCE = 200;
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;
 
+// Star background parallax constants
+export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
+export const STAR_LAYER_CONFIGS = [
+    { count: 200, parallaxFactor: 0.1, sizeRange: [0.5, 1.0] as [number, number] },   // Far background
+    { count: 150, parallaxFactor: 0.2, sizeRange: [0.8, 1.5] as [number, number] },   // Mid-far
+    { count: 100, parallaxFactor: 0.35, sizeRange: [1.0, 2.0] as [number, number] },  // Mid-near
+    { count: 50, parallaxFactor: 0.5, sizeRange: [1.5, 2.5] as [number, number] }     // Near foreground
+];
+
 // Raytracing constants
 export const RAYTRACING_NUM_RAYS = 64; // Number of rays to cast per sun
 export const MAX_RAY_DISTANCE = 2000; // Maximum distance for ray casting
