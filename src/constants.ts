@@ -79,7 +79,7 @@ export const STARLING_MAX_HEALTH = 50;
 export const STARLING_ATTACK_RANGE = 150;
 export const STARLING_ATTACK_DAMAGE = 5;
 export const STARLING_ATTACK_SPEED = 2; // Attacks per second
-export const STARLING_MOVE_SPEED = 120; // Pixels per second (faster than regular units)
+export const STARLING_MOVE_SPEED = 50; // Pixels per second (slower than regular units)
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
 

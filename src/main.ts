@@ -23,6 +23,8 @@ class GameController {
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
+    private isDrawingPath: boolean = false; // Flag for drawing minion path from base
+    private pathPoints: Vector2D[] = []; // Path waypoints being drawn
 
     /**
      * Check if only hero units are currently selected
@@ -209,8 +211,13 @@ class GameController {
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
                 
-                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow) {
-                    if (hasOnlyHeroUnits) {
+                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDrawingPath) {
+                    if (this.selectedBase && this.selectedBase.isSelected) {
+                        // Drawing a path from the selected base
+                        this.isDrawingPath = true;
+                        this.pathPoints = [];
+                        this.cancelHold();
+                    } else if (hasOnlyHeroUnits) {
                         // For hero units, use arrow dragging mode
                         this.isDraggingHeroArrow = true;
                         this.cancelHold();
@@ -229,6 +236,15 @@ class GameController {
                     // Update arrow direction (for hero ability casting)
                     this.renderer.abilityArrowStart = this.selectionStartScreen;
                     this.renderer.abilityArrowEnd = new Vector2D(x, y);
+                } else if (this.isDrawingPath) {
+                    // Collect path waypoints as we drag
+                    const worldPos = this.renderer.screenToWorld(x, y);
+                    
+                    // Add waypoint if we've moved far enough from the last one
+                    if (this.pathPoints.length === 0 || 
+                        this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > 50) {
+                        this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
+                    }
                 }
             }
             
@@ -417,6 +433,14 @@ class GameController {
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
+            } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.selectedBase && this.game) {
+                // Finalize the path drawing
+                if (this.pathPoints.length > 0) {
+                    this.selectedBase.setMinionPath(this.pathPoints);
+                    console.log(`Path set with ${this.pathPoints.length} waypoints`);
+                }
+                this.pathPoints = [];
+                this.isDrawingPath = false;
             } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
@@ -493,6 +517,8 @@ class GameController {
             isMouseDown = false;
             this.isSelecting = false;
             this.isDraggingHeroArrow = false;
+            this.isDrawingPath = false;
+            this.pathPoints = [];
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
