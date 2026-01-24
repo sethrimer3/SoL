@@ -3214,22 +3214,15 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         const player = new Player(name, faction);
         const forgePos = positions[i];
         
-        const sun = game.suns[0];
         const mirrorSpawnDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
-        const angleToForge = Math.atan2(
-            forgePos.y - sun.position.y,
-            forgePos.x - sun.position.x
-        );
-        const leftAngle = angleToForge + Math.PI / 2;
-        const rightAngle = angleToForge - Math.PI / 2;
         const mirrorPositions = [
             new Vector2D(
-                forgePos.x + Math.cos(leftAngle) * mirrorSpawnDistance,
-                forgePos.y + Math.sin(leftAngle) * mirrorSpawnDistance
+                forgePos.x - mirrorSpawnDistance,
+                forgePos.y
             ),
             new Vector2D(
-                forgePos.x + Math.cos(rightAngle) * mirrorSpawnDistance,
-                forgePos.y + Math.sin(rightAngle) * mirrorSpawnDistance
+                forgePos.x + mirrorSpawnDistance,
+                forgePos.y
             )
         ];
         game.initializePlayer(player, forgePos, mirrorPositions);

@@ -1383,6 +1383,7 @@ export class GameRenderer {
      */
     private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[]): void {
         if (!player.stellarForge) return;
+        if (this.viewingPlayer && player !== this.viewingPlayer) return;
 
         const forgeScreenPos = this.worldToScreen(player.stellarForge.position);
 
@@ -1766,8 +1767,10 @@ export class GameRenderer {
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
             // Draw Solar Mirrors
-            for (const mirror of player.solarMirrors) {
-                this.drawSolarMirror(mirror, color, game);
+            if (!isEnemy) {
+                for (const mirror of player.solarMirrors) {
+                    this.drawSolarMirror(mirror, color, game);
+                }
             }
 
             // Draw Stellar Forge
