@@ -104,6 +104,14 @@ export const CASING_COLLISION_DAMPING = 0.3;
 // Unit movement constants
 export const UNIT_MOVE_SPEED = 100; // Pixels per second
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
+export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
+export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
+export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)
+export const UNIT_HERO_AVOIDANCE_MULTIPLIER = 0.3; // Heroes ignore some avoidance (unitless)
+export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes (unitless)
+
+// Deterministic state hash cadence
+export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
 
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
