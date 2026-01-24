@@ -26,6 +26,17 @@ export interface HeroUnit {
     name: string;
     description: string;
     faction: Faction;
+    // Combat stats
+    maxHealth: number;
+    attackDamage: number;
+    attackSpeed: number; // attacks per second
+    attackRange: number;
+    attackIgnoresDefense: boolean;
+    // Defensive stats
+    defense: number; // percentage damage reduction (0-100)
+    regen: number; // percentage of health recovered in influence field (0-100)
+    // Ability
+    abilityDescription: string;
 }
 
 export interface GameSettings {
@@ -44,49 +55,193 @@ export class MainMenu {
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     
-    // Hero unit data - stubs for now
+    // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
         // Radiant faction heroes
-        { id: 'radiant-1', name: 'Luminar', description: 'Master of light manipulation', faction: Faction.RADIANT },
-        { id: 'radiant-2', name: 'Prismara', description: 'Rainbow warrior', faction: Faction.RADIANT },
-        { id: 'radiant-3', name: 'Solstice', description: 'Sun-caller', faction: Faction.RADIANT },
-        { id: 'radiant-4', name: 'Beamforge', description: 'Laser specialist', faction: Faction.RADIANT },
-        { id: 'radiant-5', name: 'Photonix', description: 'Speed of light incarnate', faction: Faction.RADIANT },
-        { id: 'radiant-6', name: 'Glowbringer', description: 'Illumination support', faction: Faction.RADIANT },
-        { id: 'radiant-7', name: 'Radiance', description: 'Pure light entity', faction: Faction.RADIANT },
-        { id: 'radiant-8', name: 'Stellaris', description: 'Star-born warrior', faction: Faction.RADIANT },
-        { id: 'radiant-9', name: 'Luxarion', description: 'Light shield bearer', faction: Faction.RADIANT },
-        { id: 'radiant-10', name: 'Dawnbringer', description: 'Herald of morning', faction: Faction.RADIANT },
-        { id: 'radiant-11', name: 'Shimmerwind', description: 'Swift light dancer', faction: Faction.RADIANT },
-        { id: 'radiant-12', name: 'Eclipsar', description: 'Master of light and shadow', faction: Faction.RADIANT },
+        { 
+            id: 'radiant-1', name: 'Luminar', description: 'Master of light manipulation', faction: Faction.RADIANT,
+            maxHealth: 120, attackDamage: 12, attackSpeed: 2.5, attackRange: 350, attackIgnoresDefense: false,
+            defense: 15, regen: 3, abilityDescription: 'Bends light rays to blind and confuse enemies'
+        },
+        { 
+            id: 'radiant-2', name: 'Prismara', description: 'Rainbow warrior', faction: Faction.RADIANT,
+            maxHealth: 100, attackDamage: 15, attackSpeed: 3.0, attackRange: 300, attackIgnoresDefense: false,
+            defense: 10, regen: 4, abilityDescription: 'Splits attacks into multiple colored beams'
+        },
+        { 
+            id: 'radiant-3', name: 'Solstice', description: 'Sun-caller', faction: Faction.RADIANT,
+            maxHealth: 110, attackDamage: 18, attackSpeed: 1.5, attackRange: 400, attackIgnoresDefense: false,
+            defense: 12, regen: 5, abilityDescription: 'Calls down focused sunlight on enemies'
+        },
+        { 
+            id: 'radiant-4', name: 'Beamforge', description: 'Laser specialist', faction: Faction.RADIANT,
+            maxHealth: 90, attackDamage: 20, attackSpeed: 2.0, attackRange: 450, attackIgnoresDefense: true,
+            defense: 8, regen: 2, abilityDescription: 'Fires piercing laser that ignores defense'
+        },
+        { 
+            id: 'radiant-5', name: 'Photonix', description: 'Speed of light incarnate', faction: Faction.RADIANT,
+            maxHealth: 80, attackDamage: 10, attackSpeed: 5.0, attackRange: 250, attackIgnoresDefense: false,
+            defense: 5, regen: 6, abilityDescription: 'Rapidly teleports in combat, dodging attacks'
+        },
+        { 
+            id: 'radiant-6', name: 'Glowbringer', description: 'Illumination support', faction: Faction.RADIANT,
+            maxHealth: 130, attackDamage: 8, attackSpeed: 2.0, attackRange: 300, attackIgnoresDefense: false,
+            defense: 20, regen: 8, abilityDescription: 'Heals nearby allies with radiant energy'
+        },
+        { 
+            id: 'radiant-7', name: 'Radiance', description: 'Pure light entity', faction: Faction.RADIANT,
+            maxHealth: 85, attackDamage: 22, attackSpeed: 1.8, attackRange: 350, attackIgnoresDefense: true,
+            defense: 0, regen: 10, abilityDescription: 'Becomes pure energy, immune to physical damage'
+        },
+        { 
+            id: 'radiant-8', name: 'Stellaris', description: 'Star-born warrior', faction: Faction.RADIANT,
+            maxHealth: 140, attackDamage: 14, attackSpeed: 2.2, attackRange: 320, attackIgnoresDefense: false,
+            defense: 18, regen: 4, abilityDescription: 'Creates stellar shields for nearby units'
+        },
+        { 
+            id: 'radiant-9', name: 'Luxarion', description: 'Light shield bearer', faction: Faction.RADIANT,
+            maxHealth: 160, attackDamage: 10, attackSpeed: 1.5, attackRange: 280, attackIgnoresDefense: false,
+            defense: 30, regen: 3, abilityDescription: 'Deploys hard-light barrier blocking attacks'
+        },
+        { 
+            id: 'radiant-10', name: 'Dawnbringer', description: 'Herald of morning', faction: Faction.RADIANT,
+            maxHealth: 115, attackDamage: 16, attackSpeed: 2.5, attackRange: 340, attackIgnoresDefense: false,
+            defense: 12, regen: 5, abilityDescription: 'Dawn pulse damages and slows enemies'
+        },
+        { 
+            id: 'radiant-11', name: 'Shimmerwind', description: 'Swift light dancer', faction: Faction.RADIANT,
+            maxHealth: 70, attackDamage: 12, attackSpeed: 4.5, attackRange: 220, attackIgnoresDefense: false,
+            defense: 8, regen: 7, abilityDescription: 'Dashes rapidly, leaving afterimages'
+        },
+        { 
+            id: 'radiant-12', name: 'Eclipsar', description: 'Master of light and shadow', faction: Faction.RADIANT,
+            maxHealth: 105, attackDamage: 18, attackSpeed: 2.0, attackRange: 360, attackIgnoresDefense: false,
+            defense: 15, regen: 4, abilityDescription: 'Toggles between light and shadow forms'
+        },
         
         // Aurum faction heroes
-        { id: 'aurum-1', name: 'Goldhart', description: 'Golden commander', faction: Faction.AURUM },
-        { id: 'aurum-2', name: 'Wealthweaver', description: 'Economic mastermind', faction: Faction.AURUM },
-        { id: 'aurum-3', name: 'Coinforge', description: 'Resource multiplier', faction: Faction.AURUM },
-        { id: 'aurum-4', name: 'Gilded Guardian', description: 'Defensive specialist', faction: Faction.AURUM },
-        { id: 'aurum-5', name: 'Treasureheart', description: 'Loot collector', faction: Faction.AURUM },
-        { id: 'aurum-6', name: 'Aurumancer', description: 'Gold magic user', faction: Faction.AURUM },
-        { id: 'aurum-7', name: 'Mintmaster', description: 'Economy booster', faction: Faction.AURUM },
-        { id: 'aurum-8', name: 'Goldstrike', description: 'Heavy hitter', faction: Faction.AURUM },
-        { id: 'aurum-9', name: 'Vaultkeeper', description: 'Resource protector', faction: Faction.AURUM },
-        { id: 'aurum-10', name: 'Prosperion', description: 'Wealth incarnate', faction: Faction.AURUM },
-        { id: 'aurum-11', name: 'Opulence', description: 'Luxury warrior', faction: Faction.AURUM },
-        { id: 'aurum-12', name: 'Bullionaire', description: 'Market dominator', faction: Faction.AURUM },
+        { 
+            id: 'aurum-1', name: 'Goldhart', description: 'Golden commander', faction: Faction.AURUM,
+            maxHealth: 130, attackDamage: 14, attackSpeed: 2.0, attackRange: 320, attackIgnoresDefense: false,
+            defense: 20, regen: 4, abilityDescription: 'Rallies allies, boosting their stats'
+        },
+        { 
+            id: 'aurum-2', name: 'Wealthweaver', description: 'Economic mastermind', faction: Faction.AURUM,
+            maxHealth: 90, attackDamage: 8, attackSpeed: 1.5, attackRange: 280, attackIgnoresDefense: false,
+            defense: 10, regen: 6, abilityDescription: 'Generates bonus solarium per crunch'
+        },
+        { 
+            id: 'aurum-3', name: 'Coinforge', description: 'Resource multiplier', faction: Faction.AURUM,
+            maxHealth: 100, attackDamage: 10, attackSpeed: 2.0, attackRange: 300, attackIgnoresDefense: false,
+            defense: 12, regen: 5, abilityDescription: 'Converts damage dealt into solarium'
+        },
+        { 
+            id: 'aurum-4', name: 'Gilded Guardian', description: 'Defensive specialist', faction: Faction.AURUM,
+            maxHealth: 180, attackDamage: 8, attackSpeed: 1.2, attackRange: 260, attackIgnoresDefense: false,
+            defense: 35, regen: 2, abilityDescription: 'Forms golden barrier absorbing damage'
+        },
+        { 
+            id: 'aurum-5', name: 'Treasureheart', description: 'Loot collector', faction: Faction.AURUM,
+            maxHealth: 110, attackDamage: 12, attackSpeed: 2.5, attackRange: 310, attackIgnoresDefense: false,
+            defense: 15, regen: 5, abilityDescription: 'Collects resources from defeated enemies'
+        },
+        { 
+            id: 'aurum-6', name: 'Aurumancer', description: 'Gold magic user', faction: Faction.AURUM,
+            maxHealth: 95, attackDamage: 20, attackSpeed: 1.8, attackRange: 380, attackIgnoresDefense: false,
+            defense: 8, regen: 4, abilityDescription: 'Transmutes enemies into golden statues'
+        },
+        { 
+            id: 'aurum-7', name: 'Mintmaster', description: 'Economy booster', faction: Faction.AURUM,
+            maxHealth: 85, attackDamage: 10, attackSpeed: 2.0, attackRange: 290, attackIgnoresDefense: false,
+            defense: 10, regen: 7, abilityDescription: 'Mints golden coins that boost production'
+        },
+        { 
+            id: 'aurum-8', name: 'Goldstrike', description: 'Heavy hitter', faction: Faction.AURUM,
+            maxHealth: 125, attackDamage: 25, attackSpeed: 1.5, attackRange: 340, attackIgnoresDefense: true,
+            defense: 15, regen: 3, abilityDescription: 'Delivers devastating golden hammer blow'
+        },
+        { 
+            id: 'aurum-9', name: 'Vaultkeeper', description: 'Resource protector', faction: Faction.AURUM,
+            maxHealth: 150, attackDamage: 11, attackSpeed: 1.8, attackRange: 300, attackIgnoresDefense: false,
+            defense: 25, regen: 4, abilityDescription: 'Creates vault shield protecting structures'
+        },
+        { 
+            id: 'aurum-10', name: 'Prosperion', description: 'Wealth incarnate', faction: Faction.AURUM,
+            maxHealth: 140, attackDamage: 16, attackSpeed: 2.2, attackRange: 350, attackIgnoresDefense: false,
+            defense: 18, regen: 5, abilityDescription: 'Radiates prosperity, buffing nearby units'
+        },
+        { 
+            id: 'aurum-11', name: 'Opulence', description: 'Luxury warrior', faction: Faction.AURUM,
+            maxHealth: 120, attackDamage: 18, attackSpeed: 2.0, attackRange: 330, attackIgnoresDefense: false,
+            defense: 22, regen: 4, abilityDescription: 'Summons golden minions to fight'
+        },
+        { 
+            id: 'aurum-12', name: 'Bullionaire', description: 'Market dominator', faction: Faction.AURUM,
+            maxHealth: 110, attackDamage: 15, attackSpeed: 2.5, attackRange: 320, attackIgnoresDefense: false,
+            defense: 12, regen: 6, abilityDescription: 'Manipulates market, disrupting enemy economy'
+        },
         
         // Solari faction heroes
-        { id: 'solari-1', name: 'Sunwarden', description: 'Solar defender', faction: Faction.SOLARI },
-        { id: 'solari-2', name: 'Flareborn', description: 'Fire warrior', faction: Faction.SOLARI },
-        { id: 'solari-3', name: 'Heliarch', description: 'Sun priest', faction: Faction.SOLARI },
-        { id: 'solari-4', name: 'Coronax', description: 'Solar storm bringer', faction: Faction.SOLARI },
-        { id: 'solari-5', name: 'Pyroclast', description: 'Lava manipulator', faction: Faction.SOLARI },
-        { id: 'solari-6', name: 'Solarion', description: 'Sun champion', faction: Faction.SOLARI },
-        { id: 'solari-7', name: 'Infernova', description: 'Supernova wielder', faction: Faction.SOLARI },
-        { id: 'solari-8', name: 'Dawnkeeper', description: 'Morning guardian', faction: Faction.SOLARI },
-        { id: 'solari-9', name: 'Sunscorch', description: 'Burning blade', faction: Faction.SOLARI },
-        { id: 'solari-10', name: 'Heliorax', description: 'Solar dragon', faction: Faction.SOLARI },
-        { id: 'solari-11', name: 'Blazeheart', description: 'Fire soul', faction: Faction.SOLARI },
-        { id: 'solari-12', name: 'Solarflare', description: 'Burst specialist', faction: Faction.SOLARI },
+        { 
+            id: 'solari-1', name: 'Sunwarden', description: 'Solar defender', faction: Faction.SOLARI,
+            maxHealth: 150, attackDamage: 12, attackSpeed: 1.8, attackRange: 300, attackIgnoresDefense: false,
+            defense: 25, regen: 5, abilityDescription: 'Solar shield blocks incoming attacks'
+        },
+        { 
+            id: 'solari-2', name: 'Flareborn', description: 'Fire warrior', faction: Faction.SOLARI,
+            maxHealth: 100, attackDamage: 22, attackSpeed: 2.5, attackRange: 280, attackIgnoresDefense: false,
+            defense: 10, regen: 6, abilityDescription: 'Ignites enemies with solar flares'
+        },
+        { 
+            id: 'solari-3', name: 'Heliarch', description: 'Sun priest', faction: Faction.SOLARI,
+            maxHealth: 110, attackDamage: 14, attackSpeed: 2.0, attackRange: 340, attackIgnoresDefense: false,
+            defense: 15, regen: 8, abilityDescription: 'Channels sun energy to heal and empower'
+        },
+        { 
+            id: 'solari-4', name: 'Coronax', description: 'Solar storm bringer', faction: Faction.SOLARI,
+            maxHealth: 95, attackDamage: 18, attackSpeed: 2.8, attackRange: 360, attackIgnoresDefense: false,
+            defense: 8, regen: 5, abilityDescription: 'Summons solar storm damaging area'
+        },
+        { 
+            id: 'solari-5', name: 'Pyroclast', description: 'Lava manipulator', faction: Faction.SOLARI,
+            maxHealth: 105, attackDamage: 20, attackSpeed: 2.0, attackRange: 320, attackIgnoresDefense: true,
+            defense: 12, regen: 4, abilityDescription: 'Creates lava pools that damage over time'
+        },
+        { 
+            id: 'solari-6', name: 'Solarion', description: 'Sun champion', faction: Faction.SOLARI,
+            maxHealth: 135, attackDamage: 16, attackSpeed: 2.2, attackRange: 330, attackIgnoresDefense: false,
+            defense: 20, regen: 5, abilityDescription: 'Empowered by sun, gains strength in light'
+        },
+        { 
+            id: 'solari-7', name: 'Infernova', description: 'Supernova wielder', faction: Faction.SOLARI,
+            maxHealth: 80, attackDamage: 28, attackSpeed: 1.5, attackRange: 400, attackIgnoresDefense: true,
+            defense: 5, regen: 3, abilityDescription: 'Unleashes supernova explosion'
+        },
+        { 
+            id: 'solari-8', name: 'Dawnkeeper', description: 'Morning guardian', faction: Faction.SOLARI,
+            maxHealth: 125, attackDamage: 13, attackSpeed: 2.0, attackRange: 310, attackIgnoresDefense: false,
+            defense: 18, regen: 6, abilityDescription: 'Dawn light revitalizes allies'
+        },
+        { 
+            id: 'solari-9', name: 'Sunscorch', description: 'Burning blade', faction: Faction.SOLARI,
+            maxHealth: 90, attackDamage: 24, attackSpeed: 3.0, attackRange: 250, attackIgnoresDefense: false,
+            defense: 8, regen: 5, abilityDescription: 'Blade burns with solar fire'
+        },
+        { 
+            id: 'solari-10', name: 'Heliorax', description: 'Solar dragon', faction: Faction.SOLARI,
+            maxHealth: 160, attackDamage: 20, attackSpeed: 1.8, attackRange: 380, attackIgnoresDefense: false,
+            defense: 22, regen: 4, abilityDescription: 'Breathes solar flames in wide arc'
+        },
+        { 
+            id: 'solari-11', name: 'Blazeheart', description: 'Fire soul', faction: Faction.SOLARI,
+            maxHealth: 100, attackDamage: 16, attackSpeed: 2.8, attackRange: 300, attackIgnoresDefense: false,
+            defense: 10, regen: 7, abilityDescription: 'Burns hotter when health is low'
+        },
+        { 
+            id: 'solari-12', name: 'Solarflare', description: 'Burst specialist', faction: Faction.SOLARI,
+            maxHealth: 85, attackDamage: 14, attackSpeed: 4.0, attackRange: 290, attackIgnoresDefense: false,
+            defense: 6, regen: 6, abilityDescription: 'Releases rapid bursts of solar energy'
+        },
     ];
     
     private availableMaps: MapConfig[] = [
@@ -594,12 +749,12 @@ export class MainMenu {
         // Hero grid
         const heroGrid = document.createElement('div');
         heroGrid.style.display = 'grid';
-        heroGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(200px, 1fr))';
+        heroGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
         heroGrid.style.gap = '15px';
-        heroGrid.style.maxWidth = '1000px';
+        heroGrid.style.maxWidth = '1200px';
         heroGrid.style.padding = '20px';
         heroGrid.style.marginBottom = '20px';
-        heroGrid.style.maxHeight = '500px';
+        heroGrid.style.maxHeight = '600px';
         heroGrid.style.overflowY = 'auto';
 
         // Filter heroes by selected faction
@@ -617,7 +772,7 @@ export class MainMenu {
             heroCard.style.cursor = canSelect ? 'pointer' : 'not-allowed';
             heroCard.style.transition = 'all 0.3s';
             heroCard.style.opacity = canSelect ? '1' : '0.5';
-            heroCard.style.minHeight = '120px';
+            heroCard.style.minHeight = '300px';
 
             if (canSelect) {
                 heroCard.addEventListener('mouseenter', () => {
@@ -658,7 +813,57 @@ export class MainMenu {
             heroDesc.style.fontSize = '12px';
             heroDesc.style.lineHeight = '1.4';
             heroDesc.style.color = '#AAAAAA';
+            heroDesc.style.marginBottom = '10px';
             heroCard.appendChild(heroDesc);
+
+            // Stats section
+            const statsContainer = document.createElement('div');
+            statsContainer.style.fontSize = '11px';
+            statsContainer.style.lineHeight = '1.6';
+            statsContainer.style.color = '#CCCCCC';
+            statsContainer.style.marginBottom = '8px';
+            statsContainer.style.padding = '8px';
+            statsContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+            statsContainer.style.borderRadius = '5px';
+
+            // Create stat rows
+            const healthStat = document.createElement('div');
+            healthStat.textContent = `❤ Health: ${hero.maxHealth}`;
+            statsContainer.appendChild(healthStat);
+
+            const regenStat = document.createElement('div');
+            regenStat.textContent = `♻ Regen: ${hero.regen}%`;
+            statsContainer.appendChild(regenStat);
+
+            const defenseStat = document.createElement('div');
+            defenseStat.textContent = `🛡 Defense: ${hero.defense}%`;
+            statsContainer.appendChild(defenseStat);
+
+            const attackStat = document.createElement('div');
+            const attackIcon = hero.attackIgnoresDefense ? '⚡' : '⚔';
+            const attackSuffix = hero.attackIgnoresDefense ? ' (ignores defense)' : '';
+            attackStat.textContent = `${attackIcon} Attack: ${hero.attackDamage}${attackSuffix}`;
+            statsContainer.appendChild(attackStat);
+
+            const attackSpeedStat = document.createElement('div');
+            attackSpeedStat.textContent = `⏱ Speed: ${hero.attackSpeed}/s`;
+            statsContainer.appendChild(attackSpeedStat);
+
+            const rangeStat = document.createElement('div');
+            rangeStat.textContent = `🎯 Range: ${hero.attackRange}`;
+            statsContainer.appendChild(rangeStat);
+
+            heroCard.appendChild(statsContainer);
+
+            // Ability description
+            const abilityDesc = document.createElement('div');
+            abilityDesc.style.fontSize = '11px';
+            abilityDesc.style.lineHeight = '1.4';
+            abilityDesc.style.color = '#FFD700';
+            abilityDesc.style.marginBottom = '8px';
+            abilityDesc.style.fontStyle = 'italic';
+            abilityDesc.textContent = `✨ ${hero.abilityDescription}`;
+            heroCard.appendChild(abilityDesc);
 
             // Selection indicator
             if (isSelected) {
