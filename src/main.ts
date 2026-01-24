@@ -581,6 +581,10 @@ class GameController {
                 if (player.stellarForge && player.stellarForge.isSelected) {
                     player.stellarForge.setTarget(worldPos);
                     player.stellarForge.isSelected = false; // Auto-deselect after setting target
+                    this.selectedBase = null;
+                    this.selectedUnits.clear();
+                    this.selectedMirrors.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
                     console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -598,6 +602,10 @@ class GameController {
                 if (selectedMirror) {
                     selectedMirror.setTarget(worldPos);
                     selectedMirror.isSelected = false; // Auto-deselect after setting target
+                    this.selectedBase = null;
+                    this.selectedUnits.clear();
+                    this.selectedMirrors.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
                     console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;

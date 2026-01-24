@@ -41,6 +41,8 @@ export class GameRenderer {
     
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
+    private readonly FORGE_MAX_HEALTH = 1000;
+    private readonly MIRROR_MAX_HEALTH = 100;
     
     // Parallax star layers for depth
     private starLayers: Array<{
@@ -355,8 +357,11 @@ export class GameRenderer {
                 this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
             }
             
-            // Draw hero production buttons around the forge
-            this.drawHeroButtons(forge, screenPos, size);
+            const hasHeroUnits = forge.owner.units.some(unit => unit.isHero);
+            if (!hasHeroUnits) {
+                // Draw hero production buttons around the forge
+                this.drawHeroButtons(forge, screenPos, size);
+            }
         }
 
         // Draw base structure
@@ -380,18 +385,20 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Draw health bar
-        const barWidth = size * 2;
-        const barHeight = 6;
-        const barX = screenPos.x - barWidth / 2;
-        const barY = screenPos.y - size - 15;
-        
-        this.ctx.fillStyle = '#333';
-        this.ctx.fillRect(barX, barY, barWidth, barHeight);
-        
-        const healthPercent = forge.health / 1000.0;
-        this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-        this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        if (forge.health < this.FORGE_MAX_HEALTH) {
+            // Draw health bar
+            const barWidth = size * 2;
+            const barHeight = 6;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y - size - 15;
+            
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            const healthPercent = forge.health / this.FORGE_MAX_HEALTH;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        }
         
         // Draw move order indicator if forge has one
         if (forge.moveOrder > 0 && forge.targetPosition) {
@@ -408,7 +415,7 @@ export class GameRenderer {
      * Draw hero production buttons around selected Stellar Forge
      */
     private drawHeroButtons(forge: StellarForge, screenPos: Vector2D, forgeSize: number): void {
-        const buttonRadius = 20 * this.zoom;
+        const buttonRadius = 28 * this.zoom;
         const buttonDistance = (forgeSize * 2.5);
         
         // Draw 4 buttons in cardinal directions
@@ -438,7 +445,7 @@ export class GameRenderer {
             
             // Draw button label
             this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#666666';
-            this.ctx.font = `${12 * this.zoom}px Arial`;
+            this.ctx.font = `${14 * this.zoom}px Arial`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(pos.label, buttonX, buttonY);
@@ -596,6 +603,20 @@ export class GameRenderer {
         // Draw move order indicator if mirror has one
         if (mirror.moveOrder > 0 && mirror.targetPosition) {
             this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, color);
+        }
+
+        if (mirror.health < this.MIRROR_MAX_HEALTH) {
+            const barWidth = size * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y - size - 10;
+            
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            const healthPercent = mirror.health / this.MIRROR_MAX_HEALTH;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
         }
     }
 
@@ -884,18 +905,20 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.stroke();
 
-        // Draw health bar
-        const barWidth = size * 3;
-        const barHeight = 3;
-        const barX = screenPos.x - barWidth / 2;
-        const barY = screenPos.y - size - 8;
-        
-        this.ctx.fillStyle = '#333';
-        this.ctx.fillRect(barX, barY, barWidth, barHeight);
-        
-        const healthPercent = unit.health / unit.maxHealth;
-        this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-        this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        if (unit.health < unit.maxHealth) {
+            // Draw health bar
+            const barWidth = size * 3;
+            const barHeight = 3;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y - size - 8;
+            
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            const healthPercent = unit.health / unit.maxHealth;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        }
 
         // Draw direction indicator if unit has a target
         if (unit.target) {
@@ -1110,16 +1133,18 @@ export class GameRenderer {
         this.ctx.fillStyle = color;
         this.ctx.fillRect(screenPos.x - size * 0.3, screenPos.y - size, size * 0.6, size);
         
-        // Draw health bar
-        const healthBarWidth = size * 1.5;
-        const healthBarHeight = 4 * this.zoom;
-        const healthPercentage = turret.health / turret.maxHealth;
-        
-        this.ctx.fillStyle = '#333333';
-        this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth, healthBarHeight);
-        
-        this.ctx.fillStyle = healthPercentage > 0.3 ? '#00FF00' : '#FF0000';
-        this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth * healthPercentage, healthBarHeight);
+        if (turret.health < turret.maxHealth) {
+            // Draw health bar
+            const healthBarWidth = size * 1.5;
+            const healthBarHeight = 4 * this.zoom;
+            const healthPercentage = turret.health / turret.maxHealth;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth, healthBarHeight);
+            
+            this.ctx.fillStyle = healthPercentage > 0.3 ? '#00FF00' : '#FF0000';
+            this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth * healthPercentage, healthBarHeight);
+        }
     }
 
     /**
@@ -1487,18 +1512,20 @@ export class GameRenderer {
         );
         this.ctx.stroke();
 
-        // Draw health bar
-        const healthBarWidth = radius * 2;
-        const healthBarHeight = 4;
-        const healthBarX = screenPos.x - healthBarWidth / 2;
-        const healthBarY = screenPos.y - radius - 10;
-        
-        this.ctx.fillStyle = '#FF0000';
-        this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-        
-        const healthPercent = building.health / building.maxHealth;
-        this.ctx.fillStyle = '#00FF00';
-        this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+        if (building.health < building.maxHealth) {
+            // Draw health bar
+            const healthBarWidth = radius * 2;
+            const healthBarHeight = 4;
+            const healthBarX = screenPos.x - healthBarWidth / 2;
+            const healthBarY = screenPos.y - radius - 10;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            
+            const healthPercent = building.health / building.maxHealth;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+        }
         
         // Reset alpha if we dimmed
         if (shouldDim) {
