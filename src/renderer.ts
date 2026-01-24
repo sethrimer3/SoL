@@ -19,6 +19,9 @@ export class GameRenderer {
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
     
+    // Movement order indicator constants
+    private readonly MOVE_ORDER_DOT_RADIUS = 12;
+    
     // Parallax star layers for depth
     private starLayers: Array<{
         stars: Array<{x: number, y: number, size: number, brightness: number}>,
@@ -920,7 +923,7 @@ export class GameRenderer {
         this.ctx.globalAlpha = 1.0;
         
         // Draw dot with order number at target
-        const dotRadius = 12;
+        const dotRadius = this.MOVE_ORDER_DOT_RADIUS;
         this.ctx.fillStyle = color;
         this.ctx.strokeStyle = '#FFFFFF';
         this.ctx.lineWidth = 2;

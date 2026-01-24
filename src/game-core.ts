@@ -213,6 +213,8 @@ export class SolarMirror {
     private readonly MAX_SPEED = 50; // Pixels per second - slower than forge
     private readonly ACCELERATION = 25; // Pixels per second squared
     private readonly DECELERATION = 50; // Pixels per second squared
+    private readonly ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
+    private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
 
     constructor(
         public position: Vector2D,
@@ -350,7 +352,7 @@ export class SolarMirror {
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         
         // If we're close enough to target, stop smoothly
-        if (distanceToTarget < 2) {
+        if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
             this.position = this.targetPosition;
             this.targetPosition = null;
             this.velocity = new Vector2D(0, 0);
@@ -365,8 +367,8 @@ export class SolarMirror {
         if (gameState) {
             const avoidanceDir = this.calculateObstacleAvoidance(gameState);
             if (avoidanceDir) {
-                directionX += avoidanceDir.x * 0.6;
-                directionY += avoidanceDir.y * 0.6;
+                directionX += avoidanceDir.x * this.AVOIDANCE_BLEND_FACTOR;
+                directionY += avoidanceDir.y * this.AVOIDANCE_BLEND_FACTOR;
                 const length = Math.sqrt(directionX * directionX + directionY * directionY);
                 if (length > 0) {
                     directionX /= length;
@@ -496,6 +498,7 @@ export class StellarForge {
     private readonly maxSpeed: number = 50; // pixels per second
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
+    private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
     readonly radius: number = 40; // For rendering and selection
     crunchTimer: number = 0; // Timer until next crunch
     currentCrunch: ForgeCrunch | null = null; // Active crunch effect
@@ -612,8 +615,8 @@ export class StellarForge {
                 if (gameState) {
                     const avoidanceDir = this.calculateObstacleAvoidance(gameState);
                     if (avoidanceDir) {
-                        directionX += avoidanceDir.x * 0.6;
-                        directionY += avoidanceDir.y * 0.6;
+                        directionX += avoidanceDir.x * this.AVOIDANCE_BLEND_FACTOR;
+                        directionY += avoidanceDir.y * this.AVOIDANCE_BLEND_FACTOR;
                         const length = Math.sqrt(directionX * directionX + directionY * directionY);
                         if (length > 0) {
                             directionX /= length;
@@ -2467,6 +2470,10 @@ export class GameState {
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
     mapSize: number = 2000; // Map size in world units
 
+    // Collision resolution constants
+    private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
+    private readonly PUSH_MULTIPLIER = 15; // Multiplier for push strength calculation
+
     /**
      * Update game state
      */
@@ -3566,8 +3573,8 @@ export class GameState {
                 if (pushCount > 0) {
                     const pushLength = Math.sqrt(pushX * pushX + pushY * pushY);
                     if (pushLength > 0) {
-                        // Normalize and apply gentle push (10 pixels max)
-                        const pushDistance = Math.min(10, pushLength * 15);
+                        // Normalize and apply gentle push
+                        const pushDistance = Math.min(this.MAX_PUSH_DISTANCE, pushLength * this.PUSH_MULTIPLIER);
                         unit.position.x = oldPosition.x + (pushX / pushLength) * pushDistance;
                         unit.position.y = oldPosition.y + (pushY / pushLength) * pushDistance;
                     }
