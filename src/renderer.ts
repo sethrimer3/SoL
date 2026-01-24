@@ -16,6 +16,12 @@ export class GameRenderer {
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
+    
+    // Parallax star layers for depth
+    private starLayers: Array<{
+        stars: Array<{x: number, y: number, size: number, brightness: number}>,
+        parallaxFactor: number
+    }> = [];
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -26,6 +32,9 @@ export class GameRenderer {
         this.ctx = context;
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
+        
+        // Initialize star layers with random positions
+        this.initializeStarLayers();
     }
 
     private resizeCanvas(): void {
@@ -43,6 +52,44 @@ export class GameRenderer {
         // Reset transform and scale the context to match device pixel ratio
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(dpr, dpr);
+    }
+
+    /**
+     * Initialize star layers with random positions for parallax effect
+     */
+    private initializeStarLayers(): void {
+        // Create 4 parallax layers with different depths
+        const layers = [
+            { count: 200, parallaxFactor: 0.1, sizeRange: [0.5, 1.0] },   // Far background
+            { count: 150, parallaxFactor: 0.2, sizeRange: [0.8, 1.5] },   // Mid-far
+            { count: 100, parallaxFactor: 0.35, sizeRange: [1.0, 2.0] },  // Mid-near
+            { count: 50, parallaxFactor: 0.5, sizeRange: [1.5, 2.5] }     // Near foreground
+        ];
+        
+        // Use a seeded random for consistent star positions
+        let seed = 42;
+        const seededRandom = () => {
+            seed = (seed * 9301 + 49297) % 233280;
+            return seed / 233280;
+        };
+        
+        for (const layerConfig of layers) {
+            const stars: Array<{x: number, y: number, size: number, brightness: number}> = [];
+            
+            for (let i = 0; i < layerConfig.count; i++) {
+                stars.push({
+                    x: seededRandom() * 4000 - 2000,  // Spread across 4000 units
+                    y: seededRandom() * 4000 - 2000,
+                    size: layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]),
+                    brightness: 0.3 + seededRandom() * 0.7  // Vary brightness
+                });
+            }
+            
+            this.starLayers.push({
+                stars,
+                parallaxFactor: layerConfig.parallaxFactor
+            });
+        }
     }
 
     /**
@@ -325,7 +372,7 @@ export class GameRenderer {
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
-    private drawSolarMirror(mirror: SolarMirror, color: string): void {
+    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState): void {
         const screenPos = this.worldToScreen(mirror.position);
         const size = 20 * this.zoom;
 
@@ -351,6 +398,70 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
             this.ctx.fill();
+            
+            // Draw reflected light beam in front of the mirror
+            // Find the closest sun to determine reflection direction
+            if (game.suns.length > 0) {
+                let closestSun = game.suns[0];
+                let minDist = mirror.position.distanceTo(closestSun.position);
+                
+                for (const sun of game.suns) {
+                    const dist = mirror.position.distanceTo(sun.position);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestSun = sun;
+                    }
+                }
+                
+                // Calculate reflection direction (opposite to sun direction)
+                const sunDir = new Vector2D(
+                    closestSun.position.x - mirror.position.x,
+                    closestSun.position.y - mirror.position.y
+                ).normalize();
+                
+                // Reflect the light (opposite direction from sun)
+                const reflectDir = new Vector2D(-sunDir.x, -sunDir.y);
+                
+                // Draw reflected light beam (a few feet / ~100 units in front of mirror)
+                const beamLength = 100;
+                const beamEnd = new Vector2D(
+                    mirror.position.x + reflectDir.x * beamLength,
+                    mirror.position.y + reflectDir.y * beamLength
+                );
+                const beamEndScreen = this.worldToScreen(beamEnd);
+                
+                // Draw bright beam with doubled intensity
+                const beamGradient = this.ctx.createLinearGradient(
+                    screenPos.x, screenPos.y,
+                    beamEndScreen.x, beamEndScreen.y
+                );
+                beamGradient.addColorStop(0, `rgba(255, 255, 200, ${glowIntensity * 1.0})`);
+                beamGradient.addColorStop(0.7, `rgba(255, 255, 150, ${glowIntensity * 0.6})`);
+                beamGradient.addColorStop(1, 'rgba(255, 255, 100, 0)');
+                
+                this.ctx.strokeStyle = beamGradient;
+                this.ctx.lineWidth = 15 * this.zoom * glowIntensity;
+                this.ctx.lineCap = 'round';
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(beamEndScreen.x, beamEndScreen.y);
+                this.ctx.stroke();
+                
+                // Add a bright spot at the end of the beam for doubled brightness effect
+                const endGlowRadius = 20 * this.zoom * glowIntensity;
+                const endGradient = this.ctx.createRadialGradient(
+                    beamEndScreen.x, beamEndScreen.y, 0,
+                    beamEndScreen.x, beamEndScreen.y, endGlowRadius
+                );
+                endGradient.addColorStop(0, `rgba(255, 255, 255, ${glowIntensity * 0.9})`);
+                endGradient.addColorStop(0.5, `rgba(255, 255, 200, ${glowIntensity * 0.5})`);
+                endGradient.addColorStop(1, 'rgba(255, 255, 150, 0)');
+                
+                this.ctx.fillStyle = endGradient;
+                this.ctx.beginPath();
+                this.ctx.arc(beamEndScreen.x, beamEndScreen.y, endGlowRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
         }
         
         // Translate to mirror position and rotate for reflection angle
@@ -444,15 +555,27 @@ export class GameRenderer {
      * Draw sun rays with raytracing (brightens field and casts shadows)
      */
     private drawSunRays(game: GameState): void {
-        // Draw ambient lighting layer
-        const gradient = this.ctx.createRadialGradient(
-            this.canvas.width / 2, this.canvas.height / 2, 0,
-            this.canvas.width / 2, this.canvas.height / 2, Math.max(this.canvas.width, this.canvas.height)
-        );
-        gradient.addColorStop(0, 'rgba(255, 255, 200, 0.1)');
-        gradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
-        this.ctx.fillStyle = gradient;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        // Draw ambient lighting layers for each sun (brighter closer to sun)
+        for (const sun of game.suns) {
+            const sunScreenPos = this.worldToScreen(sun.position);
+            const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
+            
+            // Create radial gradient centered on the sun
+            const gradient = this.ctx.createRadialGradient(
+                sunScreenPos.x, sunScreenPos.y, 0,
+                sunScreenPos.x, sunScreenPos.y, maxRadius
+            );
+            
+            // Subtle brightness falloff from sun - brighter near sun, dimmer farther away
+            gradient.addColorStop(0, 'rgba(255, 255, 220, 0.25)');     // Brightest near sun
+            gradient.addColorStop(0.15, 'rgba(255, 255, 210, 0.15)');  // Still bright
+            gradient.addColorStop(0.35, 'rgba(255, 255, 200, 0.08)');  // Medium
+            gradient.addColorStop(0.6, 'rgba(255, 255, 190, 0.03)');   // Dim
+            gradient.addColorStop(1, 'rgba(255, 255, 180, 0)');        // Fade out
+            
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        }
 
         // Draw asteroid shadows cast by sunlight
         for (const sun of game.suns) {
@@ -1524,13 +1647,34 @@ export class GameRenderer {
         this.ctx.fillStyle = '#000011';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-        // Draw stars background
-        this.ctx.fillStyle = '#FFFFFF';
-        for (let i = 0; i < 100; i++) {
-            const x = (i * 137.5) % this.canvas.width;
-            const y = (i * 217.3) % this.canvas.height;
-            const size = (i % 3) * 0.5 + 0.5;
-            this.ctx.fillRect(x, y, size, size);
+        // Draw parallax star layers
+        for (const layer of this.starLayers) {
+            this.ctx.fillStyle = '#FFFFFF';
+            const dpr = window.devicePixelRatio || 1;
+            
+            for (const star of layer.stars) {
+                // Calculate star position with parallax effect
+                const parallaxX = this.camera.x * layer.parallaxFactor;
+                const parallaxY = this.camera.y * layer.parallaxFactor;
+                
+                // Convert to screen space
+                const centerX = (this.canvas.width / dpr) / 2;
+                const centerY = (this.canvas.height / dpr) / 2;
+                const screenX = centerX + (star.x - parallaxX);
+                const screenY = centerY + (star.y - parallaxY);
+                
+                // Wrap stars around screen edges for infinite scrolling effect
+                const wrappedX = ((screenX + centerX) % (centerX * 2 + 4000)) - centerX;
+                const wrappedY = ((screenY + centerY) % (centerY * 2 + 4000)) - centerY;
+                
+                // Only draw if on screen
+                if (wrappedX >= -100 && wrappedX <= this.canvas.width / dpr + 100 &&
+                    wrappedY >= -100 && wrappedY <= this.canvas.height / dpr + 100) {
+                    this.ctx.globalAlpha = star.brightness;
+                    this.ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                }
+            }
+            this.ctx.globalAlpha = 1.0;
         }
 
         // Draw space dust particles
@@ -1631,7 +1775,7 @@ export class GameRenderer {
 
             // Draw Solar Mirrors
             for (const mirror of player.solarMirrors) {
-                this.drawSolarMirror(mirror, color);
+                this.drawSolarMirror(mirror, color, game);
             }
 
             // Draw Stellar Forge
