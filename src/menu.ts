@@ -105,7 +105,10 @@ class ParticleMenuLayer {
         this.offscreenContext = offscreenContext;
 
         this.container.appendChild(this.canvas);
-        this.resize();
+        // Defer initial resize to ensure container has layout dimensions
+        requestAnimationFrame(() => {
+            this.resize();
+        });
         this.start();
     }
 
