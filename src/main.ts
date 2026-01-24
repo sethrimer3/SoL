@@ -446,10 +446,15 @@ class GameController {
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 
-                // If dragged significantly (> 5 pixels), use ability (for units only)
-                if (totalMovement >= 5 && this.selectedUnits.size > 0) {
-                    // Check if these are hero units
-                    const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
+                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const shouldUseAbility = this.selectedUnits.size > 0 && (
+                    (!hasOnlyHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
+                    (hasOnlyHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
+                );
+
+                // If dragged significantly, use ability (for units only)
+                if (shouldUseAbility) {
                     
                     // Only create swipe effect for non-hero units
                     if (!hasOnlyHeroUnits) {
@@ -483,7 +488,7 @@ class GameController {
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
                 } else {
-                    // If movement was minimal (< 5 pixels) or only mirrors/base selected, set movement targets
+                    // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
                     
                     // Set rally point for all selected units
