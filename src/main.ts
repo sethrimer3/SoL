@@ -242,7 +242,7 @@ class GameController {
                     
                     // Add waypoint if we've moved far enough from the last one
                     if (this.pathPoints.length === 0 || 
-                        this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > 50) {
+                        this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
                         this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
                     }
                 }

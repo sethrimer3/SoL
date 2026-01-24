@@ -124,6 +124,8 @@ export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
 export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)
 export const UNIT_HERO_AVOIDANCE_MULTIPLIER = 0.3; // Heroes ignore some avoidance (unitless)
 export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes (unitless)
+export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint arrival detection
+export const MIN_WAYPOINT_DISTANCE = 50; // Minimum distance between path waypoints in pixels
 
 // Deterministic state hash cadence
 export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks

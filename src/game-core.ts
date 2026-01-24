@@ -1708,19 +1708,20 @@ export class Starling extends Unit {
             const targetWaypoint = base.minionPath[this.currentPathWaypoint];
             
             // Check if we've reached the current waypoint
-            if (this.position.distanceTo(targetWaypoint) < Constants.UNIT_ARRIVAL_THRESHOLD * 2) {
+            if (this.position.distanceTo(targetWaypoint) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
                 // Move to next waypoint if there is one
                 if (this.currentPathWaypoint < base.minionPath.length - 1) {
                     this.currentPathWaypoint++;
+                    this.rallyPoint = base.minionPath[this.currentPathWaypoint];
                 } else {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = targetWaypoint;
                     return;
                 }
+            } else {
+                // Set rally point to current waypoint
+                this.rallyPoint = base.minionPath[this.currentPathWaypoint];
             }
-            
-            // Set rally point to current waypoint
-            this.rallyPoint = base.minionPath[this.currentPathWaypoint];
         } else {
             // No path defined, fall back to original AI behavior
             // No need to update exploration timer here, it's updated in the main update loop
