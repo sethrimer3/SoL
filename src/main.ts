@@ -25,6 +25,7 @@ class GameController {
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
+    private moveOrderCounter: number = 0; // Counter for move order indicators
 
     /**
      * Check if only hero units are currently selected
@@ -491,20 +492,26 @@ class GameController {
                     // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
                     
+                    // Increment move order counter
+                    this.moveOrderCounter++;
+                    
                     // Set rally point for all selected units
                     for (const unit of this.selectedUnits) {
                         unit.rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                        unit.moveOrder = this.moveOrderCounter;
                     }
                     
                     // Set target for all selected mirrors
                     for (const mirror of this.selectedMirrors) {
                         mirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                        mirror.moveOrder = this.moveOrderCounter;
                         mirror.isSelected = false;
                     }
                     
                     // Set target for selected base
                     if (this.selectedBase) {
                         this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                        this.selectedBase.moveOrder = this.moveOrderCounter;
                         this.selectedBase.isSelected = false;
                     }
                     
@@ -514,7 +521,7 @@ class GameController {
                     this.selectedBase = null;
                     this.renderer.selectedUnits = this.selectedUnits;
                     
-                    console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - Move order #${this.moveOrderCounter}`);
                 }
             }
             
