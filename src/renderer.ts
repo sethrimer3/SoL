@@ -592,7 +592,7 @@ export class GameRenderer {
             // Save the current context state
             this.ctx.save();
             
-            // Use 'lighten' blend mode to prevent shadows from the same sun from stacking
+            // Use 'darken' blend mode to prevent shadows from the same sun from stacking
             // This ensures overlapping shadows from the same light source don't become darker
             this.ctx.globalCompositeOperation = 'darken';
             
