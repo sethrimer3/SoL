@@ -1511,7 +1511,7 @@ export class GameRenderer {
         const length = Math.sqrt(dx * dx + dy * dy);
         
         // Don't draw if arrow is too short
-        if (length < 10) return;
+        if (length < Constants.ABILITY_ARROW_MIN_LENGTH) return;
 
         // Draw arrow shaft
         this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; // Gold color for hero abilities

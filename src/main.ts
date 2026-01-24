@@ -24,6 +24,14 @@ class GameController {
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
 
+    /**
+     * Check if only hero units are currently selected
+     */
+    private hasOnlyHeroUnitsSelected(): boolean {
+        return this.selectedUnits.size > 0 && 
+               Array.from(this.selectedUnits).every(unit => unit.isHero);
+    }
+
     constructor() {
         // Create canvas
         const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -196,8 +204,7 @@ class GameController {
             } else if (totalMovement > 5) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
-                const hasOnlyHeroUnits = this.selectedUnits.size > 0 && 
-                                        Array.from(this.selectedUnits).every(unit => unit.isHero);
+                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow) {
                     if (hasOnlyHeroUnits) {
@@ -415,7 +422,7 @@ class GameController {
                 // If dragged significantly (> 5 pixels), use ability (for units only)
                 if (totalMovement >= 5 && this.selectedUnits.size > 0) {
                     // Check if these are hero units
-                    const hasOnlyHeroUnits = Array.from(this.selectedUnits).every(unit => unit.isHero);
+                    const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
                     
                     // Only create swipe effect for non-hero units
                     if (!hasOnlyHeroUnits) {
