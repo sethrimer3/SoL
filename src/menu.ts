@@ -44,6 +44,7 @@ export interface GameSettings {
     difficulty: 'easy' | 'normal' | 'hard';
     soundEnabled: boolean;
     musicEnabled: boolean;
+    isBattleStatsInfoEnabled: boolean;
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
 }
@@ -172,6 +173,7 @@ export class MainMenu {
             difficulty: 'normal',
             soundEnabled: true,
             musicEnabled: true,
+            isBattleStatsInfoEnabled: false,
             selectedFaction: null,
             selectedHeroes: []
         };
@@ -188,6 +190,8 @@ export class MainMenu {
         menu.style.left = '0';
         menu.style.width = '100%';
         menu.style.height = '100%';
+        menu.style.padding = '24px 16px';
+        menu.style.boxSizing = 'border-box';
         menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
         menu.style.display = 'flex';
         menu.style.flexDirection = 'column';
@@ -197,6 +201,7 @@ export class MainMenu {
         menu.style.fontFamily = 'Arial, sans-serif';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
+        menu.style.overflowX = 'hidden';
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(menu);
@@ -220,28 +225,34 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
         
         // Title
         const title = document.createElement('h1');
         title.textContent = 'SoL';
-        title.style.fontSize = '72px';
+        title.style.fontSize = isCompactLayout ? '48px' : '72px';
         title.style.marginBottom = '10px';
         title.style.color = '#FFD700';
         title.style.textShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
         container.appendChild(title);
 
         // Subtitle
         const subtitle = document.createElement('h2');
         subtitle.textContent = 'Speed of Light RTS';
-        subtitle.style.fontSize = '24px';
+        subtitle.style.fontSize = isCompactLayout ? '18px' : '24px';
         subtitle.style.marginBottom = '30px';
         subtitle.style.color = '#AAAAAA';
+        subtitle.style.textAlign = 'center';
+        subtitle.style.maxWidth = '100%';
         container.appendChild(subtitle);
 
         // Description
         const description = document.createElement('p');
         description.textContent = 'Select a menu option below';
-        description.style.fontSize = '16px';
+        description.style.fontSize = isCompactLayout ? '14px' : '16px';
         description.style.marginBottom = '40px';
         description.style.maxWidth = '500px';
         description.style.textAlign = 'center';
@@ -251,7 +262,8 @@ export class MainMenu {
         // Create carousel menu container
         const carouselContainer = document.createElement('div');
         carouselContainer.style.width = '100%';
-        carouselContainer.style.maxWidth = '900px';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
         carouselContainer.style.marginBottom = '40px';
         container.appendChild(carouselContainer);
 
@@ -306,7 +318,7 @@ export class MainMenu {
         // Current loadout and map indicators
         const statusInfo = document.createElement('div');
         statusInfo.style.marginTop = '20px';
-        statusInfo.style.fontSize = '14px';
+        statusInfo.style.fontSize = isCompactLayout ? '12px' : '14px';
         statusInfo.style.color = '#AAAAAA';
         
         let loadoutStatus = 'Not configured';
@@ -327,7 +339,7 @@ export class MainMenu {
         // Features list
         const features = document.createElement('div');
         features.style.marginTop = '40px';
-        features.style.fontSize = '14px';
+        features.style.fontSize = isCompactLayout ? '12px' : '14px';
         features.style.color = '#888888';
         features.innerHTML = `
             <div style="text-align: center;">
@@ -342,19 +354,23 @@ export class MainMenu {
 
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
 
         // Title
         const title = document.createElement('h2');
         title.textContent = 'Select Map';
-        title.style.fontSize = '48px';
-        title.style.marginBottom = '30px';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
         title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
         container.appendChild(title);
 
         // Map grid
         const mapGrid = document.createElement('div');
         mapGrid.style.display = 'grid';
-        mapGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
+        mapGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 300}px, 1fr))`;
         mapGrid.style.gap = '20px';
         mapGrid.style.maxWidth = '900px';
         mapGrid.style.padding = '20px';
@@ -429,13 +445,17 @@ export class MainMenu {
 
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
 
         // Title
         const title = document.createElement('h2');
         title.textContent = 'Settings';
-        title.style.fontSize = '48px';
-        title.style.marginBottom = '30px';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
         title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
         container.appendChild(title);
 
         // Settings container
@@ -481,6 +501,17 @@ export class MainMenu {
         );
         settingsContainer.appendChild(musicSection);
 
+        const battleStatsSection = this.createSettingSection(
+            'Battle Stats Info',
+            this.createToggle(
+                this.settings.isBattleStatsInfoEnabled,
+                (value) => {
+                    this.settings.isBattleStatsInfoEnabled = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(battleStatsSection);
+
         container.appendChild(settingsContainer);
 
         // Back button
@@ -494,19 +525,23 @@ export class MainMenu {
 
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
 
         // Title
         const title = document.createElement('h2');
         title.textContent = 'Select Your Faction';
-        title.style.fontSize = '48px';
-        title.style.marginBottom = '30px';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
         title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
         container.appendChild(title);
 
         // Faction grid
         const factionGrid = document.createElement('div');
         factionGrid.style.display = 'grid';
-        factionGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
+        factionGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 280}px, 1fr))`;
         factionGrid.style.gap = '20px';
         factionGrid.style.maxWidth = '900px';
         factionGrid.style.padding = '20px';
@@ -587,6 +622,12 @@ export class MainMenu {
         buttonContainer.style.display = 'flex';
         buttonContainer.style.gap = '20px';
         buttonContainer.style.marginTop = '20px';
+        buttonContainer.style.flexWrap = 'wrap';
+        buttonContainer.style.justifyContent = 'center';
+        if (isCompactLayout) {
+            buttonContainer.style.flexDirection = 'column';
+            buttonContainer.style.alignItems = 'center';
+        }
 
         // Continue button (only enabled if faction is selected)
         if (this.settings.selectedFaction) {
@@ -609,6 +650,8 @@ export class MainMenu {
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
 
         if (!this.settings.selectedFaction) {
             // Shouldn't happen, but handle gracefully
@@ -619,29 +662,31 @@ export class MainMenu {
         // Title
         const title = document.createElement('h2');
         title.textContent = `Select 4 Heroes - ${this.settings.selectedFaction}`;
-        title.style.fontSize = '42px';
-        title.style.marginBottom = '20px';
+        title.style.fontSize = isCompactLayout ? '28px' : '42px';
+        title.style.marginBottom = isCompactLayout ? '15px' : '20px';
         title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
         container.appendChild(title);
 
         // Selection counter
         const counter = document.createElement('div');
         counter.textContent = `Selected: ${this.settings.selectedHeroes.length} / 4`;
-        counter.style.fontSize = '18px';
-        counter.style.marginBottom = '30px';
+        counter.style.fontSize = isCompactLayout ? '16px' : '18px';
+        counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
         counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
         container.appendChild(counter);
 
         // Hero grid
         const heroGrid = document.createElement('div');
         heroGrid.style.display = 'grid';
-        heroGrid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(280px, 1fr))';
+        heroGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 280}px, 1fr))`;
         heroGrid.style.gap = '15px';
         heroGrid.style.maxWidth = '1200px';
         heroGrid.style.padding = '20px';
         heroGrid.style.marginBottom = '20px';
-        heroGrid.style.maxHeight = '600px';
-        heroGrid.style.overflowY = 'auto';
+        heroGrid.style.maxHeight = isCompactLayout ? 'none' : '600px';
+        heroGrid.style.overflowY = isCompactLayout ? 'visible' : 'auto';
 
         // Filter heroes by selected faction
         const factionHeroes = this.heroUnits.filter(hero => hero.faction === this.settings.selectedFaction);
@@ -772,6 +817,12 @@ export class MainMenu {
         buttonContainer.style.display = 'flex';
         buttonContainer.style.gap = '20px';
         buttonContainer.style.marginTop = '20px';
+        buttonContainer.style.flexWrap = 'wrap';
+        buttonContainer.style.justifyContent = 'center';
+        if (isCompactLayout) {
+            buttonContainer.style.flexDirection = 'column';
+            buttonContainer.style.alignItems = 'center';
+        }
 
         // Confirm button (only enabled if 4 heroes selected)
         if (this.settings.selectedHeroes.length === 4) {

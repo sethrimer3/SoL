@@ -14,7 +14,7 @@ class GameController {
     private isRunning: boolean = false;
     private isPaused: boolean = false;
     private showInGameMenu: boolean = false;
-    private showInfo: boolean = true;
+    private showInfo: boolean = false;
     private holdStartTime: number | null = null;
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
@@ -90,10 +90,10 @@ class GameController {
         // Reset states
         this.isPaused = false;
         this.showInGameMenu = false;
-        this.showInfo = true;
+        this.showInfo = this.menu.getSettings().isBattleStatsInfoEnabled;
         this.renderer.showInGameMenu = false;
         this.renderer.isPaused = false;
-        this.renderer.showInfo = true;
+        this.renderer.showInfo = this.showInfo;
         
         // Show main menu
         this.menu.show();
@@ -112,6 +112,8 @@ class GameController {
         // Create and show main menu
         this.menu = new MainMenu();
         this.menu.onStart((settings: GameSettings) => this.startNewGame(settings));
+        this.showInfo = this.menu.getSettings().isBattleStatsInfoEnabled;
+        this.renderer.showInfo = this.showInfo;
 
         // Set up input handlers
         this.setupInputHandlers(canvas);
@@ -132,6 +134,9 @@ class GameController {
                 this.renderer.setZoom(0.5); // Halfway zoomed in
             }
         }
+
+        this.showInfo = settings.isBattleStatsInfoEnabled;
+        this.renderer.showInfo = this.showInfo;
 
         // Start game loop
         this.start();
