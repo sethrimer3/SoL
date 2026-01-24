@@ -1261,6 +1261,11 @@ export class Unit {
         const moveDistance = moveSpeed * deltaTime;
         this.position.x += directionX * moveDistance;
         this.position.y += directionY * moveDistance;
+
+        // Clamp position to playable map boundaries (keep units out of dark border fade zone)
+        const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+        this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
+        this.position.y = Math.max(-boundary, Math.min(boundary, this.position.y));
     }
 
     /**

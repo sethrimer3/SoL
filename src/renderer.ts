@@ -587,7 +587,15 @@ export class GameRenderer {
         }
 
         // Draw asteroid shadows cast by sunlight
+        // Process each sun separately to prevent shadow stacking from the same light source
         for (const sun of game.suns) {
+            // Save the current context state
+            this.ctx.save();
+            
+            // Use 'lighten' blend mode to prevent shadows from the same sun from stacking
+            // This ensures overlapping shadows from the same light source don't become darker
+            this.ctx.globalCompositeOperation = 'darken';
+            
             // Draw shadow regions behind asteroids
             for (const asteroid of game.asteroids) {
                 const worldVertices = asteroid.getWorldVertices();
@@ -628,6 +636,9 @@ export class GameRenderer {
                     }
                 }
             }
+            
+            // Restore the context state (including composite operation)
+            this.ctx.restore();
         }
     }
 
@@ -719,9 +730,9 @@ export class GameRenderer {
     /**
      * Draw a unit
      */
-    private drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean): void {
+    private drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean, sizeMultiplier: number = 1.0): void {
         const screenPos = this.worldToScreen(unit.position);
-        const size = 8 * this.zoom;
+        const size = 8 * this.zoom * sizeMultiplier;
         const isSelected = this.selectedUnits.has(unit);
 
         // Check visibility for enemy units
@@ -1034,12 +1045,12 @@ export class GameRenderer {
             }
         }
         
-        // Draw the base unit
-        this.drawUnit(starling, color, game, isEnemy);
+        // Draw the base unit at 30% size (minion size)
+        this.drawUnit(starling, color, game, isEnemy, 0.3);
         
         // Draw a distinctive star/bird symbol for starling
         const screenPos = this.worldToScreen(starling.position);
-        const size = 6 * this.zoom;
+        const size = 6 * this.zoom * 0.3; // Scale the wing symbol to match the smaller unit size
         
         // Draw a simple bird-like wing pattern
         this.ctx.strokeStyle = '#FFD700'; // Golden color for starlings
