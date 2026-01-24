@@ -1999,50 +1999,53 @@ export class GameRenderer {
         const topLeft = this.worldToScreen(new Vector2D(-halfMapSize, -halfMapSize));
         const topRight = this.worldToScreen(new Vector2D(halfMapSize, -halfMapSize));
         const bottomLeft = this.worldToScreen(new Vector2D(-halfMapSize, halfMapSize));
-        const bottomRight = this.worldToScreen(new Vector2D(halfMapSize, halfMapSize));
         
-        // Calculate fade start positions (inside the map boundary)
-        const fadeStart = this.worldToScreen(new Vector2D(-halfMapSize + fadeZoneWidth, -halfMapSize + fadeZoneWidth));
-        const fadeStartX = fadeStart.x - topLeft.x;
-        const fadeStartY = fadeStart.y - topLeft.y;
+        // Calculate fade start positions (inside the map boundary) in screen space
+        const fadeStartLeft = this.worldToScreen(new Vector2D(-halfMapSize + fadeZoneWidth, 0));
+        const fadeStartRight = this.worldToScreen(new Vector2D(halfMapSize - fadeZoneWidth, 0));
+        const fadeStartTop = this.worldToScreen(new Vector2D(0, -halfMapSize + fadeZoneWidth));
+        const fadeStartBottom = this.worldToScreen(new Vector2D(0, halfMapSize - fadeZoneWidth));
+        
+        const fadeWidthX = Math.abs(fadeStartLeft.x - topLeft.x);
+        const fadeWidthY = Math.abs(fadeStartTop.y - topLeft.y);
         
         // Save context state
         this.ctx.save();
         
         // Left edge fade
         if (topLeft.x < screenWidth) {
-            const gradient = this.ctx.createLinearGradient(topLeft.x, 0, topLeft.x + fadeStartX, 0);
+            const gradient = this.ctx.createLinearGradient(topLeft.x, 0, topLeft.x + fadeWidthX, 0);
             gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, 0, topLeft.x + fadeStartX, screenHeight);
+            this.ctx.fillRect(0, 0, topLeft.x + fadeWidthX, screenHeight);
         }
         
         // Right edge fade
         if (topRight.x > 0) {
-            const gradient = this.ctx.createLinearGradient(topRight.x, 0, topRight.x - fadeStartX, 0);
+            const gradient = this.ctx.createLinearGradient(topRight.x, 0, topRight.x - fadeWidthX, 0);
             gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(topRight.x - fadeStartX, 0, screenWidth - (topRight.x - fadeStartX), screenHeight);
+            this.ctx.fillRect(topRight.x - fadeWidthX, 0, screenWidth - (topRight.x - fadeWidthX), screenHeight);
         }
         
         // Top edge fade
         if (topLeft.y < screenHeight) {
-            const gradient = this.ctx.createLinearGradient(0, topLeft.y, 0, topLeft.y + fadeStartY);
+            const gradient = this.ctx.createLinearGradient(0, topLeft.y, 0, topLeft.y + fadeWidthY);
             gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, 0, screenWidth, topLeft.y + fadeStartY);
+            this.ctx.fillRect(0, 0, screenWidth, topLeft.y + fadeWidthY);
         }
         
         // Bottom edge fade
         if (bottomLeft.y > 0) {
-            const gradient = this.ctx.createLinearGradient(0, bottomLeft.y, 0, bottomLeft.y - fadeStartY);
+            const gradient = this.ctx.createLinearGradient(0, bottomLeft.y, 0, bottomLeft.y - fadeWidthY);
             gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
             gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
             this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, bottomLeft.y - fadeStartY, screenWidth, screenHeight - (bottomLeft.y - fadeStartY));
+            this.ctx.fillRect(0, bottomLeft.y - fadeWidthY, screenWidth, screenHeight - (bottomLeft.y - fadeWidthY));
         }
         
         // Restore context state

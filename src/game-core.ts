@@ -2919,7 +2919,7 @@ export class GameState {
      * Check if ray intersects with map edge
      */
     private rayIntersectsEdge(origin: Vector2D, direction: Vector2D): Vector2D | null {
-        const mapSize = 2000; // Approximate map size
+        const mapSize = this.mapSize;
         let closestHit: Vector2D | null = null;
         let closestDist = Infinity;
         
@@ -3043,7 +3043,7 @@ export class GameState {
         }
         
         // Check collision with map edges (decelerate and stop)
-        const mapSize = 2000;
+        const mapSize = this.mapSize;
         if (driller.position.x < 0 || driller.position.x > mapSize ||
             driller.position.y < 0 || driller.position.y > mapSize) {
             // Apply deceleration
