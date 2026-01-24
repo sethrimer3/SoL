@@ -338,7 +338,11 @@ export class SolarMirror {
         
         // The mirror surface should be perpendicular to the bisector
         // So we rotate by 90 degrees
-        this.reflectionAngle = Math.atan2(bisectorY, bisectorX);
+        const bisectorLength = Math.sqrt(bisectorX * bisectorX + bisectorY * bisectorY);
+        const bisectorAngle = bisectorLength > 0
+            ? Math.atan2(bisectorY, bisectorX)
+            : Math.atan2(sunDirection.y, sunDirection.x);
+        this.reflectionAngle = bisectorAngle + Math.PI / 2;
     }
 
     /**

@@ -458,27 +458,24 @@ export class GameRenderer {
             this.ctx.fill();
             
             // Draw reflected light beam in front of the mirror
-            // Find the closest sun to determine reflection direction
-            if (game.suns.length > 0) {
-                let closestSun = game.suns[0];
-                let minDist = mirror.position.distanceTo(closestSun.position);
-                
-                for (const sun of game.suns) {
-                    const dist = mirror.position.distanceTo(sun.position);
-                    if (dist < minDist) {
-                        minDist = dist;
-                        closestSun = sun;
-                    }
+            // Find the closest visible sun to determine reflection direction
+            const closestSun = mirror.getClosestVisibleSun(game.suns, game.asteroids);
+            if (closestSun) {
+                const forge = mirror.owner.stellarForge;
+                let reflectDir: Vector2D | null = null;
+
+                if (forge && mirror.hasLineOfSightToForge(forge, game.asteroids)) {
+                    reflectDir = new Vector2D(
+                        forge.position.x - mirror.position.x,
+                        forge.position.y - mirror.position.y
+                    ).normalize();
+                } else {
+                    const sunDir = new Vector2D(
+                        closestSun.position.x - mirror.position.x,
+                        closestSun.position.y - mirror.position.y
+                    ).normalize();
+                    reflectDir = new Vector2D(-sunDir.x, -sunDir.y);
                 }
-                
-                // Calculate reflection direction (opposite to sun direction)
-                const sunDir = new Vector2D(
-                    closestSun.position.x - mirror.position.x,
-                    closestSun.position.y - mirror.position.y
-                ).normalize();
-                
-                // Reflect the light (opposite direction from sun)
-                const reflectDir = new Vector2D(-sunDir.x, -sunDir.y);
                 
                 // Draw reflected light beam (a few feet / ~100 units in front of mirror)
                 const beamLength = 100;
