@@ -12,6 +12,8 @@ export class GameRenderer {
     public zoom: number = 1.0;
     public selectionStart: Vector2D | null = null;
     public selectionEnd: Vector2D | null = null;
+    public abilityArrowStart: Vector2D | null = null; // Arrow start for hero ability casting
+    public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
     public selectedUnits: Set<Unit> = new Set();
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
@@ -1499,6 +1501,54 @@ export class GameRenderer {
     }
 
     /**
+     * Draw ability arrow for hero units
+     */
+    private drawAbilityArrow(): void {
+        if (!this.abilityArrowStart || !this.abilityArrowEnd) return;
+
+        const dx = this.abilityArrowEnd.x - this.abilityArrowStart.x;
+        const dy = this.abilityArrowEnd.y - this.abilityArrowStart.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        
+        // Don't draw if arrow is too short
+        if (length < 10) return;
+
+        // Draw arrow shaft
+        this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; // Gold color for hero abilities
+        this.ctx.lineWidth = 4;
+        this.ctx.setLineDash([]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.abilityArrowStart.x, this.abilityArrowStart.y);
+        this.ctx.lineTo(this.abilityArrowEnd.x, this.abilityArrowEnd.y);
+        this.ctx.stroke();
+
+        // Draw arrowhead
+        const angle = Math.atan2(dy, dx);
+        const arrowHeadLength = 20;
+        const arrowHeadAngle = Math.PI / 6; // 30 degrees
+
+        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.abilityArrowEnd.x, this.abilityArrowEnd.y);
+        this.ctx.lineTo(
+            this.abilityArrowEnd.x - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+            this.abilityArrowEnd.y - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+        );
+        this.ctx.lineTo(
+            this.abilityArrowEnd.x - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+            this.abilityArrowEnd.y - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+        );
+        this.ctx.closePath();
+        this.ctx.fill();
+
+        // Draw a circle at the start point
+        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
+        this.ctx.beginPath();
+        this.ctx.arc(this.abilityArrowStart.x, this.abilityArrowStart.y, 8, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    /**
      * Create a tap visual effect at screen position
      */
     createTapEffect(screenX: number, screenY: number): void {
@@ -1864,6 +1914,9 @@ export class GameRenderer {
 
         // Draw selection rectangle
         this.drawSelectionRectangle();
+
+        // Draw ability arrow for hero units
+        this.drawAbilityArrow();
 
         // Draw tap and swipe visual effects
         this.updateAndDrawTapEffects();
