@@ -3420,6 +3420,17 @@ export class GameState {
             hash = Math.imul(hash ^ normalizedValue, 16777619);
         };
 
+        const mixInt = (value: number): void => {
+            hash = Math.imul(hash ^ value, 16777619);
+        };
+
+        const mixString = (value: string): void => {
+            mixInt(value.length);
+            for (let i = 0; i < value.length; i++) {
+                mixInt(value.charCodeAt(i));
+            }
+        };
+
         mix(this.gameTime);
         mix(this.suns.length);
         mix(this.asteroids.length);
@@ -3431,6 +3442,10 @@ export class GameState {
                 mix(player.stellarForge.position.x);
                 mix(player.stellarForge.position.y);
                 mix(player.stellarForge.health);
+                mixInt(player.stellarForge.unitQueue.length);
+                for (const unitType of player.stellarForge.unitQueue) {
+                    mixString(unitType);
+                }
             } else {
                 mix(-1);
             }
@@ -3589,32 +3604,6 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         
         // Hero units (Marine and Grave) are no longer spawned automatically
         // They must be obtained through other game mechanics
-        
-        // TEMPORARY: Add test hero units
-        if (i === 0) { // Player 1 gets Solari heroes
-            const rayPos = new Vector2D(forgePos.x + 100, forgePos.y);
-            player.units.push(new Ray(rayPos, player));
-            
-            const influenceBallPos = new Vector2D(forgePos.x + 150, forgePos.y);
-            player.units.push(new InfluenceBall(influenceBallPos, player));
-            
-            const turretDeployerPos = new Vector2D(forgePos.x + 200, forgePos.y);
-            player.units.push(new TurretDeployer(turretDeployerPos, player));
-        } else if (i === 1) { // Player 2 gets Aurum hero
-            const drillerPos = new Vector2D(forgePos.x - 100, forgePos.y);
-            const driller = new Driller(drillerPos, player);
-            player.units.push(driller);
-            
-            // Start driller hidden in an asteroid near the base
-            // Find an asteroid near the base
-            for (const asteroid of game.asteroids) {
-                const distance = asteroid.position.distanceTo(forgePos);
-                if (distance < 400 && distance > 100) {
-                    driller.hideInAsteroid(asteroid);
-                    break;
-                }
-            }
-        }
         
         game.players.push(player);
     }
