@@ -48,7 +48,7 @@ export const STRATEGIC_ASTEROID_DISTANCE = 250; // Distance from sun center for 
 // Map boundary constants
 export const MAP_SIZE = 2000; // Total map size in world units (centered at 0,0)
 export const BORDER_FADE_WIDTH = 150; // Width of dark border fade zone
-export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Units cannot move beyond this: 850 units from center
+export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Units cannot move beyond this boundary
 
 // Countdown and mirror constants
 export const COUNTDOWN_DURATION = 3.0; // Countdown duration in seconds
