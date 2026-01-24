@@ -35,6 +35,14 @@ class GameController {
                Array.from(this.selectedUnits).every(unit => unit.isHero);
     }
 
+    private clearPathPreview(): void {
+        this.pathPoints = [];
+        this.isDrawingPath = false;
+        this.renderer.pathPreviewForge = null;
+        this.renderer.pathPreviewPoints = this.pathPoints;
+        this.renderer.pathPreviewEnd = null;
+    }
+
     constructor() {
         // Create canvas
         const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
@@ -217,6 +225,8 @@ class GameController {
                         // Drawing a path from the selected base
                         this.isDrawingPath = true;
                         this.pathPoints = [];
+                        this.renderer.pathPreviewForge = this.selectedBase;
+                        this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
                     } else if (hasOnlyHeroUnits) {
                         // For hero units, use arrow dragging mode
@@ -246,6 +256,10 @@ class GameController {
                         this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
                         this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
                     }
+                    
+                    this.renderer.pathPreviewForge = this.selectedBase;
+                    this.renderer.pathPreviewPoints = this.pathPoints;
+                    this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
                 }
             }
             
@@ -274,6 +288,7 @@ class GameController {
                         // Deselect forge
                         player.stellarForge.isSelected = false;
                         this.selectedBase = null;
+                        this.clearPathPreview();
                         console.log('Stellar Forge deselected');
                     } else {
                         // Select forge, deselect units and mirrors
@@ -286,6 +301,7 @@ class GameController {
                         for (const mirror of player.solarMirrors) {
                             mirror.isSelected = false;
                         }
+                        this.clearPathPreview();
                         console.log('Stellar Forge selected');
                     }
                     
@@ -313,6 +329,7 @@ class GameController {
                         // Deselect mirror
                         clickedMirror.isSelected = false;
                         this.selectedMirrors.delete(clickedMirror);
+                        this.clearPathPreview();
                         console.log('Solar Mirror deselected');
                     } else {
                         // Select mirror, deselect forge and units
@@ -331,6 +348,7 @@ class GameController {
                                 mirror.isSelected = false;
                             }
                         }
+                        this.clearPathPreview();
                         console.log('Solar Mirror selected');
                     }
                     
@@ -440,8 +458,7 @@ class GameController {
                     this.selectedBase.setMinionPath(this.pathPoints);
                     console.log(`Path set with ${this.pathPoints.length} waypoints`);
                 }
-                this.pathPoints = [];
-                this.isDrawingPath = false;
+                this.clearPathPreview();
             } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);

@@ -214,6 +214,7 @@ export class SolarMirror {
     private readonly ACCELERATION = 25; // Pixels per second squared
     private readonly DECELERATION = 50; // Pixels per second squared
     private readonly ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
+    private readonly SLOW_RADIUS_PX = 60; // Distance to begin slow approach
     private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
 
     constructor(
@@ -381,33 +382,40 @@ export class SolarMirror {
             }
         }
         
-        // Calculate distance needed to decelerate to stop
-        const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-        const decelerationDistance = (currentSpeed * currentSpeed) / (2 * this.DECELERATION);
-        
-        // Should we accelerate or decelerate?
-        if (distanceToTarget > decelerationDistance && currentSpeed < this.MAX_SPEED) {
-            // Accelerate toward target
-            this.velocity.x += directionX * this.ACCELERATION * deltaTime;
-            this.velocity.y += directionY * this.ACCELERATION * deltaTime;
+        if (distanceToTarget <= this.SLOW_RADIUS_PX) {
+            const slowFactor = Math.max(0, distanceToTarget / this.SLOW_RADIUS_PX);
+            const desiredSpeed = this.MAX_SPEED * slowFactor;
+            this.velocity.x = directionX * desiredSpeed;
+            this.velocity.y = directionY * desiredSpeed;
         } else {
-            // Decelerate - improved deceleration to prevent overshooting
-            if (currentSpeed > 0.1) {
-                const decelerationAmount = this.DECELERATION * deltaTime;
-                const decelerationFactor = Math.max(0, (currentSpeed - decelerationAmount) / currentSpeed);
-                this.velocity.x *= decelerationFactor;
-                this.velocity.y *= decelerationFactor;
+            // Calculate distance needed to decelerate to stop
+            const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+            const decelerationDistance = (currentSpeed * currentSpeed) / (2 * this.DECELERATION);
+            
+            // Should we accelerate or decelerate?
+            if (distanceToTarget > decelerationDistance && currentSpeed < this.MAX_SPEED) {
+                // Accelerate toward target
+                this.velocity.x += directionX * this.ACCELERATION * deltaTime;
+                this.velocity.y += directionY * this.ACCELERATION * deltaTime;
             } else {
-                this.velocity.x = 0;
-                this.velocity.y = 0;
+                // Decelerate - improved deceleration to prevent overshooting
+                if (currentSpeed > 0.1) {
+                    const decelerationAmount = this.DECELERATION * deltaTime;
+                    const decelerationFactor = Math.max(0, (currentSpeed - decelerationAmount) / currentSpeed);
+                    this.velocity.x *= decelerationFactor;
+                    this.velocity.y *= decelerationFactor;
+                } else {
+                    this.velocity.x = 0;
+                    this.velocity.y = 0;
+                }
             }
-        }
-        
-        // Cap speed at MAX_SPEED
-        const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-        if (speed > this.MAX_SPEED) {
-            this.velocity.x = (this.velocity.x / speed) * this.MAX_SPEED;
-            this.velocity.y = (this.velocity.y / speed) * this.MAX_SPEED;
+            
+            // Cap speed at MAX_SPEED
+            const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+            if (speed > this.MAX_SPEED) {
+                this.velocity.x = (this.velocity.x / speed) * this.MAX_SPEED;
+                this.velocity.y = (this.velocity.y / speed) * this.MAX_SPEED;
+            }
         }
         
         // Update position
@@ -502,6 +510,7 @@ export class StellarForge {
     private readonly maxSpeed: number = 50; // pixels per second
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
+    private readonly slowRadiusPx: number = 80; // Distance to begin slow approach
     private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
     readonly radius: number = 40; // For rendering and selection
     crunchTimer: number = 0; // Timer until next crunch
@@ -629,15 +638,22 @@ export class StellarForge {
                     }
                 }
 
-                // Apply acceleration toward target
-                this.velocity.x += directionX * this.acceleration * deltaTime;
-                this.velocity.y += directionY * this.acceleration * deltaTime;
+                if (distanceToTarget <= this.slowRadiusPx) {
+                    const slowFactor = Math.max(0, distanceToTarget / this.slowRadiusPx);
+                    const desiredSpeed = this.maxSpeed * slowFactor;
+                    this.velocity.x = directionX * desiredSpeed;
+                    this.velocity.y = directionY * desiredSpeed;
+                } else {
+                    // Apply acceleration toward target
+                    this.velocity.x += directionX * this.acceleration * deltaTime;
+                    this.velocity.y += directionY * this.acceleration * deltaTime;
 
-                // Clamp to max speed
-                const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-                if (currentSpeed > this.maxSpeed) {
-                    this.velocity.x = (this.velocity.x / currentSpeed) * this.maxSpeed;
-                    this.velocity.y = (this.velocity.y / currentSpeed) * this.maxSpeed;
+                    // Clamp to max speed
+                    const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+                    if (currentSpeed > this.maxSpeed) {
+                        this.velocity.x = (this.velocity.x / currentSpeed) * this.maxSpeed;
+                        this.velocity.y = (this.velocity.y / currentSpeed) * this.maxSpeed;
+                    }
                 }
             }
         }
@@ -3690,6 +3706,15 @@ export class GameState {
                 for (const unitType of player.stellarForge.unitQueue) {
                     mixString(unitType);
                 }
+                if (player.stellarForge.targetPosition) {
+                    mix(player.stellarForge.targetPosition.x);
+                    mix(player.stellarForge.targetPosition.y);
+                } else {
+                    mix(-1);
+                    mix(-1);
+                }
+                mix(player.stellarForge.velocity.x);
+                mix(player.stellarForge.velocity.y);
             } else {
                 mix(-1);
             }
@@ -3698,6 +3723,15 @@ export class GameState {
                 mix(mirror.position.x);
                 mix(mirror.position.y);
                 mix(mirror.health);
+                if (mirror.targetPosition) {
+                    mix(mirror.targetPosition.x);
+                    mix(mirror.targetPosition.y);
+                } else {
+                    mix(-1);
+                    mix(-1);
+                }
+                mix(mirror.velocity.x);
+                mix(mirror.velocity.y);
             }
 
             for (const unit of player.units) {
