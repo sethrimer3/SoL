@@ -12,6 +12,9 @@ class GameController {
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
+    private isPaused: boolean = false;
+    private showInGameMenu: boolean = false;
+    private showInfo: boolean = true;
     private holdStartTime: number | null = null;
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
@@ -41,6 +44,59 @@ class GameController {
         this.renderer.pathPreviewForge = null;
         this.renderer.pathPreviewPoints = this.pathPoints;
         this.renderer.pathPreviewEnd = null;
+    }
+
+    private toggleInGameMenu(): void {
+        this.showInGameMenu = !this.showInGameMenu;
+        this.isPaused = this.showInGameMenu;
+        this.renderer.showInGameMenu = this.showInGameMenu;
+        this.renderer.isPaused = this.isPaused;
+    }
+
+    private toggleInfo(): void {
+        this.showInfo = !this.showInfo;
+        this.renderer.showInfo = this.showInfo;
+    }
+
+    private surrender(): void {
+        if (!this.game) return;
+        
+        // Set player's forge health to 0 to trigger defeat
+        const player = this.game.players[0];
+        if (player.stellarForge) {
+            player.stellarForge.health = 0;
+        }
+        
+        // Close menu
+        this.showInGameMenu = false;
+        this.isPaused = false;
+        this.renderer.showInGameMenu = false;
+        this.renderer.isPaused = false;
+        
+        console.log('Player surrendered');
+    }
+
+    private returnToMainMenu(): void {
+        // Stop the game
+        this.stop();
+        this.game = null;
+        
+        // Clear selections
+        this.selectedUnits.clear();
+        this.selectedMirrors.clear();
+        this.selectedBase = null;
+        this.renderer.selectedUnits = this.selectedUnits;
+        
+        // Reset states
+        this.isPaused = false;
+        this.showInGameMenu = false;
+        this.showInfo = true;
+        this.renderer.showInGameMenu = false;
+        this.renderer.isPaused = false;
+        this.renderer.showInfo = true;
+        
+        // Show main menu
+        this.menu.show();
     }
 
     constructor() {
@@ -272,6 +328,108 @@ class GameController {
             const wasClick = this.selectionStartScreen && 
                              Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
                              Math.abs(lastY - this.selectionStartScreen.y) < Constants.CLICK_DRAG_THRESHOLD;
+            
+            // Handle UI clicks first
+            if (wasClick && this.game) {
+                const winner = this.game.checkVictoryConditions();
+                
+                // Check menu button click (top-left, 60x60 area including margin)
+                if (!winner && !this.game.isCountdownActive && lastX <= 70 && lastY <= 70) {
+                    this.toggleInGameMenu();
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+                
+                // Check in-game menu clicks
+                if (this.showInGameMenu && !winner) {
+                    const dpr = window.devicePixelRatio || 1;
+                    const screenWidth = this.renderer.canvas.width / dpr;
+                    const screenHeight = this.renderer.canvas.height / dpr;
+                    const buttonWidth = 300;
+                    const buttonHeight = 50;
+                    const buttonX = (screenWidth - buttonWidth) / 2;
+                    const panelHeight = 350;
+                    const panelY = (screenHeight - panelHeight) / 2;
+                    let buttonY = panelY + 100;
+                    const buttonSpacing = 20;
+                    
+                    // Check Resume button
+                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
+                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
+                        this.toggleInGameMenu();
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
+                    }
+                    buttonY += buttonHeight + buttonSpacing;
+                    
+                    // Check Toggle Info button
+                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
+                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
+                        this.toggleInfo();
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
+                    }
+                    buttonY += buttonHeight + buttonSpacing;
+                    
+                    // Check Surrender button
+                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
+                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
+                        this.surrender();
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
+                    }
+                }
+                
+                // Check end-game Continue button
+                if (winner) {
+                    const dpr = window.devicePixelRatio || 1;
+                    const screenWidth = this.renderer.canvas.width / dpr;
+                    const screenHeight = this.renderer.canvas.height / dpr;
+                    const panelHeight = 450;
+                    const panelY = 130;
+                    const buttonWidth = 300;
+                    const buttonHeight = 60;
+                    const buttonX = (screenWidth - buttonWidth) / 2;
+                    const buttonY = panelY + panelHeight + 30;
+                    
+                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
+                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
+                        this.returnToMainMenu();
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
+                    }
+                }
+            }
             
             // Create tap visual effect for clicks
             if (wasClick && this.selectionStartScreen) {
@@ -675,6 +833,17 @@ class GameController {
         
         window.addEventListener('keydown', (e: KeyboardEvent) => {
             const key = e.key.toLowerCase();
+            
+            // ESC key toggles in-game menu
+            if (key === 'escape' && this.game && !this.game.isCountdownActive) {
+                const winner = this.game.checkVictoryConditions();
+                if (!winner) {
+                    e.preventDefault();
+                    this.toggleInGameMenu();
+                    return;
+                }
+            }
+            
             if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
                 e.preventDefault();
                 keysPressed.add(key);
@@ -893,6 +1062,9 @@ class GameController {
 
     private update(deltaTime: number): void {
         if (!this.game) return;
+        
+        // Don't update game logic if paused
+        if (this.isPaused) return;
         
         if (this.game.isRunning) {
             this.game.update(deltaTime);

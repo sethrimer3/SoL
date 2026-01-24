@@ -6,7 +6,7 @@ import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, S
 import * as Constants from './constants';
 
 export class GameRenderer {
-    private canvas: HTMLCanvasElement;
+    public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     public camera: Vector2D = new Vector2D(0, 0);
     public zoom: number = 1.0;
@@ -21,6 +21,9 @@ export class GameRenderer {
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
+    public showInfo: boolean = true; // Toggle for showing top-left info
+    public showInGameMenu: boolean = false; // Toggle for in-game menu
+    public isPaused: boolean = false; // Game pause state
     
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
@@ -1592,42 +1595,45 @@ export class GameRenderer {
      * Draw UI overlay
      */
     private drawUI(game: GameState): void {
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, 10, 300, 200);
+        // Only show info if showInfo is true
+        if (this.showInfo) {
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(10, 10, 300, 200);
 
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = '16px Arial';
-        this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
-        this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
-        this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
-        this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, 90);
-        this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 110);
-
-        let y = 140;
-        for (const player of game.players) {
-            const color = this.getFactionColor(player.faction);
-            this.ctx.fillStyle = color;
-            this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.fillText(`Solarium: ${player.solarium.toFixed(1)}`, 20, y + 20);
-            
-            if (player.stellarForge) {
-                const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
-                this.ctx.fillText(`${status} | HP: ${player.stellarForge.health.toFixed(0)}`, 20, y + 40);
-            }
-            
-            y += 60;
-        }
+            this.ctx.font = '16px Arial';
+            this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
+            this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
+            this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
+            this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, 90);
+            this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 110);
 
-        // Draw controls help
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-        this.ctx.fillRect(10, this.canvas.height - 100, 450, 90);
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = '14px Arial';
-        this.ctx.fillText('Controls: Drag to select units', 20, this.canvas.height - 75);
-        this.ctx.fillText('Pan: WASD/Arrows or mouse edge or two-finger drag', 20, this.canvas.height - 55);
-        this.ctx.fillText('Zoom: Scroll/Pinch (zooms toward cursor)', 20, this.canvas.height - 35);
-        this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
+            let y = 140;
+            for (const player of game.players) {
+                const color = this.getFactionColor(player.faction);
+                this.ctx.fillStyle = color;
+                this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillText(`Solarium: ${player.solarium.toFixed(1)}`, 20, y + 20);
+                
+                if (player.stellarForge) {
+                    const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
+                    this.ctx.fillText(`${status} | HP: ${player.stellarForge.health.toFixed(0)}`, 20, y + 40);
+                }
+                
+                y += 60;
+            }
+
+            // Draw controls help
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            this.ctx.fillRect(10, this.canvas.height - 100, 450, 90);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = '14px Arial';
+            this.ctx.fillText('Controls: Drag to select units', 20, this.canvas.height - 75);
+            this.ctx.fillText('Pan: WASD/Arrows or mouse edge or two-finger drag', 20, this.canvas.height - 55);
+            this.ctx.fillText('Zoom: Scroll/Pinch (zooms toward cursor)', 20, this.canvas.height - 35);
+            this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
+        }
     }
 
     /**
@@ -2136,14 +2142,7 @@ export class GameRenderer {
         // Check for victory
         const winner = game.checkVictoryConditions();
         if (winner) {
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-            
-            this.ctx.fillStyle = this.getFactionColor(winner.faction);
-            this.ctx.font = 'bold 48px Arial';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText(`${winner.name} WINS!`, this.canvas.width / 2, this.canvas.height / 2);
-            this.ctx.textAlign = 'left';
+            this.drawEndGameStatsScreen(game, winner);
         }
 
         // Draw countdown overlay
@@ -2166,6 +2165,207 @@ export class GameRenderer {
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
         }
+        
+        // Draw in-game menu button (top-left, always visible when not in countdown)
+        if (!game.isCountdownActive && !winner) {
+            this.drawMenuButton();
+        }
+        
+        // Draw in-game menu overlay if open
+        if (this.showInGameMenu && !winner) {
+            this.drawInGameMenuOverlay();
+        }
+    }
+
+    /**
+     * Draw in-game menu button in top-left corner
+     */
+    private drawMenuButton(): void {
+        const dpr = window.devicePixelRatio || 1;
+        const buttonSize = 50;
+        const margin = 10;
+        
+        // Draw button background
+        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.8)';
+        this.ctx.fillRect(margin, margin, buttonSize, buttonSize);
+        
+        // Draw border
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(margin, margin, buttonSize, buttonSize);
+        
+        // Draw hamburger icon (three horizontal lines)
+        this.ctx.fillStyle = '#FFFFFF';
+        const lineWidth = 30;
+        const lineHeight = 3;
+        const lineSpacing = 8;
+        const startX = margin + (buttonSize - lineWidth) / 2;
+        const startY = margin + (buttonSize - lineHeight * 3 - lineSpacing * 2) / 2;
+        
+        this.ctx.fillRect(startX, startY, lineWidth, lineHeight);
+        this.ctx.fillRect(startX, startY + lineHeight + lineSpacing, lineWidth, lineHeight);
+        this.ctx.fillRect(startX, startY + (lineHeight + lineSpacing) * 2, lineWidth, lineHeight);
+    }
+
+    /**
+     * Draw in-game menu overlay
+     */
+    private drawInGameMenuOverlay(): void {
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        
+        // Semi-transparent background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+        
+        // Menu panel
+        const panelWidth = 400;
+        const panelHeight = 350;
+        const panelX = (screenWidth - panelWidth) / 2;
+        const panelY = (screenHeight - panelHeight) / 2;
+        
+        this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
+        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Panel border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Title
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 32px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
+        
+        // Menu buttons
+        const buttonWidth = 300;
+        const buttonHeight = 50;
+        const buttonX = (screenWidth - buttonWidth) / 2;
+        let buttonY = panelY + 100;
+        const buttonSpacing = 20;
+        
+        // Helper function to draw a button
+        const drawButton = (label: string, y: number) => {
+            this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = '20px Arial';
+            this.ctx.fillText(label, screenWidth / 2, y + 32);
+        };
+        
+        drawButton('Resume', buttonY);
+        buttonY += buttonHeight + buttonSpacing;
+        drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
+        buttonY += buttonHeight + buttonSpacing;
+        drawButton('Surrender', buttonY);
+        
+        this.ctx.textAlign = 'left';
+    }
+
+    /**
+     * Draw end-game statistics screen
+     */
+    private drawEndGameStatsScreen(game: GameState, winner: Player): void {
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        
+        // Semi-transparent background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+        
+        // Victory message
+        this.ctx.fillStyle = this.getFactionColor(winner.faction);
+        this.ctx.font = 'bold 48px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`${winner.name} WINS!`, screenWidth / 2, 80);
+        
+        // Stats panel
+        const panelWidth = 700;
+        const panelHeight = 450;
+        const panelX = (screenWidth - panelWidth) / 2;
+        const panelY = 130;
+        
+        this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
+        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+        
+        // Match statistics title
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = 'bold 28px Arial';
+        this.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
+        
+        // Draw stats for each player
+        this.ctx.font = '20px Arial';
+        let y = panelY + 100;
+        const leftCol = panelX + 50;
+        const rightCol = panelX + panelWidth - 250;
+        
+        // Headers
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.textAlign = 'left';
+        this.ctx.fillText('Statistic', leftCol, y);
+        this.ctx.textAlign = 'right';
+        
+        for (let i = 0; i < game.players.length; i++) {
+            const player = game.players[i];
+            const color = this.getFactionColor(player.faction);
+            this.ctx.fillStyle = color;
+            const colX = rightCol + i * 150;
+            this.ctx.fillText(player.name, colX, y);
+        }
+        
+        y += 40;
+        
+        // Stat rows
+        const stats = [
+            { label: 'Units Created', key: 'unitsCreated' },
+            { label: 'Units Lost', key: 'unitsLost' },
+            { label: 'Solarium Gathered', key: 'solariumGathered' },
+            { label: 'Final Solarium', key: 'solarium' }
+        ];
+        
+        for (const stat of stats) {
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText(stat.label, leftCol, y);
+            this.ctx.textAlign = 'right';
+            
+            for (let i = 0; i < game.players.length; i++) {
+                const player = game.players[i] as any;
+                const value = stat.key === 'solarium' ? player[stat.key].toFixed(1) : player[stat.key];
+                const colX = rightCol + i * 150;
+                this.ctx.fillText(String(value), colX, y);
+            }
+            
+            y += 35;
+        }
+        
+        // Continue button
+        const buttonWidth = 300;
+        const buttonHeight = 60;
+        const buttonX = (screenWidth - buttonWidth) / 2;
+        const buttonY = panelY + panelHeight + 30;
+        
+        this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
+        this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3;
+        this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 24px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('Continue', screenWidth / 2, buttonY + 38);
+        
+        this.ctx.textAlign = 'left';
     }
 
     /**
