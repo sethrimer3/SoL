@@ -118,6 +118,12 @@ export class MainMenu {
             maxHealth: 105, attackDamage: 18, attackSpeed: 2.0, attackRange: 360, attackIgnoresDefense: false,
             defense: 15, regen: 4, abilityDescription: 'Toggles between light and shadow forms'
         },
+        { 
+            id: 'radiant-13', name: 'Marine', description: 'Rapid-fire ranged specialist', faction: Faction.RADIANT,
+            maxHealth: Constants.MARINE_MAX_HEALTH, attackDamage: Constants.MARINE_ATTACK_DAMAGE, attackSpeed: Constants.MARINE_ATTACK_SPEED,
+            attackRange: Constants.MARINE_ATTACK_RANGE, attackIgnoresDefense: false, defense: 10, regen: 4,
+            abilityDescription: 'Bullet storm: fires a spread of shots toward a target direction'
+        },
         
         // Aurum faction heroes
         { 
@@ -179,6 +185,13 @@ export class MainMenu {
             id: 'aurum-12', name: 'Bullionaire', description: 'Market dominator', faction: Faction.AURUM,
             maxHealth: 110, attackDamage: 15, attackSpeed: 2.5, attackRange: 320, attackIgnoresDefense: false,
             defense: 12, regen: 6, abilityDescription: 'Manipulates market, disrupting enemy economy'
+        },
+        { 
+            id: 'aurum-13', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.AURUM,
+            maxHealth: Constants.GRAVE_MAX_HEALTH, attackDamage: Constants.GRAVE_ATTACK_DAMAGE, attackSpeed: Constants.GRAVE_ATTACK_SPEED,
+            attackRange: Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER,
+            attackIgnoresDefense: false, defense: 18, regen: 3,
+            abilityDescription: 'Orbits gravitic shards that launch at targets and return'
         },
         
         // Solari faction heroes
