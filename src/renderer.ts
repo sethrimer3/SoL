@@ -21,9 +21,23 @@ export class GameRenderer {
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
-    public showInfo: boolean = true; // Toggle for showing top-left info
+    public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
     public isPaused: boolean = false; // Game pause state
+
+    private static readonly CONTROL_LINES_FULL = [
+        'Controls: Drag to select units',
+        'Pan: WASD/Arrows or mouse edge or two-finger drag',
+        'Zoom: Scroll/Pinch (zooms toward cursor)',
+        'Hold still 6 seconds in influence to open warp gate'
+    ];
+
+    private static readonly CONTROL_LINES_COMPACT = [
+        'Controls: Drag to select units',
+        'Pan: WASD/Arrows or two-finger drag',
+        'Zoom: Scroll/Pinch toward cursor',
+        'Hold still 6s in influence to open warp gate'
+    ];
     
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
@@ -1597,18 +1611,32 @@ export class GameRenderer {
     private drawUI(game: GameState): void {
         // Only show info if showInfo is true
         if (this.showInfo) {
+            const dpr = window.devicePixelRatio || 1;
+            const screenWidth = this.canvas.width / dpr;
+            const screenHeight = this.canvas.height / dpr;
+            const isCompactLayout = screenWidth < 600;
+            const infoFontSize = isCompactLayout ? 13 : 16;
+            const infoLineHeight = infoFontSize + 4;
+            const infoBoxWidth = Math.min(300, screenWidth - 20);
+            const infoBoxHeight = 20 + infoLineHeight * 5 + game.players.length * 60;
+
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(10, 10, 300, 200);
+            this.ctx.fillRect(10, 10, infoBoxWidth, infoBoxHeight);
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = '16px Arial';
-            this.ctx.fillText(`SoL - Speed of Light RTS`, 20, 30);
-            this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, 50);
-            this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, 70);
-            this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, 90);
-            this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, 110);
+            this.ctx.font = `${infoFontSize}px Arial`;
+            let infoY = 30;
+            this.ctx.fillText(`SoL - Speed of Light RTS`, 20, infoY);
+            infoY += infoLineHeight;
+            this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, infoY);
+            infoY += infoLineHeight;
+            this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, infoY);
+            infoY += infoLineHeight;
+            this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, infoY);
+            infoY += infoLineHeight;
+            this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, infoY);
 
-            let y = 140;
+            let y = infoY + infoLineHeight;
             for (const player of game.players) {
                 const color = this.getFactionColor(player.faction);
                 this.ctx.fillStyle = color;
@@ -1625,14 +1653,24 @@ export class GameRenderer {
             }
 
             // Draw controls help
+            const controlLines = isCompactLayout
+                ? GameRenderer.CONTROL_LINES_COMPACT
+                : GameRenderer.CONTROL_LINES_FULL;
+            const controlFontSize = isCompactLayout ? 12 : 14;
+            const controlLineHeight = controlFontSize + 4;
+            const controlBoxWidth = Math.min(450, screenWidth - 20);
+            const controlBoxHeight = controlLineHeight * controlLines.length + 14;
+            const controlBoxX = 10;
+            const controlBoxY = screenHeight - controlBoxHeight - 10;
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(10, this.canvas.height - 100, 450, 90);
+            this.ctx.fillRect(controlBoxX, controlBoxY, controlBoxWidth, controlBoxHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = '14px Arial';
-            this.ctx.fillText('Controls: Drag to select units', 20, this.canvas.height - 75);
-            this.ctx.fillText('Pan: WASD/Arrows or mouse edge or two-finger drag', 20, this.canvas.height - 55);
-            this.ctx.fillText('Zoom: Scroll/Pinch (zooms toward cursor)', 20, this.canvas.height - 35);
-            this.ctx.fillText('Hold still 6 seconds in influence to open warp gate', 20, this.canvas.height - 15);
+            this.ctx.font = `${controlFontSize}px Arial`;
+            let controlTextY = controlBoxY + controlLineHeight;
+            for (const line of controlLines) {
+                this.ctx.fillText(line, 20, controlTextY);
+                controlTextY += controlLineHeight;
+            }
         }
     }
 
@@ -2214,14 +2252,15 @@ export class GameRenderer {
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
+        const isCompactLayout = screenWidth < 600;
         
         // Semi-transparent background
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
         
         // Menu panel
-        const panelWidth = 400;
-        const panelHeight = 350;
+        const panelWidth = Math.min(400, screenWidth - 40);
+        const panelHeight = Math.min(350, screenHeight - 40);
         const panelX = (screenWidth - panelWidth) / 2;
         const panelY = (screenHeight - panelHeight) / 2;
         
@@ -2235,16 +2274,16 @@ export class GameRenderer {
         
         // Title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = 'bold 32px Arial';
+        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Arial`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
         
         // Menu buttons
-        const buttonWidth = 300;
-        const buttonHeight = 50;
+        const buttonWidth = Math.min(300, panelWidth - 40);
+        const buttonHeight = isCompactLayout ? 44 : 50;
         const buttonX = (screenWidth - buttonWidth) / 2;
-        let buttonY = panelY + 100;
-        const buttonSpacing = 20;
+        let buttonY = panelY + (isCompactLayout ? 80 : 100);
+        const buttonSpacing = isCompactLayout ? 14 : 20;
         
         // Helper function to draw a button
         const drawButton = (label: string, y: number) => {
@@ -2254,8 +2293,8 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = '20px Arial';
-            this.ctx.fillText(label, screenWidth / 2, y + 32);
+            this.ctx.font = `${isCompactLayout ? 18 : 20}px Arial`;
+            this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
         };
         
         drawButton('Resume', buttonY);
@@ -2274,6 +2313,7 @@ export class GameRenderer {
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
+        const isCompactLayout = screenWidth < 700;
         
         // Semi-transparent background
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
@@ -2281,13 +2321,14 @@ export class GameRenderer {
         
         // Victory message
         this.ctx.fillStyle = this.getFactionColor(winner.faction);
-        this.ctx.font = 'bold 48px Arial';
+        const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
+        this.ctx.font = `bold ${victoryFontSize}px Arial`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`${winner.name} WINS!`, screenWidth / 2, 80);
         
         // Stats panel
-        const panelWidth = 700;
-        const panelHeight = 450;
+        const panelWidth = Math.min(700, screenWidth - 40);
+        const panelHeight = Math.min(450, screenHeight - 200);
         const panelX = (screenWidth - panelWidth) / 2;
         const panelY = 130;
         
@@ -2299,14 +2340,21 @@ export class GameRenderer {
         
         // Match statistics title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = 'bold 28px Arial';
+        const statsTitleSize = Math.max(18, Math.min(28, screenWidth * 0.07));
+        this.ctx.font = `bold ${statsTitleSize}px Arial`;
         this.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
         
         // Draw stats for each player
-        this.ctx.font = '20px Arial';
+        const statsFontSize = Math.max(14, Math.min(20, screenWidth * 0.045));
+        this.ctx.font = `${statsFontSize}px Arial`;
         let y = panelY + 100;
-        const leftCol = panelX + 50;
-        const rightCol = panelX + panelWidth - 250;
+        const horizontalPadding = 24;
+        const labelColumnWidth = Math.max(100, Math.min(200, panelWidth * 0.4));
+        const playerCount = game.players.length;
+        const availablePlayerWidth = panelWidth - horizontalPadding * 2 - labelColumnWidth;
+        const playerColumnWidth = Math.max(50, availablePlayerWidth / playerCount);
+        const leftCol = panelX + horizontalPadding;
+        const playerStartX = leftCol + labelColumnWidth;
         
         // Headers
         this.ctx.fillStyle = '#FFFFFF';
@@ -2318,11 +2366,11 @@ export class GameRenderer {
             const player = game.players[i];
             const color = this.getFactionColor(player.faction);
             this.ctx.fillStyle = color;
-            const colX = rightCol + i * 150;
+            const colX = playerStartX + playerColumnWidth * (i + 1);
             this.ctx.fillText(player.name, colX, y);
         }
         
-        y += 40;
+        y += isCompactLayout ? 32 : 40;
         
         // Stat rows
         const stats = [
@@ -2341,18 +2389,18 @@ export class GameRenderer {
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
                 const value = stat.key === 'solarium' ? player[stat.key].toFixed(1) : player[stat.key];
-                const colX = rightCol + i * 150;
+                const colX = playerStartX + playerColumnWidth * (i + 1);
                 this.ctx.fillText(String(value), colX, y);
             }
             
-            y += 35;
+            y += isCompactLayout ? 28 : 35;
         }
         
         // Continue button
-        const buttonWidth = 300;
-        const buttonHeight = 60;
+        const buttonWidth = Math.min(300, screenWidth - 60);
+        const buttonHeight = isCompactLayout ? 50 : 60;
         const buttonX = (screenWidth - buttonWidth) / 2;
-        const buttonY = panelY + panelHeight + 30;
+        const buttonY = Math.min(panelY + panelHeight + 30, screenHeight - buttonHeight - 20);
         
         this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
         this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
@@ -2361,9 +2409,9 @@ export class GameRenderer {
         this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
         
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 24px Arial';
+        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Arial`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('Continue', screenWidth / 2, buttonY + 38);
+        this.ctx.fillText('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65));
         
         this.ctx.textAlign = 'left';
     }
