@@ -78,6 +78,16 @@ export const STARLING_MOVE_SPEED = 120; // Pixels per second (faster than regula
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
 
+// Forge crunch constants (periodic event that spawns minions)
+export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
+export const FORGE_CRUNCH_SUCK_DURATION = 0.8; // Duration of dust suction phase
+export const FORGE_CRUNCH_WAVE_DURATION = 1.2; // Duration of wave push phase
+export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
+export const FORGE_CRUNCH_WAVE_RADIUS = 300; // Radius of wave push effect
+export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
+export const FORGE_CRUNCH_WAVE_FORCE = 200; // Force magnitude pushing dust out
+export const STARLING_COST_PER_SOLARIUM = 50; // Solarium needed per starling spawned
+
 // Minigun building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
 export const MINIGUN_ATTACK_RANGE = 350;
