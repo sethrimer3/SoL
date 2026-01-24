@@ -48,6 +48,13 @@ class GameController {
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
             this.renderer.viewingPlayer = this.game.players[0];
+            
+            // Center camera on player's base and zoom in halfway
+            const player = this.game.players[0];
+            if (player.stellarForge) {
+                this.renderer.setCameraPosition(player.stellarForge.position);
+                this.renderer.setZoom(0.5); // Halfway zoomed in
+            }
         }
 
         // Start game loop
