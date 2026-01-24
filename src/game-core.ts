@@ -414,6 +414,7 @@ export class StellarForge {
     crunchTimer: number = 0; // Timer until next crunch
     currentCrunch: ForgeCrunch | null = null; // Active crunch effect
     pendingSolarium: number = 0; // Solarium accumulated since last crunch
+    minionPath: Vector2D[] = []; // Path that minions will follow
 
     constructor(
         public position: Vector2D,
@@ -421,6 +422,21 @@ export class StellarForge {
     ) {
         // Initialize crunch timer with random offset to stagger crunches
         this.crunchTimer = Math.random() * Constants.FORGE_CRUNCH_INTERVAL;
+    }
+    
+    /**
+     * Set the path for minions to follow
+     */
+    setMinionPath(waypoints: Vector2D[]): void {
+        this.minionPath = waypoints;
+    }
+    
+    /**
+     * Initialize default path to enemy base position
+     */
+    initializeDefaultPath(enemyBasePosition: Vector2D): void {
+        // Create a path from this base to the enemy base
+        this.minionPath = [enemyBasePosition];
     }
 
     /**
@@ -1666,6 +1682,7 @@ export class Grave extends Unit {
 export class Starling extends Unit {
     private explorationTarget: Vector2D | null = null;
     private explorationTimer: number = 0;
+    private currentPathWaypoint: number = 0; // Current waypoint index in the base's path
     
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -1683,57 +1700,82 @@ export class Starling extends Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
-        // No need to update exploration timer here, it's updated in the main update loop
-
-        // AI behavior: prioritize enemy base, then buildings, then explore
-        let targetPosition: Vector2D | null = null;
-
-        // 1. Try to target enemy base if visible
-        for (const enemy of enemies) {
-            if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
-                // Check if enemy base is visible (not in shadow)
-                if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
-                    targetPosition = enemy.position;
-                    break;
+        // Get the base's minion path
+        const base = this.owner.stellarForge;
+        
+        if (base && base.minionPath.length > 0) {
+            // Follow the base's path
+            const targetWaypoint = base.minionPath[this.currentPathWaypoint];
+            
+            // Check if we've reached the current waypoint
+            if (this.position.distanceTo(targetWaypoint) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
+                // Move to next waypoint if there is one
+                if (this.currentPathWaypoint < base.minionPath.length - 1) {
+                    this.currentPathWaypoint++;
+                    this.rallyPoint = base.minionPath[this.currentPathWaypoint];
+                } else {
+                    // We've reached the end of the path, stay here (pile up)
+                    this.rallyPoint = targetWaypoint;
+                    return;
                 }
+            } else {
+                // Set rally point to current waypoint
+                this.rallyPoint = base.minionPath[this.currentPathWaypoint];
             }
-        }
+        } else {
+            // No path defined, fall back to original AI behavior
+            // No need to update exploration timer here, it's updated in the main update loop
 
-        // 2. If no visible enemy base, target visible enemy buildings (mirrors)
-        if (!targetPosition) {
-            for (const player of gameState.players) {
-                if (player !== this.owner) {
-                    for (const mirror of player.solarMirrors) {
-                        if (gameState.isObjectVisibleToPlayer(mirror.position, this.owner)) {
-                            targetPosition = mirror.position;
-                            break;
-                        }
+            // AI behavior: prioritize enemy base, then buildings, then explore
+            let targetPosition: Vector2D | null = null;
+
+            // 1. Try to target enemy base if visible
+            for (const enemy of enemies) {
+                if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
+                    // Check if enemy base is visible (not in shadow)
+                    if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
+                        targetPosition = enemy.position;
+                        break;
                     }
-                    if (targetPosition) break;
                 }
             }
-        }
 
-        // 3. If no visible structures, explore shadows randomly
-        if (!targetPosition) {
-            // Generate new random exploration target every few seconds or if we've reached current target
-            if (this.explorationTimer <= 0 || !this.explorationTarget ||
-                this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
-                // Pick a random position in shadow
-                const angle = Math.random() * Math.PI * 2;
-                const distance = 300 + Math.random() * 500;
-                this.explorationTarget = new Vector2D(
-                    this.position.x + Math.cos(angle) * distance,
-                    this.position.y + Math.sin(angle) * distance
-                );
-                this.explorationTimer = Constants.STARLING_EXPLORATION_CHANGE_INTERVAL;
+            // 2. If no visible enemy base, target visible enemy buildings (mirrors)
+            if (!targetPosition) {
+                for (const player of gameState.players) {
+                    if (player !== this.owner) {
+                        for (const mirror of player.solarMirrors) {
+                            if (gameState.isObjectVisibleToPlayer(mirror.position, this.owner)) {
+                                targetPosition = mirror.position;
+                                break;
+                            }
+                        }
+                        if (targetPosition) break;
+                    }
+                }
             }
-            targetPosition = this.explorationTarget;
-        }
 
-        // Set rally point for movement
-        if (targetPosition) {
-            this.rallyPoint = targetPosition;
+            // 3. If no visible structures, explore shadows randomly
+            if (!targetPosition) {
+                // Generate new random exploration target every few seconds or if we've reached current target
+                if (this.explorationTimer <= 0 || !this.explorationTarget ||
+                    this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
+                    // Pick a random position in shadow
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 300 + Math.random() * 500;
+                    this.explorationTarget = new Vector2D(
+                        this.position.x + Math.cos(angle) * distance,
+                        this.position.y + Math.sin(angle) * distance
+                    );
+                    this.explorationTimer = Constants.STARLING_EXPLORATION_CHANGE_INTERVAL;
+                }
+                targetPosition = this.explorationTarget;
+            }
+
+            // Set rally point for movement
+            if (targetPosition) {
+                this.rallyPoint = targetPosition;
+            }
         }
     }
 
@@ -3575,6 +3617,19 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         }
         
         game.players.push(player);
+    }
+    
+    // Initialize default minion paths (each forge targets the enemy's spawn location)
+    if (game.players.length >= 2) {
+        for (let i = 0; i < game.players.length; i++) {
+            const player = game.players[i];
+            const enemyIndex = (i + 1) % game.players.length;
+            const enemyPlayer = game.players[enemyIndex];
+            
+            if (player.stellarForge && enemyPlayer.stellarForge) {
+                player.stellarForge.initializeDefaultPath(enemyPlayer.stellarForge.position);
+            }
+        }
     }
 
     // Initialize space dust particles

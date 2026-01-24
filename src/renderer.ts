@@ -286,6 +286,47 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
             this.ctx.stroke();
             
+            // Draw minion path if it exists
+            if (forge.minionPath.length > 0) {
+                this.ctx.strokeStyle = '#FFFF00'; // Yellow path
+                this.ctx.lineWidth = 3;
+                this.ctx.setLineDash([10, 5]); // Dashed line
+                this.ctx.beginPath();
+                
+                // Start from the forge position
+                const startScreen = this.worldToScreen(forge.position);
+                this.ctx.moveTo(startScreen.x, startScreen.y);
+                
+                // Draw line through all waypoints
+                for (const waypoint of forge.minionPath) {
+                    const waypointScreen = this.worldToScreen(waypoint);
+                    this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
+                }
+                
+                this.ctx.stroke();
+                this.ctx.setLineDash([]); // Reset to solid line
+                
+                // Draw waypoint markers
+                this.ctx.fillStyle = '#FFFF00';
+                for (let i = 0; i < forge.minionPath.length; i++) {
+                    const waypoint = forge.minionPath[i];
+                    const waypointScreen = this.worldToScreen(waypoint);
+                    this.ctx.beginPath();
+                    this.ctx.arc(waypointScreen.x, waypointScreen.y, 5, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Draw number for waypoint
+                    if (i === forge.minionPath.length - 1) {
+                        // Last waypoint gets special marker
+                        this.ctx.strokeStyle = '#FFFF00';
+                        this.ctx.lineWidth = 2;
+                        this.ctx.beginPath();
+                        this.ctx.arc(waypointScreen.x, waypointScreen.y, 8, 0, Math.PI * 2);
+                        this.ctx.stroke();
+                    }
+                }
+            }
+            
             // Draw hero production buttons around the forge
             this.drawHeroButtons(forge, screenPos, size);
         }
