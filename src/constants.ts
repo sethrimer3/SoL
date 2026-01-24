@@ -130,7 +130,7 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
 export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
-export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow
+export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
 
 // Visual effect constants
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect
