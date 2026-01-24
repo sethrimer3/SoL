@@ -2160,6 +2160,7 @@ export class GameState {
     countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
+    mapSize: number = 2000; // Map size in world units
 
     /**
      * Update game state
@@ -2918,7 +2919,7 @@ export class GameState {
      * Check if ray intersects with map edge
      */
     private rayIntersectsEdge(origin: Vector2D, direction: Vector2D): Vector2D | null {
-        const mapSize = 2000; // Approximate map size
+        const mapSize = this.mapSize;
         let closestHit: Vector2D | null = null;
         let closestDist = Infinity;
         
@@ -3042,7 +3043,7 @@ export class GameState {
         }
         
         // Check collision with map edges (decelerate and stop)
-        const mapSize = 2000;
+        const mapSize = this.mapSize;
         if (driller.position.x < 0 || driller.position.x > mapSize ||
             driller.position.y < 0 || driller.position.y > mapSize) {
             // Apply deceleration
@@ -3274,7 +3275,6 @@ export class GameState {
      */
     initializeAsteroids(count: number, width: number, height: number): void {
         this.asteroids = [];
-        const minGap = 100; // Minimum distance between asteroid centers
         const maxAttempts = 50; // Maximum attempts to find a valid position
         
         for (let i = 0; i < count; i++) {
@@ -3293,12 +3293,13 @@ export class GameState {
                 size = 30 + Math.random() * 50;
                 
                 // Check if this position has enough gap from existing asteroids
+                // Gap must be at least the sum of both asteroid radii
                 validPosition = true;
                 for (const asteroid of this.asteroids) {
                     const dx = x - asteroid.position.x;
                     const dy = y - asteroid.position.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    const requiredGap = minGap + size + asteroid.size;
+                    const requiredGap = size + asteroid.size;
                     
                     if (dist < requiredGap) {
                         validPosition = false;

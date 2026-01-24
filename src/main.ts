@@ -79,6 +79,9 @@ class GameController {
         // Clear and recreate based on map settings
         const map = settings.selectedMap;
         
+        // Set map size
+        game.mapSize = map.mapSize;
+        
         // Clear existing suns and add new ones based on map
         game.suns = [];
         
