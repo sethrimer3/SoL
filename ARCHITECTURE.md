@@ -82,8 +82,10 @@ Use the following minimal command list to validate that the same `stateHash` is 
 [
   { "tick": 0, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 0 },
   { "tick": 1, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 0, "targetWorld": { "x": 520, "y": 480 } },
-  { "tick": 4, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
-  { "tick": 5, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 1, "targetWorld": { "x": 460, "y": 520 } }
+  { "tick": 3, "command": "selectForge", "playerIndex": 0 },
+  { "tick": 4, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
+  { "tick": 6, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
+  { "tick": 7, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 1, "targetWorld": { "x": 460, "y": 520 } }
 ]
 ```
 

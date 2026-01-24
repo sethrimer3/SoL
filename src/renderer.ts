@@ -15,6 +15,9 @@ export class GameRenderer {
     public abilityArrowStart: Vector2D | null = null; // Arrow start for hero ability casting
     public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
     public selectedUnits: Set<Unit> = new Set();
+    public pathPreviewForge: StellarForge | null = null;
+    public pathPreviewPoints: Vector2D[] = [];
+    public pathPreviewEnd: Vector2D | null = null;
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
@@ -303,7 +306,7 @@ export class GameRenderer {
                 // Draw line through all waypoints
                 for (const waypoint of forge.minionPath) {
                     const waypointScreen = this.worldToScreen(waypoint);
-                    this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
+                this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
                 }
                 
                 this.ctx.stroke();
@@ -328,6 +331,11 @@ export class GameRenderer {
                         this.ctx.stroke();
                     }
                 }
+            }
+
+            // Draw path preview while drawing a new path
+            if (this.pathPreviewForge === forge && (this.pathPreviewPoints.length > 0 || this.pathPreviewEnd)) {
+                this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
             }
             
             // Draw hero production buttons around the forge
@@ -1692,6 +1700,49 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(this.abilityArrowStart.x, this.abilityArrowStart.y, 8, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+
+    /**
+     * Draw a path preview while the player is actively drawing a minion route.
+     */
+    private drawMinionPathPreview(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null): void {
+        this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([6, 6]);
+        this.ctx.beginPath();
+
+        const startScreen = this.worldToScreen(startWorld);
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+
+        for (let i = 0; i < waypoints.length; i++) {
+            const waypointScreen = this.worldToScreen(waypoints[i]);
+            this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
+        }
+
+        if (endWorld) {
+            const endScreen = this.worldToScreen(endWorld);
+            this.ctx.lineTo(endScreen.x, endScreen.y);
+        }
+
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+
+        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+        for (let i = 0; i < waypoints.length; i++) {
+            const waypointScreen = this.worldToScreen(waypoints[i]);
+            this.ctx.beginPath();
+            this.ctx.arc(waypointScreen.x, waypointScreen.y, 4, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        if (endWorld) {
+            const endScreen = this.worldToScreen(endWorld);
+            this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(endScreen.x, endScreen.y, 6, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
     }
 
     /**
