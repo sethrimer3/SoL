@@ -574,7 +574,7 @@ export class Building {
     /**
      * Update building logic
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1076,7 +1076,7 @@ export class Unit {
     /**
      * Update unit logic
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1087,23 +1087,7 @@ export class Unit {
             this.abilityCooldown -= deltaTime;
         }
 
-        // Move toward rally point if set
-        if (this.rallyPoint) {
-            const distance = this.position.distanceTo(this.rallyPoint);
-            if (distance > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                // Calculate direction vector
-                const dx = this.rallyPoint.x - this.position.x;
-                const dy = this.rallyPoint.y - this.position.y;
-                
-                // Normalize and move (reuse distance to avoid redundant calculation)
-                const moveDistance = Constants.UNIT_MOVE_SPEED * deltaTime;
-                this.position.x += (dx / distance) * moveDistance;
-                this.position.y += (dy / distance) * moveDistance;
-            } else {
-                // Arrived at rally point
-                this.rallyPoint = null;
-            }
-        }
+        this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits);
 
         // Find target if don't have one or current target is dead
         if (!this.target || this.isTargetDead(this.target)) {
@@ -1118,6 +1102,74 @@ export class Unit {
                 this.attackCooldown = 1.0 / this.attackSpeed;
             }
         }
+    }
+
+    protected moveTowardRallyPoint(deltaTime: number, moveSpeed: number, allUnits: Unit[]): void {
+        if (!this.rallyPoint) {
+            return;
+        }
+
+        const dx = this.rallyPoint.x - this.position.x;
+        const dy = this.rallyPoint.y - this.position.y;
+        const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+
+        if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
+            this.rallyPoint = null;
+            return;
+        }
+
+        let directionX = dx / distanceToTarget;
+        let directionY = dy / distanceToTarget;
+
+        const avoidanceRangePx = Constants.UNIT_AVOIDANCE_RANGE_PX;
+        const avoidanceRangeSq = avoidanceRangePx * avoidanceRangePx;
+        let avoidanceX = 0;
+        let avoidanceY = 0;
+
+        for (let i = 0; i < allUnits.length; i++) {
+            const otherUnit = allUnits[i];
+            if (otherUnit === this || otherUnit.isDead()) {
+                continue;
+            }
+
+            const offsetX = this.position.x - otherUnit.position.x;
+            const offsetY = this.position.y - otherUnit.position.y;
+            const distanceSq = offsetX * offsetX + offsetY * offsetY;
+
+            if (distanceSq > 0 && distanceSq < avoidanceRangeSq) {
+                const distance = Math.sqrt(distanceSq);
+                const strength = (avoidanceRangePx - distance) / avoidanceRangePx;
+                let weight = strength;
+
+                if (this.isHero && !otherUnit.isHero) {
+                    weight *= Constants.UNIT_HERO_AVOIDANCE_MULTIPLIER;
+                } else if (!this.isHero && otherUnit.isHero) {
+                    weight *= Constants.UNIT_MINION_YIELD_MULTIPLIER;
+                }
+
+                avoidanceX += (offsetX / distance) * weight;
+                avoidanceY += (offsetY / distance) * weight;
+            }
+        }
+
+        const avoidanceLength = Math.sqrt(avoidanceX * avoidanceX + avoidanceY * avoidanceY);
+        if (avoidanceLength > 0) {
+            avoidanceX /= avoidanceLength;
+            avoidanceY /= avoidanceLength;
+        }
+
+        directionX += avoidanceX * Constants.UNIT_AVOIDANCE_STRENGTH;
+        directionY += avoidanceY * Constants.UNIT_AVOIDANCE_STRENGTH;
+
+        const directionLength = Math.sqrt(directionX * directionX + directionY * directionY);
+        if (directionLength > 0) {
+            directionX /= directionLength;
+            directionY /= directionLength;
+        }
+
+        const moveDistance = moveSpeed * deltaTime;
+        this.position.x += directionX * moveDistance;
+        this.position.y += directionY * moveDistance;
     }
 
     /**
@@ -1469,9 +1521,9 @@ export class Grave extends Unit {
     /**
      * Update grave and its projectiles
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge)[], allUnits: Unit[]): void {
         // Update base unit logic
-        super.update(deltaTime, enemies);
+        super.update(deltaTime, enemies, allUnits);
         
         // Update projectile launch cooldown
         if (this.projectileLaunchCooldown > 0) {
@@ -1606,23 +1658,7 @@ export class Starling extends Unit {
         // Update exploration timer
         this.explorationTimer -= deltaTime;
 
-        // Move toward rally point if set (using custom starling speed)
-        if (this.rallyPoint) {
-            const distance = this.position.distanceTo(this.rallyPoint);
-            if (distance > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                // Calculate direction vector
-                const dx = this.rallyPoint.x - this.position.x;
-                const dy = this.rallyPoint.y - this.position.y;
-                
-                // Normalize and move (using starling speed)
-                const moveDistance = Constants.STARLING_MOVE_SPEED * deltaTime;
-                this.position.x += (dx / distance) * moveDistance;
-                this.position.y += (dy / distance) * moveDistance;
-            } else {
-                // Arrived at rally point
-                this.rallyPoint = null;
-            }
-        }
+        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -2118,6 +2154,8 @@ export class GameState {
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
     gameTime: number = 0.0;
+    stateHash: number = 0;
+    stateHashTickCounter: number = 0;
     isRunning: boolean = false;
     countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
     isCountdownActive: boolean = true; // Start with countdown active
@@ -2167,7 +2205,7 @@ export class GameState {
                     player.stellarForge.update(deltaTime); // Update forge movement
                     
                     // Check collision for forge (larger radius)
-                    if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius)) {
+                    if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius, player.stellarForge)) {
                         // Revert to old position and stop movement
                         player.stellarForge.position = oldForgePos;
                         player.stellarForge.targetPosition = null;
@@ -2196,7 +2234,7 @@ export class GameState {
                 mirror.update(deltaTime); // Update mirror movement
                 
                 // Check collision for mirror
-                if (this.checkCollision(mirror.position, 20)) {
+                if (this.checkCollision(mirror.position, 20, mirror)) {
                     // Revert to old position and stop movement
                     mirror.position = oldMirrorPos;
                     mirror.targetPosition = null;
@@ -2255,7 +2293,7 @@ export class GameState {
                         unit.updateAI(this, enemies);
                     }
                     
-                    unit.update(deltaTime, enemies);
+                    unit.update(deltaTime, enemies, allUnits);
 
                 // If unit is a Marine, collect its effects
                 if (unit instanceof Marine) {
@@ -2309,39 +2347,6 @@ export class GameState {
                 }
             }
             } // End of countdown check
-
-            // Check and resolve collisions for all units (only after countdown)
-            if (!this.isCountdownActive) {
-                for (const unit of player.units) {
-                    const oldPosition = new Vector2D(unit.position.x, unit.position.y);
-                
-                // Check if current position is in collision
-                if (this.checkCollision(unit.position)) {
-                    // Try to find a valid position nearby
-                    let foundValidPosition = false;
-                    const searchRadius = 15; // Search within 15 pixels
-                    const searchSteps = 8; // Check 8 directions
-                    
-                    for (let i = 0; i < searchSteps; i++) {
-                        const angle = (i / searchSteps) * Math.PI * 2;
-                        const testX = oldPosition.x + Math.cos(angle) * searchRadius;
-                        const testY = oldPosition.y + Math.sin(angle) * searchRadius;
-                        const testPos = new Vector2D(testX, testY);
-                        
-                        if (!this.checkCollision(testPos)) {
-                            unit.position = testPos;
-                            foundValidPosition = true;
-                            break;
-                        }
-                    }
-                    
-                    // If no valid position found, stop movement
-                    if (!foundValidPosition) {
-                        unit.rallyPoint = null; // Cancel movement
-                    }
-                }
-            }
-            } // End of countdown check for collisions
 
             // Remove dead units
             player.units = player.units.filter(unit => !unit.isDead());
@@ -2440,6 +2445,16 @@ export class GameState {
 
             // Remove destroyed buildings
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
+        }
+
+        if (!this.isCountdownActive) {
+            this.resolveUnitCollisions(allUnits);
+            this.resolveUnitObstacleCollisions(allUnits);
+        }
+
+        this.stateHashTickCounter += 1;
+        if (this.stateHashTickCounter % Constants.STATE_HASH_TICK_INTERVAL === 0) {
+            this.updateStateHash();
         }
 
         // Update muzzle flashes
@@ -3049,11 +3064,98 @@ export class GameState {
         }
     }
 
+    private resolveUnitCollisions(allUnits: Unit[]): void {
+        const unitRadiusPx = Constants.UNIT_RADIUS_PX;
+        const minDistance = unitRadiusPx * 2;
+        const minDistanceSq = minDistance * minDistance;
+
+        for (let i = 0; i < allUnits.length; i++) {
+            const unitA = allUnits[i];
+            if (unitA.isDead()) {
+                continue;
+            }
+
+            for (let j = i + 1; j < allUnits.length; j++) {
+                const unitB = allUnits[j];
+                if (unitB.isDead()) {
+                    continue;
+                }
+
+                let deltaX = unitB.position.x - unitA.position.x;
+                let deltaY = unitB.position.y - unitA.position.y;
+                let distanceSq = deltaX * deltaX + deltaY * deltaY;
+
+                if (distanceSq === 0) {
+                    deltaX = i % 2 === 0 ? 1 : -1;
+                    deltaY = 0;
+                    distanceSq = 1;
+                }
+
+                if (distanceSq < minDistanceSq) {
+                    const distance = Math.sqrt(distanceSq);
+                    const overlap = minDistance - distance;
+                    const pushX = (deltaX / distance) * overlap;
+                    const pushY = (deltaY / distance) * overlap;
+
+                    if (unitA.isHero && !unitB.isHero) {
+                        unitB.position.x += pushX;
+                        unitB.position.y += pushY;
+                    } else if (!unitA.isHero && unitB.isHero) {
+                        unitA.position.x -= pushX;
+                        unitA.position.y -= pushY;
+                    } else {
+                        unitA.position.x -= pushX * 0.5;
+                        unitA.position.y -= pushY * 0.5;
+                        unitB.position.x += pushX * 0.5;
+                        unitB.position.y += pushY * 0.5;
+                    }
+                }
+            }
+        }
+    }
+
+    private resolveUnitObstacleCollisions(allUnits: Unit[]): void {
+        for (const unit of allUnits) {
+            if (unit.isDead()) {
+                continue;
+            }
+
+            const oldPosition = new Vector2D(unit.position.x, unit.position.y);
+
+            if (this.checkCollision(unit.position, Constants.UNIT_RADIUS_PX)) {
+                let foundValidPosition = false;
+                const searchRadius = 15;
+                const searchSteps = 8;
+
+                for (let i = 0; i < searchSteps; i++) {
+                    const angle = (i / searchSteps) * Math.PI * 2;
+                    const testX = oldPosition.x + Math.cos(angle) * searchRadius;
+                    const testY = oldPosition.y + Math.sin(angle) * searchRadius;
+                    const testPos = new Vector2D(testX, testY);
+
+                    if (!this.checkCollision(testPos, Constants.UNIT_RADIUS_PX)) {
+                        unit.position = testPos;
+                        foundValidPosition = true;
+                        break;
+                    }
+                }
+
+                if (!foundValidPosition) {
+                    unit.rallyPoint = null;
+                }
+            }
+        }
+    }
+
     /**
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
      * Returns true if collision detected
      */
-    checkCollision(position: Vector2D, unitRadius: number = 8): boolean {
+    checkCollision(
+        position: Vector2D,
+        unitRadius: number = Constants.UNIT_RADIUS_PX,
+        ignoredObject: SolarMirror | StellarForge | Building | null = null
+    ): boolean {
         // Check collision with suns
         for (const sun of this.suns) {
             const distance = position.distanceTo(sun.position);
@@ -3073,6 +3175,9 @@ export class GameState {
         for (const player of this.players) {
             // Check collision with stellar forge
             if (player.stellarForge) {
+                if (player.stellarForge === ignoredObject) {
+                    continue;
+                }
                 const distance = position.distanceTo(player.stellarForge.position);
                 if (distance < player.stellarForge.radius + unitRadius) {
                     return true; // Collision with forge
@@ -3081,6 +3186,9 @@ export class GameState {
 
             // Check collision with solar mirrors (using approximate radius)
             for (const mirror of player.solarMirrors) {
+                if (mirror === ignoredObject) {
+                    continue;
+                }
                 const distance = position.distanceTo(mirror.position);
                 if (distance < 20 + unitRadius) { // Mirror has ~20 pixel radius
                     return true; // Collision with mirror
@@ -3089,6 +3197,9 @@ export class GameState {
 
             // Check collision with buildings
             for (const building of player.buildings) {
+                if (building === ignoredObject) {
+                    continue;
+                }
                 const distance = position.distanceTo(building.position);
                 if (distance < building.radius + unitRadius) {
                     return true; // Collision with building
@@ -3097,6 +3208,53 @@ export class GameState {
         }
 
         return false; // No collision
+    }
+
+    private updateStateHash(): void {
+        let hash = 2166136261;
+
+        const mix = (value: number): void => {
+            const normalizedValue = Math.floor(value * 100);
+            hash = Math.imul(hash ^ normalizedValue, 16777619);
+        };
+
+        mix(this.gameTime);
+        mix(this.suns.length);
+        mix(this.asteroids.length);
+
+        for (const player of this.players) {
+            mix(player.solarium);
+
+            if (player.stellarForge) {
+                mix(player.stellarForge.position.x);
+                mix(player.stellarForge.position.y);
+                mix(player.stellarForge.health);
+            } else {
+                mix(-1);
+            }
+
+            for (const mirror of player.solarMirrors) {
+                mix(mirror.position.x);
+                mix(mirror.position.y);
+                mix(mirror.health);
+            }
+
+            for (const unit of player.units) {
+                mix(unit.position.x);
+                mix(unit.position.y);
+                mix(unit.health);
+                mix(unit.isHero ? 1 : 0);
+            }
+
+            for (const building of player.buildings) {
+                mix(building.position.x);
+                mix(building.position.y);
+                mix(building.health);
+                mix(building.isComplete ? 1 : 0);
+            }
+        }
+
+        this.stateHash = hash >>> 0;
     }
 
     /**

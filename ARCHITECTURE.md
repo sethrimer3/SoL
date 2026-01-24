@@ -71,6 +71,22 @@
               └─────────────────────────┘
 ```
 
+## Deterministic State Hash & Replay Snippet
+
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, health, completion flags) for players, mirrors, units, and buildings. This hash is used for quick determinism checks during replays or multiplayer validation.
+
+### Sample Deterministic Replay Snippet (Command List)
+Use the following minimal command list to validate that the same `stateHash` is produced across runs:
+
+```json
+[
+  { "tick": 0, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 0 },
+  { "tick": 1, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 0, "targetWorld": { "x": 520, "y": 480 } },
+  { "tick": 5, "command": "selectUnits", "playerIndex": 0, "unitIndices": [0, 1, 2] },
+  { "tick": 6, "command": "moveUnits", "playerIndex": 0, "targetWorld": { "x": 600, "y": 500 } }
+]
+```
+
 ## Light & Resource Flow
 
 ```
