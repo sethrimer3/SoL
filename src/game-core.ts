@@ -2278,16 +2278,17 @@ export class GameState {
                 if (unit instanceof Ray) {
                     unit.updateBeamSegments(deltaTime);
                     
-                    // Process Ray ability if just used
-                    if (unit.abilityCooldown === unit.abilityCooldownTime - deltaTime) {
+                    // Process Ray ability if just used (check if cooldown is near max)
+                    if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1 && unit.drillDirection) {
                         this.processRayBeamAbility(unit);
+                        unit.drillDirection = null; // Clear after processing
                     }
                 }
                 
                 // Handle TurretDeployer ability
                 if (unit instanceof TurretDeployer) {
-                    // Check if ability was just used
-                    if (unit.abilityCooldown === unit.abilityCooldownTime - deltaTime) {
+                    // Check if ability was just used (check if cooldown is near max)
+                    if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1) {
                         this.processTurretDeployment(unit);
                     }
                 }
@@ -3212,6 +3213,32 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         
         // Hero units (Marine and Grave) are no longer spawned automatically
         // They must be obtained through other game mechanics
+        
+        // TEMPORARY: Add test hero units
+        if (i === 0) { // Player 1 gets Solari heroes
+            const rayPos = new Vector2D(forgePos.x + 100, forgePos.y);
+            player.units.push(new Ray(rayPos, player));
+            
+            const influenceBallPos = new Vector2D(forgePos.x + 150, forgePos.y);
+            player.units.push(new InfluenceBall(influenceBallPos, player));
+            
+            const turretDeployerPos = new Vector2D(forgePos.x + 200, forgePos.y);
+            player.units.push(new TurretDeployer(turretDeployerPos, player));
+        } else if (i === 1) { // Player 2 gets Aurum hero
+            const drillerPos = new Vector2D(forgePos.x - 100, forgePos.y);
+            const driller = new Driller(drillerPos, player);
+            player.units.push(driller);
+            
+            // Start driller hidden in an asteroid near the base
+            // Find an asteroid near the base
+            for (const asteroid of game.asteroids) {
+                const distance = asteroid.position.distanceTo(forgePos);
+                if (distance < 400 && distance > 100) {
+                    driller.hideInAsteroid(asteroid);
+                    break;
+                }
+            }
+        }
         
         game.players.push(player);
     }
