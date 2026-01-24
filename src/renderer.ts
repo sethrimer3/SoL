@@ -365,6 +365,11 @@ export class GameRenderer {
         this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
         this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
         
+        // Draw move order indicator if forge has one
+        if (forge.moveOrder > 0 && forge.targetPosition) {
+            this.drawMoveOrderIndicator(forge.position, forge.targetPosition, forge.moveOrder, color);
+        }
+        
         // Reset alpha if we dimmed
         if (shouldDim) {
             this.ctx.globalAlpha = 1.0;
@@ -561,6 +566,11 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
             this.ctx.fill();
+        }
+        
+        // Draw move order indicator if mirror has one
+        if (mirror.moveOrder > 0 && mirror.targetPosition) {
+            this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, color);
         }
     }
 
@@ -879,10 +889,52 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
+        // Draw move order indicator if unit has one
+        if (unit.moveOrder > 0 && unit.rallyPoint) {
+            this.drawMoveOrderIndicator(unit.position, unit.rallyPoint, unit.moveOrder, color);
+        }
+        
         // Reset alpha if we dimmed
         if (shouldDim) {
             this.ctx.globalAlpha = 1.0;
         }
+    }
+
+    /**
+     * Draw move order indicator (dot and line)
+     */
+    private drawMoveOrderIndicator(position: Vector2D, target: Vector2D, order: number, color: string): void {
+        const screenPos = this.worldToScreen(position);
+        const targetScreenPos = this.worldToScreen(target);
+        
+        // Draw thin line from unit to target
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y);
+        this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]);
+        this.ctx.globalAlpha = 1.0;
+        
+        // Draw dot with order number at target
+        const dotRadius = 12;
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(targetScreenPos.x, targetScreenPos.y, dotRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        // Draw order number
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 12px Arial';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(order.toString(), targetScreenPos.x, targetScreenPos.y);
     }
 
     /**

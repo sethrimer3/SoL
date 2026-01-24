@@ -207,6 +207,7 @@ export class SolarMirror {
     velocity: Vector2D = new Vector2D(0, 0);
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
     closestSunDistance: number = Infinity; // Distance to closest visible sun
+    moveOrder: number = 0; // Movement order indicator (0 = no order)
 
     // Movement constants for mirrors (slower than Stellar Forge)
     private readonly MAX_SPEED = 50; // Pixels per second - slower than forge
@@ -339,17 +340,17 @@ export class SolarMirror {
     }
 
     /**
-     * Update mirror position based on target and velocity
+     * Update mirror position based on target and velocity with obstacle avoidance
      */
-    update(deltaTime: number): void {
+    update(deltaTime: number, gameState: GameState | null = null): void {
         if (!this.targetPosition) return;
         
         const dx = this.targetPosition.x - this.position.x;
         const dy = this.targetPosition.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         
-        // If we're close enough to target, stop
-        if (distanceToTarget < 5) {
+        // If we're close enough to target, stop smoothly
+        if (distanceToTarget < 2) {
             this.position = this.targetPosition;
             this.targetPosition = null;
             this.velocity = new Vector2D(0, 0);
@@ -357,8 +358,22 @@ export class SolarMirror {
         }
         
         // Calculate desired direction
-        const directionX = dx / distanceToTarget;
-        const directionY = dy / distanceToTarget;
+        let directionX = dx / distanceToTarget;
+        let directionY = dy / distanceToTarget;
+        
+        // Add obstacle avoidance if gameState is provided
+        if (gameState) {
+            const avoidanceDir = this.calculateObstacleAvoidance(gameState);
+            if (avoidanceDir) {
+                directionX += avoidanceDir.x * 0.6;
+                directionY += avoidanceDir.y * 0.6;
+                const length = Math.sqrt(directionX * directionX + directionY * directionY);
+                if (length > 0) {
+                    directionX /= length;
+                    directionY /= length;
+                }
+            }
+        }
         
         // Calculate distance needed to decelerate to stop
         const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
@@ -370,10 +385,16 @@ export class SolarMirror {
             this.velocity.x += directionX * this.ACCELERATION * deltaTime;
             this.velocity.y += directionY * this.ACCELERATION * deltaTime;
         } else {
-            // Decelerate
-            const decelerationFactor = Math.max(0, 1 - (this.DECELERATION * deltaTime) / currentSpeed);
-            this.velocity.x *= decelerationFactor;
-            this.velocity.y *= decelerationFactor;
+            // Decelerate - improved deceleration to prevent overshooting
+            if (currentSpeed > 0.1) {
+                const decelerationAmount = this.DECELERATION * deltaTime;
+                const decelerationFactor = Math.max(0, (currentSpeed - decelerationAmount) / currentSpeed);
+                this.velocity.x *= decelerationFactor;
+                this.velocity.y *= decelerationFactor;
+            } else {
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+            }
         }
         
         // Cap speed at MAX_SPEED
@@ -386,6 +407,71 @@ export class SolarMirror {
         // Update position
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Calculate obstacle avoidance direction for smooth pathfinding
+     */
+    private calculateObstacleAvoidance(gameState: GameState): Vector2D | null {
+        let avoidX = 0;
+        let avoidY = 0;
+        let avoidCount = 0;
+        const avoidanceRange = 60; // Look ahead distance
+
+        // Check nearby obstacles
+        for (const sun of gameState.suns) {
+            const dx = this.position.x - sun.position.x;
+            const dy = this.position.y - sun.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = sun.radius + 30;
+            if (dist < minDist + avoidanceRange) {
+                const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                avoidX += (dx / dist) * avoidStrength;
+                avoidY += (dy / dist) * avoidStrength;
+                avoidCount++;
+            }
+        }
+
+        // Check other mirrors (avoid colliding with friendly mirrors)
+        for (const player of gameState.players) {
+            for (const mirror of player.solarMirrors) {
+                if (mirror === this) continue;
+                const dx = this.position.x - mirror.position.x;
+                const dy = this.position.y - mirror.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = 40; // 20 + 20 for two mirrors
+                if (dist < minDist + avoidanceRange && dist > 0) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+
+            // Check stellar forges
+            if (player.stellarForge) {
+                const forge = player.stellarForge;
+                const dx = this.position.x - forge.position.x;
+                const dy = this.position.y - forge.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = forge.radius + 30;
+                if (dist < minDist + avoidanceRange) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+        }
+
+        if (avoidCount > 0) {
+            const length = Math.sqrt(avoidX * avoidX + avoidY * avoidY);
+            if (length > 0) {
+                return new Vector2D(avoidX / length, avoidY / length);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -415,6 +501,7 @@ export class StellarForge {
     currentCrunch: ForgeCrunch | null = null; // Active crunch effect
     pendingSolarium: number = 0; // Solarium accumulated since last crunch
     minionPath: Vector2D[] = []; // Path that minions will follow
+    moveOrder: number = 0; // Movement order indicator (0 = no order)
 
     constructor(
         public position: Vector2D,
@@ -475,9 +562,9 @@ export class StellarForge {
     }
 
     /**
-     * Update forge movement and crunch effects
+     * Update forge movement and crunch effects with obstacle avoidance
      */
-    update(deltaTime: number): void {
+    update(deltaTime: number, gameState: GameState | null = null): void {
         // Update crunch timer
         if (this.health > 0 && this.isReceivingLight) {
             this.crunchTimer -= deltaTime;
@@ -518,8 +605,22 @@ export class StellarForge {
                 this.targetPosition = null;
             } else {
                 // Calculate desired velocity direction
-                const directionX = dx / distanceToTarget;
-                const directionY = dy / distanceToTarget;
+                let directionX = dx / distanceToTarget;
+                let directionY = dy / distanceToTarget;
+
+                // Add obstacle avoidance if gameState is provided
+                if (gameState) {
+                    const avoidanceDir = this.calculateObstacleAvoidance(gameState);
+                    if (avoidanceDir) {
+                        directionX += avoidanceDir.x * 0.6;
+                        directionY += avoidanceDir.y * 0.6;
+                        const length = Math.sqrt(directionX * directionX + directionY * directionY);
+                        if (length > 0) {
+                            directionX /= length;
+                            directionY /= length;
+                        }
+                    }
+                }
 
                 // Apply acceleration toward target
                 this.velocity.x += directionX * this.acceleration * deltaTime;
@@ -537,6 +638,71 @@ export class StellarForge {
         // Update position
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Calculate obstacle avoidance direction for smooth pathfinding
+     */
+    private calculateObstacleAvoidance(gameState: GameState): Vector2D | null {
+        let avoidX = 0;
+        let avoidY = 0;
+        let avoidCount = 0;
+        const avoidanceRange = 80; // Look ahead distance
+
+        // Check nearby obstacles
+        for (const sun of gameState.suns) {
+            const dx = this.position.x - sun.position.x;
+            const dy = this.position.y - sun.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = sun.radius + this.radius + 10;
+            if (dist < minDist + avoidanceRange) {
+                const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                avoidX += (dx / dist) * avoidStrength;
+                avoidY += (dy / dist) * avoidStrength;
+                avoidCount++;
+            }
+        }
+
+        // Check other forges and mirrors
+        for (const player of gameState.players) {
+            // Check other stellar forges
+            if (player.stellarForge && player.stellarForge !== this) {
+                const forge = player.stellarForge;
+                const dx = this.position.x - forge.position.x;
+                const dy = this.position.y - forge.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = this.radius + forge.radius + 10;
+                if (dist < minDist + avoidanceRange && dist > 0) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+
+            // Check mirrors
+            for (const mirror of player.solarMirrors) {
+                const dx = this.position.x - mirror.position.x;
+                const dy = this.position.y - mirror.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = this.radius + 30;
+                if (dist < minDist + avoidanceRange) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+        }
+
+        if (avoidCount > 0) {
+            const length = Math.sqrt(avoidX * avoidX + avoidY * avoidY);
+            if (length > 0) {
+                return new Vector2D(avoidX / length, avoidY / length);
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1166,6 +1332,7 @@ export class Unit {
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
+    moveOrder: number = 0; // Movement order indicator (0 = no order)
     
     constructor(
         public position: Vector2D,
@@ -2341,7 +2508,7 @@ export class GameState {
                 
                 // Only allow forge movement after countdown
                 if (!this.isCountdownActive) {
-                    player.stellarForge.update(deltaTime); // Update forge movement
+                    player.stellarForge.update(deltaTime, this); // Update forge movement with gameState
                     
                     // Check collision for forge (larger radius)
                     if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius, player.stellarForge)) {
@@ -2382,7 +2549,7 @@ export class GameState {
             // Mirrors can move during countdown to reach the sun
             for (const mirror of player.solarMirrors) {
                 const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
-                mirror.update(deltaTime); // Update mirror movement
+                mirror.update(deltaTime, this); // Update mirror movement with gameState
                 
                 // Check collision for mirror
                 if (this.checkCollision(mirror.position, 20, mirror)) {
@@ -3325,24 +3492,90 @@ export class GameState {
             const oldPosition = new Vector2D(unit.position.x, unit.position.y);
 
             if (this.checkCollision(unit.position, Constants.UNIT_RADIUS_PX)) {
-                let foundValidPosition = false;
-                const searchRadius = 15;
-                const searchSteps = 8;
+                // Smooth collision: Find the nearest obstacle and push away from it gently
+                let pushX = 0;
+                let pushY = 0;
+                let pushCount = 0;
 
-                for (let i = 0; i < searchSteps; i++) {
-                    const angle = (i / searchSteps) * Math.PI * 2;
-                    const testX = oldPosition.x + Math.cos(angle) * searchRadius;
-                    const testY = oldPosition.y + Math.sin(angle) * searchRadius;
-                    const testPos = new Vector2D(testX, testY);
-
-                    if (!this.checkCollision(testPos, Constants.UNIT_RADIUS_PX)) {
-                        unit.position = testPos;
-                        foundValidPosition = true;
-                        break;
+                // Check all obstacles and accumulate push directions
+                // Check suns
+                for (const sun of this.suns) {
+                    const dx = unit.position.x - sun.position.x;
+                    const dy = unit.position.y - sun.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const minDist = sun.radius + Constants.UNIT_RADIUS_PX;
+                    if (dist < minDist) {
+                        const pushStrength = (minDist - dist) / minDist;
+                        pushX += (dx / dist) * pushStrength;
+                        pushY += (dy / dist) * pushStrength;
+                        pushCount++;
                     }
                 }
 
-                if (!foundValidPosition) {
+                // Check stellar forges
+                for (const player of this.players) {
+                    if (player.stellarForge && player !== unit.owner) {
+                        const forge = player.stellarForge;
+                        const dx = unit.position.x - forge.position.x;
+                        const dy = unit.position.y - forge.position.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const minDist = forge.radius + Constants.UNIT_RADIUS_PX;
+                        if (dist < minDist) {
+                            const pushStrength = (minDist - dist) / minDist;
+                            pushX += (dx / dist) * pushStrength;
+                            pushY += (dy / dist) * pushStrength;
+                            pushCount++;
+                        }
+                    }
+                }
+
+                // Check solar mirrors
+                for (const player of this.players) {
+                    for (const mirror of player.solarMirrors) {
+                        if (mirror.owner === unit.owner) continue;
+                        const dx = unit.position.x - mirror.position.x;
+                        const dy = unit.position.y - mirror.position.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const minDist = 20 + Constants.UNIT_RADIUS_PX;
+                        if (dist < minDist) {
+                            const pushStrength = (minDist - dist) / minDist;
+                            pushX += (dx / dist) * pushStrength;
+                            pushY += (dy / dist) * pushStrength;
+                            pushCount++;
+                        }
+                    }
+                }
+
+                // Check buildings
+                for (const player of this.players) {
+                    for (const building of player.buildings) {
+                        const dx = unit.position.x - building.position.x;
+                        const dy = unit.position.y - building.position.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const minDist = building.radius + Constants.UNIT_RADIUS_PX;
+                        if (dist < minDist) {
+                            const pushStrength = (minDist - dist) / minDist;
+                            pushX += (dx / dist) * pushStrength;
+                            pushY += (dy / dist) * pushStrength;
+                            pushCount++;
+                        }
+                    }
+                }
+
+                // Apply smooth push away from obstacles
+                if (pushCount > 0) {
+                    const pushLength = Math.sqrt(pushX * pushX + pushY * pushY);
+                    if (pushLength > 0) {
+                        // Normalize and apply gentle push (10 pixels max)
+                        const pushDistance = Math.min(10, pushLength * 15);
+                        unit.position.x = oldPosition.x + (pushX / pushLength) * pushDistance;
+                        unit.position.y = oldPosition.y + (pushY / pushLength) * pushDistance;
+                    }
+                }
+
+                // If still in collision after push, stop the unit
+                if (this.checkCollision(unit.position, Constants.UNIT_RADIUS_PX)) {
+                    unit.position = oldPosition;
                     unit.rallyPoint = null;
                 }
             }
