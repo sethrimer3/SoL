@@ -567,14 +567,40 @@ export class GameRenderer {
     /**
      * Draw space dust particle
      */
-    private drawSpaceDust(particle: SpaceDustParticle): void {
+    private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
         const size = Constants.DUST_PARTICLE_SIZE * this.zoom;
+        let particleColor = particle.currentColor;
 
-        this.ctx.fillStyle = particle.currentColor;
+        if (viewingPlayerIndex !== null && game.isPointInShadow(particle.position)) {
+            const closestInfluenceOwnerIndex = this.getClosestInfluenceOwnerIndex(particle.position, game);
+            if (closestInfluenceOwnerIndex !== null && closestInfluenceOwnerIndex !== viewingPlayerIndex) {
+                particleColor = particle.baseColor;
+            }
+        }
+
+        this.ctx.fillStyle = particleColor;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+
+    private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
+        let closestDistance = Infinity;
+        let closestIndex: number | null = null;
+
+        for (let i = 0; i < game.players.length; i++) {
+            const player = game.players[i];
+            if (player.stellarForge && !player.isDefeated()) {
+                const distance = position.distanceTo(player.stellarForge.position);
+                if (distance < Constants.INFLUENCE_RADIUS && distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = i;
+                }
+            }
+        }
+
+        return closestIndex;
     }
 
     /**
@@ -1788,11 +1814,13 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
+        const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
+
         // Draw space dust particles (with culling)
         for (const particle of game.spaceDust) {
             // Only render particles within map boundaries
             if (this.isWithinRenderBounds(particle.position, game.mapSize, 10)) {
-                this.drawSpaceDust(particle);
+                this.drawSpaceDust(particle, game, viewingPlayerIndex);
             }
         }
 
@@ -1821,6 +1849,9 @@ export class GameRenderer {
         const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
+            if (viewingPlayerIndex !== null && i !== viewingPlayerIndex) {
+                continue;
+            }
             if (player.stellarForge && !player.isDefeated()) {
                 const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
                 influenceCircles.push({
