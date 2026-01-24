@@ -99,6 +99,21 @@ export class GameRenderer {
     }
 
     /**
+     * Check if a world position is within render bounds (map boundaries)
+     * @param worldPos Position in world space
+     * @param mapSize Size of the map
+     * @param margin Additional margin beyond map size (default 0)
+     * @returns true if position should be rendered
+     */
+    private isWithinRenderBounds(worldPos: Vector2D, mapSize: number, margin: number = 0): boolean {
+        const halfSize = mapSize / 2;
+        return worldPos.x >= -halfSize - margin && 
+               worldPos.x <= halfSize + margin && 
+               worldPos.y >= -halfSize - margin && 
+               worldPos.y <= halfSize + margin;
+    }
+
+    /**
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
@@ -1720,9 +1735,12 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
-        // Draw space dust particles
+        // Draw space dust particles (with culling)
         for (const particle of game.spaceDust) {
-            this.drawSpaceDust(particle);
+            // Only render particles within map boundaries
+            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10)) {
+                this.drawSpaceDust(particle);
+            }
         }
 
         // Draw suns
@@ -1738,9 +1756,12 @@ export class GameRenderer {
             this.drawLensFlare(sun);
         }
 
-        // Draw asteroids
+        // Draw asteroids (with culling - skip rendering beyond map bounds)
         for (const asteroid of game.asteroids) {
-            this.drawAsteroid(asteroid);
+            // Only render asteroids within map boundaries
+            if (this.isWithinRenderBounds(asteroid.position, game.mapSize, asteroid.size)) {
+                this.drawAsteroid(asteroid);
+            }
         }
 
         // Draw influence circles (with proper handling of overlaps)
@@ -1909,6 +1930,9 @@ export class GameRenderer {
             this.drawDeployedTurret(turret);
         }
 
+        // Draw border fade to black effect
+        this.drawBorderFade(game.mapSize);
+
         // Draw UI
         this.drawUI(game);
 
@@ -1955,6 +1979,74 @@ export class GameRenderer {
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
         }
+    }
+
+    /**
+     * Draw border fade effect - fades to black at map edges
+     */
+    private drawBorderFade(mapSize: number): void {
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        
+        // Define fade zone width in world units
+        const fadeZoneWidth = 150;
+        
+        // Calculate map boundaries in world coordinates
+        const halfMapSize = mapSize / 2;
+        
+        // Convert map edges to screen coordinates
+        const topLeft = this.worldToScreen(new Vector2D(-halfMapSize, -halfMapSize));
+        const topRight = this.worldToScreen(new Vector2D(halfMapSize, -halfMapSize));
+        const bottomLeft = this.worldToScreen(new Vector2D(-halfMapSize, halfMapSize));
+        const bottomRight = this.worldToScreen(new Vector2D(halfMapSize, halfMapSize));
+        
+        // Calculate fade start positions (inside the map boundary)
+        const fadeStart = this.worldToScreen(new Vector2D(-halfMapSize + fadeZoneWidth, -halfMapSize + fadeZoneWidth));
+        const fadeStartX = fadeStart.x - topLeft.x;
+        const fadeStartY = fadeStart.y - topLeft.y;
+        
+        // Save context state
+        this.ctx.save();
+        
+        // Left edge fade
+        if (topLeft.x < screenWidth) {
+            const gradient = this.ctx.createLinearGradient(topLeft.x, 0, topLeft.x + fadeStartX, 0);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, topLeft.x + fadeStartX, screenHeight);
+        }
+        
+        // Right edge fade
+        if (topRight.x > 0) {
+            const gradient = this.ctx.createLinearGradient(topRight.x, 0, topRight.x - fadeStartX, 0);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(topRight.x - fadeStartX, 0, screenWidth - (topRight.x - fadeStartX), screenHeight);
+        }
+        
+        // Top edge fade
+        if (topLeft.y < screenHeight) {
+            const gradient = this.ctx.createLinearGradient(0, topLeft.y, 0, topLeft.y + fadeStartY);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, 0, screenWidth, topLeft.y + fadeStartY);
+        }
+        
+        // Bottom edge fade
+        if (bottomLeft.y > 0) {
+            const gradient = this.ctx.createLinearGradient(0, bottomLeft.y, 0, bottomLeft.y - fadeStartY);
+            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.fillRect(0, bottomLeft.y - fadeStartY, screenWidth, screenHeight - (bottomLeft.y - fadeStartY));
+        }
+        
+        // Restore context state
+        this.ctx.restore();
     }
 
     /**

@@ -2160,6 +2160,7 @@ export class GameState {
     countdownTime: number = Constants.COUNTDOWN_DURATION; // Countdown from 3 seconds
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
+    mapSize: number = 2000; // Map size in world units
 
     /**
      * Update game state
@@ -3274,7 +3275,6 @@ export class GameState {
      */
     initializeAsteroids(count: number, width: number, height: number): void {
         this.asteroids = [];
-        const minGap = 100; // Minimum distance between asteroid centers
         const maxAttempts = 50; // Maximum attempts to find a valid position
         
         for (let i = 0; i < count; i++) {
@@ -3293,12 +3293,13 @@ export class GameState {
                 size = 30 + Math.random() * 50;
                 
                 // Check if this position has enough gap from existing asteroids
+                // Gap must be at least the sum of both asteroid radii
                 validPosition = true;
                 for (const asteroid of this.asteroids) {
                     const dx = x - asteroid.position.x;
                     const dy = y - asteroid.position.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    const requiredGap = minGap + size + asteroid.size;
+                    const requiredGap = size + asteroid.size;
                     
                     if (dist < requiredGap) {
                         validPosition = false;
