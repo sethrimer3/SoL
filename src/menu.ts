@@ -107,7 +107,11 @@ class ParticleMenuLayer {
         this.container.appendChild(this.canvas);
         // Defer initial resize to ensure container has layout dimensions
         requestAnimationFrame(() => {
-            this.resize();
+            try {
+                this.resize();
+            } catch (error) {
+                console.error('Failed to resize particle canvas:', error);
+            }
         });
         this.start();
     }
