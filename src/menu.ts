@@ -39,6 +39,322 @@ export interface HeroUnit {
     abilityDescription: string;
 }
 
+interface ParticleTarget {
+    x: number;
+    y: number;
+    color: string;
+    sizePx: number;
+}
+
+interface Particle {
+    x: number;
+    y: number;
+    velocityX: number;
+    velocityY: number;
+    targetX: number;
+    targetY: number;
+    baseTargetX: number;
+    baseTargetY: number;
+    color: string;
+    sizePx: number;
+    driftPhase: number;
+    driftRadiusPx: number;
+}
+
+class ParticleMenuLayer {
+    private static readonly REFRESH_INTERVAL_MS = 140;
+    private static readonly POSITION_SMOOTHING = 0.08;
+    private static readonly DRIFT_SPEED = 0.0007;
+    private static readonly DRIFT_RADIUS_MIN_PX = 0.6;
+    private static readonly DRIFT_RADIUS_MAX_PX = 2.4;
+
+    private container: HTMLElement;
+    private canvas: HTMLCanvasElement;
+    private context: CanvasRenderingContext2D;
+    private offscreenCanvas: HTMLCanvasElement;
+    private offscreenContext: CanvasRenderingContext2D;
+    private particles: Particle[] = [];
+    private animationFrameId: number | null = null;
+    private isActive: boolean = false;
+    private needsTargetRefresh: boolean = false;
+    private lastTargetRefreshMs: number = 0;
+    private targetRefreshContainer: HTMLElement | null = null;
+
+    constructor(container: HTMLElement) {
+        this.container = container;
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.top = '0';
+        this.canvas.style.left = '0';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.pointerEvents = 'none';
+        this.canvas.style.zIndex = '2';
+
+        const context = this.canvas.getContext('2d');
+        if (!context) {
+            throw new Error('Unable to create menu particle canvas context.');
+        }
+        this.context = context;
+
+        this.offscreenCanvas = document.createElement('canvas');
+        const offscreenContext = this.offscreenCanvas.getContext('2d');
+        if (!offscreenContext) {
+            throw new Error('Unable to create offscreen particle canvas context.');
+        }
+        this.offscreenContext = offscreenContext;
+
+        this.container.appendChild(this.canvas);
+        this.resize();
+        this.start();
+    }
+
+    public start(): void {
+        if (this.isActive) {
+            return;
+        }
+        this.isActive = true;
+        this.animate();
+    }
+
+    public stop(): void {
+        this.isActive = false;
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+
+    public resize(): void {
+        const rect = this.container.getBoundingClientRect();
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        this.canvas.width = Math.round(rect.width * devicePixelRatio);
+        this.canvas.height = Math.round(rect.height * devicePixelRatio);
+        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+
+    public requestTargetRefresh(container: HTMLElement): void {
+        this.needsTargetRefresh = true;
+        this.targetRefreshContainer = container;
+    }
+
+    public clearTargets(): void {
+        this.setTargets([]);
+    }
+
+    private animate(): void {
+        if (!this.isActive) {
+            return;
+        }
+
+        const nowMs = performance.now();
+        if (
+            this.needsTargetRefresh
+            && this.targetRefreshContainer
+            && nowMs - this.lastTargetRefreshMs >= ParticleMenuLayer.REFRESH_INTERVAL_MS
+        ) {
+            this.updateTargetsFromElements(this.targetRefreshContainer);
+            this.lastTargetRefreshMs = nowMs;
+            this.needsTargetRefresh = false;
+        }
+
+        this.updateParticles(nowMs);
+        this.renderParticles();
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
+    }
+
+    private updateTargetsFromElements(container: HTMLElement): void {
+        const targets = this.collectTargets(container);
+        this.setTargets(targets);
+    }
+
+    private setTargets(targets: ParticleTarget[]): void {
+        const updatedParticles: Particle[] = [];
+        const existingParticles = this.particles.slice();
+        const targetCount = targets.length;
+
+        while (existingParticles.length < targetCount) {
+            const seed = targets[existingParticles.length];
+            existingParticles.push(this.createParticle(seed.x, seed.y, seed.color, seed.sizePx));
+        }
+
+        for (let i = 0; i < targetCount; i++) {
+            const target = targets[i];
+            const particle = existingParticles[i];
+            particle.targetX = target.x;
+            particle.targetY = target.y;
+            particle.baseTargetX = target.x;
+            particle.baseTargetY = target.y;
+            particle.color = target.color;
+            particle.sizePx = target.sizePx;
+            updatedParticles.push(particle);
+        }
+
+        this.particles = updatedParticles;
+    }
+
+    private createParticle(x: number, y: number, color: string, sizePx: number): Particle {
+        const driftPhase = Math.random() * Math.PI * 2;
+        const driftRadiusPx = ParticleMenuLayer.DRIFT_RADIUS_MIN_PX
+            + Math.random() * (ParticleMenuLayer.DRIFT_RADIUS_MAX_PX - ParticleMenuLayer.DRIFT_RADIUS_MIN_PX);
+        return {
+            x,
+            y,
+            velocityX: 0,
+            velocityY: 0,
+            targetX: x,
+            targetY: y,
+            baseTargetX: x,
+            baseTargetY: y,
+            color,
+            sizePx,
+            driftPhase,
+            driftRadiusPx,
+        };
+    }
+
+    private updateParticles(nowMs: number): void {
+        const driftTime = nowMs * ParticleMenuLayer.DRIFT_SPEED;
+        for (const particle of this.particles) {
+            const driftX = Math.cos(particle.driftPhase + driftTime) * particle.driftRadiusPx;
+            const driftY = Math.sin(particle.driftPhase + driftTime) * particle.driftRadiusPx;
+
+            particle.baseTargetX = particle.targetX + driftX;
+            particle.baseTargetY = particle.targetY + driftY;
+
+            const deltaX = particle.baseTargetX - particle.x;
+            const deltaY = particle.baseTargetY - particle.y;
+
+            particle.velocityX += deltaX * ParticleMenuLayer.POSITION_SMOOTHING;
+            particle.velocityY += deltaY * ParticleMenuLayer.POSITION_SMOOTHING;
+
+            particle.velocityX *= 0.82;
+            particle.velocityY *= 0.82;
+
+            particle.x += particle.velocityX;
+            particle.y += particle.velocityY;
+        }
+    }
+
+    private renderParticles(): void {
+        const rect = this.container.getBoundingClientRect();
+        this.context.clearRect(0, 0, rect.width, rect.height);
+        this.context.globalCompositeOperation = 'lighter';
+
+        for (const particle of this.particles) {
+            this.context.fillStyle = particle.color;
+            this.context.beginPath();
+            this.context.arc(particle.x, particle.y, particle.sizePx, 0, Math.PI * 2);
+            this.context.fill();
+        }
+
+        this.context.globalCompositeOperation = 'source-over';
+    }
+
+    private collectTargets(container: HTMLElement): ParticleTarget[] {
+        const elements = Array.from(
+            container.querySelectorAll<HTMLElement>('[data-particle-text], [data-particle-box]')
+        );
+        const targets: ParticleTarget[] = [];
+
+        for (const element of elements) {
+            if (element.dataset.particleText !== undefined) {
+                targets.push(...this.collectTextTargets(element));
+            }
+            if (element.dataset.particleBox !== undefined) {
+                targets.push(...this.collectBoxTargets(element));
+            }
+        }
+
+        return targets;
+    }
+
+    private collectTextTargets(element: HTMLElement): ParticleTarget[] {
+        const text = element.textContent?.trim();
+        if (!text) {
+            return [];
+        }
+
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+            return [];
+        }
+
+        const computedStyle = window.getComputedStyle(element);
+        const fontSizePx = Number.parseFloat(computedStyle.fontSize) || 16;
+        const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
+        const fontWeight = computedStyle.fontWeight || '600';
+        const textColor = element.dataset.particleColor || '#FFFFFF';
+        const pointSizePx = Math.max(1.2, fontSizePx / 13);
+        const spacingPx = Math.max(4, Math.round(fontSizePx / 5.5));
+
+        this.offscreenCanvas.width = Math.ceil(rect.width);
+        this.offscreenCanvas.height = Math.ceil(rect.height);
+
+        this.offscreenContext.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+        this.offscreenContext.fillStyle = '#FFFFFF';
+        this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
+        this.offscreenContext.textAlign = 'center';
+        this.offscreenContext.textBaseline = 'middle';
+        this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
+
+        const imageData = this.offscreenContext.getImageData(
+            0,
+            0,
+            this.offscreenCanvas.width,
+            this.offscreenCanvas.height
+        );
+        const data = imageData.data;
+        const targets: ParticleTarget[] = [];
+        const startX = spacingPx / 2;
+        const startY = spacingPx / 2;
+
+        for (let y = startY; y < this.offscreenCanvas.height; y += spacingPx) {
+            for (let x = startX; x < this.offscreenCanvas.width; x += spacingPx) {
+                const index = (Math.floor(y) * this.offscreenCanvas.width + Math.floor(x)) * 4 + 3;
+                if (data[index] > 80) {
+                    targets.push({
+                        x: rect.left + x,
+                        y: rect.top + y,
+                        color: textColor,
+                        sizePx: pointSizePx,
+                    });
+                }
+            }
+        }
+
+        return targets;
+    }
+
+    private collectBoxTargets(element: HTMLElement): ParticleTarget[] {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) {
+            return [];
+        }
+
+        const color = element.dataset.particleColor || '#FFFFFF';
+        const spacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
+        const pointSizePx = Math.max(1.4, spacingPx / 3.2);
+        const targets: ParticleTarget[] = [];
+
+        const left = rect.left;
+        const right = rect.right;
+        const top = rect.top;
+        const bottom = rect.bottom;
+
+        for (let x = left; x <= right; x += spacingPx) {
+            targets.push({ x, y: top, color, sizePx: pointSizePx });
+            targets.push({ x, y: bottom, color, sizePx: pointSizePx });
+        }
+        for (let y = top; y <= bottom; y += spacingPx) {
+            targets.push({ x: left, y, color, sizePx: pointSizePx });
+            targets.push({ x: right, y, color, sizePx: pointSizePx });
+        }
+
+        return targets;
+    }
+}
+
 export interface GameSettings {
     selectedMap: MapConfig;
     difficulty: 'easy' | 'normal' | 'hard';
@@ -68,6 +384,9 @@ const createEmptyHero = (id: string, faction: Faction): HeroUnit => ({
 
 export class MainMenu {
     private menuElement: HTMLElement;
+    private contentElement!: HTMLElement;
+    private menuParticleLayer: ParticleMenuLayer | null = null;
+    private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
     private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-select' = 'main';
     private settings: GameSettings;
@@ -190,21 +509,45 @@ export class MainMenu {
         menu.style.left = '0';
         menu.style.width = '100%';
         menu.style.height = '100%';
-        menu.style.padding = '24px 16px';
         menu.style.boxSizing = 'border-box';
         menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
-        menu.style.display = 'flex';
-        menu.style.flexDirection = 'column';
-        menu.style.justifyContent = 'center';
-        menu.style.alignItems = 'center';
         menu.style.zIndex = '1000';
         menu.style.fontFamily = 'Arial, sans-serif';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
         menu.style.overflowX = 'hidden';
+        menu.style.isolation = 'isolate';
+
+        const content = document.createElement('div');
+        content.style.position = 'relative';
+        content.style.zIndex = '1';
+        content.style.width = '100%';
+        content.style.minHeight = '100%';
+        content.style.padding = '24px 16px';
+        content.style.boxSizing = 'border-box';
+        content.style.display = 'flex';
+        content.style.flexDirection = 'column';
+        content.style.justifyContent = 'center';
+        content.style.alignItems = 'center';
+        menu.appendChild(content);
+
+        this.contentElement = content;
+        this.menuParticleLayer = new ParticleMenuLayer(menu);
 
         // Render main screen content into the menu element
-        this.renderMainScreenContent(menu);
+        this.renderMainScreenContent(content);
+
+        this.resizeHandler = () => {
+            if (!this.menuParticleLayer) {
+                return;
+            }
+            this.menuParticleLayer.resize();
+            this.menuParticleLayer.requestTargetRefresh(this.contentElement);
+        };
+        window.addEventListener('resize', this.resizeHandler);
+        menu.addEventListener('scroll', () => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
         
         return menu;
     }
@@ -214,8 +557,8 @@ export class MainMenu {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
         }
-        if (this.menuElement) {
-            this.menuElement.innerHTML = '';
+        if (this.contentElement) {
+            this.contentElement.innerHTML = '';
         }
     }
 
@@ -233,10 +576,12 @@ export class MainMenu {
         title.textContent = 'SoL';
         title.style.fontSize = isCompactLayout ? '48px' : '72px';
         title.style.marginBottom = '10px';
-        title.style.color = '#FFD700';
-        title.style.textShadow = '0 0 20px rgba(255, 215, 0, 0.5)';
+        title.style.color = 'transparent';
+        title.style.textShadow = 'none';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
         // Subtitle
@@ -244,9 +589,11 @@ export class MainMenu {
         subtitle.textContent = 'Speed of Light RTS';
         subtitle.style.fontSize = isCompactLayout ? '18px' : '24px';
         subtitle.style.marginBottom = '30px';
-        subtitle.style.color = '#AAAAAA';
+        subtitle.style.color = 'transparent';
         subtitle.style.textAlign = 'center';
         subtitle.style.maxWidth = '100%';
+        subtitle.dataset.particleText = 'true';
+        subtitle.dataset.particleColor = '#AAAAAA';
         container.appendChild(subtitle);
 
         // Description
@@ -257,6 +604,9 @@ export class MainMenu {
         description.style.maxWidth = '500px';
         description.style.textAlign = 'center';
         description.style.lineHeight = '1.5';
+        description.style.color = 'transparent';
+        description.dataset.particleText = 'true';
+        description.dataset.particleColor = '#C5C5C5';
         container.appendChild(description);
 
         // Create carousel menu container
@@ -292,11 +642,14 @@ export class MainMenu {
         ];
 
         this.carouselMenu = new CarouselMenuView(carouselContainer, menuOptions);
+        this.carouselMenu.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
         this.carouselMenu.onSelect((option: MenuOption) => {
             switch (option.id) {
                 case 'loadout':
                     this.currentScreen = 'faction-select';
-                    this.renderFactionSelectionScreen(this.menuElement);
+                    this.renderFactionSelectionScreen(this.contentElement);
                     break;
                 case 'start':
                     this.hide();
@@ -306,11 +659,11 @@ export class MainMenu {
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
-                    this.renderMapSelectionScreen(this.menuElement);
+                    this.renderMapSelectionScreen(this.contentElement);
                     break;
                 case 'settings':
                     this.currentScreen = 'settings';
-                    this.renderSettingsScreen(this.menuElement);
+                    this.renderSettingsScreen(this.contentElement);
                     break;
             }
         });
@@ -319,7 +672,9 @@ export class MainMenu {
         const statusInfo = document.createElement('div');
         statusInfo.style.marginTop = '20px';
         statusInfo.style.fontSize = isCompactLayout ? '12px' : '14px';
-        statusInfo.style.color = '#AAAAAA';
+        statusInfo.style.color = 'transparent';
+        statusInfo.dataset.particleText = 'true';
+        statusInfo.dataset.particleColor = '#9AA0A6';
         
         let loadoutStatus = 'Not configured';
         if (this.settings.selectedFaction && this.settings.selectedHeroes.length === 4) {
@@ -340,7 +695,9 @@ export class MainMenu {
         const features = document.createElement('div');
         features.style.marginTop = '40px';
         features.style.fontSize = isCompactLayout ? '12px' : '14px';
-        features.style.color = '#888888';
+        features.style.color = 'transparent';
+        features.dataset.particleText = 'true';
+        features.dataset.particleColor = '#7C7C7C';
         features.innerHTML = `
             <div style="text-align: center;">
                 <div>✨ Ray-traced lighting and shadows</div>
@@ -350,10 +707,13 @@ export class MainMenu {
             </div>
         `;
         container.appendChild(features);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -399,7 +759,7 @@ export class MainMenu {
 
             mapCard.addEventListener('click', () => {
                 this.settings.selectedMap = map;
-                this.renderMapSelectionScreen(this.menuElement);
+                this.renderMapSelectionScreen(this.contentElement);
             });
 
             // Map name
@@ -438,13 +798,14 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
-            this.renderMainScreen(this.menuElement);
+            this.renderMainScreen(this.contentElement);
         }, '#666666');
         container.appendChild(backButton);
     }
 
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -517,7 +878,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
-            this.renderMainScreen(this.menuElement);
+            this.renderMainScreen(this.contentElement);
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
@@ -525,6 +886,7 @@ export class MainMenu {
 
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -593,7 +955,7 @@ export class MainMenu {
             factionCard.addEventListener('click', () => {
                 this.settings.selectedFaction = faction.id;
                 this.settings.selectedHeroes = []; // Reset hero selection when faction changes
-                this.renderFactionSelectionScreen(this.menuElement);
+                this.renderFactionSelectionScreen(this.contentElement);
             });
 
             // Faction name
@@ -633,7 +995,7 @@ export class MainMenu {
         if (this.settings.selectedFaction) {
             const continueButton = this.createButton('SELECT HEROES', () => {
                 this.currentScreen = 'loadout-select';
-                this.renderLoadoutSelectionScreen(this.menuElement);
+                this.renderLoadoutSelectionScreen(this.contentElement);
             }, '#00FF88');
             buttonContainer.appendChild(continueButton);
         }
@@ -641,7 +1003,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
-            this.renderMainScreen(this.menuElement);
+            this.renderMainScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
 
@@ -650,6 +1012,7 @@ export class MainMenu {
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -726,7 +1089,7 @@ export class MainMenu {
                         // Select hero
                         this.settings.selectedHeroes.push(hero.id);
                     }
-                    this.renderLoadoutSelectionScreen(this.menuElement);
+                    this.renderLoadoutSelectionScreen(this.contentElement);
                 });
             }
 
@@ -828,7 +1191,7 @@ export class MainMenu {
         if (this.settings.selectedHeroes.length === 4) {
             const confirmButton = this.createButton('CONFIRM LOADOUT', () => {
                 this.currentScreen = 'main';
-                this.renderMainScreen(this.menuElement);
+                this.renderMainScreen(this.contentElement);
             }, '#00FF88');
             buttonContainer.appendChild(confirmButton);
         }
@@ -836,7 +1199,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'faction-select';
-            this.renderFactionSelectionScreen(this.menuElement);
+            this.renderFactionSelectionScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
 
@@ -970,15 +1333,17 @@ export class MainMenu {
      */
     hide(): void {
         this.menuElement.style.display = 'none';
+        this.menuParticleLayer?.stop();
     }
 
     /**
      * Show the menu
      */
     show(): void {
-        this.menuElement.style.display = 'flex';
+        this.menuElement.style.display = 'block';
         this.currentScreen = 'main';
-        this.renderMainScreen(this.menuElement);
+        this.renderMainScreen(this.contentElement);
+        this.menuParticleLayer?.start();
     }
 
     /**
@@ -989,6 +1354,10 @@ export class MainMenu {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
         }
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
+        }
+        this.menuParticleLayer?.stop();
         if (this.menuElement.parentNode) {
             this.menuElement.parentNode.removeChild(this.menuElement);
         }
@@ -1024,6 +1393,7 @@ class CarouselMenuView {
     private dragStartOffset: number = 0;
     private velocity: number = 0;
     private onSelectCallback: ((option: MenuOption) => void) | null = null;
+    private onRenderCallback: (() => void) | null = null;
     private animationFrameId: number | null = null;
     private hasDragged: boolean = false;
 
@@ -1228,8 +1598,8 @@ class CarouselMenuView {
             optionElement.style.top = `${centerY - size / 2}px`;
             optionElement.style.width = `${size}px`;
             optionElement.style.height = `${size}px`;
-            optionElement.style.backgroundColor = distance === 0 ? '#FFD700' : '#00AAFF';
-            optionElement.style.border = '3px solid rgba(255, 255, 255, 0.5)';
+            optionElement.style.backgroundColor = 'transparent';
+            optionElement.style.border = '2px solid transparent';
             optionElement.style.borderRadius = '10px';
             optionElement.style.opacity = opacity.toString();
             optionElement.style.transition = 'background-color 0.2s';
@@ -1243,12 +1613,17 @@ class CarouselMenuView {
             optionElement.style.textAlign = 'center';
             optionElement.style.padding = '10px';
             optionElement.style.boxSizing = 'border-box';
+            optionElement.dataset.particleBox = 'true';
+            optionElement.dataset.particleColor = distance === 0 ? '#FFD700' : '#00AAFF';
             
             // Add option name
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name;
             nameElement.style.fontSize = `${Math.max(12, 16 * scale)}px`;
             nameElement.style.marginBottom = '5px';
+            nameElement.style.color = 'transparent';
+            nameElement.dataset.particleText = 'true';
+            nameElement.dataset.particleColor = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             optionElement.appendChild(nameElement);
             
             // Add option description (only for center item)
@@ -1256,9 +1631,11 @@ class CarouselMenuView {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
                 descElement.style.fontSize = `${Math.max(8, 10 * scale)}px`;
-                descElement.style.color = '#333333';
+                descElement.style.color = 'transparent';
                 descElement.style.overflow = 'hidden';
                 descElement.style.textOverflow = 'ellipsis';
+                descElement.dataset.particleText = 'true';
+                descElement.dataset.particleColor = '#D0D0D0';
                 optionElement.appendChild(descElement);
             }
             
@@ -1272,14 +1649,24 @@ class CarouselMenuView {
         instructionElement.style.bottom = '20px';
         instructionElement.style.left = '50%';
         instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = '#AAAAAA';
+        instructionElement.style.color = 'transparent';
         instructionElement.style.fontSize = '14px';
         instructionElement.style.pointerEvents = 'none';
+        instructionElement.dataset.particleText = 'true';
+        instructionElement.dataset.particleColor = '#AAAAAA';
         this.container.appendChild(instructionElement);
+
+        if (this.onRenderCallback) {
+            this.onRenderCallback();
+        }
     }
 
     public onSelect(callback: (option: MenuOption) => void): void {
         this.onSelectCallback = callback;
+    }
+
+    public onRender(callback: () => void): void {
+        this.onRenderCallback = callback;
     }
 
     public destroy(): void {
