@@ -43,7 +43,6 @@ interface ParticleTarget {
     x: number;
     y: number;
     color: string;
-    sizePx: number;
 }
 
 interface Particle {
@@ -55,7 +54,12 @@ interface Particle {
     targetY: number;
     baseTargetX: number;
     baseTargetY: number;
-    color: string;
+    colorR: number;
+    colorG: number;
+    colorB: number;
+    targetColorR: number;
+    targetColorG: number;
+    targetColorB: number;
     sizePx: number;
     driftPhase: number;
     driftRadiusPx: number;
@@ -63,12 +67,13 @@ interface Particle {
 
 class ParticleMenuLayer {
     private static readonly REFRESH_INTERVAL_MS = 140;
-    private static readonly POSITION_SMOOTHING = 0.08;
-    private static readonly DRIFT_SPEED = 0.0007;
+    private static readonly POSITION_SMOOTHING = 0.08 / 3;
+    private static readonly DRIFT_SPEED = 0.0007 / 3;
     private static readonly DRIFT_RADIUS_MIN_PX = 0.6;
     private static readonly DRIFT_RADIUS_MAX_PX = 2.4;
-    private static readonly POINT_SIZE_SCALE = 1 / 3;
     private static readonly OUTLINE_TEXT_THRESHOLD_PX = 32;
+    private static readonly COLOR_SMOOTHING = 0.08;
+    private static readonly PARTICLE_SIZE_PX = 1.6;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -82,6 +87,7 @@ class ParticleMenuLayer {
     private lastTargetRefreshMs: number = 0;
     private targetRefreshContainer: HTMLElement | null = null;
     private densityMultiplier: number = 1;
+    private desiredParticleCount: number = 0;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -184,33 +190,51 @@ class ParticleMenuLayer {
 
     private setTargets(targets: ParticleTarget[]): void {
         const updatedParticles: Particle[] = [];
-        const existingParticles = this.particles.slice();
         const targetCount = targets.length;
 
-        while (existingParticles.length < targetCount) {
-            const seed = targets[existingParticles.length];
-            existingParticles.push(this.createParticle(seed.x, seed.y, seed.color, seed.sizePx));
+        if (targetCount === 0) {
+            this.particles = updatedParticles;
+            this.desiredParticleCount = 0;
+            return;
         }
 
-        for (let i = 0; i < targetCount; i++) {
-            const target = targets[i];
+        if (this.desiredParticleCount === 0) {
+            this.desiredParticleCount = targetCount;
+        } else {
+            this.desiredParticleCount = Math.max(this.desiredParticleCount, targetCount);
+        }
+
+        const desiredCount = this.desiredParticleCount;
+        const existingParticles = this.particles.slice();
+
+        while (existingParticles.length < desiredCount) {
+            const seed = targets[existingParticles.length % targetCount];
+            existingParticles.push(this.createParticle(seed.x, seed.y, seed.color));
+        }
+
+        for (let i = 0; i < desiredCount; i++) {
+            const target = targets[i % targetCount];
             const particle = existingParticles[i];
             particle.targetX = target.x;
             particle.targetY = target.y;
             particle.baseTargetX = target.x;
             particle.baseTargetY = target.y;
-            particle.color = target.color;
-            particle.sizePx = target.sizePx;
+            const targetColor = this.parseColor(target.color);
+            particle.targetColorR = targetColor.r;
+            particle.targetColorG = targetColor.g;
+            particle.targetColorB = targetColor.b;
+            particle.sizePx = ParticleMenuLayer.PARTICLE_SIZE_PX;
             updatedParticles.push(particle);
         }
 
         this.particles = updatedParticles;
     }
 
-    private createParticle(x: number, y: number, color: string, sizePx: number): Particle {
+    private createParticle(x: number, y: number, color: string): Particle {
         const driftPhase = Math.random() * Math.PI * 2;
         const driftRadiusPx = ParticleMenuLayer.DRIFT_RADIUS_MIN_PX
             + Math.random() * (ParticleMenuLayer.DRIFT_RADIUS_MAX_PX - ParticleMenuLayer.DRIFT_RADIUS_MIN_PX);
+        const parsedColor = this.parseColor(color);
         return {
             x,
             y,
@@ -220,8 +244,13 @@ class ParticleMenuLayer {
             targetY: y,
             baseTargetX: x,
             baseTargetY: y,
-            color,
-            sizePx,
+            colorR: parsedColor.r,
+            colorG: parsedColor.g,
+            colorB: parsedColor.b,
+            targetColorR: parsedColor.r,
+            targetColorG: parsedColor.g,
+            targetColorB: parsedColor.b,
+            sizePx: ParticleMenuLayer.PARTICLE_SIZE_PX,
             driftPhase,
             driftRadiusPx,
         };
@@ -247,6 +276,10 @@ class ParticleMenuLayer {
 
             particle.x += particle.velocityX;
             particle.y += particle.velocityY;
+
+            particle.colorR += (particle.targetColorR - particle.colorR) * ParticleMenuLayer.COLOR_SMOOTHING;
+            particle.colorG += (particle.targetColorG - particle.colorG) * ParticleMenuLayer.COLOR_SMOOTHING;
+            particle.colorB += (particle.targetColorB - particle.colorB) * ParticleMenuLayer.COLOR_SMOOTHING;
         }
     }
 
@@ -256,7 +289,10 @@ class ParticleMenuLayer {
         this.context.globalCompositeOperation = 'lighter';
 
         for (const particle of this.particles) {
-            this.context.fillStyle = particle.color;
+            const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
+            const green = Math.min(255, Math.max(0, Math.round(particle.colorG)));
+            const blue = Math.min(255, Math.max(0, Math.round(particle.colorB)));
+            this.context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
             this.context.beginPath();
             this.context.arc(particle.x, particle.y, particle.sizePx, 0, Math.PI * 2);
             this.context.fill();
@@ -299,8 +335,6 @@ class ParticleMenuLayer {
         const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
         const fontWeight = computedStyle.fontWeight || '600';
         const textColor = element.dataset.particleColor || '#FFFFFF';
-        const basePointSizePx = Math.max(1.4, fontSizePx / 11);
-        const pointSizePx = basePointSizePx * ParticleMenuLayer.POINT_SIZE_SCALE;
         const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
         const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
         const isLargeText = fontSizePx >= ParticleMenuLayer.OUTLINE_TEXT_THRESHOLD_PX;
@@ -341,7 +375,6 @@ class ParticleMenuLayer {
                         x: rect.left + x,
                         y: rect.top + y,
                         color: textColor,
-                        sizePx: pointSizePx,
                     });
                 }
             }
@@ -359,8 +392,6 @@ class ParticleMenuLayer {
         const color = element.dataset.particleColor || '#FFFFFF';
         const baseSpacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
         const spacingPx = Math.max(3, Math.round(baseSpacingPx / this.densityMultiplier));
-        const basePointSizePx = Math.max(1.4, spacingPx / 3.2);
-        const pointSizePx = basePointSizePx * ParticleMenuLayer.POINT_SIZE_SCALE;
         const targets: ParticleTarget[] = [];
 
         const left = rect.left;
@@ -369,15 +400,35 @@ class ParticleMenuLayer {
         const bottom = rect.bottom;
 
         for (let x = left; x <= right; x += spacingPx) {
-            targets.push({ x, y: top, color, sizePx: pointSizePx });
-            targets.push({ x, y: bottom, color, sizePx: pointSizePx });
+            targets.push({ x, y: top, color });
+            targets.push({ x, y: bottom, color });
         }
         for (let y = top; y <= bottom; y += spacingPx) {
-            targets.push({ x: left, y, color, sizePx: pointSizePx });
-            targets.push({ x: right, y, color, sizePx: pointSizePx });
+            targets.push({ x: left, y, color });
+            targets.push({ x: right, y, color });
         }
 
         return targets;
+    }
+
+    private parseColor(color: string): { r: number; g: number; b: number } {
+        const trimmed = color.trim();
+        if (trimmed.startsWith('#')) {
+            const hex = trimmed.slice(1);
+            if (hex.length === 3) {
+                const r = Number.parseInt(hex[0] + hex[0], 16);
+                const g = Number.parseInt(hex[1] + hex[1], 16);
+                const b = Number.parseInt(hex[2] + hex[2], 16);
+                return { r, g, b };
+            }
+            if (hex.length === 6) {
+                const r = Number.parseInt(hex.slice(0, 2), 16);
+                const g = Number.parseInt(hex.slice(2, 4), 16);
+                const b = Number.parseInt(hex.slice(4, 6), 16);
+                return { r, g, b };
+            }
+        }
+        return { r: 255, g: 255, b: 255 };
     }
 }
 
@@ -1047,7 +1098,7 @@ export class MainMenu {
         title.textContent = `Select 4 Heroes - ${this.settings.selectedFaction}`;
         title.style.fontSize = isCompactLayout ? '28px' : '42px';
         title.style.marginBottom = isCompactLayout ? '15px' : '20px';
-        title.style.color = '#FFD700';
+        title.style.color = 'transparent';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
         title.dataset.particleText = 'true';
@@ -1059,7 +1110,7 @@ export class MainMenu {
         counter.textContent = `Selected: ${this.settings.selectedHeroes.length} / 4`;
         counter.style.fontSize = isCompactLayout ? '16px' : '18px';
         counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
+        counter.style.color = 'transparent';
         counter.dataset.particleText = 'true';
         counter.dataset.particleColor = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
         container.appendChild(counter);
@@ -1124,7 +1175,7 @@ export class MainMenu {
             heroName.textContent = hero.name;
             heroName.style.fontSize = '18px';
             heroName.style.marginBottom = '8px';
-            heroName.style.color = isSelected ? '#00FF88' : '#FFFFFF';
+            heroName.style.color = 'transparent';
             heroName.dataset.particleText = 'true';
             heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
             heroCard.appendChild(heroName);
@@ -1134,7 +1185,7 @@ export class MainMenu {
             heroDesc.textContent = hero.description;
             heroDesc.style.fontSize = '12px';
             heroDesc.style.lineHeight = '1.4';
-            heroDesc.style.color = '#AAAAAA';
+            heroDesc.style.color = 'transparent';
             heroDesc.style.marginBottom = '10px';
             heroDesc.dataset.particleText = 'true';
             heroDesc.dataset.particleColor = '#AAAAAA';
@@ -1153,28 +1204,46 @@ export class MainMenu {
             // Create stat rows
             const healthStat = document.createElement('div');
             healthStat.textContent = `❤ Health: ${hero.maxHealth}`;
+            healthStat.style.color = 'transparent';
+            healthStat.dataset.particleText = 'true';
+            healthStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(healthStat);
 
             const regenStat = document.createElement('div');
             regenStat.textContent = `♻ Regen: ${hero.regen}%`;
+            regenStat.style.color = 'transparent';
+            regenStat.dataset.particleText = 'true';
+            regenStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(regenStat);
 
             const defenseStat = document.createElement('div');
             defenseStat.textContent = `🛡 Defense: ${hero.defense}%`;
+            defenseStat.style.color = 'transparent';
+            defenseStat.dataset.particleText = 'true';
+            defenseStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(defenseStat);
 
             const attackStat = document.createElement('div');
             const attackIcon = hero.attackIgnoresDefense ? '⚡' : '⚔';
             const attackSuffix = hero.attackIgnoresDefense ? ' (ignores defense)' : '';
             attackStat.textContent = `${attackIcon} Attack: ${hero.attackDamage}${attackSuffix}`;
+            attackStat.style.color = 'transparent';
+            attackStat.dataset.particleText = 'true';
+            attackStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackStat);
 
             const attackSpeedStat = document.createElement('div');
             attackSpeedStat.textContent = `⏱ Speed: ${hero.attackSpeed}/s`;
+            attackSpeedStat.style.color = 'transparent';
+            attackSpeedStat.dataset.particleText = 'true';
+            attackSpeedStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackSpeedStat);
 
             const rangeStat = document.createElement('div');
             rangeStat.textContent = `🎯 Range: ${hero.attackRange}`;
+            rangeStat.style.color = 'transparent';
+            rangeStat.dataset.particleText = 'true';
+            rangeStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(rangeStat);
 
             heroCard.appendChild(statsContainer);
@@ -1183,10 +1252,12 @@ export class MainMenu {
             const abilityDesc = document.createElement('div');
             abilityDesc.style.fontSize = '11px';
             abilityDesc.style.lineHeight = '1.4';
-            abilityDesc.style.color = '#FFD700';
+            abilityDesc.style.color = 'transparent';
             abilityDesc.style.marginBottom = '8px';
             abilityDesc.style.fontStyle = 'italic';
             abilityDesc.textContent = `✨ ${hero.abilityDescription}`;
+            abilityDesc.dataset.particleText = 'true';
+            abilityDesc.dataset.particleColor = '#FFD700';
             heroCard.appendChild(abilityDesc);
 
             // Selection indicator
@@ -1195,8 +1266,10 @@ export class MainMenu {
                 indicator.textContent = '✓ Selected';
                 indicator.style.fontSize = '12px';
                 indicator.style.marginTop = '8px';
-                indicator.style.color = '#00FF88';
+                indicator.style.color = 'transparent';
                 indicator.style.fontWeight = 'bold';
+                indicator.dataset.particleText = 'true';
+                indicator.dataset.particleColor = '#00FF88';
                 heroCard.appendChild(indicator);
             }
 
