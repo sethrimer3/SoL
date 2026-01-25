@@ -450,6 +450,8 @@ export interface GameSettings {
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
     selectedHeroNames: string[];
+    playerColor: string;
+    enemyColor: string;
 }
 
 export class MainMenu {
@@ -549,7 +551,9 @@ export class MainMenu {
             isBattleStatsInfoEnabled: false,
             selectedFaction: null,
             selectedHeroes: [],
-            selectedHeroNames: []
+            selectedHeroNames: [],
+            playerColor: '#66B3FF', // Somewhat light blue
+            enemyColor: '#FF6B6B'   // Slightly light red
         };
         
         this.menuElement = this.createMenuElement();
@@ -920,6 +924,30 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(battleStatsSection);
+
+        // Player Color setting
+        const playerColorSection = this.createSettingSection(
+            'Player Color',
+            this.createColorPicker(
+                this.settings.playerColor,
+                (value) => {
+                    this.settings.playerColor = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(playerColorSection);
+
+        // Enemy Color setting
+        const enemyColorSection = this.createSettingSection(
+            'Enemy Color',
+            this.createColorPicker(
+                this.settings.enemyColor,
+                (value) => {
+                    this.settings.enemyColor = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(enemyColorSection);
 
         container.appendChild(settingsContainer);
 
@@ -1426,6 +1454,45 @@ export class MainMenu {
         toggleContainer.appendChild(toggle);
 
         return toggleContainer;
+    }
+
+    private createColorPicker(currentValue: string, onChange: (value: string) => void): HTMLElement {
+        const container = document.createElement('div');
+        container.style.display = 'flex';
+        container.style.alignItems = 'center';
+        container.style.gap = '10px';
+
+        // Color preview box
+        const preview = document.createElement('div');
+        preview.style.width = '40px';
+        preview.style.height = '40px';
+        preview.style.backgroundColor = currentValue;
+        preview.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        preview.style.borderRadius = '5px';
+        preview.style.cursor = 'pointer';
+
+        // Hidden color input
+        const input = document.createElement('input');
+        input.type = 'color';
+        input.value = currentValue;
+        input.style.opacity = '0';
+        input.style.width = '0';
+        input.style.height = '0';
+        input.style.position = 'absolute';
+
+        input.addEventListener('change', () => {
+            preview.style.backgroundColor = input.value;
+            onChange(input.value);
+        });
+
+        preview.addEventListener('click', () => {
+            input.click();
+        });
+
+        container.appendChild(preview);
+        container.appendChild(input);
+
+        return container;
     }
 
     /**

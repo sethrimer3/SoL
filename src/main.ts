@@ -124,6 +124,10 @@ class GameController {
         this.game = this.createGameFromSettings(settings);
         this.renderer.selectedHeroNames = settings.selectedHeroNames;
         
+        // Set player and enemy colors from settings
+        this.renderer.playerColor = settings.playerColor;
+        this.renderer.enemyColor = settings.enemyColor;
+        
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
             this.renderer.viewingPlayer = this.game.players[0];
