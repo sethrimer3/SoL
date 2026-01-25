@@ -454,7 +454,7 @@ export class GameRenderer {
             
             // Draw button label
             this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#666666';
-            this.ctx.font = `${14 * this.zoom}px Arial`;
+            this.ctx.font = `${14 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(displayHeroes[i], buttonX, buttonY);
@@ -462,7 +462,7 @@ export class GameRenderer {
         
         // Draw instruction text
         this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.font = `${10 * this.zoom}px Arial`;
+        this.ctx.font = `${10 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'top';
         this.ctx.fillText('Hero Production (Stub)', screenPos.x, screenPos.y + forgeSize * 2.5);
@@ -638,7 +638,7 @@ export class GameRenderer {
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
-            this.ctx.font = `${12 * this.zoom}px Arial`;
+            this.ctx.font = `${12 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
@@ -866,7 +866,7 @@ export class GameRenderer {
 
                 // Draw button icon (placeholder)
                 this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${12 * this.zoom}px Arial`;
+                this.ctx.font = `${12 * this.zoom}px Doto`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
                 this.ctx.fillText(`B${i + 1}`, btnX, btnY);
@@ -1004,7 +1004,7 @@ export class GameRenderer {
         
         // Draw order number
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 12px Arial';
+        this.ctx.font = 'bold 12px Doto';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(order.toString(), targetScreenPos.x, targetScreenPos.y);
@@ -1881,7 +1881,7 @@ export class GameRenderer {
             this.ctx.fillRect(10, 10, infoBoxWidth, infoBoxHeight);
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${infoFontSize}px Arial`;
+            this.ctx.font = `${infoFontSize}px Doto`;
             let infoY = 30;
             this.ctx.fillText(`SoL - Speed of Light RTS`, 20, infoY);
             infoY += infoLineHeight;
@@ -1922,7 +1922,7 @@ export class GameRenderer {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             this.ctx.fillRect(controlBoxX, controlBoxY, controlBoxWidth, controlBoxHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${controlFontSize}px Arial`;
+            this.ctx.font = `${controlFontSize}px Doto`;
             let controlTextY = controlBoxY + controlLineHeight;
             for (const line of controlLines) {
                 this.ctx.fillText(line, 20, controlTextY);
@@ -2457,7 +2457,7 @@ export class GameRenderer {
             
             // Countdown text
             this.ctx.fillStyle = '#FFD700';
-            this.ctx.font = 'bold 120px Arial';
+            this.ctx.font = 'bold 120px Doto';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             
@@ -2540,7 +2540,7 @@ export class GameRenderer {
         
         // Title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Arial`;
+        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
         
@@ -2559,7 +2559,7 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 18 : 20}px Arial`;
+            this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
             this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
         };
         
@@ -2588,7 +2588,7 @@ export class GameRenderer {
         // Victory message
         this.ctx.fillStyle = this.getFactionColor(winner.faction);
         const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
-        this.ctx.font = `bold ${victoryFontSize}px Arial`;
+        this.ctx.font = `bold ${victoryFontSize}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`${winner.name} WINS!`, screenWidth / 2, 80);
         
@@ -2607,12 +2607,12 @@ export class GameRenderer {
         // Match statistics title
         this.ctx.fillStyle = '#FFD700';
         const statsTitleSize = Math.max(18, Math.min(28, screenWidth * 0.07));
-        this.ctx.font = `bold ${statsTitleSize}px Arial`;
+        this.ctx.font = `bold ${statsTitleSize}px Doto`;
         this.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
         
         // Draw stats for each player
         const statsFontSize = Math.max(14, Math.min(20, screenWidth * 0.045));
-        this.ctx.font = `${statsFontSize}px Arial`;
+        this.ctx.font = `${statsFontSize}px Doto`;
         let y = panelY + 100;
         const horizontalPadding = 24;
         const labelColumnWidth = Math.max(100, Math.min(200, panelWidth * 0.4));
@@ -2675,7 +2675,7 @@ export class GameRenderer {
         this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
         
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Arial`;
+        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65));
         
