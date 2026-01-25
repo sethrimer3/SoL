@@ -70,8 +70,6 @@ interface BackgroundParticle {
     y: number;
     velocityX: number;
     velocityY: number;
-    driftAngleRad: number;
-    driftTurnRateRad: number;
     colorR: number;
     colorG: number;
     colorB: number;
@@ -94,10 +92,8 @@ class BackgroundParticleLayer {
     private static readonly LARGE_PARTICLE_RADIUS = 250;
     private static readonly LARGE_MAX_VELOCITY = 0.3;
     private static readonly LARGE_FRICTION = 0.98;
-    private static readonly LARGE_SWIM_ACCELERATION = 0.0045;
-    private static readonly LARGE_SWIM_TURN_RATE_RAD = 0.0025;
-    private static readonly LARGE_SCATTER_SPEED = 1.1;
     private static readonly COLOR_TRANSITION_SPEED = 0.002;
+    private static readonly LARGE_REPULSION_STRENGTH = 0.08;
     private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
     private static readonly SWARM_PARTICLE_COUNT = 160;
     private static readonly SWARM_TYPE_COUNT = 8;
@@ -105,13 +101,13 @@ class BackgroundParticleLayer {
     private static readonly SWARM_FRICTION = 0.96;
     private static readonly SWARM_INTERACTION_STRENGTH = 0.02;
     private static readonly SWARM_SPRITE_SIZE_PX = 42;
-    private static readonly SWARM_SCATTER_SPEED = 1.4;
     private static readonly SWARM_OPACITY = 0.35;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
     private particles: BackgroundParticle[] = [];
     private swarmParticles: BackgroundSwarmParticle[] = [];
+    private attractionMatrix: number[][] = [];
     private swarmInteractionMatrix: number[][] = [];
     private swarmSprites: HTMLCanvasElement[] = [];
     private animationFrameId: number | null = null;
@@ -149,6 +145,7 @@ class BackgroundParticleLayer {
         
         this.resize();
         this.initializeParticles();
+        this.initializeAttractionMatrix();
         this.initializeSwarmSprites();
         this.initializeSwarmParticles();
         this.initializeSwarmInteractionMatrix();
@@ -158,29 +155,38 @@ class BackgroundParticleLayer {
     private initializeParticles(): void {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
-        const radius = BackgroundParticleLayer.LARGE_PARTICLE_RADIUS;
-        const maxX = Math.max(radius, width - radius);
-        const maxY = Math.max(radius, height - radius);
         
         this.particles = [];
         for (let i = 0; i < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; i++) {
             const color = this.gradientColors[i % this.gradientColors.length];
             const particle: BackgroundParticle = {
-                x: radius + Math.random() * (maxX - radius),
-                y: radius + Math.random() * (maxY - radius),
+                x: Math.random() * width,
+                y: Math.random() * height,
                 velocityX: (Math.random() - 0.5) * 0.5,
                 velocityY: (Math.random() - 0.5) * 0.5,
-                driftAngleRad: Math.random() * Math.PI * 2,
-                driftTurnRateRad: (Math.random() - 0.5) * BackgroundParticleLayer.LARGE_SWIM_TURN_RATE_RAD,
                 colorR: color[0],
                 colorG: color[1],
                 colorB: color[2],
                 targetColorR: color[0],
                 targetColorG: color[1],
                 targetColorB: color[2],
-                radius
+                radius: BackgroundParticleLayer.LARGE_PARTICLE_RADIUS
             };
             this.particles.push(particle);
+        }
+    }
+
+    private initializeAttractionMatrix(): void {
+        this.attractionMatrix = [];
+        for (let i = 0; i < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; i++) {
+            this.attractionMatrix[i] = [];
+            for (let j = 0; j < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; j++) {
+                if (i === j) {
+                    this.attractionMatrix[i][j] = 0;
+                } else {
+                    this.attractionMatrix[i][j] = -Math.random() * BackgroundParticleLayer.LARGE_REPULSION_STRENGTH;
+                }
+            }
         }
     }
 
@@ -195,15 +201,12 @@ class BackgroundParticleLayer {
     private initializeSwarmParticles(): void {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
-        const boundaryPaddingPx = BackgroundParticleLayer.SWARM_SPRITE_SIZE_PX * 0.5;
-        const maxX = Math.max(boundaryPaddingPx, width - boundaryPaddingPx);
-        const maxY = Math.max(boundaryPaddingPx, height - boundaryPaddingPx);
 
         this.swarmParticles = [];
         for (let i = 0; i < BackgroundParticleLayer.SWARM_PARTICLE_COUNT; i++) {
             this.swarmParticles.push({
-                x: boundaryPaddingPx + Math.random() * (maxX - boundaryPaddingPx),
-                y: boundaryPaddingPx + Math.random() * (maxY - boundaryPaddingPx),
+                x: Math.random() * width,
+                y: Math.random() * height,
                 velocityX: (Math.random() - 0.5) * 0.4,
                 velocityY: (Math.random() - 0.5) * 0.4,
                 typeIndex: i % BackgroundParticleLayer.SWARM_TYPE_COUNT
@@ -216,23 +219,10 @@ class BackgroundParticleLayer {
         for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
             this.swarmInteractionMatrix[i] = [];
             for (let j = 0; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
-                this.swarmInteractionMatrix[i][j] = 0;
-            }
-        }
-
-        for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
-            for (let j = i + 1; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
-                const shouldBothRepel = Math.random() < 0.45;
-                if (shouldBothRepel) {
-                    const repulsion = -Math.random();
-                    this.swarmInteractionMatrix[i][j] = repulsion;
-                    this.swarmInteractionMatrix[j][i] = repulsion;
+                if (i === j) {
+                    this.swarmInteractionMatrix[i][j] = 0;
                 } else {
-                    const attraction = Math.random();
-                    const repulsion = -Math.random();
-                    const isForwardAttracting = Math.random() < 0.5;
-                    this.swarmInteractionMatrix[i][j] = isForwardAttracting ? attraction : repulsion;
-                    this.swarmInteractionMatrix[j][i] = isForwardAttracting ? repulsion : attraction;
+                    this.swarmInteractionMatrix[i][j] = Math.random() * 2 - 1;
                 }
             }
         }
@@ -325,13 +315,28 @@ class BackgroundParticleLayer {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
         
+        // Apply attraction/repulsion forces
         for (let i = 0; i < this.particles.length; i++) {
             const p1 = this.particles[i];
-
-            p1.driftAngleRad += p1.driftTurnRateRad;
-            p1.velocityX += Math.cos(p1.driftAngleRad) * BackgroundParticleLayer.LARGE_SWIM_ACCELERATION;
-            p1.velocityY += Math.sin(p1.driftAngleRad) * BackgroundParticleLayer.LARGE_SWIM_ACCELERATION;
-
+            
+            for (let j = 0; j < this.particles.length; j++) {
+                if (i === j) continue;
+                
+                const p2 = this.particles[j];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    const force = this.attractionMatrix[i][j];
+                    const forceX = (dx / distance) * force;
+                    const forceY = (dy / distance) * force;
+                    
+                    p1.velocityX += forceX;
+                    p1.velocityY += forceY;
+                }
+            }
+            
             // Apply friction
             p1.velocityX *= BackgroundParticleLayer.LARGE_FRICTION;
             p1.velocityY *= BackgroundParticleLayer.LARGE_FRICTION;
@@ -347,23 +352,11 @@ class BackgroundParticleLayer {
             p1.x += p1.velocityX;
             p1.y += p1.velocityY;
             
-            // Keep particles within viewport bounds
-            if (p1.x < p1.radius) {
-                p1.x = p1.radius;
-                p1.velocityX = Math.abs(p1.velocityX);
-            }
-            if (p1.x > width - p1.radius) {
-                p1.x = width - p1.radius;
-                p1.velocityX = -Math.abs(p1.velocityX);
-            }
-            if (p1.y < p1.radius) {
-                p1.y = p1.radius;
-                p1.velocityY = Math.abs(p1.velocityY);
-            }
-            if (p1.y > height - p1.radius) {
-                p1.y = height - p1.radius;
-                p1.velocityY = -Math.abs(p1.velocityY);
-            }
+            // Wrap around screen edges
+            if (p1.x < -p1.radius) p1.x = width + p1.radius;
+            if (p1.x > width + p1.radius) p1.x = -p1.radius;
+            if (p1.y < -p1.radius) p1.y = height + p1.radius;
+            if (p1.y > height + p1.radius) p1.y = -p1.radius;
             
             // Smoothly transition colors
             p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
@@ -375,7 +368,6 @@ class BackgroundParticleLayer {
     private updateSwarmParticles(): void {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
-        const boundaryPaddingPx = BackgroundParticleLayer.SWARM_SPRITE_SIZE_PX * 0.5;
 
         for (let i = 0; i < this.swarmParticles.length; i++) {
             const p1 = this.swarmParticles[i];
@@ -410,41 +402,10 @@ class BackgroundParticleLayer {
             p1.x += p1.velocityX;
             p1.y += p1.velocityY;
 
-            if (p1.x < boundaryPaddingPx) {
-                p1.x = boundaryPaddingPx;
-                p1.velocityX = Math.abs(p1.velocityX);
-            }
-            if (p1.x > width - boundaryPaddingPx) {
-                p1.x = width - boundaryPaddingPx;
-                p1.velocityX = -Math.abs(p1.velocityX);
-            }
-            if (p1.y < boundaryPaddingPx) {
-                p1.y = boundaryPaddingPx;
-                p1.velocityY = Math.abs(p1.velocityY);
-            }
-            if (p1.y > height - boundaryPaddingPx) {
-                p1.y = height - boundaryPaddingPx;
-                p1.velocityY = -Math.abs(p1.velocityY);
-            }
-        }
-    }
-
-    public scatterParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-
-        for (const particle of this.particles) {
-            particle.velocityX = (Math.random() - 0.5) * BackgroundParticleLayer.LARGE_SCATTER_SPEED;
-            particle.velocityY = (Math.random() - 0.5) * BackgroundParticleLayer.LARGE_SCATTER_SPEED;
-            particle.driftAngleRad = Math.random() * Math.PI * 2;
-            particle.driftTurnRateRad = (Math.random() - 0.5) * BackgroundParticleLayer.LARGE_SWIM_TURN_RATE_RAD;
-            particle.x = Math.min(width - particle.radius, Math.max(particle.radius, particle.x));
-            particle.y = Math.min(height - particle.radius, Math.max(particle.radius, particle.y));
-        }
-
-        for (const particle of this.swarmParticles) {
-            particle.velocityX = (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SCATTER_SPEED;
-            particle.velocityY = (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SCATTER_SPEED;
+            if (p1.x < 0) p1.x = width;
+            if (p1.x > width) p1.x = 0;
+            if (p1.y < 0) p1.y = height;
+            if (p1.y > height) p1.y = 0;
         }
     }
     
@@ -1136,7 +1097,6 @@ export class MainMenu {
 
     private startMenuTransition(): void {
         this.menuParticleLayer?.startTransition();
-        this.backgroundParticleLayer?.scatterParticles();
     }
 
     private renderMainScreen(container: HTMLElement): void {
