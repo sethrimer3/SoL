@@ -67,6 +67,8 @@ class ParticleMenuLayer {
     private static readonly DRIFT_SPEED = 0.0007;
     private static readonly DRIFT_RADIUS_MIN_PX = 0.6;
     private static readonly DRIFT_RADIUS_MAX_PX = 2.4;
+    private static readonly POINT_SIZE_SCALE = 1 / 3;
+    private static readonly OUTLINE_TEXT_THRESHOLD_PX = 32;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -297,19 +299,28 @@ class ParticleMenuLayer {
         const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
         const fontWeight = computedStyle.fontWeight || '600';
         const textColor = element.dataset.particleColor || '#FFFFFF';
-        const pointSizePx = Math.max(1.4, fontSizePx / 11);
+        const basePointSizePx = Math.max(1.4, fontSizePx / 11);
+        const pointSizePx = basePointSizePx * ParticleMenuLayer.POINT_SIZE_SCALE;
         const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
         const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
+        const isLargeText = fontSizePx >= ParticleMenuLayer.OUTLINE_TEXT_THRESHOLD_PX;
 
         this.offscreenCanvas.width = Math.ceil(rect.width);
         this.offscreenCanvas.height = Math.ceil(rect.height);
 
         this.offscreenContext.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
-        this.offscreenContext.fillStyle = '#FFFFFF';
         this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
         this.offscreenContext.textAlign = 'center';
         this.offscreenContext.textBaseline = 'middle';
-        this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
+        if (isLargeText) {
+            this.offscreenContext.strokeStyle = '#FFFFFF';
+            this.offscreenContext.lineWidth = Math.max(2, fontSizePx / 10);
+            this.offscreenContext.lineJoin = 'round';
+            this.offscreenContext.strokeText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
+        } else {
+            this.offscreenContext.fillStyle = '#FFFFFF';
+            this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
+        }
 
         const imageData = this.offscreenContext.getImageData(
             0,
@@ -348,7 +359,8 @@ class ParticleMenuLayer {
         const color = element.dataset.particleColor || '#FFFFFF';
         const baseSpacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
         const spacingPx = Math.max(3, Math.round(baseSpacingPx / this.densityMultiplier));
-        const pointSizePx = Math.max(1.4, spacingPx / 3.2);
+        const basePointSizePx = Math.max(1.4, spacingPx / 3.2);
+        const pointSizePx = basePointSizePx * ParticleMenuLayer.POINT_SIZE_SCALE;
         const targets: ParticleTarget[] = [];
 
         const left = rect.left;
@@ -526,7 +538,7 @@ export class MainMenu {
         menu.style.boxSizing = 'border-box';
         menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
         menu.style.zIndex = '1000';
-        menu.style.fontFamily = 'Arial, sans-serif';
+        menu.style.fontFamily = '"Archivo Black", Arial, sans-serif';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
         menu.style.overflowX = 'hidden';
@@ -577,7 +589,8 @@ export class MainMenu {
     }
 
     private setMenuParticleDensity(multiplier: number): void {
-        this.menuParticleLayer?.setDensityMultiplier(multiplier);
+        const densityScale = 2;
+        this.menuParticleLayer?.setDensityMultiplier(multiplier * densityScale);
     }
 
     private renderMainScreen(container: HTMLElement): void {
@@ -1398,8 +1411,9 @@ export class MainMenu {
  */
 class CarouselMenuView {
     // Animation constants
-    private static readonly ITEM_WIDTH = 200;
-    private static readonly BASE_SIZE = 120;
+    private static readonly ITEM_WIDTH = 600;
+    private static readonly BASE_SIZE = 360;
+    private static readonly TEXT_SCALE = 3;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
     private static readonly VELOCITY_FACTOR = 0.001;
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
@@ -1430,7 +1444,7 @@ class CarouselMenuView {
     private setupContainer(): void {
         this.container.style.position = 'relative';
         this.container.style.width = '100%';
-        this.container.style.height = '400px';
+        this.container.style.height = '600px';
         this.container.style.overflow = 'hidden';
         this.container.style.cursor = 'grab';
         this.container.style.userSelect = 'none';
@@ -1633,7 +1647,7 @@ class CarouselMenuView {
             optionElement.style.color = '#000000';
             optionElement.style.fontWeight = 'bold';
             optionElement.style.textAlign = 'center';
-            optionElement.style.padding = '10px';
+            optionElement.style.padding = '30px';
             optionElement.style.boxSizing = 'border-box';
             optionElement.dataset.particleBox = 'true';
             optionElement.dataset.particleColor = distance === 0 ? '#FFD700' : '#00AAFF';
@@ -1641,8 +1655,8 @@ class CarouselMenuView {
             // Add option name
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name;
-            nameElement.style.fontSize = `${Math.max(14, 18 * scale)}px`;
-            nameElement.style.marginBottom = '5px';
+            nameElement.style.fontSize = `${Math.max(14, 18 * scale) * CarouselMenuView.TEXT_SCALE}px`;
+            nameElement.style.marginBottom = '15px';
             nameElement.style.color = 'transparent';
             nameElement.style.fontWeight = '700';
             nameElement.dataset.particleText = 'true';
@@ -1653,7 +1667,7 @@ class CarouselMenuView {
             if (distance === 0) {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
-                descElement.style.fontSize = `${Math.max(10, 12 * scale)}px`;
+                descElement.style.fontSize = `${Math.max(10, 12 * scale) * CarouselMenuView.TEXT_SCALE}px`;
                 descElement.style.color = 'transparent';
                 descElement.style.overflow = 'hidden';
                 descElement.style.textOverflow = 'ellipsis';
