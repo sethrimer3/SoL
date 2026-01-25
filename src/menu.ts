@@ -75,8 +75,8 @@ class ParticleMenuLayer {
     private static readonly PARTICLE_SIZE_PX = 1.6;
     private static readonly RELOCATE_MIN_DISTANCE_PX = 4;
     private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
-    private static readonly BASE_PARTICLE_OPACITY = 0.1;
-    private static readonly PEAK_PARTICLE_OPACITY = 1;
+    private static readonly BASE_PARTICLE_OPACITY = 0.15;
+    private static readonly PEAK_PARTICLE_OPACITY = 0.4;
     private static readonly TRANSITION_DURATION_MS = 600;
 
     private container: HTMLElement;
@@ -714,7 +714,7 @@ export class MainMenu {
         title.textContent = 'SoL';
         title.style.fontSize = isCompactLayout ? '56px' : '88px';
         title.style.marginBottom = '10px';
-        title.style.color = 'transparent';
+        title.style.color = '#FFD700';
         title.style.textShadow = 'none';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
@@ -728,7 +728,7 @@ export class MainMenu {
         subtitle.textContent = 'Speed of Light RTS';
         subtitle.style.fontSize = isCompactLayout ? '24px' : '32px';
         subtitle.style.marginBottom = '30px';
-        subtitle.style.color = 'transparent';
+        subtitle.style.color = '#AAAAAA';
         subtitle.style.textAlign = 'center';
         subtitle.style.maxWidth = '100%';
         subtitle.style.fontWeight = '300';
@@ -744,7 +744,7 @@ export class MainMenu {
         description.style.maxWidth = '500px';
         description.style.textAlign = 'center';
         description.style.lineHeight = '1.5';
-        description.style.color = 'transparent';
+        description.style.color = '#C5C5C5';
         description.style.fontWeight = '300';
         description.dataset.particleText = 'true';
         description.dataset.particleColor = '#C5C5C5';
@@ -1192,7 +1192,7 @@ export class MainMenu {
         title.textContent = `Select 4 Heroes - ${this.settings.selectedFaction}`;
         title.style.fontSize = isCompactLayout ? '28px' : '42px';
         title.style.marginBottom = isCompactLayout ? '15px' : '20px';
-        title.style.color = 'transparent';
+        title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
         title.style.fontWeight = '300';
@@ -1205,7 +1205,7 @@ export class MainMenu {
         counter.textContent = `Selected: ${this.settings.selectedHeroes.length} / 4`;
         counter.style.fontSize = isCompactLayout ? '24px' : '26px';
         counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        counter.style.color = 'transparent';
+        counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
         counter.style.fontWeight = '300';
         counter.dataset.particleText = 'true';
         counter.dataset.particleColor = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
@@ -1273,7 +1273,7 @@ export class MainMenu {
             heroName.textContent = hero.name;
             heroName.style.fontSize = '24px';
             heroName.style.marginBottom = '8px';
-            heroName.style.color = 'transparent';
+            heroName.style.color = isSelected ? '#00FF88' : '#E0F2FF';
             heroName.style.fontWeight = '300';
             heroName.dataset.particleText = 'true';
             heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
@@ -1284,7 +1284,7 @@ export class MainMenu {
             heroDesc.textContent = hero.description;
             heroDesc.style.fontSize = '24px';
             heroDesc.style.lineHeight = '1.4';
-            heroDesc.style.color = 'transparent';
+            heroDesc.style.color = '#AAAAAA';
             heroDesc.style.marginBottom = '10px';
             heroDesc.style.fontWeight = '300';
             heroDesc.dataset.particleText = 'true';
@@ -1305,21 +1305,21 @@ export class MainMenu {
             // Create stat rows
             const healthStat = document.createElement('div');
             healthStat.textContent = `❤ Health: ${hero.maxHealth}`;
-            healthStat.style.color = 'transparent';
+            healthStat.style.color = '#CCCCCC';
             healthStat.dataset.particleText = 'true';
             healthStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(healthStat);
 
             const regenStat = document.createElement('div');
             regenStat.textContent = `♻ Regen: ${hero.regen}%`;
-            regenStat.style.color = 'transparent';
+            regenStat.style.color = '#CCCCCC';
             regenStat.dataset.particleText = 'true';
             regenStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(regenStat);
 
             const defenseStat = document.createElement('div');
             defenseStat.textContent = `🛡 Defense: ${hero.defense}%`;
-            defenseStat.style.color = 'transparent';
+            defenseStat.style.color = '#CCCCCC';
             defenseStat.dataset.particleText = 'true';
             defenseStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(defenseStat);
@@ -1328,21 +1328,21 @@ export class MainMenu {
             const attackIcon = hero.attackIgnoresDefense ? '⚡' : '⚔';
             const attackSuffix = hero.attackIgnoresDefense ? ' (ignores defense)' : '';
             attackStat.textContent = `${attackIcon} Attack: ${hero.attackDamage}${attackSuffix}`;
-            attackStat.style.color = 'transparent';
+            attackStat.style.color = '#CCCCCC';
             attackStat.dataset.particleText = 'true';
             attackStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackStat);
 
             const attackSpeedStat = document.createElement('div');
             attackSpeedStat.textContent = `⏱ Speed: ${hero.attackSpeed}/s`;
-            attackSpeedStat.style.color = 'transparent';
+            attackSpeedStat.style.color = '#CCCCCC';
             attackSpeedStat.dataset.particleText = 'true';
             attackSpeedStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackSpeedStat);
 
             const rangeStat = document.createElement('div');
             rangeStat.textContent = `🎯 Range: ${hero.attackRange}`;
-            rangeStat.style.color = 'transparent';
+            rangeStat.style.color = '#CCCCCC';
             rangeStat.dataset.particleText = 'true';
             rangeStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(rangeStat);
@@ -1353,7 +1353,7 @@ export class MainMenu {
             const abilityDesc = document.createElement('div');
             abilityDesc.style.fontSize = '24px';
             abilityDesc.style.lineHeight = '1.4';
-            abilityDesc.style.color = 'transparent';
+            abilityDesc.style.color = '#FFD700';
             abilityDesc.style.marginBottom = '8px';
             abilityDesc.style.fontStyle = 'italic';
             abilityDesc.style.fontWeight = '300';
@@ -1368,7 +1368,7 @@ export class MainMenu {
                 indicator.textContent = '✓ Selected';
                 indicator.style.fontSize = '24px';
                 indicator.style.marginTop = '8px';
-                indicator.style.color = 'transparent';
+                indicator.style.color = '#00FF88';
                 indicator.style.fontWeight = '300';
                 indicator.dataset.particleText = 'true';
                 indicator.dataset.particleColor = '#00FF88';
@@ -1929,7 +1929,7 @@ class CarouselMenuView {
             nameElement.textContent = option.name;
             nameElement.style.fontSize = `${Math.max(14, 18 * scale) * textScale}px`;
             nameElement.style.marginBottom = '15px';
-            nameElement.style.color = 'transparent';
+            nameElement.style.color = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             nameElement.style.fontWeight = '300';
             nameElement.dataset.particleText = 'true';
             nameElement.dataset.particleColor = distance === 0 ? '#FFF5C2' : '#E2F4FF';
@@ -1940,7 +1940,7 @@ class CarouselMenuView {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
                 descElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
-                descElement.style.color = 'transparent';
+                descElement.style.color = '#D0D0D0';
                 descElement.style.overflow = 'hidden';
                 descElement.style.textOverflow = 'ellipsis';
                 descElement.style.fontWeight = '300';
@@ -1959,7 +1959,7 @@ class CarouselMenuView {
         instructionElement.style.bottom = '20px';
         instructionElement.style.left = '50%';
         instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = 'transparent';
+        instructionElement.style.color = '#AAAAAA';
         instructionElement.style.fontSize = `${24 * layoutScale}px`;
         instructionElement.style.fontWeight = '300';
         instructionElement.style.pointerEvents = 'none';
