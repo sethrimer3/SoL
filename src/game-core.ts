@@ -2827,11 +2827,11 @@ export class Driller extends Unit {
 }
 
 /**
- * Phantom hero unit (Radiant faction) - cloaked assassin
+ * Dagger hero unit (Radiant faction) - cloaked assassin
  * Always cloaked and invisible to enemies. Cannot see enemies until ability is used.
  * Becomes visible for 8 seconds after using ability.
  */
-export class Phantom extends Unit {
+export class Dagger extends Unit {
     isCloaked: boolean = true; // Always cloaked unless ability was recently used
     visibilityTimer: number = 0; // Time remaining while visible after ability use
     canSeeEnemies: boolean = false; // Can only see enemies after using ability
@@ -2841,13 +2841,13 @@ export class Phantom extends Unit {
         super(
             position,
             owner,
-            Constants.PHANTOM_MAX_HEALTH,
-            Constants.PHANTOM_ATTACK_RANGE,
-            Constants.PHANTOM_ATTACK_DAMAGE,
-            Constants.PHANTOM_ATTACK_SPEED,
-            Constants.PHANTOM_ABILITY_COOLDOWN
+            Constants.DAGGER_MAX_HEALTH,
+            Constants.DAGGER_ATTACK_RANGE,
+            Constants.DAGGER_ATTACK_DAMAGE,
+            Constants.DAGGER_ATTACK_SPEED,
+            Constants.DAGGER_ABILITY_COOLDOWN
         );
-        this.isHero = true; // Phantom is a hero unit for Radiant faction
+        this.isHero = true; // Dagger is a hero unit for Radiant faction
     }
     
     /**
@@ -2874,21 +2874,21 @@ export class Phantom extends Unit {
     }
     
     /**
-     * Use Phantom's ability: short-range directional attack
-     * Deals damage in a cone and reveals the Phantom for 8 seconds
+     * Use Dagger's ability: short-range directional attack
+     * Deals damage in a cone and reveals the Dagger for 8 seconds
      */
     useAbility(direction: Vector2D): boolean {
         if (!super.useAbility(direction)) {
             return false;
         }
         
-        // Reveal Phantom for 8 seconds
+        // Reveal Dagger for 8 seconds
         this.isCloaked = false;
-        this.visibilityTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        this.visibilityTimer = Constants.DAGGER_VISIBILITY_DURATION;
         
         // Grant enemy vision for 8 seconds
         this.canSeeEnemies = true;
-        this.enemyVisionTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        this.enemyVisionTimer = Constants.DAGGER_VISIBILITY_DURATION;
         
         // Calculate attack direction
         const attackDir = direction.normalize();
@@ -2906,11 +2906,11 @@ export class Phantom extends Unit {
             new Vector2D(this.position.x, this.position.y),
             velocity,
             this.owner,
-            Constants.PHANTOM_ABILITY_DAMAGE
+            Constants.DAGGER_ABILITY_DAMAGE
         );
         
         // Set short range for the projectile
-        bullet.maxRange = Constants.PHANTOM_ABILITY_RANGE;
+        bullet.maxRange = Constants.DAGGER_ABILITY_RANGE;
         
         this.lastAbilityEffects.push(bullet);
         
@@ -2926,7 +2926,7 @@ export class Phantom extends Unit {
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
-        // Filter enemies - Phantom can only see enemies if it has enemy vision
+        // Filter enemies - Dagger can only see enemies if it has enemy vision
         let visibleEnemies = enemies;
         if (!this.canSeeEnemies) {
             visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
@@ -2937,14 +2937,14 @@ export class Phantom extends Unit {
     }
     
     /**
-     * Check if this Phantom is cloaked (invisible to enemies)
+     * Check if this Dagger is cloaked (invisible to enemies)
      */
     isCloakedToEnemies(): boolean {
         return this.isCloaked;
     }
     
     /**
-     * Check if this Phantom can currently see enemies
+     * Check if this Dagger can currently see enemies
      */
     hasEnemyVision(): boolean {
         return this.canSeeEnemies;
@@ -3187,8 +3187,8 @@ export class GameState {
                     this.processDrillerCollisions(unit, deltaTime);
                 }
                 
-                // Handle Phantom timers
-                if (unit instanceof Phantom) {
+                // Handle Dagger timers
+                if (unit instanceof Dagger) {
                     unit.updateTimers(deltaTime);
                 }
                 
@@ -3711,11 +3711,11 @@ export class GameState {
      * - They are in shadow but within player's influence radius
      */
     isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
-        // Special case: if object is a Phantom unit and is cloaked
-        if (object && object instanceof Phantom) {
-            // Phantom is only visible to enemies if not cloaked
+        // Special case: if object is a Dagger unit and is cloaked
+        if (object && object instanceof Dagger) {
+            // Dagger is only visible to enemies if not cloaked
             if (object.isCloakedToEnemies() && object.owner !== player) {
-                return false; // Cloaked Phantoms are invisible to enemies
+                return false; // Cloaked Daggers are invisible to enemies
             }
         }
         

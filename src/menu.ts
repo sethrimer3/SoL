@@ -831,10 +831,10 @@ export class MainMenu {
             abilityDescription: 'Drill charge: tunnels through an asteroid toward the target'
         },
         {
-            id: 'radiant-phantom', name: 'Phantom', description: 'Cloaked assassin with burst damage', faction: Faction.RADIANT,
-            maxHealth: Constants.PHANTOM_MAX_HEALTH, attackDamage: Constants.PHANTOM_ATTACK_DAMAGE, attackSpeed: Constants.PHANTOM_ATTACK_SPEED,
-            attackRange: Constants.PHANTOM_ATTACK_RANGE, attackIgnoresDefense: false, defense: 5, regen: 3,
-            abilityDescription: 'Shadow strike: short-range burst attack, reveals Phantom for 8 seconds'
+            id: 'radiant-dagger', name: 'Dagger', description: 'Cloaked assassin with burst damage', faction: Faction.RADIANT,
+            maxHealth: Constants.DAGGER_MAX_HEALTH, attackDamage: Constants.DAGGER_ATTACK_DAMAGE, attackSpeed: Constants.DAGGER_ATTACK_SPEED,
+            attackRange: Constants.DAGGER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 5, regen: 3,
+            abilityDescription: 'Shadow strike: short-range burst attack, reveals Dagger for 8 seconds'
         }
     ];
     
