@@ -2952,6 +2952,69 @@ export class Dagger extends Unit {
 }
 
 /**
+ * Beam hero unit (Radiant faction) - sniper with distance-based damage
+ * Fires a thin beam that does more damage the further away the target is
+ */
+export class Beam extends Unit {
+    public lastBeamDamage: number = 0; // For displaying multiplier
+    public lastBeamDistance: number = 0; // For calculating multiplier
+    public lastBeamMultiplier: number = 0; // For display above unit
+    public lastBeamTime: number = 0; // When the last beam was fired
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.BEAM_MAX_HEALTH,
+            Constants.BEAM_ATTACK_RANGE,
+            Constants.BEAM_ATTACK_DAMAGE,
+            Constants.BEAM_ATTACK_SPEED,
+            Constants.BEAM_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // Beam is a hero unit for Radiant faction
+    }
+    
+    /**
+     * Use Beam's ability: long-range sniper beam with distance-based damage
+     * Deals more damage the further away the target is
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Calculate beam direction
+        const beamDir = direction.normalize();
+        
+        // Create a thin beam projectile that travels in a straight line
+        const speed = 1000; // Very fast beam speed
+        const velocity = new Vector2D(
+            beamDir.x * speed,
+            beamDir.y * speed
+        );
+        
+        // Create ability bullet for the beam
+        const bullet = new AbilityBullet(
+            new Vector2D(this.position.x, this.position.y),
+            velocity,
+            this.owner,
+            Constants.BEAM_ABILITY_BASE_DAMAGE // Base damage, will be modified on hit
+        );
+        
+        // Set long range for the sniper beam
+        bullet.maxRange = Constants.BEAM_ABILITY_MAX_RANGE;
+        
+        // Mark this as a beam projectile for special damage calculation
+        (bullet as any).isBeamProjectile = true;
+        (bullet as any).beamOwner = this;
+        
+        this.lastAbilityEffects.push(bullet);
+        
+        return true;
+    }
+}
+
+/**
  * Damage number that floats upward and fades out
  */
 export class DamageNumber {
@@ -3429,11 +3492,27 @@ export class GameState {
                 // Check hits on units
                 for (const unit of player.units) {
                     if (bullet.checkHit(unit)) {
-                        unit.takeDamage(bullet.damage);
+                        let finalDamage = bullet.damage;
+                        
+                        // Check if this is a Beam projectile for distance-based damage
+                        if ((bullet as any).isBeamProjectile && (bullet as any).beamOwner) {
+                            const beamOwner = (bullet as any).beamOwner as Beam;
+                            const distance = beamOwner.position.distanceTo(unit.position);
+                            const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
+                            finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
+                            
+                            // Store info for display above Beam unit
+                            beamOwner.lastBeamDamage = finalDamage;
+                            beamOwner.lastBeamDistance = distance;
+                            beamOwner.lastBeamMultiplier = multiplier;
+                            beamOwner.lastBeamTime = this.gameTime;
+                        }
+                        
+                        unit.takeDamage(finalDamage);
                         // Create damage number
                         this.damageNumbers.push(new DamageNumber(
                             unit.position,
-                            bullet.damage,
+                            finalDamage,
                             this.gameTime,
                             unit.maxHealth
                         ));
@@ -3444,11 +3523,27 @@ export class GameState {
 
                 // Check hits on Stellar Forge
                 if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
-                    player.stellarForge.health -= bullet.damage;
+                    let finalDamage = bullet.damage;
+                    
+                    // Check if this is a Beam projectile for distance-based damage
+                    if ((bullet as any).isBeamProjectile && (bullet as any).beamOwner) {
+                        const beamOwner = (bullet as any).beamOwner as Beam;
+                        const distance = beamOwner.position.distanceTo(player.stellarForge.position);
+                        const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
+                        finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
+                        
+                        // Store info for display above Beam unit
+                        beamOwner.lastBeamDamage = finalDamage;
+                        beamOwner.lastBeamDistance = distance;
+                        beamOwner.lastBeamMultiplier = multiplier;
+                        beamOwner.lastBeamTime = this.gameTime;
+                    }
+                    
+                    player.stellarForge.health -= finalDamage;
                     // Create damage number
                     this.damageNumbers.push(new DamageNumber(
                         player.stellarForge.position,
-                        bullet.damage,
+                        finalDamage,
                         this.gameTime,
                         Constants.STELLAR_FORGE_MAX_HEALTH
                     ));

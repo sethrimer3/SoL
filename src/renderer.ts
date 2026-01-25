@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -1531,6 +1531,88 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Beam hero unit with sniper indicator
+     */
+    private drawBeam(beam: Beam, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(beam.position, this.viewingPlayer, beam);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            const inShadow = game.isPointInShadow(beam.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(beam, color, game, isEnemy);
+        
+        // Draw crosshair/sniper scope indicator for friendly units
+        if (!isEnemy) {
+            const screenPos = this.worldToScreen(beam.position);
+            const size = 10 * this.zoom;
+            
+            this.ctx.strokeStyle = '#FF0000'; // Red for sniper
+            this.ctx.lineWidth = 1.5 * this.zoom;
+            
+            // Draw crosshair
+            this.ctx.beginPath();
+            // Horizontal line
+            this.ctx.moveTo(screenPos.x - size, screenPos.y);
+            this.ctx.lineTo(screenPos.x + size, screenPos.y);
+            // Vertical line
+            this.ctx.moveTo(screenPos.x, screenPos.y - size);
+            this.ctx.lineTo(screenPos.x, screenPos.y + size);
+            this.ctx.stroke();
+            
+            // Draw small circle in center
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+        
+        // Display damage multiplier if recently fired (show for 2 seconds)
+        if (game.gameTime - beam.lastBeamTime < 2.0 && beam.lastBeamMultiplier > 0) {
+            const screenPos = this.worldToScreen(beam.position);
+            const yOffset = -20 * this.zoom;
+            
+            // Format multiplier: e.g., "(30x5.5)"
+            const baseDamage = Constants.BEAM_ABILITY_BASE_DAMAGE;
+            const multiplierText = `(${baseDamage}x${beam.lastBeamMultiplier.toFixed(1)})`;
+            
+            // Small font for the multiplier
+            const fontSize = 10 * this.zoom;
+            this.ctx.font = `${fontSize}px Doto`;
+            this.ctx.fillStyle = '#FFAA00'; // Orange/yellow
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'bottom';
+            
+            // Draw with slight fade based on time
+            const age = game.gameTime - beam.lastBeamTime;
+            const opacity = Math.max(0, 1 - age / 2.0);
+            this.ctx.globalAlpha = opacity;
+            
+            // Add stroke for readability
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(multiplierText, screenPos.x, screenPos.y + yOffset);
+            this.ctx.fillText(multiplierText, screenPos.x, screenPos.y + yOffset);
+            
+            this.ctx.globalAlpha = 1.0;
+        }
+        
+        // Reset alpha
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Minigun building
      */
     private drawMinigun(building: Minigun, color: string, game: GameState, isEnemy: boolean): void {
@@ -2391,6 +2473,8 @@ export class GameRenderer {
                     this.drawDriller(unit, color, game, isEnemy);
                 } else if (unit instanceof Dagger) {
                     this.drawDagger(unit, color, game, isEnemy);
+                } else if (unit instanceof Beam) {
+                    this.drawBeam(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }

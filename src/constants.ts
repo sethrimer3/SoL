@@ -226,3 +226,13 @@ export const DAGGER_ABILITY_RANGE = 150; // Very short range for ability attack
 export const DAGGER_ABILITY_DAMAGE = 50; // High burst damage
 export const DAGGER_VISIBILITY_DURATION = 8.0; // 8 seconds visible after using ability
 export const DAGGER_CLOAK_OPACITY = 0.4; // Opacity when cloaked to own player
+
+// Beam unit constants (Radiant hero - sniper with distance-based damage)
+export const BEAM_MAX_HEALTH = 70;
+export const BEAM_ATTACK_RANGE = 150;
+export const BEAM_ATTACK_DAMAGE = 20;
+export const BEAM_ATTACK_SPEED = 1.0; // Attacks per second
+export const BEAM_ABILITY_COOLDOWN = 8.0; // 8 seconds
+export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
+export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
+export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
