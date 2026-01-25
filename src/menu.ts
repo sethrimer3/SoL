@@ -115,11 +115,11 @@ class BackgroundParticleLayer {
         this.canvas.style.width = '100%';
         this.canvas.style.height = '100%';
         this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '0';
+        this.canvas.style.zIndex = '-1';
         
         const context = this.canvas.getContext('2d');
         if (!context) {
-            throw new Error('Unable to create background particle canvas context.');
+            throw new Error('Unable to create background particle canvas context. This may be due to browser compatibility or system limitations.');
         }
         this.context = context;
         
@@ -287,8 +287,8 @@ class BackgroundParticleLayer {
         this.context.fillStyle = '#000000';
         this.context.fillRect(0, 0, width, height);
         
-        // Draw particles with blur effect
-        this.context.filter = 'blur(80px)';
+        // Draw particles with blur effect (reduced blur for better performance)
+        this.context.filter = 'blur(60px)';
         this.context.globalCompositeOperation = 'screen';
         
         for (const particle of this.particles) {
