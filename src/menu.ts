@@ -445,24 +445,8 @@ export interface GameSettings {
     isBattleStatsInfoEnabled: boolean;
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
+    selectedHeroNames: string[];
 }
-
-const EMPTY_HERO_LABEL = '[EMPTY]';
-
-const createEmptyHero = (id: string, faction: Faction): HeroUnit => ({
-    id,
-    name: EMPTY_HERO_LABEL,
-    description: EMPTY_HERO_LABEL,
-    faction,
-    maxHealth: 0,
-    attackDamage: 0,
-    attackSpeed: 0,
-    attackRange: 0,
-    attackIgnoresDefense: false,
-    defense: 0,
-    regen: 0,
-    abilityDescription: EMPTY_HERO_LABEL,
-});
 
 export class MainMenu {
     private menuElement: HTMLElement;
@@ -477,59 +461,43 @@ export class MainMenu {
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
         // Radiant faction heroes
-        createEmptyHero('radiant-1', Faction.RADIANT),
-        createEmptyHero('radiant-2', Faction.RADIANT),
-        createEmptyHero('radiant-3', Faction.RADIANT),
-        createEmptyHero('radiant-4', Faction.RADIANT),
-        createEmptyHero('radiant-5', Faction.RADIANT),
-        createEmptyHero('radiant-6', Faction.RADIANT),
-        createEmptyHero('radiant-7', Faction.RADIANT),
-        createEmptyHero('radiant-8', Faction.RADIANT),
-        createEmptyHero('radiant-9', Faction.RADIANT),
-        createEmptyHero('radiant-10', Faction.RADIANT),
-        createEmptyHero('radiant-11', Faction.RADIANT),
-        createEmptyHero('radiant-12', Faction.RADIANT),
         { 
-            id: 'radiant-13', name: 'Marine', description: 'Rapid-fire ranged specialist', faction: Faction.RADIANT,
+            id: 'radiant-marine', name: 'Marine', description: 'Rapid-fire ranged specialist', faction: Faction.RADIANT,
             maxHealth: Constants.MARINE_MAX_HEALTH, attackDamage: Constants.MARINE_ATTACK_DAMAGE, attackSpeed: Constants.MARINE_ATTACK_SPEED,
             attackRange: Constants.MARINE_ATTACK_RANGE, attackIgnoresDefense: false, defense: 10, regen: 4,
             abilityDescription: 'Bullet storm: fires a spread of shots toward a target direction'
         },
-        
-        // Aurum faction heroes
-        createEmptyHero('aurum-1', Faction.AURUM),
-        createEmptyHero('aurum-2', Faction.AURUM),
-        createEmptyHero('aurum-3', Faction.AURUM),
-        createEmptyHero('aurum-4', Faction.AURUM),
-        createEmptyHero('aurum-5', Faction.AURUM),
-        createEmptyHero('aurum-6', Faction.AURUM),
-        createEmptyHero('aurum-7', Faction.AURUM),
-        createEmptyHero('aurum-8', Faction.AURUM),
-        createEmptyHero('aurum-9', Faction.AURUM),
-        createEmptyHero('aurum-10', Faction.AURUM),
-        createEmptyHero('aurum-11', Faction.AURUM),
-        createEmptyHero('aurum-12', Faction.AURUM),
         { 
-            id: 'aurum-13', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.AURUM,
+            id: 'radiant-grave', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.RADIANT,
             maxHealth: Constants.GRAVE_MAX_HEALTH, attackDamage: Constants.GRAVE_ATTACK_DAMAGE, attackSpeed: Constants.GRAVE_ATTACK_SPEED,
             attackRange: Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER,
             attackIgnoresDefense: false, defense: 18, regen: 3,
             abilityDescription: 'Orbits gravitic shards that launch at targets and return'
         },
-        
-        // Solari faction heroes
-        createEmptyHero('solari-1', Faction.SOLARI),
-        createEmptyHero('solari-2', Faction.SOLARI),
-        createEmptyHero('solari-3', Faction.SOLARI),
-        createEmptyHero('solari-4', Faction.SOLARI),
-        createEmptyHero('solari-5', Faction.SOLARI),
-        createEmptyHero('solari-6', Faction.SOLARI),
-        createEmptyHero('solari-7', Faction.SOLARI),
-        createEmptyHero('solari-8', Faction.SOLARI),
-        createEmptyHero('solari-9', Faction.SOLARI),
-        createEmptyHero('solari-10', Faction.SOLARI),
-        createEmptyHero('solari-11', Faction.SOLARI),
-        createEmptyHero('solari-12', Faction.SOLARI),
+        {
+            id: 'radiant-ray', name: 'Ray', description: 'Bouncing beam marks targets', faction: Faction.RADIANT,
+            maxHealth: Constants.RAY_MAX_HEALTH, attackDamage: Constants.RAY_ATTACK_DAMAGE, attackSpeed: Constants.RAY_ATTACK_SPEED,
+            attackRange: Constants.RAY_ATTACK_RANGE, attackIgnoresDefense: true, defense: 8, regen: 5,
+            abilityDescription: 'Solar ricochet: beam bounces between multiple enemies'
+        },
+        {
+            id: 'radiant-influence-ball', name: 'Influence Ball', description: 'Deploys temporary influence zones', faction: Faction.RADIANT,
+            maxHealth: Constants.INFLUENCE_BALL_MAX_HEALTH, attackDamage: Constants.INFLUENCE_BALL_ATTACK_DAMAGE, attackSpeed: Constants.INFLUENCE_BALL_ATTACK_SPEED,
+            attackRange: Constants.INFLUENCE_BALL_ATTACK_RANGE, attackIgnoresDefense: false, defense: 12, regen: 6,
+            abilityDescription: 'Influence surge: expand an influence zone at target location'
+        },
+        {
+            id: 'radiant-turret-deployer', name: 'Turret Deployer', description: 'Deploys automated turrets on asteroids', faction: Faction.RADIANT,
+            maxHealth: Constants.TURRET_DEPLOYER_MAX_HEALTH, attackDamage: Constants.TURRET_DEPLOYER_ATTACK_DAMAGE, attackSpeed: Constants.TURRET_DEPLOYER_ATTACK_SPEED,
+            attackRange: Constants.TURRET_DEPLOYER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 4,
+            abilityDescription: 'Deploy turret: places a turret on a nearby asteroid'
+        },
+        {
+            id: 'radiant-driller', name: 'Driller', description: 'Burrows through asteroids to flank', faction: Faction.RADIANT,
+            maxHealth: Constants.DRILLER_MAX_HEALTH, attackDamage: Constants.DRILLER_ATTACK_DAMAGE, attackSpeed: Constants.DRILLER_ATTACK_SPEED,
+            attackRange: Constants.DRILLER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 16, regen: 3,
+            abilityDescription: 'Drill charge: tunnels through an asteroid toward the target'
+        }
     ];
     
     private availableMaps: MapConfig[] = [
@@ -576,7 +544,8 @@ export class MainMenu {
             musicEnabled: true,
             isBattleStatsInfoEnabled: false,
             selectedFaction: null,
-            selectedHeroes: []
+            selectedHeroes: [],
+            selectedHeroNames: []
         };
         
         this.menuElement = this.createMenuElement();
@@ -634,6 +603,12 @@ export class MainMenu {
         });
         
         return menu;
+    }
+
+    private getSelectedHeroNames(): string[] {
+        return this.heroUnits
+            .filter(hero => this.settings.selectedHeroes.includes(hero.id))
+            .map(hero => hero.name);
     }
 
     private clearMenu(): void {
@@ -747,6 +722,7 @@ export class MainMenu {
                 case 'start':
                     this.hide();
                     if (this.onStartCallback) {
+                        this.settings.selectedHeroNames = this.getSelectedHeroNames();
                         this.onStartCallback(this.settings);
                     }
                     break;
