@@ -2952,6 +2952,58 @@ export class Dagger extends Unit {
 }
 
 /**
+ * Damage number that floats upward and fades out
+ */
+export class DamageNumber {
+    public position: Vector2D;
+    public damage: number;
+    public creationTime: number;
+    public velocity: Vector2D;
+    public maxHealth: number; // For calculating size proportional to health
+
+    constructor(
+        position: Vector2D,
+        damage: number,
+        creationTime: number,
+        maxHealth: number = 100
+    ) {
+        this.position = new Vector2D(position.x, position.y);
+        this.damage = Math.round(damage);
+        this.creationTime = creationTime;
+        this.maxHealth = maxHealth;
+        // Random horizontal drift
+        this.velocity = new Vector2D(
+            (Math.random() - 0.5) * 20,
+            -50 // Upward velocity
+        );
+    }
+
+    /**
+     * Update position based on velocity
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Check if damage number has expired (2 second lifetime)
+     */
+    isExpired(currentTime: number): boolean {
+        return currentTime - this.creationTime > 2.0;
+    }
+
+    /**
+     * Get opacity based on age (fade out over time)
+     */
+    getOpacity(currentTime: number): number {
+        const age = currentTime - this.creationTime;
+        const lifetime = 2.0;
+        return Math.max(0, 1 - age / lifetime);
+    }
+}
+
+/**
  * Main game state
  */
 export class GameState {
@@ -2968,6 +3020,7 @@ export class GameState {
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
+    damageNumbers: DamageNumber[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -3377,6 +3430,13 @@ export class GameState {
                 for (const unit of player.units) {
                     if (bullet.checkHit(unit)) {
                         unit.takeDamage(bullet.damage);
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            bullet.damage,
+                            this.gameTime,
+                            unit.maxHealth
+                        ));
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -3385,6 +3445,13 @@ export class GameState {
                 // Check hits on Stellar Forge
                 if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= bullet.damage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        bullet.damage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
             }
@@ -3414,6 +3481,13 @@ export class GameState {
                 for (const unit of player.units) {
                     if (projectile.checkHit(unit)) {
                         unit.takeDamage(projectile.damage);
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            projectile.damage,
+                            this.gameTime,
+                            unit.maxHealth
+                        ));
                         hasHit = true;
                         break;
                     }
@@ -3426,6 +3500,13 @@ export class GameState {
                 for (const building of player.buildings) {
                     if (projectile.checkHit(building)) {
                         building.health -= projectile.damage;
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            building.position,
+                            projectile.damage,
+                            this.gameTime,
+                            building.maxHealth
+                        ));
                         hasHit = true;
                         break;
                     }
@@ -3437,6 +3518,13 @@ export class GameState {
 
                 if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= projectile.damage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        projectile.damage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     hasHit = true;
                     break;
                 }
@@ -3502,6 +3590,13 @@ export class GameState {
             turret.update(deltaTime, enemies);
         }
         this.deployedTurrets = this.deployedTurrets.filter(turret => !turret.isDead());
+
+        // Update damage numbers
+        for (const damageNumber of this.damageNumbers) {
+            damageNumber.update(deltaTime);
+        }
+        // Remove expired damage numbers
+        this.damageNumbers = this.damageNumbers.filter(dn => !dn.isExpired(this.gameTime));
     }
 
     /**
@@ -3842,6 +3937,16 @@ export class GameState {
                 // Damage and stop
                 if (closestHit.target) {
                     closestHit.target.takeDamage(Constants.RAY_BEAM_DAMAGE);
+                    // Create damage number
+                    const maxHealth = closestHit.type === 'forge' 
+                        ? Constants.STELLAR_FORGE_MAX_HEALTH 
+                        : (closestHit.target as Unit).maxHealth;
+                    this.damageNumbers.push(new DamageNumber(
+                        closestHit.target.position,
+                        Constants.RAY_BEAM_DAMAGE,
+                        this.gameTime,
+                        maxHealth
+                    ));
                 }
                 break;
             } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
@@ -4016,6 +4121,13 @@ export class GameState {
                 const distance = driller.position.distanceTo(unit.position);
                 if (distance < 15) {
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        unit.position,
+                        Constants.DRILLER_DRILL_DAMAGE,
+                        this.gameTime,
+                        unit.maxHealth
+                    ));
                 }
             }
             
@@ -4023,7 +4135,15 @@ export class GameState {
             for (const building of player.buildings) {
                 const distance = driller.position.distanceTo(building.position);
                 if (distance < 40) {
-                    building.takeDamage(Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER);
+                    const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    building.takeDamage(damage);
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        building.position,
+                        damage,
+                        this.gameTime,
+                        building.maxHealth
+                    ));
                     // Continue drilling through building
                 }
             }
@@ -4032,7 +4152,15 @@ export class GameState {
             if (player.stellarForge) {
                 const distance = driller.position.distanceTo(player.stellarForge.position);
                 if (distance < player.stellarForge.radius + 10) {
-                    player.stellarForge.health -= Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    player.stellarForge.health -= damage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        damage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     // Continue drilling through
                 }
             }

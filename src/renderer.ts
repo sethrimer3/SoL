@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -2181,6 +2181,32 @@ export class GameRenderer {
     }
 
     /**
+     * Draw damage numbers floating up from damaged units
+     */
+    private drawDamageNumbers(game: GameState): void {
+        for (const damageNumber of game.damageNumbers) {
+            const screenPos = this.worldToScreen(damageNumber.position);
+            const opacity = damageNumber.getOpacity(game.gameTime);
+            
+            // Calculate size based on damage proportion to max health
+            // Range: 8px (small) to 24px (large)
+            const damageRatio = damageNumber.damage / damageNumber.maxHealth;
+            const fontSize = Math.max(8, Math.min(24, 8 + damageRatio * 80));
+            
+            this.ctx.font = `bold ${fontSize}px Doto`;
+            this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            // Add stroke for readability
+            this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})`;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+            this.ctx.fillText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+        }
+    }
+
+    /**
      * Render the entire game state
      */
     render(game: GameState): void {
@@ -2426,6 +2452,9 @@ export class GameRenderer {
         for (const turret of game.deployedTurrets) {
             this.drawDeployedTurret(turret);
         }
+
+        // Draw damage numbers
+        this.drawDamageNumbers(game);
 
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
