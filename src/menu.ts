@@ -86,8 +86,6 @@ interface BackgroundSwarmParticle {
     y: number;
     velocityX: number;
     velocityY: number;
-    driftAngleRad: number;
-    driftTurnRateRad: number;
     typeIndex: number;
 }
 
@@ -105,8 +103,7 @@ class BackgroundParticleLayer {
     private static readonly SWARM_TYPE_COUNT = 8;
     private static readonly SWARM_MAX_VELOCITY = 0.55;
     private static readonly SWARM_FRICTION = 0.96;
-    private static readonly SWARM_SWIM_ACCELERATION = 0.008;
-    private static readonly SWARM_SWIM_TURN_RATE_RAD = 0.004;
+    private static readonly SWARM_INTERACTION_STRENGTH = 0.02;
     private static readonly SWARM_SPRITE_SIZE_PX = 42;
     private static readonly SWARM_SCATTER_SPEED = 1.4;
     private static readonly SWARM_OPACITY = 0.35;
@@ -115,6 +112,7 @@ class BackgroundParticleLayer {
     private context: CanvasRenderingContext2D;
     private particles: BackgroundParticle[] = [];
     private swarmParticles: BackgroundSwarmParticle[] = [];
+    private swarmInteractionMatrix: number[][] = [];
     private swarmSprites: HTMLCanvasElement[] = [];
     private animationFrameId: number | null = null;
     private isActive: boolean = false;
@@ -153,6 +151,7 @@ class BackgroundParticleLayer {
         this.initializeParticles();
         this.initializeSwarmSprites();
         this.initializeSwarmParticles();
+        this.initializeSwarmInteractionMatrix();
         this.start();
     }
     
@@ -207,10 +206,19 @@ class BackgroundParticleLayer {
                 y: boundaryPaddingPx + Math.random() * (maxY - boundaryPaddingPx),
                 velocityX: (Math.random() - 0.5) * 0.4,
                 velocityY: (Math.random() - 0.5) * 0.4,
-                driftAngleRad: Math.random() * Math.PI * 2,
-                driftTurnRateRad: (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SWIM_TURN_RATE_RAD,
                 typeIndex: i % BackgroundParticleLayer.SWARM_TYPE_COUNT
             });
+        }
+    }
+
+    private initializeSwarmInteractionMatrix(): void {
+        this.swarmInteractionMatrix = [];
+        for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
+            this.swarmInteractionMatrix[i] = [];
+            for (let j = 0; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
+                const repulsionStrength = 0.35 + Math.random() * 0.65;
+                this.swarmInteractionMatrix[i][j] = -repulsionStrength;
+            }
         }
     }
 
@@ -356,9 +364,23 @@ class BackgroundParticleLayer {
         for (let i = 0; i < this.swarmParticles.length; i++) {
             const p1 = this.swarmParticles[i];
 
-            p1.driftAngleRad += p1.driftTurnRateRad;
-            p1.velocityX += Math.cos(p1.driftAngleRad) * BackgroundParticleLayer.SWARM_SWIM_ACCELERATION;
-            p1.velocityY += Math.sin(p1.driftAngleRad) * BackgroundParticleLayer.SWARM_SWIM_ACCELERATION;
+            for (let j = 0; j < this.swarmParticles.length; j++) {
+                if (i === j) {
+                    continue;
+                }
+
+                const p2 = this.swarmParticles[j];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 0) {
+                    const interaction = this.swarmInteractionMatrix[p1.typeIndex][p2.typeIndex];
+                    const force = interaction * BackgroundParticleLayer.SWARM_INTERACTION_STRENGTH;
+                    p1.velocityX += (dx / distance) * force;
+                    p1.velocityY += (dy / distance) * force;
+                }
+            }
 
             p1.velocityX *= BackgroundParticleLayer.SWARM_FRICTION;
             p1.velocityY *= BackgroundParticleLayer.SWARM_FRICTION;
@@ -407,8 +429,6 @@ class BackgroundParticleLayer {
         for (const particle of this.swarmParticles) {
             particle.velocityX = (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SCATTER_SPEED;
             particle.velocityY = (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SCATTER_SPEED;
-            particle.driftAngleRad = Math.random() * Math.PI * 2;
-            particle.driftTurnRateRad = (Math.random() - 0.5) * BackgroundParticleLayer.SWARM_SWIM_TURN_RATE_RAD;
         }
     }
     
