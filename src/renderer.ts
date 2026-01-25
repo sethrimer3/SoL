@@ -25,6 +25,8 @@ export class GameRenderer {
     public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
     public isPaused: boolean = false; // Game pause state
+    public playerColor: string = Constants.PLAYER_1_COLOR; // Player 1 color (customizable)
+    public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -2188,7 +2190,7 @@ export class GameRenderer {
                 continue;
             }
             if (player.stellarForge && !player.isDefeated()) {
-                const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                const color = i === 0 ? this.playerColor : this.enemyColor;
                 influenceCircles.push({
                     position: player.stellarForge.position,
                     radius: Constants.INFLUENCE_RADIUS,
