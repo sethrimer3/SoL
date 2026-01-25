@@ -1505,6 +1505,10 @@ export class AbilityBullet {
     maxRange: number = Infinity; // Optional max range in pixels (default: no limit)
     startPosition: Vector2D;
     
+    // Optional properties for Beam sniper projectile
+    isBeamProjectile?: boolean;
+    beamOwner?: Beam;
+    
     constructor(
         public position: Vector2D,
         velocity: Vector2D,
@@ -3005,8 +3009,8 @@ export class Beam extends Unit {
         bullet.maxRange = Constants.BEAM_ABILITY_MAX_RANGE;
         
         // Mark this as a beam projectile for special damage calculation
-        (bullet as any).isBeamProjectile = true;
-        (bullet as any).beamOwner = this;
+        bullet.isBeamProjectile = true;
+        bullet.beamOwner = this;
         
         this.lastAbilityEffects.push(bullet);
         
@@ -3495,8 +3499,8 @@ export class GameState {
                         let finalDamage = bullet.damage;
                         
                         // Check if this is a Beam projectile for distance-based damage
-                        if ((bullet as any).isBeamProjectile && (bullet as any).beamOwner) {
-                            const beamOwner = (bullet as any).beamOwner as Beam;
+                        if (bullet.isBeamProjectile && bullet.beamOwner) {
+                            const beamOwner = bullet.beamOwner;
                             const distance = beamOwner.position.distanceTo(unit.position);
                             const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
                             finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
@@ -3526,8 +3530,8 @@ export class GameState {
                     let finalDamage = bullet.damage;
                     
                     // Check if this is a Beam projectile for distance-based damage
-                    if ((bullet as any).isBeamProjectile && (bullet as any).beamOwner) {
-                        const beamOwner = (bullet as any).beamOwner as Beam;
+                    if (bullet.isBeamProjectile && bullet.beamOwner) {
+                        const beamOwner = bullet.beamOwner;
                         const distance = beamOwner.position.distanceTo(player.stellarForge.position);
                         const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
                         finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
