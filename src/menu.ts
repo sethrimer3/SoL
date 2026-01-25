@@ -216,24 +216,8 @@ class BackgroundParticleLayer {
         for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
             this.swarmInteractionMatrix[i] = [];
             for (let j = 0; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
-                this.swarmInteractionMatrix[i][j] = 0;
-            }
-        }
-
-        for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
-            for (let j = i + 1; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
-                const shouldBothRepel = Math.random() < 0.45;
-                if (shouldBothRepel) {
-                    const repulsion = -Math.random();
-                    this.swarmInteractionMatrix[i][j] = repulsion;
-                    this.swarmInteractionMatrix[j][i] = repulsion;
-                } else {
-                    const attraction = Math.random();
-                    const repulsion = -Math.random();
-                    const isForwardAttracting = Math.random() < 0.5;
-                    this.swarmInteractionMatrix[i][j] = isForwardAttracting ? attraction : repulsion;
-                    this.swarmInteractionMatrix[j][i] = isForwardAttracting ? repulsion : attraction;
-                }
+                const repulsionStrength = 0.35 + Math.random() * 0.65;
+                this.swarmInteractionMatrix[i][j] = -repulsionStrength;
             }
         }
     }
