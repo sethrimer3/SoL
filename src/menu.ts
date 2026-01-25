@@ -69,8 +69,8 @@ class ParticleMenuLayer {
     private static readonly REFRESH_INTERVAL_MS = 140;
     private static readonly POSITION_SMOOTHING = 0.08 / 14;
     private static readonly DRIFT_SPEED = 0.0007 / 6;
-    private static readonly DRIFT_RADIUS_MIN_PX = 0.3;
-    private static readonly DRIFT_RADIUS_MAX_PX = 1.1;
+    private static readonly DRIFT_RADIUS_MIN_PX = 0.03;
+    private static readonly DRIFT_RADIUS_MAX_PX = 0.11;
     private static readonly COLOR_SMOOTHING = 0.08;
     private static readonly PARTICLE_SIZE_PX = 1.6;
     private static readonly RELOCATE_MIN_DISTANCE_PX = 4;
