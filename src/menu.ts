@@ -93,7 +93,7 @@ class ParticleMenuLayer {
     constructor(container: HTMLElement) {
         this.container = container;
         this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'absolute';
+        this.canvas.style.position = 'fixed';
         this.canvas.style.top = '0';
         this.canvas.style.left = '0';
         this.canvas.style.width = '100%';
@@ -145,8 +145,10 @@ class ParticleMenuLayer {
     public resize(): void {
         const rect = this.container.getBoundingClientRect();
         const devicePixelRatio = window.devicePixelRatio || 1;
-        this.canvas.width = Math.round(rect.width * devicePixelRatio);
-        this.canvas.height = Math.round(rect.height * devicePixelRatio);
+        const width = rect.width || window.innerWidth;
+        const height = rect.height || window.innerHeight;
+        this.canvas.width = Math.round(width * devicePixelRatio);
+        this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     }
 
@@ -298,7 +300,9 @@ class ParticleMenuLayer {
 
     private renderParticles(): void {
         const rect = this.container.getBoundingClientRect();
-        this.context.clearRect(0, 0, rect.width, rect.height);
+        const width = rect.width || window.innerWidth;
+        const height = rect.height || window.innerHeight;
+        this.context.clearRect(0, 0, width, height);
         this.context.globalCompositeOperation = 'lighter';
 
         for (const particle of this.particles) {
@@ -563,8 +567,8 @@ export class MainMenu {
         menu.style.boxSizing = 'border-box';
         menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
         menu.style.zIndex = '1000';
-        menu.style.fontFamily = '"Doto", "Archivo Black", Arial, sans-serif';
-        menu.style.fontWeight = '100';
+        menu.style.fontFamily = '"Doto", Arial, sans-serif';
+        menu.style.fontWeight = '300';
         menu.style.fontSize = '24px';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
@@ -645,7 +649,7 @@ export class MainMenu {
         title.style.textShadow = 'none';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
-        title.style.fontWeight = '100';
+        title.style.fontWeight = '300';
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
@@ -658,7 +662,7 @@ export class MainMenu {
         subtitle.style.color = 'transparent';
         subtitle.style.textAlign = 'center';
         subtitle.style.maxWidth = '100%';
-        subtitle.style.fontWeight = '100';
+        subtitle.style.fontWeight = '300';
         subtitle.dataset.particleText = 'true';
         subtitle.dataset.particleColor = '#AAAAAA';
         container.appendChild(subtitle);
@@ -672,7 +676,7 @@ export class MainMenu {
         description.style.textAlign = 'center';
         description.style.lineHeight = '1.5';
         description.style.color = 'transparent';
-        description.style.fontWeight = '100';
+        description.style.fontWeight = '300';
         description.dataset.particleText = 'true';
         description.dataset.particleColor = '#C5C5C5';
         container.appendChild(description);
@@ -754,7 +758,7 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
-        title.style.fontWeight = '100';
+        title.style.fontWeight = '300';
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
@@ -771,7 +775,7 @@ export class MainMenu {
         for (const map of this.availableMaps) {
             const mapCard = document.createElement('div');
             mapCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            mapCard.style.border = map.id === this.settings.selectedMap.id ? '3px solid #FFD700' : '2px solid rgba(255, 255, 255, 0.2)';
+            mapCard.style.border = '2px solid transparent';
             mapCard.style.borderRadius = '10px';
             mapCard.style.padding = '20px';
             mapCard.style.cursor = 'pointer';
@@ -802,7 +806,7 @@ export class MainMenu {
             mapName.style.fontSize = '28px';
             mapName.style.marginBottom = '10px';
             mapName.style.color = map.id === this.settings.selectedMap.id ? '#FFD700' : '#FFFFFF';
-            mapName.style.fontWeight = '100';
+            mapName.style.fontWeight = '300';
             mapName.dataset.particleText = 'true';
             mapName.dataset.particleColor = map.id === this.settings.selectedMap.id ? '#FFF2B3' : '#E0F2FF';
             mapCard.appendChild(mapName);
@@ -814,7 +818,7 @@ export class MainMenu {
             mapDesc.style.lineHeight = '1.5';
             mapDesc.style.marginBottom = '15px';
             mapDesc.style.color = '#CCCCCC';
-            mapDesc.style.fontWeight = '100';
+            mapDesc.style.fontWeight = '300';
             mapDesc.dataset.particleText = 'true';
             mapDesc.dataset.particleColor = '#CCCCCC';
             mapCard.appendChild(mapDesc);
@@ -858,7 +862,7 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
-        title.style.fontWeight = '100';
+        title.style.fontWeight = '300';
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
@@ -943,7 +947,7 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
-        title.style.fontWeight = '100';
+        title.style.fontWeight = '300';
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
@@ -981,7 +985,7 @@ export class MainMenu {
         for (const faction of factions) {
             const factionCard = document.createElement('div');
             factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            factionCard.style.border = this.settings.selectedFaction === faction.id ? `3px solid ${faction.color}` : '2px solid rgba(255, 255, 255, 0.2)';
+            factionCard.style.border = '2px solid transparent';
             factionCard.style.borderRadius = '10px';
             factionCard.style.padding = '20px';
             factionCard.style.cursor = 'pointer';
@@ -1014,7 +1018,7 @@ export class MainMenu {
             factionName.style.fontSize = '28px';
             factionName.style.marginBottom = '15px';
             factionName.style.color = this.settings.selectedFaction === faction.id ? faction.color : '#FFFFFF';
-            factionName.style.fontWeight = '100';
+            factionName.style.fontWeight = '300';
             factionName.dataset.particleText = 'true';
             factionName.dataset.particleColor = this.settings.selectedFaction === faction.id ? '#FFFFFF' : '#E0F2FF';
             factionCard.appendChild(factionName);
@@ -1025,7 +1029,7 @@ export class MainMenu {
             factionDesc.style.fontSize = '24px';
             factionDesc.style.lineHeight = '1.5';
             factionDesc.style.color = '#CCCCCC';
-            factionDesc.style.fontWeight = '100';
+            factionDesc.style.fontWeight = '300';
             factionDesc.dataset.particleText = 'true';
             factionDesc.dataset.particleColor = '#CCCCCC';
             factionCard.appendChild(factionDesc);
@@ -1087,7 +1091,7 @@ export class MainMenu {
         title.style.color = 'transparent';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
-        title.style.fontWeight = '100';
+        title.style.fontWeight = '300';
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
@@ -1098,7 +1102,7 @@ export class MainMenu {
         counter.style.fontSize = isCompactLayout ? '24px' : '26px';
         counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
         counter.style.color = 'transparent';
-        counter.style.fontWeight = '100';
+        counter.style.fontWeight = '300';
         counter.dataset.particleText = 'true';
         counter.dataset.particleColor = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
         container.appendChild(counter);
@@ -1106,7 +1110,9 @@ export class MainMenu {
         // Hero grid
         const heroGrid = document.createElement('div');
         heroGrid.style.display = 'grid';
-        heroGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 280}px, 1fr))`;
+        heroGrid.style.gridTemplateColumns = isCompactLayout
+            ? 'repeat(2, minmax(0, 1fr))'
+            : 'repeat(auto-fit, minmax(280px, 1fr))';
         heroGrid.style.gap = '15px';
         heroGrid.style.maxWidth = '1200px';
         heroGrid.style.padding = '20px';
@@ -1123,7 +1129,7 @@ export class MainMenu {
 
             const heroCard = document.createElement('div');
             heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
-            heroCard.style.border = isSelected ? '3px solid #00FF88' : '2px solid rgba(255, 255, 255, 0.2)';
+            heroCard.style.border = '2px solid transparent';
             heroCard.style.borderRadius = '10px';
             heroCard.style.padding = '15px';
             heroCard.style.cursor = canSelect ? 'pointer' : 'not-allowed';
@@ -1164,7 +1170,7 @@ export class MainMenu {
             heroName.style.fontSize = '24px';
             heroName.style.marginBottom = '8px';
             heroName.style.color = 'transparent';
-            heroName.style.fontWeight = '100';
+            heroName.style.fontWeight = '300';
             heroName.dataset.particleText = 'true';
             heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
             heroCard.appendChild(heroName);
@@ -1176,7 +1182,7 @@ export class MainMenu {
             heroDesc.style.lineHeight = '1.4';
             heroDesc.style.color = 'transparent';
             heroDesc.style.marginBottom = '10px';
-            heroDesc.style.fontWeight = '100';
+            heroDesc.style.fontWeight = '300';
             heroDesc.dataset.particleText = 'true';
             heroDesc.dataset.particleColor = '#AAAAAA';
             heroCard.appendChild(heroDesc);
@@ -1190,7 +1196,7 @@ export class MainMenu {
             statsContainer.style.padding = '8px';
             statsContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
             statsContainer.style.borderRadius = '5px';
-            statsContainer.style.fontWeight = '100';
+            statsContainer.style.fontWeight = '300';
 
             // Create stat rows
             const healthStat = document.createElement('div');
@@ -1246,7 +1252,7 @@ export class MainMenu {
             abilityDesc.style.color = 'transparent';
             abilityDesc.style.marginBottom = '8px';
             abilityDesc.style.fontStyle = 'italic';
-            abilityDesc.style.fontWeight = '100';
+            abilityDesc.style.fontWeight = '300';
             abilityDesc.textContent = `✨ ${hero.abilityDescription}`;
             abilityDesc.dataset.particleText = 'true';
             abilityDesc.dataset.particleColor = '#FFD700';
@@ -1259,7 +1265,7 @@ export class MainMenu {
                 indicator.style.fontSize = '24px';
                 indicator.style.marginTop = '8px';
                 indicator.style.color = 'transparent';
-                indicator.style.fontWeight = '100';
+                indicator.style.fontWeight = '300';
                 indicator.dataset.particleText = 'true';
                 indicator.dataset.particleColor = '#00FF88';
                 heroCard.appendChild(indicator);
@@ -1307,26 +1313,24 @@ export class MainMenu {
         button.textContent = text;
         button.style.fontSize = '24px';
         button.style.padding = '15px 40px';
-        button.style.backgroundColor = color;
-        button.style.color = color === '#666666' ? '#FFFFFF' : '#000000';
-        button.style.border = 'none';
+        button.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        button.style.color = color === '#666666' ? '#FFFFFF' : color;
+        button.style.border = '2px solid transparent';
         button.style.borderRadius = '5px';
         button.style.cursor = 'pointer';
-        button.style.fontWeight = '100';
+        button.style.fontWeight = '300';
+        button.style.fontFamily = 'inherit';
         button.style.transition = 'all 0.3s';
         button.dataset.particleBox = 'true';
         button.dataset.particleColor = color;
         
         button.addEventListener('mouseenter', () => {
-            const hoverColor = color === '#FFD700' ? '#FFA500' : 
-                               color === '#00AAFF' ? '#0088DD' : 
-                               color === '#00FF88' ? '#00DD66' : '#888888';
-            button.style.backgroundColor = hoverColor;
+            button.style.backgroundColor = 'rgba(255, 255, 255, 0.12)';
             button.style.transform = 'scale(1.05)';
         });
         
         button.addEventListener('mouseleave', () => {
-            button.style.backgroundColor = color;
+            button.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
             button.style.transform = 'scale(1)';
         });
         
@@ -1346,7 +1350,7 @@ export class MainMenu {
         labelElement.textContent = label;
         labelElement.style.fontSize = '24px';
         labelElement.style.color = '#FFFFFF';
-        labelElement.style.fontWeight = '100';
+        labelElement.style.fontWeight = '300';
         labelElement.dataset.particleText = 'true';
         labelElement.dataset.particleColor = '#FFFFFF';
 
@@ -1365,6 +1369,8 @@ export class MainMenu {
         select.style.border = '2px solid rgba(255, 255, 255, 0.3)';
         select.style.borderRadius = '5px';
         select.style.cursor = 'pointer';
+        select.style.fontFamily = 'inherit';
+        select.style.fontWeight = '300';
 
         for (const option of options) {
             const optionElement = document.createElement('option');
@@ -1484,6 +1490,7 @@ class CarouselMenuView {
     private static readonly VELOCITY_FACTOR = 0.001;
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
     private static readonly VELOCITY_DECAY_FACTOR = 0.9;
+    private static readonly SWIPE_THRESHOLD_PX = 50;
     
     private container: HTMLElement;
     private options: MenuOption[];
@@ -1493,11 +1500,14 @@ class CarouselMenuView {
     private isDragging: boolean = false;
     private dragStartX: number = 0;
     private dragStartOffset: number = 0;
+    private lastDragDeltaX: number = 0;
     private velocity: number = 0;
     private onSelectCallback: ((option: MenuOption) => void) | null = null;
     private onRenderCallback: (() => void) | null = null;
     private animationFrameId: number | null = null;
     private hasDragged: boolean = false;
+    private isCompactLayout: boolean = false;
+    private resizeHandler: (() => void) | null = null;
 
     constructor(container: HTMLElement, options: MenuOption[]) {
         this.container = container;
@@ -1510,7 +1520,7 @@ class CarouselMenuView {
     private setupContainer(): void {
         this.container.style.position = 'relative';
         this.container.style.width = '100%';
-        this.container.style.height = '600px';
+        this.updateLayoutMetrics();
         this.container.style.overflow = 'hidden';
         this.container.style.cursor = 'grab';
         this.container.style.userSelect = 'none';
@@ -1518,6 +1528,11 @@ class CarouselMenuView {
     }
 
     private setupEventHandlers(): void {
+        this.resizeHandler = () => {
+            this.updateLayoutMetrics();
+        };
+        window.addEventListener('resize', this.resizeHandler);
+
         // Mouse events
         this.container.addEventListener('mousedown', (e: MouseEvent) => {
             this.startDrag(e.clientX);
@@ -1572,6 +1587,7 @@ class CarouselMenuView {
         this.dragStartOffset = this.scrollOffset;
         this.velocity = 0;
         this.hasDragged = false;
+        this.lastDragDeltaX = 0;
         this.container.style.cursor = 'grabbing';
     }
 
@@ -1579,6 +1595,7 @@ class CarouselMenuView {
         if (!this.isDragging) return;
         
         const deltaX = x - this.dragStartX;
+        this.lastDragDeltaX = deltaX;
         this.scrollOffset = this.dragStartOffset + deltaX;
         this.velocity = deltaX * CarouselMenuView.VELOCITY_MULTIPLIER; // Track velocity for momentum
         
@@ -1600,10 +1617,20 @@ class CarouselMenuView {
             return;
         }
         
+        const itemWidth = this.getItemWidthPx();
+        const deltaX = this.lastDragDeltaX;
+        if (Math.abs(deltaX) >= CarouselMenuView.SWIPE_THRESHOLD_PX) {
+            const direction = deltaX < 0 ? 1 : -1;
+            const targetIndex = Math.max(0, Math.min(this.options.length - 1, this.currentIndex + direction));
+            this.targetIndex = targetIndex;
+            this.currentIndex = targetIndex;
+            return;
+        }
+
         // Snap to nearest option based on current position and velocity
-        const targetIndexFloat = -this.scrollOffset / CarouselMenuView.ITEM_WIDTH;
+        const targetIndexFloat = -this.scrollOffset / itemWidth;
         let targetIndex = Math.round(targetIndexFloat + this.velocity * CarouselMenuView.VELOCITY_FACTOR);
-        
+
         // Clamp to valid range
         targetIndex = Math.max(0, Math.min(this.options.length - 1, targetIndex));
         this.targetIndex = targetIndex;
@@ -1617,7 +1644,7 @@ class CarouselMenuView {
         const offsetFromCenter = relativeX - centerX;
         
         // Determine which option was clicked based on position
-        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / CarouselMenuView.ITEM_WIDTH);
+        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / this.getItemWidthPx());
         const clickedIndex = Math.max(0, Math.min(this.options.length - 1, clickedOffset));
         
         if (clickedIndex === this.currentIndex) {
@@ -1641,9 +1668,27 @@ class CarouselMenuView {
         animate();
     }
 
+    private updateLayoutMetrics(): void {
+        const isCompactLayout = window.innerWidth < 600;
+        this.isCompactLayout = isCompactLayout;
+        const targetHeight = this.isCompactLayout ? '360px' : '600px';
+        if (this.container.style.height !== targetHeight) {
+            this.container.style.height = targetHeight;
+        }
+    }
+
+    private getLayoutScale(): number {
+        return this.isCompactLayout ? 0.5 : 1;
+    }
+
+    private getItemWidthPx(): number {
+        return CarouselMenuView.ITEM_WIDTH * this.getLayoutScale();
+    }
+
     private update(): void {
+        this.updateLayoutMetrics();
         // Smooth scrolling towards target
-        const targetScrollOffset = -this.currentIndex * CarouselMenuView.ITEM_WIDTH;
+        const targetScrollOffset = -this.currentIndex * this.getItemWidthPx();
         const diff = targetScrollOffset - this.scrollOffset;
         this.scrollOffset += diff * CarouselMenuView.SMOOTH_INTERPOLATION_FACTOR;
         
@@ -1664,6 +1709,11 @@ class CarouselMenuView {
         const centerX = rect.width / 2;
         const centerY = rect.height / 2;
         
+        const layoutScale = this.getLayoutScale();
+        const itemWidth = this.getItemWidthPx();
+        const baseSize = CarouselMenuView.BASE_SIZE * layoutScale;
+        const textScale = CarouselMenuView.TEXT_SCALE * layoutScale;
+
         // Render each option
         for (let i = 0; i < this.options.length; i++) {
             const option = this.options[i];
@@ -1671,7 +1721,7 @@ class CarouselMenuView {
             const distance = Math.abs(offsetFromCenter);
             
             // Calculate position
-            const x = centerX + this.scrollOffset + i * CarouselMenuView.ITEM_WIDTH;
+            const x = centerX + this.scrollOffset + i * itemWidth;
             
             // Calculate size and opacity based on distance from center
             let scale = 1.0;
@@ -1691,7 +1741,7 @@ class CarouselMenuView {
                 opacity = Math.max(0.25, 1.0 - distance * 0.25);
             }
             
-            const size = CarouselMenuView.BASE_SIZE * scale;
+            const size = baseSize * scale;
             
             // Create option element
             const optionElement = document.createElement('div');
@@ -1711,7 +1761,7 @@ class CarouselMenuView {
             optionElement.style.alignItems = 'center';
             optionElement.style.pointerEvents = 'none'; // Let container handle events
             optionElement.style.color = '#000000';
-            optionElement.style.fontWeight = '100';
+            optionElement.style.fontWeight = '300';
             optionElement.style.textAlign = 'center';
             optionElement.style.padding = '30px';
             optionElement.style.boxSizing = 'border-box';
@@ -1721,10 +1771,10 @@ class CarouselMenuView {
             // Add option name
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name;
-            nameElement.style.fontSize = `${Math.max(14, 18 * scale) * CarouselMenuView.TEXT_SCALE}px`;
+            nameElement.style.fontSize = `${Math.max(14, 18 * scale) * textScale}px`;
             nameElement.style.marginBottom = '15px';
             nameElement.style.color = 'transparent';
-            nameElement.style.fontWeight = '100';
+            nameElement.style.fontWeight = '300';
             nameElement.dataset.particleText = 'true';
             nameElement.dataset.particleColor = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             optionElement.appendChild(nameElement);
@@ -1733,11 +1783,11 @@ class CarouselMenuView {
             if (distance === 0) {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
-                descElement.style.fontSize = `${Math.max(10, 12 * scale) * CarouselMenuView.TEXT_SCALE}px`;
+                descElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
                 descElement.style.color = 'transparent';
                 descElement.style.overflow = 'hidden';
                 descElement.style.textOverflow = 'ellipsis';
-                descElement.style.fontWeight = '100';
+                descElement.style.fontWeight = '300';
                 descElement.dataset.particleText = 'true';
                 descElement.dataset.particleColor = '#D0D0D0';
                 optionElement.appendChild(descElement);
@@ -1748,14 +1798,14 @@ class CarouselMenuView {
         
         // Add instruction text
         const instructionElement = document.createElement('div');
-        instructionElement.textContent = 'Drag to browse • Click center to select';
+        instructionElement.textContent = 'Swipe or drag to browse • Tap center to select';
         instructionElement.style.position = 'absolute';
         instructionElement.style.bottom = '20px';
         instructionElement.style.left = '50%';
         instructionElement.style.transform = 'translateX(-50%)';
         instructionElement.style.color = 'transparent';
-        instructionElement.style.fontSize = '24px';
-        instructionElement.style.fontWeight = '100';
+        instructionElement.style.fontSize = `${24 * layoutScale}px`;
+        instructionElement.style.fontWeight = '300';
         instructionElement.style.pointerEvents = 'none';
         instructionElement.dataset.particleText = 'true';
         instructionElement.dataset.particleColor = '#AAAAAA';
@@ -1778,6 +1828,9 @@ class CarouselMenuView {
         if (this.animationFrameId !== null) {
             cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = null;
+        }
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
         }
     }
 }
