@@ -122,6 +122,7 @@ class GameController {
     private startNewGame(settings: GameSettings): void {
         // Create game based on selected map
         this.game = this.createGameFromSettings(settings);
+        this.renderer.selectedHeroNames = settings.selectedHeroNames;
         
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {

@@ -18,6 +18,7 @@ export class GameRenderer {
     public pathPreviewForge: StellarForge | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
+    public selectedHeroNames: string[] = [];
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
@@ -358,9 +359,9 @@ export class GameRenderer {
             }
             
             const hasHeroUnits = forge.owner.units.some(unit => unit.isHero);
-            if (!hasHeroUnits) {
+            if (forge.isSelected && !hasHeroUnits && this.selectedHeroNames.length > 0) {
                 // Draw hero production buttons around the forge
-                this.drawHeroButtons(forge, screenPos, size);
+                this.drawHeroButtons(forge, screenPos, size, this.selectedHeroNames);
             }
         }
 
@@ -414,19 +415,25 @@ export class GameRenderer {
     /**
      * Draw hero production buttons around selected Stellar Forge
      */
-    private drawHeroButtons(forge: StellarForge, screenPos: Vector2D, forgeSize: number): void {
+    private drawHeroButtons(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        forgeSize: number,
+        heroNames: string[]
+    ): void {
         const buttonRadius = 28 * this.zoom;
         const buttonDistance = (forgeSize * 2.5);
         
         // Draw 4 buttons in cardinal directions
         const positions = [
-            { x: 0, y: -1, label: 'H1' },  // Top
-            { x: 1, y: 0, label: 'H2' },   // Right
-            { x: 0, y: 1, label: 'H3' },   // Bottom
-            { x: -1, y: 0, label: 'H4' }   // Left
+            { x: 0, y: -1 },  // Top
+            { x: 1, y: 0 },   // Right
+            { x: 0, y: 1 },   // Bottom
+            { x: -1, y: 0 }   // Left
         ];
-        
-        for (let i = 0; i < positions.length; i++) {
+        const displayHeroes = heroNames.slice(0, positions.length);
+
+        for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
             const buttonX = screenPos.x + pos.x * buttonDistance;
             const buttonY = screenPos.y + pos.y * buttonDistance;
@@ -448,7 +455,7 @@ export class GameRenderer {
             this.ctx.font = `${14 * this.zoom}px Arial`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(pos.label, buttonX, buttonY);
+            this.ctx.fillText(displayHeroes[i], buttonX, buttonY);
         }
         
         // Draw instruction text
