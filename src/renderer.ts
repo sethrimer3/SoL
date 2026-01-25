@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, Building, Minigun, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -1069,6 +1069,22 @@ export class GameRenderer {
         const color = this.getFactionColor(bullet.owner.faction);
         this.ctx.fillStyle = `${color}`;
         this.ctx.globalAlpha = opacity;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a minion projectile
+     */
+    private drawMinionProjectile(projectile: MinionProjectile): void {
+        const screenPos = this.worldToScreen(projectile.position);
+        const size = 2.5 * this.zoom;
+        const color = this.getFactionColor(projectile.owner.faction);
+
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.9;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
@@ -2191,6 +2207,11 @@ export class GameRenderer {
         // Draw ability bullets
         for (const bullet of game.abilityBullets) {
             this.drawAbilityBullet(bullet);
+        }
+
+        // Draw minion projectiles
+        for (const projectile of game.minionProjectiles) {
+            this.drawMinionProjectile(projectile);
         }
         
         // Draw influence zones

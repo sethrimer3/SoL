@@ -641,7 +641,7 @@ export class StellarForge {
      * Set the path for minions to follow
      */
     setMinionPath(waypoints: Vector2D[]): void {
-        this.minionPath = waypoints;
+        this.minionPath = waypoints.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
     }
     
     /**
@@ -649,7 +649,7 @@ export class StellarForge {
      */
     initializeDefaultPath(enemyBasePosition: Vector2D): void {
         // Create a path from this base to the enemy base
-        this.minionPath = [enemyBasePosition];
+        this.minionPath = [new Vector2D(enemyBasePosition.x, enemyBasePosition.y)];
     }
 
     /**
@@ -920,7 +920,12 @@ export class Building {
     /**
      * Update building logic
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
+    update(
+        deltaTime: number,
+        enemies: (Unit | StellarForge | Building)[],
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1460,6 +1465,43 @@ export class AbilityBullet {
 }
 
 /**
+ * Minion projectile fired by Starlings
+ */
+export class MinionProjectile {
+    velocity: Vector2D;
+    distanceTraveledPx: number = 0;
+    maxRangePx: number;
+
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D,
+        public owner: Player,
+        public damage: number,
+        maxRangePx: number = Constants.STARLING_PROJECTILE_MAX_RANGE_PX
+    ) {
+        this.velocity = velocity;
+        this.maxRangePx = maxRangePx;
+    }
+
+    update(deltaTime: number): void {
+        const moveX = this.velocity.x * deltaTime;
+        const moveY = this.velocity.y * deltaTime;
+        this.position.x += moveX;
+        this.position.y += moveY;
+        this.distanceTraveledPx += Math.sqrt(moveX * moveX + moveY * moveY);
+    }
+
+    shouldDespawn(): boolean {
+        return this.distanceTraveledPx >= this.maxRangePx;
+    }
+
+    checkHit(target: Unit | StellarForge | Building): boolean {
+        const distance = this.position.distanceTo(target.position);
+        return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
+    }
+}
+
+/**
  * Base Unit class
  */
 export class Unit {
@@ -1489,7 +1531,12 @@ export class Unit {
     /**
      * Update unit logic
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
+    update(
+        deltaTime: number,
+        enemies: (Unit | StellarForge | Building)[],
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -1500,7 +1547,7 @@ export class Unit {
             this.abilityCooldown -= deltaTime;
         }
 
-        this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits);
+        this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
 
         // Find target if don't have one or current target is dead
         if (!this.target || this.isTargetDead(this.target)) {
@@ -1517,7 +1564,12 @@ export class Unit {
         }
     }
 
-    protected moveTowardRallyPoint(deltaTime: number, moveSpeed: number, allUnits: Unit[]): void {
+    protected moveTowardRallyPoint(
+        deltaTime: number,
+        moveSpeed: number,
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
         if (!this.rallyPoint) {
             return;
         }
@@ -1571,8 +1623,58 @@ export class Unit {
             avoidanceY /= avoidanceLength;
         }
 
+        let asteroidAvoidanceX = 0;
+        let asteroidAvoidanceY = 0;
+        const lookaheadPx = Constants.UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX;
+        const bufferPx = Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
+
+        for (let i = 0; i < asteroids.length; i++) {
+            const asteroid = asteroids[i];
+            const toAsteroidX = asteroid.position.x - this.position.x;
+            const toAsteroidY = asteroid.position.y - this.position.y;
+            const projection = toAsteroidX * directionX + toAsteroidY * directionY;
+            const avoidanceRadius = asteroid.size + Constants.UNIT_RADIUS_PX + bufferPx;
+            const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
+
+            if (projection > 0 && projection < lookaheadPx) {
+                const perpendicularX = toAsteroidX - directionX * projection;
+                const perpendicularY = toAsteroidY - directionY * projection;
+                const perpendicularDistanceSq = perpendicularX * perpendicularX + perpendicularY * perpendicularY;
+
+                if (perpendicularDistanceSq < avoidanceRadiusSq) {
+                    const cross = directionX * toAsteroidY - directionY * toAsteroidX;
+                    const steerX = cross > 0 ? directionY : -directionY;
+                    const steerY = cross > 0 ? -directionX : directionX;
+                    const strength = (avoidanceRadius - Math.sqrt(perpendicularDistanceSq)) / avoidanceRadius;
+                    asteroidAvoidanceX += steerX * strength;
+                    asteroidAvoidanceY += steerY * strength;
+                }
+            }
+
+            const offsetX = this.position.x - asteroid.position.x;
+            const offsetY = this.position.y - asteroid.position.y;
+            const distanceSq = offsetX * offsetX + offsetY * offsetY;
+
+            if (distanceSq < avoidanceRadiusSq) {
+                const distance = Math.sqrt(distanceSq);
+                if (distance > 0) {
+                    const pushStrength = (avoidanceRadius - distance) / avoidanceRadius;
+                    asteroidAvoidanceX += (offsetX / distance) * pushStrength;
+                    asteroidAvoidanceY += (offsetY / distance) * pushStrength;
+                }
+            }
+        }
+
+        const asteroidAvoidanceLength = Math.sqrt(asteroidAvoidanceX * asteroidAvoidanceX + asteroidAvoidanceY * asteroidAvoidanceY);
+        if (asteroidAvoidanceLength > 0) {
+            asteroidAvoidanceX /= asteroidAvoidanceLength;
+            asteroidAvoidanceY /= asteroidAvoidanceLength;
+        }
+
         directionX += avoidanceX * Constants.UNIT_AVOIDANCE_STRENGTH;
         directionY += avoidanceY * Constants.UNIT_AVOIDANCE_STRENGTH;
+        directionX += asteroidAvoidanceX * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
+        directionY += asteroidAvoidanceY * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
 
         const directionLength = Math.sqrt(directionX * directionX + directionY * directionY);
         if (directionLength > 0) {
@@ -1939,9 +2041,9 @@ export class Grave extends Unit {
     /**
      * Update grave and its projectiles
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[], allUnits: Unit[]): void {
+    update(deltaTime: number, enemies: (Unit | StellarForge)[], allUnits: Unit[], asteroids: Asteroid[] = []): void {
         // Update base unit logic
-        super.update(deltaTime, enemies, allUnits);
+        super.update(deltaTime, enemies, allUnits, asteroids);
         
         // Update projectile launch cooldown
         if (this.projectileLaunchCooldown > 0) {
@@ -1988,9 +2090,12 @@ export class Grave extends Unit {
 export class Starling extends Unit {
     private explorationTarget: Vector2D | null = null;
     private explorationTimer: number = 0;
-    private currentPathWaypoint: number = 0; // Current waypoint index in the base's path
+    private currentPathWaypointIndex: number = 0; // Current waypoint index in the assigned path
+    private assignedPath: Vector2D[] = [];
+    private hasManualOrder: boolean = false;
+    private lastShotProjectiles: MinionProjectile[] = [];
     
-    constructor(position: Vector2D, owner: Player) {
+    constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
             position,
             owner,
@@ -2000,25 +2105,54 @@ export class Starling extends Unit {
             Constants.STARLING_ATTACK_SPEED,
             0 // No special ability
         );
+        this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+    }
+
+    setManualRallyPoint(target: Vector2D): void {
+        this.rallyPoint = target;
+        this.hasManualOrder = true;
+    }
+
+    getAssignedPathLength(): number {
+        return this.assignedPath.length;
+    }
+
+    getCurrentPathWaypointIndex(): number {
+        return this.currentPathWaypointIndex;
+    }
+
+    hasActiveManualOrder(): boolean {
+        return this.hasManualOrder;
+    }
+
+    getAndClearLastShotProjectiles(): MinionProjectile[] {
+        const projectiles = this.lastShotProjectiles;
+        this.lastShotProjectiles = [];
+        return projectiles;
     }
 
     /**
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
-        // Get the base's minion path
-        const base = this.owner.stellarForge;
-        
-        if (base && base.minionPath.length > 0) {
+        if (this.hasManualOrder) {
+            if (this.rallyPoint) {
+                return;
+            }
+            this.hasManualOrder = false;
+        }
+
+        // Use the assigned minion path
+        if (this.assignedPath.length > 0) {
             // Follow the base's path
-            const targetWaypoint = base.minionPath[this.currentPathWaypoint];
+            const targetWaypoint = this.assignedPath[this.currentPathWaypointIndex];
             
             // Check if we've reached the current waypoint
             if (this.position.distanceTo(targetWaypoint) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
                 // Move to next waypoint if there is one
-                if (this.currentPathWaypoint < base.minionPath.length - 1) {
-                    this.currentPathWaypoint++;
-                    this.rallyPoint = base.minionPath[this.currentPathWaypoint];
+                if (this.currentPathWaypointIndex < this.assignedPath.length - 1) {
+                    this.currentPathWaypointIndex++;
+                    this.rallyPoint = this.assignedPath[this.currentPathWaypointIndex];
                 } else {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = targetWaypoint;
@@ -2026,7 +2160,7 @@ export class Starling extends Unit {
                 }
             } else {
                 // Set rally point to current waypoint
-                this.rallyPoint = base.minionPath[this.currentPathWaypoint];
+                this.rallyPoint = this.assignedPath[this.currentPathWaypointIndex];
             }
         } else {
             // No path defined, fall back to original AI behavior
@@ -2088,7 +2222,12 @@ export class Starling extends Unit {
     /**
      * Override update to use custom movement speed
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits?: Unit[]): void {
+    update(
+        deltaTime: number,
+        enemies: (Unit | StellarForge | Building)[],
+        allUnits: Unit[] = [],
+        asteroids: Asteroid[] = []
+    ): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -2102,7 +2241,7 @@ export class Starling extends Unit {
         // Update exploration timer
         this.explorationTimer -= deltaTime;
 
-        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits || []);
+        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits, asteroids);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -2118,6 +2257,25 @@ export class Starling extends Unit {
                 this.attackCooldown = 1.0 / this.attackSpeed;
             }
         }
+    }
+
+    attack(target: Unit | StellarForge | Building): void {
+        const dx = target.position.x - this.position.x;
+        const dy = target.position.y - this.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= 0) {
+            return;
+        }
+        const velocity = new Vector2D(
+            (dx / distance) * Constants.STARLING_PROJECTILE_SPEED,
+            (dy / distance) * Constants.STARLING_PROJECTILE_SPEED
+        );
+        this.lastShotProjectiles.push(new MinionProjectile(
+            new Vector2D(this.position.x, this.position.y),
+            velocity,
+            this.owner,
+            this.attackDamage
+        ));
     }
 }
 
@@ -2594,6 +2752,7 @@ export class GameState {
     bulletCasings: BulletCasing[] = [];
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
+    minionProjectiles: MinionProjectile[] = [];
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
@@ -2677,7 +2836,7 @@ export class GameState {
                                 player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
                                 player.stellarForge.position.y + Math.sin(angle) * spawnRadius
                             );
-                            const starling = new Starling(spawnPosition, player);
+                            const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
                             player.units.push(starling);
                             player.unitsCreated++;
                         }
@@ -2756,7 +2915,7 @@ export class GameState {
                         unit.updateAI(this, enemies);
                     }
                     
-                    unit.update(deltaTime, enemies, allUnits);
+                    unit.update(deltaTime, enemies, allUnits, this.asteroids);
 
                 // If unit is a Marine, collect its effects
                 if (unit instanceof Marine) {
@@ -2775,6 +2934,13 @@ export class GameState {
                 // Collect ability effects from all units
                 const abilityEffects = unit.getAndClearLastAbilityEffects();
                 this.abilityBullets.push(...abilityEffects);
+
+                if (unit instanceof Starling) {
+                    const projectiles = unit.getAndClearLastShotProjectiles();
+                    if (projectiles.length > 0) {
+                        this.minionProjectiles.push(...projectiles);
+                    }
+                }
                 
                 // Handle InfluenceBall projectiles specifically
                 if (unit instanceof InfluenceBall) {
@@ -2991,6 +3157,53 @@ export class GameState {
             }
         }
         this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
+
+        // Update minion projectiles and check for hits
+        for (const projectile of this.minionProjectiles) {
+            projectile.update(deltaTime);
+            let hasHit = false;
+
+            for (const player of this.players) {
+                if (player === projectile.owner) {
+                    continue;
+                }
+
+                for (const unit of player.units) {
+                    if (projectile.checkHit(unit)) {
+                        unit.takeDamage(projectile.damage);
+                        hasHit = true;
+                        break;
+                    }
+                }
+
+                if (hasHit) {
+                    break;
+                }
+
+                for (const building of player.buildings) {
+                    if (projectile.checkHit(building)) {
+                        building.health -= projectile.damage;
+                        hasHit = true;
+                        break;
+                    }
+                }
+
+                if (hasHit) {
+                    break;
+                }
+
+                if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
+                    player.stellarForge.health -= projectile.damage;
+                    hasHit = true;
+                    break;
+                }
+            }
+
+            if (hasHit) {
+                projectile.distanceTraveledPx = projectile.maxRangePx;
+            }
+        }
+        this.minionProjectiles = this.minionProjectiles.filter(projectile => !projectile.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -3658,6 +3871,22 @@ export class GameState {
                     }
                 }
 
+                // Check asteroids
+                for (const asteroid of this.asteroids) {
+                    const dx = unit.position.x - asteroid.position.x;
+                    const dy = unit.position.y - asteroid.position.y;
+                    const distSq = dx * dx + dy * dy;
+                    const minDist = asteroid.size + Constants.UNIT_RADIUS_PX + Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
+                    const minDistSq = minDist * minDist;
+                    if (distSq < minDistSq || asteroid.containsPoint(unit.position)) {
+                        const dist = Math.sqrt(distSq) || 1;
+                        const pushStrength = (minDist - dist) / minDist;
+                        pushX += (dx / dist) * pushStrength;
+                        pushY += (dy / dist) * pushStrength;
+                        pushCount++;
+                    }
+                }
+
                 // Check stellar forges
                 for (const player of this.players) {
                     if (player.stellarForge && player !== unit.owner) {
@@ -3860,6 +4089,18 @@ export class GameState {
                 mix(unit.position.y);
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
+                if (unit.rallyPoint) {
+                    mix(unit.rallyPoint.x);
+                    mix(unit.rallyPoint.y);
+                } else {
+                    mix(-1);
+                    mix(-1);
+                }
+                if (unit instanceof Starling) {
+                    mixInt(unit.getAssignedPathLength());
+                    mixInt(unit.getCurrentPathWaypointIndex());
+                    mixInt(unit.hasActiveManualOrder() ? 1 : 0);
+                }
             }
 
             for (const building of player.buildings) {
@@ -3868,6 +4109,18 @@ export class GameState {
                 mix(building.health);
                 mix(building.isComplete ? 1 : 0);
             }
+        }
+
+        mixInt(this.minionProjectiles.length);
+        for (const projectile of this.minionProjectiles) {
+            mix(projectile.position.x);
+            mix(projectile.position.y);
+            mix(projectile.velocity.x);
+            mix(projectile.velocity.y);
+            mix(projectile.damage);
+            mix(projectile.distanceTraveledPx);
+            mix(projectile.maxRangePx);
+            mixInt(this.players.indexOf(projectile.owner));
         }
 
         this.stateHash = hash >>> 0;

@@ -76,12 +76,15 @@ export const GRAVE_PROJECTILE_HIT_DISTANCE = 10; // Distance at which projectile
 
 // Starling unit constants (minions from stellar forge)
 export const STARLING_MAX_HEALTH = 50;
-export const STARLING_ATTACK_RANGE = 150;
+export const STARLING_ATTACK_RANGE = 120;
 export const STARLING_ATTACK_DAMAGE = 5;
 export const STARLING_ATTACK_SPEED = 2; // Attacks per second
 export const STARLING_MOVE_SPEED = 50; // Pixels per second (slower than regular units)
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
+export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
+export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
+export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 
 // Forge crunch constants (periodic event that spawns minions)
 export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
@@ -122,6 +125,9 @@ export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
 export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)
+export const UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX = 140; // Distance ahead to check for asteroids
+export const UNIT_ASTEROID_AVOIDANCE_BUFFER_PX = 12; // Buffer distance around asteroids
+export const UNIT_ASTEROID_AVOIDANCE_STRENGTH = 1.1; // Blend factor for asteroid avoidance
 export const UNIT_HERO_AVOIDANCE_MULTIPLIER = 0.3; // Heroes ignore some avoidance (unitless)
 export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes (unitless)
 export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint arrival detection
