@@ -496,7 +496,7 @@ export class GameRenderer {
                 const forge = mirror.owner.stellarForge;
                 let reflectDir: Vector2D | null = null;
 
-                if (forge && mirror.hasLineOfSightToForge(forge, game.asteroids)) {
+                if (forge && mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)) {
                     reflectDir = new Vector2D(
                         forge.position.x - mirror.position.x,
                         forge.position.y - mirror.position.y
@@ -617,6 +617,22 @@ export class GameRenderer {
             const healthPercent = mirror.health / this.MIRROR_MAX_HEALTH;
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        }
+
+        if (mirror.isSelected) {
+            const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
+            const forge = mirror.owner.stellarForge;
+            const hasLoSToForge = forge
+                ? mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)
+                : false;
+            const solariumRate = hasLoSToSun && hasLoSToForge ? mirror.getSolariumRatePerSec() : 0;
+            const textY = screenPos.y + size + 16 * this.zoom;
+
+            this.ctx.fillStyle = '#FFFFAA';
+            this.ctx.font = `${12 * this.zoom}px Arial`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
         }
     }
 
@@ -1581,7 +1597,7 @@ export class GameRenderer {
     /**
      * Draw connection lines with visual indicators for line of sight
      */
-    private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[]): void {
+    private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[], players: Player[]): void {
         if (!player.stellarForge) return;
         if (this.viewingPlayer && player !== this.viewingPlayer) return;
 
@@ -1593,15 +1609,17 @@ export class GameRenderer {
             
             // Check line of sight to sun
             const hasLoSToSun = mirror.hasLineOfSightToLight(suns, asteroids);
-            const closestSun = mirror.getClosestVisibleSun(suns, asteroids);
+            const closestSun = hasLoSToSun
+                ? mirror.getClosestVisibleSun(suns, asteroids)
+                : mirror.getClosestSun(suns);
             
             // Check line of sight to forge
-            const hasLoSToForge = mirror.hasLineOfSightToForge(player.stellarForge, asteroids);
+            const hasLoSToForge = mirror.hasLineOfSightToForge(player.stellarForge, asteroids, players);
             
-            // Draw line to sun (green if clear, red if blocked)
-            if (closestSun) {
+            // Draw line to sun only when blocked
+            if (closestSun && !hasLoSToSun) {
                 const sunScreenPos = this.worldToScreen(closestSun.position);
-                this.ctx.strokeStyle = hasLoSToSun ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 0, 0, 0.4)';
+                this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
                 this.ctx.lineWidth = 1.5;
                 this.ctx.setLineDash([3, 3]);
                 this.ctx.beginPath();
@@ -1611,15 +1629,17 @@ export class GameRenderer {
                 this.ctx.setLineDash([]);
             }
             
-            // Draw line to forge (blue if clear, red if blocked)
-            this.ctx.strokeStyle = hasLoSToForge ? 'rgba(0, 150, 255, 0.4)' : 'rgba(255, 0, 0, 0.4)';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.setLineDash([3, 3]);
-            this.ctx.beginPath();
-            this.ctx.moveTo(mirrorScreenPos.x, mirrorScreenPos.y);
-            this.ctx.lineTo(forgeScreenPos.x, forgeScreenPos.y);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
+            // Draw line to forge only when blocked
+            if (!hasLoSToForge) {
+                this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.setLineDash([3, 3]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(mirrorScreenPos.x, mirrorScreenPos.y);
+                this.ctx.lineTo(forgeScreenPos.x, forgeScreenPos.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+            }
             
             // Draw combined status indicator on the mirror
             if (hasLoSToSun && hasLoSToForge) {
@@ -2084,7 +2104,7 @@ export class GameRenderer {
         // Draw connections first (so they appear behind structures)
         for (const player of game.players) {
             if (!player.isDefeated()) {
-                this.drawConnections(player, game.suns, game.asteroids);
+                this.drawConnections(player, game.suns, game.asteroids, game.players);
             }
         }
 
