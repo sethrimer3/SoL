@@ -1505,6 +1505,10 @@ export class AbilityBullet {
     maxRange: number = Infinity; // Optional max range in pixels (default: no limit)
     startPosition: Vector2D;
     
+    // Optional properties for Beam sniper projectile
+    isBeamProjectile?: boolean;
+    beamOwner?: Beam;
+    
     constructor(
         public position: Vector2D,
         velocity: Vector2D,
@@ -2827,11 +2831,11 @@ export class Driller extends Unit {
 }
 
 /**
- * Phantom hero unit (Radiant faction) - cloaked assassin
+ * Dagger hero unit (Radiant faction) - cloaked assassin
  * Always cloaked and invisible to enemies. Cannot see enemies until ability is used.
  * Becomes visible for 8 seconds after using ability.
  */
-export class Phantom extends Unit {
+export class Dagger extends Unit {
     isCloaked: boolean = true; // Always cloaked unless ability was recently used
     visibilityTimer: number = 0; // Time remaining while visible after ability use
     canSeeEnemies: boolean = false; // Can only see enemies after using ability
@@ -2841,13 +2845,13 @@ export class Phantom extends Unit {
         super(
             position,
             owner,
-            Constants.PHANTOM_MAX_HEALTH,
-            Constants.PHANTOM_ATTACK_RANGE,
-            Constants.PHANTOM_ATTACK_DAMAGE,
-            Constants.PHANTOM_ATTACK_SPEED,
-            Constants.PHANTOM_ABILITY_COOLDOWN
+            Constants.DAGGER_MAX_HEALTH,
+            Constants.DAGGER_ATTACK_RANGE,
+            Constants.DAGGER_ATTACK_DAMAGE,
+            Constants.DAGGER_ATTACK_SPEED,
+            Constants.DAGGER_ABILITY_COOLDOWN
         );
-        this.isHero = true; // Phantom is a hero unit for Radiant faction
+        this.isHero = true; // Dagger is a hero unit for Radiant faction
     }
     
     /**
@@ -2874,21 +2878,21 @@ export class Phantom extends Unit {
     }
     
     /**
-     * Use Phantom's ability: short-range directional attack
-     * Deals damage in a cone and reveals the Phantom for 8 seconds
+     * Use Dagger's ability: short-range directional attack
+     * Deals damage in a cone and reveals the Dagger for 8 seconds
      */
     useAbility(direction: Vector2D): boolean {
         if (!super.useAbility(direction)) {
             return false;
         }
         
-        // Reveal Phantom for 8 seconds
+        // Reveal Dagger for 8 seconds
         this.isCloaked = false;
-        this.visibilityTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        this.visibilityTimer = Constants.DAGGER_VISIBILITY_DURATION;
         
         // Grant enemy vision for 8 seconds
         this.canSeeEnemies = true;
-        this.enemyVisionTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        this.enemyVisionTimer = Constants.DAGGER_VISIBILITY_DURATION;
         
         // Calculate attack direction
         const attackDir = direction.normalize();
@@ -2906,11 +2910,11 @@ export class Phantom extends Unit {
             new Vector2D(this.position.x, this.position.y),
             velocity,
             this.owner,
-            Constants.PHANTOM_ABILITY_DAMAGE
+            Constants.DAGGER_ABILITY_DAMAGE
         );
         
         // Set short range for the projectile
-        bullet.maxRange = Constants.PHANTOM_ABILITY_RANGE;
+        bullet.maxRange = Constants.DAGGER_ABILITY_RANGE;
         
         this.lastAbilityEffects.push(bullet);
         
@@ -2926,7 +2930,7 @@ export class Phantom extends Unit {
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
-        // Filter enemies - Phantom can only see enemies if it has enemy vision
+        // Filter enemies - Dagger can only see enemies if it has enemy vision
         let visibleEnemies = enemies;
         if (!this.canSeeEnemies) {
             visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
@@ -2937,17 +2941,132 @@ export class Phantom extends Unit {
     }
     
     /**
-     * Check if this Phantom is cloaked (invisible to enemies)
+     * Check if this Dagger is cloaked (invisible to enemies)
      */
     isCloakedToEnemies(): boolean {
         return this.isCloaked;
     }
     
     /**
-     * Check if this Phantom can currently see enemies
+     * Check if this Dagger can currently see enemies
      */
     hasEnemyVision(): boolean {
         return this.canSeeEnemies;
+    }
+}
+
+/**
+ * Beam hero unit (Radiant faction) - sniper with distance-based damage
+ * Fires a thin beam that does more damage the further away the target is
+ */
+export class Beam extends Unit {
+    public lastBeamDamage: number = 0; // For displaying multiplier
+    public lastBeamDistance: number = 0; // For calculating multiplier
+    public lastBeamMultiplier: number = 0; // For display above unit
+    public lastBeamTime: number = 0; // When the last beam was fired
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.BEAM_MAX_HEALTH,
+            Constants.BEAM_ATTACK_RANGE,
+            Constants.BEAM_ATTACK_DAMAGE,
+            Constants.BEAM_ATTACK_SPEED,
+            Constants.BEAM_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // Beam is a hero unit for Radiant faction
+    }
+    
+    /**
+     * Use Beam's ability: long-range sniper beam with distance-based damage
+     * Deals more damage the further away the target is
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Calculate beam direction
+        const beamDir = direction.normalize();
+        
+        // Create a thin beam projectile that travels in a straight line
+        const speed = 1000; // Very fast beam speed
+        const velocity = new Vector2D(
+            beamDir.x * speed,
+            beamDir.y * speed
+        );
+        
+        // Create ability bullet for the beam
+        const bullet = new AbilityBullet(
+            new Vector2D(this.position.x, this.position.y),
+            velocity,
+            this.owner,
+            Constants.BEAM_ABILITY_BASE_DAMAGE // Base damage, will be modified on hit
+        );
+        
+        // Set long range for the sniper beam
+        bullet.maxRange = Constants.BEAM_ABILITY_MAX_RANGE;
+        
+        // Mark this as a beam projectile for special damage calculation
+        bullet.isBeamProjectile = true;
+        bullet.beamOwner = this;
+        
+        this.lastAbilityEffects.push(bullet);
+        
+        return true;
+    }
+}
+
+/**
+ * Damage number that floats upward and fades out
+ */
+export class DamageNumber {
+    public position: Vector2D;
+    public damage: number;
+    public creationTime: number;
+    public velocity: Vector2D;
+    public maxHealth: number; // For calculating size proportional to health
+
+    constructor(
+        position: Vector2D,
+        damage: number,
+        creationTime: number,
+        maxHealth: number = 100
+    ) {
+        this.position = new Vector2D(position.x, position.y);
+        this.damage = Math.round(damage);
+        this.creationTime = creationTime;
+        this.maxHealth = maxHealth;
+        // Random horizontal drift
+        this.velocity = new Vector2D(
+            (Math.random() - 0.5) * 20,
+            -50 // Upward velocity
+        );
+    }
+
+    /**
+     * Update position based on velocity
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+    }
+
+    /**
+     * Check if damage number has expired (2 second lifetime)
+     */
+    isExpired(currentTime: number): boolean {
+        return currentTime - this.creationTime > 2.0;
+    }
+
+    /**
+     * Get opacity based on age (fade out over time)
+     */
+    getOpacity(currentTime: number): number {
+        const age = currentTime - this.creationTime;
+        const lifetime = 2.0;
+        return Math.max(0, 1 - age / lifetime);
     }
 }
 
@@ -2968,6 +3087,7 @@ export class GameState {
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
+    damageNumbers: DamageNumber[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -3187,8 +3307,8 @@ export class GameState {
                     this.processDrillerCollisions(unit, deltaTime);
                 }
                 
-                // Handle Phantom timers
-                if (unit instanceof Phantom) {
+                // Handle Dagger timers
+                if (unit instanceof Dagger) {
                     unit.updateTimers(deltaTime);
                 }
                 
@@ -3376,7 +3496,30 @@ export class GameState {
                 // Check hits on units
                 for (const unit of player.units) {
                     if (bullet.checkHit(unit)) {
-                        unit.takeDamage(bullet.damage);
+                        let finalDamage = bullet.damage;
+                        
+                        // Check if this is a Beam projectile for distance-based damage
+                        if (bullet.isBeamProjectile && bullet.beamOwner) {
+                            const beamOwner = bullet.beamOwner;
+                            const distance = beamOwner.position.distanceTo(unit.position);
+                            const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
+                            finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
+                            
+                            // Store info for display above Beam unit
+                            beamOwner.lastBeamDamage = finalDamage;
+                            beamOwner.lastBeamDistance = distance;
+                            beamOwner.lastBeamMultiplier = multiplier;
+                            beamOwner.lastBeamTime = this.gameTime;
+                        }
+                        
+                        unit.takeDamage(finalDamage);
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            finalDamage,
+                            this.gameTime,
+                            unit.maxHealth
+                        ));
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -3384,7 +3527,30 @@ export class GameState {
 
                 // Check hits on Stellar Forge
                 if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
-                    player.stellarForge.health -= bullet.damage;
+                    let finalDamage = bullet.damage;
+                    
+                    // Check if this is a Beam projectile for distance-based damage
+                    if (bullet.isBeamProjectile && bullet.beamOwner) {
+                        const beamOwner = bullet.beamOwner;
+                        const distance = beamOwner.position.distanceTo(player.stellarForge.position);
+                        const multiplier = 1 + (distance * Constants.BEAM_ABILITY_DAMAGE_PER_DISTANCE);
+                        finalDamage = Math.round(Constants.BEAM_ABILITY_BASE_DAMAGE * multiplier);
+                        
+                        // Store info for display above Beam unit
+                        beamOwner.lastBeamDamage = finalDamage;
+                        beamOwner.lastBeamDistance = distance;
+                        beamOwner.lastBeamMultiplier = multiplier;
+                        beamOwner.lastBeamTime = this.gameTime;
+                    }
+                    
+                    player.stellarForge.health -= finalDamage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        finalDamage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
             }
@@ -3414,6 +3580,13 @@ export class GameState {
                 for (const unit of player.units) {
                     if (projectile.checkHit(unit)) {
                         unit.takeDamage(projectile.damage);
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            projectile.damage,
+                            this.gameTime,
+                            unit.maxHealth
+                        ));
                         hasHit = true;
                         break;
                     }
@@ -3426,6 +3599,13 @@ export class GameState {
                 for (const building of player.buildings) {
                     if (projectile.checkHit(building)) {
                         building.health -= projectile.damage;
+                        // Create damage number
+                        this.damageNumbers.push(new DamageNumber(
+                            building.position,
+                            projectile.damage,
+                            this.gameTime,
+                            building.maxHealth
+                        ));
                         hasHit = true;
                         break;
                     }
@@ -3437,6 +3617,13 @@ export class GameState {
 
                 if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= projectile.damage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        projectile.damage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     hasHit = true;
                     break;
                 }
@@ -3502,6 +3689,13 @@ export class GameState {
             turret.update(deltaTime, enemies);
         }
         this.deployedTurrets = this.deployedTurrets.filter(turret => !turret.isDead());
+
+        // Update damage numbers
+        for (const damageNumber of this.damageNumbers) {
+            damageNumber.update(deltaTime);
+        }
+        // Remove expired damage numbers
+        this.damageNumbers = this.damageNumbers.filter(dn => !dn.isExpired(this.gameTime));
     }
 
     /**
@@ -3711,11 +3905,11 @@ export class GameState {
      * - They are in shadow but within player's influence radius
      */
     isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
-        // Special case: if object is a Phantom unit and is cloaked
-        if (object && object instanceof Phantom) {
-            // Phantom is only visible to enemies if not cloaked
+        // Special case: if object is a Dagger unit and is cloaked
+        if (object && object instanceof Dagger) {
+            // Dagger is only visible to enemies if not cloaked
             if (object.isCloakedToEnemies() && object.owner !== player) {
-                return false; // Cloaked Phantoms are invisible to enemies
+                return false; // Cloaked Daggers are invisible to enemies
             }
         }
         
@@ -3842,6 +4036,16 @@ export class GameState {
                 // Damage and stop
                 if (closestHit.target) {
                     closestHit.target.takeDamage(Constants.RAY_BEAM_DAMAGE);
+                    // Create damage number
+                    const maxHealth = closestHit.type === 'forge' 
+                        ? Constants.STELLAR_FORGE_MAX_HEALTH 
+                        : (closestHit.target as Unit).maxHealth;
+                    this.damageNumbers.push(new DamageNumber(
+                        closestHit.target.position,
+                        Constants.RAY_BEAM_DAMAGE,
+                        this.gameTime,
+                        maxHealth
+                    ));
                 }
                 break;
             } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
@@ -4016,6 +4220,13 @@ export class GameState {
                 const distance = driller.position.distanceTo(unit.position);
                 if (distance < 15) {
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        unit.position,
+                        Constants.DRILLER_DRILL_DAMAGE,
+                        this.gameTime,
+                        unit.maxHealth
+                    ));
                 }
             }
             
@@ -4023,7 +4234,15 @@ export class GameState {
             for (const building of player.buildings) {
                 const distance = driller.position.distanceTo(building.position);
                 if (distance < 40) {
-                    building.takeDamage(Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER);
+                    const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    building.takeDamage(damage);
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        building.position,
+                        damage,
+                        this.gameTime,
+                        building.maxHealth
+                    ));
                     // Continue drilling through building
                 }
             }
@@ -4032,7 +4251,15 @@ export class GameState {
             if (player.stellarForge) {
                 const distance = driller.position.distanceTo(player.stellarForge.position);
                 if (distance < player.stellarForge.radius + 10) {
-                    player.stellarForge.health -= Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
+                    player.stellarForge.health -= damage;
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        damage,
+                        this.gameTime,
+                        Constants.STELLAR_FORGE_MAX_HEALTH
+                    ));
                     // Continue drilling through
                 }
             }

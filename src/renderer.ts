@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Phantom } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -454,7 +454,7 @@ export class GameRenderer {
             
             // Draw button label
             this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#666666';
-            this.ctx.font = `${14 * this.zoom}px Arial`;
+            this.ctx.font = `${14 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(displayHeroes[i], buttonX, buttonY);
@@ -462,7 +462,7 @@ export class GameRenderer {
         
         // Draw instruction text
         this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.font = `${10 * this.zoom}px Arial`;
+        this.ctx.font = `${10 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'top';
         this.ctx.fillText('Hero Production (Stub)', screenPos.x, screenPos.y + forgeSize * 2.5);
@@ -638,7 +638,7 @@ export class GameRenderer {
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
-            this.ctx.font = `${12 * this.zoom}px Arial`;
+            this.ctx.font = `${12 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
@@ -866,7 +866,7 @@ export class GameRenderer {
 
                 // Draw button icon (placeholder)
                 this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${12 * this.zoom}px Arial`;
+                this.ctx.font = `${12 * this.zoom}px Doto`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
                 this.ctx.fillText(`B${i + 1}`, btnX, btnY);
@@ -1004,7 +1004,7 @@ export class GameRenderer {
         
         // Draw order number
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 12px Arial';
+        this.ctx.font = 'bold 12px Doto';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(order.toString(), targetScreenPos.x, targetScreenPos.y);
@@ -1464,18 +1464,18 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Phantom hero unit with cloak indicator
+     * Draw a Dagger hero unit with cloak indicator
      */
-    private drawPhantom(phantom: Phantom, color: string, game: GameState, isEnemy: boolean): void {
+    private drawDagger(dagger: Dagger, color: string, game: GameState, isEnemy: boolean): void {
         // Check visibility for enemy units
         let shouldDim = false;
         if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(phantom.position, this.viewingPlayer, phantom);
+            const isVisible = game.isObjectVisibleToPlayer(dagger.position, this.viewingPlayer, dagger);
             if (!isVisible) {
-                return; // Cloaked Phantom is invisible to enemies
+                return; // Cloaked Dagger is invisible to enemies
             }
             
-            const inShadow = game.isPointInShadow(phantom.position);
+            const inShadow = game.isPointInShadow(dagger.position);
             if (inShadow) {
                 shouldDim = true;
                 this.ctx.globalAlpha = Constants.SHADE_OPACITY;
@@ -1484,17 +1484,17 @@ export class GameRenderer {
         
         // For friendly units, apply cloak opacity when cloaked
         let isCloakedFriendly = false;
-        if (!isEnemy && phantom.isCloakedToEnemies()) {
+        if (!isEnemy && dagger.isCloakedToEnemies()) {
             isCloakedFriendly = true;
-            this.ctx.globalAlpha = Constants.PHANTOM_CLOAK_OPACITY;
+            this.ctx.globalAlpha = Constants.DAGGER_CLOAK_OPACITY;
         }
         
         // Draw base unit
-        this.drawUnit(phantom, color, game, isEnemy);
+        this.drawUnit(dagger, color, game, isEnemy);
         
         // Draw cloak indicator (ghostly outline)
         if (isCloakedFriendly) {
-            const screenPos = this.worldToScreen(phantom.position);
+            const screenPos = this.worldToScreen(dagger.position);
             const size = 8 * this.zoom;
             
             this.ctx.strokeStyle = color;
@@ -1510,8 +1510,8 @@ export class GameRenderer {
         }
         
         // Draw ability indicator when visible (not cloaked)
-        if (!phantom.isCloakedToEnemies() && !isEnemy) {
-            const screenPos = this.worldToScreen(phantom.position);
+        if (!dagger.isCloakedToEnemies() && !isEnemy) {
+            const screenPos = this.worldToScreen(dagger.position);
             const size = 8 * this.zoom;
             
             // Draw strike symbol (like a blade)
@@ -1526,6 +1526,88 @@ export class GameRenderer {
         
         // Reset alpha
         if (shouldDim || isCloakedFriendly) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a Beam hero unit with sniper indicator
+     */
+    private drawBeam(beam: Beam, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(beam.position, this.viewingPlayer, beam);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            const inShadow = game.isPointInShadow(beam.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(beam, color, game, isEnemy);
+        
+        // Draw crosshair/sniper scope indicator for friendly units
+        if (!isEnemy) {
+            const screenPos = this.worldToScreen(beam.position);
+            const size = 10 * this.zoom;
+            
+            this.ctx.strokeStyle = '#FF0000'; // Red for sniper
+            this.ctx.lineWidth = 1.5 * this.zoom;
+            
+            // Draw crosshair
+            this.ctx.beginPath();
+            // Horizontal line
+            this.ctx.moveTo(screenPos.x - size, screenPos.y);
+            this.ctx.lineTo(screenPos.x + size, screenPos.y);
+            // Vertical line
+            this.ctx.moveTo(screenPos.x, screenPos.y - size);
+            this.ctx.lineTo(screenPos.x, screenPos.y + size);
+            this.ctx.stroke();
+            
+            // Draw small circle in center
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+        
+        // Display damage multiplier if recently fired (show for 2 seconds)
+        if (game.gameTime - beam.lastBeamTime < 2.0 && beam.lastBeamMultiplier > 0) {
+            const screenPos = this.worldToScreen(beam.position);
+            const yOffset = -20 * this.zoom;
+            
+            // Format multiplier: e.g., "(30x5.5)"
+            const baseDamage = Constants.BEAM_ABILITY_BASE_DAMAGE;
+            const multiplierText = `(${baseDamage}x${beam.lastBeamMultiplier.toFixed(1)})`;
+            
+            // Small font for the multiplier
+            const fontSize = 10 * this.zoom;
+            this.ctx.font = `${fontSize}px Doto`;
+            this.ctx.fillStyle = '#FFAA00'; // Orange/yellow
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'bottom';
+            
+            // Draw with slight fade based on time
+            const age = game.gameTime - beam.lastBeamTime;
+            const opacity = Math.max(0, 1 - age / 2.0);
+            this.ctx.globalAlpha = opacity;
+            
+            // Add stroke for readability
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(multiplierText, screenPos.x, screenPos.y + yOffset);
+            this.ctx.fillText(multiplierText, screenPos.x, screenPos.y + yOffset);
+            
+            this.ctx.globalAlpha = 1.0;
+        }
+        
+        // Reset alpha
+        if (shouldDim) {
             this.ctx.globalAlpha = 1.0;
         }
     }
@@ -1881,7 +1963,7 @@ export class GameRenderer {
             this.ctx.fillRect(10, 10, infoBoxWidth, infoBoxHeight);
 
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${infoFontSize}px Arial`;
+            this.ctx.font = `${infoFontSize}px Doto`;
             let infoY = 30;
             this.ctx.fillText(`SoL - Speed of Light RTS`, 20, infoY);
             infoY += infoLineHeight;
@@ -1922,7 +2004,7 @@ export class GameRenderer {
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             this.ctx.fillRect(controlBoxX, controlBoxY, controlBoxWidth, controlBoxHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${controlFontSize}px Arial`;
+            this.ctx.font = `${controlFontSize}px Doto`;
             let controlTextY = controlBoxY + controlLineHeight;
             for (const line of controlLines) {
                 this.ctx.fillText(line, 20, controlTextY);
@@ -2181,6 +2263,32 @@ export class GameRenderer {
     }
 
     /**
+     * Draw damage numbers floating up from damaged units
+     */
+    private drawDamageNumbers(game: GameState): void {
+        for (const damageNumber of game.damageNumbers) {
+            const screenPos = this.worldToScreen(damageNumber.position);
+            const opacity = damageNumber.getOpacity(game.gameTime);
+            
+            // Calculate size based on damage proportion to max health
+            // Range: 8px (small) to 24px (large)
+            const damageRatio = damageNumber.damage / damageNumber.maxHealth;
+            const fontSize = Math.max(8, Math.min(24, 8 + damageRatio * 80));
+            
+            this.ctx.font = `bold ${fontSize}px Doto`;
+            this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            
+            // Add stroke for readability
+            this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})`;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+            this.ctx.fillText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+        }
+    }
+
+    /**
      * Render the entire game state
      */
     render(game: GameState): void {
@@ -2363,8 +2471,10 @@ export class GameRenderer {
                     this.drawTurretDeployer(unit, color, game, isEnemy);
                 } else if (unit instanceof Driller) {
                     this.drawDriller(unit, color, game, isEnemy);
-                } else if (unit instanceof Phantom) {
-                    this.drawPhantom(unit, color, game, isEnemy);
+                } else if (unit instanceof Dagger) {
+                    this.drawDagger(unit, color, game, isEnemy);
+                } else if (unit instanceof Beam) {
+                    this.drawBeam(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -2427,6 +2537,9 @@ export class GameRenderer {
             this.drawDeployedTurret(turret);
         }
 
+        // Draw damage numbers
+        this.drawDamageNumbers(game);
+
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
 
@@ -2457,7 +2570,7 @@ export class GameRenderer {
             
             // Countdown text
             this.ctx.fillStyle = '#FFD700';
-            this.ctx.font = 'bold 120px Arial';
+            this.ctx.font = 'bold 120px Doto';
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             
@@ -2540,7 +2653,7 @@ export class GameRenderer {
         
         // Title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Arial`;
+        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
         
@@ -2559,7 +2672,7 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 18 : 20}px Arial`;
+            this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
             this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
         };
         
@@ -2588,7 +2701,7 @@ export class GameRenderer {
         // Victory message
         this.ctx.fillStyle = this.getFactionColor(winner.faction);
         const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
-        this.ctx.font = `bold ${victoryFontSize}px Arial`;
+        this.ctx.font = `bold ${victoryFontSize}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`${winner.name} WINS!`, screenWidth / 2, 80);
         
@@ -2607,12 +2720,12 @@ export class GameRenderer {
         // Match statistics title
         this.ctx.fillStyle = '#FFD700';
         const statsTitleSize = Math.max(18, Math.min(28, screenWidth * 0.07));
-        this.ctx.font = `bold ${statsTitleSize}px Arial`;
+        this.ctx.font = `bold ${statsTitleSize}px Doto`;
         this.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
         
         // Draw stats for each player
         const statsFontSize = Math.max(14, Math.min(20, screenWidth * 0.045));
-        this.ctx.font = `${statsFontSize}px Arial`;
+        this.ctx.font = `${statsFontSize}px Doto`;
         let y = panelY + 100;
         const horizontalPadding = 24;
         const labelColumnWidth = Math.max(100, Math.min(200, panelWidth * 0.4));
@@ -2675,7 +2788,7 @@ export class GameRenderer {
         this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
         
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Arial`;
+        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65));
         

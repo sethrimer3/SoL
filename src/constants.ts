@@ -86,6 +86,9 @@ export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 
+// Stellar Forge constants (main base structure)
+export const STELLAR_FORGE_MAX_HEALTH = 1000;
+
 // Forge crunch constants (periodic event that spawns minions)
 export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
 export const FORGE_CRUNCH_SUCK_DURATION = 0.8; // Duration of dust suction phase
@@ -216,13 +219,23 @@ export const DRILLER_DRILL_DAMAGE = 30; // Damage to units
 export const DRILLER_BUILDING_DAMAGE_MULTIPLIER = 2.0; // Double damage to buildings
 export const DRILLER_DECELERATION = 200; // Deceleration rate at edge
 
-// Phantom unit constants (Radiant hero - cloaked assassin)
-export const PHANTOM_MAX_HEALTH = 80;
-export const PHANTOM_ATTACK_RANGE = 100; // Very short range
-export const PHANTOM_ATTACK_DAMAGE = 35; // High damage for close range
-export const PHANTOM_ATTACK_SPEED = 1.5; // Attacks per second
-export const PHANTOM_ABILITY_COOLDOWN = 6.0; // 6 seconds
-export const PHANTOM_ABILITY_RANGE = 150; // Very short range for ability attack
-export const PHANTOM_ABILITY_DAMAGE = 50; // High burst damage
-export const PHANTOM_VISIBILITY_DURATION = 8.0; // 8 seconds visible after using ability
-export const PHANTOM_CLOAK_OPACITY = 0.4; // Opacity when cloaked to own player
+// Dagger unit constants (Radiant hero - cloaked assassin)
+export const DAGGER_MAX_HEALTH = 80;
+export const DAGGER_ATTACK_RANGE = 100; // Very short range
+export const DAGGER_ATTACK_DAMAGE = 35; // High damage for close range
+export const DAGGER_ATTACK_SPEED = 1.5; // Attacks per second
+export const DAGGER_ABILITY_COOLDOWN = 6.0; // 6 seconds
+export const DAGGER_ABILITY_RANGE = 150; // Very short range for ability attack
+export const DAGGER_ABILITY_DAMAGE = 50; // High burst damage
+export const DAGGER_VISIBILITY_DURATION = 8.0; // 8 seconds visible after using ability
+export const DAGGER_CLOAK_OPACITY = 0.4; // Opacity when cloaked to own player
+
+// Beam unit constants (Radiant hero - sniper with distance-based damage)
+export const BEAM_MAX_HEALTH = 70;
+export const BEAM_ATTACK_RANGE = 150;
+export const BEAM_ATTACK_DAMAGE = 20;
+export const BEAM_ATTACK_SPEED = 1.0; // Attacks per second
+export const BEAM_ABILITY_COOLDOWN = 8.0; // 8 seconds
+export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
+export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
+export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
