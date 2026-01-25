@@ -79,37 +79,19 @@ interface BackgroundParticle {
     radius: number;
 }
 
-interface BackgroundSwarmParticle {
-    x: number;
-    y: number;
-    velocityX: number;
-    velocityY: number;
-    typeIndex: number;
-}
-
 class BackgroundParticleLayer {
-    private static readonly LARGE_PARTICLE_COUNT = 8;
-    private static readonly LARGE_PARTICLE_RADIUS = 250;
-    private static readonly LARGE_MAX_VELOCITY = 0.3;
-    private static readonly LARGE_FRICTION = 0.98;
+    private static readonly PARTICLE_COUNT = 8;
+    private static readonly PARTICLE_RADIUS = 250;
+    private static readonly MAX_VELOCITY = 0.3;
+    private static readonly FRICTION = 0.98;
     private static readonly COLOR_TRANSITION_SPEED = 0.002;
-    private static readonly LARGE_REPULSION_STRENGTH = 0.08;
+    private static readonly ATTRACTION_STRENGTH = 0.15;
     private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
-    private static readonly SWARM_PARTICLE_COUNT = 160;
-    private static readonly SWARM_TYPE_COUNT = 8;
-    private static readonly SWARM_MAX_VELOCITY = 0.55;
-    private static readonly SWARM_FRICTION = 0.96;
-    private static readonly SWARM_INTERACTION_STRENGTH = 0.02;
-    private static readonly SWARM_SPRITE_SIZE_PX = 42;
-    private static readonly SWARM_OPACITY = 0.35;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
     private particles: BackgroundParticle[] = [];
-    private swarmParticles: BackgroundSwarmParticle[] = [];
     private attractionMatrix: number[][] = [];
-    private swarmInteractionMatrix: number[][] = [];
-    private swarmSprites: HTMLCanvasElement[] = [];
     private animationFrameId: number | null = null;
     private isActive: boolean = false;
     private lastColorChangeMs: number = 0;
@@ -146,9 +128,6 @@ class BackgroundParticleLayer {
         this.resize();
         this.initializeParticles();
         this.initializeAttractionMatrix();
-        this.initializeSwarmSprites();
-        this.initializeSwarmParticles();
-        this.initializeSwarmInteractionMatrix();
         this.start();
     }
     
@@ -157,7 +136,7 @@ class BackgroundParticleLayer {
         const height = this.canvas.height / (window.devicePixelRatio || 1);
         
         this.particles = [];
-        for (let i = 0; i < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; i++) {
+        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
             const color = this.gradientColors[i % this.gradientColors.length];
             const particle: BackgroundParticle = {
                 x: Math.random() * width,
@@ -170,89 +149,25 @@ class BackgroundParticleLayer {
                 targetColorR: color[0],
                 targetColorG: color[1],
                 targetColorB: color[2],
-                radius: BackgroundParticleLayer.LARGE_PARTICLE_RADIUS
+                radius: BackgroundParticleLayer.PARTICLE_RADIUS
             };
             this.particles.push(particle);
         }
     }
-
+    
     private initializeAttractionMatrix(): void {
         this.attractionMatrix = [];
-        for (let i = 0; i < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; i++) {
+        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
             this.attractionMatrix[i] = [];
-            for (let j = 0; j < BackgroundParticleLayer.LARGE_PARTICLE_COUNT; j++) {
+            for (let j = 0; j < BackgroundParticleLayer.PARTICLE_COUNT; j++) {
                 if (i === j) {
                     this.attractionMatrix[i][j] = 0;
                 } else {
-                    this.attractionMatrix[i][j] = -Math.random() * BackgroundParticleLayer.LARGE_REPULSION_STRENGTH;
+                    // Random attraction (-0.5 to 0.5): negative = repulsion, positive = attraction
+                    this.attractionMatrix[i][j] = (Math.random() - 0.5) * BackgroundParticleLayer.ATTRACTION_STRENGTH;
                 }
             }
         }
-    }
-
-    private initializeSwarmSprites(): void {
-        this.swarmSprites = [];
-        for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
-            const color = this.gradientColors[i % this.gradientColors.length];
-            this.swarmSprites.push(this.createSwarmSprite(color));
-        }
-    }
-
-    private initializeSwarmParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-
-        this.swarmParticles = [];
-        for (let i = 0; i < BackgroundParticleLayer.SWARM_PARTICLE_COUNT; i++) {
-            this.swarmParticles.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                velocityX: (Math.random() - 0.5) * 0.4,
-                velocityY: (Math.random() - 0.5) * 0.4,
-                typeIndex: i % BackgroundParticleLayer.SWARM_TYPE_COUNT
-            });
-        }
-    }
-
-    private initializeSwarmInteractionMatrix(): void {
-        this.swarmInteractionMatrix = [];
-        for (let i = 0; i < BackgroundParticleLayer.SWARM_TYPE_COUNT; i++) {
-            this.swarmInteractionMatrix[i] = [];
-            for (let j = 0; j < BackgroundParticleLayer.SWARM_TYPE_COUNT; j++) {
-                if (i === j) {
-                    this.swarmInteractionMatrix[i][j] = 0;
-                } else {
-                    this.swarmInteractionMatrix[i][j] = Math.random() * 2 - 1;
-                }
-            }
-        }
-    }
-
-    private createSwarmSprite(color: number[]): HTMLCanvasElement {
-        const spriteCanvas = document.createElement('canvas');
-        const sizePx = BackgroundParticleLayer.SWARM_SPRITE_SIZE_PX;
-        spriteCanvas.width = sizePx;
-        spriteCanvas.height = sizePx;
-        const spriteContext = spriteCanvas.getContext('2d');
-        if (!spriteContext) {
-            throw new Error('Unable to create swarm particle canvas context.');
-        }
-
-        const center = sizePx / 2;
-        const gradient = spriteContext.createRadialGradient(center, center, 0, center, center, center);
-        const baseRed = color[0];
-        const baseGreen = color[1];
-        const baseBlue = color[2];
-        gradient.addColorStop(0, `rgba(${baseRed}, ${baseGreen}, ${baseBlue}, 0.85)`);
-        gradient.addColorStop(0.5, `rgba(120, 185, 255, 0.25)`);
-        gradient.addColorStop(1, 'rgba(120, 185, 255, 0)');
-
-        spriteContext.fillStyle = gradient;
-        spriteContext.beginPath();
-        spriteContext.arc(center, center, center, 0, Math.PI * 2);
-        spriteContext.fill();
-
-        return spriteCanvas;
     }
     
     public resize(): void {
@@ -295,7 +210,6 @@ class BackgroundParticleLayer {
         }
         
         this.updateParticles();
-        this.updateSwarmParticles();
         this.render();
         
         this.animationFrameId = requestAnimationFrame(() => this.animate());
@@ -338,14 +252,14 @@ class BackgroundParticleLayer {
             }
             
             // Apply friction
-            p1.velocityX *= BackgroundParticleLayer.LARGE_FRICTION;
-            p1.velocityY *= BackgroundParticleLayer.LARGE_FRICTION;
+            p1.velocityX *= BackgroundParticleLayer.FRICTION;
+            p1.velocityY *= BackgroundParticleLayer.FRICTION;
             
             // Limit velocity
             const speed = Math.sqrt(p1.velocityX * p1.velocityX + p1.velocityY * p1.velocityY);
-            if (speed > BackgroundParticleLayer.LARGE_MAX_VELOCITY) {
-                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.LARGE_MAX_VELOCITY;
-                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.LARGE_MAX_VELOCITY;
+            if (speed > BackgroundParticleLayer.MAX_VELOCITY) {
+                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MAX_VELOCITY;
+                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
             }
             
             // Update position
@@ -362,50 +276,6 @@ class BackgroundParticleLayer {
             p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
             p1.colorG += (p1.targetColorG - p1.colorG) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
             p1.colorB += (p1.targetColorB - p1.colorB) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
-        }
-    }
-
-    private updateSwarmParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-
-        for (let i = 0; i < this.swarmParticles.length; i++) {
-            const p1 = this.swarmParticles[i];
-
-            for (let j = 0; j < this.swarmParticles.length; j++) {
-                if (i === j) {
-                    continue;
-                }
-
-                const p2 = this.swarmParticles[j];
-                const dx = p2.x - p1.x;
-                const dy = p2.y - p1.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance > 0) {
-                    const interaction = this.swarmInteractionMatrix[p1.typeIndex][p2.typeIndex];
-                    const force = interaction * BackgroundParticleLayer.SWARM_INTERACTION_STRENGTH;
-                    p1.velocityX += (dx / distance) * force;
-                    p1.velocityY += (dy / distance) * force;
-                }
-            }
-
-            p1.velocityX *= BackgroundParticleLayer.SWARM_FRICTION;
-            p1.velocityY *= BackgroundParticleLayer.SWARM_FRICTION;
-
-            const speed = Math.sqrt(p1.velocityX * p1.velocityX + p1.velocityY * p1.velocityY);
-            if (speed > BackgroundParticleLayer.SWARM_MAX_VELOCITY) {
-                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.SWARM_MAX_VELOCITY;
-                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.SWARM_MAX_VELOCITY;
-            }
-
-            p1.x += p1.velocityX;
-            p1.y += p1.velocityY;
-
-            if (p1.x < 0) p1.x = width;
-            if (p1.x > width) p1.x = 0;
-            if (p1.y < 0) p1.y = height;
-            if (p1.y > height) p1.y = 0;
         }
     }
     
@@ -439,18 +309,8 @@ class BackgroundParticleLayer {
             this.context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
             this.context.fill();
         }
-
+        
         this.context.filter = 'none';
-        this.context.globalCompositeOperation = 'screen';
-        this.context.globalAlpha = BackgroundParticleLayer.SWARM_OPACITY;
-
-        for (const particle of this.swarmParticles) {
-            const sprite = this.swarmSprites[particle.typeIndex];
-            const spriteHalf = sprite.width / 2;
-            this.context.drawImage(sprite, particle.x - spriteHalf, particle.y - spriteHalf);
-        }
-
-        this.context.globalAlpha = 1;
         this.context.globalCompositeOperation = 'source-over';
     }
     
