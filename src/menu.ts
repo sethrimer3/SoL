@@ -12,6 +12,13 @@ export interface MenuOption {
     icon?: string;
 }
 
+interface FactionCarouselOption {
+    id: Faction;
+    name: string;
+    description: string;
+    color: string;
+}
+
 export interface MapConfig {
     id: string;
     name: string;
@@ -781,6 +788,7 @@ export class MainMenu {
     private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-select' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
+    private factionCarousel: FactionCarouselView | null = null;
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -944,6 +952,10 @@ export class MainMenu {
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
+        }
+        if (this.factionCarousel) {
+            this.factionCarousel.destroy();
+            this.factionCarousel = null;
         }
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
@@ -1314,16 +1326,15 @@ export class MainMenu {
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
-        // Faction grid
-        const factionGrid = document.createElement('div');
-        factionGrid.style.display = 'grid';
-        factionGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 280}px, 1fr))`;
-        factionGrid.style.gap = '20px';
-        factionGrid.style.maxWidth = '900px';
-        factionGrid.style.padding = '20px';
-        factionGrid.style.marginBottom = '30px';
+        // Faction carousel
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
+        carouselContainer.style.marginBottom = '30px';
+        container.appendChild(carouselContainer);
 
-        const factions = [
+        const factions: FactionCarouselOption[] = [
             { 
                 id: Faction.RADIANT, 
                 name: 'Radiant', 
@@ -1343,63 +1354,23 @@ export class MainMenu {
                 color: '#FF6600'
             }
         ];
-
-        for (const faction of factions) {
-            const factionCard = document.createElement('div');
-            factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            factionCard.style.border = '2px solid transparent';
-            factionCard.style.borderRadius = '10px';
-            factionCard.style.padding = '20px';
-            factionCard.style.cursor = 'pointer';
-            factionCard.style.transition = 'all 0.3s';
-            factionCard.style.minHeight = '200px';
-            factionCard.dataset.particleBox = 'true';
-            factionCard.dataset.particleColor = this.settings.selectedFaction === faction.id ? faction.color : '#66B3FF';
-
-            factionCard.addEventListener('mouseenter', () => {
-                if (this.settings.selectedFaction !== faction.id) {
-                    factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                    factionCard.style.transform = 'scale(1.02)';
-                }
-            });
-
-            factionCard.addEventListener('mouseleave', () => {
-                factionCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                factionCard.style.transform = 'scale(1)';
-            });
-
-            factionCard.addEventListener('click', () => {
-                this.settings.selectedFaction = faction.id;
-                this.settings.selectedHeroes = []; // Reset hero selection when faction changes
-                this.renderFactionSelectionScreen(this.contentElement);
-            });
-
-            // Faction name
-            const factionName = document.createElement('h3');
-            factionName.textContent = faction.name;
-            factionName.style.fontSize = '28px';
-            factionName.style.marginBottom = '15px';
-            factionName.style.color = this.settings.selectedFaction === faction.id ? faction.color : '#FFFFFF';
-            factionName.style.fontWeight = '300';
-            factionName.dataset.particleText = 'true';
-            factionName.dataset.particleColor = this.settings.selectedFaction === faction.id ? '#FFFFFF' : '#E0F2FF';
-            factionCard.appendChild(factionName);
-
-            // Faction description
-            const factionDesc = document.createElement('p');
-            factionDesc.textContent = faction.description;
-            factionDesc.style.fontSize = '24px';
-            factionDesc.style.lineHeight = '1.5';
-            factionDesc.style.color = '#CCCCCC';
-            factionDesc.style.fontWeight = '300';
-            factionDesc.dataset.particleText = 'true';
-            factionDesc.dataset.particleColor = '#CCCCCC';
-            factionCard.appendChild(factionDesc);
-
-            factionGrid.appendChild(factionCard);
+        const selectedIndex = factions.findIndex((faction) => faction.id === this.settings.selectedFaction);
+        const initialIndex = selectedIndex >= 0 ? selectedIndex : 0;
+        if (!this.settings.selectedFaction && factions.length > 0) {
+            this.settings.selectedFaction = factions[initialIndex].id;
         }
 
-        container.appendChild(factionGrid);
+        this.factionCarousel = new FactionCarouselView(carouselContainer, factions, initialIndex);
+        this.factionCarousel.onSelectionChange((option) => {
+            if (this.settings.selectedFaction !== option.id) {
+                this.settings.selectedFaction = option.id;
+                this.settings.selectedHeroes = []; // Reset hero selection when faction changes
+            }
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.factionCarousel.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
 
         // Action buttons
         const buttonContainer = document.createElement('div');
@@ -1868,6 +1839,10 @@ export class MainMenu {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
         }
+        if (this.factionCarousel) {
+            this.factionCarousel.destroy();
+            this.factionCarousel = null;
+        }
         if (this.resizeHandler) {
             window.removeEventListener('resize', this.resizeHandler);
         }
@@ -1883,6 +1858,366 @@ export class MainMenu {
      */
     getSettings(): GameSettings {
         return this.settings;
+    }
+}
+
+/**
+ * Faction carousel view - displays factions in a horizontal carousel
+ */
+class FactionCarouselView {
+    private static readonly ITEM_SPACING_PX = 220;
+    private static readonly BASE_SIZE_PX = 320;
+    private static readonly TEXT_SCALE = 2.4;
+    private static readonly VELOCITY_MULTIPLIER = 0.1;
+    private static readonly VELOCITY_FACTOR = 0.001;
+    private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
+    private static readonly VELOCITY_DECAY_FACTOR = 0.9;
+    private static readonly SWIPE_THRESHOLD_PX = 50;
+
+    private container: HTMLElement;
+    private options: FactionCarouselOption[];
+    private currentIndex: number;
+    private targetIndex: number;
+    private scrollOffset: number = 0;
+    private isDragging: boolean = false;
+    private dragStartX: number = 0;
+    private dragStartOffset: number = 0;
+    private lastDragDeltaX: number = 0;
+    private velocity: number = 0;
+    private hasDragged: boolean = false;
+    private isCompactLayout: boolean = false;
+    private resizeHandler: (() => void) | null = null;
+    private keydownHandler: ((event: KeyboardEvent) => void) | null = null;
+    private onSelectionChangeCallback: ((option: FactionCarouselOption) => void) | null = null;
+    private onRenderCallback: (() => void) | null = null;
+    private animationFrameId: number | null = null;
+
+    constructor(container: HTMLElement, options: FactionCarouselOption[], initialIndex: number) {
+        this.container = container;
+        this.options = options;
+        this.currentIndex = Math.max(0, Math.min(options.length - 1, initialIndex));
+        this.targetIndex = this.currentIndex;
+        this.setupContainer();
+        this.setupEventHandlers();
+        this.scrollOffset = -this.currentIndex * this.getItemSpacingPx();
+        this.startAnimation();
+    }
+
+    private setupContainer(): void {
+        this.container.style.position = 'relative';
+        this.container.style.width = '100%';
+        this.updateLayoutMetrics();
+        this.container.style.overflow = 'hidden';
+        this.container.style.cursor = 'grab';
+        this.container.style.userSelect = 'none';
+        this.container.style.touchAction = 'pan-y';
+    }
+
+    private setupEventHandlers(): void {
+        this.resizeHandler = () => {
+            this.updateLayoutMetrics();
+        };
+        window.addEventListener('resize', this.resizeHandler);
+
+        this.keydownHandler = (event: KeyboardEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) {
+                return;
+            }
+            const key = event.key.toLowerCase();
+            if (key === 'arrowleft' || key === 'a') {
+                this.moveSelection(-1);
+                event.preventDefault();
+            }
+            if (key === 'arrowright' || key === 'd') {
+                this.moveSelection(1);
+                event.preventDefault();
+            }
+        };
+        window.addEventListener('keydown', this.keydownHandler);
+
+        this.container.addEventListener('mousedown', (event: MouseEvent) => {
+            this.startDrag(event.clientX);
+            event.preventDefault();
+        });
+
+        this.container.addEventListener('mousemove', (event: MouseEvent) => {
+            if (this.isDragging) {
+                this.updateDrag(event.clientX);
+                event.preventDefault();
+            }
+        });
+
+        this.container.addEventListener('mouseup', (event: MouseEvent) => {
+            this.endDrag(event.clientX);
+            event.preventDefault();
+        });
+
+        this.container.addEventListener('mouseleave', () => {
+            if (this.isDragging) {
+                this.endDrag(this.dragStartX);
+            }
+        });
+
+        this.container.addEventListener('touchstart', (event: TouchEvent) => {
+            if (event.touches.length === 1) {
+                this.startDrag(event.touches[0].clientX);
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        this.container.addEventListener('touchmove', (event: TouchEvent) => {
+            if (this.isDragging && event.touches.length === 1) {
+                this.updateDrag(event.touches[0].clientX);
+                event.preventDefault();
+            }
+        }, { passive: false });
+
+        this.container.addEventListener('touchend', (event: TouchEvent) => {
+            if (this.isDragging) {
+                const touch = event.changedTouches[0];
+                this.endDrag(touch.clientX);
+                event.preventDefault();
+            }
+        }, { passive: false });
+    }
+
+    private startDrag(x: number): void {
+        this.isDragging = true;
+        this.dragStartX = x;
+        this.dragStartOffset = this.scrollOffset;
+        this.velocity = 0;
+        this.hasDragged = false;
+        this.lastDragDeltaX = 0;
+        this.container.style.cursor = 'grabbing';
+    }
+
+    private updateDrag(x: number): void {
+        if (!this.isDragging) return;
+
+        const deltaX = x - this.dragStartX;
+        this.lastDragDeltaX = deltaX;
+        this.scrollOffset = this.dragStartOffset + deltaX;
+        this.velocity = deltaX * FactionCarouselView.VELOCITY_MULTIPLIER;
+
+        if (Math.abs(deltaX) > Constants.CLICK_DRAG_THRESHOLD) {
+            this.hasDragged = true;
+        }
+    }
+
+    private endDrag(x: number): void {
+        if (!this.isDragging) return;
+
+        this.isDragging = false;
+        this.container.style.cursor = 'grab';
+
+        if (!this.hasDragged) {
+            this.handleClick(x);
+            return;
+        }
+
+        const itemWidthPx = this.getItemSpacingPx();
+        const deltaX = this.lastDragDeltaX;
+        if (Math.abs(deltaX) >= FactionCarouselView.SWIPE_THRESHOLD_PX) {
+            const direction = deltaX < 0 ? 1 : -1;
+            this.setCurrentIndex(this.currentIndex + direction);
+            return;
+        }
+
+        const targetIndexFloat = -this.scrollOffset / itemWidthPx;
+        const targetIndex = Math.round(targetIndexFloat + this.velocity * FactionCarouselView.VELOCITY_FACTOR);
+        this.setCurrentIndex(targetIndex);
+    }
+
+    private handleClick(x: number): void {
+        const rect = this.container.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const relativeX = x - rect.left;
+        const offsetFromCenter = relativeX - centerX;
+        const clickedOffset = this.currentIndex + Math.round(offsetFromCenter / this.getItemSpacingPx());
+        this.setCurrentIndex(clickedOffset);
+    }
+
+    private moveSelection(direction: number): void {
+        this.setCurrentIndex(this.currentIndex + direction);
+    }
+
+    private setCurrentIndex(nextIndex: number): void {
+        const clampedIndex = Math.max(0, Math.min(this.options.length - 1, nextIndex));
+        if (clampedIndex === this.currentIndex) {
+            this.targetIndex = clampedIndex;
+            return;
+        }
+
+        this.targetIndex = clampedIndex;
+        this.currentIndex = clampedIndex;
+        if (this.onSelectionChangeCallback) {
+            this.onSelectionChangeCallback(this.options[this.currentIndex]);
+        }
+    }
+
+    private startAnimation(): void {
+        const animate = () => {
+            this.update();
+            this.render();
+            this.animationFrameId = requestAnimationFrame(animate);
+        };
+        animate();
+    }
+
+    private updateLayoutMetrics(): void {
+        this.isCompactLayout = window.innerWidth < 600;
+        const targetHeight = this.isCompactLayout ? '360px' : '480px';
+        if (this.container.style.height !== targetHeight) {
+            this.container.style.height = targetHeight;
+        }
+    }
+
+    private getLayoutScale(): number {
+        return this.isCompactLayout ? 0.6 : 0.9;
+    }
+
+    private getItemSpacingPx(): number {
+        return FactionCarouselView.ITEM_SPACING_PX * this.getLayoutScale();
+    }
+
+    private update(): void {
+        this.updateLayoutMetrics();
+        const targetScrollOffset = -this.currentIndex * this.getItemSpacingPx();
+        const diff = targetScrollOffset - this.scrollOffset;
+        this.scrollOffset += diff * FactionCarouselView.SMOOTH_INTERPOLATION_FACTOR;
+
+        if (!this.isDragging && Math.abs(this.velocity) > 0.1) {
+            this.velocity *= FactionCarouselView.VELOCITY_DECAY_FACTOR;
+            this.scrollOffset += this.velocity;
+        } else {
+            this.velocity = 0;
+        }
+    }
+
+    private render(): void {
+        this.container.innerHTML = '';
+
+        const rect = this.container.getBoundingClientRect();
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        const layoutScale = this.getLayoutScale();
+        const itemSpacingPx = this.getItemSpacingPx();
+        const baseSizePx = FactionCarouselView.BASE_SIZE_PX * layoutScale;
+        const textScale = FactionCarouselView.TEXT_SCALE * layoutScale;
+
+        for (let i = 0; i < this.options.length; i++) {
+            const option = this.options[i];
+            const offsetFromCenter = i - this.currentIndex;
+            const distance = Math.abs(offsetFromCenter);
+            const x = centerX + this.scrollOffset + i * itemSpacingPx;
+
+            let scale = 1.0;
+            let opacity = 1.0;
+            if (distance === 0) {
+                scale = 1.0;
+                opacity = 1.0;
+            } else if (distance === 1) {
+                scale = 0.72;
+                opacity = 0.85;
+            } else if (distance === 2) {
+                scale = 0.5;
+                opacity = 0.55;
+            } else {
+                scale = Math.max(0.3, 1.0 - distance * 0.25);
+                opacity = Math.max(0.3, 1.0 - distance * 0.25);
+            }
+
+            const sizePx = baseSizePx * scale;
+            const optionElement = document.createElement('div');
+            optionElement.style.position = 'absolute';
+            optionElement.style.left = `${x - sizePx / 2}px`;
+            optionElement.style.top = `${centerY - sizePx / 2}px`;
+            optionElement.style.width = `${sizePx}px`;
+            optionElement.style.height = `${sizePx}px`;
+            optionElement.style.backgroundColor = distance === 0 ? 'rgba(12, 14, 22, 0.98)' : 'rgba(12, 14, 22, 0.85)';
+            optionElement.style.border = distance === 0 ? `2px solid ${option.color}` : '2px solid rgba(255, 255, 255, 0.2)';
+            optionElement.style.borderRadius = '10px';
+            optionElement.style.opacity = opacity.toString();
+            optionElement.style.display = 'flex';
+            optionElement.style.flexDirection = 'column';
+            optionElement.style.justifyContent = 'center';
+            optionElement.style.alignItems = 'center';
+            optionElement.style.pointerEvents = 'none';
+            optionElement.style.color = '#FFFFFF';
+            optionElement.style.fontWeight = '300';
+            optionElement.style.textAlign = 'center';
+            optionElement.style.padding = `${24 * layoutScale}px`;
+            optionElement.style.boxSizing = 'border-box';
+            optionElement.style.zIndex = (100 - distance).toString();
+            optionElement.style.overflow = 'hidden';
+            optionElement.dataset.particleBox = 'true';
+            optionElement.dataset.particleColor = distance === 0 ? option.color : '#66B3FF';
+
+            const nameElement = document.createElement('div');
+            nameElement.textContent = option.name.toUpperCase();
+            nameElement.style.fontSize = `${Math.max(16, 20 * scale) * textScale}px`;
+            nameElement.style.marginBottom = distance === 0 ? '14px' : '0';
+            nameElement.style.color = distance === 0 ? '#FFFFFF' : '#E0F2FF';
+            nameElement.style.fontWeight = '300';
+            nameElement.dataset.particleText = 'true';
+            nameElement.dataset.particleColor = distance === 0 ? '#FFFFFF' : '#E0F2FF';
+            optionElement.appendChild(nameElement);
+
+            if (distance === 0) {
+                const descElement = document.createElement('div');
+                descElement.textContent = option.description;
+                descElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
+                descElement.style.color = '#D0D0D0';
+                descElement.style.lineHeight = '1.4';
+                descElement.style.fontWeight = '300';
+                descElement.dataset.particleText = 'true';
+                descElement.dataset.particleColor = '#D0D0D0';
+                optionElement.appendChild(descElement);
+            }
+
+            this.container.appendChild(optionElement);
+        }
+
+        const instructionElement = document.createElement('div');
+        instructionElement.textContent = 'Swipe, drag, or use \u2190/\u2192 (A/D) \u2022 Tap side tiles to browse';
+        instructionElement.style.position = 'absolute';
+        instructionElement.style.bottom = '20px';
+        instructionElement.style.left = '50%';
+        instructionElement.style.transform = 'translateX(-50%)';
+        instructionElement.style.color = '#AAAAAA';
+        instructionElement.style.fontSize = `${22 * layoutScale}px`;
+        instructionElement.style.fontWeight = '300';
+        instructionElement.style.pointerEvents = 'none';
+        instructionElement.dataset.particleText = 'true';
+        instructionElement.dataset.particleColor = '#AAAAAA';
+        this.container.appendChild(instructionElement);
+
+        if (this.onRenderCallback) {
+            this.onRenderCallback();
+        }
+    }
+
+    public onSelectionChange(callback: (option: FactionCarouselOption) => void): void {
+        this.onSelectionChangeCallback = callback;
+    }
+
+    public onRender(callback: () => void): void {
+        this.onRenderCallback = callback;
+    }
+
+    public destroy(): void {
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+        if (this.resizeHandler) {
+            window.removeEventListener('resize', this.resizeHandler);
+        }
+        if (this.keydownHandler) {
+            window.removeEventListener('keydown', this.keydownHandler);
+        }
     }
 }
 
