@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, LightRay } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, LightRay, Starling } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -685,7 +685,12 @@ class GameController {
                     
                     // Set rally point for all selected units
                     for (const unit of this.selectedUnits) {
-                        unit.rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                        const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                        if (unit instanceof Starling) {
+                            unit.setManualRallyPoint(rallyPoint);
+                        } else {
+                            unit.rallyPoint = rallyPoint;
+                        }
                         unit.moveOrder = this.moveOrderCounter;
                     }
                     

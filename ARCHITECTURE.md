@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, health, completion flags, and mirror reflection angles) for players, mirrors, units, and buildings. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, health, completion flags, mirror reflection angles, unit rally points, minion path progress, and minion projectile state) for players, mirrors, units, buildings, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -83,10 +83,11 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 0, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 0 },
   { "tick": 1, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 0, "targetWorld": { "x": 520, "y": 480 } },
   { "tick": 3, "command": "selectForge", "playerIndex": 0 },
-  { "tick": 4, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
-  { "tick": 6, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
-  { "tick": 7, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 1, "targetWorld": { "x": 460, "y": 520 } },
-  { "tick": 9, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 440, "y": 440 } }
+  { "tick": 4, "command": "setMinionPath", "playerIndex": 0, "waypointsWorld": [{ "x": 420, "y": 460 }, { "x": 520, "y": 360 }] },
+  { "tick": 6, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
+  { "tick": 8, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
+  { "tick": 9, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 1, "targetWorld": { "x": 460, "y": 520 } },
+  { "tick": 11, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 440, "y": 440 } }
 ]
 ```
 
