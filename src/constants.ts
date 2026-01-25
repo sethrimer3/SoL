@@ -86,6 +86,9 @@ export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 
+// Stellar Forge constants (main base structure)
+export const STELLAR_FORGE_MAX_HEALTH = 1000;
+
 // Forge crunch constants (periodic event that spawns minions)
 export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
 export const FORGE_CRUNCH_SUCK_DURATION = 0.8; // Duration of dust suction phase
