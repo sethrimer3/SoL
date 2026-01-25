@@ -75,6 +75,9 @@ class ParticleMenuLayer {
     private static readonly PARTICLE_SIZE_PX = 1.6;
     private static readonly RELOCATE_MIN_DISTANCE_PX = 4;
     private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
+    private static readonly BASE_PARTICLE_OPACITY = 0.1;
+    private static readonly PEAK_PARTICLE_OPACITY = 1;
+    private static readonly TRANSITION_DURATION_MS = 600;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -89,6 +92,10 @@ class ParticleMenuLayer {
     private targetRefreshContainer: HTMLElement | null = null;
     private densityMultiplier: number = 1;
     private desiredParticleCount: number = 0;
+    private menuContentElement: HTMLElement | null = null;
+    private particleOpacity: number = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
+    private menuOpacity: number = 1;
+    private transitionStartMs: number | null = null;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -152,6 +159,11 @@ class ParticleMenuLayer {
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
     }
 
+    public setMenuContentElement(element: HTMLElement): void {
+        this.menuContentElement = element;
+        this.applyMenuOpacity();
+    }
+
     public requestTargetRefresh(container: HTMLElement): void {
         this.needsTargetRefresh = true;
         this.targetRefreshContainer = container;
@@ -163,6 +175,10 @@ class ParticleMenuLayer {
 
     public setDensityMultiplier(multiplier: number): void {
         this.densityMultiplier = Math.max(0.5, multiplier);
+    }
+
+    public startTransition(): void {
+        this.transitionStartMs = performance.now();
     }
 
     private animate(): void {
@@ -272,6 +288,7 @@ class ParticleMenuLayer {
     }
 
     private updateParticles(nowMs: number): void {
+        this.updateTransition(nowMs);
         const driftTime = nowMs * ParticleMenuLayer.DRIFT_SPEED;
         for (const particle of this.particles) {
             const driftX = Math.cos(particle.driftPhase + driftTime) * particle.driftRadiusPx;
@@ -298,12 +315,54 @@ class ParticleMenuLayer {
         }
     }
 
+    private updateTransition(nowMs: number): void {
+        if (this.transitionStartMs === null) {
+            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
+            this.menuOpacity = 1;
+            this.applyMenuOpacity();
+            return;
+        }
+
+        const elapsedMs = nowMs - this.transitionStartMs;
+        const totalDurationMs = ParticleMenuLayer.TRANSITION_DURATION_MS;
+        const halfDurationMs = totalDurationMs / 2;
+
+        if (elapsedMs >= totalDurationMs) {
+            this.transitionStartMs = null;
+            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
+            this.menuOpacity = 1;
+            this.applyMenuOpacity();
+            return;
+        }
+
+        if (elapsedMs <= halfDurationMs) {
+            const progress = elapsedMs / halfDurationMs;
+            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY
+                + (ParticleMenuLayer.PEAK_PARTICLE_OPACITY - ParticleMenuLayer.BASE_PARTICLE_OPACITY) * progress;
+            this.menuOpacity = 1 - progress;
+        } else {
+            const progress = (elapsedMs - halfDurationMs) / halfDurationMs;
+            this.particleOpacity = ParticleMenuLayer.PEAK_PARTICLE_OPACITY
+                + (ParticleMenuLayer.BASE_PARTICLE_OPACITY - ParticleMenuLayer.PEAK_PARTICLE_OPACITY) * progress;
+            this.menuOpacity = progress;
+        }
+
+        this.applyMenuOpacity();
+    }
+
+    private applyMenuOpacity(): void {
+        if (this.menuContentElement) {
+            this.menuContentElement.style.opacity = this.menuOpacity.toFixed(3);
+        }
+    }
+
     private renderParticles(): void {
         const rect = this.container.getBoundingClientRect();
         const width = rect.width || window.innerWidth;
         const height = rect.height || window.innerHeight;
         this.context.clearRect(0, 0, width, height);
         this.context.globalCompositeOperation = 'lighter';
+        this.context.globalAlpha = this.particleOpacity;
 
         for (const particle of this.particles) {
             const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
@@ -315,6 +374,7 @@ class ParticleMenuLayer {
             this.context.fill();
         }
 
+        this.context.globalAlpha = 1;
         this.context.globalCompositeOperation = 'source-over';
     }
 
@@ -594,6 +654,7 @@ export class MainMenu {
 
         this.contentElement = content;
         this.menuParticleLayer = new ParticleMenuLayer(menu);
+        this.menuParticleLayer.setMenuContentElement(content);
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(content);
@@ -632,6 +693,10 @@ export class MainMenu {
     private setMenuParticleDensity(multiplier: number): void {
         const densityScale = 2;
         this.menuParticleLayer?.setDensityMultiplier(multiplier * densityScale);
+    }
+
+    private startMenuTransition(): void {
+        this.menuParticleLayer?.startTransition();
     }
 
     private renderMainScreen(container: HTMLElement): void {
@@ -721,10 +786,15 @@ export class MainMenu {
         this.carouselMenu.onRender(() => {
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
+        this.carouselMenu.onNavigate(() => {
+            this.startMenuTransition();
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
         this.carouselMenu.onSelect((option: MenuOption) => {
             switch (option.id) {
                 case 'loadout':
                     this.currentScreen = 'faction-select';
+                    this.startMenuTransition();
                     this.renderFactionSelectionScreen(this.contentElement);
                     break;
                 case 'start':
@@ -736,10 +806,12 @@ export class MainMenu {
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
+                    this.startMenuTransition();
                     this.renderMapSelectionScreen(this.contentElement);
                     break;
                 case 'settings':
                     this.currentScreen = 'settings';
+                    this.startMenuTransition();
                     this.renderSettingsScreen(this.contentElement);
                     break;
             }
@@ -846,6 +918,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
+            this.startMenuTransition();
             this.renderMainScreen(this.contentElement);
         }, '#666666');
         container.appendChild(backButton);
@@ -954,6 +1027,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
+            this.startMenuTransition();
             this.renderMainScreen(this.contentElement);
         }, '#666666');
         backButton.style.marginTop = '30px';
@@ -1083,6 +1157,7 @@ export class MainMenu {
         if (this.settings.selectedFaction) {
             const continueButton = this.createButton('SELECT HEROES', () => {
                 this.currentScreen = 'loadout-select';
+                this.startMenuTransition();
                 this.renderLoadoutSelectionScreen(this.contentElement);
             }, '#00FF88');
             buttonContainer.appendChild(continueButton);
@@ -1091,6 +1166,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'main';
+            this.startMenuTransition();
             this.renderMainScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
@@ -1320,6 +1396,7 @@ export class MainMenu {
         if (this.settings.selectedHeroes.length === 4) {
             const confirmButton = this.createButton('CONFIRM LOADOUT', () => {
                 this.currentScreen = 'main';
+                this.startMenuTransition();
                 this.renderMainScreen(this.contentElement);
             }, '#00FF88');
             buttonContainer.appendChild(confirmButton);
@@ -1328,6 +1405,7 @@ export class MainMenu {
         // Back button
         const backButton = this.createButton('BACK', () => {
             this.currentScreen = 'faction-select';
+            this.startMenuTransition();
             this.renderFactionSelectionScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
@@ -1571,6 +1649,7 @@ class CarouselMenuView {
     private velocity: number = 0;
     private onSelectCallback: ((option: MenuOption) => void) | null = null;
     private onRenderCallback: (() => void) | null = null;
+    private onNavigateCallback: ((nextIndex: number) => void) | null = null;
     private animationFrameId: number | null = null;
     private hasDragged: boolean = false;
     private isCompactLayout: boolean = false;
@@ -1689,8 +1768,7 @@ class CarouselMenuView {
         if (Math.abs(deltaX) >= CarouselMenuView.SWIPE_THRESHOLD_PX) {
             const direction = deltaX < 0 ? 1 : -1;
             const targetIndex = Math.max(0, Math.min(this.options.length - 1, this.currentIndex + direction));
-            this.targetIndex = targetIndex;
-            this.currentIndex = targetIndex;
+            this.setCurrentIndex(targetIndex);
             return;
         }
 
@@ -1700,8 +1778,7 @@ class CarouselMenuView {
 
         // Clamp to valid range
         targetIndex = Math.max(0, Math.min(this.options.length - 1, targetIndex));
-        this.targetIndex = targetIndex;
-        this.currentIndex = targetIndex;
+        this.setCurrentIndex(targetIndex);
     }
 
     private handleClick(x: number): void {
@@ -1721,8 +1798,20 @@ class CarouselMenuView {
             }
         } else {
             // Clicked on different option - slide to it
-            this.targetIndex = clickedIndex;
-            this.currentIndex = clickedIndex;
+            this.setCurrentIndex(clickedIndex);
+        }
+    }
+
+    private setCurrentIndex(nextIndex: number): void {
+        if (nextIndex === this.currentIndex) {
+            this.targetIndex = nextIndex;
+            return;
+        }
+
+        this.targetIndex = nextIndex;
+        this.currentIndex = nextIndex;
+        if (this.onNavigateCallback) {
+            this.onNavigateCallback(nextIndex);
         }
     }
 
@@ -1889,6 +1978,10 @@ class CarouselMenuView {
 
     public onRender(callback: () => void): void {
         this.onRenderCallback = callback;
+    }
+
+    public onNavigate(callback: (nextIndex: number) => void): void {
+        this.onNavigateCallback = callback;
     }
 
     public destroy(): void {
