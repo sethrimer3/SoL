@@ -829,6 +829,12 @@ export class MainMenu {
             maxHealth: Constants.DRILLER_MAX_HEALTH, attackDamage: Constants.DRILLER_ATTACK_DAMAGE, attackSpeed: Constants.DRILLER_ATTACK_SPEED,
             attackRange: Constants.DRILLER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 16, regen: 3,
             abilityDescription: 'Drill charge: tunnels through an asteroid toward the target'
+        },
+        {
+            id: 'radiant-phantom', name: 'Phantom', description: 'Cloaked assassin with burst damage', faction: Faction.RADIANT,
+            maxHealth: Constants.PHANTOM_MAX_HEALTH, attackDamage: Constants.PHANTOM_ATTACK_DAMAGE, attackSpeed: Constants.PHANTOM_ATTACK_SPEED,
+            attackRange: Constants.PHANTOM_ATTACK_RANGE, attackIgnoresDefense: false, defense: 5, regen: 3,
+            abilityDescription: 'Shadow strike: short-range burst attack, reveals Phantom for 8 seconds'
         }
     ];
     

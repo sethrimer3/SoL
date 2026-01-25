@@ -215,3 +215,14 @@ export const DRILLER_DRILL_SPEED = 500; // Speed when drilling
 export const DRILLER_DRILL_DAMAGE = 30; // Damage to units
 export const DRILLER_BUILDING_DAMAGE_MULTIPLIER = 2.0; // Double damage to buildings
 export const DRILLER_DECELERATION = 200; // Deceleration rate at edge
+
+// Phantom unit constants (Radiant hero - cloaked assassin)
+export const PHANTOM_MAX_HEALTH = 80;
+export const PHANTOM_ATTACK_RANGE = 100; // Very short range
+export const PHANTOM_ATTACK_DAMAGE = 35; // High damage for close range
+export const PHANTOM_ATTACK_SPEED = 1.5; // Attacks per second
+export const PHANTOM_ABILITY_COOLDOWN = 6.0; // 6 seconds
+export const PHANTOM_ABILITY_RANGE = 150; // Very short range for ability attack
+export const PHANTOM_ABILITY_DAMAGE = 50; // High burst damage
+export const PHANTOM_VISIBILITY_DURATION = 8.0; // 8 seconds visible after using ability
+export const PHANTOM_CLOAK_OPACITY = 0.4; // Opacity when cloaked to own player

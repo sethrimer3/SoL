@@ -1502,6 +1502,8 @@ export class AbilityBullet {
     velocity: Vector2D;
     lifetime: number = 0;
     maxLifetime: number = Constants.MARINE_ABILITY_BULLET_LIFETIME;
+    maxRange: number = Infinity; // Optional max range in pixels (default: no limit)
+    startPosition: Vector2D;
     
     constructor(
         public position: Vector2D,
@@ -1510,6 +1512,7 @@ export class AbilityBullet {
         public damage: number = Constants.MARINE_ABILITY_BULLET_DAMAGE
     ) {
         this.velocity = velocity;
+        this.startPosition = new Vector2D(position.x, position.y);
     }
 
     /**
@@ -1525,7 +1528,18 @@ export class AbilityBullet {
      * Check if bullet should be removed
      */
     shouldDespawn(): boolean {
-        return this.lifetime >= this.maxLifetime;
+        // Check lifetime
+        if (this.lifetime >= this.maxLifetime) {
+            return true;
+        }
+        
+        // Check max range
+        const distanceTraveled = this.startPosition.distanceTo(this.position);
+        if (distanceTraveled >= this.maxRange) {
+            return true;
+        }
+        
+        return false;
     }
 
     /**
@@ -2813,6 +2827,131 @@ export class Driller extends Unit {
 }
 
 /**
+ * Phantom hero unit (Radiant faction) - cloaked assassin
+ * Always cloaked and invisible to enemies. Cannot see enemies until ability is used.
+ * Becomes visible for 8 seconds after using ability.
+ */
+export class Phantom extends Unit {
+    isCloaked: boolean = true; // Always cloaked unless ability was recently used
+    visibilityTimer: number = 0; // Time remaining while visible after ability use
+    canSeeEnemies: boolean = false; // Can only see enemies after using ability
+    enemyVisionTimer: number = 0; // Time remaining with enemy vision
+    
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.PHANTOM_MAX_HEALTH,
+            Constants.PHANTOM_ATTACK_RANGE,
+            Constants.PHANTOM_ATTACK_DAMAGE,
+            Constants.PHANTOM_ATTACK_SPEED,
+            Constants.PHANTOM_ABILITY_COOLDOWN
+        );
+        this.isHero = true; // Phantom is a hero unit for Radiant faction
+    }
+    
+    /**
+     * Update visibility and enemy vision timers
+     */
+    updateTimers(deltaTime: number): void {
+        // Update visibility timer (visible to enemies after ability use)
+        if (this.visibilityTimer > 0) {
+            this.visibilityTimer -= deltaTime;
+            if (this.visibilityTimer <= 0) {
+                this.visibilityTimer = 0;
+                this.isCloaked = true; // Return to cloaked state
+            }
+        }
+        
+        // Update enemy vision timer (can see enemies after ability use)
+        if (this.enemyVisionTimer > 0) {
+            this.enemyVisionTimer -= deltaTime;
+            if (this.enemyVisionTimer <= 0) {
+                this.enemyVisionTimer = 0;
+                this.canSeeEnemies = false; // Lose ability to see enemies
+            }
+        }
+    }
+    
+    /**
+     * Use Phantom's ability: short-range directional attack
+     * Deals damage in a cone and reveals the Phantom for 8 seconds
+     */
+    useAbility(direction: Vector2D): boolean {
+        if (!super.useAbility(direction)) {
+            return false;
+        }
+        
+        // Reveal Phantom for 8 seconds
+        this.isCloaked = false;
+        this.visibilityTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        
+        // Grant enemy vision for 8 seconds
+        this.canSeeEnemies = true;
+        this.enemyVisionTimer = Constants.PHANTOM_VISIBILITY_DURATION;
+        
+        // Calculate attack direction
+        const attackDir = direction.normalize();
+        const attackAngle = Math.atan2(attackDir.y, attackDir.x);
+        
+        // Create a short-range directional attack projectile
+        const speed = 400; // Fast projectile speed
+        const velocity = new Vector2D(
+            Math.cos(attackAngle) * speed,
+            Math.sin(attackAngle) * speed
+        );
+        
+        // Create ability bullet
+        const bullet = new AbilityBullet(
+            new Vector2D(this.position.x, this.position.y),
+            velocity,
+            this.owner,
+            Constants.PHANTOM_ABILITY_DAMAGE
+        );
+        
+        // Set short range for the projectile
+        bullet.maxRange = Constants.PHANTOM_ABILITY_RANGE;
+        
+        this.lastAbilityEffects.push(bullet);
+        
+        return true;
+    }
+    
+    /**
+     * Override update to filter enemies based on vision
+     */
+    update(
+        deltaTime: number,
+        enemies: (Unit | StellarForge | Building)[],
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
+        // Filter enemies - Phantom can only see enemies if it has enemy vision
+        let visibleEnemies = enemies;
+        if (!this.canSeeEnemies) {
+            visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
+        }
+        
+        // Call parent update with filtered enemy list
+        super.update(deltaTime, visibleEnemies, allUnits, asteroids);
+    }
+    
+    /**
+     * Check if this Phantom is cloaked (invisible to enemies)
+     */
+    isCloakedToEnemies(): boolean {
+        return this.isCloaked;
+    }
+    
+    /**
+     * Check if this Phantom can currently see enemies
+     */
+    hasEnemyVision(): boolean {
+        return this.canSeeEnemies;
+    }
+}
+
+/**
  * Main game state
  */
 export class GameState {
@@ -3046,6 +3185,11 @@ export class GameState {
                 if (unit instanceof Driller && unit.isDrilling) {
                     unit.updateDrilling(deltaTime);
                     this.processDrillerCollisions(unit, deltaTime);
+                }
+                
+                // Handle Phantom timers
+                if (unit instanceof Phantom) {
+                    unit.updateTimers(deltaTime);
                 }
                 
                 // Handle Grave projectile deflection
@@ -3566,7 +3710,15 @@ export class GameState {
      * - They are in shadow but within proximity range of player unit, OR
      * - They are in shadow but within player's influence radius
      */
-    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player): boolean {
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
+        // Special case: if object is a Phantom unit and is cloaked
+        if (object && object instanceof Phantom) {
+            // Phantom is only visible to enemies if not cloaked
+            if (object.isCloakedToEnemies() && object.owner !== player) {
+                return false; // Cloaked Phantoms are invisible to enemies
+            }
+        }
+        
         // Check if object is in shadow
         const inShadow = this.isPointInShadow(objectPos);
         
