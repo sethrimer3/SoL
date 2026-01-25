@@ -67,7 +67,7 @@ interface Particle {
 
 class ParticleMenuLayer {
     private static readonly REFRESH_INTERVAL_MS = 140;
-    private static readonly POSITION_SMOOTHING = 0.08 / 3;
+    private static readonly POSITION_SMOOTHING = 0.08 / 9;
     private static readonly DRIFT_SPEED = 0.0007 / 3;
     private static readonly DRIFT_RADIUS_MIN_PX = 0.6;
     private static readonly DRIFT_RADIUS_MAX_PX = 2.4;
@@ -760,7 +760,6 @@ export class MainMenu {
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -862,7 +861,6 @@ export class MainMenu {
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -947,7 +945,6 @@ export class MainMenu {
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
@@ -1083,7 +1080,6 @@ export class MainMenu {
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
