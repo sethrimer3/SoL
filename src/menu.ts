@@ -68,13 +68,13 @@ interface Particle {
 class ParticleMenuLayer {
     private static readonly REFRESH_INTERVAL_MS = 140;
     private static readonly POSITION_SMOOTHING = 0.08 / 14;
-    private static readonly DRIFT_SPEED = 0;
-    private static readonly DRIFT_RADIUS_MIN_PX = 0;
-    private static readonly DRIFT_RADIUS_MAX_PX = 0;
+    private static readonly DRIFT_SPEED = 0.0007 / 6;
+    private static readonly DRIFT_RADIUS_MIN_PX = 0.03;
+    private static readonly DRIFT_RADIUS_MAX_PX = 0.11;
     private static readonly COLOR_SMOOTHING = 0.08;
-    private static readonly PARTICLE_SIZE_PX = 1.2;
-    private static readonly RELOCATE_MIN_DISTANCE_PX = 2;
-    private static readonly RELOCATE_MAX_DISTANCE_PX = 6;
+    private static readonly PARTICLE_SIZE_PX = 1.6;
+    private static readonly RELOCATE_MIN_DISTANCE_PX = 4;
+    private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -223,10 +223,6 @@ class ParticleMenuLayer {
             particle.targetY = relocatedTarget.y;
             particle.baseTargetX = relocatedTarget.x;
             particle.baseTargetY = relocatedTarget.y;
-            particle.x = relocatedTarget.x;
-            particle.y = relocatedTarget.y;
-            particle.velocityX = 0;
-            particle.velocityY = 0;
             const targetColor = this.parseColor(target.color);
             particle.targetColorR = targetColor.r;
             particle.targetColorG = targetColor.g;
