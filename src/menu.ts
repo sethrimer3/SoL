@@ -71,7 +71,6 @@ class ParticleMenuLayer {
     private static readonly DRIFT_SPEED = 0.0007 / 3;
     private static readonly DRIFT_RADIUS_MIN_PX = 0.6;
     private static readonly DRIFT_RADIUS_MAX_PX = 2.4;
-    private static readonly OUTLINE_TEXT_THRESHOLD_PX = 32;
     private static readonly COLOR_SMOOTHING = 0.08;
     private static readonly PARTICLE_SIZE_PX = 1.6;
     private static readonly RELOCATE_MIN_DISTANCE_PX = 6;
@@ -351,7 +350,6 @@ class ParticleMenuLayer {
         const textColor = element.dataset.particleColor || '#FFFFFF';
         const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
         const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
-        const isLargeText = fontSizePx >= ParticleMenuLayer.OUTLINE_TEXT_THRESHOLD_PX;
 
         this.offscreenCanvas.width = Math.ceil(rect.width);
         this.offscreenCanvas.height = Math.ceil(rect.height);
@@ -360,15 +358,8 @@ class ParticleMenuLayer {
         this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
         this.offscreenContext.textAlign = 'center';
         this.offscreenContext.textBaseline = 'middle';
-        if (isLargeText) {
-            this.offscreenContext.strokeStyle = '#FFFFFF';
-            this.offscreenContext.lineWidth = Math.max(2, fontSizePx / 10);
-            this.offscreenContext.lineJoin = 'round';
-            this.offscreenContext.strokeText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
-        } else {
-            this.offscreenContext.fillStyle = '#FFFFFF';
-            this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
-        }
+        this.offscreenContext.fillStyle = '#FFFFFF';
+        this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
 
         const imageData = this.offscreenContext.getImageData(
             0,
@@ -603,7 +594,7 @@ export class MainMenu {
         menu.style.boxSizing = 'border-box';
         menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
         menu.style.zIndex = '1000';
-        menu.style.fontFamily = '"Archivo Black", Arial, sans-serif';
+        menu.style.fontFamily = '"Doto", "Archivo Black", Arial, sans-serif';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
         menu.style.overflowX = 'hidden';
