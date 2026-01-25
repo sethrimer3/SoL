@@ -650,7 +650,7 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
-        this.setMenuParticleDensity(3);
+        this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
