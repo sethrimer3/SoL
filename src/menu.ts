@@ -79,6 +79,7 @@ class ParticleMenuLayer {
     private needsTargetRefresh: boolean = false;
     private lastTargetRefreshMs: number = 0;
     private targetRefreshContainer: HTMLElement | null = null;
+    private densityMultiplier: number = 1;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -147,6 +148,10 @@ class ParticleMenuLayer {
 
     public clearTargets(): void {
         this.setTargets([]);
+    }
+
+    public setDensityMultiplier(multiplier: number): void {
+        this.densityMultiplier = Math.max(0.5, multiplier);
     }
 
     private animate(): void {
@@ -293,7 +298,8 @@ class ParticleMenuLayer {
         const fontWeight = computedStyle.fontWeight || '600';
         const textColor = element.dataset.particleColor || '#FFFFFF';
         const pointSizePx = Math.max(1.4, fontSizePx / 11);
-        const spacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
+        const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
+        const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
 
         this.offscreenCanvas.width = Math.ceil(rect.width);
         this.offscreenCanvas.height = Math.ceil(rect.height);
@@ -340,7 +346,8 @@ class ParticleMenuLayer {
         }
 
         const color = element.dataset.particleColor || '#FFFFFF';
-        const spacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
+        const baseSpacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
+        const spacingPx = Math.max(3, Math.round(baseSpacingPx / this.densityMultiplier));
         const pointSizePx = Math.max(1.4, spacingPx / 3.2);
         const targets: ParticleTarget[] = [];
 
@@ -569,12 +576,17 @@ export class MainMenu {
         }
     }
 
+    private setMenuParticleDensity(multiplier: number): void {
+        this.menuParticleLayer?.setDensityMultiplier(multiplier);
+    }
+
     private renderMainScreen(container: HTMLElement): void {
         this.clearMenu();
         this.renderMainScreenContent(container);
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
+        this.setMenuParticleDensity(2);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
@@ -678,53 +690,12 @@ export class MainMenu {
             }
         });
 
-        // Current loadout and map indicators
-        const statusInfo = document.createElement('div');
-        statusInfo.style.marginTop = '20px';
-        statusInfo.style.fontSize = isCompactLayout ? '14px' : '16px';
-        statusInfo.style.color = 'transparent';
-        statusInfo.style.fontWeight = '700';
-        statusInfo.dataset.particleText = 'true';
-        statusInfo.dataset.particleColor = '#9AA0A6';
-        
-        let loadoutStatus = 'Not configured';
-        if (this.settings.selectedFaction && this.settings.selectedHeroes.length === 4) {
-            loadoutStatus = `<span style="color: #00FF88;">${this.settings.selectedFaction} - 4 heroes</span>`;
-        } else if (this.settings.selectedFaction) {
-            loadoutStatus = `<span style="color: #FFA500;">${this.settings.selectedFaction} - ${this.settings.selectedHeroes.length}/4 heroes</span>`;
-        }
-        
-        statusInfo.innerHTML = `
-            <div style="text-align: center;">
-                <div>Loadout: ${loadoutStatus}</div>
-                <div style="margin-top: 5px;">Map: <span style="color: #FFD700;">${this.settings.selectedMap.name}</span></div>
-            </div>
-        `;
-        container.appendChild(statusInfo);
-
-        // Features list
-        const features = document.createElement('div');
-        features.style.marginTop = '40px';
-        features.style.fontSize = isCompactLayout ? '14px' : '16px';
-        features.style.color = 'transparent';
-        features.style.fontWeight = '700';
-        features.dataset.particleText = 'true';
-        features.dataset.particleColor = '#7C7C7C';
-        features.innerHTML = `
-            <div style="text-align: center;">
-                <div>✨ Ray-traced lighting and shadows</div>
-                <div style="margin-top: 5px;">🌌 Asteroid obstacles with dynamic polygons</div>
-                <div style="margin-top: 5px;">⭐ Solar mirrors with line-of-sight visualization</div>
-                <div style="margin-top: 5px;">🎮 Touch and mouse controls</div>
-            </div>
-        `;
-        container.appendChild(features);
-
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.setMenuParticleDensity(1);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -817,6 +788,7 @@ export class MainMenu {
 
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.setMenuParticleDensity(1);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -898,6 +870,7 @@ export class MainMenu {
 
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.setMenuParticleDensity(1);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -1024,6 +997,7 @@ export class MainMenu {
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
+        this.setMenuParticleDensity(1);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
