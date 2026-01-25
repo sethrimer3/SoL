@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Phantom } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -887,7 +887,7 @@ export class GameRenderer {
         // Check visibility for enemy units
         let shouldDim = false;
         if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer);
+            const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit);
             if (!isVisible) {
                 return; // Don't draw invisible enemy units
             }
@@ -1459,6 +1459,73 @@ export class GameRenderer {
         this.ctx.stroke();
         
         if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a Phantom hero unit with cloak indicator
+     */
+    private drawPhantom(phantom: Phantom, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(phantom.position, this.viewingPlayer, phantom);
+            if (!isVisible) {
+                return; // Cloaked Phantom is invisible to enemies
+            }
+            
+            const inShadow = game.isPointInShadow(phantom.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+        
+        // For friendly units, apply cloak opacity when cloaked
+        let isCloakedFriendly = false;
+        if (!isEnemy && phantom.isCloakedToEnemies()) {
+            isCloakedFriendly = true;
+            this.ctx.globalAlpha = Constants.PHANTOM_CLOAK_OPACITY;
+        }
+        
+        // Draw base unit
+        this.drawUnit(phantom, color, game, isEnemy);
+        
+        // Draw cloak indicator (ghostly outline)
+        if (isCloakedFriendly) {
+            const screenPos = this.worldToScreen(phantom.position);
+            const size = 8 * this.zoom;
+            
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 1.5 * this.zoom;
+            this.ctx.setLineDash([3 * this.zoom, 3 * this.zoom]); // Dashed line for cloak effect
+            
+            // Draw outer circle for cloak
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size + 6, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            this.ctx.setLineDash([]); // Reset line dash
+        }
+        
+        // Draw ability indicator when visible (not cloaked)
+        if (!phantom.isCloakedToEnemies() && !isEnemy) {
+            const screenPos = this.worldToScreen(phantom.position);
+            const size = 8 * this.zoom;
+            
+            // Draw strike symbol (like a blade)
+            this.ctx.strokeStyle = '#FF6600'; // Orange for strike
+            this.ctx.lineWidth = 2 * this.zoom;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x - size * 0.7, screenPos.y - size * 0.7);
+            this.ctx.lineTo(screenPos.x + size * 0.7, screenPos.y + size * 0.7);
+            this.ctx.stroke();
+        }
+        
+        // Reset alpha
+        if (shouldDim || isCloakedFriendly) {
             this.ctx.globalAlpha = 1.0;
         }
     }
@@ -2296,6 +2363,8 @@ export class GameRenderer {
                     this.drawTurretDeployer(unit, color, game, isEnemy);
                 } else if (unit instanceof Driller) {
                     this.drawDriller(unit, color, game, isEnemy);
+                } else if (unit instanceof Phantom) {
+                    this.drawPhantom(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
