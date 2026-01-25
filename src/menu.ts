@@ -586,7 +586,7 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
-        this.setMenuParticleDensity(2);
+        this.setMenuParticleDensity(3);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
@@ -695,7 +695,7 @@ export class MainMenu {
 
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.setMenuParticleDensity(1);
+        this.setMenuParticleDensity(1.6);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -708,6 +708,8 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
         // Map grid
@@ -727,6 +729,8 @@ export class MainMenu {
             mapCard.style.padding = '20px';
             mapCard.style.cursor = 'pointer';
             mapCard.style.transition = 'all 0.3s';
+            mapCard.dataset.particleBox = 'true';
+            mapCard.dataset.particleColor = map.id === this.settings.selectedMap.id ? '#FFD700' : '#66B3FF';
 
             mapCard.addEventListener('mouseenter', () => {
                 if (map.id !== this.settings.selectedMap.id) {
@@ -751,6 +755,8 @@ export class MainMenu {
             mapName.style.fontSize = '24px';
             mapName.style.marginBottom = '10px';
             mapName.style.color = map.id === this.settings.selectedMap.id ? '#FFD700' : '#FFFFFF';
+            mapName.dataset.particleText = 'true';
+            mapName.dataset.particleColor = map.id === this.settings.selectedMap.id ? '#FFF2B3' : '#E0F2FF';
             mapCard.appendChild(mapName);
 
             // Map description
@@ -760,6 +766,8 @@ export class MainMenu {
             mapDesc.style.lineHeight = '1.5';
             mapDesc.style.marginBottom = '15px';
             mapDesc.style.color = '#CCCCCC';
+            mapDesc.dataset.particleText = 'true';
+            mapDesc.dataset.particleColor = '#CCCCCC';
             mapCard.appendChild(mapDesc);
 
             // Map stats
@@ -784,11 +792,12 @@ export class MainMenu {
             this.renderMainScreen(this.contentElement);
         }, '#666666');
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.setMenuParticleDensity(1);
+        this.setMenuParticleDensity(1.6);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -801,6 +810,8 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
         // Settings container
@@ -866,11 +877,12 @@ export class MainMenu {
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.setMenuParticleDensity(1);
+        this.setMenuParticleDensity(1.6);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -883,6 +895,8 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
         // Faction grid
@@ -924,6 +938,8 @@ export class MainMenu {
             factionCard.style.cursor = 'pointer';
             factionCard.style.transition = 'all 0.3s';
             factionCard.style.minHeight = '200px';
+            factionCard.dataset.particleBox = 'true';
+            factionCard.dataset.particleColor = this.settings.selectedFaction === faction.id ? faction.color : '#66B3FF';
 
             factionCard.addEventListener('mouseenter', () => {
                 if (this.settings.selectedFaction !== faction.id) {
@@ -949,6 +965,8 @@ export class MainMenu {
             factionName.style.fontSize = '28px';
             factionName.style.marginBottom = '15px';
             factionName.style.color = this.settings.selectedFaction === faction.id ? faction.color : '#FFFFFF';
+            factionName.dataset.particleText = 'true';
+            factionName.dataset.particleColor = this.settings.selectedFaction === faction.id ? '#FFFFFF' : '#E0F2FF';
             factionCard.appendChild(factionName);
 
             // Faction description
@@ -957,6 +975,8 @@ export class MainMenu {
             factionDesc.style.fontSize = '14px';
             factionDesc.style.lineHeight = '1.5';
             factionDesc.style.color = '#CCCCCC';
+            factionDesc.dataset.particleText = 'true';
+            factionDesc.dataset.particleColor = '#CCCCCC';
             factionCard.appendChild(factionDesc);
 
             factionGrid.appendChild(factionCard);
@@ -993,11 +1013,12 @@ export class MainMenu {
         buttonContainer.appendChild(backButton);
 
         container.appendChild(buttonContainer);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.setMenuParticleDensity(1);
+        this.setMenuParticleDensity(1.6);
         this.menuParticleLayer?.clearTargets();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -1016,6 +1037,8 @@ export class MainMenu {
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
 
         // Selection counter
@@ -1024,6 +1047,8 @@ export class MainMenu {
         counter.style.fontSize = isCompactLayout ? '16px' : '18px';
         counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
         counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
+        counter.dataset.particleText = 'true';
+        counter.dataset.particleColor = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
         container.appendChild(counter);
 
         // Hero grid
@@ -1053,6 +1078,8 @@ export class MainMenu {
             heroCard.style.transition = 'all 0.3s';
             heroCard.style.opacity = canSelect ? '1' : '0.5';
             heroCard.style.minHeight = '300px';
+            heroCard.dataset.particleBox = 'true';
+            heroCard.dataset.particleColor = isSelected ? '#00FF88' : '#66B3FF';
 
             if (canSelect) {
                 heroCard.addEventListener('mouseenter', () => {
@@ -1085,6 +1112,8 @@ export class MainMenu {
             heroName.style.fontSize = '18px';
             heroName.style.marginBottom = '8px';
             heroName.style.color = isSelected ? '#00FF88' : '#FFFFFF';
+            heroName.dataset.particleText = 'true';
+            heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
             heroCard.appendChild(heroName);
 
             // Hero description
@@ -1094,6 +1123,8 @@ export class MainMenu {
             heroDesc.style.lineHeight = '1.4';
             heroDesc.style.color = '#AAAAAA';
             heroDesc.style.marginBottom = '10px';
+            heroDesc.dataset.particleText = 'true';
+            heroDesc.dataset.particleColor = '#AAAAAA';
             heroCard.appendChild(heroDesc);
 
             // Stats section
@@ -1190,6 +1221,7 @@ export class MainMenu {
         buttonContainer.appendChild(backButton);
 
         container.appendChild(buttonContainer);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private createButton(text: string, onClick: () => void, color: string = '#FFD700'): HTMLButtonElement {
@@ -1204,6 +1236,8 @@ export class MainMenu {
         button.style.cursor = 'pointer';
         button.style.fontWeight = 'bold';
         button.style.transition = 'all 0.3s';
+        button.dataset.particleBox = 'true';
+        button.dataset.particleColor = color;
         
         button.addEventListener('mouseenter', () => {
             const hoverColor = color === '#FFD700' ? '#FFA500' : 
@@ -1234,6 +1268,8 @@ export class MainMenu {
         labelElement.textContent = label;
         labelElement.style.fontSize = '18px';
         labelElement.style.color = '#FFFFFF';
+        labelElement.dataset.particleText = 'true';
+        labelElement.dataset.particleColor = '#FFFFFF';
 
         section.appendChild(labelElement);
         section.appendChild(control);
