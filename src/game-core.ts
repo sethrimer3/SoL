@@ -1502,7 +1502,7 @@ export class AbilityBullet {
     velocity: Vector2D;
     lifetime: number = 0;
     maxLifetime: number = Constants.MARINE_ABILITY_BULLET_LIFETIME;
-    maxRange: number | null = null; // Optional max range in pixels
+    maxRange: number = Infinity; // Optional max range in pixels (default: no limit)
     startPosition: Vector2D;
     
     constructor(
@@ -1533,12 +1533,10 @@ export class AbilityBullet {
             return true;
         }
         
-        // Check max range if set
-        if (this.maxRange !== null) {
-            const distanceTraveled = this.startPosition.distanceTo(this.position);
-            if (distanceTraveled >= this.maxRange) {
-                return true;
-            }
+        // Check max range
+        const distanceTraveled = this.startPosition.distanceTo(this.position);
+        if (distanceTraveled >= this.maxRange) {
+            return true;
         }
         
         return false;
@@ -2931,7 +2929,7 @@ export class Phantom extends Unit {
         // Filter enemies - Phantom can only see enemies if it has enemy vision
         let visibleEnemies = enemies;
         if (!this.canSeeEnemies) {
-            visibleEnemies = []; // Cannot see any enemies when cloaked
+            visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
         }
         
         // Call parent update with filtered enemy list
@@ -3712,7 +3710,7 @@ export class GameState {
      * - They are in shadow but within proximity range of player unit, OR
      * - They are in shadow but within player's influence radius
      */
-    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: any): boolean {
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
         // Special case: if object is a Phantom unit and is cloaked
         if (object && object instanceof Phantom) {
             // Phantom is only visible to enemies if not cloaked
