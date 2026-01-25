@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, LightRay, Starling } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, LightRay, Starling } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -562,6 +562,21 @@ class GameController {
                                     }
                                 } else {
                                     console.log('Not enough solarium to build Minigun');
+                                }
+                            } else if (i === 1) {
+                                // Second button - create Space Dust Swirler building (Radiant faction only)
+                                if (player.spendSolarium(Constants.SWIRLER_COST)) {
+                                    const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(swirler);
+                                    console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    
+                                    // Remove the warp gate
+                                    const gateIndex = this.game.warpGates.indexOf(gate);
+                                    if (gateIndex > -1) {
+                                        this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                } else {
+                                    console.log('Not enough solarium to build Space Dust Swirler');
                                 }
                             }
                             // Other buttons can be added later for different building types
