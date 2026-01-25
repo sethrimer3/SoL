@@ -103,8 +103,20 @@ export const MINIGUN_ATTACK_DAMAGE = 12;
 export const MINIGUN_ATTACK_SPEED = 6; // Attacks per second (very fast)
 export const MINIGUN_RADIUS = 30; // Building size
 
+// Space Dust Swirler building constants (defensive building for Radiant faction)
+export const SWIRLER_MAX_HEALTH = 250;
+export const SWIRLER_ATTACK_RANGE = 0; // No direct attack
+export const SWIRLER_ATTACK_DAMAGE = 0; // Defensive building
+export const SWIRLER_ATTACK_SPEED = 0; // No direct attack
+export const SWIRLER_RADIUS = 35; // Building size
+export const SWIRLER_INFLUENCE_RADIUS = 400; // Range of space dust swirl effect
+export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
+export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
+export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clockwise
+
 // Building costs
 export const MINIGUN_COST = 150;
+export const SWIRLER_COST = 200;
 export const BUILDING_BUILD_TIME = 5.0; // Base build time in seconds
 
 // Weapon effect constants

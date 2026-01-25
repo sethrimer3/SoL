@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -1573,6 +1573,124 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Space Dust Swirler building
+     */
+    private drawSpaceDustSwirler(building: SpaceDustSwirler, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        
+        // Check visibility for enemy buildings
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy buildings
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(building.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+
+        // Draw build progress indicator if not complete
+        if (!building.isComplete) {
+            this.ctx.fillStyle = 'rgba(138, 43, 226, 0.2)'; // Purple tint
+            this.ctx.strokeStyle = '#8A2BE2';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            // Draw progress bar
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#8A2BE2';
+            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
+            
+            // Reset alpha
+            if (shouldDim) {
+                this.ctx.globalAlpha = 1.0;
+            }
+            return;
+        }
+
+        // Draw influence radius (faint circle)
+        const influenceRadius = Constants.SWIRLER_INFLUENCE_RADIUS * this.zoom;
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = 0.15;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, influenceRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1.0;
+
+        // Draw base (circular platform with energy pattern)
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw swirl pattern in center (3 curved arcs rotating counter-clockwise)
+        const swirlRadius = radius * 0.7;
+        this.ctx.strokeStyle = '#8A2BE2'; // Purple color for swirl
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.lineCap = 'round';
+        
+        for (let i = 0; i < 3; i++) {
+            const angle = (Date.now() / 500 + i * Math.PI * 2 / 3) % (Math.PI * 2); // Rotating animation
+            this.ctx.beginPath();
+            this.ctx.arc(
+                screenPos.x, 
+                screenPos.y, 
+                swirlRadius, 
+                angle, 
+                angle + Math.PI / 2
+            );
+            this.ctx.stroke();
+        }
+
+        // Draw central energy core
+        const coreRadius = radius * 0.25;
+        this.ctx.fillStyle = '#DDA0DD'; // Plum color
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw health bar if damaged
+        if (building.health < building.maxHealth) {
+            const healthBarWidth = radius * 2;
+            const healthBarHeight = 4;
+            const healthBarX = screenPos.x - healthBarWidth / 2;
+            const healthBarY = screenPos.y - radius - 10;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            
+            const healthPercent = building.health / building.maxHealth;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+        }
+        
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
@@ -2192,6 +2310,8 @@ export class GameRenderer {
             for (const building of player.buildings) {
                 if (building instanceof Minigun) {
                     this.drawMinigun(building, color, game, isEnemy);
+                } else if (building instanceof SpaceDustSwirler) {
+                    this.drawSpaceDustSwirler(building, color, game, isEnemy);
                 }
             }
         }

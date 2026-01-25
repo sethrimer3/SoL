@@ -1094,6 +1094,79 @@ export class Minigun extends Building {
 }
 
 /**
+ * Space Dust Swirler Building - Defensive building for Radiant faction
+ * Swirls space dust in counter-clockwise orbits and deflects non-melee projectiles
+ */
+export class SpaceDustSwirler extends Building {
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.SWIRLER_MAX_HEALTH,
+            Constants.SWIRLER_RADIUS,
+            Constants.SWIRLER_ATTACK_RANGE,
+            Constants.SWIRLER_ATTACK_DAMAGE,
+            Constants.SWIRLER_ATTACK_SPEED
+        );
+    }
+
+    /**
+     * Apply swirling force to space dust particles within influence radius
+     */
+    applyDustSwirl(particles: SpaceDustParticle[], deltaTime: number): void {
+        if (!this.isComplete) return;
+
+        for (const particle of particles) {
+            const dx = particle.position.x - this.position.x;
+            const dy = particle.position.y - this.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            // Only affect particles within influence radius
+            if (distance > Constants.SWIRLER_INFLUENCE_RADIUS || distance < 1) continue;
+
+            // Calculate tangential (counter-clockwise) direction
+            // Counter-clockwise perpendicular: (dy, -dx) normalized
+            const tangentX = dy / distance;
+            const tangentY = -dx / distance;
+
+            // Calculate speed based on distance (faster closer to tower)
+            const normalizedDistance = distance / Constants.SWIRLER_INFLUENCE_RADIUS;
+            const speedMultiplier = Constants.SWIRLER_DUST_SPEED_MULTIPLIER * (1 - normalizedDistance);
+            const orbitSpeed = Constants.SWIRLER_DUST_ORBIT_SPEED_BASE * (1 + speedMultiplier);
+
+            // Apply tangential velocity (straight orbit, not spiral)
+            particle.velocity.x = tangentX * orbitSpeed;
+            particle.velocity.y = tangentY * orbitSpeed;
+        }
+    }
+
+    /**
+     * Check if a projectile should be deflected and apply deflection
+     * Returns true if projectile was deflected
+     */
+    deflectProjectile(projectile: MinionProjectile | GraveProjectile | InfluenceBallProjectile): boolean {
+        if (!this.isComplete) return false;
+
+        const dx = projectile.position.x - this.position.x;
+        const dy = projectile.position.y - this.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Only deflect projectiles within influence radius
+        if (distance > Constants.SWIRLER_INFLUENCE_RADIUS) return false;
+
+        // Deflect by rotating velocity counter-clockwise by 90 degrees
+        const currentVelX = projectile.velocity.x;
+        const currentVelY = projectile.velocity.y;
+        
+        // 90 degree counter-clockwise rotation: (x, y) -> (-y, x)
+        projectile.velocity.x = -currentVelY;
+        projectile.velocity.y = currentVelX;
+
+        return true;
+    }
+}
+
+/**
  * Sun/Star - Light source
  */
 export class Sun {
@@ -2974,6 +3047,22 @@ export class GameState {
                     unit.updateDrilling(deltaTime);
                     this.processDrillerCollisions(unit, deltaTime);
                 }
+                
+                // Handle Grave projectile deflection
+                if (unit instanceof Grave) {
+                    for (const projectile of unit.getProjectiles()) {
+                        if (projectile.isAttacking) {
+                            // Check for deflection by Space Dust Swirler buildings
+                            for (const player of this.players) {
+                                for (const building of player.buildings) {
+                                    if (building instanceof SpaceDustSwirler) {
+                                        building.deflectProjectile(projectile);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
             } // End of countdown check
 
@@ -3161,6 +3250,16 @@ export class GameState {
         // Update minion projectiles and check for hits
         for (const projectile of this.minionProjectiles) {
             projectile.update(deltaTime);
+
+            // Check for deflection by Space Dust Swirler buildings
+            for (const player of this.players) {
+                for (const building of player.buildings) {
+                    if (building instanceof SpaceDustSwirler) {
+                        building.deflectProjectile(projectile);
+                    }
+                }
+            }
+
             let hasHit = false;
 
             for (const player of this.players) {
@@ -3211,6 +3310,15 @@ export class GameState {
         // Update influence ball projectiles
         for (const projectile of this.influenceBallProjectiles) {
             projectile.update(deltaTime);
+
+            // Check for deflection by Space Dust Swirler buildings
+            for (const player of this.players) {
+                for (const building of player.buildings) {
+                    if (building instanceof SpaceDustSwirler) {
+                        building.deflectProjectile(projectile);
+                    }
+                }
+            }
             
             // Check if should explode (max lifetime reached)
             if (projectile.shouldExplode()) {
@@ -3360,6 +3468,15 @@ export class GameState {
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Apply forces from Space Dust Swirler buildings (counter-clockwise orbits)
+        for (const player of this.players) {
+            for (const building of player.buildings) {
+                if (building instanceof SpaceDustSwirler) {
+                    building.applyDustSwirl(this.spaceDust, deltaTime);
                 }
             }
         }
