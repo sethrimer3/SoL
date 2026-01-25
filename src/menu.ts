@@ -65,6 +65,263 @@ interface Particle {
     driftRadiusPx: number;
 }
 
+interface BackgroundParticle {
+    x: number;
+    y: number;
+    velocityX: number;
+    velocityY: number;
+    colorR: number;
+    colorG: number;
+    colorB: number;
+    targetColorR: number;
+    targetColorG: number;
+    targetColorB: number;
+    radius: number;
+}
+
+class BackgroundParticleLayer {
+    private static readonly PARTICLE_COUNT = 8;
+    private static readonly PARTICLE_RADIUS = 250;
+    private static readonly MAX_VELOCITY = 0.3;
+    private static readonly FRICTION = 0.98;
+    private static readonly COLOR_TRANSITION_SPEED = 0.002;
+    private static readonly ATTRACTION_STRENGTH = 0.15;
+    private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
+    
+    private canvas: HTMLCanvasElement;
+    private context: CanvasRenderingContext2D;
+    private particles: BackgroundParticle[] = [];
+    private attractionMatrix: number[][] = [];
+    private animationFrameId: number | null = null;
+    private isActive: boolean = false;
+    private lastColorChangeMs: number = 0;
+    
+    private readonly gradientColors = [
+        [138, 43, 226],   // Blue Violet
+        [147, 51, 234],   // Purple
+        [219, 39, 119],   // Pink
+        [236, 72, 153],   // Light Pink
+        [59, 130, 246],   // Blue
+        [14, 165, 233],   // Sky Blue
+        [168, 85, 247],   // Violet
+        [192, 132, 252]   // Light Purple
+    ];
+    
+    constructor(container: HTMLElement) {
+        this.canvas = document.createElement('canvas');
+        this.canvas.style.position = 'fixed';
+        this.canvas.style.top = '0';
+        this.canvas.style.left = '0';
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
+        this.canvas.style.pointerEvents = 'none';
+        this.canvas.style.zIndex = '0';
+        
+        const context = this.canvas.getContext('2d');
+        if (!context) {
+            throw new Error('Unable to create background particle canvas context.');
+        }
+        this.context = context;
+        
+        container.appendChild(this.canvas);
+        
+        this.resize();
+        this.initializeParticles();
+        this.initializeAttractionMatrix();
+        this.start();
+    }
+    
+    private initializeParticles(): void {
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        
+        this.particles = [];
+        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
+            const color = this.gradientColors[i % this.gradientColors.length];
+            const particle: BackgroundParticle = {
+                x: Math.random() * width,
+                y: Math.random() * height,
+                velocityX: (Math.random() - 0.5) * 0.5,
+                velocityY: (Math.random() - 0.5) * 0.5,
+                colorR: color[0],
+                colorG: color[1],
+                colorB: color[2],
+                targetColorR: color[0],
+                targetColorG: color[1],
+                targetColorB: color[2],
+                radius: BackgroundParticleLayer.PARTICLE_RADIUS
+            };
+            this.particles.push(particle);
+        }
+    }
+    
+    private initializeAttractionMatrix(): void {
+        this.attractionMatrix = [];
+        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
+            this.attractionMatrix[i] = [];
+            for (let j = 0; j < BackgroundParticleLayer.PARTICLE_COUNT; j++) {
+                if (i === j) {
+                    this.attractionMatrix[i][j] = 0;
+                } else {
+                    // Random attraction (-0.5 to 0.5): negative = repulsion, positive = attraction
+                    this.attractionMatrix[i][j] = (Math.random() - 0.5) * BackgroundParticleLayer.ATTRACTION_STRENGTH;
+                }
+            }
+        }
+    }
+    
+    public resize(): void {
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        this.canvas.width = Math.round(width * devicePixelRatio);
+        this.canvas.height = Math.round(height * devicePixelRatio);
+        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+    
+    public start(): void {
+        if (this.isActive) {
+            return;
+        }
+        this.isActive = true;
+        this.lastColorChangeMs = performance.now();
+        this.animate();
+    }
+    
+    public stop(): void {
+        this.isActive = false;
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+    
+    private animate(): void {
+        if (!this.isActive) {
+            return;
+        }
+        
+        const nowMs = performance.now();
+        
+        // Periodically change target colors for smooth transitions
+        if (nowMs - this.lastColorChangeMs >= BackgroundParticleLayer.COLOR_CHANGE_INTERVAL_MS) {
+            this.updateTargetColors();
+            this.lastColorChangeMs = nowMs;
+        }
+        
+        this.updateParticles();
+        this.render();
+        
+        this.animationFrameId = requestAnimationFrame(() => this.animate());
+    }
+    
+    private updateTargetColors(): void {
+        for (let i = 0; i < this.particles.length; i++) {
+            const colorIndex = Math.floor(Math.random() * this.gradientColors.length);
+            const color = this.gradientColors[colorIndex];
+            this.particles[i].targetColorR = color[0];
+            this.particles[i].targetColorG = color[1];
+            this.particles[i].targetColorB = color[2];
+        }
+    }
+    
+    private updateParticles(): void {
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        
+        // Apply attraction/repulsion forces
+        for (let i = 0; i < this.particles.length; i++) {
+            const p1 = this.particles[i];
+            
+            for (let j = 0; j < this.particles.length; j++) {
+                if (i === j) continue;
+                
+                const p2 = this.particles[j];
+                const dx = p2.x - p1.x;
+                const dy = p2.y - p1.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                if (distance > 0) {
+                    const force = this.attractionMatrix[i][j];
+                    const forceX = (dx / distance) * force;
+                    const forceY = (dy / distance) * force;
+                    
+                    p1.velocityX += forceX;
+                    p1.velocityY += forceY;
+                }
+            }
+            
+            // Apply friction
+            p1.velocityX *= BackgroundParticleLayer.FRICTION;
+            p1.velocityY *= BackgroundParticleLayer.FRICTION;
+            
+            // Limit velocity
+            const speed = Math.sqrt(p1.velocityX * p1.velocityX + p1.velocityY * p1.velocityY);
+            if (speed > BackgroundParticleLayer.MAX_VELOCITY) {
+                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MAX_VELOCITY;
+                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
+            }
+            
+            // Update position
+            p1.x += p1.velocityX;
+            p1.y += p1.velocityY;
+            
+            // Wrap around screen edges
+            if (p1.x < -p1.radius) p1.x = width + p1.radius;
+            if (p1.x > width + p1.radius) p1.x = -p1.radius;
+            if (p1.y < -p1.radius) p1.y = height + p1.radius;
+            if (p1.y > height + p1.radius) p1.y = -p1.radius;
+            
+            // Smoothly transition colors
+            p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
+            p1.colorG += (p1.targetColorG - p1.colorG) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
+            p1.colorB += (p1.targetColorB - p1.colorB) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
+        }
+    }
+    
+    private render(): void {
+        const width = this.canvas.width / (window.devicePixelRatio || 1);
+        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        
+        // Clear with black background
+        this.context.fillStyle = '#000000';
+        this.context.fillRect(0, 0, width, height);
+        
+        // Draw particles with blur effect
+        this.context.filter = 'blur(80px)';
+        this.context.globalCompositeOperation = 'screen';
+        
+        for (const particle of this.particles) {
+            const gradient = this.context.createRadialGradient(
+                particle.x, particle.y, 0,
+                particle.x, particle.y, particle.radius
+            );
+            
+            const r = Math.round(particle.colorR);
+            const g = Math.round(particle.colorG);
+            const b = Math.round(particle.colorB);
+            
+            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
+            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            
+            this.context.fillStyle = gradient;
+            this.context.beginPath();
+            this.context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+            this.context.fill();
+        }
+        
+        this.context.filter = 'none';
+        this.context.globalCompositeOperation = 'source-over';
+    }
+    
+    public destroy(): void {
+        this.stop();
+        if (this.canvas.parentElement) {
+            this.canvas.parentElement.removeChild(this.canvas);
+        }
+    }
+}
+
 class ParticleMenuLayer {
     private static readonly REFRESH_INTERVAL_MS = 140;
     private static readonly POSITION_SMOOTHING = 0.08 / 14;
@@ -517,6 +774,7 @@ export interface GameSettings {
 export class MainMenu {
     private menuElement: HTMLElement;
     private contentElement!: HTMLElement;
+    private backgroundParticleLayer: BackgroundParticleLayer | null = null;
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
@@ -629,7 +887,7 @@ export class MainMenu {
         menu.style.width = '100%';
         menu.style.height = '100%';
         menu.style.boxSizing = 'border-box';
-        menu.style.backgroundColor = 'rgba(0, 0, 10, 0.95)';
+        menu.style.backgroundColor = 'transparent';
         menu.style.zIndex = '1000';
         menu.style.fontFamily = '"Doto", Arial, sans-serif';
         menu.style.fontWeight = '300';
@@ -653,6 +911,7 @@ export class MainMenu {
         menu.appendChild(content);
 
         this.contentElement = content;
+        this.backgroundParticleLayer = new BackgroundParticleLayer(menu);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
 
@@ -660,6 +919,7 @@ export class MainMenu {
         this.renderMainScreenContent(content);
 
         this.resizeHandler = () => {
+            this.backgroundParticleLayer?.resize();
             if (!this.menuParticleLayer) {
                 return;
             }
@@ -1585,6 +1845,7 @@ export class MainMenu {
      */
     hide(): void {
         this.menuElement.style.display = 'none';
+        this.backgroundParticleLayer?.stop();
         this.menuParticleLayer?.stop();
     }
 
@@ -1595,6 +1856,7 @@ export class MainMenu {
         this.menuElement.style.display = 'block';
         this.currentScreen = 'main';
         this.renderMainScreen(this.contentElement);
+        this.backgroundParticleLayer?.start();
         this.menuParticleLayer?.start();
     }
 
@@ -1609,6 +1871,7 @@ export class MainMenu {
         if (this.resizeHandler) {
             window.removeEventListener('resize', this.resizeHandler);
         }
+        this.backgroundParticleLayer?.destroy();
         this.menuParticleLayer?.stop();
         if (this.menuElement.parentNode) {
             this.menuElement.parentNode.removeChild(this.menuElement);
