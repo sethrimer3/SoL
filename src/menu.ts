@@ -74,6 +74,8 @@ class ParticleMenuLayer {
     private static readonly OUTLINE_TEXT_THRESHOLD_PX = 32;
     private static readonly COLOR_SMOOTHING = 0.08;
     private static readonly PARTICLE_SIZE_PX = 1.6;
+    private static readonly RELOCATE_MIN_DISTANCE_PX = 6;
+    private static readonly RELOCATE_MAX_DISTANCE_PX = 18;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -215,10 +217,11 @@ class ParticleMenuLayer {
         for (let i = 0; i < desiredCount; i++) {
             const target = targets[i % targetCount];
             const particle = existingParticles[i];
-            particle.targetX = target.x;
-            particle.targetY = target.y;
-            particle.baseTargetX = target.x;
-            particle.baseTargetY = target.y;
+            const relocatedTarget = this.getRelocatedTarget(target);
+            particle.targetX = relocatedTarget.x;
+            particle.targetY = relocatedTarget.y;
+            particle.baseTargetX = relocatedTarget.x;
+            particle.baseTargetY = relocatedTarget.y;
             const targetColor = this.parseColor(target.color);
             particle.targetColorR = targetColor.r;
             particle.targetColorG = targetColor.g;
@@ -253,6 +256,17 @@ class ParticleMenuLayer {
             sizePx: ParticleMenuLayer.PARTICLE_SIZE_PX,
             driftPhase,
             driftRadiusPx,
+        };
+    }
+
+    private getRelocatedTarget(target: ParticleTarget): { x: number; y: number } {
+        const minDistancePx = ParticleMenuLayer.RELOCATE_MIN_DISTANCE_PX;
+        const maxDistancePx = ParticleMenuLayer.RELOCATE_MAX_DISTANCE_PX;
+        const distancePx = minDistancePx + Math.random() * (maxDistancePx - minDistancePx);
+        const angleRad = Math.random() * Math.PI * 2;
+        return {
+            x: target.x + Math.cos(angleRad) * distancePx,
+            y: target.y + Math.sin(angleRad) * distancePx,
         };
     }
 
