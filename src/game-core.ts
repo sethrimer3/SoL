@@ -631,6 +631,7 @@ export class StellarForge {
     pendingSolarium: number = 0; // Solarium accumulated since last crunch
     minionPath: Vector2D[] = []; // Path that minions will follow
     moveOrder: number = 0; // Movement order indicator (0 = no order)
+    rotation: number = 0; // Current rotation angle in radians
 
     constructor(
         public position: Vector2D,
@@ -886,6 +887,13 @@ export class StellarForge {
             this.crunchTimer = Constants.FORGE_CRUNCH_INTERVAL;
             this.currentCrunch = new ForgeCrunch(new Vector2D(this.position.x, this.position.y));
             this.currentCrunch.start();
+            
+            // Rotate forge by 1/6 turn (60 degrees = π/3 radians)
+            this.rotation += Math.PI / 3;
+            // Keep rotation within 0 to 2π
+            if (this.rotation >= Math.PI * 2) {
+                this.rotation -= Math.PI * 2;
+            }
             
             // Return the pending solarium for minion spawning
             const solariumForMinions = this.pendingSolarium;
