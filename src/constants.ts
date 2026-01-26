@@ -37,6 +37,7 @@ export const FLUID_FORWARD_COMPONENT = 0.6; // Forward push component for moving
 export const FLUID_RADIAL_COMPONENT = 0.4;  // Radial displacement component for moving objects
 export const BEAM_ALONG_COMPONENT = 0.7;     // Along beam direction component
 export const BEAM_PERPENDICULAR_COMPONENT = 0.3; // Perpendicular push component for beams
+export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by zero in fluid calculations
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;

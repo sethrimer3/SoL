@@ -3881,6 +3881,12 @@ export class GameState {
     /**
      * Apply fluid-like forces to particles from a moving object (projectile)
      * Particles closer to the object get pushed more, with falloff based on distance
+     * 
+     * @param position - World position of the moving object (pixels)
+     * @param velocity - Velocity vector of the moving object (pixels/second)
+     * @param radius - Effect radius in pixels (particles beyond this distance are not affected)
+     * @param strength - Base force strength (higher values create stronger displacement)
+     * @param deltaTime - Time delta in seconds for frame-independent physics
      */
     private applyFluidForceFromMovingObject(
         position: Vector2D,
@@ -3892,7 +3898,7 @@ export class GameState {
         for (const particle of this.spaceDust) {
             const distance = particle.position.distanceTo(position);
             
-            if (distance < radius && distance > 0.1) {
+            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
                 // Calculate direction from object to particle
                 const directionToParticle = new Vector2D(
                     particle.position.x - position.x,
@@ -3926,6 +3932,12 @@ export class GameState {
     /**
      * Apply fluid-like forces to particles from a beam segment
      * Creates a line-based displacement field along the beam
+     * 
+     * @param startPos - Starting position of the beam segment (pixels)
+     * @param endPos - Ending position of the beam segment (pixels)
+     * @param radius - Effect radius around the beam line in pixels
+     * @param strength - Base force strength (higher values create stronger displacement)
+     * @param deltaTime - Time delta in seconds for frame-independent physics
      */
     private applyFluidForceFromBeam(
         startPos: Vector2D,
@@ -3936,7 +3948,7 @@ export class GameState {
     ): void {
         // Calculate beam direction
         const beamLength = startPos.distanceTo(endPos);
-        if (beamLength < 0.1) return;
+        if (beamLength < Constants.FLUID_MIN_DISTANCE) return;
         
         const beamDirection = new Vector2D(
             endPos.x - startPos.x,
@@ -3962,7 +3974,7 @@ export class GameState {
             
             const distance = particle.position.distanceTo(closestPoint);
             
-            if (distance < radius && distance > 0.1) {
+            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
                 // Direction from beam to particle (perpendicular push)
                 const directionToParticle = new Vector2D(
                     particle.position.x - closestPoint.x,
