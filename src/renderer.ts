@@ -360,10 +360,9 @@ export class GameRenderer {
                 this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
             }
             
-            const hasHeroUnits = forge.owner.units.some(unit => unit.isHero);
-            if (forge.isSelected && !hasHeroUnits && this.selectedHeroNames.length > 0) {
+            if (forge.isSelected && this.selectedHeroNames.length > 0) {
                 // Draw hero production buttons around the forge
-                this.drawHeroButtons(forge, screenPos, size, this.selectedHeroNames);
+                this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
             }
         }
 
@@ -437,7 +436,6 @@ export class GameRenderer {
     private drawHeroButtons(
         forge: StellarForge,
         screenPos: Vector2D,
-        forgeSize: number,
         heroNames: string[]
     ): void {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
@@ -453,13 +451,15 @@ export class GameRenderer {
         const displayHeroes = heroNames.slice(0, positions.length);
 
         for (let i = 0; i < displayHeroes.length; i++) {
+            const heroName = displayHeroes[i];
             const pos = positions[i];
             const buttonX = screenPos.x + pos.x * buttonDistance;
             const buttonY = screenPos.y + pos.y * buttonDistance;
-            
-            // TODO: Check if hero is already alive and grey out if so
-            const isAvailable = true; // Stub - would check if hero is alive
-            
+            const heroUnitType = this.getHeroUnitType(heroName);
+            const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
+            const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
+            const isAvailable = heroUnitType ? !isHeroAlive && !isHeroProducing : false;
+
             // Draw button background
             this.ctx.fillStyle = isAvailable ? 'rgba(0, 255, 136, 0.3)' : 'rgba(128, 128, 128, 0.3)';
             this.ctx.strokeStyle = isAvailable ? '#00FF88' : '#888888';
@@ -474,15 +474,108 @@ export class GameRenderer {
             this.ctx.font = `${14 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(displayHeroes[i], buttonX, buttonY);
+            this.ctx.fillText(heroName, buttonX, buttonY);
+
+            if (isHeroProducing) {
+                this.drawHeroHourglass(buttonX, buttonY, buttonRadius);
+            } else if (isHeroAlive) {
+                this.drawHeroCheckmark(buttonX, buttonY, buttonRadius);
+            }
         }
-        
-        // Draw instruction text
-        this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.font = `${10 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'top';
-        this.ctx.fillText('Hero Production', screenPos.x, screenPos.y + forgeSize * 2.5);
+    }
+
+    private getHeroUnitType(heroName: string): string | null {
+        switch (heroName) {
+            case 'Marine':
+            case 'Grave':
+            case 'Ray':
+            case 'Dagger':
+            case 'Beam':
+            case 'Driller':
+                return heroName;
+            case 'Influence Ball':
+                return 'InfluenceBall';
+            case 'Turret Deployer':
+                return 'TurretDeployer';
+            default:
+                return null;
+        }
+    }
+
+    private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
+        switch (heroUnitType) {
+            case 'Marine':
+                return unit instanceof Marine;
+            case 'Grave':
+                return unit instanceof Grave;
+            case 'Ray':
+                return unit instanceof Ray;
+            case 'InfluenceBall':
+                return unit instanceof InfluenceBall;
+            case 'TurretDeployer':
+                return unit instanceof TurretDeployer;
+            case 'Driller':
+                return unit instanceof Driller;
+            case 'Dagger':
+                return unit instanceof Dagger;
+            case 'Beam':
+                return unit instanceof Beam;
+            default:
+                return false;
+        }
+    }
+
+    private isHeroUnitAlive(player: Player, heroUnitType: string): boolean {
+        return player.units.some((unit) => this.isHeroUnitOfType(unit, heroUnitType));
+    }
+
+    private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
+        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+    }
+
+    private drawHeroHourglass(centerX: number, centerY: number, radius: number): void {
+        const iconWidth = radius * 0.7;
+        const iconHeight = radius * 0.8;
+        const leftX = centerX - iconWidth * 0.5;
+        const rightX = centerX + iconWidth * 0.5;
+        const topY = centerY - iconHeight * 0.5;
+        const bottomY = centerY + iconHeight * 0.5;
+        const midY = centerY;
+
+        this.ctx.strokeStyle = '#CCCCCC';
+        this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
+        this.ctx.beginPath();
+        this.ctx.moveTo(leftX, topY);
+        this.ctx.lineTo(rightX, topY);
+        this.ctx.lineTo(centerX, midY);
+        this.ctx.closePath();
+        this.ctx.stroke();
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(leftX, bottomY);
+        this.ctx.lineTo(rightX, bottomY);
+        this.ctx.lineTo(centerX, midY);
+        this.ctx.closePath();
+        this.ctx.stroke();
+    }
+
+    private drawHeroCheckmark(centerX: number, centerY: number, radius: number): void {
+        const iconWidth = radius * 0.7;
+        const iconHeight = radius * 0.6;
+        const startX = centerX - iconWidth * 0.45;
+        const startY = centerY + iconHeight * 0.05;
+        const midX = centerX - iconWidth * 0.1;
+        const midY = centerY + iconHeight * 0.35;
+        const endX = centerX + iconWidth * 0.5;
+        const endY = centerY - iconHeight * 0.35;
+
+        this.ctx.strokeStyle = '#CCCCCC';
+        this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
+        this.ctx.beginPath();
+        this.ctx.moveTo(startX, startY);
+        this.ctx.lineTo(midX, midY);
+        this.ctx.lineTo(endX, endY);
+        this.ctx.stroke();
     }
 
     /**
