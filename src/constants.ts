@@ -22,6 +22,23 @@ export const WARP_GATE_BUTTON_OFFSET = 30;
 export const PARTICLE_SCATTER_RADIUS = 150;
 export const PARTICLE_SCATTER_FORCE = 200;
 
+// Fluid simulation constants for particle displacement
+export const ABILITY_BULLET_EFFECT_RADIUS = 30;
+export const ABILITY_BULLET_FORCE_MULTIPLIER = 0.5;
+export const MINION_PROJECTILE_EFFECT_RADIUS = 25;
+export const MINION_PROJECTILE_FORCE_MULTIPLIER = 0.4;
+export const GRAVE_PROJECTILE_EFFECT_RADIUS = 20;
+export const GRAVE_PROJECTILE_FORCE_MULTIPLIER = 0.4;
+export const INFLUENCE_BALL_EFFECT_RADIUS = 35;
+export const INFLUENCE_BALL_FORCE_MULTIPLIER = 0.5;
+export const BEAM_EFFECT_RADIUS = 40;
+export const BEAM_FORCE_STRENGTH = 300;
+export const FLUID_FORWARD_COMPONENT = 0.6; // Forward push component for moving objects
+export const FLUID_RADIAL_COMPONENT = 0.4;  // Radial displacement component for moving objects
+export const BEAM_ALONG_COMPONENT = 0.7;     // Along beam direction component
+export const BEAM_PERPENDICULAR_COMPONENT = 0.3; // Perpendicular push component for beams
+export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by zero in fluid calculations
+
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;
 
