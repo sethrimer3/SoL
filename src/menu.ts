@@ -46,6 +46,20 @@ export interface HeroUnit {
     abilityDescription: string;
 }
 
+export interface BaseLoadout {
+    id: string;
+    name: string;
+    description: string;
+    faction: Faction;
+}
+
+export interface SpawnLoadout {
+    id: string;
+    name: string;
+    description: string;
+    faction: Faction;
+}
+
 interface ParticleTarget {
     x: number;
     y: number;
@@ -781,6 +795,8 @@ export interface GameSettings {
     selectedHeroNames: string[];
     playerColor: string;
     enemyColor: string;
+    selectedBaseLoadout: string | null; // Base loadout ID
+    selectedSpawnLoadout: string | null; // Spawn loadout ID
 }
 
 export class MainMenu {
@@ -790,7 +806,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-select' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -884,6 +900,36 @@ export class MainMenu {
         }
     ];
 
+    private baseLoadouts: BaseLoadout[] = [
+        // Radiant faction bases
+        { id: 'radiant-standard', name: 'Standard Forge', description: 'Balanced base with standard production', faction: Faction.RADIANT },
+        { id: 'radiant-fortified', name: 'Fortified Forge', description: 'Enhanced defensive capabilities with thicker armor', faction: Faction.RADIANT },
+        { id: 'radiant-rapid', name: 'Rapid Forge', description: 'Faster production speed at the cost of durability', faction: Faction.RADIANT },
+        // Aurum faction bases
+        { id: 'aurum-standard', name: 'Standard Vault', description: 'Balanced base with standard production', faction: Faction.AURUM },
+        { id: 'aurum-wealth', name: 'Wealth Vault', description: 'Increased resource generation capacity', faction: Faction.AURUM },
+        { id: 'aurum-compact', name: 'Compact Vault', description: 'Smaller footprint, easier to defend', faction: Faction.AURUM },
+        // Solari faction bases
+        { id: 'solari-standard', name: 'Standard Temple', description: 'Balanced base with standard production', faction: Faction.SOLARI },
+        { id: 'solari-solar', name: 'Solar Temple', description: 'Enhanced solar collection efficiency', faction: Faction.SOLARI },
+        { id: 'solari-titan', name: 'Titan Temple', description: 'Massive health pool, slower to build', faction: Faction.SOLARI },
+    ];
+
+    private spawnLoadouts: SpawnLoadout[] = [
+        // Radiant faction spawns
+        { id: 'radiant-standard', name: 'Standard Starlings', description: 'Balanced minions with standard stats', faction: Faction.RADIANT },
+        { id: 'radiant-swarm', name: 'Swarm Starlings', description: 'More units but weaker individually', faction: Faction.RADIANT },
+        { id: 'radiant-elite', name: 'Elite Starlings', description: 'Fewer units but stronger and more durable', faction: Faction.RADIANT },
+        // Aurum faction spawns
+        { id: 'aurum-standard', name: 'Standard Drones', description: 'Balanced minions with standard stats', faction: Faction.AURUM },
+        { id: 'aurum-harvester', name: 'Harvester Drones', description: 'Gather resources more efficiently', faction: Faction.AURUM },
+        { id: 'aurum-assault', name: 'Assault Drones', description: 'Higher damage output for aggressive play', faction: Faction.AURUM },
+        // Solari faction spawns
+        { id: 'solari-standard', name: 'Standard Zealots', description: 'Balanced minions with standard stats', faction: Faction.SOLARI },
+        { id: 'solari-guardian', name: 'Guardian Zealots', description: 'Tankier units focused on defense', faction: Faction.SOLARI },
+        { id: 'solari-blazing', name: 'Blazing Zealots', description: 'Fast-moving units with fire damage', faction: Faction.SOLARI },
+    ];
+
     constructor() {
         // Initialize default settings
         this.settings = {
@@ -896,7 +942,9 @@ export class MainMenu {
             selectedHeroes: [],
             selectedHeroNames: [],
             playerColor: '#66B3FF', // Somewhat light blue
-            enemyColor: '#FF6B6B'   // Slightly light red
+            enemyColor: '#FF6B6B',   // Slightly light red
+            selectedBaseLoadout: null,
+            selectedSpawnLoadout: null
         };
         
         this.menuElement = this.createMenuElement();
@@ -1403,10 +1451,10 @@ export class MainMenu {
 
         // Continue button (only enabled if faction is selected)
         if (this.settings.selectedFaction) {
-            const continueButton = this.createButton('SELECT HEROES', () => {
-                this.currentScreen = 'loadout-select';
+            const continueButton = this.createButton('CUSTOMIZE LOADOUT', () => {
+                this.currentScreen = 'loadout-customization';
                 this.startMenuTransition();
-                this.renderLoadoutSelectionScreen(this.contentElement);
+                this.renderLoadoutCustomizationScreen(this.contentElement);
             }, '#00FF88');
             buttonContainer.appendChild(continueButton);
         }
@@ -1421,6 +1469,205 @@ export class MainMenu {
 
         container.appendChild(buttonContainer);
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderLoadoutCustomizationScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        if (!this.settings.selectedFaction) {
+            // Should not happen, but safety fallback
+            this.currentScreen = 'faction-select';
+            this.renderFactionSelectionScreen(container);
+            return;
+        }
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Customize Loadout';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = 'bold';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Get faction-specific loadouts
+        const factionBaseLoadouts = this.baseLoadouts.filter(l => l.faction === this.settings.selectedFaction);
+        const factionSpawnLoadouts = this.spawnLoadouts.filter(l => l.faction === this.settings.selectedFaction);
+
+        // Set defaults if not selected
+        if (!this.settings.selectedBaseLoadout && factionBaseLoadouts.length > 0) {
+            this.settings.selectedBaseLoadout = factionBaseLoadouts[0].id;
+        }
+        if (!this.settings.selectedSpawnLoadout && factionSpawnLoadouts.length > 0) {
+            this.settings.selectedSpawnLoadout = factionSpawnLoadouts[0].id;
+        }
+
+        // Main content container
+        const contentContainer = document.createElement('div');
+        contentContainer.style.display = 'flex';
+        contentContainer.style.flexDirection = 'column';
+        contentContainer.style.gap = '40px';
+        contentContainer.style.width = '100%';
+        contentContainer.style.maxWidth = isCompactLayout ? '100%' : '800px';
+        contentContainer.style.padding = isCompactLayout ? '0 10px' : '0 20px';
+        container.appendChild(contentContainer);
+
+        // Base Loadout Section
+        this.createLoadoutSection(
+            contentContainer,
+            'Base Loadout',
+            factionBaseLoadouts,
+            this.settings.selectedBaseLoadout,
+            (loadoutId) => { this.settings.selectedBaseLoadout = loadoutId; },
+            isCompactLayout
+        );
+
+        // Spawn Loadout Section
+        this.createLoadoutSection(
+            contentContainer,
+            'Spawn Loadout',
+            factionSpawnLoadouts,
+            this.settings.selectedSpawnLoadout,
+            (loadoutId) => { this.settings.selectedSpawnLoadout = loadoutId; },
+            isCompactLayout
+        );
+
+        // Hero Loadout Section (link to hero selection)
+        const heroSection = document.createElement('div');
+        heroSection.style.marginTop = '20px';
+        const heroTitle = document.createElement('h3');
+        heroTitle.textContent = 'Hero Loadout';
+        heroTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
+        heroTitle.style.color = '#00AAFF';
+        heroTitle.style.marginBottom = '15px';
+        heroTitle.style.fontWeight = 'bold';
+        heroTitle.dataset.particleText = 'true';
+        heroTitle.dataset.particleColor = '#00AAFF';
+        heroSection.appendChild(heroTitle);
+
+        const heroDesc = document.createElement('div');
+        heroDesc.textContent = this.settings.selectedHeroes.length > 0 
+            ? `Selected: ${this.settings.selectedHeroNames.join(', ')}`
+            : 'No heroes selected yet';
+        heroDesc.style.fontSize = '20px';
+        heroDesc.style.color = '#CCCCCC';
+        heroDesc.style.marginBottom = '15px';
+        heroSection.appendChild(heroDesc);
+
+        const selectHeroesBtn = this.createButton('SELECT HEROES', () => {
+            this.currentScreen = 'loadout-select';
+            this.startMenuTransition();
+            this.renderLoadoutSelectionScreen(this.contentElement);
+        }, '#00FF88');
+        heroSection.appendChild(selectHeroesBtn);
+        contentContainer.appendChild(heroSection);
+
+        // Action buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '20px';
+        buttonContainer.style.marginTop = '30px';
+        buttonContainer.style.flexWrap = 'wrap';
+        buttonContainer.style.justifyContent = 'center';
+        if (isCompactLayout) {
+            buttonContainer.style.flexDirection = 'column';
+            buttonContainer.style.alignItems = 'center';
+        }
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'faction-select';
+            this.startMenuTransition();
+            this.renderFactionSelectionScreen(this.contentElement);
+        }, '#666666');
+        buttonContainer.appendChild(backButton);
+
+        container.appendChild(buttonContainer);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private createLoadoutSection(
+        container: HTMLElement,
+        title: string,
+        loadouts: (BaseLoadout | SpawnLoadout)[],
+        selectedId: string | null,
+        onSelect: (id: string) => void,
+        isCompact: boolean
+    ): void {
+        const section = document.createElement('div');
+        
+        const sectionTitle = document.createElement('h3');
+        sectionTitle.textContent = title;
+        sectionTitle.style.fontSize = isCompact ? '24px' : '32px';
+        sectionTitle.style.color = '#00AAFF';
+        sectionTitle.style.marginBottom = '15px';
+        sectionTitle.style.fontWeight = 'bold';
+        sectionTitle.dataset.particleText = 'true';
+        sectionTitle.dataset.particleColor = '#00AAFF';
+        section.appendChild(sectionTitle);
+
+        const optionsContainer = document.createElement('div');
+        optionsContainer.style.display = 'flex';
+        optionsContainer.style.flexDirection = 'column';
+        optionsContainer.style.gap = '10px';
+
+        loadouts.forEach(loadout => {
+            const isSelected = loadout.id === selectedId;
+            const optionDiv = document.createElement('div');
+            optionDiv.style.padding = '15px';
+            optionDiv.style.backgroundColor = isSelected ? 'rgba(0, 170, 255, 0.2)' : 'rgba(0, 0, 0, 0.3)';
+            optionDiv.style.border = isSelected ? '2px solid #00AAFF' : '2px solid rgba(255, 255, 255, 0.2)';
+            optionDiv.style.borderRadius = '8px';
+            optionDiv.style.cursor = 'pointer';
+            optionDiv.style.transition = 'all 0.2s';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.textContent = loadout.name;
+            nameDiv.style.fontSize = '22px';
+            nameDiv.style.color = isSelected ? '#00AAFF' : '#FFFFFF';
+            nameDiv.style.fontWeight = 'bold';
+            nameDiv.style.marginBottom = '5px';
+            nameDiv.dataset.particleText = 'true';
+            nameDiv.dataset.particleColor = isSelected ? '#00AAFF' : '#FFFFFF';
+            optionDiv.appendChild(nameDiv);
+
+            const descDiv = document.createElement('div');
+            descDiv.textContent = loadout.description;
+            descDiv.style.fontSize = '18px';
+            descDiv.style.color = '#CCCCCC';
+            optionDiv.appendChild(descDiv);
+
+            optionDiv.addEventListener('click', () => {
+                onSelect(loadout.id);
+                this.renderLoadoutCustomizationScreen(this.contentElement);
+            });
+
+            optionDiv.addEventListener('mouseenter', () => {
+                if (!isSelected) {
+                    optionDiv.style.backgroundColor = 'rgba(0, 170, 255, 0.1)';
+                    optionDiv.style.borderColor = '#00AAFF';
+                }
+            });
+
+            optionDiv.addEventListener('mouseleave', () => {
+                if (!isSelected) {
+                    optionDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+                    optionDiv.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                }
+            });
+
+            optionsContainer.appendChild(optionDiv);
+        });
+
+        section.appendChild(optionsContainer);
+        container.appendChild(section);
     }
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
@@ -1657,9 +1904,9 @@ export class MainMenu {
 
         // Back button
         const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'faction-select';
+            this.currentScreen = 'loadout-customization';
             this.startMenuTransition();
-            this.renderFactionSelectionScreen(this.contentElement);
+            this.renderLoadoutCustomizationScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
 
