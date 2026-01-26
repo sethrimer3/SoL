@@ -1206,6 +1206,42 @@ export class SpaceDustSwirler extends Building {
 }
 
 /**
+ * Subsidiary Factory Building - Production building
+ * Can produce solar mirrors and special units. Only one can exist at a time.
+ */
+export class SubsidiaryFactory extends Building {
+    private productionTimer: number = 0;
+
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.SUBSIDIARY_FACTORY_MAX_HEALTH,
+            Constants.SUBSIDIARY_FACTORY_RADIUS,
+            Constants.SUBSIDIARY_FACTORY_ATTACK_RANGE,
+            Constants.SUBSIDIARY_FACTORY_ATTACK_DAMAGE,
+            Constants.SUBSIDIARY_FACTORY_ATTACK_SPEED
+        );
+    }
+
+    /**
+     * Update production timer
+     */
+    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
+        // Only produce when complete
+        if (!this.isComplete) return;
+
+        this.productionTimer += deltaTime;
+        
+        // Production happens at intervals (placeholder for future implementation)
+        if (this.productionTimer >= Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL) {
+            this.productionTimer = 0;
+            // TODO: Implement solar mirror and special unit production
+        }
+    }
+}
+
+/**
  * Sun/Star - Light source
  */
 export class Sun {

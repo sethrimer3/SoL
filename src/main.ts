@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, LightRay, Starling, StellarForge } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -604,28 +604,59 @@ class GameController {
                                     player.buildings.push(minigun);
                                     console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                                     
-                                    // Remove the warp gate
+                                    // Emit shockwave when building starts warping in
+                                    this.scatterParticles(gate.position);
+                                    
+                                    // Remove the warp gate (implode effect)
                                     const gateIndex = this.game.warpGates.indexOf(gate);
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    this.implodeParticles(gate.position);
                                 } else {
                                     console.log('Not enough solarium to build Minigun');
                                 }
                             } else if (i === 1) {
-                                // Second button - create Space Dust Swirler building (Radiant faction only)
+                                // Second button - create Space Dust Swirler building
                                 if (player.spendSolarium(Constants.SWIRLER_COST)) {
                                     const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(swirler);
                                     console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                                     
-                                    // Remove the warp gate
+                                    // Emit shockwave when building starts warping in
+                                    this.scatterParticles(gate.position);
+                                    
+                                    // Remove the warp gate (implode effect)
                                     const gateIndex = this.game.warpGates.indexOf(gate);
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    this.implodeParticles(gate.position);
                                 } else {
                                     console.log('Not enough solarium to build Space Dust Swirler');
+                                }
+                            } else if (i === 2) {
+                                // Third button (bottom) - create Subsidiary Factory building
+                                // Check if player already has a Subsidiary Factory
+                                const hasSubFactory = player.buildings.some(b => b instanceof SubsidiaryFactory);
+                                if (hasSubFactory) {
+                                    console.log('Only one Subsidiary Factory can exist at a time');
+                                } else if (player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                                    const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(subFactory);
+                                    console.log(`Subsidiary Factory building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    
+                                    // Emit shockwave when building starts warping in
+                                    this.scatterParticles(gate.position);
+                                    
+                                    // Remove the warp gate (implode effect)
+                                    const gateIndex = this.game.warpGates.indexOf(gate);
+                                    if (gateIndex > -1) {
+                                        this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                    this.implodeParticles(gate.position);
+                                } else {
+                                    console.log('Not enough solarium to build Subsidiary Factory');
                                 }
                             }
                             // Other buttons can be added later for different building types
@@ -1142,7 +1173,7 @@ class GameController {
         
         if (this.currentWarpGate) {
             this.currentWarpGate.cancel();
-            this.scatterParticles(this.currentWarpGate.position);
+            this.implodeParticles(this.currentWarpGate.position); // Changed from scatterParticles to implodeParticles
             const index = this.game.warpGates.indexOf(this.currentWarpGate);
             if (index > -1) {
                 this.game.warpGates.splice(index, 1);
@@ -1164,13 +1195,32 @@ class GameController {
     private scatterParticles(position: Vector2D): void {
         if (!this.game) return;
         
-        // Scatter nearby particles
+        // Scatter nearby particles (explosion - outward push)
         for (const particle of this.game.spaceDust) {
             const distance = particle.position.distanceTo(position);
             if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
                 const direction = new Vector2D(
                     particle.position.x - position.x,
                     particle.position.y - position.y
+                ).normalize();
+                particle.applyForce(new Vector2D(
+                    direction.x * Constants.PARTICLE_SCATTER_FORCE,
+                    direction.y * Constants.PARTICLE_SCATTER_FORCE
+                ));
+            }
+        }
+    }
+
+    private implodeParticles(position: Vector2D): void {
+        if (!this.game) return;
+        
+        // Pull nearby particles inward (implosion - inward pull)
+        for (const particle of this.game.spaceDust) {
+            const distance = particle.position.distanceTo(position);
+            if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
+                const direction = new Vector2D(
+                    position.x - particle.position.x,
+                    position.y - particle.position.y
                 ).normalize();
                 particle.applyForce(new Vector2D(
                     direction.x * Constants.PARTICLE_SCATTER_FORCE,
