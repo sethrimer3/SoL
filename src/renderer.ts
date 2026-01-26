@@ -783,10 +783,25 @@ export class GameRenderer {
         const size = Constants.DUST_PARTICLE_SIZE * this.zoom;
         let particleColor = particle.currentColor;
 
-        if (viewingPlayerIndex !== null && game.isPointInShadow(particle.position)) {
-            const closestInfluenceOwnerIndex = this.getClosestInfluenceOwnerIndex(particle.position, game);
-            if (closestInfluenceOwnerIndex !== null && closestInfluenceOwnerIndex !== viewingPlayerIndex) {
-                particleColor = particle.baseColor;
+        // Check if particle is in shadow
+        const inShadow = game.isPointInShadow(particle.position);
+        
+        if (viewingPlayerIndex !== null) {
+            // If particle is in shade, only draw if it's visible to player's units
+            if (inShadow) {
+                const viewingPlayer = game.players[viewingPlayerIndex];
+                const isVisible = game.isObjectVisibleToPlayer(particle.position, viewingPlayer);
+                if (!isVisible) {
+                    return; // Don't draw particles in shade that aren't in unit sight
+                }
+            }
+            
+            // Check influence color
+            if (inShadow) {
+                const closestInfluenceOwnerIndex = this.getClosestInfluenceOwnerIndex(particle.position, game);
+                if (closestInfluenceOwnerIndex !== null && closestInfluenceOwnerIndex !== viewingPlayerIndex) {
+                    particleColor = particle.baseColor;
+                }
             }
         }
 
@@ -1832,17 +1847,18 @@ export class GameRenderer {
         
         // Check visibility for enemy buildings
         let shouldDim = false;
+        let displayColor = color;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
                 return; // Don't draw invisible enemy buildings
             }
             
-            // Check if in shadow for dimming effect
+            // Check if in shadow for dimming effect - darken color instead of using alpha
             const inShadow = game.isPointInShadow(building.position);
             if (inShadow) {
                 shouldDim = true;
-                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
             }
         }
 
@@ -1877,7 +1893,7 @@ export class GameRenderer {
 
         // Draw influence radius (faint circle)
         const influenceRadius = Constants.SWIRLER_INFLUENCE_RADIUS * this.zoom;
-        this.ctx.strokeStyle = color;
+        this.ctx.strokeStyle = displayColor;
         this.ctx.globalAlpha = 0.15;
         this.ctx.lineWidth = 1;
         this.ctx.beginPath();
@@ -1886,8 +1902,8 @@ export class GameRenderer {
         this.ctx.globalAlpha = 1.0;
 
         // Draw base (circular platform with energy pattern)
-        this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.fillStyle = displayColor;
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -1896,7 +1912,7 @@ export class GameRenderer {
 
         // Draw swirl pattern in center (3 curved arcs rotating counter-clockwise)
         const swirlRadius = radius * 0.7;
-        this.ctx.strokeStyle = '#8A2BE2'; // Purple color for swirl
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#8A2BE2', Constants.SHADE_OPACITY) : '#8A2BE2'; // Purple color for swirl
         this.ctx.lineWidth = 3 * this.zoom;
         this.ctx.lineCap = 'round';
         
@@ -1915,7 +1931,7 @@ export class GameRenderer {
 
         // Draw central energy core
         const coreRadius = radius * 0.25;
-        this.ctx.fillStyle = '#DDA0DD'; // Plum color
+        this.ctx.fillStyle = shouldDim ? this.darkenColor('#DDA0DD', Constants.SHADE_OPACITY) : '#DDA0DD'; // Plum color
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -1934,11 +1950,6 @@ export class GameRenderer {
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
         }
-        
-        // Reset alpha if we dimmed
-        if (shouldDim) {
-            this.ctx.globalAlpha = 1.0;
-        }
     }
 
     /**
@@ -1950,17 +1961,18 @@ export class GameRenderer {
         
         // Check visibility for enemy buildings
         let shouldDim = false;
+        let displayColor = color;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
                 return; // Don't draw invisible enemy buildings
             }
             
-            // Check if in shadow for dimming effect
+            // Check if in shadow for dimming effect - darken color instead of using alpha
             const inShadow = game.isPointInShadow(building.position);
             if (inShadow) {
                 shouldDim = true;
-                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
             }
         }
 
@@ -1994,8 +2006,8 @@ export class GameRenderer {
         }
 
         // Draw main structure (hexagon shape for industrial look)
-        this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.fillStyle = displayColor;
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -2015,7 +2027,7 @@ export class GameRenderer {
         // Draw production indicator (rotating inner hexagon)
         const innerRadius = radius * 0.6;
         const rotation = (Date.now() / 1000) % (Math.PI * 2);
-        this.ctx.strokeStyle = '#FFD700'; // Gold color
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFD700', Constants.SHADE_OPACITY) : '#FFD700'; // Gold color
         this.ctx.lineWidth = 2 * this.zoom;
         this.ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -2033,7 +2045,7 @@ export class GameRenderer {
 
         // Draw central core
         const coreRadius = radius * 0.3;
-        this.ctx.fillStyle = '#FFD700';
+        this.ctx.fillStyle = shouldDim ? this.darkenColor('#FFD700', Constants.SHADE_OPACITY) : '#FFD700';
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -2051,11 +2063,6 @@ export class GameRenderer {
             const healthPercent = building.health / building.maxHealth;
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : (healthPercent > 0.25 ? '#FFFF00' : '#FF0000');
             this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
-        }
-
-        // Reset alpha if we dimmed
-        if (shouldDim) {
-            this.ctx.globalAlpha = 1.0;
         }
     }
 
