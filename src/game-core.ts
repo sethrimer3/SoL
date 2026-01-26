@@ -3248,6 +3248,23 @@ export class GameState {
                     }
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
+                    
+                    // Apply fluid forces from Grave projectiles
+                    if (unit instanceof Grave) {
+                        for (const projectile of unit.getProjectiles()) {
+                            if (projectile.isAttacking) {
+                                // Attacking projectiles push dust as they fly
+                                const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
+                                this.applyFluidForceFromMovingObject(
+                                    projectile.position,
+                                    projectile.velocity,
+                                    20, // Radius of effect
+                                    projectileSpeed * 0.4, // Force strength
+                                    deltaTime
+                                );
+                            }
+                        }
+                    }
 
                 // If unit is a Marine, collect its effects
                 if (unit instanceof Marine) {
@@ -3285,6 +3302,17 @@ export class GameState {
                 // Handle Ray beam updates
                 if (unit instanceof Ray) {
                     unit.updateBeamSegments(deltaTime);
+                    
+                    // Apply fluid forces from active beam segments
+                    for (const segment of unit.getBeamSegments()) {
+                        this.applyFluidForceFromBeam(
+                            segment.startPos,
+                            segment.endPos,
+                            40, // Radius of effect (beams affect a wider area)
+                            300, // Force strength (beams push strongly)
+                            deltaTime
+                        );
+                    }
                     
                     // Process Ray ability if just used (check if cooldown is near max)
                     if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1 && unit.drillDirection) {
@@ -3485,6 +3513,16 @@ export class GameState {
         // Update ability bullets and check for hits
         for (const bullet of this.abilityBullets) {
             bullet.update(deltaTime);
+            
+            // Apply fluid-like force to space dust particles
+            const bulletSpeed = Math.sqrt(bullet.velocity.x ** 2 + bullet.velocity.y ** 2);
+            this.applyFluidForceFromMovingObject(
+                bullet.position,
+                bullet.velocity,
+                30, // Radius of effect
+                bulletSpeed * 0.5, // Force strength proportional to speed
+                deltaTime
+            );
 
             // Check hits against enemies
             for (const player of this.players) {
@@ -3560,6 +3598,16 @@ export class GameState {
         // Update minion projectiles and check for hits
         for (const projectile of this.minionProjectiles) {
             projectile.update(deltaTime);
+            
+            // Apply fluid-like force to space dust particles
+            const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
+            this.applyFluidForceFromMovingObject(
+                projectile.position,
+                projectile.velocity,
+                25, // Radius of effect (smaller than ability bullets)
+                projectileSpeed * 0.4, // Force strength proportional to speed
+                deltaTime
+            );
 
             // Check for deflection by Space Dust Swirler buildings
             for (const player of this.players) {
@@ -3641,6 +3689,16 @@ export class GameState {
         // Update influence ball projectiles
         for (const projectile of this.influenceBallProjectiles) {
             projectile.update(deltaTime);
+            
+            // Apply fluid-like force to space dust particles
+            const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
+            this.applyFluidForceFromMovingObject(
+                projectile.position,
+                projectile.velocity,
+                35, // Radius of effect (larger ball projectile)
+                projectileSpeed * 0.5, // Force strength
+                deltaTime
+            );
 
             // Check for deflection by Space Dust Swirler buildings
             for (const player of this.players) {
@@ -3816,6 +3874,119 @@ export class GameState {
                 if (building instanceof SpaceDustSwirler) {
                     building.applyDustSwirl(this.spaceDust, deltaTime);
                 }
+            }
+        }
+    }
+
+    /**
+     * Apply fluid-like forces to particles from a moving object (projectile)
+     * Particles closer to the object get pushed more, with falloff based on distance
+     */
+    private applyFluidForceFromMovingObject(
+        position: Vector2D,
+        velocity: Vector2D,
+        radius: number,
+        strength: number,
+        deltaTime: number
+    ): void {
+        for (const particle of this.spaceDust) {
+            const distance = particle.position.distanceTo(position);
+            
+            if (distance < radius && distance > 0.1) {
+                // Calculate direction from object to particle
+                const directionToParticle = new Vector2D(
+                    particle.position.x - position.x,
+                    particle.position.y - position.y
+                ).normalize();
+                
+                // Combine forward motion with radial push
+                const velocityNorm = velocity.normalize();
+                
+                // Mix of forward push and radial displacement (like fluid being displaced)
+                const forwardComponent = 0.6; // 60% forward push
+                const radialComponent = 0.4;  // 40% radial displacement
+                
+                const pushDirection = new Vector2D(
+                    velocityNorm.x * forwardComponent + directionToParticle.x * radialComponent,
+                    velocityNorm.y * forwardComponent + directionToParticle.y * radialComponent
+                );
+                
+                // Force falls off with distance (inverse square for more realistic fluid behavior)
+                const distanceFactor = 1.0 - (distance / radius);
+                const forceMagnitude = strength * distanceFactor * distanceFactor;
+                
+                particle.applyForce(new Vector2D(
+                    pushDirection.x * forceMagnitude * deltaTime,
+                    pushDirection.y * forceMagnitude * deltaTime
+                ));
+            }
+        }
+    }
+
+    /**
+     * Apply fluid-like forces to particles from a beam segment
+     * Creates a line-based displacement field along the beam
+     */
+    private applyFluidForceFromBeam(
+        startPos: Vector2D,
+        endPos: Vector2D,
+        radius: number,
+        strength: number,
+        deltaTime: number
+    ): void {
+        // Calculate beam direction
+        const beamLength = startPos.distanceTo(endPos);
+        if (beamLength < 0.1) return;
+        
+        const beamDirection = new Vector2D(
+            endPos.x - startPos.x,
+            endPos.y - startPos.y
+        ).normalize();
+        
+        for (const particle of this.spaceDust) {
+            // Find closest point on line segment to particle
+            const toParticle = new Vector2D(
+                particle.position.x - startPos.x,
+                particle.position.y - startPos.y
+            );
+            
+            // Project particle position onto beam line
+            const projection = toParticle.x * beamDirection.x + toParticle.y * beamDirection.y;
+            const clampedProjection = Math.max(0, Math.min(beamLength, projection));
+            
+            // Closest point on beam to particle
+            const closestPoint = new Vector2D(
+                startPos.x + beamDirection.x * clampedProjection,
+                startPos.y + beamDirection.y * clampedProjection
+            );
+            
+            const distance = particle.position.distanceTo(closestPoint);
+            
+            if (distance < radius && distance > 0.1) {
+                // Direction from beam to particle (perpendicular push)
+                const directionToParticle = new Vector2D(
+                    particle.position.x - closestPoint.x,
+                    particle.position.y - closestPoint.y
+                ).normalize();
+                
+                // Combine beam direction with radial push
+                // Particles along beam get pushed forward and outward
+                const alongBeamComponent = 0.7; // 70% along beam direction
+                const perpendicularComponent = 0.3; // 30% perpendicular push
+                
+                const pushDirection = new Vector2D(
+                    beamDirection.x * alongBeamComponent + directionToParticle.x * perpendicularComponent,
+                    beamDirection.y * alongBeamComponent + directionToParticle.y * perpendicularComponent
+                );
+                
+                // Force falls off with distance from beam
+                const distanceFactor = 1.0 - (distance / radius);
+                const forceMagnitude = strength * distanceFactor * distanceFactor;
+                
+                particle.applyForce(new Vector2D(
+                    pushDirection.x * forceMagnitude * deltaTime,
+                    pushDirection.y * forceMagnitude * deltaTime
+                ));
             }
         }
     }
