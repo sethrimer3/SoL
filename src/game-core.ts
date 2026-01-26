@@ -614,6 +614,9 @@ export class StellarForge {
     health: number = 1000.0;
     isReceivingLight: boolean = false;
     unitQueue: string[] = [];
+    heroProductionUnitType: string | null = null;
+    heroProductionRemainingSec: number = 0;
+    heroProductionDurationSec: number = 0;
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
@@ -671,6 +674,42 @@ export class StellarForge {
         }
         this.unitQueue.push(unitType);
         return true;
+    }
+
+    enqueueHeroUnit(unitType: string): void {
+        this.unitQueue.push(unitType);
+    }
+
+    startHeroProductionIfIdle(): void {
+        if (this.heroProductionUnitType || this.unitQueue.length === 0) {
+            return;
+        }
+        const nextUnitType = this.unitQueue.shift();
+        if (!nextUnitType) {
+            return;
+        }
+        this.heroProductionUnitType = nextUnitType;
+        this.heroProductionDurationSec = Constants.HERO_PRODUCTION_TIME_SEC;
+        this.heroProductionRemainingSec = Constants.HERO_PRODUCTION_TIME_SEC;
+    }
+
+    advanceHeroProduction(deltaTime: number): string | null {
+        this.startHeroProductionIfIdle();
+        if (!this.heroProductionUnitType) {
+            return null;
+        }
+        if (!this.canProduceUnits()) {
+            return null;
+        }
+        this.heroProductionRemainingSec = Math.max(0, this.heroProductionRemainingSec - deltaTime);
+        if (this.heroProductionRemainingSec > 0) {
+            return null;
+        }
+        const completedUnitType = this.heroProductionUnitType;
+        this.heroProductionUnitType = null;
+        this.heroProductionDurationSec = 0;
+        this.heroProductionRemainingSec = 0;
+        return completedUnitType;
     }
 
     /**
@@ -3178,6 +3217,24 @@ export class GameState {
                         }
                     }
                 }
+
+                if (!this.isCountdownActive) {
+                    const completedHeroType = player.stellarForge.advanceHeroProduction(deltaTime);
+                    if (completedHeroType) {
+                        const spawnAngleRad = (player.unitsCreated % 8) * (Math.PI / 4);
+                        const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
+                        const spawnPosition = new Vector2D(
+                            player.stellarForge.position.x + Math.cos(spawnAngleRad) * spawnRadius,
+                            player.stellarForge.position.y + Math.sin(spawnAngleRad) * spawnRadius
+                        );
+                        const heroUnit = this.createHeroUnit(completedHeroType, spawnPosition, player);
+                        if (heroUnit) {
+                            player.units.push(heroUnit);
+                            player.unitsCreated++;
+                            console.log(`${player.name} forged hero ${completedHeroType}`);
+                        }
+                    }
+                }
             }
 
             // Update solar mirrors - position and reflection angle
@@ -4640,6 +4697,29 @@ export class GameState {
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
      * Returns true if collision detected
      */
+    private createHeroUnit(unitType: string, spawnPosition: Vector2D, owner: Player): Unit | null {
+        switch (unitType) {
+            case 'Marine':
+                return new Marine(spawnPosition, owner);
+            case 'Grave':
+                return new Grave(spawnPosition, owner);
+            case 'Ray':
+                return new Ray(spawnPosition, owner);
+            case 'InfluenceBall':
+                return new InfluenceBall(spawnPosition, owner);
+            case 'TurretDeployer':
+                return new TurretDeployer(spawnPosition, owner);
+            case 'Driller':
+                return new Driller(spawnPosition, owner);
+            case 'Dagger':
+                return new Dagger(spawnPosition, owner);
+            case 'Beam':
+                return new Beam(spawnPosition, owner);
+            default:
+                return null;
+        }
+    }
+
     checkCollision(
         position: Vector2D,
         unitRadius: number = Constants.UNIT_RADIUS_PX,
@@ -4733,6 +4813,9 @@ export class GameState {
                 for (const unitType of player.stellarForge.unitQueue) {
                     mixString(unitType);
                 }
+                mixString(player.stellarForge.heroProductionUnitType ?? '');
+                mix(player.stellarForge.heroProductionRemainingSec);
+                mix(player.stellarForge.heroProductionDurationSec);
                 if (player.stellarForge.targetPosition) {
                     mix(player.stellarForge.targetPosition.x);
                     mix(player.stellarForge.targetPosition.y);

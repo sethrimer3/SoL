@@ -402,6 +402,23 @@ export class GameRenderer {
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
         }
+
+        if (forge.heroProductionUnitType && forge.heroProductionDurationSec > 0) {
+            const barWidth = size * 2;
+            const barHeight = 6;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + size + 10;
+            const progressPercent = Math.max(
+                0,
+                Math.min(1, 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec))
+            );
+
+            this.ctx.fillStyle = '#222';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+
+            this.ctx.fillStyle = '#00FF88';
+            this.ctx.fillRect(barX, barY, barWidth * progressPercent, barHeight);
+        }
         
         // Draw move order indicator if forge has one
         if (forge.moveOrder > 0 && forge.targetPosition) {
@@ -423,8 +440,8 @@ export class GameRenderer {
         forgeSize: number,
         heroNames: string[]
     ): void {
-        const buttonRadius = 28 * this.zoom;
-        const buttonDistance = (forgeSize * 2.5);
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
+        const buttonDistance = (Constants.HERO_BUTTON_DISTANCE_PX * this.zoom);
         
         // Draw 4 buttons in cardinal directions
         const positions = [
@@ -465,7 +482,7 @@ export class GameRenderer {
         this.ctx.font = `${10 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'top';
-        this.ctx.fillText('Hero Production (Stub)', screenPos.x, screenPos.y + forgeSize * 2.5);
+        this.ctx.fillText('Hero Production', screenPos.x, screenPos.y + forgeSize * 2.5);
     }
 
     /**
