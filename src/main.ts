@@ -1192,16 +1192,21 @@ class GameController {
         // Don't remove currentWarpGate here, it might still be charging
     }
 
-    private scatterParticles(position: Vector2D): void {
+    /**
+     * Apply radial force to particles (helper function)
+     * @param position Center position
+     * @param outward If true, pushes particles outward (explosion). If false, pulls inward (implosion)
+     */
+    private applyRadialForceToParticles(position: Vector2D, outward: boolean): void {
         if (!this.game) return;
         
-        // Scatter nearby particles (explosion - outward push)
         for (const particle of this.game.spaceDust) {
             const distance = particle.position.distanceTo(position);
             if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
+                // Calculate direction: outward from center or inward to center
                 const direction = new Vector2D(
-                    particle.position.x - position.x,
-                    particle.position.y - position.y
+                    outward ? (particle.position.x - position.x) : (position.x - particle.position.x),
+                    outward ? (particle.position.y - position.y) : (position.y - particle.position.y)
                 ).normalize();
                 particle.applyForce(new Vector2D(
                     direction.x * Constants.PARTICLE_SCATTER_FORCE,
@@ -1211,23 +1216,14 @@ class GameController {
         }
     }
 
+    private scatterParticles(position: Vector2D): void {
+        // Scatter nearby particles (explosion - outward push)
+        this.applyRadialForceToParticles(position, true);
+    }
+
     private implodeParticles(position: Vector2D): void {
-        if (!this.game) return;
-        
         // Pull nearby particles inward (implosion - inward pull)
-        for (const particle of this.game.spaceDust) {
-            const distance = particle.position.distanceTo(position);
-            if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
-                const direction = new Vector2D(
-                    position.x - particle.position.x,
-                    position.y - particle.position.y
-                ).normalize();
-                particle.applyForce(new Vector2D(
-                    direction.x * Constants.PARTICLE_SCATTER_FORCE,
-                    direction.y * Constants.PARTICLE_SCATTER_FORCE
-                ));
-            }
-        }
+        this.applyRadialForceToParticles(position, false);
     }
 
     private update(deltaTime: number): void {

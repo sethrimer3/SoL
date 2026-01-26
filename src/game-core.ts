@@ -1226,6 +1226,8 @@ export class SubsidiaryFactory extends Building {
 
     /**
      * Update production timer
+     * Note: SubsidiaryFactory is a production building with no attack capability,
+     * so we don't call super.update() which handles attack logic.
      */
     update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
         // Only produce when complete
