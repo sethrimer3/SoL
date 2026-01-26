@@ -3258,8 +3258,8 @@ export class GameState {
                                 this.applyFluidForceFromMovingObject(
                                     projectile.position,
                                     projectile.velocity,
-                                    20, // Radius of effect
-                                    projectileSpeed * 0.4, // Force strength
+                                    Constants.GRAVE_PROJECTILE_EFFECT_RADIUS,
+                                    projectileSpeed * Constants.GRAVE_PROJECTILE_FORCE_MULTIPLIER,
                                     deltaTime
                                 );
                             }
@@ -3308,8 +3308,8 @@ export class GameState {
                         this.applyFluidForceFromBeam(
                             segment.startPos,
                             segment.endPos,
-                            40, // Radius of effect (beams affect a wider area)
-                            300, // Force strength (beams push strongly)
+                            Constants.BEAM_EFFECT_RADIUS,
+                            Constants.BEAM_FORCE_STRENGTH,
                             deltaTime
                         );
                     }
@@ -3519,8 +3519,8 @@ export class GameState {
             this.applyFluidForceFromMovingObject(
                 bullet.position,
                 bullet.velocity,
-                30, // Radius of effect
-                bulletSpeed * 0.5, // Force strength proportional to speed
+                Constants.ABILITY_BULLET_EFFECT_RADIUS,
+                bulletSpeed * Constants.ABILITY_BULLET_FORCE_MULTIPLIER,
                 deltaTime
             );
 
@@ -3604,8 +3604,8 @@ export class GameState {
             this.applyFluidForceFromMovingObject(
                 projectile.position,
                 projectile.velocity,
-                25, // Radius of effect (smaller than ability bullets)
-                projectileSpeed * 0.4, // Force strength proportional to speed
+                Constants.MINION_PROJECTILE_EFFECT_RADIUS,
+                projectileSpeed * Constants.MINION_PROJECTILE_FORCE_MULTIPLIER,
                 deltaTime
             );
 
@@ -3695,8 +3695,8 @@ export class GameState {
             this.applyFluidForceFromMovingObject(
                 projectile.position,
                 projectile.velocity,
-                35, // Radius of effect (larger ball projectile)
-                projectileSpeed * 0.5, // Force strength
+                Constants.INFLUENCE_BALL_EFFECT_RADIUS,
+                projectileSpeed * Constants.INFLUENCE_BALL_FORCE_MULTIPLIER,
                 deltaTime
             );
 
@@ -3903,8 +3903,8 @@ export class GameState {
                 const velocityNorm = velocity.normalize();
                 
                 // Mix of forward push and radial displacement (like fluid being displaced)
-                const forwardComponent = 0.6; // 60% forward push
-                const radialComponent = 0.4;  // 40% radial displacement
+                const forwardComponent = Constants.FLUID_FORWARD_COMPONENT;
+                const radialComponent = Constants.FLUID_RADIAL_COMPONENT;
                 
                 const pushDirection = new Vector2D(
                     velocityNorm.x * forwardComponent + directionToParticle.x * radialComponent,
@@ -3971,8 +3971,8 @@ export class GameState {
                 
                 // Combine beam direction with radial push
                 // Particles along beam get pushed forward and outward
-                const alongBeamComponent = 0.7; // 70% along beam direction
-                const perpendicularComponent = 0.3; // 30% perpendicular push
+                const alongBeamComponent = Constants.BEAM_ALONG_COMPONENT;
+                const perpendicularComponent = Constants.BEAM_PERPENDICULAR_COMPONENT;
                 
                 const pushDirection = new Vector2D(
                     beamDirection.x * alongBeamComponent + directionToParticle.x * perpendicularComponent,
