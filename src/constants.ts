@@ -114,7 +114,7 @@ export const FORGE_CRUNCH_WAVE_DURATION = 1.2; // Duration of wave push phase
 export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
 export const FORGE_CRUNCH_WAVE_RADIUS = 300; // Radius of wave push effect
 export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
-export const FORGE_CRUNCH_WAVE_FORCE = 200; // Force magnitude pushing dust out
+export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
 export const STARLING_COST_PER_SOLARIUM = 50; // Solarium needed per starling spawned
 
 // Minigun building constants (offensive building for Radiant faction)
