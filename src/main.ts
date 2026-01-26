@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -54,6 +54,37 @@ class GameController {
             default:
                 return null;
         }
+    }
+
+    private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
+        switch (heroUnitType) {
+            case 'Marine':
+                return unit instanceof Marine;
+            case 'Grave':
+                return unit instanceof Grave;
+            case 'Ray':
+                return unit instanceof Ray;
+            case 'InfluenceBall':
+                return unit instanceof InfluenceBall;
+            case 'TurretDeployer':
+                return unit instanceof TurretDeployer;
+            case 'Driller':
+                return unit instanceof Driller;
+            case 'Dagger':
+                return unit instanceof Dagger;
+            case 'Beam':
+                return unit instanceof Beam;
+            default:
+                return false;
+        }
+    }
+
+    private isHeroUnitAlive(player: Player, heroUnitType: string): boolean {
+        return player.units.some((unit) => this.isHeroUnitOfType(unit, heroUnitType));
+    }
+
+    private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
+        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
     }
 
     private getClickedHeroButton(
@@ -673,8 +704,7 @@ class GameController {
                     }
                 }
 
-                const hasHeroUnits = player.units.some(unit => unit.isHero);
-                if (player.stellarForge && player.stellarForge.isSelected && !hasHeroUnits && this.renderer.selectedHeroNames.length > 0) {
+                if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHeroName = this.getClickedHeroButton(
                         worldPos,
                         player.stellarForge,
@@ -682,22 +712,32 @@ class GameController {
                     );
                     if (clickedHeroName) {
                         const heroUnitType = this.getHeroUnitType(clickedHeroName);
+                        let isHeroQueued = false;
                         if (heroUnitType) {
-                            if (player.spendSolarium(Constants.HERO_UNIT_COST)) {
+                            const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
+                            const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                            if (isHeroAlive) {
+                                console.log(`${clickedHeroName} is already active`);
+                            } else if (isHeroProducing) {
+                                console.log(`${clickedHeroName} is already being produced`);
+                            } else if (player.spendSolarium(Constants.HERO_UNIT_COST)) {
                                 player.stellarForge.enqueueHeroUnit(heroUnitType);
                                 player.stellarForge.startHeroProductionIfIdle();
                                 console.log(`Queued hero ${clickedHeroName} for forging`);
+                                isHeroQueued = true;
                             } else {
                                 console.log('Not enough solarium to forge hero');
                             }
                         }
 
-                        player.stellarForge.isSelected = false;
-                        this.selectedBase = null;
-                        this.selectedUnits.clear();
-                        this.selectedMirrors.clear();
-                        this.renderer.selectedUnits = this.selectedUnits;
-                        this.clearPathPreview();
+                        if (isHeroQueued) {
+                            player.stellarForge.isSelected = false;
+                            this.selectedBase = null;
+                            this.selectedUnits.clear();
+                            this.selectedMirrors.clear();
+                            this.renderer.selectedUnits = this.selectedUnits;
+                            this.clearPathPreview();
+                        }
 
                         isPanning = false;
                         isMouseDown = false;

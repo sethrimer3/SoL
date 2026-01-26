@@ -1682,6 +1682,7 @@ export class Unit {
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
     moveOrder: number = 0; // Movement order indicator (0 = no order)
+    collisionRadiusPx: number;
     
     constructor(
         public position: Vector2D,
@@ -1690,10 +1691,12 @@ export class Unit {
         public attackRange: number,
         public attackDamage: number,
         public attackSpeed: number, // attacks per second
-        public abilityCooldownTime: number = 5.0 // Default ability cooldown time
+        public abilityCooldownTime: number = 5.0, // Default ability cooldown time
+        collisionRadiusPx: number = Constants.UNIT_RADIUS_PX
     ) {
         this.health = maxHealth;
         this.maxHealth = maxHealth;
+        this.collisionRadiusPx = collisionRadiusPx;
     }
 
     /**
@@ -1801,7 +1804,7 @@ export class Unit {
             const toAsteroidX = asteroid.position.x - this.position.x;
             const toAsteroidY = asteroid.position.y - this.position.y;
             const projection = toAsteroidX * directionX + toAsteroidY * directionY;
-            const avoidanceRadius = asteroid.size + Constants.UNIT_RADIUS_PX + bufferPx;
+            const avoidanceRadius = asteroid.size + this.collisionRadiusPx + bufferPx;
             const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
 
             if (projection > 0 && projection < lookaheadPx) {
@@ -2271,7 +2274,8 @@ export class Starling extends Unit {
             Constants.STARLING_ATTACK_RANGE,
             Constants.STARLING_ATTACK_DAMAGE,
             Constants.STARLING_ATTACK_SPEED,
-            0 // No special ability
+            0, // No special ability
+            Constants.STARLING_COLLISION_RADIUS_PX
         );
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
     }
@@ -4567,10 +4571,6 @@ export class GameState {
     }
 
     private resolveUnitCollisions(allUnits: Unit[]): void {
-        const unitRadiusPx = Constants.UNIT_RADIUS_PX;
-        const minDistance = unitRadiusPx * 2;
-        const minDistanceSq = minDistance * minDistance;
-
         for (let i = 0; i < allUnits.length; i++) {
             const unitA = allUnits[i];
             if (unitA.isDead()) {
@@ -4593,6 +4593,8 @@ export class GameState {
                     distanceSq = 1;
                 }
 
+                const minDistance = unitA.collisionRadiusPx + unitB.collisionRadiusPx;
+                const minDistanceSq = minDistance * minDistance;
                 if (distanceSq < minDistanceSq) {
                     const distance = Math.sqrt(distanceSq);
                     const overlap = minDistance - distance;
@@ -4624,7 +4626,7 @@ export class GameState {
 
             const oldPosition = new Vector2D(unit.position.x, unit.position.y);
 
-            if (this.checkCollision(unit.position, Constants.UNIT_RADIUS_PX)) {
+            if (this.checkCollision(unit.position, unit.collisionRadiusPx)) {
                 // Smooth collision: Find the nearest obstacle and push away from it gently
                 let pushX = 0;
                 let pushY = 0;
@@ -4636,7 +4638,7 @@ export class GameState {
                     const dx = unit.position.x - sun.position.x;
                     const dy = unit.position.y - sun.position.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    const minDist = sun.radius + Constants.UNIT_RADIUS_PX;
+                    const minDist = sun.radius + unit.collisionRadiusPx;
                     if (dist < minDist) {
                         const pushStrength = (minDist - dist) / minDist;
                         pushX += (dx / dist) * pushStrength;
@@ -4650,7 +4652,7 @@ export class GameState {
                     const dx = unit.position.x - asteroid.position.x;
                     const dy = unit.position.y - asteroid.position.y;
                     const distSq = dx * dx + dy * dy;
-                    const minDist = asteroid.size + Constants.UNIT_RADIUS_PX + Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
+                    const minDist = asteroid.size + unit.collisionRadiusPx + Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
                     const minDistSq = minDist * minDist;
                     if (distSq < minDistSq || asteroid.containsPoint(unit.position)) {
                         const dist = Math.sqrt(distSq) || 1;
@@ -4668,7 +4670,7 @@ export class GameState {
                         const dx = unit.position.x - forge.position.x;
                         const dy = unit.position.y - forge.position.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = forge.radius + Constants.UNIT_RADIUS_PX;
+                        const minDist = forge.radius + unit.collisionRadiusPx;
                         if (dist < minDist) {
                             const pushStrength = (minDist - dist) / minDist;
                             pushX += (dx / dist) * pushStrength;
@@ -4685,7 +4687,7 @@ export class GameState {
                         const dx = unit.position.x - mirror.position.x;
                         const dy = unit.position.y - mirror.position.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = 20 + Constants.UNIT_RADIUS_PX;
+                        const minDist = 20 + unit.collisionRadiusPx;
                         if (dist < minDist) {
                             const pushStrength = (minDist - dist) / minDist;
                             pushX += (dx / dist) * pushStrength;
@@ -4701,7 +4703,7 @@ export class GameState {
                         const dx = unit.position.x - building.position.x;
                         const dy = unit.position.y - building.position.y;
                         const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = building.radius + Constants.UNIT_RADIUS_PX;
+                        const minDist = building.radius + unit.collisionRadiusPx;
                         if (dist < minDist) {
                             const pushStrength = (minDist - dist) / minDist;
                             pushX += (dx / dist) * pushStrength;
@@ -4723,7 +4725,7 @@ export class GameState {
                 }
 
                 // If still in collision after push, stop the unit
-                if (this.checkCollision(unit.position, Constants.UNIT_RADIUS_PX)) {
+                if (this.checkCollision(unit.position, unit.collisionRadiusPx)) {
                     unit.position = oldPosition;
                     unit.rallyPoint = null;
                 }
@@ -4889,6 +4891,7 @@ export class GameState {
                 mix(unit.position.y);
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
+                mix(unit.collisionRadiusPx);
                 if (unit.rallyPoint) {
                     mix(unit.rallyPoint.x);
                     mix(unit.rallyPoint.y);

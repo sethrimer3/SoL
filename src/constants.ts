@@ -102,6 +102,7 @@ export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direct
 export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
+export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion starlings
 
 // Stellar Forge constants (main base structure)
 export const STELLAR_FORGE_MAX_HEALTH = 1000;
