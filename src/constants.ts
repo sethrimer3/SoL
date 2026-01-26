@@ -15,7 +15,7 @@ export const WARP_GATE_SPIRAL_MIN_DISTANCE = 5;
 export const WARP_GATE_SPIRAL_FORCE_RADIAL = 50;
 export const WARP_GATE_SPIRAL_FORCE_TANGENT = 20;
 export const WARP_GATE_RADIUS = 50;
-export const WARP_GATE_BUTTON_RADIUS = 20;
+export const WARP_GATE_BUTTON_RADIUS = 28; // Match hero button size
 export const WARP_GATE_BUTTON_OFFSET = 30;
 
 // Particle scatter constants
@@ -134,9 +134,18 @@ export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
 export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
 export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clockwise
 
+// Subsidiary Factory building constants
+export const SUBSIDIARY_FACTORY_MAX_HEALTH = 500;
+export const SUBSIDIARY_FACTORY_ATTACK_RANGE = 0; // No direct attack
+export const SUBSIDIARY_FACTORY_ATTACK_DAMAGE = 0; // Production building
+export const SUBSIDIARY_FACTORY_ATTACK_SPEED = 0; // No direct attack
+export const SUBSIDIARY_FACTORY_RADIUS = 40; // Building size
+export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between unit productions
+
 // Building costs
 export const MINIGUN_COST = 150;
 export const SWIRLER_COST = 200;
+export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
 export const HERO_PRODUCTION_TIME_SEC = 8;
 export const HERO_BUTTON_RADIUS_PX = 28;

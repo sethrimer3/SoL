@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
 import * as Constants from './constants';
 
 export class GameRenderer {
@@ -1859,6 +1859,124 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Subsidiary Factory building
+     */
+    private drawSubsidiaryFactory(building: SubsidiaryFactory, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        
+        // Check visibility for enemy buildings
+        let shouldDim = false;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy buildings
+            }
+            
+            // Check if in shadow for dimming effect
+            const inShadow = game.isPointInShadow(building.position);
+            if (inShadow) {
+                shouldDim = true;
+                this.ctx.globalAlpha = Constants.SHADE_OPACITY;
+            }
+        }
+
+        // Draw build progress indicator if not complete
+        if (!building.isComplete) {
+            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.2)'; // Gold tint
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            // Draw progress bar
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
+            
+            // Reset alpha
+            if (shouldDim) {
+                this.ctx.globalAlpha = 1.0;
+            }
+            return;
+        }
+
+        // Draw main structure (hexagon shape for industrial look)
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const x = screenPos.x + Math.cos(angle) * radius;
+            const y = screenPos.y + Math.sin(angle) * radius;
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw production indicator (rotating inner hexagon)
+        const innerRadius = radius * 0.6;
+        const rotation = (Date.now() / 1000) % (Math.PI * 2);
+        this.ctx.strokeStyle = '#FFD700'; // Gold color
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i + rotation;
+            const x = screenPos.x + Math.cos(angle) * innerRadius;
+            const y = screenPos.y + Math.sin(angle) * innerRadius;
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
+        this.ctx.stroke();
+
+        // Draw central core
+        const coreRadius = radius * 0.3;
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw health bar if damaged
+        if (building.health < building.maxHealth) {
+            const healthBarWidth = radius * 2;
+            const healthBarHeight = 4;
+            const healthBarX = screenPos.x - healthBarWidth / 2;
+            const healthBarY = screenPos.y - radius - 10;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
+            
+            const healthPercent = building.health / building.maxHealth;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : (healthPercent > 0.25 ? '#FFFF00' : '#FF0000');
+            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
+        }
+
+        // Reset alpha if we dimmed
+        if (shouldDim) {
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
@@ -2510,6 +2628,8 @@ export class GameRenderer {
                     this.drawMinigun(building, color, game, isEnemy);
                 } else if (building instanceof SpaceDustSwirler) {
                     this.drawSpaceDustSwirler(building, color, game, isEnemy);
+                } else if (building instanceof SubsidiaryFactory) {
+                    this.drawSubsidiaryFactory(building, color, game, isEnemy);
                 }
             }
         }
