@@ -70,6 +70,7 @@ interface Particle {
     sizePx: number;
     driftPhase: number;
     driftRadiusPx: number;
+    speedMultiplier: number; // Random multiplier for natural motion (0.8-1.2)
 }
 
 interface BackgroundParticle {
@@ -518,6 +519,7 @@ class ParticleMenuLayer {
         const driftPhase = Math.random() * Math.PI * 2;
         const driftRadiusPx = ParticleMenuLayer.DRIFT_RADIUS_MIN_PX
             + Math.random() * (ParticleMenuLayer.DRIFT_RADIUS_MAX_PX - ParticleMenuLayer.DRIFT_RADIUS_MIN_PX);
+        const speedMultiplier = 0.8 + Math.random() * 0.4; // Random value between 0.8 and 1.2
         const parsedColor = this.parseColor(color);
         return {
             x,
@@ -537,6 +539,7 @@ class ParticleMenuLayer {
             sizePx: ParticleMenuLayer.PARTICLE_SIZE_PX,
             driftPhase,
             driftRadiusPx,
+            speedMultiplier,
         };
     }
 
@@ -555,8 +558,9 @@ class ParticleMenuLayer {
         this.updateTransition(nowMs);
         const driftTime = nowMs * ParticleMenuLayer.DRIFT_SPEED;
         for (const particle of this.particles) {
-            const driftX = Math.cos(particle.driftPhase + driftTime) * particle.driftRadiusPx;
-            const driftY = Math.sin(particle.driftPhase + driftTime) * particle.driftRadiusPx;
+            const particleDriftTime = driftTime * particle.speedMultiplier;
+            const driftX = Math.cos(particle.driftPhase + particleDriftTime) * particle.driftRadiusPx;
+            const driftY = Math.sin(particle.driftPhase + particleDriftTime) * particle.driftRadiusPx;
 
             particle.baseTargetX = particle.targetX + driftX;
             particle.baseTargetY = particle.targetY + driftY;
@@ -564,8 +568,9 @@ class ParticleMenuLayer {
             const deltaX = particle.baseTargetX - particle.x;
             const deltaY = particle.baseTargetY - particle.y;
 
-            particle.velocityX += deltaX * ParticleMenuLayer.POSITION_SMOOTHING;
-            particle.velocityY += deltaY * ParticleMenuLayer.POSITION_SMOOTHING;
+            const positionSmoothing = ParticleMenuLayer.POSITION_SMOOTHING * particle.speedMultiplier;
+            particle.velocityX += deltaX * positionSmoothing;
+            particle.velocityY += deltaY * positionSmoothing;
 
             particle.velocityX *= 0.82;
             particle.velocityY *= 0.82;
@@ -1547,45 +1552,50 @@ export class MainMenu {
 
             // Create stat rows
             const healthStat = document.createElement('div');
-            healthStat.textContent = `❤ Health: ${hero.maxHealth}`;
+            healthStat.textContent = `HP: ${hero.maxHealth}`;
             healthStat.style.color = '#CCCCCC';
+            healthStat.style.fontWeight = 'bold';
             healthStat.dataset.particleText = 'true';
             healthStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(healthStat);
 
             const regenStat = document.createElement('div');
-            regenStat.textContent = `♻ Regen: ${hero.regen}%`;
+            regenStat.textContent = `RGN: ${hero.regen}%`;
             regenStat.style.color = '#CCCCCC';
+            regenStat.style.fontWeight = 'bold';
             regenStat.dataset.particleText = 'true';
             regenStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(regenStat);
 
             const defenseStat = document.createElement('div');
-            defenseStat.textContent = `🛡 Defense: ${hero.defense}%`;
+            defenseStat.textContent = `DEF: ${hero.defense}%`;
             defenseStat.style.color = '#CCCCCC';
+            defenseStat.style.fontWeight = 'bold';
             defenseStat.dataset.particleText = 'true';
             defenseStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(defenseStat);
 
             const attackStat = document.createElement('div');
-            const attackIcon = hero.attackIgnoresDefense ? '⚡' : '⚔';
             const attackSuffix = hero.attackIgnoresDefense ? ' (ignores defense)' : '';
-            attackStat.textContent = `${attackIcon} Attack: ${hero.attackDamage}${attackSuffix}`;
+            attackStat.textContent = `ATK: ${hero.attackDamage}${attackSuffix}`;
             attackStat.style.color = '#CCCCCC';
+            attackStat.style.fontWeight = 'bold';
             attackStat.dataset.particleText = 'true';
             attackStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackStat);
 
             const attackSpeedStat = document.createElement('div');
-            attackSpeedStat.textContent = `⏱ Speed: ${hero.attackSpeed}/s`;
+            attackSpeedStat.textContent = `SPD: ${hero.attackSpeed}/s`;
             attackSpeedStat.style.color = '#CCCCCC';
+            attackSpeedStat.style.fontWeight = 'bold';
             attackSpeedStat.dataset.particleText = 'true';
             attackSpeedStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(attackSpeedStat);
 
             const rangeStat = document.createElement('div');
-            rangeStat.textContent = `🎯 Range: ${hero.attackRange}`;
+            rangeStat.textContent = `RNG: ${hero.attackRange}`;
             rangeStat.style.color = '#CCCCCC';
+            rangeStat.style.fontWeight = 'bold';
             rangeStat.dataset.particleText = 'true';
             rangeStat.dataset.particleColor = '#CCCCCC';
             statsContainer.appendChild(rangeStat);
@@ -1599,8 +1609,8 @@ export class MainMenu {
             abilityDesc.style.color = '#FFD700';
             abilityDesc.style.marginBottom = '8px';
             abilityDesc.style.fontStyle = 'italic';
-            abilityDesc.style.fontWeight = '300';
-            abilityDesc.textContent = `✨ ${hero.abilityDescription}`;
+            abilityDesc.style.fontWeight = 'bold';
+            abilityDesc.textContent = `${hero.abilityDescription}`;
             abilityDesc.dataset.particleText = 'true';
             abilityDesc.dataset.particleColor = '#FFD700';
             heroCard.appendChild(abilityDesc);
