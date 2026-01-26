@@ -173,16 +173,24 @@ export class GameRenderer {
      * Darken a color by a given factor (0-1, where 0 is black and 1 is original color)
      */
     private darkenColor(color: string, factor: number): string {
-        // Parse hex color
-        const hex = color.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
+        // Clamp factor to valid range [0, 1]
+        const clampedFactor = Math.max(0, Math.min(1, factor));
         
-        // Apply darkening factor
-        const newR = Math.floor(r * factor);
-        const newG = Math.floor(g * factor);
-        const newB = Math.floor(b * factor);
+        // Parse hex color (handle both #RGB and #RRGGBB formats)
+        let hex = color.replace('#', '');
+        if (hex.length === 3) {
+            // Convert #RGB to #RRGGBB
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        
+        // Apply darkening factor and clamp to valid RGB range
+        const newR = Math.floor(Math.min(255, r * clampedFactor));
+        const newG = Math.floor(Math.min(255, g * clampedFactor));
+        const newB = Math.floor(Math.min(255, b * clampedFactor));
         
         // Convert back to hex
         return '#' + 
