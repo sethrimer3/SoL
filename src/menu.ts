@@ -1449,7 +1449,7 @@ export class MainMenu {
             buttonContainer.style.alignItems = 'center';
         }
 
-        // Continue button (only enabled if faction is selected)
+        // Continue button to loadout customization (only enabled if faction is selected)
         if (this.settings.selectedFaction) {
             const continueButton = this.createButton('CUSTOMIZE LOADOUT', () => {
                 this.currentScreen = 'loadout-customization';
