@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, LightRay, Starling, Dagger, Beam } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, LightRay, Starling, StellarForge } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings } from './menu';
 import * as Constants from './constants';
@@ -36,6 +36,51 @@ class GameController {
     private hasOnlyHeroUnitsSelected(): boolean {
         return this.selectedUnits.size > 0 && 
                Array.from(this.selectedUnits).every(unit => unit.isHero);
+    }
+
+    private getHeroUnitType(heroName: string): string | null {
+        switch (heroName) {
+            case 'Marine':
+            case 'Grave':
+            case 'Ray':
+            case 'Dagger':
+            case 'Beam':
+            case 'Driller':
+                return heroName;
+            case 'Influence Ball':
+                return 'InfluenceBall';
+            case 'Turret Deployer':
+                return 'TurretDeployer';
+            default:
+                return null;
+        }
+    }
+
+    private getClickedHeroButton(
+        worldPos: Vector2D,
+        forge: StellarForge,
+        heroNames: string[]
+    ): string | null {
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX;
+        const positions = [
+            { x: 0, y: -1 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+            { x: -1, y: 0 }
+        ];
+        const displayHeroes = heroNames.slice(0, positions.length);
+        for (let i = 0; i < displayHeroes.length; i++) {
+            const pos = positions[i];
+            const buttonPos = new Vector2D(
+                forge.position.x + pos.x * buttonDistance,
+                forge.position.y + pos.y * buttonDistance
+            );
+            if (worldPos.distanceTo(buttonPos) <= buttonRadius) {
+                return displayHeroes[i];
+            }
+        }
+        return null;
     }
 
     private clearPathPreview(): void {
@@ -594,6 +639,43 @@ class GameController {
                             this.endHold();
                             return;
                         }
+                    }
+                }
+
+                const hasHeroUnits = player.units.some(unit => unit.isHero);
+                if (player.stellarForge && player.stellarForge.isSelected && !hasHeroUnits && this.renderer.selectedHeroNames.length > 0) {
+                    const clickedHeroName = this.getClickedHeroButton(
+                        worldPos,
+                        player.stellarForge,
+                        this.renderer.selectedHeroNames
+                    );
+                    if (clickedHeroName) {
+                        const heroUnitType = this.getHeroUnitType(clickedHeroName);
+                        if (heroUnitType) {
+                            if (player.spendSolarium(Constants.HERO_UNIT_COST)) {
+                                player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                player.stellarForge.startHeroProductionIfIdle();
+                                console.log(`Queued hero ${clickedHeroName} for forging`);
+                            } else {
+                                console.log('Not enough solarium to forge hero');
+                            }
+                        }
+
+                        player.stellarForge.isSelected = false;
+                        this.selectedBase = null;
+                        this.selectedUnits.clear();
+                        this.selectedMirrors.clear();
+                        this.renderer.selectedUnits = this.selectedUnits;
+                        this.clearPathPreview();
+
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
                     }
                 }
                 

@@ -137,6 +137,10 @@ export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clock
 // Building costs
 export const MINIGUN_COST = 150;
 export const SWIRLER_COST = 200;
+export const HERO_UNIT_COST = 300;
+export const HERO_PRODUCTION_TIME_SEC = 8;
+export const HERO_BUTTON_RADIUS_PX = 28;
+export const HERO_BUTTON_DISTANCE_PX = 100;
 export const BUILDING_BUILD_TIME = 5.0; // Base build time in seconds
 
 // Weapon effect constants
