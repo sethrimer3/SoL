@@ -191,6 +191,7 @@ export const UNIT_ASTEROID_AVOIDANCE_BUFFER_PX = 12; // Buffer distance around a
 export const UNIT_ASTEROID_AVOIDANCE_STRENGTH = 1.1; // Blend factor for asteroid avoidance
 export const UNIT_HERO_AVOIDANCE_MULTIPLIER = 0.3; // Heroes ignore some avoidance (unitless)
 export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes (unitless)
+export const UNIT_STRUCTURE_STANDOFF_PX = 4; // Extra spacing to keep units outside structures
 export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint arrival detection
 export const MIN_WAYPOINT_DISTANCE = 50; // Minimum distance between path waypoints in pixels
 
