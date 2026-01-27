@@ -172,12 +172,19 @@ export const MINIGUN_COST = 150;
 export const SWIRLER_COST = 200;
 export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
+export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
 export const AI_DEFENSE_COMMAND_INTERVAL_SEC = 1.0;
 export const AI_HERO_COMMAND_INTERVAL_SEC = 3.0;
 export const AI_STRUCTURE_COMMAND_INTERVAL_SEC = 5.0;
+export const AI_MIRROR_PURCHASE_INTERVAL_SEC = 8.0; // Interval to check for buying mirrors
+export const AI_MAX_MIRRORS = 6; // Maximum mirrors AI will build
+export const AI_WAVES_ATTACK_THRESHOLD = 8; // Min unit count for wave attack
+export const AI_AGGRESSIVE_HERO_MULTIPLIER = 0.7; // Faster hero production
+export const AI_ECONOMIC_HERO_MULTIPLIER = 1.5; // Slower hero production
+export const AI_WAVES_HERO_MULTIPLIER = 1.2; // Slightly slower hero production
 export const AI_MIRROR_SUN_DISTANCE_PX = 220;
 export const AI_MIRROR_ARC_SPACING_RAD = 0.6;
 export const AI_MIRROR_REPOSITION_THRESHOLD_PX = 40;
@@ -307,3 +314,11 @@ export const BEAM_ABILITY_COOLDOWN = 8.0; // 8 seconds
 export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
 export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
 export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
+
+// AI Strategy types
+export enum AIStrategy {
+    ECONOMIC = "economic",       // Focus on building mirrors and economy
+    DEFENSIVE = "defensive",      // Build defensive structures early
+    AGGRESSIVE = "aggressive",    // Rush with units
+    WAVES = "waves"              // Build up then attack in waves
+}
