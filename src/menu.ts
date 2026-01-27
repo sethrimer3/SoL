@@ -368,8 +368,12 @@ class MenuAtmosphereLayer {
     private static readonly ASTEROID_SPEED_MAX = 0.18;
     private static readonly ASTEROID_ROTATION_MIN_RAD = 0.004;
     private static readonly ASTEROID_ROTATION_MAX_RAD = 0.014;
-    private static readonly SUN_RADIUS_PX = 70;
-    private static readonly SUN_GLOW_RADIUS_PX = 220;
+    private static readonly SUN_RADIUS_PX = 120;
+    private static readonly SUN_GLOW_RADIUS_PX = 320;
+    private static readonly SUN_OFFSET_X_PX = -28;
+    private static readonly SUN_OFFSET_Y_PX = -22;
+    private static readonly SHADOW_LENGTH_BASE_PX = 120;
+    private static readonly SHADOW_LENGTH_MULTIPLIER = 7.5;
     private static readonly BOUNDS_MARGIN_PX = 80;
 
     private container: HTMLElement;
@@ -380,8 +384,9 @@ class MenuAtmosphereLayer {
     private isActive: boolean = false;
     private widthPx: number = 0;
     private heightPx: number = 0;
+    private sunSprite: HTMLImageElement;
 
-    constructor(container: HTMLElement) {
+    constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
         this.canvas = document.createElement('canvas');
         this.canvas.style.position = 'fixed';
@@ -398,6 +403,9 @@ class MenuAtmosphereLayer {
             throw new Error('Unable to create menu atmosphere canvas context.');
         }
         this.context = context;
+
+        this.sunSprite = new Image();
+        this.sunSprite.src = sunSpritePath;
 
         this.container.appendChild(this.canvas);
         this.resize();
@@ -547,7 +555,7 @@ class MenuAtmosphereLayer {
         const gradient = this.context.createRadialGradient(
             sunCenter.x,
             sunCenter.y,
-            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.3,
+            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.35,
             sunCenter.x,
             sunCenter.y,
             MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
@@ -568,56 +576,78 @@ class MenuAtmosphereLayer {
         );
         this.context.fill();
 
-        this.context.fillStyle = 'rgba(255, 215, 120, 0.95)';
-        this.context.beginPath();
-        this.context.arc(
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_RADIUS_PX,
-            0,
-            Math.PI * 2
-        );
-        this.context.fill();
+        if (this.sunSprite.complete && this.sunSprite.naturalWidth > 0) {
+            const diameterPx = MenuAtmosphereLayer.SUN_RADIUS_PX * 2;
+            this.context.drawImage(
+                this.sunSprite,
+                sunCenter.x - MenuAtmosphereLayer.SUN_RADIUS_PX,
+                sunCenter.y - MenuAtmosphereLayer.SUN_RADIUS_PX,
+                diameterPx,
+                diameterPx
+            );
+        } else {
+            this.context.fillStyle = 'rgba(255, 215, 120, 0.95)';
+            this.context.beginPath();
+            this.context.arc(
+                sunCenter.x,
+                sunCenter.y,
+                MenuAtmosphereLayer.SUN_RADIUS_PX,
+                0,
+                Math.PI * 2
+            );
+            this.context.fill();
+        }
     }
 
     private renderAsteroids(): void {
         const sunCenter = this.getSunCenter();
         for (const asteroid of this.asteroids) {
-            const shadowOffset = this.getShadowOffset(asteroid, sunCenter);
-            this.renderAsteroidShadow(asteroid, shadowOffset);
-            this.renderAsteroidBody(asteroid);
+            const points = this.getAsteroidPoints(asteroid);
+            this.renderAsteroidShadow(asteroid, points, sunCenter);
+            this.renderAsteroidBody(asteroid, points);
         }
     }
 
-    private renderAsteroidShadow(asteroid: MenuAsteroid, shadowOffset: { x: number; y: number }): void {
-        this.context.fillStyle = 'rgba(25, 20, 15, 0.45)';
+    private renderAsteroidShadow(
+        asteroid: MenuAsteroid,
+        points: { x: number; y: number }[],
+        sunCenter: { x: number; y: number }
+    ): void {
+        const shadowOffset = this.getShadowOffset(asteroid, sunCenter);
+        const shadowLength =
+            MenuAtmosphereLayer.SHADOW_LENGTH_BASE_PX +
+            asteroid.radiusPx * MenuAtmosphereLayer.SHADOW_LENGTH_MULTIPLIER;
+
+        this.context.fillStyle = 'rgba(20, 14, 12, 0.45)';
         this.context.beginPath();
-        this.context.ellipse(
-            asteroid.x + shadowOffset.x,
-            asteroid.y + shadowOffset.y,
-            asteroid.radiusPx * 0.9,
-            asteroid.radiusPx * 0.55,
-            asteroid.rotationRad,
-            0,
-            Math.PI * 2
-        );
+        for (let i = 0; i < points.length; i++) {
+            const point = points[i];
+            if (i === 0) {
+                this.context.moveTo(point.x, point.y);
+            } else {
+                this.context.lineTo(point.x, point.y);
+            }
+        }
+        for (let i = points.length - 1; i >= 0; i--) {
+            const point = points[i];
+            this.context.lineTo(
+                point.x + shadowOffset.x * shadowLength,
+                point.y + shadowOffset.y * shadowLength
+            );
+        }
+        this.context.closePath();
         this.context.fill();
     }
 
-    private renderAsteroidBody(asteroid: MenuAsteroid): void {
+    private renderAsteroidBody(asteroid: MenuAsteroid, points: { x: number; y: number }[]): void {
         this.context.fillStyle = 'rgba(170, 160, 140, 0.8)';
         this.context.beginPath();
-        const points = asteroid.points;
         for (let i = 0; i < points.length; i++) {
             const point = points[i];
-            const angleRad = point.angleRad + asteroid.rotationRad;
-            const radiusPx = asteroid.radiusPx * point.radiusScale;
-            const x = asteroid.x + Math.cos(angleRad) * radiusPx;
-            const y = asteroid.y + Math.sin(angleRad) * radiusPx;
             if (i === 0) {
-                this.context.moveTo(x, y);
+                this.context.moveTo(point.x, point.y);
             } else {
-                this.context.lineTo(x, y);
+                this.context.lineTo(point.x, point.y);
             }
         }
         this.context.closePath();
@@ -630,8 +660,8 @@ class MenuAtmosphereLayer {
 
     private getSunCenter(): { x: number; y: number } {
         return {
-            x: MenuAtmosphereLayer.SUN_RADIUS_PX + 50,
-            y: MenuAtmosphereLayer.SUN_RADIUS_PX + 40,
+            x: MenuAtmosphereLayer.SUN_RADIUS_PX + MenuAtmosphereLayer.SUN_OFFSET_X_PX,
+            y: MenuAtmosphereLayer.SUN_RADIUS_PX + MenuAtmosphereLayer.SUN_OFFSET_Y_PX,
         };
     }
 
@@ -641,11 +671,25 @@ class MenuAtmosphereLayer {
         const distance = Math.max(1, Math.hypot(deltaX, deltaY));
         const normX = deltaX / distance;
         const normY = deltaY / distance;
-        const offsetScale = asteroid.radiusPx * 1.6;
         return {
-            x: normX * offsetScale,
-            y: normY * offsetScale,
+            x: normX,
+            y: normY,
         };
+    }
+
+    private getAsteroidPoints(asteroid: MenuAsteroid): { x: number; y: number }[] {
+        const points: { x: number; y: number }[] = [];
+        const basePoints = asteroid.points;
+        for (let i = 0; i < basePoints.length; i++) {
+            const point = basePoints[i];
+            const angleRad = point.angleRad + asteroid.rotationRad;
+            const radiusPx = asteroid.radiusPx * point.radiusScale;
+            points.push({
+                x: asteroid.x + Math.cos(angleRad) * radiusPx,
+                y: asteroid.y + Math.sin(angleRad) * radiusPx,
+            });
+        }
+        return points;
     }
 
     private randomRange(min: number, max: number): number {
@@ -1345,7 +1389,10 @@ export class MainMenu {
 
         this.contentElement = content;
         this.backgroundParticleLayer = new BackgroundParticleLayer(menu);
-        this.atmosphereLayer = new MenuAtmosphereLayer(menu);
+        this.atmosphereLayer = new MenuAtmosphereLayer(
+            menu,
+            this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
+        );
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
 
@@ -1438,7 +1485,7 @@ export class MainMenu {
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
         titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = '30px';
+        titleGraphic.style.marginBottom = isCompactLayout ? '8px' : '12px';
         titleGraphic.style.alignSelf = 'center';
         container.appendChild(titleGraphic);
 
@@ -1447,7 +1494,7 @@ export class MainMenu {
         carouselContainer.style.width = '100%';
         carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
         carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = '40px';
+        carouselContainer.style.marginBottom = '32px';
         container.appendChild(carouselContainer);
 
         // Create carousel menu with main menu options

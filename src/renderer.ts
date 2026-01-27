@@ -299,6 +299,7 @@ export class GameRenderer {
     private drawSun(sun: Sun): void {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
+        const sunSprite = this.getSpriteImage('ASSETS/sprites/environment/centralSun.svg');
 
         // Draw sun glow (outer glow)
         const gradient = this.ctx.createRadialGradient(
@@ -315,19 +316,30 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Draw sun core with gradient
-        const coreGradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, screenRadius * 0.6
-        );
-        coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
-        coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
-        coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
+        if (sunSprite.complete && sunSprite.naturalWidth > 0) {
+            const diameterPx = screenRadius * 2;
+            this.ctx.drawImage(
+                sunSprite,
+                screenPos.x - screenRadius,
+                screenPos.y - screenRadius,
+                diameterPx,
+                diameterPx
+            );
+        } else {
+            // Draw sun core with gradient as fallback until sprite loads
+            const coreGradient = this.ctx.createRadialGradient(
+                screenPos.x, screenPos.y, 0,
+                screenPos.x, screenPos.y, screenRadius * 0.6
+            );
+            coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
+            coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
+            coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
 
-        this.ctx.fillStyle = coreGradient;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
-        this.ctx.fill();
+            this.ctx.fillStyle = coreGradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
     }
 
     /**
