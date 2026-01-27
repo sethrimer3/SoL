@@ -36,6 +36,7 @@ export class GameRenderer {
     private readonly FORGE_SPRITE_SCALE = 2.2;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+    private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -223,6 +224,61 @@ export class GameRenderer {
         return canvas;
     }
 
+    /**
+     * Get a sprite with a colored tint and white outline
+     */
+    private getOutlinedTintedSprite(path: string, color: string): HTMLCanvasElement | null {
+        const resolvedPath = this.resolveAssetPath(path);
+        const cacheKey = `${resolvedPath}|${color}|outlined`;
+        const cached = this.outlinedSpriteCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const image = this.getSpriteImage(resolvedPath);
+        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+            return null;
+        }
+
+        // Create a larger canvas to accommodate the outline
+        const outlineWidth = 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth + outlineWidth * 2;
+        canvas.height = image.naturalHeight + outlineWidth * 2;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        // Draw white outline by drawing the image multiple times offset in all directions
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.fillStyle = 'white';
+        
+        // Draw outline in 8 directions
+        for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+            const offsetX = Math.cos(angle) * outlineWidth + outlineWidth;
+            const offsetY = Math.sin(angle) * outlineWidth + outlineWidth;
+            ctx.drawImage(image, offsetX, offsetY);
+        }
+        
+        // Fill the outline with white
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw the colored sprite on top
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(image, outlineWidth, outlineWidth);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = color;
+        ctx.fillRect(outlineWidth, outlineWidth, image.naturalWidth, image.naturalHeight);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(image, outlineWidth, outlineWidth);
+        ctx.globalCompositeOperation = 'source-over';
+
+        this.outlinedSpriteCache.set(cacheKey, canvas);
+        return canvas;
+    }
+
     private resolveAssetPath(path: string): string {
         if (!path.startsWith('ASSETS/')) {
             return path;
@@ -241,6 +297,14 @@ export class GameRenderer {
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
         if (mirror.owner.faction === Faction.RADIANT) {
             return 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg';
+        }
+        return null;
+    }
+
+    private getStarlingSpritePath(starling: Starling): string | null {
+        if (starling.owner.faction === Faction.RADIANT) {
+            // Use level 1 starling sprite
+            return 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg';
         }
         return null;
     }
@@ -288,6 +352,40 @@ export class GameRenderer {
         const newB = Math.floor(Math.min(255, b * clampedFactor));
         
         // Convert back to hex
+        return '#' + 
+               newR.toString(16).padStart(2, '0') +
+               newG.toString(16).padStart(2, '0') +
+               newB.toString(16).padStart(2, '0');
+    }
+
+    /**
+     * Brighten and pale a color (make it lighter and more desaturated)
+     * Used for solar mirrors to make them slightly brighter and paler than player color
+     */
+    private brightenAndPaleColor(color: string): string {
+        // Parse hex color
+        let hex = color.replace('#', '');
+        if (hex.length === 3) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        
+        // Brighten: move towards white by 20%
+        const brightenFactor = 0.2;
+        const brightenedR = r + (255 - r) * brightenFactor;
+        const brightenedG = g + (255 - g) * brightenFactor;
+        const brightenedB = b + (255 - b) * brightenFactor;
+        
+        // Pale (desaturate): move towards average (gray) by 15%
+        const avg = (brightenedR + brightenedG + brightenedB) / 3;
+        const paleFactor = 0.15;
+        const newR = Math.floor(brightenedR + (avg - brightenedR) * paleFactor);
+        const newG = Math.floor(brightenedG + (avg - brightenedG) * paleFactor);
+        const newB = Math.floor(brightenedB + (avg - brightenedB) * paleFactor);
+        
         return '#' + 
                newR.toString(16).padStart(2, '0') +
                newG.toString(16).padStart(2, '0') +
@@ -856,12 +954,18 @@ export class GameRenderer {
 
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
-            const mirrorSprite = this.getSpriteImage(mirrorSpritePath);
-            if (mirrorSprite.complete && mirrorSprite.naturalWidth > 0 && mirrorSprite.naturalHeight > 0) {
+            // Determine the color for the mirror (player color, brighter and paler)
+            const isEnemy = this.viewingPlayer && mirror.owner !== this.viewingPlayer;
+            const baseColor = isEnemy ? this.enemyColor : this.playerColor;
+            const mirrorColor = this.brightenAndPaleColor(baseColor);
+            
+            // Use tinted sprite for solar mirror
+            const mirrorSprite = this.getTintedSprite(mirrorSpritePath, mirrorColor);
+            if (mirrorSprite) {
                 const targetSize = size * 2.4;
-                const scale = targetSize / Math.max(mirrorSprite.naturalWidth, mirrorSprite.naturalHeight);
-                const drawWidth = mirrorSprite.naturalWidth * scale;
-                const drawHeight = mirrorSprite.naturalHeight * scale;
+                const scale = targetSize / Math.max(mirrorSprite.width, mirrorSprite.height);
+                const drawWidth = mirrorSprite.width * scale;
+                const drawHeight = mirrorSprite.height * scale;
                 selectionWidth = drawWidth;
                 selectionHeight = drawHeight;
                 this.ctx.drawImage(
@@ -959,13 +1063,12 @@ export class GameRenderer {
     }
 
     /**
-     * Draw space dust particle
+     * Draw space dust particle with sprite and glow effects
      */
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = Constants.DUST_PARTICLE_SIZE * this.zoom;
-        let particleColor = particle.currentColor;
-
+        const size = Constants.DUST_PARTICLE_SIZE * this.zoom * 3; // Make sprites larger than the old dots
+        
         // Check if particle is in shadow
         const inShadow = game.isPointInShadow(particle.position);
         
@@ -978,20 +1081,87 @@ export class GameRenderer {
                     return; // Don't draw particles in shade that aren't in unit sight
                 }
             }
-            
-            // Check influence color
-            if (inShadow) {
-                const closestInfluenceOwnerIndex = this.getClosestInfluenceOwnerIndex(particle.position, game);
-                if (closestInfluenceOwnerIndex !== null && closestInfluenceOwnerIndex !== viewingPlayerIndex) {
-                    particleColor = particle.baseColor;
-                }
+        }
+        
+        // Determine which sprite to use based on glow state and influence
+        let spritePath = 'ASSETS/sprites/environment/spaceDust/spaceDust.png';
+        let tintColor = particle.currentColor;
+        
+        // Check if particle is in player influence
+        let inInfluence = false;
+        if (viewingPlayerIndex !== null) {
+            const viewingPlayer = game.players[viewingPlayerIndex];
+            if (viewingPlayer.stellarForge) {
+                const distanceToForge = particle.position.distanceTo(viewingPlayer.stellarForge.position);
+                inInfluence = distanceToForge < Constants.INFLUENCE_RADIUS;
             }
         }
-
-        this.ctx.fillStyle = particleColor;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
+        
+        // Determine sprite and interpolation based on glow state and influence
+        let sprite1: HTMLCanvasElement | null = null;
+        let sprite2: HTMLCanvasElement | null = null;
+        let interpolation = 0;
+        
+        if (inInfluence) {
+            // In influence: cross-fade from normal -> slight glow -> full glow
+            if (particle.glowState === 0) {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
+                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                interpolation = particle.glowTransition;
+            } else if (particle.glowState === 1) {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
+                interpolation = particle.glowTransition;
+            } else {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
+                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                interpolation = particle.glowTransition;
+            }
+        } else {
+            // Not in influence: cross-fade for movement-based glow
+            if (particle.glowState === 0 && particle.targetGlowState === 0) {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
+            } else if (particle.glowState === 0 && particle.targetGlowState > 0) {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
+                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                interpolation = particle.glowTransition;
+            } else if (particle.glowState === 1) {
+                if (particle.targetGlowState === 2) {
+                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
+                    interpolation = particle.glowTransition;
+                } else if (particle.targetGlowState === 0) {
+                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
+                    interpolation = particle.glowTransition;
+                } else {
+                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                }
+            } else if (particle.glowState === 2) {
+                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
+                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
+                interpolation = particle.glowTransition;
+            }
+        }
+        
+        // Draw the sprite(s) with interpolation
+        if (sprite1 && sprite2 && interpolation > 0) {
+            // Draw both sprites with alpha blending for smooth transition
+            this.ctx.globalAlpha = 1 - interpolation;
+            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+            this.ctx.globalAlpha = interpolation;
+            this.ctx.drawImage(sprite2, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+            this.ctx.globalAlpha = 1.0;
+        } else if (sprite1) {
+            // Draw single sprite
+            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
+        } else {
+            // Fallback to circle if sprites not loaded
+            this.ctx.fillStyle = tintColor;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, Constants.DUST_PARTICLE_SIZE * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
     }
 
     private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
@@ -1255,21 +1425,17 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
-        // Draw selection indicator for selected units
-        if (isSelected) {
-            this.ctx.strokeStyle = '#00FF00';
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size + 4, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
-
         // Draw unit body (circle) - use darkened color if should dim
         const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
         const tintColor = shouldDim
             ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
             : (isEnemy ? this.enemyColor : this.playerColor);
-        const heroSprite = heroSpritePath ? this.getTintedSprite(heroSpritePath, tintColor) : null;
+        
+        // Use outlined sprite for selected units, regular tinted sprite otherwise
+        const heroSprite = heroSpritePath 
+            ? (isSelected && !isEnemy ? this.getOutlinedTintedSprite(heroSpritePath, tintColor) : this.getTintedSprite(heroSpritePath, tintColor))
+            : null;
+            
         if (heroSprite) {
             const spriteSize = size * this.HERO_SPRITE_SCALE;
             this.ctx.drawImage(
@@ -1281,8 +1447,8 @@ export class GameRenderer {
             );
         } else {
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = isSelected ? '#00FF00' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
-            this.ctx.lineWidth = isSelected ? 2 : 1;
+            this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
+            this.ctx.lineWidth = isSelected ? 3 : 1;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             this.ctx.fill();
@@ -1590,6 +1756,10 @@ export class GameRenderer {
      * Draw a Starling unit (minion from stellar forge)
      */
     private drawStarling(starling: Starling, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(starling.position);
+        const size = 8 * this.zoom * 0.3; // Minion size (30% of normal unit)
+        const isSelected = this.selectedUnits.has(starling);
+        
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -1607,25 +1777,63 @@ export class GameRenderer {
             }
         }
         
-        // Draw the base unit at 30% size (minion size)
-        this.drawUnit(starling, displayColor, game, isEnemy, 0.3);
+        // Draw attack range circle for selected starlings (only friendly units)
+        if (isSelected && !isEnemy) {
+            const attackRangeScreenRadius = starling.attackRange * this.zoom;
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 1;
+            this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, attackRangeScreenRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
         
-        // Draw a distinctive star/bird symbol for starling
-        const screenPos = this.worldToScreen(starling.position);
-        const size = 6 * this.zoom * 0.3; // Scale the wing symbol to match the smaller unit size
+        // Get starling sprite and color it with player color
+        const starlingSpritePath = this.getStarlingSpritePath(starling);
+        const tintColor = shouldDim
+            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
+            : (isEnemy ? this.enemyColor : this.playerColor);
         
-        // Draw a simple bird-like wing pattern - darken if needed
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFD700', Constants.SHADE_OPACITY) : '#FFD700'; // Golden color for starlings
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        // Left wing
-        this.ctx.moveTo(screenPos.x - size, screenPos.y);
-        this.ctx.lineTo(screenPos.x - size * 0.3, screenPos.y - size * 0.5);
-        this.ctx.lineTo(screenPos.x, screenPos.y);
-        // Right wing
-        this.ctx.lineTo(screenPos.x + size * 0.3, screenPos.y - size * 0.5);
-        this.ctx.lineTo(screenPos.x + size, screenPos.y);
-        this.ctx.stroke();
+        // Use outlined sprite for selected starlings, regular tinted sprite otherwise
+        const starlingSprite = starlingSpritePath 
+            ? (isSelected && !isEnemy ? this.getOutlinedTintedSprite(starlingSpritePath, tintColor) : this.getTintedSprite(starlingSpritePath, tintColor))
+            : null;
+        
+        if (starlingSprite) {
+            const spriteSize = size * 6; // Scale up the sprite
+            this.ctx.drawImage(
+                starlingSprite,
+                screenPos.x - spriteSize / 2,
+                screenPos.y - spriteSize / 2,
+                spriteSize,
+                spriteSize
+            );
+        } else {
+            // Fallback to circle rendering if sprite not loaded
+            this.ctx.fillStyle = displayColor;
+            this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
+            this.ctx.lineWidth = isSelected ? 3 : 1;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
+        
+        // Draw health bar if damaged
+        if (starling.health < starling.maxHealth) {
+            const barWidth = size * 3;
+            const barHeight = 3;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y - size * 6 - 10; // Position above sprite
+            
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            const healthPercent = starling.health / starling.maxHealth;
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        }
     }
 
     /**
@@ -3355,12 +3563,42 @@ export class GameRenderer {
      * Set camera position
      */
     setCameraPosition(pos: Vector2D): void {
-        this.camera = new Vector2D(pos.x, pos.y);
-        this.parallaxCamera = new Vector2D(pos.x, pos.y);
+        // Clamp camera position to level boundaries
+        const clampedPos = this.clampCameraToLevelBounds(pos);
+        this.camera = new Vector2D(clampedPos.x, clampedPos.y);
+        this.parallaxCamera = new Vector2D(clampedPos.x, clampedPos.y);
     }
 
     setCameraPositionWithoutParallax(pos: Vector2D): void {
-        this.camera = new Vector2D(pos.x, pos.y);
+        // Clamp camera position to level boundaries
+        const clampedPos = this.clampCameraToLevelBounds(pos);
+        this.camera = new Vector2D(clampedPos.x, clampedPos.y);
+    }
+
+    /**
+     * Clamp camera position to level boundaries
+     */
+    private clampCameraToLevelBounds(pos: Vector2D): Vector2D {
+        // Get device pixel ratio
+        const dpr = window.devicePixelRatio || 1;
+        
+        // Calculate visible world dimensions based on canvas size and zoom
+        const viewWidth = (this.canvas.width / dpr) / this.zoom;
+        const viewHeight = (this.canvas.height / dpr) / this.zoom;
+        
+        // Calculate max camera offset based on map size and view size
+        // The camera can move such that the view edges align with map boundaries
+        const halfMapSize = Constants.MAP_SIZE / 2;
+        const maxX = halfMapSize - viewWidth / 2;
+        const maxY = halfMapSize - viewHeight / 2;
+        const minX = -maxX;
+        const minY = -maxY;
+        
+        // Clamp camera position
+        const clampedX = Math.max(minX, Math.min(maxX, pos.x));
+        const clampedY = Math.max(minY, Math.min(maxY, pos.y));
+        
+        return new Vector2D(clampedX, clampedY);
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
