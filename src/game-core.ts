@@ -1326,13 +1326,15 @@ export class Player {
  */
 export class SpaceDustParticle {
     velocity: Vector2D;
-    baseColor: string = '#888888'; // Gray by default
-    currentColor: string = '#888888';
+    baseColor: string;
+    currentColor: string;
     
     constructor(
         public position: Vector2D,
         velocity?: Vector2D
     ) {
+        this.baseColor = SpaceDustParticle.generateBaseColor();
+        this.currentColor = this.baseColor;
         // Initialize with very slow random velocity
         if (velocity) {
             this.velocity = velocity;
@@ -1406,6 +1408,31 @@ export class SpaceDustParticle {
         const b = Math.round(b1 + (b2 - b1) * factor);
         
         return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    }
+
+    private static generateBaseColor(): string {
+        const baseShade = 85 + Math.random() * 110;
+        let r = baseShade;
+        let g = baseShade;
+        let b = baseShade;
+        const tintRoll = Math.random();
+
+        if (tintRoll < 0.18) {
+            r = baseShade - 8;
+            g = baseShade - 4;
+            b = baseShade + 14;
+        } else if (tintRoll < 0.28) {
+            r = baseShade + 10;
+            g = baseShade - 10;
+            b = baseShade + 12;
+        }
+
+        const clamp = (value: number): number => Math.max(0, Math.min(255, Math.round(value)));
+        const red = clamp(r);
+        const green = clamp(g);
+        const blue = clamp(b);
+
+        return `#${((red << 16) | (green << 8) | blue).toString(16).padStart(6, '0')}`;
     }
 }
 
@@ -3236,6 +3263,8 @@ export class GameState {
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
     private readonly PUSH_MULTIPLIER = 15; // Multiplier for push strength calculation
+    private readonly dustSpatialHash: Map<number, number[]> = new Map();
+    private readonly dustSpatialHashKeys: number[] = [];
 
     /**
      * Update game state
@@ -3918,6 +3947,8 @@ export class GameState {
      * Update space dust particles with physics and color influences
      */
     private updateSpaceDust(deltaTime: number): void {
+        this.applyDustRepulsion(deltaTime);
+
         for (const particle of this.spaceDust) {
             // Update particle position
             particle.update(deltaTime);
@@ -4032,6 +4063,78 @@ export class GameState {
                 if (building instanceof SpaceDustSwirler) {
                     building.applyDustSwirl(this.spaceDust, deltaTime);
                 }
+            }
+        }
+    }
+
+    private applyDustRepulsion(deltaTime: number): void {
+        const cellSize = Constants.DUST_REPULSION_CELL_SIZE_PX;
+        const repulsionRadiusPx = Constants.DUST_REPULSION_RADIUS_PX;
+        const repulsionRadiusSq = repulsionRadiusPx * repulsionRadiusPx;
+        const repulsionStrength = Constants.DUST_REPULSION_STRENGTH;
+
+        for (let i = 0; i < this.dustSpatialHashKeys.length; i++) {
+            const key = this.dustSpatialHashKeys[i];
+            const bucket = this.dustSpatialHash.get(key);
+            if (bucket) {
+                bucket.length = 0;
+            }
+        }
+        this.dustSpatialHashKeys.length = 0;
+
+        for (let i = 0; i < this.spaceDust.length; i++) {
+            const particle = this.spaceDust[i];
+            const cellX = Math.floor(particle.position.x / cellSize);
+            const cellY = Math.floor(particle.position.y / cellSize);
+            const key = (cellX << 16) ^ (cellY & 0xffff);
+            let bucket = this.dustSpatialHash.get(key);
+            if (!bucket) {
+                bucket = [];
+                this.dustSpatialHash.set(key, bucket);
+            }
+            if (bucket.length === 0) {
+                this.dustSpatialHashKeys.push(key);
+            }
+            bucket.push(i);
+        }
+
+        for (let i = 0; i < this.spaceDust.length; i++) {
+            const particle = this.spaceDust[i];
+            const cellX = Math.floor(particle.position.x / cellSize);
+            const cellY = Math.floor(particle.position.y / cellSize);
+            let forceX = 0;
+            let forceY = 0;
+
+            for (let offsetY = -1; offsetY <= 1; offsetY++) {
+                for (let offsetX = -1; offsetX <= 1; offsetX++) {
+                    const neighborKey = ((cellX + offsetX) << 16) ^ ((cellY + offsetY) & 0xffff);
+                    const bucket = this.dustSpatialHash.get(neighborKey);
+                    if (!bucket) {
+                        continue;
+                    }
+
+                    for (let j = 0; j < bucket.length; j++) {
+                        const neighborIndex = bucket[j];
+                        if (neighborIndex === i) {
+                            continue;
+                        }
+                        const neighbor = this.spaceDust[neighborIndex];
+                        const dx = particle.position.x - neighbor.position.x;
+                        const dy = particle.position.y - neighbor.position.y;
+                        const distSq = dx * dx + dy * dy;
+                        if (distSq > 0 && distSq < repulsionRadiusSq) {
+                            const dist = Math.sqrt(distSq);
+                            const strength = (1 - dist / repulsionRadiusPx) * repulsionStrength;
+                            forceX += (dx / dist) * strength;
+                            forceY += (dy / dist) * strength;
+                        }
+                    }
+                }
+            }
+
+            if (forceX !== 0 || forceY !== 0) {
+                particle.velocity.x += forceX * deltaTime;
+                particle.velocity.y += forceY * deltaTime;
             }
         }
     }
@@ -5281,6 +5384,13 @@ export class GameState {
         mix(this.gameTime);
         mix(this.suns.length);
         mix(this.asteroids.length);
+        mixInt(this.spaceDust.length);
+        for (const particle of this.spaceDust) {
+            mix(particle.position.x);
+            mix(particle.position.y);
+            mix(particle.velocity.x);
+            mix(particle.velocity.y);
+        }
 
         for (const player of this.players) {
             mix(player.solarium);
@@ -5407,7 +5517,7 @@ export class GameState {
                 y = Math.sin(angle) * distance;
                 
                 // Random size (30-80)
-                size = 30 + Math.random() * 50;
+                size = Constants.ASTEROID_MIN_SIZE + Math.random() * (80 - Constants.ASTEROID_MIN_SIZE);
                 
                 // Check if this position has enough gap from existing asteroids
                 // Gap must be at least the sum of both asteroid radii

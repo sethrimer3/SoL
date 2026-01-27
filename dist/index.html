@@ -118,12 +118,17 @@
             100% {
                 transform: translate(-50%, -50%) translate(90px, 0);
             }
-        }</style><script defer="defer" src="bundle.js"></script></head><body><div id="loading"><div class="build-badge">Build 1</div><div class="logo"><div class="logo-title">Gravy Time</div><div class="logo-subtitle">Speed of Light RTS</div></div><div class="orbit"><div class="orbiting-p">p</div></div></div><canvas id="gameCanvas"></canvas><script>// Hide loading screen once game is loaded
+        }</style><script defer="defer" src="bundle.js"></script></head><body><div id="loading"><div class="build-badge">Build 1</div><div class="logo"><div class="logo-title">Gravy Time</div><div class="logo-subtitle">Speed of Light RTS</div></div><div class="orbit"><div class="orbiting-p">p</div></div></div><canvas id="gameCanvas"></canvas><script>const loadingStartMs = performance.now();
+        const minimumLoadingDurationMs = 3000;
+
+        // Hide loading screen once game is loaded
         window.addEventListener('load', () => {
+            const elapsedMs = performance.now() - loadingStartMs;
+            const remainingMs = Math.max(0, minimumLoadingDurationMs - elapsedMs);
             setTimeout(() => {
                 const loading = document.getElementById('loading');
                 if (loading) {
                     loading.style.display = 'none';
                 }
-            }, 500);
+            }, remainingMs);
         });</script></body></html>

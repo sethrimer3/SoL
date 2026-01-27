@@ -44,6 +44,9 @@ export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by 
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;
+export const DUST_REPULSION_RADIUS_PX = 28;
+export const DUST_REPULSION_CELL_SIZE_PX = 32;
+export const DUST_REPULSION_STRENGTH = 14;
 
 // Star background parallax constants
 export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
@@ -64,6 +67,8 @@ export const VISIBILITY_PROXIMITY_RANGE = 150; // Range at which units can see e
 export const SHADE_OPACITY = 0.3; // Opacity for rendering objects in shade (0-1)
 export const STRATEGIC_ASTEROID_SIZE = 120; // Size of strategic asteroids that block visibility
 export const STRATEGIC_ASTEROID_DISTANCE = 250; // Distance from sun center for strategic asteroids
+export const ASTEROID_MIN_SIZE = 30;
+export const ASTEROID_MAX_SIZE = STRATEGIC_ASTEROID_SIZE;
 
 // Map boundary constants
 export const MAP_SIZE = 2000; // Total map size in world units (centered at 0,0)
