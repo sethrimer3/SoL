@@ -249,6 +249,8 @@ export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display a
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect
 export const TAP_EFFECT_MAX_RADIUS = 40; // Maximum radius of tap ripple effect
 export const SWIPE_EFFECT_SPEED = 0.08; // Progress increment per frame for swipe effect
+export const PRODUCTION_BUTTON_WAVE_MAX_RADIUS_PX = 48; // Max radius for hero/building button waves
+export const PRODUCTION_BUTTON_WAVE_PROGRESS_PER_FRAME = 0.12; // Progress increment per frame for production button wave
 export const SWIPE_ARROW_SIZE = 15; // Size of the arrow head in swipe effect
 
 // Ray unit constants (Solari hero)

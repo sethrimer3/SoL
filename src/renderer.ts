@@ -24,6 +24,7 @@ export class GameRenderer {
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
+    private productionButtonWaves: Array<{position: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
     public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
@@ -2808,6 +2809,16 @@ export class GameRenderer {
     }
 
     /**
+     * Create a production button wave effect at a world position
+     */
+    createProductionButtonWave(position: Vector2D): void {
+        this.productionButtonWaves.push({
+            position: new Vector2D(position.x, position.y),
+            progress: 0
+        });
+    }
+
+    /**
      * Update and draw tap effects (expanding ripple)
      */
     private updateAndDrawTapEffects(): void {
@@ -2942,6 +2953,42 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
             this.ctx.stroke();
+        }
+    }
+
+    /**
+     * Update and draw production button wave effects
+     */
+    private updateAndDrawProductionButtonWaves(): void {
+        for (let i = this.productionButtonWaves.length - 1; i >= 0; i--) {
+            const effect = this.productionButtonWaves[i];
+            effect.progress += Constants.PRODUCTION_BUTTON_WAVE_PROGRESS_PER_FRAME;
+
+            if (effect.progress >= 1) {
+                this.productionButtonWaves.splice(i, 1);
+                continue;
+            }
+
+            const screenPos = this.worldToScreen(effect.position);
+            const radius = Constants.PRODUCTION_BUTTON_WAVE_MAX_RADIUS_PX * effect.progress * this.zoom;
+            const alpha = (1 - effect.progress) * 0.9;
+
+            this.ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
+            this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
+
+            const gradient = this.ctx.createRadialGradient(
+                screenPos.x, screenPos.y, 0,
+                screenPos.x, screenPos.y, radius
+            );
+            gradient.addColorStop(0, `rgba(255, 215, 0, ${alpha * 0.35})`);
+            gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius * 0.6, 0, Math.PI * 2);
+            this.ctx.fill();
         }
     }
 
@@ -3241,6 +3288,7 @@ export class GameRenderer {
         this.drawAbilityArrow();
 
         // Draw tap and swipe visual effects
+        this.updateAndDrawProductionButtonWaves();
         this.updateAndDrawTapEffects();
         this.updateAndDrawSwipeEffects();
 
