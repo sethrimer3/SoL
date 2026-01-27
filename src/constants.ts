@@ -49,6 +49,22 @@ export const DUST_REPULSION_RADIUS_PX = 28;
 export const DUST_REPULSION_CELL_SIZE_PX = 32;
 export const DUST_REPULSION_STRENGTH = 14;
 
+// Sprite scaling constants
+export const DUST_SPRITE_SCALE_FACTOR = 3;
+export const STARLING_SPRITE_SCALE_FACTOR = 6;
+export const STARLING_SPRITE_ROTATION_OFFSET_RAD = Math.PI / 2;
+
+// Space dust glow constants
+export const DUST_GLOW_STATE_NORMAL = 0;
+export const DUST_GLOW_STATE_SLIGHT = 1;
+export const DUST_GLOW_STATE_FULL = 2;
+export const DUST_FAST_MOVEMENT_THRESHOLD = 5;
+export const DUST_SLOW_MOVEMENT_THRESHOLD = 1;
+export const DUST_FADE_TO_NORMAL_DELAY_MS = 2000;
+export const DUST_FADE_TO_SLIGHT_DELAY_MS = 1000;
+export const DUST_GLOW_TRANSITION_SPEED_UP = 3.0;
+export const DUST_GLOW_TRANSITION_SPEED_DOWN = 0.5;
+
 // Star background parallax constants
 export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
 export const STAR_LAYER_CONFIGS = [
@@ -112,6 +128,11 @@ export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion starlings
+export const FORGE_FLAME_ALPHA = 0.3;
+export const FORGE_FLAME_SIZE_MULTIPLIER = 0.3;
+export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
+export const FORGE_FLAME_WARMTH_FADE_PER_SEC = 2.0;
+export const FORGE_FLAME_OFFSET_MULTIPLIER = 0.35;
 
 // Stellar Forge constants (main base structure)
 export const STELLAR_FORGE_MAX_HEALTH = 1000;
@@ -157,12 +178,19 @@ export const MINIGUN_COST = 150;
 export const SWIRLER_COST = 200;
 export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
+export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
 export const AI_DEFENSE_COMMAND_INTERVAL_SEC = 1.0;
 export const AI_HERO_COMMAND_INTERVAL_SEC = 3.0;
 export const AI_STRUCTURE_COMMAND_INTERVAL_SEC = 5.0;
+export const AI_MIRROR_PURCHASE_INTERVAL_SEC = 8.0; // Interval to check for buying mirrors
+export const AI_MAX_MIRRORS = 6; // Maximum mirrors AI will build
+export const AI_WAVES_ATTACK_THRESHOLD = 8; // Min unit count for wave attack
+export const AI_AGGRESSIVE_HERO_MULTIPLIER = 0.7; // Faster hero production
+export const AI_ECONOMIC_HERO_MULTIPLIER = 1.5; // Slower hero production
+export const AI_WAVES_HERO_MULTIPLIER = 1.2; // Slightly slower hero production
 export const AI_MIRROR_SUN_DISTANCE_PX = 220;
 export const AI_MIRROR_ARC_SPACING_RAD = 0.6;
 export const AI_MIRROR_REPOSITION_THRESHOLD_PX = 40;
@@ -227,6 +255,8 @@ export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display a
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect
 export const TAP_EFFECT_MAX_RADIUS = 40; // Maximum radius of tap ripple effect
 export const SWIPE_EFFECT_SPEED = 0.08; // Progress increment per frame for swipe effect
+export const PRODUCTION_BUTTON_WAVE_MAX_RADIUS_PX = 48; // Max radius for hero/building button waves
+export const PRODUCTION_BUTTON_WAVE_PROGRESS_PER_FRAME = 0.12; // Progress increment per frame for production button wave
 export const SWIPE_ARROW_SIZE = 15; // Size of the arrow head in swipe effect
 
 // Ray unit constants (Solari hero)
@@ -292,3 +322,11 @@ export const BEAM_ABILITY_COOLDOWN = 8.0; // 8 seconds
 export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
 export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
 export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
+
+// AI Strategy types
+export enum AIStrategy {
+    ECONOMIC = "economic",       // Focus on building mirrors and economy
+    DEFENSIVE = "defensive",      // Build defensive structures early
+    AGGRESSIVE = "aggressive",    // Rush with units
+    WAVES = "waves"              // Build up then attack in waves
+}
