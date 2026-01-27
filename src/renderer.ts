@@ -21,6 +21,7 @@ export class GameRenderer {
     public selectedHeroNames: string[] = [];
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
+    private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
     public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
@@ -1003,13 +1004,15 @@ export class GameRenderer {
             const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
             const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
             const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+            const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
             
             for (let i = 0; i < 4; i++) {
                 const angle = angles[i];
                 const btnX = screenPos.x + Math.cos(angle) * buttonDistance;
                 const btnY = screenPos.y + Math.sin(angle) * buttonDistance;
+                const labelOffset = buttonRadius + 14 * this.zoom;
 
-                this.ctx.fillStyle = '#444444';
+                this.ctx.fillStyle = i === 3 ? '#2A2A2A' : '#444444';
                 this.ctx.strokeStyle = '#00FFFF';
                 this.ctx.lineWidth = 2;
                 this.ctx.beginPath();
@@ -1017,12 +1020,12 @@ export class GameRenderer {
                 this.ctx.fill();
                 this.ctx.stroke();
 
-                // Draw button icon (placeholder)
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${12 * this.zoom}px Doto`;
+                // Draw button label
+                this.ctx.fillStyle = i === 3 ? 'rgba(255, 255, 255, 0.6)' : '#FFFFFF';
+                this.ctx.font = `${11 * this.zoom}px Doto`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(`B${i + 1}`, btnX, btnY);
+                this.ctx.fillText(labels[i], btnX + Math.cos(angle) * labelOffset, btnY + Math.sin(angle) * labelOffset);
             }
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
@@ -2383,6 +2386,16 @@ export class GameRenderer {
     }
 
     /**
+     * Create a warp gate shockwave effect at a world position
+     */
+    createWarpGateShockwave(position: Vector2D): void {
+        this.warpGateShockwaves.push({
+            position: new Vector2D(position.x, position.y),
+            progress: 0
+        });
+    }
+
+    /**
      * Update and draw tap effects (expanding ripple)
      */
     private updateAndDrawTapEffects(): void {
@@ -2492,6 +2505,31 @@ export class GameRenderer {
                 this.ctx.arc(px, py, 10, 0, Math.PI * 2);
                 this.ctx.fill();
             }
+        }
+    }
+
+    /**
+     * Update and draw warp gate shockwave effects
+     */
+    private updateAndDrawWarpGateShockwaves(): void {
+        for (let i = this.warpGateShockwaves.length - 1; i >= 0; i--) {
+            const effect = this.warpGateShockwaves[i];
+            effect.progress += Constants.WARP_GATE_SHOCKWAVE_PROGRESS_PER_FRAME;
+
+            if (effect.progress >= 1) {
+                this.warpGateShockwaves.splice(i, 1);
+                continue;
+            }
+
+            const screenPos = this.worldToScreen(effect.position);
+            const radius = Constants.WARP_GATE_SHOCKWAVE_MAX_RADIUS_PX * effect.progress * this.zoom;
+            const alpha = (1 - effect.progress) * 0.8;
+
+            this.ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
+            this.ctx.lineWidth = Math.max(2, 3 * this.zoom);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.stroke();
         }
     }
 
@@ -2683,6 +2721,9 @@ export class GameRenderer {
         for (const gate of game.warpGates) {
             this.drawWarpGate(gate);
         }
+
+        // Draw warp gate shockwaves
+        this.updateAndDrawWarpGateShockwaves();
 
         // Draw units
         for (const player of game.players) {
