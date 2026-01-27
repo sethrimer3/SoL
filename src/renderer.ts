@@ -31,6 +31,11 @@ export class GameRenderer {
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
     public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
 
+    private readonly HERO_SPRITE_SCALE = 6;
+    private readonly FORGE_SPRITE_SCALE = 2.2;
+    private spriteImageCache = new Map<string, HTMLImageElement>();
+    private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
         'Pan: WASD/Arrows or mouse edge or two-finger drag',
@@ -170,6 +175,75 @@ export class GameRenderer {
             default:
                 return '#FFFFFF';
         }
+    }
+
+    private getSpriteImage(path: string): HTMLImageElement {
+        const cached = this.spriteImageCache.get(path);
+        if (cached) {
+            return cached;
+        }
+        const image = new Image();
+        image.src = path;
+        this.spriteImageCache.set(path, image);
+        return image;
+    }
+
+    private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
+        const cacheKey = `${path}|${color}`;
+        const cached = this.tintedSpriteCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const image = this.getSpriteImage(path);
+        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+            return null;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth;
+        canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        ctx.drawImage(image, 0, 0);
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'destination-in';
+        ctx.drawImage(image, 0, 0);
+        ctx.globalCompositeOperation = 'source-over';
+
+        this.tintedSpriteCache.set(cacheKey, canvas);
+        return canvas;
+    }
+
+    private getForgeSpritePath(forge: StellarForge): string | null {
+        if (forge.owner.faction === Faction.RADIANT) {
+            return 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg';
+        }
+        return null;
+    }
+
+    private getHeroSpritePath(unit: Unit): string | null {
+        if (unit.owner.faction !== Faction.RADIANT) {
+            return null;
+        }
+        if (unit instanceof Marine) {
+            return 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg';
+        }
+        if (unit instanceof Grave) {
+            return 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg';
+        }
+        if (unit instanceof Dagger) {
+            return 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg';
+        }
+        if (unit instanceof Beam) {
+            return 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg';
+        }
+        return null;
     }
 
     /**
@@ -416,27 +490,51 @@ export class GameRenderer {
         }
 
         // Draw base structure - use darkened color if should dim
-        this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = forge.isReceivingLight ? 
-            (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
-            (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-        this.ctx.lineWidth = 3;
-        
-        // Draw as a hexagon with rotation
-        this.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i + forge.rotation;
-            const x = screenPos.x + size * Math.cos(angle);
-            const y = screenPos.y + size * Math.sin(angle);
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
+        const tintColor = shouldDim
+            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
+            : (isEnemy ? this.enemyColor : this.playerColor);
+        const forgeSpritePath = this.getForgeSpritePath(forge);
+        const forgeSprite = forgeSpritePath ? this.getTintedSprite(forgeSpritePath, tintColor) : null;
+        if (forgeSprite) {
+            const spriteSize = size * this.FORGE_SPRITE_SCALE;
+            this.ctx.drawImage(
+                forgeSprite,
+                screenPos.x - spriteSize / 2,
+                screenPos.y - spriteSize / 2,
+                spriteSize,
+                spriteSize
+            );
+
+            this.ctx.strokeStyle = forge.isReceivingLight
+                ? (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00')
+                : (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, spriteSize * 0.52, 0, Math.PI * 2);
+            this.ctx.stroke();
+        } else {
+            this.ctx.fillStyle = displayColor;
+            this.ctx.strokeStyle = forge.isReceivingLight ? 
+                (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
+                (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
+            this.ctx.lineWidth = 3;
+            
+            // Draw as a hexagon with rotation
+            this.ctx.beginPath();
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i + forge.rotation;
+                const x = screenPos.x + size * Math.cos(angle);
+                const y = screenPos.y + size * Math.sin(angle);
+                if (i === 0) {
+                    this.ctx.moveTo(x, y);
+                } else {
+                    this.ctx.lineTo(x, y);
+                }
             }
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.stroke();
         }
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
 
         if (forge.health < this.FORGE_MAX_HEALTH) {
             // Draw health bar
@@ -1100,13 +1198,29 @@ export class GameRenderer {
         }
 
         // Draw unit body (circle) - use darkened color if should dim
-        this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = isSelected ? '#00FF00' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
-        this.ctx.lineWidth = isSelected ? 2 : 1;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
+        const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
+        const tintColor = shouldDim
+            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
+            : (isEnemy ? this.enemyColor : this.playerColor);
+        const heroSprite = heroSpritePath ? this.getTintedSprite(heroSpritePath, tintColor) : null;
+        if (heroSprite) {
+            const spriteSize = size * this.HERO_SPRITE_SCALE;
+            this.ctx.drawImage(
+                heroSprite,
+                screenPos.x - spriteSize / 2,
+                screenPos.y - spriteSize / 2,
+                spriteSize,
+                spriteSize
+            );
+        } else {
+            this.ctx.fillStyle = displayColor;
+            this.ctx.strokeStyle = isSelected ? '#00FF00' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
+            this.ctx.lineWidth = isSelected ? 2 : 1;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
 
         if (unit.health < unit.maxHealth) {
             // Draw health bar
