@@ -3419,6 +3419,14 @@ export class GameState {
                         player.stellarForge.targetPosition = null;
                         player.stellarForge.velocity = new Vector2D(0, 0);
                     }
+
+                    this.applyDustPushFromMovingEntity(
+                        player.stellarForge.position,
+                        player.stellarForge.velocity,
+                        Constants.FORGE_DUST_PUSH_RADIUS_PX,
+                        Constants.FORGE_DUST_PUSH_FORCE_MULTIPLIER,
+                        deltaTime
+                    );
                 }
                 
                 // Check for forge crunch (spawns minions with excess solarium)
@@ -3479,6 +3487,14 @@ export class GameState {
                     mirror.targetPosition = null;
                     mirror.velocity = new Vector2D(0, 0);
                 }
+
+                this.applyDustPushFromMovingEntity(
+                    mirror.position,
+                    mirror.velocity,
+                    Constants.MIRROR_DUST_PUSH_RADIUS_PX,
+                    Constants.MIRROR_DUST_PUSH_FORCE_MULTIPLIER,
+                    deltaTime
+                );
                 
                 mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids, deltaTime);
                 
@@ -3534,6 +3550,16 @@ export class GameState {
                     }
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
+
+                    if (unit instanceof Starling) {
+                        this.applyDustPushFromMovingEntity(
+                            unit.position,
+                            unit.velocity,
+                            Constants.STARLING_DUST_PUSH_RADIUS_PX,
+                            Constants.STARLING_DUST_PUSH_FORCE_MULTIPLIER,
+                            deltaTime
+                        );
+                    }
                     
                     // Apply fluid forces from Grave projectiles
                     if (unit instanceof Grave) {
@@ -4771,6 +4797,26 @@ export class GameState {
         return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
     }
 
+    private applyDustPushFromMovingEntity(
+        position: Vector2D,
+        velocity: Vector2D,
+        radiusPx: number,
+        forceMultiplier: number,
+        deltaTime: number
+    ): void {
+        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+        if (speed < Constants.DUST_PUSH_MIN_SPEED_PX_PER_SEC) {
+            return;
+        }
+        this.applyFluidForceFromMovingObject(
+            position,
+            velocity,
+            radiusPx,
+            speed * forceMultiplier,
+            deltaTime
+        );
+    }
+
     /**
      * Apply fluid-like forces to particles from a moving object (projectile)
      * Particles closer to the object get pushed more, with falloff based on distance
@@ -5737,6 +5783,8 @@ export class GameState {
             for (const unit of player.units) {
                 mix(unit.position.x);
                 mix(unit.position.y);
+                mix(unit.velocity.x);
+                mix(unit.velocity.y);
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
                 mix(unit.collisionRadiusPx);
