@@ -320,31 +320,28 @@ export class GameRenderer {
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        let targetPosition: Vector2D | null = null;
+        // Use the unit's smooth rotation if it's moving
         if (starling.rallyPoint) {
             const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
             if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                targetPosition = starling.rallyPoint;
+                // Use the smoothly interpolated rotation from the unit's movement logic
+                return starling.rotation + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
             }
         }
 
-        if (!targetPosition && starling.target && 'position' in starling.target) {
+        // If not moving but has a target, face the target
+        if (starling.target && 'position' in starling.target) {
             if (!('health' in starling.target) || starling.target.health > 0) {
-                targetPosition = starling.target.position;
+                const targetPosition = starling.target.position;
+                const dx = targetPosition.x - starling.position.x;
+                const dy = targetPosition.y - starling.position.y;
+                if (dx !== 0 || dy !== 0) {
+                    return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+                }
             }
         }
 
-        if (!targetPosition) {
-            return null;
-        }
-
-        const dx = targetPosition.x - starling.position.x;
-        const dy = targetPosition.y - starling.position.y;
-        if (dx === 0 && dy === 0) {
-            return null;
-        }
-
-        return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+        return null;
     }
 
     private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
@@ -529,13 +526,13 @@ export class GameRenderer {
         }
 
         const flameSize = forgeSpriteSize * Constants.FORGE_FLAME_SIZE_MULTIPLIER;
-        const flameOffset = flameSize * Constants.FORGE_FLAME_OFFSET_MULTIPLIER;
         const shadeMultiplier = shouldDim ? (1 - Constants.SHADE_OPACITY) : 1;
         const baseAlpha = Constants.FORGE_FLAME_ALPHA * shadeMultiplier;
         const hotAlpha = baseAlpha * flameState.warmth;
         const coldAlpha = baseAlpha * (1 - flameState.warmth);
 
-        const flameOffsets = [-flameOffset, flameOffset];
+        // Both flames overlap at the same position instead of being side by side
+        const flameOffsets = [0, 0];
 
         for (let i = 0; i < flameOffsets.length; i++) {
             const offsetX = flameOffsets[i];
@@ -1875,6 +1872,81 @@ export class GameRenderer {
     }
 
     /**
+     * Draw merged attack range outlines for selected starlings
+     * Shows the combined outline instead of individual circles
+     */
+    private drawMergedStarlingRanges(game: GameState): void {
+        // Collect all selected friendly starlings
+        const selectedStarlings: Starling[] = [];
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && this.viewingPlayer && unit.owner === this.viewingPlayer) {
+                selectedStarlings.push(unit);
+            }
+        }
+
+        if (selectedStarlings.length === 0) {
+            return;
+        }
+
+        const color = this.getFactionColor(this.viewingPlayer!.faction);
+        
+        // For merged ranges, we draw the outline of all overlapping circles
+        // Using a simplified approach: draw arc segments that are on the outer boundary
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
+        this.ctx.beginPath();
+
+        for (let i = 0; i < selectedStarlings.length; i++) {
+            const starling = selectedStarlings[i];
+            const screenPos = this.worldToScreen(starling.position);
+            const radius = starling.attackRange * this.zoom;
+            
+            // Draw arc segments that don't overlap with other starlings
+            const angleStep = Math.PI / 32; // Sample 64 points around circle
+            let pathStarted = false;
+            
+            for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+                const px = starling.position.x + Math.cos(angle) * starling.attackRange;
+                const py = starling.position.y + Math.sin(angle) * starling.attackRange;
+                
+                // Check if this point is outside all other starling ranges
+                let isOuterPoint = true;
+                for (let j = 0; j < selectedStarlings.length; j++) {
+                    if (i === j) continue;
+                    const other = selectedStarlings[j];
+                    const dx = px - other.position.x;
+                    const dy = py - other.position.y;
+                    const distSq = dx * dx + dy * dy;
+                    const otherRadiusSq = other.attackRange * other.attackRange;
+                    
+                    if (distSq < otherRadiusSq) {
+                        isOuterPoint = false;
+                        break;
+                    }
+                }
+                
+                const screenX = this.worldToScreen({x: px, y: py} as Vector2D).x;
+                const screenY = this.worldToScreen({x: px, y: py} as Vector2D).y;
+                
+                if (isOuterPoint) {
+                    if (!pathStarted) {
+                        this.ctx.moveTo(screenX, screenY);
+                        pathStarted = true;
+                    } else {
+                        this.ctx.lineTo(screenX, screenY);
+                    }
+                } else {
+                    pathStarted = false;
+                }
+            }
+        }
+
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
      * Draw a Starling unit (minion from stellar forge)
      */
     private drawStarling(starling: Starling, color: string, game: GameState, isEnemy: boolean): void {
@@ -1899,17 +1971,8 @@ export class GameRenderer {
             }
         }
         
-        // Draw attack range circle for selected starlings (only friendly units)
-        if (isSelected && !isEnemy) {
-            const attackRangeScreenRadius = starling.attackRange * this.zoom;
-            this.ctx.strokeStyle = color;
-            this.ctx.lineWidth = 1;
-            this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, attackRangeScreenRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
+        // Note: Range circles for starlings are drawn separately as merged outlines
+        // in drawMergedStarlingRanges() before individual starlings are rendered
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = this.getStarlingSpritePath(starling);
@@ -1970,6 +2033,54 @@ export class GameRenderer {
             const healthPercent = starling.health / starling.maxHealth;
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        }
+        
+        // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
+        // to show only a single line from the closest starling when multiple are selected
+    }
+
+    /**
+     * Draw move order lines for selected starlings
+     * Shows a single line from the closest starling to the destination when multiple are selected
+     */
+    private drawStarlingMoveLines(game: GameState): void {
+        if (!this.viewingPlayer) return;
+        
+        // Group selected starlings by their rally point (using string key for proper Map comparison)
+        const starlingsByRallyPoint = new Map<string, {rallyPoint: Vector2D, starlings: Starling[]}>();
+        
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && unit.owner === this.viewingPlayer && unit.rallyPoint && unit.moveOrder > 0) {
+                const key = `${unit.rallyPoint.x},${unit.rallyPoint.y}`;
+                if (!starlingsByRallyPoint.has(key)) {
+                    starlingsByRallyPoint.set(key, {rallyPoint: unit.rallyPoint, starlings: []});
+                }
+                starlingsByRallyPoint.get(key)!.starlings.push(unit);
+            }
+        }
+        
+        const color = this.getFactionColor(this.viewingPlayer.faction);
+        
+        // For each rally point, draw a single line from the closest starling
+        for (const [key, group] of starlingsByRallyPoint) {
+            if (group.starlings.length === 0) continue;
+            
+            // Find the closest starling to the rally point
+            let closestStarling = group.starlings[0];
+            let minDistSq = Infinity;
+            
+            for (const starling of group.starlings) {
+                const dx = group.rallyPoint.x - starling.position.x;
+                const dy = group.rallyPoint.y - starling.position.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < minDistSq) {
+                    minDistSq = distSq;
+                    closestStarling = starling;
+                }
+            }
+            
+            // Draw move order indicator from the closest starling only
+            this.drawMoveOrderIndicator(closestStarling.position, group.rallyPoint, closestStarling.moveOrder, color);
         }
     }
 
@@ -3318,6 +3429,9 @@ export class GameRenderer {
         // Draw warp gate shockwaves
         this.updateAndDrawWarpGateShockwaves();
 
+        // Draw merged range outlines for selected starlings before drawing units
+        this.drawMergedStarlingRanges(game);
+
         // Draw units
         for (const player of game.players) {
             if (player.isDefeated()) continue;
@@ -3347,6 +3461,9 @@ export class GameRenderer {
                 }
             }
         }
+
+        // Draw move order lines for selected starlings (single line per group)
+        this.drawStarlingMoveLines(game);
 
         // Draw buildings
         for (const player of game.players) {

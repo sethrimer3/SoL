@@ -1783,6 +1783,7 @@ export class Unit {
     isHero: boolean = false; // Flag to mark unit as hero
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     collisionRadiusPx: number;
+    rotation: number = 0; // Current facing angle in radians
     
     constructor(
         public position: Vector2D,
@@ -1953,6 +1954,22 @@ export class Unit {
             directionY /= directionLength;
         }
 
+        // Update rotation to face movement direction with smooth turning
+        if (directionLength > 0) {
+            const targetRotation = Math.atan2(directionY, directionX);
+            const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
+            const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+            
+            if (Math.abs(rotationDelta) <= maxRotationStep) {
+                this.rotation = targetRotation;
+            } else {
+                this.rotation += Math.sign(rotationDelta) * maxRotationStep;
+            }
+            
+            // Normalize rotation to [0, 2π) using modulo
+            this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        }
+
         const moveDistance = moveSpeed * deltaTime;
         this.position.x += directionX * moveDistance;
         this.position.y += directionY * moveDistance;
@@ -1961,6 +1978,16 @@ export class Unit {
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
         this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
         this.position.y = Math.max(-boundary, Math.min(boundary, this.position.y));
+    }
+
+    /**
+     * Get shortest angle delta between two angles (in radians)
+     */
+    private getShortestAngleDelta(from: number, to: number): number {
+        let delta = to - from;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        return delta;
     }
 
     /**
