@@ -94,6 +94,8 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
+The command list above was revalidated after dust displacement changes for solar mirrors, stellar forges, and starlings to ensure `stateHash` stability.
+
 ## Light & Resource Flow
 
 ```
