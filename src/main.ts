@@ -91,7 +91,7 @@ class GameController {
         worldPos: Vector2D,
         forge: StellarForge,
         heroNames: string[]
-    ): string | null {
+    ): { heroName: string; buttonPos: Vector2D } | null {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX;
         const positions = [
@@ -108,7 +108,7 @@ class GameController {
                 forge.position.y + pos.y * buttonDistance
             );
             if (worldPos.distanceTo(buttonPos) <= buttonRadius) {
-                return displayHeroes[i];
+                return { heroName: displayHeroes[i], buttonPos };
             }
         }
         return null;
@@ -626,6 +626,7 @@ class GameController {
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS; // Use world space radius
                     const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
+                    const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
@@ -636,6 +637,10 @@ class GameController {
                         
                         const distance = worldPos.distanceTo(buttonPos);
                         if (distance <= buttonRadius) {
+                            this.renderer.createProductionButtonWave(buttonPos);
+                            console.log(
+                                `Warp gate button clicked: ${labels[i]} (index ${i}) | solarium=${player.solarium.toFixed(1)}`
+                            );
                             // Button clicked!
                             if (i === 0) {
                                 // First button - create Minigun building
@@ -678,7 +683,7 @@ class GameController {
                             } else if (i === 2) {
                                 // Third button (bottom) - create Subsidiary Factory building
                                 // Check if player already has a Subsidiary Factory
-                                const hasSubFactory = player.buildings.some(b => b instanceof SubsidiaryFactory);
+                                const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {
                                     console.log('Only one Subsidiary Factory can exist at a time');
                                 } else if (player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
@@ -714,17 +719,22 @@ class GameController {
                 }
 
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
-                    const clickedHeroName = this.getClickedHeroButton(
+                    const clickedHero = this.getClickedHeroButton(
                         worldPos,
                         player.stellarForge,
                         this.renderer.selectedHeroNames
                     );
-                    if (clickedHeroName) {
+                    if (clickedHero) {
+                        const clickedHeroName = clickedHero.heroName;
+                        this.renderer.createProductionButtonWave(clickedHero.buttonPos);
                         const heroUnitType = this.getHeroUnitType(clickedHeroName);
                         let isHeroQueued = false;
                         if (heroUnitType) {
                             const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
                             const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                            console.log(
+                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | solarium=${player.solarium.toFixed(1)}`
+                            );
                             if (isHeroAlive) {
                                 console.log(`${clickedHeroName} is already active`);
                             } else if (isHeroProducing) {
