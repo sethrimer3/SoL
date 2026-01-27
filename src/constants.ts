@@ -148,6 +148,18 @@ export const MINIGUN_COST = 150;
 export const SWIRLER_COST = 200;
 export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
+
+// AI control intervals and placement tuning
+export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
+export const AI_DEFENSE_COMMAND_INTERVAL_SEC = 1.0;
+export const AI_HERO_COMMAND_INTERVAL_SEC = 3.0;
+export const AI_STRUCTURE_COMMAND_INTERVAL_SEC = 5.0;
+export const AI_MIRROR_SUN_DISTANCE_PX = 220;
+export const AI_MIRROR_ARC_SPACING_RAD = 0.6;
+export const AI_MIRROR_REPOSITION_THRESHOLD_PX = 40;
+export const AI_DEFENSE_RADIUS_PX = 350;
+export const AI_STRUCTURE_PLACEMENT_DISTANCE_PX = 140;
+export const AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD = Math.PI / 4;
 export const HERO_PRODUCTION_TIME_SEC = 8;
 export const HERO_BUTTON_RADIUS_PX = 28;
 export const HERO_BUTTON_DISTANCE_PX = 100;
