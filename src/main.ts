@@ -613,8 +613,8 @@ class GameController {
                     // Check if player owns this gate
                     if (gate.owner !== player) continue;
                     
-                    // Calculate button positions
-                    const buttonRadius = Constants.WARP_GATE_BUTTON_HIT_RADIUS_PX;
+                    // Calculate button positions in world space
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS; // Use world space radius
                     const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
                     
@@ -1048,6 +1048,12 @@ class GameController {
 
         // Update camera based on keyboard input and edge panning
         const updateCameraPanning = () => {
+            // Early exit if no game is active
+            if (!this.game) {
+                requestAnimationFrame(updateCameraPanning);
+                return;
+            }
+            
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
             // Disable edge panning on mobile devices

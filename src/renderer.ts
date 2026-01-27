@@ -3159,6 +3159,6 @@ export class GameRenderer {
      * Set camera position
      */
     setCameraPosition(pos: Vector2D): void {
-        this.camera = pos;
+        this.camera = new Vector2D(pos.x, pos.y);
     }
 }
