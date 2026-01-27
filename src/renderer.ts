@@ -1182,15 +1182,15 @@ export class GameRenderer {
     }
 
     /**
-     * Draw space dust particle with sprite and glow effects
+     * Draw space dust particle with lightweight circle rendering
      */
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = Constants.DUST_PARTICLE_SIZE * this.zoom * Constants.DUST_SPRITE_SCALE_FACTOR;
-        
+        const baseSize = Constants.DUST_PARTICLE_SIZE * this.zoom;
+
         // Check if particle is in shadow
         const inShadow = game.isPointInShadow(particle.position);
-        
+
         if (viewingPlayerIndex !== null) {
             // If particle is in shade, only draw if it's visible to player's units
             if (inShadow) {
@@ -1201,86 +1201,26 @@ export class GameRenderer {
                 }
             }
         }
-        
-        // Determine which sprite to use based on glow state and influence
-        let spritePath = 'ASSETS/sprites/environment/spaceDust/spaceDust.png';
-        let tintColor = particle.currentColor;
-        
-        // Check if particle is in player influence
-        let inInfluence = false;
-        if (viewingPlayerIndex !== null) {
-            const viewingPlayer = game.players[viewingPlayerIndex];
-            if (viewingPlayer.stellarForge) {
-                const distanceToForge = particle.position.distanceTo(viewingPlayer.stellarForge.position);
-                inInfluence = distanceToForge < Constants.INFLUENCE_RADIUS;
-            }
+
+        let glowLevel = particle.glowState;
+        if (particle.glowTransition > 0 && particle.glowState !== particle.targetGlowState) {
+            glowLevel = particle.glowState + (particle.targetGlowState - particle.glowState) * particle.glowTransition;
         }
-        
-        // Determine sprite and interpolation based on glow state and influence
-        let sprite1: HTMLCanvasElement | null = null;
-        let sprite2: HTMLCanvasElement | null = null;
-        let interpolation = 0;
-        
-        if (inInfluence) {
-            // In influence: cross-fade from normal -> slight glow -> full glow
-            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            }
-        } else {
-            // Not in influence: cross-fade for movement-based glow
-            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState > Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
-                if (particle.targetGlowState === Constants.DUST_GLOW_STATE_FULL) {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                    interpolation = particle.glowTransition;
-                } else if (particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                    interpolation = particle.glowTransition;
-                } else {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                }
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_FULL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            }
-        }
-        
-        // Draw the sprite(s) with interpolation
-        if (sprite1 && sprite2 && interpolation > 0) {
-            // Draw both sprites with alpha blending for smooth transition
-            this.ctx.globalAlpha = 1 - interpolation;
-            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-            this.ctx.globalAlpha = interpolation;
-            this.ctx.drawImage(sprite2, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-            this.ctx.globalAlpha = 1.0;
-        } else if (sprite1) {
-            // Draw single sprite
-            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-        } else {
-            // Fallback to circle if sprites not loaded
-            this.ctx.fillStyle = tintColor;
+
+        if (glowLevel > 0) {
+            const glowSize = baseSize * (1.2 + glowLevel * 0.35);
+            this.ctx.fillStyle = particle.currentColor;
+            this.ctx.globalAlpha = 0.15 + glowLevel * 0.1;
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, Constants.DUST_PARTICLE_SIZE * this.zoom, 0, Math.PI * 2);
+            this.ctx.arc(screenPos.x, screenPos.y, glowSize, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
         }
+
+        this.ctx.fillStyle = particle.currentColor;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
+        this.ctx.fill();
     }
 
     private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
