@@ -1296,8 +1296,8 @@ export class MainMenu {
             soundEnabled: true,
             musicEnabled: true,
             isBattleStatsInfoEnabled: false,
-            selectedFaction: null,
-            selectedHeroes: [],
+            selectedFaction: Faction.RADIANT,
+            selectedHeroes: ['radiant-marine'],
             selectedHeroNames: [],
             playerColor: '#66B3FF', // Somewhat light blue
             enemyColor: '#FF6B6B',   // Slightly light red
@@ -1305,6 +1305,7 @@ export class MainMenu {
             selectedSpawnLoadout: null,
             colorScheme: 'SpaceBlack' // Default color scheme
         };
+        this.ensureDefaultHeroSelection();
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
@@ -1374,6 +1375,29 @@ export class MainMenu {
             .map(hero => hero.name);
     }
 
+    private getDefaultHeroIdsForFaction(faction: Faction | null): string[] {
+        void faction;
+        return ['radiant-marine'];
+    }
+
+    private ensureDefaultHeroSelection(): void {
+        if (this.settings.selectedHeroes.length === 0) {
+            const defaultHeroes = this.getDefaultHeroIdsForFaction(this.settings.selectedFaction);
+            if (defaultHeroes.length > 0) {
+                this.settings.selectedHeroes = [...defaultHeroes];
+            }
+        }
+        this.settings.selectedHeroNames = this.getSelectedHeroNames();
+    }
+
+    private resolveAssetPath(path: string): string {
+        if (!path.startsWith('ASSETS/')) {
+            return path;
+        }
+        const isDistBuild = window.location.pathname.includes('/dist/');
+        return isDistBuild ? `../${path}` : path;
+    }
+
     private clearMenu(): void {
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
@@ -1409,7 +1433,7 @@ export class MainMenu {
         
         // Title graphic
         const titleGraphic = document.createElement('img');
-        titleGraphic.src = 'ASSETS/sprites/menu/titleGraphic.svg';
+        titleGraphic.src = this.resolveAssetPath('ASSETS/sprites/menu/titleGraphic.svg');
         titleGraphic.alt = 'Speed of Light RTS';
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
@@ -1468,7 +1492,7 @@ export class MainMenu {
                 case 'start':
                     this.hide();
                     if (this.onStartCallback) {
-                        this.settings.selectedHeroNames = this.getSelectedHeroNames();
+                        this.ensureDefaultHeroSelection();
                         this.onStartCallback(this.settings);
                     }
                     break;
@@ -1774,6 +1798,7 @@ export class MainMenu {
             if (this.settings.selectedFaction !== option.id) {
                 this.settings.selectedFaction = option.id;
                 this.settings.selectedHeroes = []; // Reset hero selection when faction changes
+                this.ensureDefaultHeroSelection();
             }
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
