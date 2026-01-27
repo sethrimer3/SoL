@@ -10,6 +10,7 @@ export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
     public camera: Vector2D = new Vector2D(0, 0);
+    private parallaxCamera: Vector2D = new Vector2D(0, 0);
     public zoom: number = 1.0;
     public selectionStart: Vector2D | null = null;
     public selectionEnd: Vector2D | null = null;
@@ -1023,12 +1024,20 @@ export class GameRenderer {
         const sizeT = sizeRange > 0
             ? Math.min(1, Math.max(0, (asteroid.size - Constants.ASTEROID_MIN_SIZE) / sizeRange))
             : 0;
-        const fillBrightness = Math.round(135 - sizeT * 55);
-        const strokeBrightness = Math.min(255, fillBrightness + 20);
+        const asteroidFill = this.interpolateHexColor(
+            this.colorScheme.asteroidColors.fillStart,
+            this.colorScheme.asteroidColors.fillEnd,
+            sizeT
+        );
+        const asteroidStroke = this.interpolateHexColor(
+            this.colorScheme.asteroidColors.strokeStart,
+            this.colorScheme.asteroidColors.strokeEnd,
+            sizeT
+        );
 
         // Draw asteroid body
-        this.ctx.fillStyle = `rgb(${fillBrightness}, ${fillBrightness}, ${fillBrightness})`;
-        this.ctx.strokeStyle = `rgb(${strokeBrightness}, ${strokeBrightness}, ${strokeBrightness})`;
+        this.ctx.fillStyle = asteroidFill;
+        this.ctx.strokeStyle = asteroidStroke;
         this.ctx.lineWidth = 2;
         
         this.ctx.beginPath();
@@ -2767,8 +2776,8 @@ export class GameRenderer {
             
             for (const star of layer.stars) {
                 // Calculate star position with parallax effect
-                const parallaxX = this.camera.x * layer.parallaxFactor;
-                const parallaxY = this.camera.y * layer.parallaxFactor;
+                const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
+                const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
                 
                 // Convert to screen space
                 const centerX = (this.canvas.width / dpr) / 2;
@@ -3347,5 +3356,25 @@ export class GameRenderer {
      */
     setCameraPosition(pos: Vector2D): void {
         this.camera = new Vector2D(pos.x, pos.y);
+        this.parallaxCamera = new Vector2D(pos.x, pos.y);
+    }
+
+    setCameraPositionWithoutParallax(pos: Vector2D): void {
+        this.camera = new Vector2D(pos.x, pos.y);
+    }
+
+    private interpolateHexColor(startHex: string, endHex: string, t: number): string {
+        const startValue = Number.parseInt(startHex.replace('#', ''), 16);
+        const endValue = Number.parseInt(endHex.replace('#', ''), 16);
+        const startR = (startValue >> 16) & 0xff;
+        const startG = (startValue >> 8) & 0xff;
+        const startB = startValue & 0xff;
+        const endR = (endValue >> 16) & 0xff;
+        const endG = (endValue >> 8) & 0xff;
+        const endB = endValue & 0xff;
+        const r = Math.round(startR + (endR - startR) * t);
+        const g = Math.round(startG + (endG - startG) * t);
+        const b = Math.round(startB + (endB - startB) * t);
+        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
     }
 }

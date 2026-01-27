@@ -1324,6 +1324,11 @@ export class Player {
 /**
  * Space dust particle that gets affected by influences and forces
  */
+export interface SpaceDustPalette {
+    neutral: string[];
+    accent: string[];
+}
+
 export class SpaceDustParticle {
     velocity: Vector2D;
     baseColor: string;
@@ -1331,9 +1336,10 @@ export class SpaceDustParticle {
     
     constructor(
         public position: Vector2D,
-        velocity?: Vector2D
+        velocity?: Vector2D,
+        palette?: SpaceDustPalette
     ) {
-        this.baseColor = SpaceDustParticle.generateBaseColor();
+        this.baseColor = SpaceDustParticle.generateBaseColor(palette);
         this.currentColor = this.baseColor;
         // Initialize with very slow random velocity
         if (velocity) {
@@ -1410,7 +1416,15 @@ export class SpaceDustParticle {
         return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
     }
 
-    private static generateBaseColor(): string {
+    private static generateBaseColor(palette?: SpaceDustPalette): string {
+        if (palette && palette.neutral.length > 0) {
+            const paletteRoll = Math.random();
+            const useAccent = paletteRoll > 0.7 && palette.accent.length > 0;
+            const selection = useAccent ? palette.accent : palette.neutral;
+            const colorIndex = Math.floor(Math.random() * selection.length);
+            return selection[colorIndex];
+        }
+
         const baseShade = 85 + Math.random() * 110;
         let r = baseShade;
         let g = baseShade;
@@ -5390,6 +5404,7 @@ export class GameState {
             mix(particle.position.y);
             mix(particle.velocity.x);
             mix(particle.velocity.y);
+            mixString(particle.baseColor);
         }
 
         for (const player of this.players) {
@@ -5488,12 +5503,12 @@ export class GameState {
     /**
      * Initialize space dust particles
      */
-    initializeSpaceDust(count: number, width: number, height: number): void {
+    initializeSpaceDust(count: number, width: number, height: number, palette?: SpaceDustPalette): void {
         this.spaceDust = [];
         for (let i = 0; i < count; i++) {
             const x = (Math.random() - 0.5) * width;
             const y = (Math.random() - 0.5) * height;
-            this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y)));
+            this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y), undefined, palette));
         }
     }
 
@@ -5575,7 +5590,7 @@ export class GameState {
 /**
  * Create a standard game setup
  */
-export function createStandardGame(playerNames: Array<[string, Faction]>): GameState {
+export function createStandardGame(playerNames: Array<[string, Faction]>, spaceDustPalette?: SpaceDustPalette): GameState {
     const game = new GameState();
 
     // Add sun at center
@@ -5634,7 +5649,7 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
     }
 
     // Initialize space dust particles
-    game.initializeSpaceDust(1000, 2000, 2000);
+    game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, 2000, 2000, spaceDustPalette);
 
     // Initialize random asteroids
     game.initializeAsteroids(10, 2000, 2000);
