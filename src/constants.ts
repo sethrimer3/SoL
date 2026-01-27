@@ -216,6 +216,7 @@ export const CASING_COLLISION_DAMPING = 0.3;
 
 // Unit movement constants
 export const UNIT_MOVE_SPEED = 100; // Pixels per second
+export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
