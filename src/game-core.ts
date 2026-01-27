@@ -1408,6 +1408,18 @@ export class SpaceDustParticle {
         // Apply friction to gradually slow down
         this.velocity.x *= 0.98;
         this.velocity.y *= 0.98;
+
+        const driftSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        if (driftSpeed < Constants.DUST_MIN_VELOCITY) {
+            if (driftSpeed === 0) {
+                this.velocity.x = Constants.DUST_MIN_VELOCITY;
+                this.velocity.y = 0;
+            } else {
+                const driftScale = Constants.DUST_MIN_VELOCITY / driftSpeed;
+                this.velocity.x *= driftScale;
+                this.velocity.y *= driftScale;
+            }
+        }
     }
 
     /**
@@ -5665,6 +5677,9 @@ export class GameState {
             mix(particle.position.y);
             mix(particle.velocity.x);
             mix(particle.velocity.y);
+            mix(particle.glowTransition);
+            mixInt(particle.glowState);
+            mixInt(particle.targetGlowState);
             mixString(particle.baseColor);
         }
 
