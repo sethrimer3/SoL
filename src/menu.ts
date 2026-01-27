@@ -1407,46 +1407,16 @@ export class MainMenu {
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
-        // Title
-        const title = document.createElement('h1');
-        title.textContent = 'SoL';
-        title.style.fontSize = isCompactLayout ? '56px' : '88px';
-        title.style.marginBottom = '10px';
-        title.style.color = '#FFD700';
-        title.style.textShadow = 'none';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Subtitle
-        const subtitle = document.createElement('h2');
-        subtitle.textContent = 'Speed of Light RTS';
-        subtitle.style.fontSize = isCompactLayout ? '24px' : '32px';
-        subtitle.style.marginBottom = '30px';
-        subtitle.style.color = '#AAAAAA';
-        subtitle.style.textAlign = 'center';
-        subtitle.style.maxWidth = '100%';
-        subtitle.style.fontWeight = '300';
-        subtitle.dataset.particleText = 'true';
-        subtitle.dataset.particleColor = '#AAAAAA';
-        container.appendChild(subtitle);
-
-        // Description
-        const description = document.createElement('p');
-        description.textContent = 'Select a menu option below';
-        description.style.fontSize = isCompactLayout ? '24px' : '28px';
-        description.style.marginBottom = '40px';
-        description.style.maxWidth = '500px';
-        description.style.textAlign = 'center';
-        description.style.lineHeight = '1.5';
-        description.style.color = '#C5C5C5';
-        description.style.fontWeight = '300';
-        description.dataset.particleText = 'true';
-        description.dataset.particleColor = '#C5C5C5';
-        container.appendChild(description);
+        // Title graphic
+        const titleGraphic = document.createElement('img');
+        titleGraphic.src = 'ASSETS/sprites/menu/titleGraphic.svg';
+        titleGraphic.alt = 'Speed of Light RTS';
+        titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
+        titleGraphic.style.maxWidth = '90%';
+        titleGraphic.style.height = 'auto';
+        titleGraphic.style.marginBottom = '30px';
+        titleGraphic.style.alignSelf = 'center';
+        container.appendChild(titleGraphic);
 
         // Create carousel menu container
         const carouselContainer = document.createElement('div');
