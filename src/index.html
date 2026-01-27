@@ -146,14 +146,19 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
+        const loadingStartMs = performance.now();
+        const minimumLoadingDurationMs = 3000;
+
         // Hide loading screen once game is loaded
         window.addEventListener('load', () => {
+            const elapsedMs = performance.now() - loadingStartMs;
+            const remainingMs = Math.max(0, minimumLoadingDurationMs - elapsedMs);
             setTimeout(() => {
                 const loading = document.getElementById('loading');
                 if (loading) {
                     loading.style.display = 'none';
                 }
-            }, 500);
+            }, remainingMs);
         });
     </script>
 </body>
