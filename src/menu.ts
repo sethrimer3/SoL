@@ -1140,6 +1140,16 @@ export interface ColorScheme {
     id: string;
     name: string;
     background: string;
+    asteroidColors: {
+        fillStart: string;
+        fillEnd: string;
+        strokeStart: string;
+        strokeEnd: string;
+    };
+    spaceDustPalette: {
+        neutral: string[];
+        accent: string[];
+    };
     sunCore: {
         inner: string;
         mid: string;
@@ -1164,6 +1174,16 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
         id: 'SpaceBlack',
         name: 'Space Black',
         background: '#000000',
+        asteroidColors: {
+            fillStart: '#878787',
+            fillEnd: '#505050',
+            strokeStart: '#9B9B9B',
+            strokeEnd: '#646464'
+        },
+        spaceDustPalette: {
+            neutral: ['#5a5a5a', '#6c6c6c', '#7f7f7f', '#8f8f8f'],
+            accent: ['#5b6c8f', '#6a5f8f', '#7a6aa6']
+        },
         sunCore: {
             inner: 'rgba(255, 255, 255, 1)',     // #FFFFFF white-hot center
             mid: 'rgba(255, 230, 120, 1)',       // #FFE678
@@ -1181,6 +1201,38 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             edge: 'rgba(255, 200, 140, 0)'           // #FFC88C fades to transparent
         },
         lensFlareHalo: 'rgba(255, 240, 200, 0.15)'   // #FFF0C8
+    },
+    'ColdIce': {
+        id: 'ColdIce',
+        name: 'Cold Ice',
+        background: '#0B1426',
+        asteroidColors: {
+            fillStart: '#4A3B6E',
+            fillEnd: '#7B63A6',
+            strokeStart: '#6A52A0',
+            strokeEnd: '#B39DE6'
+        },
+        spaceDustPalette: {
+            neutral: ['#6D717B', '#7C808A', '#8A8D97', '#9A9EB0'],
+            accent: ['#6C5A91', '#7B66A8', '#8B75C3', '#9A82D6']
+        },
+        sunCore: {
+            inner: 'rgba(230, 245, 255, 1)',     // soft icy white
+            mid: 'rgba(190, 220, 255, 0.95)',    // pale blue
+            outer: 'rgba(150, 200, 255, 0.85)'   // light blue edge
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(200, 230, 255, 0.75)',
+            outerGlow2: 'rgba(160, 210, 255, 0.45)',
+            outerGlow3: 'rgba(120, 190, 255, 0.25)',
+            outerGlow4: 'rgba(80, 170, 255, 0)'
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(220, 240, 255, 0.35)',
+            mid: 'rgba(170, 215, 255, 0.18)',
+            edge: 'rgba(130, 190, 255, 0)'
+        },
+        lensFlareHalo: 'rgba(210, 235, 255, 0.18)'
     }
 };
 
