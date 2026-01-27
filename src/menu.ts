@@ -1537,7 +1537,7 @@ export class MainMenu {
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
         titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = isCompactLayout ? '8px' : '12px';
+        titleGraphic.style.marginBottom = isCompactLayout ? '6px' : '8px';
         titleGraphic.style.alignSelf = 'center';
         container.appendChild(titleGraphic);
 
@@ -1546,7 +1546,8 @@ export class MainMenu {
         carouselContainer.style.width = '100%';
         carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
         carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = '32px';
+        carouselContainer.style.marginTop = isCompactLayout ? '4px' : '6px';
+        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
         container.appendChild(carouselContainer);
 
         // Create carousel menu with main menu options
@@ -2966,9 +2967,9 @@ class FactionCarouselView {
  */
 class CarouselMenuView {
     // Animation constants
-    private static readonly ITEM_WIDTH = 600;
-    private static readonly BASE_SIZE = 360;
-    private static readonly TEXT_SCALE = 3;
+    private static readonly ITEM_WIDTH = 260;
+    private static readonly BASE_SIZE = 220;
+    private static readonly TEXT_SCALE = 2;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
     private static readonly VELOCITY_FACTOR = 0.001;
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
@@ -3169,7 +3170,10 @@ class CarouselMenuView {
     private updateLayoutMetrics(): void {
         const isCompactLayout = window.innerWidth < 600;
         this.isCompactLayout = isCompactLayout;
-        const targetHeight = this.isCompactLayout ? '360px' : '600px';
+        const layoutScale = this.getLayoutScale();
+        const baseSize = CarouselMenuView.BASE_SIZE * layoutScale;
+        const instructionPadding = 120 * layoutScale;
+        const targetHeight = `${Math.round(baseSize + instructionPadding)}px`;
         if (this.container.style.height !== targetHeight) {
             this.container.style.height = targetHeight;
         }
