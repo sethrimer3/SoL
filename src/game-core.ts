@@ -1283,6 +1283,8 @@ export class Player {
     aiNextDefenseCommandSec: number = 0;
     aiNextHeroCommandSec: number = 0;
     aiNextStructureCommandSec: number = 0;
+    aiNextMirrorPurchaseCommandSec: number = 0;
+    aiStrategy: Constants.AIStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy
     
     // Statistics tracking
     unitsCreated: number = 0;
@@ -4205,6 +4207,7 @@ export class GameState {
 
             const enemies = this.getEnemiesForPlayer(player);
             this.updateAiMirrorsForPlayer(player);
+            this.updateAiMirrorPurchaseForPlayer(player);
             this.updateAiDefenseForPlayer(player, enemies);
             this.updateAiHeroProductionForPlayer(player);
             this.updateAiStructuresForPlayer(player, enemies);
@@ -4262,6 +4265,74 @@ export class GameState {
         }
     }
 
+    private updateAiMirrorPurchaseForPlayer(player: Player): void {
+        if (this.gameTime < player.aiNextMirrorPurchaseCommandSec) {
+            return;
+        }
+        player.aiNextMirrorPurchaseCommandSec = this.gameTime + Constants.AI_MIRROR_PURCHASE_INTERVAL_SEC;
+
+        // Check if we should buy more mirrors based on strategy
+        if (!player.stellarForge) {
+            return;
+        }
+
+        const currentMirrorCount = player.solarMirrors.length;
+        
+        // Determine mirror count target based on AI strategy
+        let targetMirrorCount = 2; // Default minimum
+        switch (player.aiStrategy) {
+            case Constants.AIStrategy.ECONOMIC:
+                targetMirrorCount = Constants.AI_MAX_MIRRORS; // Max out mirrors
+                break;
+            case Constants.AIStrategy.DEFENSIVE:
+                targetMirrorCount = 4; // Moderate mirrors for balanced economy
+                break;
+            case Constants.AIStrategy.AGGRESSIVE:
+                targetMirrorCount = 3; // Fewer mirrors, spend on units
+                break;
+            case Constants.AIStrategy.WAVES:
+                targetMirrorCount = 4; // Need economy for wave production
+                break;
+        }
+
+        // Don't buy more mirrors than target
+        if (currentMirrorCount >= targetMirrorCount) {
+            return;
+        }
+
+        // Check if we can afford a mirror
+        if (player.solarium < Constants.SOLAR_MIRROR_COST) {
+            return;
+        }
+
+        // Find a good position for the new mirror
+        const sun = this.getClosestSunToPoint(player.stellarForge.position);
+        if (!sun) {
+            return;
+        }
+
+        // Calculate position around the sun
+        const baseAngleRad = Math.atan2(
+            player.stellarForge.position.y - sun.position.y,
+            player.stellarForge.position.x - sun.position.x
+        );
+        const mirrorIndex = currentMirrorCount;
+        const startAngleRad = baseAngleRad - (Constants.AI_MIRROR_ARC_SPACING_RAD * targetMirrorCount) / 2;
+        const angleRad = startAngleRad + Constants.AI_MIRROR_ARC_SPACING_RAD * mirrorIndex;
+        const radiusPx = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
+        
+        const mirrorPosition = new Vector2D(
+            sun.position.x + Math.cos(angleRad) * radiusPx,
+            sun.position.y + Math.sin(angleRad) * radiusPx
+        );
+
+        // Purchase the mirror
+        if (player.spendSolarium(Constants.SOLAR_MIRROR_COST)) {
+            const newMirror = new SolarMirror(mirrorPosition, player);
+            player.solarMirrors.push(newMirror);
+        }
+    }
+
     private updateAiDefenseForPlayer(
         player: Player,
         enemies: (Unit | StellarForge | Building)[]
@@ -4289,6 +4360,59 @@ export class GameState {
             return;
         }
 
+        // Strategy-based defense behavior
+        if (player.aiStrategy === Constants.AIStrategy.WAVES) {
+            // Waves strategy: Accumulate units at base until reaching threshold
+            const unitCount = player.units.length;
+            const waveThreshold = 8; // Attack when we have at least 8 units
+            
+            if (unitCount >= waveThreshold) {
+                // Send all units to attack enemy base
+                const enemyForge = this.getEnemyForgeForPlayer(player);
+                if (enemyForge) {
+                    for (const unit of player.units) {
+                        if (unit.isHero || unit instanceof Starling) {
+                            unit.rallyPoint = new Vector2D(enemyForge.position.x, enemyForge.position.y);
+                            if (unit instanceof Starling) {
+                                unit.setManualRallyPoint(new Vector2D(enemyForge.position.x, enemyForge.position.y));
+                            }
+                        }
+                    }
+                    return;
+                }
+            } else {
+                // Accumulate at base
+                for (const unit of player.units) {
+                    if (unit.isHero) {
+                        unit.rallyPoint = new Vector2D(
+                            player.stellarForge.position.x,
+                            player.stellarForge.position.y
+                        );
+                    } else if (unit instanceof Starling) {
+                        unit.setManualRallyPoint(new Vector2D(
+                            player.stellarForge.position.x,
+                            player.stellarForge.position.y
+                        ));
+                    }
+                }
+                return;
+            }
+        } else if (player.aiStrategy === Constants.AIStrategy.AGGRESSIVE) {
+            // Aggressive strategy: Always push to enemy base
+            const enemyForge = this.getEnemyForgeForPlayer(player);
+            if (enemyForge) {
+                for (const unit of player.units) {
+                    if (unit.isHero) {
+                        unit.rallyPoint = new Vector2D(enemyForge.position.x, enemyForge.position.y);
+                    } else if (unit instanceof Starling) {
+                        unit.setManualRallyPoint(new Vector2D(enemyForge.position.x, enemyForge.position.y));
+                    }
+                }
+                return;
+            }
+        }
+
+        // Default behavior (for ECONOMIC and DEFENSIVE): Defend mirrors and base
         const mirrorCount = player.solarMirrors.length;
         let mirrorIndex = 0;
 
@@ -4312,12 +4436,38 @@ export class GameState {
             }
         }
     }
+    
+    private getEnemyForgeForPlayer(player: Player): StellarForge | null {
+        for (const otherPlayer of this.players) {
+            if (otherPlayer !== player && !otherPlayer.isDefeated() && otherPlayer.stellarForge) {
+                return otherPlayer.stellarForge;
+            }
+        }
+        return null;
+    }
 
     private updateAiHeroProductionForPlayer(player: Player): void {
         if (this.gameTime < player.aiNextHeroCommandSec) {
             return;
         }
-        player.aiNextHeroCommandSec = this.gameTime + Constants.AI_HERO_COMMAND_INTERVAL_SEC;
+        
+        // Strategy-based hero production intervals
+        let heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
+        switch (player.aiStrategy) {
+            case Constants.AIStrategy.AGGRESSIVE:
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 0.7; // Faster hero production
+                break;
+            case Constants.AIStrategy.ECONOMIC:
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 1.5; // Slower, save resources
+                break;
+            case Constants.AIStrategy.WAVES:
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 1.2; // Slightly slower
+                break;
+            default:
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
+        }
+        
+        player.aiNextHeroCommandSec = this.gameTime + heroProductionInterval;
 
         if (!player.stellarForge || !player.stellarForge.canProduceUnits()) {
             return;
@@ -4358,14 +4508,54 @@ export class GameState {
         const hasSubsidiaryFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
 
         let buildType: 'minigun' | 'swirler' | 'subsidiaryFactory' | null = null;
-        if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
-            buildType = 'subsidiaryFactory';
-        } else if (minigunCount < 2 && player.solarium >= Constants.MINIGUN_COST) {
-            buildType = 'minigun';
-        } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
-            buildType = 'swirler';
-        } else if (minigunCount < 4 && player.solarium >= Constants.MINIGUN_COST) {
-            buildType = 'minigun';
+        
+        // Strategy-based building priorities
+        switch (player.aiStrategy) {
+            case Constants.AIStrategy.ECONOMIC:
+                // Economic: Build factory first, then minimal defenses
+                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                    buildType = 'subsidiaryFactory';
+                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                    buildType = 'swirler';
+                }
+                break;
+                
+            case Constants.AIStrategy.DEFENSIVE:
+                // Defensive: Prioritize defenses heavily
+                if (swirlerCount < 2 && player.solarium >= Constants.SWIRLER_COST) {
+                    buildType = 'swirler';
+                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                } else if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                    buildType = 'subsidiaryFactory';
+                } else if (minigunCount < 5 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                }
+                break;
+                
+            case Constants.AIStrategy.AGGRESSIVE:
+                // Aggressive: Build factory early, skip most defenses
+                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                    buildType = 'subsidiaryFactory';
+                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                }
+                break;
+                
+            case Constants.AIStrategy.WAVES:
+                // Waves: Balanced approach with factory priority
+                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                    buildType = 'subsidiaryFactory';
+                } else if (minigunCount < 2 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                    buildType = 'swirler';
+                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                    buildType = 'minigun';
+                }
+                break;
         }
 
         if (!buildType) {
@@ -5458,6 +5648,8 @@ export class GameState {
             mix(player.aiNextDefenseCommandSec);
             mix(player.aiNextHeroCommandSec);
             mix(player.aiNextStructureCommandSec);
+            mix(player.aiNextMirrorPurchaseCommandSec);
+            mixString(player.aiStrategy);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -5658,6 +5850,18 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
         const [name, faction] = playerNames[i];
         const player = new Player(name, faction);
         player.isAi = i !== 0;
+        
+        // Assign random AI strategy for AI players
+        if (player.isAi) {
+            const strategies = [
+                Constants.AIStrategy.ECONOMIC,
+                Constants.AIStrategy.DEFENSIVE,
+                Constants.AIStrategy.AGGRESSIVE,
+                Constants.AIStrategy.WAVES
+            ];
+            player.aiStrategy = strategies[Math.floor(Math.random() * strategies.length)];
+        }
+        
         const forgePos = positions[i];
         
         const mirrorSpawnDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
