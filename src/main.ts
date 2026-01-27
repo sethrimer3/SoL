@@ -614,7 +614,7 @@ class GameController {
                     if (gate.owner !== player) continue;
                     
                     // Calculate button positions
-                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS;
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_HIT_RADIUS_PX;
                     const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
                     
@@ -1343,6 +1343,11 @@ class GameController {
             }
             
             this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
+
+            if (this.currentWarpGate.shouldEmitShockwave()) {
+                this.scatterParticles(this.currentWarpGate.position);
+                this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
+            }
         }
     }
 

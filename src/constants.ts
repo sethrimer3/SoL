@@ -17,6 +17,9 @@ export const WARP_GATE_SPIRAL_FORCE_TANGENT = 20;
 export const WARP_GATE_RADIUS = 50;
 export const WARP_GATE_BUTTON_RADIUS = 28; // Match hero button size
 export const WARP_GATE_BUTTON_OFFSET = 30;
+export const WARP_GATE_BUTTON_HIT_RADIUS_PX = 40;
+export const WARP_GATE_SHOCKWAVE_MAX_RADIUS_PX = 220;
+export const WARP_GATE_SHOCKWAVE_PROGRESS_PER_FRAME = 0.06;
 
 // Particle scatter constants
 export const PARTICLE_SCATTER_RADIUS = 150;
