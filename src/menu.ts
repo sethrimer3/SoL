@@ -2524,8 +2524,10 @@ class CarouselMenuView {
     constructor(container: HTMLElement, options: MenuOption[], initialIndex: number = 0) {
         this.container = container;
         this.options = options;
-        this.currentIndex = initialIndex;
-        this.targetIndex = initialIndex;
+        // Validate and clamp initialIndex to valid range
+        const validatedIndex = Math.max(0, Math.min(initialIndex, options.length - 1));
+        this.currentIndex = validatedIndex;
+        this.targetIndex = validatedIndex;
         this.setupContainer();
         this.setupEventHandlers();
         this.startAnimation();
