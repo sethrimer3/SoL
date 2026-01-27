@@ -52,6 +52,7 @@ export const DUST_REPULSION_STRENGTH = 14;
 // Sprite scaling constants
 export const DUST_SPRITE_SCALE_FACTOR = 3;
 export const STARLING_SPRITE_SCALE_FACTOR = 6;
+export const STARLING_SPRITE_ROTATION_OFFSET_RAD = Math.PI / 2;
 
 // Space dust glow constants
 export const DUST_GLOW_STATE_NORMAL = 0;
@@ -127,6 +128,11 @@ export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion starlings
+export const FORGE_FLAME_ALPHA = 0.3;
+export const FORGE_FLAME_SIZE_MULTIPLIER = 0.3;
+export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
+export const FORGE_FLAME_WARMTH_FADE_PER_SEC = 2.0;
+export const FORGE_FLAME_OFFSET_MULTIPLIER = 0.35;
 
 // Stellar Forge constants (main base structure)
 export const STELLAR_FORGE_MAX_HEALTH = 1000;

@@ -6,6 +6,12 @@ import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, S
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
+type ForgeFlameState = {
+    warmth: number;
+    rotationRad: number;
+    lastGameTime: number;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -38,6 +44,7 @@ export class GameRenderer {
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
+    private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -312,6 +319,68 @@ export class GameRenderer {
         return null;
     }
 
+    private getStarlingFacingRotationRad(starling: Starling): number | null {
+        let targetPosition: Vector2D | null = null;
+        if (starling.rallyPoint) {
+            const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
+            if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
+                targetPosition = starling.rallyPoint;
+            }
+        }
+
+        if (!targetPosition && starling.target && 'position' in starling.target) {
+            if (!('health' in starling.target) || starling.target.health > 0) {
+                targetPosition = starling.target.position;
+            }
+        }
+
+        if (!targetPosition) {
+            return null;
+        }
+
+        const dx = targetPosition.x - starling.position.x;
+        const dy = targetPosition.y - starling.position.y;
+        if (dx === 0 && dy === 0) {
+            return null;
+        }
+
+        return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+    }
+
+    private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
+        let state = this.forgeFlameStates.get(forge);
+        if (!state) {
+            state = {
+                warmth: forge.isReceivingLight ? 1 : 0,
+                rotationRad: forge.rotation,
+                lastGameTime: gameTime
+            };
+            this.forgeFlameStates.set(forge, state);
+            return state;
+        }
+
+        const deltaTime = Math.max(0, gameTime - state.lastGameTime);
+        state.lastGameTime = gameTime;
+
+        const targetWarmth = forge.isReceivingLight ? 1 : 0;
+        if (targetWarmth > state.warmth) {
+            state.warmth = Math.min(1, state.warmth + Constants.FORGE_FLAME_WARMTH_FADE_PER_SEC * deltaTime);
+        } else if (targetWarmth < state.warmth) {
+            state.warmth = Math.max(0, state.warmth - Constants.FORGE_FLAME_WARMTH_FADE_PER_SEC * deltaTime);
+        }
+
+        if (forge.isReceivingLight) {
+            const crunch = forge.getCurrentCrunch();
+            const speedMultiplier = crunch && crunch.isActive() ? 2 : 1;
+            state.rotationRad += Constants.FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC * speedMultiplier * deltaTime;
+            if (state.rotationRad >= Math.PI * 2) {
+                state.rotationRad -= Math.PI * 2;
+            }
+        }
+
+        return state;
+    }
+
     private getHeroSpritePath(unit: Unit): string | null {
         if (unit.owner.faction !== Faction.RADIANT) {
             return null;
@@ -442,6 +511,54 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
             this.ctx.fill();
         }
+    }
+
+    private drawForgeFlames(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        forgeSpriteSize: number,
+        game: GameState,
+        shouldDim: boolean
+    ): void {
+        const flameState = this.getForgeFlameState(forge, game.gameTime);
+        const hotSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png');
+        const coldSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png');
+
+        if (!hotSprite.complete || hotSprite.naturalWidth === 0 || !coldSprite.complete || coldSprite.naturalWidth === 0) {
+            return;
+        }
+
+        const flameSize = forgeSpriteSize * Constants.FORGE_FLAME_SIZE_MULTIPLIER;
+        const flameOffset = flameSize * Constants.FORGE_FLAME_OFFSET_MULTIPLIER;
+        const shadeMultiplier = shouldDim ? (1 - Constants.SHADE_OPACITY) : 1;
+        const baseAlpha = Constants.FORGE_FLAME_ALPHA * shadeMultiplier;
+        const hotAlpha = baseAlpha * flameState.warmth;
+        const coldAlpha = baseAlpha * (1 - flameState.warmth);
+
+        const flameOffsets = [-flameOffset, flameOffset];
+
+        for (let i = 0; i < flameOffsets.length; i++) {
+            const offsetX = flameOffsets[i];
+            const rotationRad = i === 0 ? flameState.rotationRad : -flameState.rotationRad;
+
+            this.ctx.save();
+            this.ctx.translate(screenPos.x + offsetX, screenPos.y);
+            this.ctx.rotate(rotationRad);
+
+            if (coldAlpha > 0) {
+                this.ctx.globalAlpha = coldAlpha;
+                this.ctx.drawImage(coldSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
+            }
+
+            if (hotAlpha > 0) {
+                this.ctx.globalAlpha = hotAlpha;
+                this.ctx.drawImage(hotSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
+            }
+
+            this.ctx.restore();
+        }
+
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**
@@ -635,6 +752,8 @@ export class GameRenderer {
                 spriteSize,
                 spriteSize
             );
+
+            this.drawForgeFlames(forge, screenPos, spriteSize, game, shouldDim);
 
             this.ctx.strokeStyle = forge.isReceivingLight
                 ? (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00')
@@ -1805,13 +1924,28 @@ export class GameRenderer {
         
         if (starlingSprite) {
             const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
-            this.ctx.drawImage(
-                starlingSprite,
-                screenPos.x - spriteSize / 2,
-                screenPos.y - spriteSize / 2,
-                spriteSize,
-                spriteSize
-            );
+            const rotationRad = this.getStarlingFacingRotationRad(starling);
+            if (rotationRad !== null) {
+                this.ctx.save();
+                this.ctx.translate(screenPos.x, screenPos.y);
+                this.ctx.rotate(rotationRad);
+                this.ctx.drawImage(
+                    starlingSprite,
+                    -spriteSize / 2,
+                    -spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+                this.ctx.restore();
+            } else {
+                this.ctx.drawImage(
+                    starlingSprite,
+                    screenPos.x - spriteSize / 2,
+                    screenPos.y - spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+            }
         } else {
             // Fallback to circle rendering if sprite not loaded
             this.ctx.fillStyle = displayColor;
