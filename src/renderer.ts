@@ -128,8 +128,9 @@ export class GameRenderer {
      * Convert world coordinates to screen coordinates
      */
     private worldToScreen(worldPos: Vector2D): Vector2D {
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
+        const dpr = window.devicePixelRatio || 1;
+        const centerX = (this.canvas.width / dpr) / 2;
+        const centerY = (this.canvas.height / dpr) / 2;
         return new Vector2D(
             centerX + (worldPos.x - this.camera.x) * this.zoom,
             centerY + (worldPos.y - this.camera.y) * this.zoom
@@ -155,8 +156,9 @@ export class GameRenderer {
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
-        const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
+        const dpr = window.devicePixelRatio || 1;
+        const centerX = (this.canvas.width / dpr) / 2;
+        const centerY = (this.canvas.height / dpr) / 2;
         return new Vector2D(
             this.camera.x + (screenX - centerX) / this.zoom,
             this.camera.y + (screenY - centerY) / this.zoom
