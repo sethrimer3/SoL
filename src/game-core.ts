@@ -1284,7 +1284,7 @@ export class Player {
     aiNextHeroCommandSec: number = 0;
     aiNextStructureCommandSec: number = 0;
     aiNextMirrorPurchaseCommandSec: number = 0;
-    aiStrategy: Constants.AIStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy
+    aiStrategy: Constants.AIStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy (randomly assigned in createStandardGame for AI players)
     
     // Statistics tracking
     unitsCreated: number = 0;
@@ -4364,7 +4364,7 @@ export class GameState {
         if (player.aiStrategy === Constants.AIStrategy.WAVES) {
             // Waves strategy: Accumulate units at base until reaching threshold
             const unitCount = player.units.length;
-            const waveThreshold = 8; // Attack when we have at least 8 units
+            const waveThreshold = Constants.AI_WAVES_ATTACK_THRESHOLD;
             
             if (unitCount >= waveThreshold) {
                 // Send all units to attack enemy base
@@ -4455,13 +4455,13 @@ export class GameState {
         let heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
         switch (player.aiStrategy) {
             case Constants.AIStrategy.AGGRESSIVE:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 0.7; // Faster hero production
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_AGGRESSIVE_HERO_MULTIPLIER;
                 break;
             case Constants.AIStrategy.ECONOMIC:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 1.5; // Slower, save resources
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_ECONOMIC_HERO_MULTIPLIER;
                 break;
             case Constants.AIStrategy.WAVES:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * 1.2; // Slightly slower
+                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_WAVES_HERO_MULTIPLIER;
                 break;
             default:
                 heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
