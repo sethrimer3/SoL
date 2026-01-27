@@ -178,24 +178,26 @@ export class GameRenderer {
     }
 
     private getSpriteImage(path: string): HTMLImageElement {
-        const cached = this.spriteImageCache.get(path);
+        const resolvedPath = this.resolveAssetPath(path);
+        const cached = this.spriteImageCache.get(resolvedPath);
         if (cached) {
             return cached;
         }
         const image = new Image();
-        image.src = path;
-        this.spriteImageCache.set(path, image);
+        image.src = resolvedPath;
+        this.spriteImageCache.set(resolvedPath, image);
         return image;
     }
 
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
-        const cacheKey = `${path}|${color}`;
+        const resolvedPath = this.resolveAssetPath(path);
+        const cacheKey = `${resolvedPath}|${color}`;
         const cached = this.tintedSpriteCache.get(cacheKey);
         if (cached) {
             return cached;
         }
 
-        const image = this.getSpriteImage(path);
+        const image = this.getSpriteImage(resolvedPath);
         if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
             return null;
         }
@@ -220,9 +222,24 @@ export class GameRenderer {
         return canvas;
     }
 
+    private resolveAssetPath(path: string): string {
+        if (!path.startsWith('ASSETS/')) {
+            return path;
+        }
+        const isDistBuild = window.location.pathname.includes('/dist/');
+        return isDistBuild ? `../${path}` : path;
+    }
+
     private getForgeSpritePath(forge: StellarForge): string | null {
         if (forge.owner.faction === Faction.RADIANT) {
             return 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg';
+        }
+        return null;
+    }
+
+    private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
+        if (mirror.owner.faction === Faction.RADIANT) {
+            return 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg';
         }
         return null;
     }
@@ -817,39 +834,68 @@ export class GameRenderer {
         // Translate to mirror position and rotate for reflection angle
         this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.rotate(mirror.reflectionAngle);
-        
-        // Draw flat reflective surface (rectangle)
+
         const surfaceLength = size * 2;
         const surfaceThickness = size * 0.3;
-        
-        // Draw surface with gradient to show reflectivity
-        const surfaceGradient = this.ctx.createLinearGradient(0, -surfaceThickness/2, 0, surfaceThickness/2);
-        surfaceGradient.addColorStop(0, '#FFFFFF');
-        surfaceGradient.addColorStop(0.5, '#E0E0E0');
-        surfaceGradient.addColorStop(1, '#C0C0C0');
-        
-        this.ctx.fillStyle = surfaceGradient;
-        this.ctx.fillRect(-surfaceLength/2, -surfaceThickness/2, surfaceLength, surfaceThickness);
-        
-        // Draw border for the surface
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(-surfaceLength/2, -surfaceThickness/2, surfaceLength, surfaceThickness);
-        
-        // Draw small indicator dots at the ends
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(-surfaceLength/2, 0, 3, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.beginPath();
-        this.ctx.arc(surfaceLength/2, 0, 3, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw selection indicator if selected
+        let selectionWidth = surfaceLength;
+        let selectionHeight = surfaceThickness;
+        let drewSprite = false;
+
+        const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
+        if (mirrorSpritePath) {
+            const mirrorSprite = this.getSpriteImage(mirrorSpritePath);
+            if (mirrorSprite.complete && mirrorSprite.naturalWidth > 0 && mirrorSprite.naturalHeight > 0) {
+                const targetSize = size * 2.4;
+                const scale = targetSize / Math.max(mirrorSprite.naturalWidth, mirrorSprite.naturalHeight);
+                const drawWidth = mirrorSprite.naturalWidth * scale;
+                const drawHeight = mirrorSprite.naturalHeight * scale;
+                selectionWidth = drawWidth;
+                selectionHeight = drawHeight;
+                this.ctx.drawImage(
+                    mirrorSprite,
+                    -drawWidth / 2,
+                    -drawHeight / 2,
+                    drawWidth,
+                    drawHeight
+                );
+                drewSprite = true;
+            }
+        }
+
+        if (!drewSprite) {
+            // Draw flat reflective surface (rectangle)
+            const surfaceGradient = this.ctx.createLinearGradient(0, -surfaceThickness / 2, 0, surfaceThickness / 2);
+            surfaceGradient.addColorStop(0, '#FFFFFF');
+            surfaceGradient.addColorStop(0.5, '#E0E0E0');
+            surfaceGradient.addColorStop(1, '#C0C0C0');
+
+            this.ctx.fillStyle = surfaceGradient;
+            this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
+
+            // Draw border for the surface
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
+
+            // Draw small indicator dots at the ends
+            this.ctx.fillStyle = color;
+            this.ctx.beginPath();
+            this.ctx.arc(-surfaceLength / 2, 0, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.beginPath();
+            this.ctx.arc(surfaceLength / 2, 0, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
         if (mirror.isSelected) {
             this.ctx.strokeStyle = '#FFFF00';
             this.ctx.lineWidth = 3;
-            this.ctx.strokeRect(-surfaceLength/2 - 3, -surfaceThickness/2 - 3, surfaceLength + 6, surfaceThickness + 6);
+            this.ctx.strokeRect(
+                -selectionWidth / 2 - 3,
+                -selectionHeight / 2 - 3,
+                selectionWidth + 6,
+                selectionHeight + 6
+            );
         }
         
         // Restore context state

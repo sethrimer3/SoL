@@ -230,9 +230,11 @@ class GameController {
     }
 
     private createGameFromSettings(settings: GameSettings): GameState {
+        const playerFaction = settings.selectedFaction ?? Faction.RADIANT;
+        const aiFaction = Faction.RADIANT;
         const game = createStandardGame([
-            ['Player 1', Faction.RADIANT],
-            ['Player 2', Faction.AURUM]
+            ['Player 1', playerFaction],
+            ['Player 2', aiFaction]
         ]);
 
         // Clear and recreate based on map settings
