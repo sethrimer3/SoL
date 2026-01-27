@@ -4,6 +4,7 @@
 
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
 import * as Constants from './constants';
+import { ColorScheme, COLOR_SCHEMES } from './menu';
 
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
@@ -28,6 +29,7 @@ export class GameRenderer {
     public isPaused: boolean = false; // Game pause state
     public playerColor: string = Constants.PLAYER_1_COLOR; // Player 1 color (customizable)
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
+    public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -207,22 +209,31 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
 
-        // Draw sun glow
+        // Draw sun glow (outer glow)
         const gradient = this.ctx.createRadialGradient(
             screenPos.x, screenPos.y, 0,
             screenPos.x, screenPos.y, screenRadius
         );
-        gradient.addColorStop(0, 'rgba(255, 255, 150, 1)');
-        gradient.addColorStop(0.5, 'rgba(255, 200, 50, 0.5)');
-        gradient.addColorStop(1, 'rgba(255, 150, 0, 0)');
+        gradient.addColorStop(0, this.colorScheme.sunGlow.outerGlow1);
+        gradient.addColorStop(0.5, this.colorScheme.sunGlow.outerGlow2);
+        gradient.addColorStop(0.8, this.colorScheme.sunGlow.outerGlow3);
+        gradient.addColorStop(1, this.colorScheme.sunGlow.outerGlow4);
 
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Draw sun core
-        this.ctx.fillStyle = '#FFFF00';
+        // Draw sun core with gradient
+        const coreGradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, screenRadius * 0.6
+        );
+        coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
+        coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
+        coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
+
+        this.ctx.fillStyle = coreGradient;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
         this.ctx.fill();
@@ -256,12 +267,17 @@ export class GameRenderer {
         // Draw multiple subtle flare spots at different positions along the sun-center axis
         // offset: position multiplier along the axis (-1 = opposite side, 0 = center, 1 = sun)
         // size: flare radius as a fraction of sun radius
-        // alpha: opacity of the flare center
+        // Extract base color and alpha from colorScheme.lensFlareHalo
+        const haloColorMatch = this.colorScheme.lensFlareHalo.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+        const haloBaseColor = haloColorMatch 
+            ? `rgba(${haloColorMatch[1]}, ${haloColorMatch[2]}, ${haloColorMatch[3]}, `
+            : 'rgba(255, 240, 200, ';
+        
         const flarePositions = [
-            { offset: -0.3, size: 0.4, alpha: 0.15, color: 'rgba(255, 200, 100, ' },  // Warm yellow-orange
-            { offset: -0.5, size: 0.25, alpha: 0.12, color: 'rgba(100, 150, 255, ' }, // Cool blue
-            { offset: 0.4, size: 0.3, alpha: 0.1, color: 'rgba(255, 150, 150, ' },    // Pink
-            { offset: 0.7, size: 0.2, alpha: 0.08, color: 'rgba(150, 255, 200, ' }    // Teal
+            { offset: -0.3, size: 0.4, alpha: 0.15 },
+            { offset: -0.5, size: 0.25, alpha: 0.12 },
+            { offset: 0.4, size: 0.3, alpha: 0.1 },
+            { offset: 0.7, size: 0.2, alpha: 0.08 }
         ];
         
         for (const flare of flarePositions) {
@@ -275,9 +291,9 @@ export class GameRenderer {
                 flareX, flareY, 0,
                 flareX, flareY, flareRadius
             );
-            flareGradient.addColorStop(0, `${flare.color}${flare.alpha})`);
-            flareGradient.addColorStop(0.5, `${flare.color}${flare.alpha * 0.5})`);
-            flareGradient.addColorStop(1, `${flare.color}0)`);
+            flareGradient.addColorStop(0, `${haloBaseColor}${flare.alpha})`);
+            flareGradient.addColorStop(0.5, `${haloBaseColor}${flare.alpha * 0.5})`);
+            flareGradient.addColorStop(1, `${haloBaseColor}0)`);
             
             this.ctx.fillStyle = flareGradient;
             this.ctx.beginPath();
@@ -288,7 +304,7 @@ export class GameRenderer {
         // Draw subtle hexagonal starburst around the sun
         this.ctx.save();
         this.ctx.globalAlpha = 0.2;
-        this.ctx.strokeStyle = 'rgba(255, 255, 200, 0.3)';
+        this.ctx.strokeStyle = this.colorScheme.lensFlareHalo;
         this.ctx.lineWidth = 2;
         
         for (let i = 0; i < 6; i++) {
@@ -299,10 +315,11 @@ export class GameRenderer {
             const endX = screenPos.x + Math.cos(angle) * rayLength;
             const endY = screenPos.y + Math.sin(angle) * rayLength;
             
-            // Create gradient for each ray
+            // Create gradient for each ray - increase alpha for better visibility
             const rayGradient = this.ctx.createLinearGradient(startX, startY, endX, endY);
-            rayGradient.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
-            rayGradient.addColorStop(1, 'rgba(255, 255, 200, 0)');
+            const rayColor = haloBaseColor + '0.4)';
+            rayGradient.addColorStop(0, rayColor);
+            rayGradient.addColorStop(1, `${haloBaseColor}0)`);
             
             this.ctx.strokeStyle = rayGradient;
             this.ctx.beginPath();
@@ -883,12 +900,10 @@ export class GameRenderer {
                 sunScreenPos.x, sunScreenPos.y, maxRadius
             );
             
-            // Subtle brightness falloff from sun - brighter near sun, dimmer farther away
-            gradient.addColorStop(0, 'rgba(255, 255, 220, 0.25)');     // Brightest near sun
-            gradient.addColorStop(0.15, 'rgba(255, 255, 210, 0.15)');  // Still bright
-            gradient.addColorStop(0.35, 'rgba(255, 255, 200, 0.08)');  // Medium
-            gradient.addColorStop(0.6, 'rgba(255, 255, 190, 0.03)');   // Dim
-            gradient.addColorStop(1, 'rgba(255, 255, 180, 0)');        // Fade out
+            // Use color scheme for subtle brightness falloff from sun
+            gradient.addColorStop(0, this.colorScheme.sunLightRays.nearCenter);     // Brightest near sun
+            gradient.addColorStop(0.5, this.colorScheme.sunLightRays.mid);          // Medium
+            gradient.addColorStop(1, this.colorScheme.sunLightRays.edge);           // Fade out
             
             this.ctx.fillStyle = gradient;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -2569,8 +2584,8 @@ export class GameRenderer {
      * Render the entire game state
      */
     render(game: GameState): void {
-        // Clear canvas
-        this.ctx.fillStyle = '#000011';
+        // Clear canvas with color scheme background
+        this.ctx.fillStyle = this.colorScheme.background;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         // Draw parallax star layers

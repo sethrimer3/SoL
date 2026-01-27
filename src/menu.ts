@@ -783,6 +783,54 @@ class ParticleMenuLayer {
     }
 }
 
+export interface ColorScheme {
+    id: string;
+    name: string;
+    background: string;
+    sunCore: {
+        inner: string;
+        mid: string;
+        outer: string;
+    };
+    sunGlow: {
+        outerGlow1: string;
+        outerGlow2: string;
+        outerGlow3: string;
+        outerGlow4: string;
+    };
+    sunLightRays: {
+        nearCenter: string;
+        mid: string;
+        edge: string;
+    };
+    lensFlareHalo: string;
+}
+
+export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
+    'SpaceBlack': {
+        id: 'SpaceBlack',
+        name: 'Space Black',
+        background: '#000000',
+        sunCore: {
+            inner: 'rgba(255, 255, 255, 1)',     // #FFFFFF white-hot center
+            mid: 'rgba(255, 230, 120, 1)',       // #FFE678
+            outer: 'rgba(255, 180, 50, 0.9)'     // #FFB432
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(255, 220, 100, 0.8)', // #FFDC64
+            outerGlow2: 'rgba(255, 180, 50, 0.4)',  // #FFB432
+            outerGlow3: 'rgba(255, 140, 30, 0.2)',  // #FF8C1E
+            outerGlow4: 'rgba(255, 100, 0, 0)'      // #FF6400 (fade)
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(255, 245, 215, 0.35)', // #FFF5D7 soft warm cream
+            mid: 'rgba(255, 220, 170, 0.18)',        // #FFDCAA warm peach
+            edge: 'rgba(255, 200, 140, 0)'           // #FFC88C fades to transparent
+        },
+        lensFlareHalo: 'rgba(255, 240, 200, 0.15)'   // #FFF0C8
+    }
+};
+
 export interface GameSettings {
     selectedMap: MapConfig;
     difficulty: 'easy' | 'normal' | 'hard';
@@ -796,6 +844,7 @@ export interface GameSettings {
     enemyColor: string;
     selectedBaseLoadout: string | null; // Base loadout ID
     selectedSpawnLoadout: string | null; // Spawn loadout ID
+    colorScheme: string; // Color scheme ID
 }
 
 export class MainMenu {
@@ -943,7 +992,8 @@ export class MainMenu {
             playerColor: '#66B3FF', // Somewhat light blue
             enemyColor: '#FF6B6B',   // Slightly light red
             selectedBaseLoadout: null,
-            selectedSpawnLoadout: null
+            selectedSpawnLoadout: null,
+            colorScheme: 'SpaceBlack' // Default color scheme
         };
         
         this.menuElement = this.createMenuElement();
@@ -1357,6 +1407,19 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(enemyColorSection);
+
+        // Color Scheme setting
+        const colorSchemeSection = this.createSettingSection(
+            'Color Scheme',
+            this.createSelect(
+                Object.keys(COLOR_SCHEMES),
+                this.settings.colorScheme,
+                (value) => {
+                    this.settings.colorScheme = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(colorSchemeSection);
 
         container.appendChild(settingsContainer);
 

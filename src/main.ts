@@ -4,7 +4,7 @@
 
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
-import { MainMenu, GameSettings } from './menu';
+import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 
 class GameController {
@@ -203,6 +203,12 @@ class GameController {
         // Set player and enemy colors from settings
         this.renderer.playerColor = settings.playerColor;
         this.renderer.enemyColor = settings.enemyColor;
+        
+        // Set color scheme from settings
+        const colorScheme = COLOR_SCHEMES[settings.colorScheme];
+        if (colorScheme) {
+            this.renderer.colorScheme = colorScheme;
+        }
         
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
