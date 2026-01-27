@@ -232,10 +232,11 @@ class GameController {
     private createGameFromSettings(settings: GameSettings): GameState {
         const playerFaction = settings.selectedFaction ?? Faction.RADIANT;
         const aiFaction = Faction.RADIANT;
+        const colorScheme = COLOR_SCHEMES[settings.colorScheme];
         const game = createStandardGame([
             ['Player 1', playerFaction],
             ['Player 2', aiFaction]
-        ]);
+        ], colorScheme?.spaceDustPalette);
 
         // Clear and recreate based on map settings
         const map = settings.selectedMap;
@@ -268,7 +269,7 @@ class GameController {
         
         // Reinitialize space dust
         game.spaceDust = [];
-        game.initializeSpaceDust(1000, map.mapSize, map.mapSize);
+        game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, map.mapSize, map.mapSize, colorScheme?.spaceDustPalette);
         
         return game;
     }
@@ -319,7 +320,7 @@ class GameController {
             
             // Adjust camera to keep world position under cursor the same
             const currentCamera = this.renderer.camera;
-            this.renderer.setCameraPosition(new Vector2D(
+            this.renderer.setCameraPositionWithoutParallax(new Vector2D(
                 currentCamera.x + (worldPosBeforeZoom.x - worldPosAfterZoom.x),
                 currentCamera.y + (worldPosBeforeZoom.y - worldPosAfterZoom.y)
             ));
@@ -994,7 +995,7 @@ class GameController {
                     
                     // Adjust camera to keep world position under pinch center the same
                     const currentCamera = this.renderer.camera;
-                    this.renderer.setCameraPosition(new Vector2D(
+                    this.renderer.setCameraPositionWithoutParallax(new Vector2D(
                         currentCamera.x + (worldPosBeforeZoom.x - worldPosAfterZoom.x),
                         currentCamera.y + (worldPosBeforeZoom.y - worldPosAfterZoom.y)
                     ));

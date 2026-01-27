@@ -44,6 +44,7 @@ export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by 
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 2;
+export const SPACE_DUST_PARTICLE_COUNT = 3000;
 export const DUST_REPULSION_RADIUS_PX = 28;
 export const DUST_REPULSION_CELL_SIZE_PX = 32;
 export const DUST_REPULSION_STRENGTH = 14;
