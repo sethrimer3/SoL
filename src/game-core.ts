@@ -1333,9 +1333,9 @@ export class SpaceDustParticle {
     velocity: Vector2D;
     baseColor: string;
     currentColor: string;
-    glowState: number = 0; // 0 = normal, 1 = slight glow, 2 = full glow
+    glowState: number = Constants.DUST_GLOW_STATE_NORMAL;
     glowTransition: number = 0; // 0-1 transition between states
-    targetGlowState: number = 0; // Target glow state for transitions
+    targetGlowState: number = Constants.DUST_GLOW_STATE_NORMAL;
     lastMovementTime: number = 0; // Time since last significant movement
     
     constructor(
@@ -1365,30 +1365,30 @@ export class SpaceDustParticle {
         
         // Check if particle is moving significantly
         const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-        if (speed > 5) {
+        if (speed > Constants.DUST_FAST_MOVEMENT_THRESHOLD) {
             // Fast movement - trigger full glow
-            this.targetGlowState = 2;
+            this.targetGlowState = Constants.DUST_GLOW_STATE_FULL;
             this.lastMovementTime = Date.now();
-        } else if (speed > 1) {
+        } else if (speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {
             // Some movement - maintain current glow or go to slight glow
-            if (this.glowState < 1) {
-                this.targetGlowState = 1;
+            if (this.glowState < Constants.DUST_GLOW_STATE_SLIGHT) {
+                this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
             }
             this.lastMovementTime = Date.now();
         } else {
             // Slow/no movement - fade back to normal based on time since last movement
             const timeSinceMovement = Date.now() - this.lastMovementTime;
-            if (timeSinceMovement > 2000) {
+            if (timeSinceMovement > Constants.DUST_FADE_TO_NORMAL_DELAY_MS) {
                 // After 2 seconds of slow movement, start fading to normal
-                this.targetGlowState = 0;
-            } else if (timeSinceMovement > 1000 && this.glowState === 2) {
+                this.targetGlowState = Constants.DUST_GLOW_STATE_NORMAL;
+            } else if (timeSinceMovement > Constants.DUST_FADE_TO_SLIGHT_DELAY_MS && this.glowState === Constants.DUST_GLOW_STATE_FULL) {
                 // After 1 second, fade from full glow to slight glow
-                this.targetGlowState = 1;
+                this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
             }
         }
         
         // Smooth transition between glow states
-        const transitionSpeed = this.glowState < this.targetGlowState ? 3.0 : 0.5; // Fast transition up, slow down
+        const transitionSpeed = this.glowState < this.targetGlowState ? Constants.DUST_GLOW_TRANSITION_SPEED_UP : Constants.DUST_GLOW_TRANSITION_SPEED_DOWN;
         if (this.glowState < this.targetGlowState) {
             this.glowTransition += deltaTime * transitionSpeed;
             if (this.glowTransition >= 1.0) {

@@ -49,6 +49,21 @@ export const DUST_REPULSION_RADIUS_PX = 28;
 export const DUST_REPULSION_CELL_SIZE_PX = 32;
 export const DUST_REPULSION_STRENGTH = 14;
 
+// Sprite scaling constants
+export const DUST_SPRITE_SCALE_FACTOR = 3;
+export const STARLING_SPRITE_SCALE_FACTOR = 6;
+
+// Space dust glow constants
+export const DUST_GLOW_STATE_NORMAL = 0;
+export const DUST_GLOW_STATE_SLIGHT = 1;
+export const DUST_GLOW_STATE_FULL = 2;
+export const DUST_FAST_MOVEMENT_THRESHOLD = 5;
+export const DUST_SLOW_MOVEMENT_THRESHOLD = 1;
+export const DUST_FADE_TO_NORMAL_DELAY_MS = 2000;
+export const DUST_FADE_TO_SLIGHT_DELAY_MS = 1000;
+export const DUST_GLOW_TRANSITION_SPEED_UP = 3.0;
+export const DUST_GLOW_TRANSITION_SPEED_DOWN = 0.5;
+
 // Star background parallax constants
 export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
 export const STAR_LAYER_CONFIGS = [

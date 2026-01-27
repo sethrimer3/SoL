@@ -1067,7 +1067,7 @@ export class GameRenderer {
      */
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = Constants.DUST_PARTICLE_SIZE * this.zoom * 3; // Make sprites larger than the old dots
+        const size = Constants.DUST_PARTICLE_SIZE * this.zoom * Constants.DUST_SPRITE_SCALE_FACTOR;
         
         // Check if particle is in shadow
         const inShadow = game.isPointInShadow(particle.position);
@@ -1104,11 +1104,11 @@ export class GameRenderer {
         
         if (inInfluence) {
             // In influence: cross-fade from normal -> slight glow -> full glow
-            if (particle.glowState === 0) {
+            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL) {
                 sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
                 sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                 interpolation = particle.glowTransition;
-            } else if (particle.glowState === 1) {
+            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
                 sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                 sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
                 interpolation = particle.glowTransition;
@@ -1119,25 +1119,25 @@ export class GameRenderer {
             }
         } else {
             // Not in influence: cross-fade for movement-based glow
-            if (particle.glowState === 0 && particle.targetGlowState === 0) {
+            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
                 sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-            } else if (particle.glowState === 0 && particle.targetGlowState > 0) {
+            } else if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState > Constants.DUST_GLOW_STATE_NORMAL) {
                 sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
                 sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                 interpolation = particle.glowTransition;
-            } else if (particle.glowState === 1) {
-                if (particle.targetGlowState === 2) {
+            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
+                if (particle.targetGlowState === Constants.DUST_GLOW_STATE_FULL) {
                     sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                     sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
                     interpolation = particle.glowTransition;
-                } else if (particle.targetGlowState === 0) {
+                } else if (particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
                     sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                     sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
                     interpolation = particle.glowTransition;
                 } else {
                     sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                 }
-            } else if (particle.glowState === 2) {
+            } else if (particle.glowState === Constants.DUST_GLOW_STATE_FULL) {
                 sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
                 sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
                 interpolation = particle.glowTransition;
@@ -1801,7 +1801,7 @@ export class GameRenderer {
             : null;
         
         if (starlingSprite) {
-            const spriteSize = size * 6; // Scale up the sprite
+            const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
             this.ctx.drawImage(
                 starlingSprite,
                 screenPos.x - spriteSize / 2,
