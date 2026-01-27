@@ -320,31 +320,28 @@ export class GameRenderer {
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        let targetPosition: Vector2D | null = null;
+        // Use the unit's smooth rotation if it's moving
         if (starling.rallyPoint) {
             const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
             if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                targetPosition = starling.rallyPoint;
+                // Use the smoothly interpolated rotation from the unit's movement logic
+                return starling.rotation + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
             }
         }
 
-        if (!targetPosition && starling.target && 'position' in starling.target) {
+        // If not moving but has a target, face the target
+        if (starling.target && 'position' in starling.target) {
             if (!('health' in starling.target) || starling.target.health > 0) {
-                targetPosition = starling.target.position;
+                const targetPosition = starling.target.position;
+                const dx = targetPosition.x - starling.position.x;
+                const dy = targetPosition.y - starling.position.y;
+                if (dx !== 0 || dy !== 0) {
+                    return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+                }
             }
         }
 
-        if (!targetPosition) {
-            return null;
-        }
-
-        const dx = targetPosition.x - starling.position.x;
-        const dy = targetPosition.y - starling.position.y;
-        if (dx === 0 && dy === 0) {
-            return null;
-        }
-
-        return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+        return null;
     }
 
     private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
@@ -2049,32 +2046,32 @@ export class GameRenderer {
     private drawStarlingMoveLines(game: GameState): void {
         if (!this.viewingPlayer) return;
         
-        // Group selected starlings by their rally point
-        const starlingsByRallyPoint = new Map<Vector2D, Starling[]>();
+        // Group selected starlings by their rally point (using string key for proper Map comparison)
+        const starlingsByRallyPoint = new Map<string, {rallyPoint: Vector2D, starlings: Starling[]}>();
         
         for (const unit of this.selectedUnits) {
             if (unit instanceof Starling && unit.owner === this.viewingPlayer && unit.rallyPoint && unit.moveOrder > 0) {
-                const key = unit.rallyPoint;
+                const key = `${unit.rallyPoint.x},${unit.rallyPoint.y}`;
                 if (!starlingsByRallyPoint.has(key)) {
-                    starlingsByRallyPoint.set(key, []);
+                    starlingsByRallyPoint.set(key, {rallyPoint: unit.rallyPoint, starlings: []});
                 }
-                starlingsByRallyPoint.get(key)!.push(unit);
+                starlingsByRallyPoint.get(key)!.starlings.push(unit);
             }
         }
         
         const color = this.getFactionColor(this.viewingPlayer.faction);
         
         // For each rally point, draw a single line from the closest starling
-        for (const [rallyPoint, starlings] of starlingsByRallyPoint) {
-            if (starlings.length === 0) continue;
+        for (const [key, group] of starlingsByRallyPoint) {
+            if (group.starlings.length === 0) continue;
             
             // Find the closest starling to the rally point
-            let closestStarling = starlings[0];
+            let closestStarling = group.starlings[0];
             let minDistSq = Infinity;
             
-            for (const starling of starlings) {
-                const dx = rallyPoint.x - starling.position.x;
-                const dy = rallyPoint.y - starling.position.y;
+            for (const starling of group.starlings) {
+                const dx = group.rallyPoint.x - starling.position.x;
+                const dy = group.rallyPoint.y - starling.position.y;
                 const distSq = dx * dx + dy * dy;
                 if (distSq < minDistSq) {
                     minDistSq = distSq;
@@ -2083,7 +2080,7 @@ export class GameRenderer {
             }
             
             // Draw move order indicator from the closest starling only
-            this.drawMoveOrderIndicator(closestStarling.position, rallyPoint, closestStarling.moveOrder, color);
+            this.drawMoveOrderIndicator(closestStarling.position, group.rallyPoint, closestStarling.moveOrder, color);
         }
     }
 

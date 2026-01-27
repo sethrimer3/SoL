@@ -1966,9 +1966,8 @@ export class Unit {
                 this.rotation += Math.sign(rotationDelta) * maxRotationStep;
             }
             
-            // Normalize rotation to [0, 2π)
-            while (this.rotation < 0) this.rotation += Math.PI * 2;
-            while (this.rotation >= Math.PI * 2) this.rotation -= Math.PI * 2;
+            // Normalize rotation to [0, 2π) using modulo
+            this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         }
 
         const moveDistance = moveSpeed * deltaTime;
