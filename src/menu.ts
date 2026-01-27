@@ -496,14 +496,13 @@ class ParticleMenuLayer {
             return;
         }
 
-        if (this.desiredParticleCount === 0) {
-            this.desiredParticleCount = targetCount;
-        } else {
-            this.desiredParticleCount = Math.max(this.desiredParticleCount, targetCount);
-        }
+        this.desiredParticleCount = targetCount;
 
         const desiredCount = this.desiredParticleCount;
         const existingParticles = this.particles.slice();
+        if (existingParticles.length > desiredCount) {
+            existingParticles.length = desiredCount;
+        }
 
         while (existingParticles.length < desiredCount) {
             const seed = targets[existingParticles.length % targetCount];
