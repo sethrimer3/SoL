@@ -2321,31 +2321,30 @@ export class Starling extends Unit {
      */
     updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
         if (this.hasManualOrder) {
-            if (this.rallyPoint) {
-                return;
-            }
-            this.hasManualOrder = false;
+            return;
         }
 
         // Use the assigned minion path
         if (this.assignedPath.length > 0) {
             // Follow the base's path
             const targetWaypoint = this.assignedPath[this.currentPathWaypointIndex];
+            const rallyTarget = this.getStandoffPointForWaypoint(gameState, targetWaypoint) ?? targetWaypoint;
             
             // Check if we've reached the current waypoint
-            if (this.position.distanceTo(targetWaypoint) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
+            if (this.position.distanceTo(rallyTarget) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
                 // Move to next waypoint if there is one
                 if (this.currentPathWaypointIndex < this.assignedPath.length - 1) {
                     this.currentPathWaypointIndex++;
-                    this.rallyPoint = this.assignedPath[this.currentPathWaypointIndex];
+                    const nextWaypoint = this.assignedPath[this.currentPathWaypointIndex];
+                    this.rallyPoint = this.getStandoffPointForWaypoint(gameState, nextWaypoint) ?? nextWaypoint;
                 } else {
                     // We've reached the end of the path, stay here (pile up)
-                    this.rallyPoint = targetWaypoint;
+                    this.rallyPoint = rallyTarget;
                     return;
                 }
             } else {
                 // Set rally point to current waypoint
-                this.rallyPoint = this.assignedPath[this.currentPathWaypointIndex];
+                this.rallyPoint = rallyTarget;
             }
         } else {
             // No path defined, fall back to original AI behavior
@@ -2353,6 +2352,7 @@ export class Starling extends Unit {
 
             // AI behavior: prioritize enemy base, then buildings, then explore
             let targetPosition: Vector2D | null = null;
+            let targetRadiusPx: number | null = null;
 
             // 1. Try to target enemy base if visible
             for (const enemy of enemies) {
@@ -2360,6 +2360,7 @@ export class Starling extends Unit {
                     // Check if enemy base is visible (not in shadow)
                     if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
                         targetPosition = enemy.position;
+                        targetRadiusPx = enemy.radius;
                         break;
                     }
                 }
@@ -2399,9 +2400,50 @@ export class Starling extends Unit {
 
             // Set rally point for movement
             if (targetPosition) {
-                this.rallyPoint = targetPosition;
+                if (targetRadiusPx) {
+                    this.rallyPoint = this.getStructureStandoffPoint(targetPosition, targetRadiusPx);
+                } else {
+                    this.rallyPoint = targetPosition;
+                }
             }
         }
+    }
+
+    private getStandoffPointForWaypoint(gameState: GameState, waypoint: Vector2D): Vector2D | null {
+        for (const player of gameState.players) {
+            if (player.stellarForge) {
+                const forgeDistance = waypoint.distanceTo(player.stellarForge.position);
+                if (forgeDistance < player.stellarForge.radius + this.collisionRadiusPx) {
+                    return this.getStructureStandoffPoint(player.stellarForge.position, player.stellarForge.radius);
+                }
+            }
+
+            for (const building of player.buildings) {
+                const buildingDistance = waypoint.distanceTo(building.position);
+                if (buildingDistance < building.radius + this.collisionRadiusPx) {
+                    return this.getStructureStandoffPoint(building.position, building.radius);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private getStructureStandoffPoint(targetPosition: Vector2D, targetRadiusPx: number): Vector2D {
+        const offsetX = this.position.x - targetPosition.x;
+        const offsetY = this.position.y - targetPosition.y;
+        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+        const minDistance = targetRadiusPx + this.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
+
+        if (distance <= 0) {
+            return new Vector2D(targetPosition.x + minDistance, targetPosition.y);
+        }
+
+        const scale = minDistance / distance;
+        return new Vector2D(
+            targetPosition.x + offsetX * scale,
+            targetPosition.y + offsetY * scale
+        );
     }
 
     /**
@@ -5027,7 +5069,7 @@ export class GameState {
 
                 // Check stellar forges
                 for (const player of this.players) {
-                    if (player.stellarForge && player !== unit.owner) {
+                    if (player.stellarForge) {
                         const forge = player.stellarForge;
                         const dx = unit.position.x - forge.position.x;
                         const dy = unit.position.y - forge.position.y;
@@ -5089,8 +5131,44 @@ export class GameState {
                 // If still in collision after push, stop the unit
                 if (this.checkCollision(unit.position, unit.collisionRadiusPx)) {
                     unit.position = oldPosition;
-                    unit.rallyPoint = null;
+                    if (unit.rallyPoint && this.checkCollision(unit.rallyPoint, unit.collisionRadiusPx)) {
+                        unit.rallyPoint = null;
+                    }
                 }
+            }
+
+            this.clampUnitOutsideStructures(unit);
+        }
+    }
+
+    private clampUnitOutsideStructures(unit: Unit): void {
+        for (const player of this.players) {
+            if (player.stellarForge) {
+                this.pushUnitOutsideCircle(unit, player.stellarForge.position, player.stellarForge.radius);
+            }
+
+            for (const building of player.buildings) {
+                this.pushUnitOutsideCircle(unit, building.position, building.radius);
+            }
+        }
+    }
+
+    private pushUnitOutsideCircle(unit: Unit, center: Vector2D, radius: number): void {
+        const minDistance = radius + unit.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
+        const offsetX = unit.position.x - center.x;
+        const offsetY = unit.position.y - center.y;
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        const minDistanceSq = minDistance * minDistance;
+
+        if (distanceSq < minDistanceSq) {
+            const distance = Math.sqrt(distanceSq);
+            if (distance > 0) {
+                const scale = minDistance / distance;
+                unit.position.x = center.x + offsetX * scale;
+                unit.position.y = center.y + offsetY * scale;
+            } else {
+                unit.position.x = center.x + minDistance;
+                unit.position.y = center.y;
             }
         }
     }
@@ -5259,6 +5337,7 @@ export class GameState {
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
                 mix(unit.collisionRadiusPx);
+                mixInt(unit.moveOrder);
                 if (unit.rallyPoint) {
                     mix(unit.rallyPoint.x);
                     mix(unit.rallyPoint.y);
