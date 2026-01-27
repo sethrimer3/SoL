@@ -1278,6 +1278,11 @@ export class Player {
     solarMirrors: SolarMirror[] = [];
     units: Unit[] = [];
     buildings: Building[] = []; // Offensive and defensive buildings
+    isAi: boolean = false;
+    aiNextMirrorCommandSec: number = 0;
+    aiNextDefenseCommandSec: number = 0;
+    aiNextHeroCommandSec: number = 0;
+    aiNextStructureCommandSec: number = 0;
     
     // Statistics tracking
     unitsCreated: number = 0;
@@ -3218,6 +3223,10 @@ export class GameState {
             asteroid.update(deltaTime);
         }
 
+        if (!this.isCountdownActive) {
+            this.updateAi(deltaTime);
+        }
+
         // Update each player
         for (const player of this.players) {
             if (player.isDefeated()) {
@@ -3983,6 +3992,351 @@ export class GameState {
                 }
             }
         }
+    }
+
+    private updateAi(deltaTime: number): void {
+        for (const player of this.players) {
+            if (!player.isAi || player.isDefeated()) {
+                continue;
+            }
+
+            const enemies = this.getEnemiesForPlayer(player);
+            this.updateAiMirrorsForPlayer(player);
+            this.updateAiDefenseForPlayer(player, enemies);
+            this.updateAiHeroProductionForPlayer(player);
+            this.updateAiStructuresForPlayer(player, enemies);
+        }
+    }
+
+    private getEnemiesForPlayer(player: Player): (Unit | StellarForge | Building)[] {
+        const enemies: (Unit | StellarForge | Building)[] = [];
+        for (const otherPlayer of this.players) {
+            if (otherPlayer !== player && !otherPlayer.isDefeated()) {
+                enemies.push(...otherPlayer.units);
+                enemies.push(...otherPlayer.buildings);
+                if (otherPlayer.stellarForge) {
+                    enemies.push(otherPlayer.stellarForge);
+                }
+            }
+        }
+        return enemies;
+    }
+
+    private updateAiMirrorsForPlayer(player: Player): void {
+        if (this.gameTime < player.aiNextMirrorCommandSec) {
+            return;
+        }
+        player.aiNextMirrorCommandSec = this.gameTime + Constants.AI_MIRROR_COMMAND_INTERVAL_SEC;
+
+        if (!player.stellarForge || player.solarMirrors.length === 0) {
+            return;
+        }
+
+        const sun = this.getClosestSunToPoint(player.stellarForge.position);
+        if (!sun) {
+            return;
+        }
+
+        const mirrorCount = player.solarMirrors.length;
+        const baseAngleRad = Math.atan2(
+            player.stellarForge.position.y - sun.position.y,
+            player.stellarForge.position.x - sun.position.x
+        );
+        const startAngleRad = baseAngleRad - (Constants.AI_MIRROR_ARC_SPACING_RAD * (mirrorCount - 1)) / 2;
+        const radiusPx = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
+
+        for (let i = 0; i < mirrorCount; i++) {
+            const mirror = player.solarMirrors[i];
+            const angleRad = startAngleRad + Constants.AI_MIRROR_ARC_SPACING_RAD * i;
+            const target = new Vector2D(
+                sun.position.x + Math.cos(angleRad) * radiusPx,
+                sun.position.y + Math.sin(angleRad) * radiusPx
+            );
+            const distance = mirror.position.distanceTo(target);
+            if (distance > Constants.AI_MIRROR_REPOSITION_THRESHOLD_PX) {
+                mirror.setTarget(target);
+            }
+        }
+    }
+
+    private updateAiDefenseForPlayer(
+        player: Player,
+        enemies: (Unit | StellarForge | Building)[]
+    ): void {
+        if (this.gameTime < player.aiNextDefenseCommandSec) {
+            return;
+        }
+        player.aiNextDefenseCommandSec = this.gameTime + Constants.AI_DEFENSE_COMMAND_INTERVAL_SEC;
+
+        const threat = this.findAiThreat(player, enemies);
+
+        if (threat) {
+            const threatPosition = threat.enemy.position;
+            for (const unit of player.units) {
+                if (unit.isHero) {
+                    unit.rallyPoint = new Vector2D(threatPosition.x, threatPosition.y);
+                } else if (unit instanceof Starling) {
+                    unit.setManualRallyPoint(new Vector2D(threatPosition.x, threatPosition.y));
+                }
+            }
+            return;
+        }
+
+        if (!player.stellarForge) {
+            return;
+        }
+
+        const mirrorCount = player.solarMirrors.length;
+        let mirrorIndex = 0;
+
+        for (const unit of player.units) {
+            if (unit.isHero) {
+                unit.rallyPoint = new Vector2D(
+                    player.stellarForge.position.x,
+                    player.stellarForge.position.y
+                );
+            } else if (unit instanceof Starling) {
+                if (mirrorIndex < mirrorCount) {
+                    const mirror = player.solarMirrors[mirrorIndex];
+                    unit.setManualRallyPoint(new Vector2D(mirror.position.x, mirror.position.y));
+                    mirrorIndex += 1;
+                } else {
+                    unit.setManualRallyPoint(new Vector2D(
+                        player.stellarForge.position.x,
+                        player.stellarForge.position.y
+                    ));
+                }
+            }
+        }
+    }
+
+    private updateAiHeroProductionForPlayer(player: Player): void {
+        if (this.gameTime < player.aiNextHeroCommandSec) {
+            return;
+        }
+        player.aiNextHeroCommandSec = this.gameTime + Constants.AI_HERO_COMMAND_INTERVAL_SEC;
+
+        if (!player.stellarForge || !player.stellarForge.canProduceUnits()) {
+            return;
+        }
+
+        const heroTypes = this.getAiHeroTypesForFaction(player.faction);
+        for (const heroType of heroTypes) {
+            if (this.isHeroUnitAlive(player, heroType)) {
+                continue;
+            }
+            if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
+                continue;
+            }
+            if (!player.spendSolarium(Constants.HERO_UNIT_COST)) {
+                return;
+            }
+            player.stellarForge.enqueueHeroUnit(heroType);
+            player.stellarForge.startHeroProductionIfIdle();
+            return;
+        }
+    }
+
+    private updateAiStructuresForPlayer(
+        player: Player,
+        enemies: (Unit | StellarForge | Building)[]
+    ): void {
+        if (this.gameTime < player.aiNextStructureCommandSec) {
+            return;
+        }
+        player.aiNextStructureCommandSec = this.gameTime + Constants.AI_STRUCTURE_COMMAND_INTERVAL_SEC;
+
+        if (!player.stellarForge) {
+            return;
+        }
+
+        const minigunCount = player.buildings.filter((building) => building instanceof Minigun).length;
+        const swirlerCount = player.buildings.filter((building) => building instanceof SpaceDustSwirler).length;
+        const hasSubsidiaryFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+
+        let buildType: 'minigun' | 'swirler' | 'subsidiaryFactory' | null = null;
+        if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+            buildType = 'subsidiaryFactory';
+        } else if (minigunCount < 2 && player.solarium >= Constants.MINIGUN_COST) {
+            buildType = 'minigun';
+        } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+            buildType = 'swirler';
+        } else if (minigunCount < 4 && player.solarium >= Constants.MINIGUN_COST) {
+            buildType = 'minigun';
+        }
+
+        if (!buildType) {
+            return;
+        }
+
+        const threat = this.findAiThreat(player, enemies);
+        const anchor = threat?.guardPoint ?? this.getAiStructureAnchor(player);
+        if (!anchor) {
+            return;
+        }
+
+        let placement: Vector2D | null = null;
+
+        switch (buildType) {
+            case 'subsidiaryFactory':
+                placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player);
+                if (placement && player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                    player.buildings.push(new SubsidiaryFactory(placement, player));
+                }
+                break;
+            case 'swirler':
+                placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player);
+                if (placement && player.spendSolarium(Constants.SWIRLER_COST)) {
+                    player.buildings.push(new SpaceDustSwirler(placement, player));
+                }
+                break;
+            case 'minigun':
+                placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player);
+                if (placement && player.spendSolarium(Constants.MINIGUN_COST)) {
+                    player.buildings.push(new Minigun(placement, player));
+                }
+                break;
+        }
+    }
+
+    private getAiStructureAnchor(player: Player): Vector2D | null {
+        if (!player.stellarForge) {
+            return null;
+        }
+
+        if (player.solarMirrors.length === 0 || this.suns.length === 0) {
+            return player.stellarForge.position;
+        }
+
+        let bestMirror: SolarMirror | null = null;
+        let bestDistance = Infinity;
+        for (const mirror of player.solarMirrors) {
+            const closestSun = mirror.getClosestSun(this.suns);
+            if (!closestSun) {
+                continue;
+            }
+            const distance = mirror.position.distanceTo(closestSun.position);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestMirror = mirror;
+            }
+        }
+
+        return bestMirror ? bestMirror.position : player.stellarForge.position;
+    }
+
+    private findAiStructurePlacement(anchor: Vector2D, radiusPx: number, player: Player): Vector2D | null {
+        const baseAngleRad = player.buildings.length * Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD;
+        const distancePx = Constants.AI_STRUCTURE_PLACEMENT_DISTANCE_PX + radiusPx;
+        for (let i = 0; i < 8; i++) {
+            const angleRad = baseAngleRad + Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD * i;
+            const candidate = new Vector2D(
+                anchor.x + Math.cos(angleRad) * distancePx,
+                anchor.y + Math.sin(angleRad) * distancePx
+            );
+            if (!this.checkCollision(candidate, radiusPx)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private findAiThreat(
+        player: Player,
+        enemies: (Unit | StellarForge | Building)[]
+    ): { enemy: Unit | StellarForge | Building; guardPoint: Vector2D } | null {
+        if (!player.stellarForge) {
+            return null;
+        }
+
+        const guardPoints: Vector2D[] = [player.stellarForge.position];
+        for (const mirror of player.solarMirrors) {
+            guardPoints.push(mirror.position);
+        }
+
+        let closestThreat: Unit | StellarForge | Building | null = null;
+        let closestGuardPoint: Vector2D | null = null;
+        let closestDistanceSq = Infinity;
+        const defenseRadiusSq = Constants.AI_DEFENSE_RADIUS_PX * Constants.AI_DEFENSE_RADIUS_PX;
+
+        for (const guardPoint of guardPoints) {
+            for (const enemy of enemies) {
+                if ('health' in enemy && enemy.health <= 0) {
+                    continue;
+                }
+                const dx = enemy.position.x - guardPoint.x;
+                const dy = enemy.position.y - guardPoint.y;
+                const distanceSq = dx * dx + dy * dy;
+                if (distanceSq <= defenseRadiusSq && distanceSq < closestDistanceSq) {
+                    closestDistanceSq = distanceSq;
+                    closestThreat = enemy;
+                    closestGuardPoint = guardPoint;
+                }
+            }
+        }
+
+        if (!closestThreat || !closestGuardPoint) {
+            return null;
+        }
+
+        return { enemy: closestThreat, guardPoint: closestGuardPoint };
+    }
+
+    private getClosestSunToPoint(point: Vector2D): Sun | null {
+        let closestSun: Sun | null = null;
+        let closestDistance = Infinity;
+        for (const sun of this.suns) {
+            const distance = point.distanceTo(sun.position);
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestSun = sun;
+            }
+        }
+        return closestSun;
+    }
+
+    private getAiHeroTypesForFaction(faction: Faction): string[] {
+        switch (faction) {
+            case Faction.RADIANT:
+                return ['Marine', 'Dagger', 'Beam'];
+            case Faction.AURUM:
+                return ['Grave', 'Driller'];
+            case Faction.SOLARI:
+                return ['Ray', 'InfluenceBall', 'TurretDeployer'];
+            default:
+                return [];
+        }
+    }
+
+    private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
+        switch (heroUnitType) {
+            case 'Marine':
+                return unit instanceof Marine;
+            case 'Grave':
+                return unit instanceof Grave;
+            case 'Ray':
+                return unit instanceof Ray;
+            case 'InfluenceBall':
+                return unit instanceof InfluenceBall;
+            case 'TurretDeployer':
+                return unit instanceof TurretDeployer;
+            case 'Driller':
+                return unit instanceof Driller;
+            case 'Dagger':
+                return unit instanceof Dagger;
+            case 'Beam':
+                return unit instanceof Beam;
+            default:
+                return false;
+        }
+    }
+
+    private isHeroUnitAlive(player: Player, heroUnitType: string): boolean {
+        return player.units.some((unit) => this.isHeroUnitOfType(unit, heroUnitType));
+    }
+
+    private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
+        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
     }
 
     /**
@@ -4852,6 +5206,11 @@ export class GameState {
 
         for (const player of this.players) {
             mix(player.solarium);
+            mixInt(player.isAi ? 1 : 0);
+            mix(player.aiNextMirrorCommandSec);
+            mix(player.aiNextDefenseCommandSec);
+            mix(player.aiNextHeroCommandSec);
+            mix(player.aiNextStructureCommandSec);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -5050,6 +5409,7 @@ export function createStandardGame(playerNames: Array<[string, Faction]>): GameS
         }
         const [name, faction] = playerNames[i];
         const player = new Player(name, faction);
+        player.isAi = i !== 0;
         const forgePos = positions[i];
         
         const mirrorSpawnDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
