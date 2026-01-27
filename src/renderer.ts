@@ -846,10 +846,16 @@ export class GameRenderer {
         if (worldVertices.length === 0) return;
 
         const screenVertices = worldVertices.map(v => this.worldToScreen(v));
+        const sizeRange = Constants.ASTEROID_MAX_SIZE - Constants.ASTEROID_MIN_SIZE;
+        const sizeT = sizeRange > 0
+            ? Math.min(1, Math.max(0, (asteroid.size - Constants.ASTEROID_MIN_SIZE) / sizeRange))
+            : 0;
+        const fillBrightness = Math.round(135 - sizeT * 55);
+        const strokeBrightness = Math.min(255, fillBrightness + 20);
 
         // Draw asteroid body
-        this.ctx.fillStyle = '#666666';
-        this.ctx.strokeStyle = '#888888';
+        this.ctx.fillStyle = `rgb(${fillBrightness}, ${fillBrightness}, ${fillBrightness})`;
+        this.ctx.strokeStyle = `rgb(${strokeBrightness}, ${strokeBrightness}, ${strokeBrightness})`;
         this.ctx.lineWidth = 2;
         
         this.ctx.beginPath();
