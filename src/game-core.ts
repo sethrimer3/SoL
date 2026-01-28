@@ -2552,6 +2552,15 @@ export class Starling extends Unit {
         this.hasReachedFinalWaypoint = false;
     }
 
+    setPath(path: Vector2D[]): void {
+        this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.pathHash = this.generatePathHash(this.assignedPath);
+        this.currentPathWaypointIndex = 0;
+        this.hasManualOrder = true;
+        this.hasReachedFinalWaypoint = false;
+        this.rallyPoint = null; // Clear rally point when following a path
+    }
+
     getAssignedPathLength(): number {
         return this.assignedPath.length;
     }

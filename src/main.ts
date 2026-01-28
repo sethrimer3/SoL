@@ -38,6 +38,21 @@ class GameController {
                Array.from(this.selectedUnits).every(unit => unit.isHero);
     }
 
+    /**
+     * Check if a world position is near any selected unit
+     */
+    private isDragStartNearSelectedUnits(worldPos: Vector2D): boolean {
+        if (this.selectedUnits.size === 0) return false;
+        
+        for (const unit of this.selectedUnits) {
+            const distance = unit.position.distanceTo(worldPos);
+            if (distance <= Constants.UNIT_PATH_DRAW_RADIUS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
@@ -444,7 +459,7 @@ class GameController {
                     currentCamera.x - dx / this.renderer.zoom,
                     currentCamera.y - dy / this.renderer.zoom
                 ));
-            } else if (totalMovement > 5) {
+            } else if (totalMovement > Constants.CLICK_DRAG_THRESHOLD) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
@@ -457,6 +472,25 @@ class GameController {
                         this.renderer.pathPreviewForge = this.selectedBase;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
+                    } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
+                        // Check if drag started near selected units - if so, draw movement path
+                        const dragStartWorld = this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y);
+                        if (this.isDragStartNearSelectedUnits(dragStartWorld)) {
+                            // Drawing a movement path for selected units
+                            this.isDrawingPath = true;
+                            this.pathPoints = [];
+                            this.renderer.pathPreviewForge = null; // No forge for unit paths
+                            this.renderer.pathPreviewPoints = this.pathPoints;
+                            this.cancelHold();
+                        } else if (hasOnlyHeroUnits) {
+                            // For hero units away from units, use arrow dragging mode
+                            this.isDraggingHeroArrow = true;
+                            this.cancelHold();
+                        } else {
+                            // For regular units or no selection, use selection rectangle
+                            this.isSelecting = true;
+                            this.cancelHold();
+                        }
                     } else if (hasOnlyHeroUnits) {
                         // For hero units, use arrow dragging mode
                         this.isDraggingHeroArrow = true;
@@ -467,29 +501,31 @@ class GameController {
                         this.cancelHold();
                     }
                 }
+            }
+            
+            // Update visual feedback continuously (not just when threshold exceeded)
+            // This fixes the janky rectangle/arrow update issue
+            if (this.isSelecting) {
+                // Update selection rectangle (for normal unit selection)
+                this.renderer.selectionStart = this.selectionStartScreen;
+                this.renderer.selectionEnd = new Vector2D(x, y);
+            } else if (this.isDraggingHeroArrow) {
+                // Update arrow direction (for hero ability casting)
+                this.renderer.abilityArrowStart = this.selectionStartScreen;
+                this.renderer.abilityArrowEnd = new Vector2D(x, y);
+            } else if (this.isDrawingPath) {
+                // Collect path waypoints as we drag
+                const worldPos = this.renderer.screenToWorld(x, y);
                 
-                if (this.isSelecting) {
-                    // Update selection rectangle (for normal unit selection)
-                    this.renderer.selectionStart = this.selectionStartScreen;
-                    this.renderer.selectionEnd = new Vector2D(x, y);
-                } else if (this.isDraggingHeroArrow) {
-                    // Update arrow direction (for hero ability casting)
-                    this.renderer.abilityArrowStart = this.selectionStartScreen;
-                    this.renderer.abilityArrowEnd = new Vector2D(x, y);
-                } else if (this.isDrawingPath) {
-                    // Collect path waypoints as we drag
-                    const worldPos = this.renderer.screenToWorld(x, y);
-                    
-                    // Add waypoint if we've moved far enough from the last one
-                    if (this.pathPoints.length === 0 || 
-                        this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
-                        this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
-                    }
-                    
-                    this.renderer.pathPreviewForge = this.selectedBase;
-                    this.renderer.pathPreviewPoints = this.pathPoints;
-                    this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
+                // Add waypoint if we've moved far enough from the last one
+                if (this.pathPoints.length === 0 || 
+                    this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
+                    this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
                 }
+                
+                this.renderer.pathPreviewForge = this.selectedBase;
+                this.renderer.pathPreviewPoints = this.pathPoints;
+                this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
             }
             
             lastX = x;
@@ -889,11 +925,34 @@ class GameController {
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
-            } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.selectedBase && this.game) {
+            } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.game) {
                 // Finalize the path drawing
-                if (this.pathPoints.length > 0) {
+                if (this.selectedBase && this.selectedBase.isSelected) {
+                    // Path for base (minion spawning)
                     this.selectedBase.setMinionPath(this.pathPoints);
-                    console.log(`Path set with ${this.pathPoints.length} waypoints`);
+                    console.log(`Base path set with ${this.pathPoints.length} waypoints`);
+                } else if (this.selectedUnits.size > 0) {
+                    // Path for selected units
+                    console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
+                    
+                    // Increment move order counter
+                    this.moveOrderCounter++;
+                    
+                    // Set path for all selected units
+                    for (const unit of this.selectedUnits) {
+                        if (unit instanceof Starling) {
+                            unit.setPath(this.pathPoints);
+                        } else {
+                            // For non-Starling units, just set the final waypoint as rally point
+                            const finalWaypoint = this.pathPoints[this.pathPoints.length - 1];
+                            unit.rallyPoint = new Vector2D(finalWaypoint.x, finalWaypoint.y);
+                        }
+                        unit.moveOrder = this.moveOrderCounter;
+                    }
+                    
+                    // Deselect units after setting path
+                    this.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
                 }
                 this.clearPathPreview();
             } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
