@@ -4805,14 +4805,15 @@ export class GameState {
         deltaTime: number
     ): void {
         const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
-        if (speed < Constants.DUST_PUSH_MIN_SPEED_PX_PER_SEC) {
+        if (speed <= 0) {
             return;
         }
+        const effectiveSpeed = Math.max(speed, Constants.DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC);
         this.applyFluidForceFromMovingObject(
             position,
             velocity,
             radiusPx,
-            speed * forceMultiplier,
+            effectiveSpeed * forceMultiplier,
             deltaTime
         );
     }
@@ -5750,6 +5751,8 @@ export class GameState {
                 mixString(player.stellarForge.heroProductionUnitType ?? '');
                 mix(player.stellarForge.heroProductionRemainingSec);
                 mix(player.stellarForge.heroProductionDurationSec);
+                mix(player.stellarForge.crunchTimer);
+                mix(player.stellarForge.rotation);
                 if (player.stellarForge.targetPosition) {
                     mix(player.stellarForge.targetPosition.x);
                     mix(player.stellarForge.targetPosition.y);
