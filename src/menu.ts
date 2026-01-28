@@ -1250,6 +1250,8 @@ export interface GameSettings {
     selectedBaseLoadout: string | null; // Base loadout ID
     selectedSpawnLoadout: string | null; // Spawn loadout ID
     colorScheme: string; // Color scheme ID
+    damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
+    healthDisplayMode: 'bar' | 'number'; // How to display unit health
 }
 
 export class MainMenu {
@@ -1408,7 +1410,9 @@ export class MainMenu {
             enemyColor: '#FF6B6B',   // Slightly light red
             selectedBaseLoadout: null,
             selectedSpawnLoadout: null,
-            colorScheme: 'SpaceBlack' // Default color scheme
+            colorScheme: 'SpaceBlack', // Default color scheme
+            damageDisplayMode: 'damage', // Default to showing damage numbers
+            healthDisplayMode: 'bar' // Default to showing health bars
         };
         this.ensureDefaultHeroSelection();
         

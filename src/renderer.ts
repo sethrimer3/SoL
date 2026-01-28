@@ -30,14 +30,16 @@ type GraphicOption = {
     pngPath?: string;
 };
 
-type InGameMenuTab = 'main' | 'graphics';
+type InGameMenuTab = 'main' | 'options' | 'graphics';
 
 type InGameMenuAction =
     | { type: 'resume' }
     | { type: 'toggleInfo' }
     | { type: 'surrender' }
     | { type: 'tab'; tab: InGameMenuTab }
-    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant };
+    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
+    | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
+    | { type: 'healthDisplayMode'; mode: 'bar' | 'number' };
 
 type InGameMenuLayout = {
     screenWidth: number;
@@ -104,6 +106,8 @@ export class GameRenderer {
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
     public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
     public inGameMenuTab: InGameMenuTab = 'main';
+    public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
+    public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
 
     private readonly HERO_SPRITE_SCALE = 6;
     private readonly FORGE_SPRITE_SCALE = 2.2;
@@ -3427,21 +3431,67 @@ export class GameRenderer {
             const screenPos = this.worldToScreen(damageNumber.position);
             const opacity = damageNumber.getOpacity(game.gameTime);
             
+            // Determine what to display based on mode
+            const displayValue = this.damageDisplayMode === 'remaining-life' 
+                ? damageNumber.remainingHealth 
+                : damageNumber.damage;
+            
             // Calculate size based on damage proportion to max health
             // Range: 8px (small) to 24px (large)
             const damageRatio = damageNumber.damage / damageNumber.maxHealth;
             const fontSize = Math.max(8, Math.min(24, 8 + damageRatio * 80));
             
             this.ctx.font = `bold ${fontSize}px Doto`;
-            this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            
+            // For remaining life mode, color based on health percentage
+            if (this.damageDisplayMode === 'remaining-life') {
+                const healthPercent = damageNumber.remainingHealth / damageNumber.maxHealth;
+                const color = this.getHealthColor(healthPercent);
+                this.ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
+            } else {
+                // Damage numbers are red
+                this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            }
+            
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             
             // Add stroke for readability
             this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})`;
             this.ctx.lineWidth = 2;
-            this.ctx.strokeText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
-            this.ctx.fillText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+            this.ctx.strokeText(displayValue.toString(), screenPos.x, screenPos.y);
+            this.ctx.fillText(displayValue.toString(), screenPos.x, screenPos.y);
+        }
+    }
+
+    /**
+     * Get health color based on percentage (green -> yellow -> red)
+     */
+    private getHealthColor(healthPercent: number): { r: number; g: number; b: number } {
+        if (healthPercent > 0.6) {
+            // Green zone: interpolate from green (0, 255, 0) to yellow (255, 255, 0)
+            const t = (healthPercent - 0.6) / 0.4; // 0 at 60%, 1 at 100%
+            return {
+                r: Math.round(255 * (1 - t)),
+                g: 255,
+                b: 0
+            };
+        } else if (healthPercent > 0.3) {
+            // Yellow zone: interpolate from orange-red (255, 165, 0) to yellow (255, 255, 0)
+            const t = (healthPercent - 0.3) / 0.3; // 0 at 30%, 1 at 60%
+            return {
+                r: 255,
+                g: Math.round(165 + 90 * t),
+                b: 0
+            };
+        } else {
+            // Red zone: interpolate from dark red (180, 0, 0) to orange-red (255, 165, 0)
+            const t = healthPercent / 0.3; // 0 at 0%, 1 at 30%
+            return {
+                r: Math.round(180 + 75 * t),
+                g: Math.round(165 * t),
+                b: 0
+            };
         }
     }
 
@@ -3948,12 +3998,13 @@ export class GameRenderer {
         const titleY = panelY + (isCompactLayout ? 34 : 42);
         const tabHeight = isCompactLayout ? 30 : 34;
         const tabGap = 12;
-        const tabWidth = (panelWidth - panelPaddingX * 2 - tabGap) / 2;
+        const tabWidth = (panelWidth - panelPaddingX * 2 - tabGap * 2) / 3;
         const tabY = titleY + (isCompactLayout ? 16 : 18);
         const tabX = panelX + panelPaddingX;
         const tabs: InGameMenuLayout['tabs'] = [
             { tab: 'main', x: tabX, y: tabY, width: tabWidth, height: tabHeight },
-            { tab: 'graphics', x: tabX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight }
+            { tab: 'options', x: tabX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight },
+            { tab: 'graphics', x: tabX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight }
         ];
         const contentTopY = tabY + tabHeight + (isCompactLayout ? 16 : 20);
         const contentBottomY = panelY + panelHeight - panelPaddingY;
@@ -4063,6 +4114,46 @@ export class GameRenderer {
             return null;
         }
 
+        if (this.inGameMenuTab === 'options') {
+            let optionY = layout.contentTopY;
+            const optionHeight = layout.buttonHeight;
+            const optionSpacing = layout.buttonSpacing;
+            const optionX = layout.buttonX;
+            const optionWidth = layout.buttonWidth;
+            const buttonWidth = optionWidth * 0.35;
+            const buttonGap = 10;
+
+            // Damage Display Mode buttons
+            const damageButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const damageButton2X = optionX + optionWidth - buttonWidth;
+            
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= damageButton1X && screenX <= damageButton1X + buttonWidth) {
+                    return { type: 'damageDisplayMode', mode: 'damage' };
+                }
+                if (screenX >= damageButton2X && screenX <= damageButton2X + buttonWidth) {
+                    return { type: 'damageDisplayMode', mode: 'remaining-life' };
+                }
+            }
+            
+            optionY += optionHeight + optionSpacing;
+
+            // Health Display Mode buttons
+            const healthButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const healthButton2X = optionX + optionWidth - buttonWidth;
+            
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= healthButton1X && screenX <= healthButton1X + buttonWidth) {
+                    return { type: 'healthDisplayMode', mode: 'bar' };
+                }
+                if (screenX >= healthButton2X && screenX <= healthButton2X + buttonWidth) {
+                    return { type: 'healthDisplayMode', mode: 'number' };
+                }
+            }
+            
+            return null;
+        }
+
         const isWithinList =
             screenX >= layout.graphicsListX &&
             screenX <= layout.graphicsListX + layout.graphicsListWidth &&
@@ -4145,7 +4236,8 @@ export class GameRenderer {
             this.ctx.strokeRect(tab.x, tab.y, tab.width, tab.height);
             this.ctx.fillStyle = '#FFFFFF';
             this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.fillText(tab.tab === 'main' ? 'Main' : 'Graphics', tab.x + tab.width / 2, tab.y + tab.height * 0.68);
+            const tabLabel = tab.tab === 'main' ? 'Main' : tab.tab === 'options' ? 'Options' : 'Graphics';
+            this.ctx.fillText(tabLabel, tab.x + tab.width / 2, tab.y + tab.height * 0.68);
         }
 
         if (this.inGameMenuTab === 'main') {
@@ -4173,6 +4265,104 @@ export class GameRenderer {
             drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
             buttonY += buttonHeight + buttonSpacing;
             drawButton('Surrender', buttonY);
+        } else if (this.inGameMenuTab === 'options') {
+            // Options tab content
+            let optionY = layout.contentTopY;
+            const optionHeight = layout.buttonHeight;
+            const optionSpacing = layout.buttonSpacing;
+            const optionX = layout.buttonX;
+            const optionWidth = layout.buttonWidth;
+
+            // Helper function to draw an option toggle
+            const drawOptionToggle = (label: string, y: number, isActive: boolean) => {
+                // Draw label
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 16 : 18}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(label, optionX, y + (optionHeight * 0.4));
+                
+                // Draw toggle buttons
+                const buttonWidth = optionWidth * 0.35;
+                const buttonGap = 10;
+                const button1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+                const button2X = optionX + optionWidth - buttonWidth;
+                
+                return { button1X, button2X, buttonWidth };
+            };
+
+            // Damage Display Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Damage Display:', optionX, optionY + (optionHeight * 0.4));
+            
+            const damageButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+            
+            // Damage button
+            const isDamageMode = this.damageDisplayMode === 'damage';
+            this.ctx.fillStyle = isDamageMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isDamageMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Dmg #', damageButtons.button1X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            // Remaining Life button
+            const isRemainingMode = this.damageDisplayMode === 'remaining-life';
+            this.ctx.fillStyle = isRemainingMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isRemainingMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('HP Left', damageButtons.button2X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            optionY += optionHeight + optionSpacing;
+
+            // Health Display Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Health Display:', optionX, optionY + (optionHeight * 0.4));
+            
+            const healthButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+            
+            // Bar button
+            const isBarMode = this.healthDisplayMode === 'bar';
+            this.ctx.fillStyle = isBarMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isBarMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Bar', healthButtons.button1X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            // Number button
+            const isNumberMode = this.healthDisplayMode === 'number';
+            this.ctx.fillStyle = isNumberMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isNumberMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Number', healthButtons.button2X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
         } else {
             const maxScroll = this.getGraphicsMenuMaxScroll(layout);
             if (this.graphicsMenuScrollOffset > maxScroll) {

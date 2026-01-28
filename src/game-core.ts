@@ -3396,20 +3396,26 @@ export class Beam extends Unit {
 export class DamageNumber {
     public position: Vector2D;
     public damage: number;
+    public remainingHealth: number; // For remaining-life mode
     public creationTime: number;
     public velocity: Vector2D;
     public maxHealth: number; // For calculating size proportional to health
+    public unitId: string | null; // Track which unit this belongs to (for replacement)
 
     constructor(
         position: Vector2D,
         damage: number,
         creationTime: number,
-        maxHealth: number = 100
+        maxHealth: number = 100,
+        remainingHealth: number = 0,
+        unitId: string | null = null
     ) {
         this.position = new Vector2D(position.x, position.y);
         this.damage = Math.round(damage);
+        this.remainingHealth = Math.round(remainingHealth);
         this.creationTime = creationTime;
         this.maxHealth = maxHealth;
+        this.unitId = unitId;
         // Random horizontal drift
         this.velocity = new Vector2D(
             (Math.random() - 0.5) * 20,
@@ -3468,6 +3474,7 @@ export class GameState {
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
     mapSize: number = 2000; // Map size in world units
+    damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
 
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
@@ -6097,6 +6104,33 @@ export class GameState {
             const mirror = new SolarMirror(pos, player);
             player.solarMirrors.push(mirror);
         }
+    }
+
+    /**
+     * Add a damage number with proper handling for display mode
+     */
+    addDamageNumber(
+        position: Vector2D,
+        damage: number,
+        maxHealth: number,
+        currentHealth: number,
+        unitKey: string | null = null
+    ): void {
+        const remainingHealth = Math.max(0, currentHealth);
+
+        // If in remaining-life mode and unitKey is provided, remove previous damage numbers for this unit
+        if (this.damageDisplayMode === 'remaining-life' && unitKey !== null) {
+            this.damageNumbers = this.damageNumbers.filter(dn => dn.unitId !== unitKey);
+        }
+
+        this.damageNumbers.push(new DamageNumber(
+            position,
+            damage,
+            this.gameTime,
+            maxHealth,
+            remainingHealth,
+            unitKey
+        ));
     }
 }
 
