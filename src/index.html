@@ -106,10 +106,10 @@
     <div id="loading">
         <div class="build-badge">Build 1</div>
         <div class="logo">
-            <img class="loading-logo" src="ASSETS/sprites/loadingScreen/gravyThymeLogo.png" alt="Gravythyme logo">
+            <img class="loading-logo" src="../ASSETS/sprites/loadingScreen/gravyThymeLogo.png" alt="Gravythyme logo">
             <div class="logo-subtitle">Speed of Light RTS</div>
         </div>
-        <img id="loadingAnimationFrame" class="loading-animation" src="ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png" alt="Loading animation">
+        <img id="loadingAnimationFrame" class="loading-animation" src="../ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png" alt="Loading animation">
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
@@ -119,7 +119,7 @@
         const animationFrameDurationMs = 80;
         const animationFrames = Array.from({ length: animationFrameCount }, (_, frameIndex) => {
             const frameNumber = frameIndex + 1;
-            return `ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`;
+            return `../ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`;
         });
         const preloadedAnimationFrames = animationFrames.map((frameSrc) => {
             const image = new Image();
