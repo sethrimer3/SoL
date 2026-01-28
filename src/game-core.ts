@@ -200,7 +200,7 @@ export class Asteroid {
  * Solar Mirror - reflects light to generate Energy
  */
 export class SolarMirror {
-    health: number = 100.0;
+    health: number = Constants.MIRROR_MAX_HEALTH;
     efficiency: number = 1.0; // 0.0 to 1.0
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
@@ -607,6 +607,8 @@ export class SolarMirror {
     }
 }
 
+type CombatTarget = Unit | StellarForge | Building | SolarMirror;
+
 /**
  * Stellar Forge - Main base that produces units
  */
@@ -947,7 +949,7 @@ export class Building {
     health: number;
     maxHealth: number;
     attackCooldown: number = 0;
-    target: Unit | StellarForge | Building | null = null;
+    target: CombatTarget | null = null;
     buildProgress: number = 0; // 0 to 1, building is complete at 1
     isComplete: boolean = false;
     
@@ -969,7 +971,7 @@ export class Building {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
@@ -1001,7 +1003,7 @@ export class Building {
     /**
      * Check if target is dead
      */
-    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
+    protected isTargetDead(target: CombatTarget): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -1011,8 +1013,8 @@ export class Building {
     /**
      * Find nearest enemy
      */
-    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
+    protected findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
+        let nearest: CombatTarget | null = null;
         let minDistance = Infinity;
 
         for (const enemy of enemies) {
@@ -1031,7 +1033,7 @@ export class Building {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -1092,7 +1094,7 @@ export class Minigun extends Building {
     /**
      * Attack with visual effects like Marine
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Apply damage
         super.attack(target);
 
@@ -1237,7 +1239,7 @@ export class SubsidiaryFactory extends Building {
      * Note: SubsidiaryFactory is a production building with no attack capability,
      * so we don't call super.update() which handles attack logic.
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
+    update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[]): void {
         // Only produce when complete
         if (!this.isComplete) return;
 
@@ -1837,7 +1839,7 @@ export class AbilityBullet {
     /**
      * Check if bullet hits a target
      */
-    checkHit(target: Unit | StellarForge): boolean {
+    checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
         return distance < 10; // Hit radius
     }
@@ -1874,7 +1876,7 @@ export class MinionProjectile {
         return this.distanceTraveledPx >= this.maxRangePx;
     }
 
-    checkHit(target: Unit | StellarForge | Building): boolean {
+    checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
         return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
     }
@@ -1888,7 +1890,7 @@ export class Unit {
     maxHealth: number;
     attackCooldown: number = 0;
     abilityCooldown: number = 0; // Cooldown for special ability
-    target: Unit | StellarForge | Building | null = null;
+    target: CombatTarget | null = null;
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
@@ -1917,7 +1919,7 @@ export class Unit {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
@@ -2113,7 +2115,7 @@ export class Unit {
     /**
      * Check if target is dead
      */
-    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
+    protected isTargetDead(target: CombatTarget): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -2123,8 +2125,8 @@ export class Unit {
     /**
      * Find nearest enemy
      */
-    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
+    protected findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
+        let nearest: CombatTarget | null = null;
         let minDistance = Infinity;
 
         for (const enemy of enemies) {
@@ -2143,7 +2145,7 @@ export class Unit {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -2218,7 +2220,7 @@ export class Marine extends Unit {
     /**
      * Attack with visual effects
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Apply damage
         super.attack(target);
 
@@ -2317,7 +2319,7 @@ export class GraveProjectile {
     velocity: Vector2D;
     lifetime: number = 0;
     isAttacking: boolean = false;
-    targetEnemy: Unit | StellarForge | Building | null = null;
+    targetEnemy: CombatTarget | null = null;
     trail: Vector2D[] = []; // Trail of positions
     
     constructor(
@@ -2390,7 +2392,7 @@ export class GraveProjectile {
     /**
      * Launch projectile toward target
      */
-    launchAtTarget(target: Unit | StellarForge | Building): void {
+    launchAtTarget(target: CombatTarget): void {
         this.isAttacking = true;
         this.targetEnemy = target;
         this.trail = [];
@@ -2459,7 +2461,7 @@ export class Grave extends Unit {
     /**
      * Update grave and its projectiles
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[], allUnits: Unit[], asteroids: Asteroid[] = []): void {
+    update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[], asteroids: Asteroid[] = []): void {
         // Update base unit logic
         super.update(deltaTime, enemies, allUnits, asteroids);
         
@@ -2490,7 +2492,7 @@ export class Grave extends Unit {
     /**
      * Grave doesn't use the base attack (projectiles do the damage)
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Projectiles handle the actual attacking
     }
 
@@ -2553,7 +2555,7 @@ export class Starling extends Unit {
     /**
      * Update starling AI behavior (call this before regular update)
      */
-    updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
+    updateAI(gameState: GameState, enemies: CombatTarget[]): void {
         if (this.hasManualOrder) {
             return;
         }
@@ -2685,7 +2687,7 @@ export class Starling extends Unit {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[] = [],
         asteroids: Asteroid[] = []
     ): void {
@@ -2720,7 +2722,7 @@ export class Starling extends Unit {
         }
     }
 
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         const dx = target.position.x - this.position.x;
         const dy = target.position.y - this.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
@@ -3006,7 +3008,7 @@ export class DeployedTurret {
     health: number;
     maxHealth: number = Constants.DEPLOYED_TURRET_MAX_HEALTH;
     attackCooldown: number = 0;
-    target: Unit | StellarForge | Building | null = null;
+    target: CombatTarget | null = null;
     
     constructor(
         public position: Vector2D,
@@ -3016,7 +3018,7 @@ export class DeployedTurret {
         this.health = this.maxHealth;
     }
     
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
+    update(deltaTime: number, enemies: CombatTarget[]): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -3037,15 +3039,15 @@ export class DeployedTurret {
         }
     }
     
-    private isTargetDead(target: Unit | StellarForge | Building): boolean {
+    private isTargetDead(target: CombatTarget): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
         return false;
     }
     
-    private findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
+    private findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
+        let nearest: CombatTarget | null = null;
         let minDistance = Infinity;
         
         for (const enemy of enemies) {
@@ -3061,7 +3063,7 @@ export class DeployedTurret {
         return nearest;
     }
     
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         if ('health' in target) {
             target.health -= Constants.DEPLOYED_TURRET_ATTACK_DAMAGE;
         }
@@ -3134,7 +3136,7 @@ export class Driller extends Unit {
     /**
      * Driller has no normal attack - only the drilling ability
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Driller does not have a normal attack - it only attacks via drilling ability
         // This is intentional per the unit design
     }
@@ -3296,7 +3298,7 @@ export class Dagger extends Unit {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
@@ -3516,6 +3518,10 @@ export class GameState {
                 continue;
             }
 
+            if (player.solarMirrors.length > 0) {
+                player.solarMirrors = player.solarMirrors.filter(mirror => mirror.health > 0);
+            }
+
             // Update light status for Stellar Forge
             if (player.stellarForge) {
                 const oldForgePos = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
@@ -3620,6 +3626,16 @@ export class GameState {
                     player.addEnergy(energyGenerated);
                     player.stellarForge.addPendingEnergy(energyGenerated);
                 }
+
+                if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
+                    const distanceToForge = player.stellarForge.position.distanceTo(mirror.position);
+                    if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
+                        mirror.health = Math.min(
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
+                        );
+                    }
+                }
             }
         }
 
@@ -3644,11 +3660,16 @@ export class GameState {
             if (player.isDefeated()) continue;
 
             // Get enemies (units and structures not owned by this player)
-            const enemies: (Unit | StellarForge | Building)[] = [];
+            const enemies: CombatTarget[] = [];
             for (const otherPlayer of this.players) {
                 if (otherPlayer !== player && !otherPlayer.isDefeated()) {
                     enemies.push(...otherPlayer.units);
                     enemies.push(...otherPlayer.buildings);
+                    for (const mirror of otherPlayer.solarMirrors) {
+                        if (mirror.health > 0) {
+                            enemies.push(mirror);
+                        }
+                    }
                     if (otherPlayer.stellarForge) {
                         enemies.push(otherPlayer.stellarForge);
                     }
@@ -3989,6 +4010,31 @@ export class GameState {
                     }
                 }
 
+                if (bullet.shouldDespawn()) {
+                    continue;
+                }
+
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health <= 0) {
+                        continue;
+                    }
+                    if (bullet.checkHit(mirror)) {
+                        mirror.health -= bullet.damage;
+                        this.damageNumbers.push(new DamageNumber(
+                            mirror.position,
+                            bullet.damage,
+                            this.gameTime,
+                            Constants.MIRROR_MAX_HEALTH
+                        ));
+                        bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                        break;
+                    }
+                }
+
+                if (bullet.shouldDespawn()) {
+                    continue;
+                }
+
                 // Check hits on Stellar Forge
                 if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
                     let finalDamage = bullet.damage;
@@ -4060,6 +4106,27 @@ export class GameState {
                             projectile.damage,
                             this.gameTime,
                             unit.maxHealth
+                        ));
+                        hasHit = true;
+                        break;
+                    }
+                }
+
+                if (hasHit) {
+                    break;
+                }
+
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health <= 0) {
+                        continue;
+                    }
+                    if (projectile.checkHit(mirror)) {
+                        mirror.health -= projectile.damage;
+                        this.damageNumbers.push(new DamageNumber(
+                            mirror.position,
+                            projectile.damage,
+                            this.gameTime,
+                            Constants.MIRROR_MAX_HEALTH
                         ));
                         hasHit = true;
                         break;
@@ -4148,11 +4215,16 @@ export class GameState {
         this.influenceBallProjectiles = this.influenceBallProjectiles.filter(p => !p.shouldExplode());
         
         // Update deployed turrets
-        const allUnitsAndStructures: (Unit | StellarForge | Building)[] = [];
+        const allUnitsAndStructures: CombatTarget[] = [];
         for (const player of this.players) {
             if (!player.isDefeated()) {
                 allUnitsAndStructures.push(...player.units);
                 allUnitsAndStructures.push(...player.buildings);
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health > 0) {
+                        allUnitsAndStructures.push(mirror);
+                    }
+                }
                 if (player.stellarForge) {
                     allUnitsAndStructures.push(player.stellarForge);
                 }
@@ -4161,14 +4233,7 @@ export class GameState {
         
         for (const turret of this.deployedTurrets) {
             // Get enemies for this turret
-            const enemies = allUnitsAndStructures.filter(e => {
-                if (e instanceof Unit || e instanceof Building) {
-                    return e.owner !== turret.owner;
-                } else if (e instanceof StellarForge) {
-                    return e.owner !== turret.owner;
-                }
-                return false;
-            });
+            const enemies = allUnitsAndStructures.filter(e => e.owner !== turret.owner);
             
             turret.update(deltaTime, enemies);
         }
@@ -4393,12 +4458,17 @@ export class GameState {
         }
     }
 
-    private getEnemiesForPlayer(player: Player): (Unit | StellarForge | Building)[] {
-        const enemies: (Unit | StellarForge | Building)[] = [];
+    private getEnemiesForPlayer(player: Player): CombatTarget[] {
+        const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
             if (otherPlayer !== player && !otherPlayer.isDefeated()) {
                 enemies.push(...otherPlayer.units);
                 enemies.push(...otherPlayer.buildings);
+                for (const mirror of otherPlayer.solarMirrors) {
+                    if (mirror.health > 0) {
+                        enemies.push(mirror);
+                    }
+                }
                 if (otherPlayer.stellarForge) {
                     enemies.push(otherPlayer.stellarForge);
                 }
@@ -4514,7 +4584,7 @@ export class GameState {
 
     private updateAiDefenseForPlayer(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
+        enemies: CombatTarget[]
     ): void {
         if (this.gameTime < player.aiNextDefenseCommandSec) {
             return;
@@ -4671,7 +4741,7 @@ export class GameState {
 
     private updateAiStructuresForPlayer(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
+        enemies: CombatTarget[]
     ): void {
         if (this.gameTime < player.aiNextStructureCommandSec) {
             return;
@@ -4815,8 +4885,8 @@ export class GameState {
 
     private findAiThreat(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
-    ): { enemy: Unit | StellarForge | Building; guardPoint: Vector2D } | null {
+        enemies: CombatTarget[]
+    ): { enemy: CombatTarget; guardPoint: Vector2D } | null {
         if (!player.stellarForge) {
             return null;
         }
@@ -4826,7 +4896,7 @@ export class GameState {
             guardPoints.push(mirror.position);
         }
 
-        let closestThreat: Unit | StellarForge | Building | null = null;
+        let closestThreat: CombatTarget | null = null;
         let closestGuardPoint: Vector2D | null = null;
         let closestDistanceSq = Infinity;
         const defenseRadiusSq = Constants.AI_DEFENSE_RADIUS_PX * Constants.AI_DEFENSE_RADIUS_PX;
@@ -5141,7 +5211,7 @@ export class GameState {
      * - They are in shadow but within proximity range of player unit, OR
      * - They are in shadow but within player's influence radius
      */
-    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget): boolean {
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
             // Dagger is only visible to enemies if not cloaked

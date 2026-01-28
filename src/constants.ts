@@ -103,6 +103,8 @@ export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Unit
 // Countdown and mirror constants
 export const COUNTDOWN_DURATION = 3.0; // Countdown duration in seconds
 export const MIRROR_COUNTDOWN_DEPLOY_DISTANCE = 150; // Distance mirrors move from base during countdown
+export const MIRROR_MAX_HEALTH = 100;
+export const MIRROR_REGEN_PER_SEC = 2;
 
 // Marine unit constants
 export const MARINE_MAX_HEALTH = 100;
