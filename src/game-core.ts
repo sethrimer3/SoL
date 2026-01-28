@@ -3616,7 +3616,8 @@ export class GameState {
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
-                    // Add to forge's pending energy pool for next crunch
+                    // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
+                    player.addEnergy(energyGenerated);
                     player.stellarForge.addPendingEnergy(energyGenerated);
                 }
             }

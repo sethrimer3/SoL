@@ -4317,8 +4317,7 @@ export class GameRenderer {
         const stats = [
             { label: 'Units Created', key: 'unitsCreated' },
             { label: 'Units Lost', key: 'unitsLost' },
-            { label: 'Energy Gathered', key: 'energyGathered' },
-            { label: 'Final Energy', key: 'energy' }
+            { label: 'Energy Gathered', key: 'energyGathered' }
         ];
         
         for (const stat of stats) {
