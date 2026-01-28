@@ -88,12 +88,18 @@ class GameController {
     }
 
     private getClickedHeroButton(
-        worldPos: Vector2D,
+        screenX: number,
+        screenY: number,
         forge: StellarForge,
         heroNames: string[]
     ): { heroName: string; buttonPos: Vector2D } | null {
-        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX;
-        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX;
+        // Convert forge position to screen space
+        const forgeScreenPos = this.renderer.worldToScreen(forge.position);
+        
+        // Button measurements in screen space (affected by zoom)
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
+        
         const positions = [
             { x: 0, y: -1 },
             { x: 1, y: 0 },
@@ -103,12 +109,19 @@ class GameController {
         const displayHeroes = heroNames.slice(0, positions.length);
         for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
-            const buttonPos = new Vector2D(
-                forge.position.x + pos.x * buttonDistance,
-                forge.position.y + pos.y * buttonDistance
-            );
-            if (worldPos.distanceTo(buttonPos) <= buttonRadius) {
-                return { heroName: displayHeroes[i], buttonPos };
+            // Calculate button position in screen space
+            const buttonScreenX = forgeScreenPos.x + pos.x * buttonDistance;
+            const buttonScreenY = forgeScreenPos.y + pos.y * buttonDistance;
+            
+            // Check distance in screen space
+            const dx = screenX - buttonScreenX;
+            const dy = screenY - buttonScreenY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= buttonRadius) {
+                // Convert button screen position back to world position for the wave effect
+                const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                return { heroName: displayHeroes[i], buttonPos: buttonWorldPos };
             }
         }
         return null;
@@ -757,7 +770,8 @@ class GameController {
 
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHero = this.getClickedHeroButton(
-                        worldPos,
+                        lastX,
+                        lastY,
                         player.stellarForge,
                         this.renderer.selectedHeroNames
                     );

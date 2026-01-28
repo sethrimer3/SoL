@@ -297,7 +297,7 @@ export class GameRenderer {
     /**
      * Convert world coordinates to screen coordinates
      */
-    private worldToScreen(worldPos: Vector2D): Vector2D {
+    worldToScreen(worldPos: Vector2D): Vector2D {
         const dpr = window.devicePixelRatio || 1;
         const centerX = (this.canvas.width / dpr) / 2;
         const centerY = (this.canvas.height / dpr) / 2;
