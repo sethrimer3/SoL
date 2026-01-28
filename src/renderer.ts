@@ -530,7 +530,7 @@ export class GameRenderer {
             }
         }
 
-        return null;
+        return starling.rotation + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
     }
 
     private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
@@ -1734,13 +1734,18 @@ export class GameRenderer {
             
         if (heroSprite) {
             const spriteSize = size * this.HERO_SPRITE_SCALE;
+            const rotationRad = unit.rotation;
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationRad);
             this.ctx.drawImage(
                 heroSprite,
-                screenPos.x - spriteSize / 2,
-                screenPos.y - spriteSize / 2,
+                -spriteSize / 2,
+                -spriteSize / 2,
                 spriteSize,
                 spriteSize
             );
+            this.ctx.restore();
         } else {
             this.ctx.fillStyle = displayColor;
             this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
@@ -1767,7 +1772,7 @@ export class GameRenderer {
         }
 
         // Draw direction indicator if unit has a target
-        if (unit.target) {
+        if (!unit.isHero && unit.target) {
             const dx = unit.target.position.x - unit.position.x;
             const dy = unit.target.position.y - unit.position.y;
             const angle = Math.atan2(dy, dx);
