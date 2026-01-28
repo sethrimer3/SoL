@@ -226,6 +226,7 @@ class GameController {
         // Set damage and health display modes from settings
         this.renderer.damageDisplayMode = settings.damageDisplayMode;
         this.renderer.healthDisplayMode = settings.healthDisplayMode;
+        this.game.damageDisplayMode = settings.damageDisplayMode;
         
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
@@ -540,6 +541,9 @@ class GameController {
                                 break;
                             case 'damageDisplayMode':
                                 this.renderer.damageDisplayMode = menuAction.mode;
+                                if (this.game) {
+                                    this.game.damageDisplayMode = menuAction.mode;
+                                }
                                 break;
                             case 'healthDisplayMode':
                                 this.renderer.healthDisplayMode = menuAction.mode;

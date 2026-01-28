@@ -4006,12 +4006,14 @@ export class GameState {
                         
                         unit.takeDamage(finalDamage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             finalDamage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -4027,12 +4029,14 @@ export class GameState {
                     }
                     if (bullet.checkHit(mirror)) {
                         mirror.health -= bullet.damage;
-                        this.damageNumbers.push(new DamageNumber(
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             mirror.position,
                             bullet.damage,
-                            this.gameTime,
-                            Constants.MIRROR_MAX_HEALTH
-                        ));
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -4062,12 +4066,14 @@ export class GameState {
                     
                     player.stellarForge.health -= finalDamage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         finalDamage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
             }
@@ -4108,12 +4114,14 @@ export class GameState {
                     if (projectile.checkHit(unit)) {
                         unit.takeDamage(projectile.damage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             projectile.damage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4129,12 +4137,14 @@ export class GameState {
                     }
                     if (projectile.checkHit(mirror)) {
                         mirror.health -= projectile.damage;
-                        this.damageNumbers.push(new DamageNumber(
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             mirror.position,
                             projectile.damage,
-                            this.gameTime,
-                            Constants.MIRROR_MAX_HEALTH
-                        ));
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4148,12 +4158,14 @@ export class GameState {
                     if (projectile.checkHit(building)) {
                         building.health -= projectile.damage;
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             building.position,
                             projectile.damage,
-                            this.gameTime,
-                            building.maxHealth
-                        ));
+                            building.maxHealth,
+                            building.health,
+                            buildingKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4166,12 +4178,14 @@ export class GameState {
                 if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= projectile.damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         projectile.damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     hasHit = true;
                     break;
                 }
@@ -5354,12 +5368,16 @@ export class GameState {
                     const maxHealth = closestHit.type === 'forge' 
                         ? Constants.STELLAR_FORGE_MAX_HEALTH 
                         : (closestHit.target as Unit).maxHealth;
-                    this.damageNumbers.push(new DamageNumber(
+                    const targetKey = closestHit.type === 'forge'
+                        ? `forge_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as StellarForge).owner.name}`
+                        : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as Unit).owner.name}`;
+                    this.addDamageNumber(
                         closestHit.target.position,
                         Constants.RAY_BEAM_DAMAGE,
-                        this.gameTime,
-                        maxHealth
-                    ));
+                        maxHealth,
+                        closestHit.target.health,
+                        targetKey
+                    );
                 }
                 break;
             } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
@@ -5535,12 +5553,14 @@ export class GameState {
                 if (distance < 15) {
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                    this.addDamageNumber(
                         unit.position,
                         Constants.DRILLER_DRILL_DAMAGE,
-                        this.gameTime,
-                        unit.maxHealth
-                    ));
+                        unit.maxHealth,
+                        unit.health,
+                        unitKey
+                    );
                 }
             }
             
@@ -5551,12 +5571,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     building.takeDamage(damage);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         building.position,
                         damage,
-                        this.gameTime,
-                        building.maxHealth
-                    ));
+                        building.maxHealth,
+                        building.health,
+                        buildingKey
+                    );
                     // Continue drilling through building
                 }
             }
@@ -5568,12 +5590,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     player.stellarForge.health -= damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     // Continue drilling through
                 }
             }
