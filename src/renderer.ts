@@ -238,10 +238,12 @@ export class GameRenderer {
         // Initialize star layers with random positions
         this.initializeStarLayers();
 
+        const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
             this.graphicsOptionByKey.set(option.key, option);
             const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
-            this.graphicsVariantByKey.set(option.key, defaultVariant);
+            const shouldPreferPng = defaultPngKeys.includes(option.key) && option.pngPath;
+            this.graphicsVariantByKey.set(option.key, shouldPreferPng ? 'png' : defaultVariant);
         }
     }
 
