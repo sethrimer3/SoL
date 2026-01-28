@@ -1264,6 +1264,7 @@ export class MainMenu {
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
+    private testLevelButton: HTMLButtonElement | null = null;
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -1326,6 +1327,14 @@ export class MainMenu {
             description: 'Classic 1v1 map with a single sun at the center. Balanced gameplay with moderate obstacles.',
             numSuns: 1,
             numAsteroids: 10,
+            mapSize: 2000
+        },
+        {
+            id: 'test-level',
+            name: 'Test Level',
+            description: 'Minimal layout for AI testing with a single sun, mirrored bases, and no asteroids.',
+            numSuns: 1,
+            numAsteroids: 0,
             mapSize: 2000
         },
         {
@@ -1447,6 +1456,8 @@ export class MainMenu {
         );
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
+        this.testLevelButton = this.createTestLevelButton();
+        menu.appendChild(this.testLevelButton);
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(content);
@@ -1466,6 +1477,59 @@ export class MainMenu {
         });
         
         return menu;
+    }
+
+    private createTestLevelButton(): HTMLButtonElement {
+        const button = document.createElement('button');
+        button.textContent = 'TEST LEVEL';
+        button.type = 'button';
+        button.style.position = 'absolute';
+        button.style.top = '20px';
+        button.style.right = '20px';
+        button.style.padding = '10px 16px';
+        button.style.borderRadius = '6px';
+        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
+        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+        button.style.color = '#FFFFFF';
+        button.style.fontFamily = 'Arial, sans-serif';
+        button.style.fontWeight = '500';
+        button.style.fontSize = '14px';
+        button.style.letterSpacing = '0.08em';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2';
+        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
+
+        button.addEventListener('mouseenter', () => {
+            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
+            button.style.borderColor = '#FFD700';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        button.addEventListener('click', () => {
+            const testMap = this.availableMaps.find(map => map.id === 'test-level');
+            if (!testMap) {
+                return;
+            }
+            this.settings.selectedMap = testMap;
+            this.hide();
+            if (this.onStartCallback) {
+                this.ensureDefaultHeroSelection();
+                this.onStartCallback(this.settings);
+            }
+        });
+
+        return button;
+    }
+
+    private setTestLevelButtonVisible(isVisible: boolean): void {
+        if (!this.testLevelButton) {
+            return;
+        }
+        this.testLevelButton.style.display = isVisible ? 'block' : 'none';
     }
 
     private getSelectedHeroNames(): string[] {
@@ -1509,6 +1573,7 @@ export class MainMenu {
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
         }
+        this.setTestLevelButtonVisible(false);
     }
 
     private setMenuParticleDensity(multiplier: number): void {
@@ -1526,6 +1591,7 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
+        this.setTestLevelButtonVisible(true);
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;

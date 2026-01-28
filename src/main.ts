@@ -251,9 +251,51 @@ class GameController {
             // Two suns positioned diagonally
             game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else if (map.id === 'test-level') {
+            // Single sun at center for test level
+            game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
         } else {
             // Single sun at center (default for all other maps)
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        }
+
+        if (map.id === 'test-level') {
+            const leftForgePosition = new Vector2D(-700, 0);
+            const rightForgePosition = new Vector2D(700, 0);
+            const mirrorOffset = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+            const mirrorPositionsLeft = [
+                new Vector2D(leftForgePosition.x, leftForgePosition.y - mirrorOffset),
+                new Vector2D(leftForgePosition.x, leftForgePosition.y + mirrorOffset)
+            ];
+            const mirrorPositionsRight = [
+                new Vector2D(rightForgePosition.x, rightForgePosition.y - mirrorOffset),
+                new Vector2D(rightForgePosition.x, rightForgePosition.y + mirrorOffset)
+            ];
+
+            const playerPositions = [leftForgePosition, rightForgePosition];
+            const mirrorPositions = [mirrorPositionsLeft, mirrorPositionsRight];
+
+            for (let i = 0; i < game.players.length; i++) {
+                const player = game.players[i];
+                const forgePosition = playerPositions[i] ?? leftForgePosition;
+                const mirrorPositionSet = mirrorPositions[i] ?? mirrorPositionsLeft;
+                player.stellarForge = null;
+                player.solarMirrors = [];
+                game.initializePlayer(player, forgePosition, mirrorPositionSet);
+            }
+
+            if (game.players.length >= 2) {
+                const player = game.players[0];
+                const enemyPlayer = game.players[1];
+                if (player.stellarForge && enemyPlayer.stellarForge) {
+                    player.stellarForge.initializeDefaultPath(enemyPlayer.stellarForge.position);
+                    enemyPlayer.stellarForge.initializeDefaultPath(player.stellarForge.position);
+                }
+            }
+
+            game.asteroids = [];
+            game.spaceDust = [];
+            return game;
         }
         
         // Reinitialize asteroids based on map (keeps strategic asteroids from createStandardGame)
