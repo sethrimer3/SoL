@@ -3068,6 +3068,30 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a path preview for selected units (not from base)
+     */
+    private drawUnitPathPreview(): void {
+        // Only draw if we have path points and no forge (meaning it's a unit path, not a base path)
+        if (!this.pathPreviewForge && this.pathPreviewPoints.length > 0) {
+            // Get the average position of selected units as the start point
+            let avgX = 0;
+            let avgY = 0;
+            let count = 0;
+            
+            for (const unit of this.selectedUnits) {
+                avgX += unit.position.x;
+                avgY += unit.position.y;
+                count++;
+            }
+            
+            if (count > 0) {
+                const startWorld = new Vector2D(avgX / count, avgY / count);
+                this.drawMinionPathPreview(startWorld, this.pathPreviewPoints, this.pathPreviewEnd);
+            }
+        }
+    }
+
+    /**
      * Draw a path preview while the player is actively drawing a minion route.
      */
     private drawMinionPathPreview(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null): void {
@@ -3715,6 +3739,9 @@ export class GameRenderer {
 
         // Draw ability arrow for hero units
         this.drawAbilityArrow();
+
+        // Draw unit path preview
+        this.drawUnitPathPreview();
 
         // Draw tap and swipe visual effects
         this.updateAndDrawProductionButtonWaves();

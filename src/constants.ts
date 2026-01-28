@@ -239,6 +239,7 @@ export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes
 export const UNIT_STRUCTURE_STANDOFF_PX = 4; // Extra spacing to keep units outside structures
 export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint arrival detection
 export const MIN_WAYPOINT_DISTANCE = 50; // Minimum distance between path waypoints in pixels
+export const UNIT_PATH_DRAW_RADIUS = 50; // Maximum distance from unit to initiate path drawing (pixels)
 
 // Deterministic state hash cadence
 export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
@@ -258,7 +259,7 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
-export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
+export const CLICK_DRAG_THRESHOLD = 10; // Pixels of movement to distinguish click from drag (increased for better tap/drag distinction)
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
 
