@@ -21,7 +21,7 @@
 ┌─────────────────────────┐   ┌─────────────────────────┐
 │      PLAYER 1           │   │      PLAYER 2           │
 │  Faction: Radiant       │   │  Faction: Aurum         │
-│  Solarium: 100 Sol      │   │  Solarium: 100 Sol      │
+│  Energy: 100 Sol      │   │  Energy: 100 Sol      │
 └─────────────────────────┘   └─────────────────────────┘
             │                               │
     ┌───────┴────────┐              ┌───────┴────────┐
@@ -61,7 +61,7 @@
               │  For Each Player:       │
               │  1. Check if defeated   │
               │  2. Update forge light  │
-              │  3. Generate Solarium   │
+              │  3. Generate Energy   │
               └─────────────────────────┘
                             │
                             ▼
@@ -117,7 +117,7 @@ The command list above was revalidated after tuning dust wake displacement for m
     │  FORGE  │      Produces units
     └─────────┘
          │
-         │ Uses Solarium
+         │ Uses Energy
          ▼
     ┌─────────┐
     │  UNITS  │ ◄─── Only produced when
@@ -133,7 +133,7 @@ The command list above was revalidated after tuning dust wake displacement for m
 │ Light-based  │     │ Wealth focus │     │ Sun worship  │
 │──────────────│     │──────────────│     │──────────────│
 │ +10% Mirror  │     │ +50% Start   │     │ +20% Forge   │
-│ Efficiency   │     │   Solarium   │     │   Health     │
+│ Efficiency   │     │   Energy   │     │   Health     │
 │              │     │              │     │              │
 │ +20% Light   │     │ +10% Sol     │     │ +10% Unit    │
 │ Detection    │     │ Generation   │     │ Production   │
@@ -145,15 +145,15 @@ The command list above was revalidated after tuning dust wake displacement for m
 ### Solar Mirror Operation
 ```
 if (has_line_of_sight_to_sun AND has_line_of_sight_to_forge):
-    generate_solarium(rate * efficiency * delta_time)
-    player.add_solarium(generated_amount)
+    generate_energy(rate * efficiency * delta_time)
+    player.add_energy(generated_amount)
 ```
 
 ### Unit Production
 ```
-if (forge.is_receiving_light AND player.solarium >= unit_cost):
+if (forge.is_receiving_light AND player.energy >= unit_cost):
     produce_unit()
-    player.spend_solarium(unit_cost)
+    player.spend_energy(unit_cost)
 ```
 
 ### Victory Condition

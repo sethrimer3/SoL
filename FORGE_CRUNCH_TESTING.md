@@ -5,15 +5,15 @@
 The forge crunch feature has been implemented with the following mechanics:
 
 ### 1. **Crunch Cycle** (Every 10 seconds)
-- When the Stellar Forge receives light from Solar Mirrors, it accumulates solarium
+- When the Stellar Forge receives light from Solar Mirrors, it accumulates energy
 - Every 10 seconds, the forge performs a "crunch" 
 - During a crunch:
   - **Suck Phase** (0.8 seconds): Space dust is pulled toward the forge
   - **Wave Phase** (1.2 seconds): Space dust is pushed away in a wave effect
 
 ### 2. **Minion Spawning**
-- When a crunch happens, all accumulated solarium is used to spawn Starling minions
-- Each Starling costs 50 solarium
+- When a crunch happens, all accumulated energy is used to spawn Starling minions
+- Each Starling costs 50 energy
 - Starlings spawn evenly distributed around the forge at the wave edge (70% of wave radius)
 
 ### 3. **Space Dust Physics**
@@ -35,10 +35,10 @@ The forge crunch feature has been implemented with the following mechanics:
      - First pull toward the forge (0.8s)
      - Then get pushed away in a wave (1.2s)
    
-   - **Minion spawning**: If the forge is generating solarium, every 10 seconds you should see:
+   - **Minion spawning**: If the forge is generating energy, every 10 seconds you should see:
      - Starling units spawn around the forge
-     - Number of starlings = (accumulated solarium / 50)
-     - Check console for log: "forge crunch spawned X Starlings with Y solarium"
+     - Number of starlings = (accumulated energy / 50)
+     - Check console for log: "forge crunch spawned X Starlings with Y energy"
 
 ### Code Verification
 All new code has been added to:
@@ -61,7 +61,7 @@ FORGE_CRUNCH_SUCK_RADIUS = 250        // Suck effect radius
 FORGE_CRUNCH_WAVE_RADIUS = 300        // Wave effect radius
 FORGE_CRUNCH_SUCK_FORCE = 150         // Suck force magnitude
 FORGE_CRUNCH_WAVE_FORCE = 200         // Wave force magnitude
-STARLING_COST_PER_SOLARIUM = 50       // Solarium per starling
+STARLING_COST_PER_SOLARIUM = 50       // Energy per starling
 ```
 
 ### New Classes
@@ -70,14 +70,14 @@ STARLING_COST_PER_SOLARIUM = 50       // Solarium per starling
 ### Modified Classes
 - **StellarForge**: 
   - Replaced `starlingSpawnTimer` with `crunchTimer`
-  - Added `pendingSolarium` to accumulate resources
+  - Added `pendingEnergy` to accumulate resources
   - Added `currentCrunch` to track active crunch effect
-  - New methods: `shouldCrunch()`, `addPendingSolarium()`, `getCurrentCrunch()`
+  - New methods: `shouldCrunch()`, `addPendingEnergy()`, `getCurrentCrunch()`
 
 ### Modified Game Loop
-- Solar mirrors now add generated solarium to forge's pending pool
+- Solar mirrors now add generated energy to forge's pending pool
 - Crunch triggers every 10s when forge receives light
-- Starlings spawn based on pending solarium amount
+- Starlings spawn based on pending energy amount
 - Space dust updated with crunch forces in both phases
 
 ## Expected Behavior
@@ -89,8 +89,8 @@ STARLING_COST_PER_SOLARIUM = 50       // Solarium per starling
 
 2. **With Active Solar Mirrors**:
    - Every 10 seconds: crunch animation (dust suck + wave)
-   - Starlings spawn every crunch based on solarium generation rate
-   - Example: 3 mirrors generating ~15 solarium/sec = 150 solarium per crunch = 3 starlings
+   - Starlings spawn every crunch based on energy generation rate
+   - Example: 3 mirrors generating ~15 energy/sec = 150 energy per crunch = 3 starlings
 
 3. **Space Dust Visual**:
    - Should clearly show the "suck then push" pattern

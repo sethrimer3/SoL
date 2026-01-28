@@ -4,7 +4,7 @@
 Implement forge crunches that:
 1. Slightly suck space dust toward the base
 2. Have a "wave" effect going outward from the base pushing dust away
-3. Spawn minions with excess solarium not used for structures/hero units
+3. Spawn minions with excess energy not used for structures/hero units
 
 ## Solution Implemented
 
@@ -13,7 +13,7 @@ Implement forge crunches that:
 - **Two-Phase Animation**:
   - **Suck Phase** (0.8s): Pulls space dust toward forge within 250px radius
   - **Wave Phase** (1.2s): Pushes dust away in expanding wave within 300px radius
-- **Minion Spawning**: Accumulated solarium spawns Starlings (50 solarium each)
+- **Minion Spawning**: Accumulated energy spawns Starlings (50 energy each)
 
 ### Technical Implementation
 
@@ -29,7 +29,7 @@ Implement forge crunches that:
 - `FORGE_CRUNCH_SUCK_DURATION = 0.8s`, `FORGE_CRUNCH_WAVE_DURATION = 1.2s`
 - `FORGE_CRUNCH_SUCK_RADIUS = 250px`, `FORGE_CRUNCH_WAVE_RADIUS = 300px`
 - `FORGE_CRUNCH_SUCK_FORCE = 150`, `FORGE_CRUNCH_WAVE_FORCE = 200`
-- `STARLING_COST_PER_SOLARIUM = 50`
+- `STARLING_COST_PER_ENERGY = 50`
 
 **src/game-core.ts**
 - **New Class: ForgeCrunch** (~60 lines)
@@ -39,13 +39,13 @@ Implement forge crunches that:
   
 - **Modified Class: StellarForge**
   - Replaced `starlingSpawnTimer` with `crunchTimer`
-  - Added `pendingSolarium` accumulator
+  - Added `pendingEnergy` accumulator
   - Added `currentCrunch` for active effect tracking
-  - New methods: `shouldCrunch()`, `addPendingSolarium()`, `getCurrentCrunch()`
+  - New methods: `shouldCrunch()`, `addPendingEnergy()`, `getCurrentCrunch()`
 
 - **Modified: Game Update Loop**
-  - Solar mirrors now feed pending solarium pool
-  - Crunch triggers spawn starlings based on accumulated solarium
+  - Solar mirrors now feed pending energy pool
+  - Crunch triggers spawn starlings based on accumulated energy
   - Starlings spawn evenly distributed around forge
 
 - **Modified: updateSpaceDust()**
@@ -62,8 +62,8 @@ Implement forge crunches that:
 
 ### Design Decisions
 
-1. **Solarium Management**: Changed from instant use to accumulation model
-   - Mirrors add to `pendingSolarium` instead of player's direct pool
+1. **Energy Management**: Changed from instant use to accumulation model
+   - Mirrors add to `pendingEnergy` instead of player's direct pool
    - Allows for batch processing during crunches
    - More aligned with the "crunch" concept
 
@@ -104,5 +104,5 @@ npm run build
 - Visual crunch indicator on forge sprite
 - Sound effects for crunch
 - Particle color change during crunch
-- UI display of pending solarium
+- UI display of pending energy
 - Configurable crunch parameters per faction

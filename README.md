@@ -25,11 +25,11 @@ Three unique civilizations, each with distinct bonuses:
 
 #### Solar Mirrors
 - Reflect sunlight to your Stellar Forge
-- Generate Solarium (the game's currency)
+- Generate Energy (the game's currency)
 - Require clear line-of-sight to both a sun and your Stellar Forge
 - Can be targeted by enemies to disrupt your economy
 
-### Resource: Solarium (Sol)
+### Resource: Energy (E)
 - Primary currency generated from Solar Mirrors
 - Used to produce units and build structures
 - Generation requires active light connection between mirrors, sun, and forge
@@ -95,7 +95,7 @@ python3 -m http.server 8080
 ✅ Three distinct factions with unique characteristics  
 ✅ Stellar Forge main base system  
 ✅ Solar Mirror resource collection  
-✅ Solarium currency system  
+✅ Energy currency system  
 ✅ Light-based unit production mechanics  
 ✅ Line-of-sight system for solar mirrors  
 ✅ Ray tracing foundation for light/shadow  
