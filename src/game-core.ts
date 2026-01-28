@@ -2548,10 +2548,20 @@ export class Starling extends Unit {
     setManualRallyPoint(target: Vector2D): void {
         this.rallyPoint = target;
         this.hasManualOrder = true;
+        // Reset the final waypoint flag since we're now moving to a new destination
+        this.hasReachedFinalWaypoint = false;
     }
 
     getAssignedPathLength(): number {
         return this.assignedPath.length;
+    }
+    
+    getPathHash(): string {
+        return this.pathHash;
+    }
+    
+    getHasReachedFinalWaypoint(): boolean {
+        return this.hasReachedFinalWaypoint;
     }
 
     getCurrentPathWaypointIndex(): number {
@@ -2713,7 +2723,8 @@ export class Starling extends Unit {
         // This only applies when we're heading to the final waypoint (not intermediate waypoints)
         if (this.assignedPath.length > 0 && 
             this.currentPathWaypointIndex === this.assignedPath.length - 1 &&
-            !this.hasReachedFinalWaypoint) {
+            !this.hasReachedFinalWaypoint &&
+            this.rallyPoint !== null) {
             
             // Check for collision with other stopped starlings from the same group
             const stopDistance = Constants.UNIT_AVOIDANCE_RANGE_PX; // Use avoidance range as collision detection range
@@ -2721,18 +2732,18 @@ export class Starling extends Unit {
             for (let i = 0; i < allUnits.length; i++) {
                 const otherUnit = allUnits[i];
                 
-                // Skip if not a starling, is self, or is dead
-                if (!(otherUnit instanceof Starling) || otherUnit === this || otherUnit.isDead()) {
+                // Skip if not a starling, is self, is dead, or is not from the same team
+                if (!(otherUnit instanceof Starling) || otherUnit === this || otherUnit.isDead() || otherUnit.owner !== this.owner) {
                     continue;
                 }
                 
                 // Check if other starling is from the same group (same path hash)
-                if ((otherUnit as Starling).pathHash !== this.pathHash) {
+                if (otherUnit.pathHash !== this.pathHash) {
                     continue;
                 }
                 
                 // Check if other starling has reached its final waypoint and stopped
-                if (!(otherUnit as Starling).hasReachedFinalWaypoint) {
+                if (!otherUnit.hasReachedFinalWaypoint) {
                     continue;
                 }
                 
