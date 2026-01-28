@@ -88,12 +88,18 @@ class GameController {
     }
 
     private getClickedHeroButton(
-        worldPos: Vector2D,
+        screenX: number,
+        screenY: number,
         forge: StellarForge,
         heroNames: string[]
     ): { heroName: string; buttonPos: Vector2D } | null {
-        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX;
-        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX;
+        // Convert forge position to screen space
+        const forgeScreenPos = this.renderer.worldToScreen(forge.position);
+        
+        // Button measurements in screen space (affected by zoom)
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
+        
         const positions = [
             { x: 0, y: -1 },
             { x: 1, y: 0 },
@@ -103,12 +109,19 @@ class GameController {
         const displayHeroes = heroNames.slice(0, positions.length);
         for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
-            const buttonPos = new Vector2D(
-                forge.position.x + pos.x * buttonDistance,
-                forge.position.y + pos.y * buttonDistance
-            );
-            if (worldPos.distanceTo(buttonPos) <= buttonRadius) {
-                return { heroName: displayHeroes[i], buttonPos };
+            // Calculate button position in screen space
+            const buttonScreenX = forgeScreenPos.x + pos.x * buttonDistance;
+            const buttonScreenY = forgeScreenPos.y + pos.y * buttonDistance;
+            
+            // Check distance in screen space
+            const dx = screenX - buttonScreenX;
+            const dy = screenY - buttonScreenY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= buttonRadius) {
+                // Convert button screen position back to world position for the wave effect
+                const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                return { heroName: displayHeroes[i], buttonPos: buttonWorldPos };
             }
         }
         return null;
@@ -659,22 +672,31 @@ class GameController {
                     // Check if player owns this gate
                     if (gate.owner !== player) continue;
                     
-                    // Calculate button positions in world space
-                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS; // Use world space radius
-                    const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
+                    // Convert gate position to screen space
+                    const gateScreenPos = this.renderer.worldToScreen(gate.position);
+                    
+                    // Calculate button positions in screen space (matching renderer)
+                    const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
+                    const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
                     const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
-                        const buttonPos = new Vector2D(
-                            gate.position.x + Math.cos(angle) * buttonDistance,
-                            gate.position.y + Math.sin(angle) * buttonDistance
-                        );
+                        // Calculate button position in screen space
+                        const buttonScreenX = gateScreenPos.x + Math.cos(angle) * buttonDistance;
+                        const buttonScreenY = gateScreenPos.y + Math.sin(angle) * buttonDistance;
                         
-                        const distance = worldPos.distanceTo(buttonPos);
+                        // Check distance in screen space
+                        const dx = lastX - buttonScreenX;
+                        const dy = lastY - buttonScreenY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
                         if (distance <= buttonRadius) {
-                            this.renderer.createProductionButtonWave(buttonPos);
+                            // Convert button screen position to world position for the wave effect
+                            const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                            this.renderer.createProductionButtonWave(buttonWorldPos);
                             console.log(
                                 `Warp gate button clicked: ${labels[i]} (index ${i}) | energy=${player.energy.toFixed(1)}`
                             );
@@ -757,7 +779,8 @@ class GameController {
 
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHero = this.getClickedHeroButton(
-                        worldPos,
+                        lastX,
+                        lastY,
                         player.stellarForge,
                         this.renderer.selectedHeroNames
                     );
