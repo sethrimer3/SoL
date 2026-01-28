@@ -1259,6 +1259,7 @@ export class SubsidiaryFactory extends Building {
  */
 export interface SunColorParticle {
     position: Vector2D;
+    startColor: { r: number; g: number; b: number };
     currentColor: { r: number; g: number; b: number };
     targetColor: { r: number; g: number; b: number };
     transitionProgress: number;
@@ -1297,6 +1298,7 @@ export class Sun {
             
             this.colorParticles.push({
                 position: particlePos,
+                startColor: { ...initialColor },
                 currentColor: { ...initialColor },
                 targetColor: { ...initialColor },
                 transitionProgress: 1.0,
@@ -1337,22 +1339,23 @@ export class Sun {
     /**
      * Update color particle animations
      */
-    public updateColorParticles(): void {
+    public updateColorParticles(deltaTime: number): void {
         for (const particle of this.colorParticles) {
-            particle.transitionProgress += particle.transitionSpeed;
+            particle.transitionProgress += particle.transitionSpeed * deltaTime;
             
             if (particle.transitionProgress >= 1.0) {
                 // Transition complete, pick new target color
                 particle.transitionProgress = 0;
+                particle.startColor = { ...particle.targetColor };
                 particle.currentColor = { ...particle.targetColor };
                 particle.targetColor = this.getWeightedRandomColor();
                 particle.transitionSpeed = 0.001 + Math.random() * 0.002; // New random speed
             } else {
-                // Interpolate between current and target color
+                // Interpolate between start and target color using linear interpolation
                 const t = particle.transitionProgress;
-                particle.currentColor.r = particle.currentColor.r + (particle.targetColor.r - particle.currentColor.r) * t;
-                particle.currentColor.g = particle.currentColor.g + (particle.targetColor.g - particle.currentColor.g) * t;
-                particle.currentColor.b = particle.currentColor.b + (particle.targetColor.b - particle.currentColor.b) * t;
+                particle.currentColor.r = particle.startColor.r + (particle.targetColor.r - particle.startColor.r) * t;
+                particle.currentColor.g = particle.startColor.g + (particle.targetColor.g - particle.startColor.g) * t;
+                particle.currentColor.b = particle.startColor.b + (particle.targetColor.b - particle.startColor.b) * t;
             }
         }
     }
@@ -3495,7 +3498,7 @@ export class GameState {
 
         // Update sun color particles for fractal color fading
         for (const sun of this.suns) {
-            sun.updateColorParticles();
+            sun.updateColorParticles(deltaTime);
         }
 
         // Update asteroids
