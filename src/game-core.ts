@@ -1796,6 +1796,7 @@ export class Unit {
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
+    velocity: Vector2D = new Vector2D(0, 0);
     
     constructor(
         public position: Vector2D,
@@ -1855,6 +1856,8 @@ export class Unit {
         asteroids: Asteroid[] = []
     ): void {
         if (!this.rallyPoint) {
+            this.velocity.x = 0;
+            this.velocity.y = 0;
             return;
         }
 
@@ -1864,6 +1867,8 @@ export class Unit {
 
         if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
             this.rallyPoint = null;
+            this.velocity.x = 0;
+            this.velocity.y = 0;
             return;
         }
 
@@ -1983,8 +1988,12 @@ export class Unit {
         }
 
         const moveDistance = moveSpeed * deltaTime;
-        this.position.x += directionX * moveDistance;
-        this.position.y += directionY * moveDistance;
+        const moveX = directionX * moveDistance;
+        const moveY = directionY * moveDistance;
+        this.position.x += moveX;
+        this.position.y += moveY;
+        this.velocity.x = directionX * moveSpeed;
+        this.velocity.y = directionY * moveSpeed;
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
