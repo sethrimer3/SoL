@@ -6,6 +6,71 @@ import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, S
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
+type GraphicVariant = 'svg' | 'png' | 'stub';
+type GraphicKey =
+    | 'centralSun'
+    | 'stellarForge'
+    | 'forgeFlameHot'
+    | 'forgeFlameCold'
+    | 'solarMirror'
+    | 'starling'
+    | 'heroMarine'
+    | 'heroGrave'
+    | 'heroDagger'
+    | 'heroBeam'
+    | 'heroRay'
+    | 'heroInfluenceBall'
+    | 'heroTurretDeployer'
+    | 'heroDriller';
+
+type GraphicOption = {
+    key: GraphicKey;
+    label: string;
+    svgPath?: string;
+    pngPath?: string;
+};
+
+type InGameMenuTab = 'main' | 'graphics';
+
+type InGameMenuAction =
+    | { type: 'resume' }
+    | { type: 'toggleInfo' }
+    | { type: 'surrender' }
+    | { type: 'tab'; tab: InGameMenuTab }
+    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant };
+
+type InGameMenuLayout = {
+    screenWidth: number;
+    screenHeight: number;
+    panelX: number;
+    panelY: number;
+    panelWidth: number;
+    panelHeight: number;
+    isCompactLayout: boolean;
+    titleY: number;
+    tabs: Array<{
+        tab: InGameMenuTab;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    }>;
+    contentTopY: number;
+    contentBottomY: number;
+    buttonWidth: number;
+    buttonHeight: number;
+    buttonX: number;
+    buttonSpacing: number;
+    graphicsListX: number;
+    graphicsListY: number;
+    graphicsListWidth: number;
+    graphicsListHeight: number;
+    graphicsRowHeight: number;
+    graphicsButtonWidth: number;
+    graphicsButtonHeight: number;
+    graphicsButtonGap: number;
+};
+
 type ForgeFlameState = {
     warmth: number;
     rotationRad: number;
@@ -38,6 +103,7 @@ export class GameRenderer {
     public playerColor: string = Constants.PLAYER_1_COLOR; // Player 1 color (customizable)
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
     public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
+    public inGameMenuTab: InGameMenuTab = 'main';
 
     private readonly HERO_SPRITE_SCALE = 6;
     private readonly FORGE_SPRITE_SCALE = 2.2;
@@ -45,6 +111,94 @@ export class GameRenderer {
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private graphicsOptionByKey = new Map<GraphicKey, GraphicOption>();
+    private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
+    private graphicsMenuScrollOffset = 0;
+
+    private readonly graphicsOptions: GraphicOption[] = [
+        {
+            key: 'centralSun',
+            label: 'Central Sun',
+            svgPath: 'ASSETS/sprites/environment/centralSun.svg',
+            pngPath: 'ASSETS/sprites/environment/centralSun.png'
+        },
+        {
+            key: 'stellarForge',
+            label: 'Stellar Forge Base',
+            svgPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.png'
+        },
+        {
+            key: 'forgeFlameHot',
+            label: 'Forge Flame (Hot)',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png'
+        },
+        {
+            key: 'forgeFlameCold',
+            label: 'Forge Flame (Cold)',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png'
+        },
+        {
+            key: 'solarMirror',
+            label: 'Solar Mirror',
+            svgPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.png'
+        },
+        {
+            key: 'starling',
+            label: 'Starling',
+            svgPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg',
+            pngPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).png'
+        },
+        {
+            key: 'heroMarine',
+            label: 'Hero: Marine',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.png'
+        },
+        {
+            key: 'heroGrave',
+            label: 'Hero: Grave',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.png'
+        },
+        {
+            key: 'heroRay',
+            label: 'Hero: Ray',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
+        },
+        {
+            key: 'heroInfluenceBall',
+            label: 'Hero: Influence Ball',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.png'
+        },
+        {
+            key: 'heroTurretDeployer',
+            label: 'Hero: Turret Deployer',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.png'
+        },
+        {
+            key: 'heroDriller',
+            label: 'Hero: Driller',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.png'
+        },
+        {
+            key: 'heroDagger',
+            label: 'Hero: Dagger',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.png'
+        },
+        {
+            key: 'heroBeam',
+            label: 'Hero: Beam',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
+        }
+    ];
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -83,6 +237,12 @@ export class GameRenderer {
         
         // Initialize star layers with random positions
         this.initializeStarLayers();
+
+        for (const option of this.graphicsOptions) {
+            this.graphicsOptionByKey.set(option.key, option);
+            const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
+            this.graphicsVariantByKey.set(option.key, defaultVariant);
+        }
     }
 
     private resizeCanvas(): void {
@@ -297,16 +457,43 @@ export class GameRenderer {
         return isDistBuild ? `../${path}` : path;
     }
 
+    private getGraphicVariant(key: GraphicKey): GraphicVariant {
+        return this.graphicsVariantByKey.get(key) ?? 'stub';
+    }
+
+    public setGraphicsVariant(key: GraphicKey, variant: GraphicVariant): void {
+        this.graphicsVariantByKey.set(key, variant);
+    }
+
+    public setInGameMenuTab(tab: InGameMenuTab): void {
+        this.inGameMenuTab = tab;
+    }
+
+    private getGraphicAssetPath(key: GraphicKey): string | null {
+        const option = this.graphicsOptionByKey.get(key);
+        if (!option) {
+            return null;
+        }
+        const variant = this.getGraphicVariant(key);
+        if (variant === 'svg') {
+            return option.svgPath ?? null;
+        }
+        if (variant === 'png') {
+            return option.pngPath ?? null;
+        }
+        return null;
+    }
+
     private getForgeSpritePath(forge: StellarForge): string | null {
         if (forge.owner.faction === Faction.RADIANT) {
-            return 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg';
+            return this.getGraphicAssetPath('stellarForge');
         }
         return null;
     }
 
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
         if (mirror.owner.faction === Faction.RADIANT) {
-            return 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg';
+            return this.getGraphicAssetPath('solarMirror');
         }
         return null;
     }
@@ -314,7 +501,7 @@ export class GameRenderer {
     private getStarlingSpritePath(starling: Starling): string | null {
         if (starling.owner.faction === Faction.RADIANT) {
             // Use level 1 starling sprite
-            return 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg';
+            return this.getGraphicAssetPath('starling');
         }
         return null;
     }
@@ -383,16 +570,28 @@ export class GameRenderer {
             return null;
         }
         if (unit instanceof Marine) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg';
+            return this.getGraphicAssetPath('heroMarine');
         }
         if (unit instanceof Grave) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg';
+            return this.getGraphicAssetPath('heroGrave');
         }
         if (unit instanceof Dagger) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg';
+            return this.getGraphicAssetPath('heroDagger');
         }
         if (unit instanceof Beam) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg';
+            return this.getGraphicAssetPath('heroBeam');
+        }
+        if (unit instanceof Ray) {
+            return this.getGraphicAssetPath('heroRay');
+        }
+        if (unit instanceof InfluenceBall) {
+            return this.getGraphicAssetPath('heroInfluenceBall');
+        }
+        if (unit instanceof TurretDeployer) {
+            return this.getGraphicAssetPath('heroTurretDeployer');
+        }
+        if (unit instanceof Driller) {
+            return this.getGraphicAssetPath('heroDriller');
         }
         return null;
     }
@@ -467,7 +666,8 @@ export class GameRenderer {
     private drawSun(sun: Sun): void {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
-        const sunSprite = this.getSpriteImage('ASSETS/sprites/environment/centralSun.svg');
+        const sunSpritePath = this.getGraphicAssetPath('centralSun');
+        const sunSprite = sunSpritePath ? this.getSpriteImage(sunSpritePath) : null;
 
         // Draw sun glow (outer glow)
         const gradient = this.ctx.createRadialGradient(
@@ -484,7 +684,7 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        if (sunSprite.complete && sunSprite.naturalWidth > 0) {
+        if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
             const diameterPx = screenRadius * 2;
             this.ctx.drawImage(
                 sunSprite,
@@ -518,8 +718,13 @@ export class GameRenderer {
         shouldDim: boolean
     ): void {
         const flameState = this.getForgeFlameState(forge, game.gameTime);
-        const hotSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png');
-        const coldSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png');
+        const hotSpritePath = this.getGraphicAssetPath('forgeFlameHot');
+        const coldSpritePath = this.getGraphicAssetPath('forgeFlameCold');
+        if (!hotSpritePath || !coldSpritePath) {
+            return;
+        }
+        const hotSprite = this.getSpriteImage(hotSpritePath);
+        const coldSprite = this.getSpriteImage(coldSpritePath);
 
         if (!hotSprite.complete || hotSprite.naturalWidth === 0 || !coldSprite.complete || coldSprite.naturalWidth === 0) {
             return;
@@ -3551,25 +3756,194 @@ export class GameRenderer {
         this.ctx.fillRect(startX, startY + (lineHeight + lineSpacing) * 2, lineWidth, lineHeight);
     }
 
-    /**
-     * Draw in-game menu overlay
-     */
-    private drawInGameMenuOverlay(): void {
+    private getInGameMenuLayout(): InGameMenuLayout {
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
         const isCompactLayout = screenWidth < 600;
+        const panelWidth = Math.min(480, screenWidth - 40);
+        const panelHeight = Math.min(460, screenHeight - 40);
+        const panelX = (screenWidth - panelWidth) / 2;
+        const panelY = (screenHeight - panelHeight) / 2;
+        const panelPaddingX = isCompactLayout ? 14 : 20;
+        const panelPaddingY = isCompactLayout ? 16 : 20;
+        const titleY = panelY + (isCompactLayout ? 34 : 42);
+        const tabHeight = isCompactLayout ? 30 : 34;
+        const tabGap = 12;
+        const tabWidth = (panelWidth - panelPaddingX * 2 - tabGap) / 2;
+        const tabY = titleY + (isCompactLayout ? 16 : 18);
+        const tabX = panelX + panelPaddingX;
+        const tabs: InGameMenuLayout['tabs'] = [
+            { tab: 'main', x: tabX, y: tabY, width: tabWidth, height: tabHeight },
+            { tab: 'graphics', x: tabX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight }
+        ];
+        const contentTopY = tabY + tabHeight + (isCompactLayout ? 16 : 20);
+        const contentBottomY = panelY + panelHeight - panelPaddingY;
+        const buttonWidth = Math.min(300, panelWidth - panelPaddingX * 2);
+        const buttonHeight = isCompactLayout ? 44 : 50;
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+        const buttonSpacing = isCompactLayout ? 14 : 20;
+        const graphicsListX = panelX + panelPaddingX;
+        const graphicsListY = contentTopY;
+        const graphicsListWidth = panelWidth - panelPaddingX * 2;
+        const graphicsListHeight = Math.max(0, contentBottomY - contentTopY);
+        const graphicsRowHeight = isCompactLayout ? 44 : 48;
+        const graphicsButtonWidth = isCompactLayout ? 54 : 60;
+        const graphicsButtonHeight = isCompactLayout ? 26 : 30;
+        const graphicsButtonGap = 8;
+
+        return {
+            screenWidth,
+            screenHeight,
+            panelX,
+            panelY,
+            panelWidth,
+            panelHeight,
+            isCompactLayout,
+            titleY,
+            tabs,
+            contentTopY,
+            contentBottomY,
+            buttonWidth,
+            buttonHeight,
+            buttonX,
+            buttonSpacing,
+            graphicsListX,
+            graphicsListY,
+            graphicsListWidth,
+            graphicsListHeight,
+            graphicsRowHeight,
+            graphicsButtonWidth,
+            graphicsButtonHeight,
+            graphicsButtonGap
+        };
+    }
+
+    private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
+        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
+        return Math.max(0, contentHeight - layout.graphicsListHeight);
+    }
+
+    public handleInGameMenuScroll(screenX: number, screenY: number, deltaY: number): boolean {
+        if (!this.showInGameMenu || this.inGameMenuTab !== 'graphics') {
+            return false;
+        }
+        const layout = this.getInGameMenuLayout();
+        const isWithinList =
+            screenX >= layout.graphicsListX &&
+            screenX <= layout.graphicsListX + layout.graphicsListWidth &&
+            screenY >= layout.graphicsListY &&
+            screenY <= layout.graphicsListY + layout.graphicsListHeight;
+        if (!isWithinList) {
+            return false;
+        }
+        const maxScroll = this.getGraphicsMenuMaxScroll(layout);
+        if (maxScroll === 0) {
+            return true;
+        }
+        this.graphicsMenuScrollOffset = Math.min(
+            maxScroll,
+            Math.max(0, this.graphicsMenuScrollOffset + deltaY)
+        );
+        return true;
+    }
+
+    public getInGameMenuAction(screenX: number, screenY: number): InGameMenuAction | null {
+        if (!this.showInGameMenu) {
+            return null;
+        }
+        const layout = this.getInGameMenuLayout();
+        for (const tab of layout.tabs) {
+            const isWithinTab =
+                screenX >= tab.x &&
+                screenX <= tab.x + tab.width &&
+                screenY >= tab.y &&
+                screenY <= tab.y + tab.height;
+            if (isWithinTab) {
+                return { type: 'tab', tab: tab.tab };
+            }
+        }
+
+        if (this.inGameMenuTab === 'main') {
+            let buttonY = layout.contentTopY;
+            const buttons: Array<{ action: InGameMenuAction }> = [
+                { action: { type: 'resume' } },
+                { action: { type: 'toggleInfo' } },
+                { action: { type: 'surrender' } }
+            ];
+            for (const button of buttons) {
+                const isWithinButton =
+                    screenX >= layout.buttonX &&
+                    screenX <= layout.buttonX + layout.buttonWidth &&
+                    screenY >= buttonY &&
+                    screenY <= buttonY + layout.buttonHeight;
+                if (isWithinButton) {
+                    return button.action;
+                }
+                buttonY += layout.buttonHeight + layout.buttonSpacing;
+            }
+            return null;
+        }
+
+        const isWithinList =
+            screenX >= layout.graphicsListX &&
+            screenX <= layout.graphicsListX + layout.graphicsListWidth &&
+            screenY >= layout.graphicsListY &&
+            screenY <= layout.graphicsListY + layout.graphicsListHeight;
+        if (!isWithinList) {
+            return null;
+        }
+
+        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
+        const localY = screenY - layout.graphicsListY + this.graphicsMenuScrollOffset;
+        if (localY < 0 || localY > contentHeight) {
+            return null;
+        }
+        const rowIndex = Math.floor(localY / layout.graphicsRowHeight);
+        const option = this.graphicsOptions[rowIndex];
+        if (!option) {
+            return null;
+        }
+
+        const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+        const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
+        const rowY = layout.graphicsListY + rowIndex * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
+        const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
+        const variants: GraphicVariant[] = ['svg', 'png', 'stub'];
+        for (let i = 0; i < variants.length; i += 1) {
+            const buttonX = buttonStartX + i * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
+            const isWithinButton =
+                screenX >= buttonX &&
+                screenX <= buttonX + layout.graphicsButtonWidth &&
+                screenY >= buttonY &&
+                screenY <= buttonY + layout.graphicsButtonHeight;
+            if (isWithinButton) {
+                return { type: 'graphicsVariant', key: option.key, variant: variants[i] };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Draw in-game menu overlay
+     */
+    private drawInGameMenuOverlay(): void {
+        const layout = this.getInGameMenuLayout();
+        const screenWidth = layout.screenWidth;
+        const screenHeight = layout.screenHeight;
+        const isCompactLayout = layout.isCompactLayout;
         
         // Semi-transparent background
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
         
         // Menu panel
-        const panelWidth = Math.min(400, screenWidth - 40);
-        const panelHeight = Math.min(350, screenHeight - 40);
-        const panelX = (screenWidth - panelWidth) / 2;
-        const panelY = (screenHeight - panelHeight) / 2;
-        
+        const panelWidth = layout.panelWidth;
+        const panelHeight = layout.panelHeight;
+        const panelX = layout.panelX;
+        const panelY = layout.panelY;
+
         this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
         this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
         
@@ -3580,35 +3954,123 @@ export class GameRenderer {
         
         // Title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Doto`;
+        this.ctx.font = `bold ${isCompactLayout ? 22 : 30}px Doto`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
-        
-        // Menu buttons
-        const buttonWidth = Math.min(300, panelWidth - 40);
-        const buttonHeight = isCompactLayout ? 44 : 50;
-        const buttonX = (screenWidth - buttonWidth) / 2;
-        let buttonY = panelY + (isCompactLayout ? 80 : 100);
-        const buttonSpacing = isCompactLayout ? 14 : 20;
-        
-        // Helper function to draw a button
-        const drawButton = (label: string, y: number) => {
-            this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
-            this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.fillText('GAME MENU', screenWidth / 2, layout.titleY);
+
+        for (const tab of layout.tabs) {
+            const isActive = this.inGameMenuTab === tab.tab;
+            this.ctx.fillStyle = isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(60, 60, 60, 0.9)';
+            this.ctx.fillRect(tab.x, tab.y, tab.width, tab.height);
+            this.ctx.strokeStyle = isActive ? '#FFD700' : '#FFFFFF';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+            this.ctx.strokeRect(tab.x, tab.y, tab.width, tab.height);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
-            this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
-        };
-        
-        drawButton('Resume', buttonY);
-        buttonY += buttonHeight + buttonSpacing;
-        drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
-        buttonY += buttonHeight + buttonSpacing;
-        drawButton('Surrender', buttonY);
-        
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.fillText(tab.tab === 'main' ? 'Main' : 'Graphics', tab.x + tab.width / 2, tab.y + tab.height * 0.68);
+        }
+
+        if (this.inGameMenuTab === 'main') {
+            // Menu buttons
+            let buttonY = layout.contentTopY;
+            const buttonWidth = layout.buttonWidth;
+            const buttonHeight = layout.buttonHeight;
+            const buttonX = layout.buttonX;
+            const buttonSpacing = layout.buttonSpacing;
+
+            // Helper function to draw a button
+            const drawButton = (label: string, y: number) => {
+                this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
+                this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
+                this.ctx.strokeStyle = '#FFFFFF';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
+                this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
+            };
+
+            drawButton('Resume', buttonY);
+            buttonY += buttonHeight + buttonSpacing;
+            drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
+            buttonY += buttonHeight + buttonSpacing;
+            drawButton('Surrender', buttonY);
+        } else {
+            const maxScroll = this.getGraphicsMenuMaxScroll(layout);
+            if (this.graphicsMenuScrollOffset > maxScroll) {
+                this.graphicsMenuScrollOffset = maxScroll;
+            }
+            this.ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+            this.ctx.fillRect(
+                layout.graphicsListX,
+                layout.graphicsListY,
+                layout.graphicsListWidth,
+                layout.graphicsListHeight
+            );
+            this.ctx.save();
+            this.ctx.beginPath();
+            this.ctx.rect(
+                layout.graphicsListX,
+                layout.graphicsListY,
+                layout.graphicsListWidth,
+                layout.graphicsListHeight
+            );
+            this.ctx.clip();
+
+            const labelX = layout.graphicsListX + 8;
+            const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+            const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
+            const variants: Array<{ variant: GraphicVariant; label: string }> = [
+                { variant: 'svg', label: 'SVG' },
+                { variant: 'png', label: 'PNG' },
+                { variant: 'stub', label: 'Stub' }
+            ];
+
+            for (let i = 0; i < this.graphicsOptions.length; i += 1) {
+                const option = this.graphicsOptions[i];
+                const rowY = layout.graphicsListY + i * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
+                if (rowY + layout.graphicsRowHeight < layout.graphicsListY || rowY > layout.graphicsListY + layout.graphicsListHeight) {
+                    continue;
+                }
+                this.ctx.fillStyle = i % 2 === 0 ? 'rgba(40, 40, 40, 0.6)' : 'rgba(55, 55, 55, 0.6)';
+                this.ctx.fillRect(layout.graphicsListX, rowY, layout.graphicsListWidth, layout.graphicsRowHeight);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 13 : 15}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(option.label, labelX, rowY + layout.graphicsRowHeight * 0.65);
+
+                const selectedVariant = this.getGraphicVariant(option.key);
+                const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
+                for (let j = 0; j < variants.length; j += 1) {
+                    const variant = variants[j];
+                    const buttonX = buttonStartX + j * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
+                    const isSelected = selectedVariant === variant.variant;
+                    const isAvailable =
+                        variant.variant === 'stub' ||
+                        (variant.variant === 'svg' && option.svgPath) ||
+                        (variant.variant === 'png' && option.pngPath);
+                    this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+                    if (!isAvailable) {
+                        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.5)';
+                    }
+                    this.ctx.fillRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
+                    this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
+                    this.ctx.lineWidth = 1.5;
+                    this.ctx.strokeRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
+                    this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
+                    this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(
+                        variant.label,
+                        buttonX + layout.graphicsButtonWidth / 2,
+                        buttonY + layout.graphicsButtonHeight * 0.68
+                    );
+                }
+            }
+
+            this.ctx.restore();
+        }
+
         this.ctx.textAlign = 'left';
     }
 
