@@ -281,6 +281,14 @@ class GameController {
                 || ('ontouchstart' in window);
         };
 
+        const getCanvasPosition = (clientX: number, clientY: number): { x: number; y: number } => {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
+        };
+
         // Touch/Mouse support for mobile and desktop
         let isPanning = false;
         let isMouseDown = false;
@@ -308,14 +316,17 @@ class GameController {
             e.preventDefault();
 
             if (this.showInGameMenu) {
-                const didScrollMenu = this.renderer.handleInGameMenuScroll(e.clientX, e.clientY, e.deltaY);
+                const menuPos = getCanvasPosition(e.clientX, e.clientY);
+                const didScrollMenu = this.renderer.handleInGameMenuScroll(menuPos.x, menuPos.y, e.deltaY);
                 if (didScrollMenu) {
                     return;
                 }
             }
+
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
             
             // Get world position under mouse before zoom
-            const worldPosBeforeZoom = this.renderer.screenToWorld(e.clientX, e.clientY);
+            const worldPosBeforeZoom = this.renderer.screenToWorld(screenPos.x, screenPos.y);
             
             // Apply zoom
             const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -323,7 +334,7 @@ class GameController {
             this.renderer.setZoom(oldZoom * zoomDelta);
             
             // Get world position under mouse after zoom
-            const worldPosAfterZoom = this.renderer.screenToWorld(e.clientX, e.clientY);
+            const worldPosAfterZoom = this.renderer.screenToWorld(screenPos.x, screenPos.y);
             
             // Adjust camera to keep world position under cursor the same
             const currentCamera = this.renderer.camera;
@@ -911,13 +922,15 @@ class GameController {
         // Mouse events
         canvas.addEventListener('mousedown', (e: MouseEvent) => {
             isMouseDown = true;
-            startDrag(e.clientX, e.clientY);
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
+            startDrag(screenPos.x, screenPos.y);
         });
 
         canvas.addEventListener('mousemove', (e: MouseEvent) => {
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            moveDrag(e.clientX, e.clientY, false);
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
+            lastMouseX = screenPos.x;
+            lastMouseY = screenPos.y;
+            moveDrag(screenPos.x, screenPos.y, false);
         });
 
         canvas.addEventListener('mouseup', () => {
@@ -933,22 +946,23 @@ class GameController {
             if (e.touches.length === 1) {
                 e.preventDefault();
                 isMouseDown = true;
-                startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                const touchPos = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                startDrag(touchPos.x, touchPos.y);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
                 // Two finger touch - prepare for panning and zooming
                 isMouseDown = true;
                 isPanning = false;
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
+                const touch1 = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                const touch2 = getCanvasPosition(e.touches[1].clientX, e.touches[1].clientY);
                 
                 // Calculate center point between two touches
-                lastX = (touch1.clientX + touch2.clientX) / 2;
-                lastY = (touch1.clientY + touch2.clientY) / 2;
+                lastX = (touch1.x + touch2.x) / 2;
+                lastY = (touch1.y + touch2.y) / 2;
                 
                 // Calculate initial distance for pinch zoom
-                const dx = touch2.clientX - touch1.clientX;
-                const dy = touch2.clientY - touch1.clientY;
+                const dx = touch2.x - touch1.x;
+                const dy = touch2.y - touch1.y;
                 lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 
                 this.cancelHold();
@@ -958,20 +972,20 @@ class GameController {
         canvas.addEventListener('touchmove', (e: TouchEvent) => {
             if (e.touches.length === 1 && isMouseDown) {
                 e.preventDefault();
-                const touch = e.touches[0];
-                moveDrag(touch.clientX, touch.clientY, false);
+                const touchPos = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                moveDrag(touchPos.x, touchPos.y, false);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
+                const touch1 = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                const touch2 = getCanvasPosition(e.touches[1].clientX, e.touches[1].clientY);
                 
                 // Calculate current center point
-                const currentX = (touch1.clientX + touch2.clientX) / 2;
-                const currentY = (touch1.clientY + touch2.clientY) / 2;
+                const currentX = (touch1.x + touch2.x) / 2;
+                const currentY = (touch1.y + touch2.y) / 2;
                 
                 // Calculate current distance for pinch zoom
-                const dx = touch2.clientX - touch1.clientX;
-                const dy = touch2.clientY - touch1.clientY;
+                const dx = touch2.x - touch1.x;
+                const dy = touch2.y - touch1.y;
                 const currentPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 
                 // Handle pinch zoom if distance changed significantly
@@ -1003,15 +1017,23 @@ class GameController {
         }, { passive: false });
 
         canvas.addEventListener('touchend', (e: TouchEvent) => {
+            if (e.changedTouches.length > 0) {
+                const touchPos = getCanvasPosition(
+                    e.changedTouches[0].clientX,
+                    e.changedTouches[0].clientY
+                );
+                lastX = touchPos.x;
+                lastY = touchPos.y;
+                lastMouseX = touchPos.x;
+                lastMouseY = touchPos.y;
+            }
+
             if (e.touches.length === 0) {
                 // All touches ended
                 endDrag();
                 lastPinchDistance = 0;
             } else if (e.touches.length === 1) {
                 // One touch remaining, transition from two-finger to one-finger mode
-                const touch = e.touches[0];
-                lastX = touch.clientX;
-                lastY = touch.clientY;
                 isPanning = false;
                 lastPinchDistance = 0;
             }
@@ -1060,11 +1082,14 @@ class GameController {
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
             // Disable edge panning on mobile devices
+            const dpr = window.devicePixelRatio || 1;
+            const screenWidth = canvas.width / dpr;
+            const screenHeight = canvas.height / dpr;
             const hasEdgeInput = !isMobile && !isMouseDown && !isPanning && (
                 lastMouseX < EDGE_PAN_THRESHOLD ||
-                lastMouseX > canvas.width - EDGE_PAN_THRESHOLD ||
+                lastMouseX > screenWidth - EDGE_PAN_THRESHOLD ||
                 lastMouseY < EDGE_PAN_THRESHOLD ||
-                lastMouseY > canvas.height - EDGE_PAN_THRESHOLD
+                lastMouseY > screenHeight - EDGE_PAN_THRESHOLD
             );
             
             if (hasKeyboardInput || hasEdgeInput) {
@@ -1081,9 +1106,9 @@ class GameController {
                 // Edge panning (only if not dragging with mouse and not on mobile)
                 if (hasEdgeInput) {
                     if (lastMouseX < EDGE_PAN_THRESHOLD) dx -= EDGE_PAN_SPEED;
-                    if (lastMouseX > canvas.width - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
+                    if (lastMouseX > screenWidth - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
                     if (lastMouseY < EDGE_PAN_THRESHOLD) dy -= EDGE_PAN_SPEED;
-                    if (lastMouseY > canvas.height - EDGE_PAN_THRESHOLD) dy += EDGE_PAN_SPEED;
+                    if (lastMouseY > screenHeight - EDGE_PAN_THRESHOLD) dy += EDGE_PAN_SPEED;
                 }
 
                 if (dx !== 0 || dy !== 0) {
