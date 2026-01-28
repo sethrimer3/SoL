@@ -306,6 +306,13 @@ class GameController {
         // Mouse wheel zoom - zoom towards cursor
         canvas.addEventListener('wheel', (e: WheelEvent) => {
             e.preventDefault();
+
+            if (this.showInGameMenu) {
+                const didScrollMenu = this.renderer.handleInGameMenuScroll(e.clientX, e.clientY, e.deltaY);
+                if (didScrollMenu) {
+                    return;
+                }
+            }
             
             // Get world position under mouse before zoom
             const worldPosBeforeZoom = this.renderer.screenToWorld(e.clientX, e.clientY);
@@ -443,51 +450,28 @@ class GameController {
                 
                 // Check in-game menu clicks
                 if (this.showInGameMenu && !winner) {
-                    const dpr = window.devicePixelRatio || 1;
-                    const screenWidth = this.renderer.canvas.width / dpr;
-                    const screenHeight = this.renderer.canvas.height / dpr;
-                    const buttonWidth = 300;
-                    const buttonHeight = 50;
-                    const buttonX = (screenWidth - buttonWidth) / 2;
-                    const panelHeight = 350;
-                    const panelY = (screenHeight - panelHeight) / 2;
-                    let buttonY = panelY + 100;
-                    const buttonSpacing = 20;
-                    
-                    // Check Resume button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.toggleInGameMenu();
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        this.endHold();
-                        return;
-                    }
-                    buttonY += buttonHeight + buttonSpacing;
-                    
-                    // Check Toggle Info button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.toggleInfo();
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        this.endHold();
-                        return;
-                    }
-                    buttonY += buttonHeight + buttonSpacing;
-                    
-                    // Check Surrender button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.surrender();
+                    const menuAction = this.renderer.getInGameMenuAction(lastX, lastY);
+                    if (menuAction) {
+                        switch (menuAction.type) {
+                            case 'resume':
+                                this.toggleInGameMenu();
+                                break;
+                            case 'toggleInfo':
+                                this.toggleInfo();
+                                break;
+                            case 'surrender':
+                                this.surrender();
+                                break;
+                            case 'tab':
+                                this.renderer.setInGameMenuTab(menuAction.tab);
+                                break;
+                            case 'graphicsVariant':
+                                this.renderer.setGraphicsVariant(menuAction.key, menuAction.variant);
+                                break;
+                            default:
+                                break;
+                        }
+
                         isPanning = false;
                         isMouseDown = false;
                         this.isSelecting = false;
