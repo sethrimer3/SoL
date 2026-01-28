@@ -3364,6 +3364,7 @@ export class GameState {
     private readonly PUSH_MULTIPLIER = 15; // Multiplier for push strength calculation
     private readonly dustSpatialHash: Map<number, number[]> = new Map();
     private readonly dustSpatialHashKeys: number[] = [];
+    private readonly unitVelocityScratch: Vector2D = new Vector2D(0, 0);
 
     /**
      * Update game state
@@ -3549,12 +3550,22 @@ export class GameState {
                         unit.updateAI(this, enemies);
                     }
                     
+                    const unitPositionX = unit.position.x;
+                    const unitPositionY = unit.position.y;
+
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
 
                     if (unit instanceof Starling) {
+                        if (deltaTime > 0) {
+                            this.unitVelocityScratch.x = (unit.position.x - unitPositionX) / deltaTime;
+                            this.unitVelocityScratch.y = (unit.position.y - unitPositionY) / deltaTime;
+                        } else {
+                            this.unitVelocityScratch.x = 0;
+                            this.unitVelocityScratch.y = 0;
+                        }
                         this.applyDustPushFromMovingEntity(
                             unit.position,
-                            unit.velocity,
+                            this.unitVelocityScratch,
                             Constants.STARLING_DUST_PUSH_RADIUS_PX,
                             Constants.STARLING_DUST_PUSH_FORCE_MULTIPLIER,
                             deltaTime
@@ -5783,8 +5794,13 @@ export class GameState {
             for (const unit of player.units) {
                 mix(unit.position.x);
                 mix(unit.position.y);
-                mix(unit.velocity.x);
-                mix(unit.velocity.y);
+                if ('velocity' in unit && unit.velocity) {
+                    mix(unit.velocity.x);
+                    mix(unit.velocity.y);
+                } else {
+                    mix(0);
+                    mix(0);
+                }
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
                 mix(unit.collisionRadiusPx);
