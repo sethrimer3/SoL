@@ -8,7 +8,7 @@ import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 
 class GameController {
-    private game: GameState | null = null;
+    public game: GameState | null = null;
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
@@ -1495,5 +1495,7 @@ class GameController {
 
 // Start game when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new GameController();
+    const controller = new GameController();
+    // Expose for dev/testing purposes
+    (window as any).gameController = controller;
 });

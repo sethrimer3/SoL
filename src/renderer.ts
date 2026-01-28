@@ -3816,8 +3816,10 @@ export class GameRenderer {
             const productionName = this.getProductionDisplayName(forge.heroProductionUnitType!);
             this.ctx.fillText(productionName, x + 8, y + 8);
             
-            // Calculate progress
-            const progress = 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec);
+            // Calculate progress (guard against division by zero)
+            const progress = forge.heroProductionDurationSec > 0 
+                ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
+                : 0;
             
             // Draw progress bar
             this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
@@ -3826,6 +3828,7 @@ export class GameRenderer {
         }
         
         // Draw building construction progress
+        // Note: find() stops at first match, typically only one building under construction
         const buildingInProgress = player.buildings.find((building) => !building.isComplete);
         if (buildingInProgress) {
             // Draw background box
