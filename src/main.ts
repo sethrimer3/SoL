@@ -487,7 +487,7 @@ class GameController {
                             this.isDraggingHeroArrow = true;
                             this.cancelHold();
                         } else {
-                            // For regular units or no selection, use selection rectangle
+                            // For regular (non-hero) units when drag doesn't start near them, use selection rectangle
                             this.isSelecting = true;
                             this.cancelHold();
                         }
@@ -523,7 +523,7 @@ class GameController {
                     this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
                 }
                 
-                this.renderer.pathPreviewForge = this.selectedBase;
+                // pathPreviewForge was already set when initiating path drawing (selectedBase for base paths, null for unit paths)
                 this.renderer.pathPreviewPoints = this.pathPoints;
                 this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
             }
