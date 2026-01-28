@@ -1254,12 +1254,111 @@ export class SubsidiaryFactory extends Building {
 /**
  * Sun/Star - Light source
  */
+/**
+ * Represents a color particle within the sun fractal
+ */
+export interface SunColorParticle {
+    position: Vector2D;
+    startColor: { r: number; g: number; b: number };
+    currentColor: { r: number; g: number; b: number };
+    targetColor: { r: number; g: number; b: number };
+    transitionProgress: number;
+    transitionSpeed: number;
+    size: number;
+}
+
 export class Sun {
+    public colorParticles: SunColorParticle[] = [];
+
     constructor(
         public position: Vector2D,
         public intensity: number = 1.0,
         public radius: number = 100.0
-    ) {}
+    ) {
+        this.initializeColorParticles();
+    }
+
+    /**
+     * Initialize color particles distributed within the sun
+     */
+    private initializeColorParticles(): void {
+        const numParticles = 150; // Number of colored spaces in the fractal
+        
+        for (let i = 0; i < numParticles; i++) {
+            // Distribute particles randomly within the sun's radius
+            const angle = Math.random() * Math.PI * 2;
+            const distance = Math.sqrt(Math.random()) * this.radius * 0.8; // 80% of radius
+            
+            const particlePos = new Vector2D(
+                this.position.x + Math.cos(angle) * distance,
+                this.position.y + Math.sin(angle) * distance
+            );
+            
+            const initialColor = this.getWeightedRandomColor();
+            
+            this.colorParticles.push({
+                position: particlePos,
+                startColor: { ...initialColor },
+                currentColor: { ...initialColor },
+                targetColor: { ...initialColor },
+                transitionProgress: 1.0,
+                transitionSpeed: 0.001 + Math.random() * 0.002, // Slow random speed
+                size: 1.5 + Math.random() * 2.5 // Random size for visual variety
+            });
+        }
+    }
+
+    /**
+     * Get a weighted random sun color (orange/red common, extremes rare)
+     */
+    private getWeightedRandomColor(): { r: number; g: number; b: number } {
+        const rand = Math.random();
+        
+        // Weighted distribution
+        if (rand < 0.35) {
+            // Light orange (common)
+            return { r: 255, g: 140 + Math.random() * 40, b: 50 + Math.random() * 30 };
+        } else if (rand < 0.70) {
+            // Red-orange (common)
+            return { r: 255, g: 80 + Math.random() * 60, b: 30 + Math.random() * 30 };
+        } else if (rand < 0.85) {
+            // Deep red (less common)
+            return { r: 200 + Math.random() * 55, g: 40 + Math.random() * 40, b: 20 + Math.random() * 20 };
+        } else if (rand < 0.93) {
+            // Warm yellow (rare)
+            return { r: 255, g: 220 + Math.random() * 35, b: 100 + Math.random() * 50 };
+        } else if (rand < 0.97) {
+            // Dark red (rare)
+            return { r: 150 + Math.random() * 50, g: 20 + Math.random() * 30, b: 10 + Math.random() * 20 };
+        } else {
+            // Dark grey (very rare)
+            return { r: 60 + Math.random() * 40, g: 50 + Math.random() * 30, b: 45 + Math.random() * 30 };
+        }
+    }
+
+    /**
+     * Update color particle animations
+     */
+    public updateColorParticles(deltaTime: number): void {
+        for (const particle of this.colorParticles) {
+            particle.transitionProgress += particle.transitionSpeed * deltaTime;
+            
+            if (particle.transitionProgress >= 1.0) {
+                // Transition complete, pick new target color
+                particle.transitionProgress = 0;
+                particle.startColor = { ...particle.targetColor };
+                particle.currentColor = { ...particle.targetColor };
+                particle.targetColor = this.getWeightedRandomColor();
+                particle.transitionSpeed = 0.001 + Math.random() * 0.002; // New random speed
+            } else {
+                // Interpolate between start and target color using linear interpolation
+                const t = particle.transitionProgress;
+                particle.currentColor.r = particle.startColor.r + (particle.targetColor.r - particle.startColor.r) * t;
+                particle.currentColor.g = particle.startColor.g + (particle.targetColor.g - particle.startColor.g) * t;
+                particle.currentColor.b = particle.startColor.b + (particle.targetColor.b - particle.startColor.b) * t;
+            }
+        }
+    }
 
     /**
      * Emit a light ray in specified direction
@@ -3395,6 +3494,11 @@ export class GameState {
                 this.isCountdownActive = false;
                 this.countdownTime = 0;
             }
+        }
+
+        // Update sun color particles for fractal color fading
+        for (const sun of this.suns) {
+            sun.updateColorParticles(deltaTime);
         }
 
         // Update asteroids

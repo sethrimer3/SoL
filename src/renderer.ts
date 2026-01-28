@@ -686,6 +686,21 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
+        // Draw color particles (fractal spaces) before the sprite
+        for (const particle of sun.colorParticles) {
+            const particleScreenPos = this.worldToScreen(particle.position);
+            const particleScreenSize = particle.size * this.zoom;
+            
+            const r = Math.round(particle.currentColor.r);
+            const g = Math.round(particle.currentColor.g);
+            const b = Math.round(particle.currentColor.b);
+            
+            this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.7)`;
+            this.ctx.beginPath();
+            this.ctx.arc(particleScreenPos.x, particleScreenPos.y, particleScreenSize, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
         if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
             const diameterPx = screenRadius * 2;
             this.ctx.drawImage(
