@@ -685,6 +685,9 @@ export class StellarForge {
         if (this.heroProductionUnitType || this.unitQueue.length === 0) {
             return;
         }
+        if (!this.canProduceUnits()) {
+            return;
+        }
         const nextUnitType = this.unitQueue.shift();
         if (!nextUnitType) {
             return;
