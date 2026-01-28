@@ -153,7 +153,7 @@ export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
 export const FORGE_CRUNCH_WAVE_RADIUS = 300; // Radius of wave push effect
 export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
-export const STARLING_COST_PER_SOLARIUM = 50; // Solarium needed per starling spawned
+export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
 
 // Minigun building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
@@ -244,7 +244,7 @@ export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
 export const MIRROR_MAX_GLOW_DISTANCE = 1000; // Maximum distance for glow and efficiency calculations
-export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum solarium generation multiplier at close range
+export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum energy generation multiplier at close range
 
 // Ability constants
 export const MARINE_ABILITY_COOLDOWN = 5.0; // 5 seconds

@@ -1392,14 +1392,14 @@ export class GameRenderer {
             const hasLoSToForge = forge
                 ? mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)
                 : false;
-            const solariumRate = hasLoSToSun && hasLoSToForge ? mirror.getSolariumRatePerSec() : 0;
+            const energyRate = hasLoSToSun && hasLoSToForge ? mirror.getEnergyRatePerSec() : 0;
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
             this.ctx.font = `${12 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
+            this.ctx.fillText(`+${energyRate.toFixed(0)}/s`, screenPos.x, textY);
         }
     }
 
@@ -3037,7 +3037,7 @@ export class GameRenderer {
                 this.ctx.fillStyle = color;
                 this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
                 this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.fillText(`Solarium: ${player.solarium.toFixed(1)}`, 20, y + 20);
+                this.ctx.fillText(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20);
                 
                 if (player.stellarForge) {
                     const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
@@ -4159,8 +4159,8 @@ export class GameRenderer {
         const stats = [
             { label: 'Units Created', key: 'unitsCreated' },
             { label: 'Units Lost', key: 'unitsLost' },
-            { label: 'Solarium Gathered', key: 'solariumGathered' },
-            { label: 'Final Solarium', key: 'solarium' }
+            { label: 'Energy Gathered', key: 'energyGathered' },
+            { label: 'Final Energy', key: 'energy' }
         ];
         
         for (const stat of stats) {
@@ -4171,7 +4171,7 @@ export class GameRenderer {
             
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
-                const value = stat.key === 'solarium' ? player[stat.key].toFixed(1) : player[stat.key];
+                const value = stat.key === 'energy' ? player[stat.key].toFixed(1) : player[stat.key];
                 const colX = playerStartX + playerColumnWidth * (i + 1);
                 this.ctx.fillText(String(value), colX, y);
             }
