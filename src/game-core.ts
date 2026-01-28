@@ -197,7 +197,7 @@ export class Asteroid {
 }
 
 /**
- * Solar Mirror - reflects light to generate Solarium
+ * Solar Mirror - reflects light to generate Energy
  */
 export class SolarMirror {
     health: number = 100.0;
@@ -371,16 +371,16 @@ export class SolarMirror {
     }
 
     /**
-     * Generate Solarium based on light received and distance to closest sun
+     * Generate Energy based on light received and distance to closest sun
      */
-    generateSolarium(deltaTime: number): number {
-        return this.getSolariumRatePerSec() * deltaTime;
+    generateEnergy(deltaTime: number): number {
+        return this.getEnergyRatePerSec() * deltaTime;
     }
 
     /**
-     * Get solarium generation rate per second
+     * Get energy generation rate per second
      */
-    getSolariumRatePerSec(): number {
+    getEnergyRatePerSec(): number {
         const baseGenerationRatePerSec = 10.0;
 
         // Apply distance-based multiplier (closer = more efficient)
@@ -628,7 +628,7 @@ export class StellarForge {
     readonly radius: number = 40; // For rendering and selection
     crunchTimer: number = 0; // Timer until next crunch
     currentCrunch: ForgeCrunch | null = null; // Active crunch effect
-    pendingSolarium: number = 0; // Solarium accumulated since last crunch
+    pendingEnergy: number = 0; // Energy accumulated since last crunch
     minionPath: Vector2D[] = []; // Path that minions will follow
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     rotation: number = 0; // Current rotation angle in radians
@@ -666,11 +666,11 @@ export class StellarForge {
     /**
      * Attempt to produce a unit
      */
-    produceUnit(unitType: string, cost: number, playerSolarium: number): boolean {
+    produceUnit(unitType: string, cost: number, playerEnergy: number): boolean {
         if (!this.canProduceUnits()) {
             return false;
         }
-        if (playerSolarium < cost) {
+        if (playerEnergy < cost) {
             return false;
         }
         this.unitQueue.push(unitType);
@@ -883,7 +883,7 @@ export class StellarForge {
 
     /**
      * Check if a crunch should happen and trigger it if ready
-     * Returns the amount of solarium to use for spawning minions
+     * Returns the amount of energy to use for spawning minions
      */
     shouldCrunch(): number {
         if (this.crunchTimer <= 0 && this.health > 0 && this.isReceivingLight) {
@@ -898,19 +898,19 @@ export class StellarForge {
                 this.rotation -= Math.PI * 2;
             }
             
-            // Return the pending solarium for minion spawning
-            const solariumForMinions = this.pendingSolarium;
-            this.pendingSolarium = 0;
-            return solariumForMinions;
+            // Return the pending energy for minion spawning
+            const energyForMinions = this.pendingEnergy;
+            this.pendingEnergy = 0;
+            return energyForMinions;
         }
         return 0;
     }
 
     /**
-     * Add solarium to pending amount (called when mirrors generate solarium)
+     * Add energy to pending amount (called when mirrors generate energy)
      */
-    addPendingSolarium(amount: number): void {
-        this.pendingSolarium += amount;
+    addPendingEnergy(amount: number): void {
+        this.pendingEnergy += amount;
     }
 
     /**
@@ -1056,7 +1056,7 @@ export class Building {
     }
 
     /**
-     * Add build progress (from solarium or mirror light)
+     * Add build progress (from energy or mirror light)
      */
     addBuildProgress(amount: number): void {
         if (this.isComplete) return;
@@ -1276,7 +1276,7 @@ export class Sun {
  * Player in the game
  */
 export class Player {
-    solarium: number = 100.0; // Starting currency
+    energy: number = 100.0; // Starting currency
     stellarForge: StellarForge | null = null;
     solarMirrors: SolarMirror[] = [];
     units: Unit[] = [];
@@ -1292,7 +1292,7 @@ export class Player {
     // Statistics tracking
     unitsCreated: number = 0;
     unitsLost: number = 0;
-    solariumGathered: number = 0;
+    energyGathered: number = 0;
 
     constructor(
         public name: string,
@@ -1307,19 +1307,19 @@ export class Player {
     }
 
     /**
-     * Add Solarium to player's resources
+     * Add Energy to player's resources
      */
-    addSolarium(amount: number): void {
-        this.solarium += amount;
-        this.solariumGathered += amount;
+    addEnergy(amount: number): void {
+        this.energy += amount;
+        this.energyGathered += amount;
     }
 
     /**
-     * Attempt to spend Solarium
+     * Attempt to spend Energy
      */
-    spendSolarium(amount: number): boolean {
-        if (this.solarium >= amount) {
-            this.solarium -= amount;
+    spendEnergy(amount: number): boolean {
+        if (this.energy >= amount) {
+            this.energy -= amount;
             return true;
         }
         return false;
@@ -3441,12 +3441,12 @@ export class GameState {
                     );
                 }
                 
-                // Check for forge crunch (spawns minions with excess solarium)
+                // Check for forge crunch (spawns minions with excess energy)
                 if (!this.isCountdownActive) {
-                    const solariumForMinions = player.stellarForge.shouldCrunch();
-                    if (solariumForMinions > 0) {
-                        // Calculate number of starlings to spawn based on solarium
-                        const numStarlings = Math.floor(solariumForMinions / Constants.STARLING_COST_PER_SOLARIUM);
+                    const energyForMinions = player.stellarForge.shouldCrunch();
+                    if (energyForMinions > 0) {
+                        // Calculate number of starlings to spawn based on energy
+                        const numStarlings = Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY);
                         
                         // Spawn starlings at the wave edge during wave phase
                         for (let i = 0; i < numStarlings; i++) {
@@ -3462,7 +3462,7 @@ export class GameState {
                         }
                         
                         if (numStarlings > 0) {
-                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${solariumForMinions.toFixed(0)} solarium`);
+                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${energyForMinions.toFixed(0)} energy`);
                         }
                     }
                 }
@@ -3510,13 +3510,13 @@ export class GameState {
                 
                 mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids, deltaTime);
                 
-                // Generate solarium even during countdown once mirrors reach position
+                // Generate energy even during countdown once mirrors reach position
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
-                    const solariumGenerated = mirror.generateSolarium(deltaTime);
-                    // Add to forge's pending solarium pool for next crunch
-                    player.stellarForge.addPendingSolarium(solariumGenerated);
+                    const energyGenerated = mirror.generateEnergy(deltaTime);
+                    // Add to forge's pending energy pool for next crunch
+                    player.stellarForge.addPendingEnergy(energyGenerated);
                 }
             }
         }
@@ -3718,13 +3718,13 @@ export class GameState {
                                      building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
                 
                 if (isInInfluence && player.stellarForge) {
-                    // Building inside influence: take solarium from forge
+                    // Building inside influence: take energy from forge
                     // Calculate build progress per second (inverse of build time)
                     const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
                     const buildProgress = buildRate * deltaTime;
                     
-                    // TODO: Split solarium between buildings and hero units
-                    // For now, buildings get solarium if available
+                    // TODO: Split energy between buildings and hero units
+                    // For now, buildings get energy if available
                     building.addBuildProgress(buildProgress);
                 } else {
                     // Building outside influence: powered by mirrors shining on it
@@ -4378,7 +4378,7 @@ export class GameState {
         }
 
         // Check if we can afford a mirror
-        if (player.solarium < Constants.SOLAR_MIRROR_COST) {
+        if (player.energy < Constants.SOLAR_MIRROR_COST) {
             return;
         }
 
@@ -4404,7 +4404,7 @@ export class GameState {
         );
 
         // Purchase the mirror
-        if (player.spendSolarium(Constants.SOLAR_MIRROR_COST)) {
+        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
             const newMirror = new SolarMirror(mirrorPosition, player);
             player.solarMirrors.push(newMirror);
         }
@@ -4558,7 +4558,7 @@ export class GameState {
             if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
                 continue;
             }
-            if (!player.spendSolarium(Constants.HERO_UNIT_COST)) {
+            if (!player.spendEnergy(Constants.HERO_UNIT_COST)) {
                 return;
             }
             player.stellarForge.enqueueHeroUnit(heroType);
@@ -4590,46 +4590,46 @@ export class GameState {
         switch (player.aiStrategy) {
             case Constants.AIStrategy.ECONOMIC:
                 // Economic: Build factory first, then minimal defenses
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 }
                 break;
                 
             case Constants.AIStrategy.DEFENSIVE:
                 // Defensive: Prioritize defenses heavily
-                if (swirlerCount < 2 && player.solarium >= Constants.SWIRLER_COST) {
+                if (swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                } else if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 5 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 5 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
                 
             case Constants.AIStrategy.AGGRESSIVE:
                 // Aggressive: Build factory early, skip most defenses
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
                 
             case Constants.AIStrategy.WAVES:
                 // Waves: Balanced approach with factory priority
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 2 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
@@ -4650,19 +4650,19 @@ export class GameState {
         switch (buildType) {
             case 'subsidiaryFactory':
                 placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                if (placement && player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                     player.buildings.push(new SubsidiaryFactory(placement, player));
                 }
                 break;
             case 'swirler':
                 placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.SWIRLER_COST)) {
+                if (placement && player.spendEnergy(Constants.SWIRLER_COST)) {
                     player.buildings.push(new SpaceDustSwirler(placement, player));
                 }
                 break;
             case 'minigun':
                 placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.MINIGUN_COST)) {
+                if (placement && player.spendEnergy(Constants.MINIGUN_COST)) {
                     player.buildings.push(new Minigun(placement, player));
                 }
                 break;
@@ -5743,7 +5743,7 @@ export class GameState {
         }
 
         for (const player of this.players) {
-            mix(player.solarium);
+            mix(player.energy);
             mixInt(player.isAi ? 1 : 0);
             mix(player.aiNextMirrorCommandSec);
             mix(player.aiNextDefenseCommandSec);

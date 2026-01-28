@@ -59,11 +59,11 @@ Mirrors glow with yellow-white light that increases in brightness as they get cl
 
 ### 5. 📈 Distance-Based Efficiency
 **Mechanic:**
-Solar mirrors generate more solarium when positioned closer to a sun.
+Solar mirrors generate more energy when positioned closer to a sun.
 
 **Generation Formula:**
 ```
-solarium = baseRate × efficiency × distanceMultiplier × deltaTime
+energy = baseRate × efficiency × distanceMultiplier × deltaTime
 ```
 
 **Distance Multiplier:**
@@ -85,7 +85,7 @@ All key parameters are configurable via constants in `src/constants.ts`:
 // Glow and efficiency distance threshold
 MIRROR_MAX_GLOW_DISTANCE = 1000
 
-// Maximum solarium generation multiplier at close range  
+// Maximum energy generation multiplier at close range  
 MIRROR_PROXIMITY_MULTIPLIER = 2.0
 
 // Glow visual size

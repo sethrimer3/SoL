@@ -676,12 +676,12 @@ class GameController {
                         if (distance <= buttonRadius) {
                             this.renderer.createProductionButtonWave(buttonPos);
                             console.log(
-                                `Warp gate button clicked: ${labels[i]} (index ${i}) | solarium=${player.solarium.toFixed(1)}`
+                                `Warp gate button clicked: ${labels[i]} (index ${i}) | energy=${player.energy.toFixed(1)}`
                             );
                             // Button clicked!
                             if (i === 0) {
                                 // First button - create Minigun building
-                                if (player.spendSolarium(Constants.MINIGUN_COST)) {
+                                if (player.spendEnergy(Constants.MINIGUN_COST)) {
                                     const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(minigun);
                                     console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -696,11 +696,11 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Minigun');
+                                    console.log('Not enough energy to build Minigun');
                                 }
                             } else if (i === 1) {
                                 // Second button - create Space Dust Swirler building
-                                if (player.spendSolarium(Constants.SWIRLER_COST)) {
+                                if (player.spendEnergy(Constants.SWIRLER_COST)) {
                                     const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(swirler);
                                     console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -715,7 +715,7 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Space Dust Swirler');
+                                    console.log('Not enough energy to build Space Dust Swirler');
                                 }
                             } else if (i === 2) {
                                 // Third button (bottom) - create Subsidiary Factory building
@@ -723,7 +723,7 @@ class GameController {
                                 const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {
                                     console.log('Only one Subsidiary Factory can exist at a time');
-                                } else if (player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                                } else if (player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                                     const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(subFactory);
                                     console.log(`Subsidiary Factory building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -738,7 +738,7 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Subsidiary Factory');
+                                    console.log('Not enough energy to build Subsidiary Factory');
                                 }
                             }
                             // Other buttons can be added later for different building types
@@ -770,19 +770,19 @@ class GameController {
                             const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
                             const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
                             console.log(
-                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | solarium=${player.solarium.toFixed(1)}`
+                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | energy=${player.energy.toFixed(1)}`
                             );
                             if (isHeroAlive) {
                                 console.log(`${clickedHeroName} is already active`);
                             } else if (isHeroProducing) {
                                 console.log(`${clickedHeroName} is already being produced`);
-                            } else if (player.spendSolarium(Constants.HERO_UNIT_COST)) {
+                            } else if (player.spendEnergy(Constants.HERO_UNIT_COST)) {
                                 player.stellarForge.enqueueHeroUnit(heroUnitType);
                                 player.stellarForge.startHeroProductionIfIdle();
                                 console.log(`Queued hero ${clickedHeroName} for forging`);
                                 isHeroQueued = true;
                             } else {
-                                console.log('Not enough solarium to forge hero');
+                                console.log('Not enough energy to forge hero');
                             }
                         }
 

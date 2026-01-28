@@ -1179,7 +1179,24 @@ export class GameRenderer {
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
-    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState): void {
+    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy mirrors
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy mirrors
+            }
+            
+            // Check if in shadow for dimming effect - darken color instead of using alpha
+            const inShadow = game.isPointInShadow(mirror.position);
+            if (inShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            }
+        }
+        
         const screenPos = this.worldToScreen(mirror.position);
         const size = 20 * this.zoom;
 
@@ -1280,10 +1297,8 @@ export class GameRenderer {
 
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
-            // Determine the color for the mirror (player color, brighter and paler)
-            const isEnemy = this.viewingPlayer && mirror.owner !== this.viewingPlayer;
-            const baseColor = isEnemy ? this.enemyColor : this.playerColor;
-            const mirrorColor = this.brightenAndPaleColor(baseColor);
+            // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
+            const mirrorColor = this.brightenAndPaleColor(displayColor);
             
             // Use tinted sprite for solar mirror
             const mirrorSprite = this.getTintedSprite(mirrorSpritePath, mirrorColor);
@@ -1316,12 +1331,12 @@ export class GameRenderer {
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw border for the surface
-            this.ctx.strokeStyle = color;
+            this.ctx.strokeStyle = displayColor;
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw small indicator dots at the ends
-            this.ctx.fillStyle = color;
+            this.ctx.fillStyle = displayColor;
             this.ctx.beginPath();
             this.ctx.arc(-surfaceLength / 2, 0, 3, 0, Math.PI * 2);
             this.ctx.fill();
@@ -1377,14 +1392,14 @@ export class GameRenderer {
             const hasLoSToForge = forge
                 ? mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)
                 : false;
-            const solariumRate = hasLoSToSun && hasLoSToForge ? mirror.getSolariumRatePerSec() : 0;
+            const energyRate = hasLoSToSun && hasLoSToForge ? mirror.getEnergyRatePerSec() : 0;
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
             this.ctx.font = `${12 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
+            this.ctx.fillText(`+${energyRate.toFixed(0)}/s`, screenPos.x, textY);
         }
     }
 
@@ -3022,7 +3037,7 @@ export class GameRenderer {
                 this.ctx.fillStyle = color;
                 this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
                 this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.fillText(`Solarium: ${player.solarium.toFixed(1)}`, 20, y + 20);
+                this.ctx.fillText(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20);
                 
                 if (player.stellarForge) {
                     const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
@@ -3555,11 +3570,9 @@ export class GameRenderer {
             const color = this.getFactionColor(player.faction);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
-            // Draw Solar Mirrors
-            if (!isEnemy) {
-                for (const mirror of player.solarMirrors) {
-                    this.drawSolarMirror(mirror, color, game);
-                }
+            // Draw Solar Mirrors (including enemy mirrors with visibility checks)
+            for (const mirror of player.solarMirrors) {
+                this.drawSolarMirror(mirror, color, game, isEnemy);
             }
 
             // Draw Stellar Forge
@@ -4146,8 +4159,8 @@ export class GameRenderer {
         const stats = [
             { label: 'Units Created', key: 'unitsCreated' },
             { label: 'Units Lost', key: 'unitsLost' },
-            { label: 'Solarium Gathered', key: 'solariumGathered' },
-            { label: 'Final Solarium', key: 'solarium' }
+            { label: 'Energy Gathered', key: 'energyGathered' },
+            { label: 'Final Energy', key: 'energy' }
         ];
         
         for (const stat of stats) {
@@ -4158,7 +4171,7 @@ export class GameRenderer {
             
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
-                const value = stat.key === 'solarium' ? player[stat.key].toFixed(1) : player[stat.key];
+                const value = stat.key === 'energy' ? player[stat.key].toFixed(1) : player[stat.key];
                 const colX = playerStartX + playerColumnWidth * (i + 1);
                 this.ctx.fillText(String(value), colX, y);
             }

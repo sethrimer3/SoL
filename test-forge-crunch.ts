@@ -14,15 +14,15 @@ console.log('=== Forge Crunch Test ===\n');
 // Test 1: Initial state
 console.log('Test 1: Initial State');
 console.log(`Crunch timer: ${testForge.crunchTimer.toFixed(2)}s`);
-console.log(`Pending solarium: ${testForge.pendingSolarium}`);
+console.log(`Pending energy: ${testForge.pendingEnergy}`);
 console.log(`Current crunch: ${testForge.getCurrentCrunch()}`);
 console.log('✓ Initial state OK\n');
 
-// Test 2: Add pending solarium
-console.log('Test 2: Adding Pending Solarium');
-testForge.addPendingSolarium(150);
-console.log(`Pending solarium after adding 150: ${testForge.pendingSolarium}`);
-console.log('✓ Solarium addition OK\n');
+// Test 2: Add pending energy
+console.log('Test 2: Adding Pending Energy');
+testForge.addPendingEnergy(150);
+console.log(`Pending energy after adding 150: ${testForge.pendingEnergy}`);
+console.log('✓ Energy addition OK\n');
 
 // Test 3: Trigger crunch manually
 console.log('Test 3: Triggering Crunch');
@@ -30,15 +30,15 @@ testForge.health = 1000;
 testForge.isReceivingLight = true;
 testForge.crunchTimer = 0; // Force timer to trigger
 
-const solariumForMinions = testForge.shouldCrunch();
-console.log(`Solarium returned for minions: ${solariumForMinions}`);
-console.log(`Pending solarium after crunch: ${testForge.pendingSolarium}`);
+const energyForMinions = testForge.shouldCrunch();
+console.log(`Energy returned for minions: ${energyForMinions}`);
+console.log(`Pending energy after crunch: ${testForge.pendingEnergy}`);
 console.log(`Current crunch active: ${testForge.getCurrentCrunch()?.isActive()}`);
 console.log(`Crunch phase: ${testForge.getCurrentCrunch()?.phase}`);
 
 // Calculate expected starlings
-const expectedStarlings = Math.floor(solariumForMinions / Constants.STARLING_COST_PER_SOLARIUM);
-console.log(`Expected starlings to spawn: ${expectedStarlings} (150 / ${Constants.STARLING_COST_PER_SOLARIUM} = ${expectedStarlings})`);
+const expectedStarlings = Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY);
+console.log(`Expected starlings to spawn: ${expectedStarlings} (150 / ${Constants.STARLING_COST_PER_ENERGY} = ${expectedStarlings})`);
 console.log('✓ Crunch trigger OK\n');
 
 // Test 4: Crunch state transitions
