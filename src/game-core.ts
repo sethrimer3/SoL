@@ -883,7 +883,7 @@ export class StellarForge {
 
     /**
      * Check if a crunch should happen and trigger it if ready
-     * Returns the amount of solarium to use for spawning minions
+     * Returns the amount of energy to use for spawning minions
      */
     shouldCrunch(): number {
         if (this.crunchTimer <= 0 && this.health > 0 && this.isReceivingLight) {
@@ -3718,13 +3718,13 @@ export class GameState {
                                      building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
                 
                 if (isInInfluence && player.stellarForge) {
-                    // Building inside influence: take solarium from forge
+                    // Building inside influence: take energy from forge
                     // Calculate build progress per second (inverse of build time)
                     const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
                     const buildProgress = buildRate * deltaTime;
                     
-                    // TODO: Split solarium between buildings and hero units
-                    // For now, buildings get solarium if available
+                    // TODO: Split energy between buildings and hero units
+                    // For now, buildings get energy if available
                     building.addBuildProgress(buildProgress);
                 } else {
                     // Building outside influence: powered by mirrors shining on it
