@@ -3396,20 +3396,26 @@ export class Beam extends Unit {
 export class DamageNumber {
     public position: Vector2D;
     public damage: number;
+    public remainingHealth: number; // For remaining-life mode
     public creationTime: number;
     public velocity: Vector2D;
     public maxHealth: number; // For calculating size proportional to health
+    public unitId: string | null; // Track which unit this belongs to (for replacement)
 
     constructor(
         position: Vector2D,
         damage: number,
         creationTime: number,
-        maxHealth: number = 100
+        maxHealth: number = 100,
+        remainingHealth: number = 0,
+        unitId: string | null = null
     ) {
         this.position = new Vector2D(position.x, position.y);
         this.damage = Math.round(damage);
+        this.remainingHealth = Math.round(remainingHealth);
         this.creationTime = creationTime;
         this.maxHealth = maxHealth;
+        this.unitId = unitId;
         // Random horizontal drift
         this.velocity = new Vector2D(
             (Math.random() - 0.5) * 20,
@@ -3468,6 +3474,7 @@ export class GameState {
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
     mapSize: number = 2000; // Map size in world units
+    damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
 
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
@@ -3999,12 +4006,14 @@ export class GameState {
                         
                         unit.takeDamage(finalDamage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             finalDamage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -4020,12 +4029,14 @@ export class GameState {
                     }
                     if (bullet.checkHit(mirror)) {
                         mirror.health -= bullet.damage;
-                        this.damageNumbers.push(new DamageNumber(
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             mirror.position,
                             bullet.damage,
-                            this.gameTime,
-                            Constants.MIRROR_MAX_HEALTH
-                        ));
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
@@ -4055,12 +4066,14 @@ export class GameState {
                     
                     player.stellarForge.health -= finalDamage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         finalDamage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
             }
@@ -4101,12 +4114,14 @@ export class GameState {
                     if (projectile.checkHit(unit)) {
                         unit.takeDamage(projectile.damage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             projectile.damage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4122,12 +4137,14 @@ export class GameState {
                     }
                     if (projectile.checkHit(mirror)) {
                         mirror.health -= projectile.damage;
-                        this.damageNumbers.push(new DamageNumber(
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             mirror.position,
                             projectile.damage,
-                            this.gameTime,
-                            Constants.MIRROR_MAX_HEALTH
-                        ));
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4141,12 +4158,14 @@ export class GameState {
                     if (projectile.checkHit(building)) {
                         building.health -= projectile.damage;
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             building.position,
                             projectile.damage,
-                            this.gameTime,
-                            building.maxHealth
-                        ));
+                            building.maxHealth,
+                            building.health,
+                            buildingKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -4159,12 +4178,14 @@ export class GameState {
                 if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= projectile.damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         projectile.damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     hasHit = true;
                     break;
                 }
@@ -5347,12 +5368,16 @@ export class GameState {
                     const maxHealth = closestHit.type === 'forge' 
                         ? Constants.STELLAR_FORGE_MAX_HEALTH 
                         : (closestHit.target as Unit).maxHealth;
-                    this.damageNumbers.push(new DamageNumber(
+                    const targetKey = closestHit.type === 'forge'
+                        ? `forge_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as StellarForge).owner.name}`
+                        : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as Unit).owner.name}`;
+                    this.addDamageNumber(
                         closestHit.target.position,
                         Constants.RAY_BEAM_DAMAGE,
-                        this.gameTime,
-                        maxHealth
-                    ));
+                        maxHealth,
+                        closestHit.target.health,
+                        targetKey
+                    );
                 }
                 break;
             } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
@@ -5528,12 +5553,14 @@ export class GameState {
                 if (distance < 15) {
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                    this.addDamageNumber(
                         unit.position,
                         Constants.DRILLER_DRILL_DAMAGE,
-                        this.gameTime,
-                        unit.maxHealth
-                    ));
+                        unit.maxHealth,
+                        unit.health,
+                        unitKey
+                    );
                 }
             }
             
@@ -5544,12 +5571,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     building.takeDamage(damage);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         building.position,
                         damage,
-                        this.gameTime,
-                        building.maxHealth
-                    ));
+                        building.maxHealth,
+                        building.health,
+                        buildingKey
+                    );
                     // Continue drilling through building
                 }
             }
@@ -5561,12 +5590,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     player.stellarForge.health -= damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     // Continue drilling through
                 }
             }
@@ -6097,6 +6128,33 @@ export class GameState {
             const mirror = new SolarMirror(pos, player);
             player.solarMirrors.push(mirror);
         }
+    }
+
+    /**
+     * Add a damage number with proper handling for display mode
+     */
+    addDamageNumber(
+        position: Vector2D,
+        damage: number,
+        maxHealth: number,
+        currentHealth: number,
+        unitKey: string | null = null
+    ): void {
+        const remainingHealth = Math.max(0, currentHealth);
+
+        // If in remaining-life mode and unitKey is provided, remove previous damage numbers for this unit
+        if (this.damageDisplayMode === 'remaining-life' && unitKey !== null) {
+            this.damageNumbers = this.damageNumbers.filter(dn => dn.unitId !== unitKey);
+        }
+
+        this.damageNumbers.push(new DamageNumber(
+            position,
+            damage,
+            this.gameTime,
+            maxHealth,
+            remainingHealth,
+            unitKey
+        ));
     }
 }
 
