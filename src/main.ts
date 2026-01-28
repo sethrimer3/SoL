@@ -1017,7 +1017,16 @@ class GameController {
         }, { passive: false });
 
         canvas.addEventListener('touchend', (e: TouchEvent) => {
-            if (e.changedTouches.length > 0) {
+            if (e.touches.length === 1) {
+                const touchPos = getCanvasPosition(
+                    e.touches[0].clientX,
+                    e.touches[0].clientY
+                );
+                lastX = touchPos.x;
+                lastY = touchPos.y;
+                lastMouseX = touchPos.x;
+                lastMouseY = touchPos.y;
+            } else if (e.changedTouches.length > 0) {
                 const touchPos = getCanvasPosition(
                     e.changedTouches[0].clientX,
                     e.changedTouches[0].clientY
