@@ -1179,7 +1179,24 @@ export class GameRenderer {
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
-    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState): void {
+    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy mirrors
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy mirrors
+            }
+            
+            // Check if in shadow for dimming effect - darken color instead of using alpha
+            const inShadow = game.isPointInShadow(mirror.position);
+            if (inShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            }
+        }
+        
         const screenPos = this.worldToScreen(mirror.position);
         const size = 20 * this.zoom;
 
@@ -1280,10 +1297,8 @@ export class GameRenderer {
 
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
-            // Determine the color for the mirror (player color, brighter and paler)
-            const isEnemy = this.viewingPlayer && mirror.owner !== this.viewingPlayer;
-            const baseColor = isEnemy ? this.enemyColor : this.playerColor;
-            const mirrorColor = this.brightenAndPaleColor(baseColor);
+            // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
+            const mirrorColor = this.brightenAndPaleColor(displayColor);
             
             // Use tinted sprite for solar mirror
             const mirrorSprite = this.getTintedSprite(mirrorSpritePath, mirrorColor);
@@ -1316,12 +1331,12 @@ export class GameRenderer {
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw border for the surface
-            this.ctx.strokeStyle = color;
+            this.ctx.strokeStyle = displayColor;
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw small indicator dots at the ends
-            this.ctx.fillStyle = color;
+            this.ctx.fillStyle = displayColor;
             this.ctx.beginPath();
             this.ctx.arc(-surfaceLength / 2, 0, 3, 0, Math.PI * 2);
             this.ctx.fill();
@@ -3555,11 +3570,9 @@ export class GameRenderer {
             const color = this.getFactionColor(player.faction);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
-            // Draw Solar Mirrors
-            if (!isEnemy) {
-                for (const mirror of player.solarMirrors) {
-                    this.drawSolarMirror(mirror, color, game);
-                }
+            // Draw Solar Mirrors (including enemy mirrors with visibility checks)
+            for (const mirror of player.solarMirrors) {
+                this.drawSolarMirror(mirror, color, game, isEnemy);
             }
 
             // Draw Stellar Forge
