@@ -2514,6 +2514,8 @@ export class Starling extends Unit {
     private assignedPath: Vector2D[] = [];
     private hasManualOrder: boolean = false;
     private lastShotProjectiles: MinionProjectile[] = [];
+    private pathHash: string = ''; // Unique identifier for the assigned path
+    private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
@@ -2527,6 +2529,20 @@ export class Starling extends Unit {
             Constants.STARLING_COLLISION_RADIUS_PX
         );
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.pathHash = this.generatePathHash(this.assignedPath);
+    }
+    
+    /**
+     * Generate a unique hash for the assigned path to identify starlings with the same movement instructions
+     */
+    private generatePathHash(path: Vector2D[]): string {
+        if (path.length === 0) {
+            return 'no-path';
+        }
+        // Create hash from path waypoints (rounded to avoid floating point issues)
+        return path.map(waypoint => 
+            `${Math.round(waypoint.x)},${Math.round(waypoint.y)}`
+        ).join('|');
     }
 
     setManualRallyPoint(target: Vector2D): void {
@@ -2576,6 +2592,7 @@ export class Starling extends Unit {
                 } else {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = rallyTarget;
+                    this.hasReachedFinalWaypoint = true;
                     return;
                 }
             } else {
@@ -2680,6 +2697,63 @@ export class Starling extends Unit {
             targetPosition.x + offsetX * scale,
             targetPosition.y + offsetY * scale
         );
+    }
+
+    /**
+     * Override moveTowardRallyPoint to implement group stopping behavior
+     * Starlings at their final waypoint will stop when touching other stopped starlings from the same group
+     */
+    protected moveTowardRallyPoint(
+        deltaTime: number,
+        moveSpeed: number,
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
+        // Check if we should stop due to touching a stopped starling from our group
+        // This only applies when we're heading to the final waypoint (not intermediate waypoints)
+        if (this.assignedPath.length > 0 && 
+            this.currentPathWaypointIndex === this.assignedPath.length - 1 &&
+            !this.hasReachedFinalWaypoint) {
+            
+            // Check for collision with other stopped starlings from the same group
+            const stopDistance = Constants.UNIT_AVOIDANCE_RANGE_PX; // Use avoidance range as collision detection range
+            
+            for (let i = 0; i < allUnits.length; i++) {
+                const otherUnit = allUnits[i];
+                
+                // Skip if not a starling, is self, or is dead
+                if (!(otherUnit instanceof Starling) || otherUnit === this || otherUnit.isDead()) {
+                    continue;
+                }
+                
+                // Check if other starling is from the same group (same path hash)
+                if ((otherUnit as Starling).pathHash !== this.pathHash) {
+                    continue;
+                }
+                
+                // Check if other starling has reached its final waypoint and stopped
+                if (!(otherUnit as Starling).hasReachedFinalWaypoint) {
+                    continue;
+                }
+                
+                // Check if we're close enough to the stopped starling
+                const offsetX = this.position.x - otherUnit.position.x;
+                const offsetY = this.position.y - otherUnit.position.y;
+                const distanceSq = offsetX * offsetX + offsetY * offsetY;
+                
+                if (distanceSq < stopDistance * stopDistance) {
+                    // Stop this starling - we've touched a stopped starling from our group
+                    this.rallyPoint = null;
+                    this.velocity.x = 0;
+                    this.velocity.y = 0;
+                    this.hasReachedFinalWaypoint = true;
+                    return;
+                }
+            }
+        }
+        
+        // Call parent implementation for normal movement
+        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids);
     }
 
     /**
