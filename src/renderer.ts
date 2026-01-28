@@ -3735,6 +3735,11 @@ export class GameRenderer {
             this.drawMenuButton();
         }
         
+        // Draw production progress indicator (top-right)
+        if (!game.isCountdownActive && !winner) {
+            this.drawProductionProgress(game);
+        }
+        
         // Draw in-game menu overlay if open
         if (this.showInGameMenu && !winner) {
             this.drawInGameMenuOverlay();
@@ -3769,6 +3774,144 @@ export class GameRenderer {
         this.ctx.fillRect(startX, startY, lineWidth, lineHeight);
         this.ctx.fillRect(startX, startY + lineHeight + lineSpacing, lineWidth, lineHeight);
         this.ctx.fillRect(startX, startY + (lineHeight + lineSpacing) * 2, lineWidth, lineHeight);
+    }
+
+    /**
+     * Draw production progress indicator in top-right corner
+     */
+    private drawProductionProgress(game: GameState): void {
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const margin = 10;
+        const boxWidth = 200;
+        const boxHeight = 60;
+        const x = screenWidth - boxWidth - margin;
+        let y = margin;
+        
+        // Check for player's production
+        const player = game.players.find((p) => !p.isAi);
+        if (!player) {
+            return;
+        }
+        
+        // Draw hero production from stellar forge
+        if (player.stellarForge && player.stellarForge.heroProductionUnitType) {
+            const forge = player.stellarForge;
+            
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            
+            // Draw border
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            
+            // Draw production name
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            
+            const productionName = this.getProductionDisplayName(forge.heroProductionUnitType!);
+            this.ctx.fillText(productionName, x + 8, y + 8);
+            
+            // Calculate progress (guard against division by zero)
+            const progress = forge.heroProductionDurationSec > 0 
+                ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
+                : 0;
+            
+            // Draw progress bar
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
+            
+            y += boxHeight + 8;
+        }
+        
+        // Draw building construction progress
+        // Note: find() stops at first match, typically only one building under construction
+        const buildingInProgress = player.buildings.find((building) => !building.isComplete);
+        if (buildingInProgress) {
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            
+            // Draw border
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            
+            // Draw building name
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            
+            const buildingName = this.getBuildingDisplayName(buildingInProgress);
+            this.ctx.fillText(`Building ${buildingName}`, x + 8, y + 8);
+            
+            // Draw progress bar
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, buildingInProgress.buildProgress);
+        }
+        
+        // Reset text alignment
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
+    }
+    
+    /**
+     * Draw a progress bar
+     */
+    private drawProgressBar(x: number, y: number, width: number, height: number, progress: number): void {
+        // Draw progress bar background
+        this.ctx.fillStyle = 'rgba(100, 100, 100, 0.8)';
+        this.ctx.fillRect(x, y, width, height);
+        
+        // Draw progress bar fill
+        this.ctx.fillStyle = '#4CAF50';
+        this.ctx.fillRect(x, y, width * progress, height);
+        
+        // Draw progress bar border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x, y, width, height);
+        
+        // Draw progress percentage
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 12px Doto';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`${Math.floor(progress * 100)}%`, x + width / 2, y + height / 2);
+    }
+    
+    /**
+     * Get display name for building type
+     */
+    private getBuildingDisplayName(building: Building): string {
+        if (building instanceof Minigun) {
+            return 'Minigun';
+        } else if (building instanceof SpaceDustSwirler) {
+            return 'Space Dust Swirler';
+        } else if (building instanceof SubsidiaryFactory) {
+            return 'Subsidiary Factory';
+        }
+        return 'Building';
+    }
+    
+    /**
+     * Get display name for production unit type
+     */
+    private getProductionDisplayName(unitType: string): string {
+        const nameMap: { [key: string]: string } = {
+            'marine': 'Marine',
+            'grave': 'Grave',
+            'ray': 'Ray',
+            'influenceball': 'Influence Ball',
+            'turretdeployer': 'Turret Deployer',
+            'driller': 'Driller',
+            'dagger': 'Dagger',
+            'beam': 'Beam'
+        };
+        return nameMap[unitType.toLowerCase()] || unitType;
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
