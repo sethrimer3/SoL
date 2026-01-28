@@ -217,7 +217,7 @@ export class GameRenderer {
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
     private readonly FORGE_MAX_HEALTH = 1000;
-    private readonly MIRROR_MAX_HEALTH = 100;
+    private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
     // Parallax star layers for depth
     private starLayers: Array<{

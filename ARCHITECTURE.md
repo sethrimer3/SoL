@@ -94,7 +94,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after tuning dust wake displacement for moving solar mirrors and stellar forges to ensure `stateHash` stability.
+The command list above was revalidated after enabling solar mirror damage interactions and influence-based regeneration to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
