@@ -2911,6 +2911,17 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.stroke();
 
+        // Draw selection indicator if selected
+        if (building.isSelected) {
+            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
+            this.ctx.lineWidth = 3;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]); // Reset dash pattern
+        }
+
         // Draw turret base (smaller circle in center)
         const turretBaseRadius = radius * 0.6;
         this.ctx.fillStyle = shouldDim ? this.darkenColor('#666666', Constants.SHADE_OPACITY) : '#666666';
@@ -3015,6 +3026,17 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.stroke();
 
+        // Draw selection indicator if selected
+        if (building.isSelected) {
+            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
+            this.ctx.lineWidth = 3;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]); // Reset dash pattern
+        }
+
         // Draw swirl pattern in center (3 curved arcs rotating counter-clockwise)
         const swirlRadius = radius * 0.7;
         this.ctx.strokeStyle = shouldDim ? this.darkenColor('#8A2BE2', Constants.SHADE_OPACITY) : '#8A2BE2'; // Purple color for swirl
@@ -3116,6 +3138,18 @@ export class GameRenderer {
         this.ctx.closePath();
         this.ctx.fill();
         this.ctx.stroke();
+
+        // Draw selection indicator if selected
+        if (building.isSelected) {
+            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
+            this.ctx.lineWidth = 3;
+            this.ctx.setLineDash([5, 5]);
+            this.ctx.beginPath();
+            // Draw circle around the hexagon
+            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]); // Reset dash pattern
+        }
 
         // Draw production indicator (rotating inner hexagon)
         const innerRadius = radius * 0.6;

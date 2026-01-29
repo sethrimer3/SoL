@@ -23,6 +23,7 @@ class GameController {
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
+    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun, SpaceDustSwirler, SubsidiaryFactory)
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
@@ -735,6 +736,51 @@ class GameController {
                     return;
                 }
 
+                // Check if clicked on a building
+                let clickedBuilding: any = null;
+                for (const building of player.buildings) {
+                    if (building.containsPoint(worldPos)) {
+                        clickedBuilding = building;
+                        break;
+                    }
+                }
+                
+                if (clickedBuilding) {
+                    if (clickedBuilding.isSelected) {
+                        // Deselect building
+                        clickedBuilding.isSelected = false;
+                        this.selectedBuildings.delete(clickedBuilding);
+                        console.log('Building deselected');
+                    } else {
+                        // Select building, deselect forge, units, and mirrors
+                        clickedBuilding.isSelected = true;
+                        this.selectedBuildings.clear();
+                        this.selectedBuildings.add(clickedBuilding);
+                        if (player.stellarForge) {
+                            player.stellarForge.isSelected = false;
+                        }
+                        this.selectedBase = null;
+                        this.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectedUnits;
+                        // Deselect all mirrors
+                        for (const mirror of player.solarMirrors) {
+                            mirror.isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                        this.clearPathPreview();
+                        console.log('Building selected');
+                    }
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+
                 // Check if clicked on a warp gate button
                 for (const gate of this.game.warpGates) {
                     if (!gate.isComplete) continue;
@@ -1292,6 +1338,51 @@ class GameController {
         
         const player = this.game.players[0]; // Assume player 1 is the human player
         if (!player.stellarForge) return;
+
+        // Check if any buildings with guns are selected
+        const hasSelectedShootingBuildings = Array.from(this.selectedBuildings).some(
+            (building: any) => building.canShoot()
+        );
+        
+        if (hasSelectedShootingBuildings) {
+            // Building control: Set target for all selected buildings that can shoot
+            for (const building of this.selectedBuildings) {
+                if (building.canShoot()) {
+                    // Find the nearest enemy to the hold position
+                    const enemies: any[] = [];
+                    
+                    // Get all enemy units and buildings
+                    for (const otherPlayer of this.game.players) {
+                        if (otherPlayer === player) continue;
+                        
+                        enemies.push(...otherPlayer.units);
+                        enemies.push(...otherPlayer.buildings);
+                        if (otherPlayer.stellarForge) {
+                            enemies.push(otherPlayer.stellarForge);
+                        }
+                    }
+                    
+                    // Find nearest enemy to the hold position
+                    let nearestEnemy: any = null;
+                    let minDistance = Infinity;
+                    
+                    for (const enemy of enemies) {
+                        const distance = worldPos.distanceTo(enemy.position);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestEnemy = enemy;
+                        }
+                    }
+                    
+                    // Set target for the building
+                    if (nearestEnemy) {
+                        building.target = nearestEnemy;
+                        console.log(`Building targeting enemy at (${nearestEnemy.position.x.toFixed(0)}, ${nearestEnemy.position.y.toFixed(0)})`);
+                    }
+                }
+            }
+            return;
+        }
 
         // Check if any mirrors are selected
         const hasSelectedMirrors = this.selectedMirrors.size > 0;
