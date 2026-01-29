@@ -964,6 +964,7 @@ export class Building {
     target: CombatTarget | null = null;
     buildProgress: number = 0; // 0 to 1, building is complete at 1
     isComplete: boolean = false;
+    isSelected: boolean = false;
     
     constructor(
         public position: Vector2D,
@@ -1077,6 +1078,22 @@ export class Building {
             this.buildProgress = 1.0;
             this.isComplete = true;
         }
+    }
+
+    /**
+     * Check if a point is within the building's radius
+     */
+    containsPoint(point: Vector2D): boolean {
+        const distance = this.position.distanceTo(point);
+        return distance <= this.radius;
+    }
+
+    /**
+     * Check if this building can shoot (has a gun)
+     */
+    canShoot(): boolean {
+        // Only buildings with attack range and damage can shoot
+        return this.attackRange > 0 && this.attackDamage > 0;
     }
 }
 
