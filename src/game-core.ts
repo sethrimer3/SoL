@@ -1904,6 +1904,30 @@ export class LaserBeam {
 }
 
 /**
+ * Impact particle spawned at laser beam endpoint
+ */
+export class ImpactParticle {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public velocity: Vector2D,
+        public maxLifetime: number,
+        public faction: Faction
+    ) {}
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+    
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
  * Base Unit class
  */
 export class Unit {
@@ -3587,6 +3611,7 @@ export class GameState {
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
     laserBeams: LaserBeam[] = [];
+    impactParticles: ImpactParticle[] = [];
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
@@ -3867,6 +3892,23 @@ export class GameState {
                     const lasers = unit.getAndClearLastShotLasers();
                     if (lasers.length > 0) {
                         this.laserBeams.push(...lasers);
+                        
+                        // Spawn impact particles at laser endpoints
+                        for (const laser of lasers) {
+                            for (let i = 0; i < Constants.STARLING_LASER_IMPACT_PARTICLES; i++) {
+                                const angle = (Math.PI * 2 * i) / Constants.STARLING_LASER_IMPACT_PARTICLES;
+                                const velocity = new Vector2D(
+                                    Math.cos(angle) * Constants.STARLING_LASER_PARTICLE_SPEED,
+                                    Math.sin(angle) * Constants.STARLING_LASER_PARTICLE_SPEED
+                                );
+                                this.impactParticles.push(new ImpactParticle(
+                                    new Vector2D(laser.endPos.x, laser.endPos.y),
+                                    velocity,
+                                    Constants.STARLING_LASER_PARTICLE_LIFETIME,
+                                    laser.owner.faction
+                                ));
+                            }
+                        }
                     }
                 }
                 
@@ -4324,6 +4366,12 @@ export class GameState {
         
         // Update laser beams (visual effects only)
         this.laserBeams = this.laserBeams.filter(laser => !laser.update(deltaTime));
+        
+        // Update impact particles (visual effects only)
+        for (const particle of this.impactParticles) {
+            particle.update(deltaTime);
+        }
+        this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));

@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -1888,6 +1888,54 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a laser beam
+     */
+    private drawLaserBeam(laser: LaserBeam): void {
+        const startScreen = this.worldToScreen(laser.startPos);
+        const endScreen = this.worldToScreen(laser.endPos);
+        const color = this.getFactionColor(laser.owner.faction);
+        
+        // Calculate fade based on lifetime
+        const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
+        
+        // Draw the main laser beam
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = alpha * 0.8;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        // Draw a glowing outer beam
+        this.ctx.globalAlpha = alpha * 0.3;
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw an impact particle
+     */
+    private drawImpactParticle(particle: ImpactParticle): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const color = this.getFactionColor(particle.faction);
+        const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
+        const size = 1 * this.zoom;
+        
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
      * Draw an influence zone
      */
     private drawInfluenceZone(zone: InfluenceZone): void {
@@ -3708,6 +3756,16 @@ export class GameRenderer {
         // Draw minion projectiles
         for (const projectile of game.minionProjectiles) {
             this.drawMinionProjectile(projectile);
+        }
+        
+        // Draw laser beams
+        for (const laser of game.laserBeams) {
+            this.drawLaserBeam(laser);
+        }
+        
+        // Draw impact particles
+        for (const particle of game.impactParticles) {
+            this.drawImpactParticle(particle);
         }
         
         // Draw influence zones
