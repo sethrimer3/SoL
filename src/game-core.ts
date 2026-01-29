@@ -5,6 +5,14 @@
 
 import * as Constants from './constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from './network';
+import { createBeamHero } from './heroes/beam';
+import { createDaggerHero } from './heroes/dagger';
+import { createDrillerHero } from './heroes/driller';
+import { createGraveHero } from './heroes/grave';
+import { createInfluenceBallHero } from './heroes/influence-ball';
+import { createMarineHero } from './heroes/marine';
+import { createRayHero } from './heroes/ray';
+import { createTurretDeployerHero } from './heroes/turret-deployer';
 
 /**
  * Three playable factions in the game
@@ -608,7 +616,7 @@ export class SolarMirror {
     }
 }
 
-type CombatTarget = Unit | StellarForge | Building | SolarMirror;
+export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
 
 /**
  * Stellar Forge - Main base that produces units
@@ -2333,315 +2341,75 @@ export class Unit {
     }
 }
 
-/**
- * Marine unit - fast shooting with visual effects
- */
-export class Marine extends Unit {
-    private lastShotEffects: { 
-        muzzleFlash?: MuzzleFlash, 
-        casing?: BulletCasing, 
-        bouncingBullet?: BouncingBullet 
-    } = {};
+const { Marine } = createMarineHero({
+    Unit,
+    Vector2D,
+    Constants,
+    MuzzleFlash,
+    BulletCasing,
+    BouncingBullet,
+    AbilityBullet
+});
 
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.MARINE_MAX_HEALTH,
-            Constants.MARINE_ATTACK_RANGE,
-            Constants.MARINE_ATTACK_DAMAGE,
-            Constants.MARINE_ATTACK_SPEED,
-            Constants.MARINE_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Marine is a hero unit for Radiant faction
-    }
+const { Grave, GraveProjectile } = createGraveHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-    /**
-     * Attack with visual effects
-     */
-    attack(target: CombatTarget): void {
-        // Apply damage
-        super.attack(target);
+const { Ray, RayBeamSegment } = createRayHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Calculate angle to target
-        const dx = target.position.x - this.position.x;
-        const dy = target.position.y - this.position.y;
-        const angle = Math.atan2(dy, dx);
+const { InfluenceBall, InfluenceZone, InfluenceBallProjectile } = createInfluenceBallHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
-            new Vector2D(this.position.x, this.position.y),
-            angle
-        );
+const { TurretDeployer, DeployedTurret } = createTurretDeployerHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create bullet casing with slight angle deviation
-        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Eject to the side
-        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
-                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
-        this.lastShotEffects.casing = new BulletCasing(
-            new Vector2D(this.position.x, this.position.y),
-            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
-        );
+const { Driller } = createDrillerHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create bouncing bullet at target position
-        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0; // Bounce away from impact
-        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
-                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
-        this.lastShotEffects.bouncingBullet = new BouncingBullet(
-            new Vector2D(target.position.x, target.position.y),
-            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
-        );
-    }
+const { Dagger } = createDaggerHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
 
-    /**
-     * Get effects from last shot (for game state to manage)
-     */
-    getAndClearLastShotEffects(): { 
-        muzzleFlash?: MuzzleFlash, 
-        casing?: BulletCasing, 
-        bouncingBullet?: BouncingBullet 
-    } {
-        const effects = this.lastShotEffects;
-        this.lastShotEffects = {};
-        return effects;
-    }
+const { Beam } = createBeamHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
 
-    /**
-     * Use special ability: Bullet Storm
-     * Fires a spread of bullets in the specified direction
-     */
-    useAbility(direction: Vector2D): boolean {
-        // Check if ability is ready
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-
-        // Calculate base angle from direction
-        const baseAngle = Math.atan2(direction.y, direction.x);
-        
-        // Create bullets with spread
-        const spreadAngle = Constants.MARINE_ABILITY_SPREAD_ANGLE;
-        const bulletCount = Constants.MARINE_ABILITY_BULLET_COUNT;
-        
-        for (let i = 0; i < bulletCount; i++) {
-            // Calculate angle for this bullet within the spread
-            // Distribute bullets evenly within the spread angle
-            // Use max to avoid division by zero if bulletCount is 1
-            const angleOffset = (i / Math.max(bulletCount - 1, 1) - 0.5) * spreadAngle * 2;
-            const bulletAngle = baseAngle + angleOffset;
-            
-            // Calculate velocity
-            const speed = Constants.MARINE_ABILITY_BULLET_SPEED;
-            const velocity = new Vector2D(
-                Math.cos(bulletAngle) * speed,
-                Math.sin(bulletAngle) * speed
-            );
-            
-            // Create bullet
-            const bullet = new AbilityBullet(
-                new Vector2D(this.position.x, this.position.y),
-                velocity,
-                this.owner
-            );
-            
-            this.lastAbilityEffects.push(bullet);
-        }
-
-        return true;
-    }
-}
-
-/**
- * Projectile that orbits a Grave unit with gravitational attraction
- */
-export class GraveProjectile {
-    velocity: Vector2D;
-    lifetime: number = 0;
-    isAttacking: boolean = false;
-    targetEnemy: CombatTarget | null = null;
-    trail: Vector2D[] = []; // Trail of positions
-    
-    constructor(
-        public position: Vector2D,
-        velocity: Vector2D,
-        public owner: Player
-    ) {
-        this.velocity = velocity;
-    }
-
-    /**
-     * Update projectile position with gravitational attraction to grave
-     */
-    update(deltaTime: number, gravePosition: Vector2D): void {
-        if (!this.isAttacking) {
-            // Apply gravitational attraction to grave
-            const dx = gravePosition.x - this.position.x;
-            const dy = gravePosition.y - this.position.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-                // Normalize direction
-                const dirX = dx / distance;
-                const dirY = dy / distance;
-                
-                // Apply attraction force
-                const force = Constants.GRAVE_PROJECTILE_ATTRACTION_FORCE;
-                this.velocity.x += dirX * force * deltaTime;
-                this.velocity.y += dirY * force * deltaTime;
-                
-                // Maintain minimum speed to keep orbiting
-                const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-                if (speed < Constants.GRAVE_PROJECTILE_MIN_SPEED) {
-                    const scale = Constants.GRAVE_PROJECTILE_MIN_SPEED / speed;
-                    this.velocity.x *= scale;
-                    this.velocity.y *= scale;
-                }
-            }
-        }
-        
-        // Update position
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-        
-        // Update trail when attacking
-        if (this.isAttacking) {
-            this.trail.push(new Vector2D(this.position.x, this.position.y));
-            if (this.trail.length > Constants.GRAVE_PROJECTILE_TRAIL_LENGTH) {
-                this.trail.shift(); // Remove oldest trail point
-            }
-            this.lifetime += deltaTime;
-        }
-        
-        // Check if hit target
-        if (this.isAttacking && this.targetEnemy) {
-            const distance = this.position.distanceTo(this.targetEnemy.position);
-            if (distance < Constants.GRAVE_PROJECTILE_HIT_DISTANCE) {
-                // Hit the target
-                if ('health' in this.targetEnemy) {
-                    this.targetEnemy.health -= Constants.GRAVE_ATTACK_DAMAGE;
-                }
-                // Mark for removal by returning to grave
-                this.isAttacking = false;
-                this.trail = [];
-                this.targetEnemy = null;
-            }
-        }
-    }
-
-    /**
-     * Launch projectile toward target
-     */
-    launchAtTarget(target: CombatTarget): void {
-        this.isAttacking = true;
-        this.targetEnemy = target;
-        this.trail = [];
-        this.lifetime = 0;
-        
-        // Set velocity toward target
-        const dx = target.position.x - this.position.x;
-        const dy = target.position.y - this.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 0) {
-            const dirX = dx / distance;
-            const dirY = dy / distance;
-            this.velocity.x = dirX * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
-            this.velocity.y = dirY * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
-        }
-    }
-
-    /**
-     * Reset projectile to orbit mode
-     */
-    returnToOrbit(): void {
-        this.isAttacking = false;
-        this.trail = [];
-        this.targetEnemy = null;
-    }
-}
-
-/**
- * Grave unit - has orbiting projectiles that attack enemies
- */
-export class Grave extends Unit {
-    projectiles: GraveProjectile[] = [];
-    projectileLaunchCooldown: number = 0;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.GRAVE_MAX_HEALTH,
-            Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER, // Hero units have reduced range
-            Constants.GRAVE_ATTACK_DAMAGE,
-            Constants.GRAVE_ATTACK_SPEED,
-            5.0 // Default ability cooldown
-        );
-        this.isHero = true; // Grave is a hero unit for Aurum faction
-        
-        // Initialize orbiting projectiles
-        for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {
-            const angle = (i / Constants.GRAVE_NUM_PROJECTILES) * Math.PI * 2;
-            const offsetX = Math.cos(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
-            const offsetY = Math.sin(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
-            
-            // Give initial tangential velocity for orbit
-            const tangentVelX = -Math.sin(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-            const tangentVelY = Math.cos(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-            
-            this.projectiles.push(new GraveProjectile(
-                new Vector2D(position.x + offsetX, position.y + offsetY),
-                new Vector2D(tangentVelX, tangentVelY),
-                owner
-            ));
-        }
-    }
-
-    /**
-     * Update grave and its projectiles
-     */
-    update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[], asteroids: Asteroid[] = []): void {
-        // Update base unit logic
-        super.update(deltaTime, enemies, allUnits, asteroids);
-        
-        // Update projectile launch cooldown
-        if (this.projectileLaunchCooldown > 0) {
-            this.projectileLaunchCooldown -= deltaTime;
-        }
-        
-        // Update all projectiles
-        for (const projectile of this.projectiles) {
-            projectile.update(deltaTime, this.position);
-        }
-        
-        // Launch projectiles at enemies if in range
-        if (this.target && this.projectileLaunchCooldown <= 0) {
-            const distance = this.position.distanceTo(this.target.position);
-            if (distance <= this.attackRange) {
-                // Find an available projectile (not currently attacking)
-                const availableProjectile = this.projectiles.find(p => !p.isAttacking);
-                if (availableProjectile) {
-                    availableProjectile.launchAtTarget(this.target);
-                    this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
-                }
-            }
-        }
-    }
-
-    /**
-     * Grave doesn't use the base attack (projectiles do the damage)
-     */
-    attack(target: CombatTarget): void {
-        // Projectiles handle the actual attacking
-    }
-
-    /**
-     * Get all projectiles for rendering
-     */
-    getProjectiles(): GraveProjectile[] {
-        return this.projectiles;
-    }
-}
+export {
+    Marine,
+    Grave,
+    GraveProjectile,
+    Ray,
+    RayBeamSegment,
+    InfluenceBall,
+    InfluenceZone,
+    InfluenceBallProjectile,
+    TurretDeployer,
+    DeployedTurret,
+    Driller,
+    Dagger,
+    Beam
+};
 
 /**
  * Starling unit - minion that spawns from stellar forge and has AI behavior
@@ -3066,571 +2834,6 @@ export class WarpGate {
     }
 }
 
-/**
- * Ray beam segment for bouncing beam ability
- */
-export class RayBeamSegment {
-    lifetime: number = 0;
-    maxLifetime: number = 0.5; // 0.5 seconds per segment
-    
-    constructor(
-        public startPos: Vector2D,
-        public endPos: Vector2D,
-        public owner: Player
-    ) {}
-    
-    update(deltaTime: number): boolean {
-        this.lifetime += deltaTime;
-        return this.lifetime >= this.maxLifetime;
-    }
-}
-
-/**
- * Ray hero unit (Solari faction) - shoots bouncing beam
- */
-export class Ray extends Unit {
-    private beamSegments: RayBeamSegment[] = [];
-    drillDirection: Vector2D | null = null; // Used temporarily to store ability direction
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.RAY_MAX_HEALTH,
-            Constants.RAY_ATTACK_RANGE,
-            Constants.RAY_ATTACK_DAMAGE,
-            Constants.RAY_ATTACK_SPEED,
-            Constants.RAY_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Ray is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Ray's bouncing beam ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Store direction for GameState to process
-        this.drillDirection = direction;
-        
-        return true;
-    }
-    
-    /**
-     * Get beam segments for rendering
-     */
-    getBeamSegments(): RayBeamSegment[] {
-        return this.beamSegments;
-    }
-    
-    /**
-     * Set beam segments (called by GameState after calculating bounces)
-     */
-    setBeamSegments(segments: RayBeamSegment[]): void {
-        this.beamSegments = segments;
-    }
-    
-    /**
-     * Update beam segments
-     */
-    updateBeamSegments(deltaTime: number): void {
-        this.beamSegments = this.beamSegments.filter(segment => !segment.update(deltaTime));
-    }
-}
-
-/**
- * Influence zone created by InfluenceBall ability
- */
-export class InfluenceZone {
-    lifetime: number = 0;
-    
-    constructor(
-        public position: Vector2D,
-        public owner: Player,
-        public radius: number = Constants.INFLUENCE_BALL_EXPLOSION_RADIUS,
-        public duration: number = Constants.INFLUENCE_BALL_DURATION
-    ) {}
-    
-    update(deltaTime: number): boolean {
-        this.lifetime += deltaTime;
-        return this.lifetime >= this.duration;
-    }
-    
-    isExpired(): boolean {
-        return this.lifetime >= this.duration;
-    }
-}
-
-/**
- * Influence Ball projectile
- */
-export class InfluenceBallProjectile {
-    velocity: Vector2D;
-    lifetime: number = 0;
-    maxLifetime: number = 5.0; // Max 5 seconds before auto-explode
-    
-    constructor(
-        public position: Vector2D,
-        velocity: Vector2D,
-        public owner: Player
-    ) {
-        this.velocity = velocity;
-    }
-    
-    update(deltaTime: number): void {
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-        this.lifetime += deltaTime;
-    }
-    
-    shouldExplode(): boolean {
-        return this.lifetime >= this.maxLifetime;
-    }
-}
-
-/**
- * Influence Ball hero unit (Solari faction) - creates temporary influence zones
- */
-export class InfluenceBall extends Unit {
-    private projectileToCreate: InfluenceBallProjectile | null = null;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.INFLUENCE_BALL_MAX_HEALTH,
-            Constants.INFLUENCE_BALL_ATTACK_RANGE,
-            Constants.INFLUENCE_BALL_ATTACK_DAMAGE,
-            Constants.INFLUENCE_BALL_ATTACK_SPEED,
-            Constants.INFLUENCE_BALL_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // InfluenceBall is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Influence Ball's area control ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Create influence ball projectile
-        const velocity = new Vector2D(
-            direction.x * Constants.INFLUENCE_BALL_PROJECTILE_SPEED,
-            direction.y * Constants.INFLUENCE_BALL_PROJECTILE_SPEED
-        );
-        
-        this.projectileToCreate = new InfluenceBallProjectile(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner
-        );
-        
-        return true;
-    }
-    
-    /**
-     * Get and clear pending projectile
-     */
-    getAndClearProjectile(): InfluenceBallProjectile | null {
-        const proj = this.projectileToCreate;
-        this.projectileToCreate = null;
-        return proj;
-    }
-}
-
-/**
- * Deployed turret that attaches to asteroids
- */
-export class DeployedTurret {
-    health: number;
-    maxHealth: number = Constants.DEPLOYED_TURRET_MAX_HEALTH;
-    attackCooldown: number = 0;
-    target: CombatTarget | null = null;
-    
-    constructor(
-        public position: Vector2D,
-        public owner: Player,
-        public attachedToAsteroid: Asteroid | null = null
-    ) {
-        this.health = this.maxHealth;
-    }
-    
-    update(deltaTime: number, enemies: CombatTarget[]): void {
-        // Update attack cooldown
-        if (this.attackCooldown > 0) {
-            this.attackCooldown -= deltaTime;
-        }
-        
-        // Find target if don't have one or current target is dead
-        if (!this.target || this.isTargetDead(this.target)) {
-            this.target = this.findNearestEnemy(enemies);
-        }
-        
-        // Attack if target in range and cooldown ready
-        if (this.target && this.attackCooldown <= 0) {
-            const distance = this.position.distanceTo(this.target.position);
-            if (distance <= Constants.DEPLOYED_TURRET_ATTACK_RANGE) {
-                this.attack(this.target);
-                this.attackCooldown = 1.0 / Constants.DEPLOYED_TURRET_ATTACK_SPEED;
-            }
-        }
-    }
-    
-    private isTargetDead(target: CombatTarget): boolean {
-        if ('health' in target) {
-            return target.health <= 0;
-        }
-        return false;
-    }
-    
-    private findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
-        let nearest: CombatTarget | null = null;
-        let minDistance = Infinity;
-        
-        for (const enemy of enemies) {
-            if ('health' in enemy && enemy.health <= 0) continue;
-            
-            const distance = this.position.distanceTo(enemy.position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearest = enemy;
-            }
-        }
-        
-        return nearest;
-    }
-    
-    attack(target: CombatTarget): void {
-        if ('health' in target) {
-            target.health -= Constants.DEPLOYED_TURRET_ATTACK_DAMAGE;
-        }
-    }
-    
-    takeDamage(amount: number): void {
-        this.health -= amount;
-    }
-    
-    isDead(): boolean {
-        return this.health <= 0;
-    }
-}
-
-/**
- * Turret Deployer hero unit (Solari faction) - deploys turrets on asteroids
- */
-export class TurretDeployer extends Unit {
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.TURRET_DEPLOYER_MAX_HEALTH,
-            Constants.TURRET_DEPLOYER_ATTACK_RANGE,
-            Constants.TURRET_DEPLOYER_ATTACK_DAMAGE,
-            Constants.TURRET_DEPLOYER_ATTACK_SPEED,
-            Constants.TURRET_DEPLOYER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // TurretDeployer is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Turret Deployer's turret placement ability
-     * The turret deployment will be handled by GameState which has access to asteroids
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Signal that ability was used, GameState will handle turret placement
-        return true;
-    }
-}
-
-/**
- * Driller hero unit (Aurum faction) - drills through asteroids
- */
-export class Driller extends Unit {
-    isDrilling: boolean = false;
-    isHidden: boolean = false; // Hidden when inside asteroid
-    drillDirection: Vector2D | null = null;
-    drillVelocity: Vector2D = new Vector2D(0, 0);
-    hiddenInAsteroid: Asteroid | null = null;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.DRILLER_MAX_HEALTH,
-            Constants.DRILLER_ATTACK_RANGE,
-            Constants.DRILLER_ATTACK_DAMAGE,
-            Constants.DRILLER_ATTACK_SPEED,
-            Constants.DRILLER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Driller is a hero unit for Aurum faction
-    }
-    
-    /**
-     * Driller has no normal attack - only the drilling ability
-     */
-    attack(target: CombatTarget): void {
-        // Driller does not have a normal attack - it only attacks via drilling ability
-        // This is intentional per the unit design
-    }
-    
-    /**
-     * Use Driller's drilling ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        // Check if already drilling
-        if (this.isDrilling) {
-            return false;
-        }
-        
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Start drilling
-        this.isDrilling = true;
-        this.isHidden = false;
-        this.drillDirection = direction.normalize();
-        this.drillVelocity = new Vector2D(
-            this.drillDirection.x * Constants.DRILLER_DRILL_SPEED,
-            this.drillDirection.y * Constants.DRILLER_DRILL_SPEED
-        );
-        
-        return true;
-    }
-    
-    /**
-     * Update drilling movement
-     */
-    updateDrilling(deltaTime: number): void {
-        if (this.isDrilling && this.drillVelocity) {
-            this.position.x += this.drillVelocity.x * deltaTime;
-            this.position.y += this.drillVelocity.y * deltaTime;
-        }
-    }
-    
-    /**
-     * Stop drilling and start cooldown
-     */
-    stopDrilling(): void {
-        this.isDrilling = false;
-        this.drillVelocity = new Vector2D(0, 0);
-        // Cooldown timer already set by useAbility
-    }
-    
-    /**
-     * Hide in asteroid
-     */
-    hideInAsteroid(asteroid: Asteroid): void {
-        this.isHidden = true;
-        this.hiddenInAsteroid = asteroid;
-        this.position = new Vector2D(asteroid.position.x, asteroid.position.y);
-    }
-    
-    /**
-     * Check if driller is hidden
-     */
-    isHiddenInAsteroid(): boolean {
-        return this.isHidden;
-    }
-}
-
-/**
- * Dagger hero unit (Radiant faction) - cloaked assassin
- * Always cloaked and invisible to enemies. Cannot see enemies until ability is used.
- * Becomes visible for 8 seconds after using ability.
- */
-export class Dagger extends Unit {
-    isCloaked: boolean = true; // Always cloaked unless ability was recently used
-    visibilityTimer: number = 0; // Time remaining while visible after ability use
-    canSeeEnemies: boolean = false; // Can only see enemies after using ability
-    enemyVisionTimer: number = 0; // Time remaining with enemy vision
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.DAGGER_MAX_HEALTH,
-            Constants.DAGGER_ATTACK_RANGE,
-            Constants.DAGGER_ATTACK_DAMAGE,
-            Constants.DAGGER_ATTACK_SPEED,
-            Constants.DAGGER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Dagger is a hero unit for Radiant faction
-    }
-    
-    /**
-     * Update visibility and enemy vision timers
-     */
-    updateTimers(deltaTime: number): void {
-        // Update visibility timer (visible to enemies after ability use)
-        if (this.visibilityTimer > 0) {
-            this.visibilityTimer -= deltaTime;
-            if (this.visibilityTimer <= 0) {
-                this.visibilityTimer = 0;
-                this.isCloaked = true; // Return to cloaked state
-            }
-        }
-        
-        // Update enemy vision timer (can see enemies after ability use)
-        if (this.enemyVisionTimer > 0) {
-            this.enemyVisionTimer -= deltaTime;
-            if (this.enemyVisionTimer <= 0) {
-                this.enemyVisionTimer = 0;
-                this.canSeeEnemies = false; // Lose ability to see enemies
-            }
-        }
-    }
-    
-    /**
-     * Use Dagger's ability: short-range directional attack
-     * Deals damage in a cone and reveals the Dagger for 8 seconds
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Reveal Dagger for 8 seconds
-        this.isCloaked = false;
-        this.visibilityTimer = Constants.DAGGER_VISIBILITY_DURATION;
-        
-        // Grant enemy vision for 8 seconds
-        this.canSeeEnemies = true;
-        this.enemyVisionTimer = Constants.DAGGER_VISIBILITY_DURATION;
-        
-        // Calculate attack direction
-        const attackDir = direction.normalize();
-        const attackAngle = Math.atan2(attackDir.y, attackDir.x);
-        
-        // Create a short-range directional attack projectile
-        const speed = 400; // Fast projectile speed
-        const velocity = new Vector2D(
-            Math.cos(attackAngle) * speed,
-            Math.sin(attackAngle) * speed
-        );
-        
-        // Create ability bullet
-        const bullet = new AbilityBullet(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner,
-            Constants.DAGGER_ABILITY_DAMAGE
-        );
-        
-        // Set short range for the projectile
-        bullet.maxRange = Constants.DAGGER_ABILITY_RANGE;
-        
-        this.lastAbilityEffects.push(bullet);
-        
-        return true;
-    }
-    
-    /**
-     * Override update to filter enemies based on vision
-     */
-    update(
-        deltaTime: number,
-        enemies: CombatTarget[],
-        allUnits: Unit[],
-        asteroids: Asteroid[] = []
-    ): void {
-        // Filter enemies - Dagger can only see enemies if it has enemy vision
-        let visibleEnemies = enemies;
-        if (!this.canSeeEnemies) {
-            visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
-        }
-        
-        // Call parent update with filtered enemy list
-        super.update(deltaTime, visibleEnemies, allUnits, asteroids);
-    }
-    
-    /**
-     * Check if this Dagger is cloaked (invisible to enemies)
-     */
-    isCloakedToEnemies(): boolean {
-        return this.isCloaked;
-    }
-    
-    /**
-     * Check if this Dagger can currently see enemies
-     */
-    hasEnemyVision(): boolean {
-        return this.canSeeEnemies;
-    }
-}
-
-/**
- * Beam hero unit (Radiant faction) - sniper with distance-based damage
- * Fires a thin beam that does more damage the further away the target is
- */
-export class Beam extends Unit {
-    public lastBeamDamage: number = 0; // For displaying multiplier
-    public lastBeamDistance: number = 0; // For calculating multiplier
-    public lastBeamMultiplier: number = 0; // For display above unit
-    public lastBeamTime: number = 0; // When the last beam was fired
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.BEAM_MAX_HEALTH,
-            Constants.BEAM_ATTACK_RANGE,
-            Constants.BEAM_ATTACK_DAMAGE,
-            Constants.BEAM_ATTACK_SPEED,
-            Constants.BEAM_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Beam is a hero unit for Radiant faction
-    }
-    
-    /**
-     * Use Beam's ability: long-range sniper beam with distance-based damage
-     * Deals more damage the further away the target is
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Calculate beam direction
-        const beamDir = direction.normalize();
-        
-        // Create a thin beam projectile that travels in a straight line
-        const speed = 1000; // Very fast beam speed
-        const velocity = new Vector2D(
-            beamDir.x * speed,
-            beamDir.y * speed
-        );
-        
-        // Create ability bullet for the beam
-        const bullet = new AbilityBullet(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner,
-            Constants.BEAM_ABILITY_BASE_DAMAGE // Base damage, will be modified on hit
-        );
-        
-        // Set long range for the sniper beam
-        bullet.maxRange = Constants.BEAM_ABILITY_MAX_RANGE;
-        
-        // Mark this as a beam projectile for special damage calculation
-        bullet.isBeamProjectile = true;
-        bullet.beamOwner = this;
-        
-        this.lastAbilityEffects.push(bullet);
-        
-        return true;
-    }
-}
 
 /**
  * Damage number that floats upward and fades out
