@@ -2212,8 +2212,8 @@ export class Unit {
 
         // Update rotation to face movement direction with smooth turning
         if (directionLength > 0) {
-            // Subtract π/2 to make the TOP of the sprite be the FRONT (not the right side)
-            const targetRotation = Math.atan2(directionY, directionX) - Math.PI / 2;
+            // Add π/2 so the TOP of the sprite is treated as the FRONT (not the bottom/right side)
+            const targetRotation = Math.atan2(directionY, directionX) + Math.PI / 2;
             const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
             const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
             
@@ -6281,6 +6281,7 @@ export class GameState {
                 mix(unit.position.y);
                 mix(unit.velocity.x);
                 mix(unit.velocity.y);
+                mix(unit.rotation);
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
                 mix(unit.collisionRadiusPx);
