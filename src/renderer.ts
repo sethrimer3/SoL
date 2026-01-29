@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Morter } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -18,7 +18,7 @@ type GraphicKey =
     | 'heroGrave'
     | 'heroDagger'
     | 'heroBeam'
-    | 'heroMorter'
+    | 'heroMortar'
     | 'heroRay'
     | 'heroInfluenceBall'
     | 'heroTurretDeployer'
@@ -590,8 +590,8 @@ export class GameRenderer {
         if (unit instanceof Beam) {
             return this.getGraphicAssetPath('heroBeam');
         }
-        if (unit instanceof Morter) {
-            return this.getGraphicAssetPath('heroMorter');
+        if (unit instanceof Mortar) {
+            return this.getGraphicAssetPath('heroMortar');
         }
         if (unit instanceof Ray) {
             return this.getGraphicAssetPath('heroRay');
@@ -1182,8 +1182,8 @@ export class GameRenderer {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
-            case 'Morter':
-                return unit instanceof Morter;
+            case 'Mortar':
+                return unit instanceof Mortar;
             default:
                 return false;
         }
@@ -1948,9 +1948,9 @@ export class GameRenderer {
     }
     
     /**
-     * Draw a morter projectile (larger, more visible artillery shell)
+     * Draw a mortar projectile (larger, more visible artillery shell)
      */
-    private drawMorterProjectile(projectile: any): void {
+    private drawMortarProjectile(projectile: any): void {
         const screenPos = this.worldToScreen(projectile.position);
         const size = 6 * this.zoom; // Larger than other projectiles
         const color = this.getFactionColor(projectile.owner.faction);
@@ -2666,19 +2666,19 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Morter hero unit with detection cone visualization
+     * Draw a Mortar hero unit with detection cone visualization
      */
-    private drawMorter(morter: any, color: string, game: GameState, isEnemy: boolean): void {
+    private drawMortar(mortar: any, color: string, game: GameState, isEnemy: boolean): void {
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
         if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(morter.position, this.viewingPlayer, morter);
+            const isVisible = game.isObjectVisibleToPlayer(mortar.position, this.viewingPlayer, mortar);
             if (!isVisible) {
                 return; // Don't draw invisible enemy units
             }
             
-            const inShadow = game.isPointInShadow(morter.position);
+            const inShadow = game.isPointInShadow(mortar.position);
             if (inShadow) {
                 shouldDim = true;
                 displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
@@ -2686,9 +2686,9 @@ export class GameRenderer {
         }
         
         // Draw detection cone if set up and not enemy
-        if (!isEnemy && morter.isSetup && morter.facingDirection) {
-            const screenPos = this.worldToScreen(morter.position);
-            const facingAngle = Math.atan2(morter.facingDirection.y, morter.facingDirection.x);
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
             const halfConeAngle = Constants.MORTER_DETECTION_CONE_ANGLE / 2;
             const coneRadius = Constants.MORTER_ATTACK_RANGE * this.zoom;
             
@@ -2727,12 +2727,12 @@ export class GameRenderer {
         }
         
         // Draw base unit
-        this.drawUnit(morter, displayColor, game, isEnemy);
+        this.drawUnit(mortar, displayColor, game, isEnemy);
         
         // Draw setup indicator - show artillery barrel/turret for friendly units
-        if (!isEnemy && morter.isSetup && morter.facingDirection) {
-            const screenPos = this.worldToScreen(morter.position);
-            const facingAngle = Math.atan2(morter.facingDirection.y, morter.facingDirection.x);
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
             const barrelLength = 15 * this.zoom;
             
             // Draw barrel
@@ -2745,9 +2745,9 @@ export class GameRenderer {
                 screenPos.y + Math.sin(facingAngle) * barrelLength
             );
             this.ctx.stroke();
-        } else if (!isEnemy && !morter.isSetup) {
+        } else if (!isEnemy && !mortar.isSetup) {
             // Show "not set up" indicator
-            const screenPos = this.worldToScreen(morter.position);
+            const screenPos = this.worldToScreen(mortar.position);
             const size = 12 * this.zoom;
             
             this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFAA00', Constants.SHADE_OPACITY) : '#FFAA00'; // Orange
@@ -3903,8 +3903,8 @@ export class GameRenderer {
                     this.drawDagger(unit, color, game, isEnemy);
                 } else if (unit instanceof Beam) {
                     this.drawBeam(unit, color, game, isEnemy);
-                } else if (unit instanceof Morter) {
-                    this.drawMorter(unit, color, game, isEnemy);
+                } else if (unit instanceof Mortar) {
+                    this.drawMortar(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -3957,9 +3957,9 @@ export class GameRenderer {
             this.drawMinionProjectile(projectile);
         }
         
-        // Draw morter projectiles
-        for (const projectile of game.morterProjectiles) {
-            this.drawMorterProjectile(projectile);
+        // Draw mortar projectiles
+        for (const projectile of game.mortarProjectiles) {
+            this.drawMortarProjectile(projectile);
         }
         
         // Draw laser beams

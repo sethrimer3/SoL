@@ -338,7 +338,7 @@ export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
 export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
 export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
 
-// Morter unit constants (Radiant hero - stationary artillery with cone detection)
+// Mortar unit constants (Radiant hero - stationary artillery with cone detection)
 export const MORTER_MAX_HEALTH = 120;
 export const MORTER_ATTACK_RANGE = 450; // Long range artillery
 export const MORTER_ATTACK_DAMAGE = 40; // High damage per shot
@@ -347,7 +347,7 @@ export const MORTER_ABILITY_COOLDOWN = 0; // No cooldown, setup is the ability
 export const MORTER_DETECTION_CONE_ANGLE = (150 * Math.PI) / 180; // 150 degrees detection cone
 export const MORTER_SPLASH_RADIUS = 80; // Radius of splash damage
 export const MORTER_SPLASH_DAMAGE_FALLOFF = 0.5; // 50% damage at edge of splash radius
-export const MORTER_PROJECTILE_SPEED = 300; // Speed of morter shells
+export const MORTER_PROJECTILE_SPEED = 300; // Speed of mortar shells
 
 // AI Strategy types
 export enum AIStrategy {

@@ -1,18 +1,18 @@
 import type { CombatTarget, Player, Unit, Vector2D } from '../game-core';
 
-type MorterHeroDeps = {
+type MortarHeroDeps = {
     Unit: typeof Unit;
     Vector2D: typeof Vector2D;
     Constants: typeof import('../constants');
 };
 
-export const createMorterHero = (deps: MorterHeroDeps) => {
+export const createMortarHero = (deps: MortarHeroDeps) => {
     const { Unit, Vector2D, Constants } = deps;
 
     /**
-     * Morter Projectile - projectile that deals splash damage on impact
+     * Mortar Projectile - projectile that deals splash damage on impact
      */
-    class MorterProjectile {
+    class MortarProjectile {
         velocity: Vector2D;
         lifetime: number = 0;
         maxLifetime: number = 3.0; // 3 seconds max flight time
@@ -79,14 +79,14 @@ export const createMorterHero = (deps: MorterHeroDeps) => {
     }
 
     /**
-     * Morter hero unit (Radiant faction) - stationary artillery
+     * Mortar hero unit (Radiant faction) - stationary artillery
      * Must be set up by swiping in a direction before it can attack
      * Detects enemies in a 150-degree cone and fires splash damage rounds at low fire rate
      */
-    class Morter extends Unit {
+    class Mortar extends Unit {
         isSetup: boolean = false; // Not active until set up
-        facingDirection: Vector2D | null = null; // Direction morter is facing after setup
-        lastShotProjectiles: MorterProjectile[] = [];
+        facingDirection: Vector2D | null = null; // Direction mortar is facing after setup
+        lastShotProjectiles: MortarProjectile[] = [];
 
         constructor(position: Vector2D, owner: Player) {
             super(
@@ -98,12 +98,12 @@ export const createMorterHero = (deps: MorterHeroDeps) => {
                 Constants.MORTER_ATTACK_SPEED,
                 Constants.MORTER_ABILITY_COOLDOWN
             );
-            this.isHero = true; // Morter is a hero unit for Radiant faction
+            this.isHero = true; // Mortar is a hero unit for Radiant faction
         }
 
         /**
-         * Use ability: Set up the morter facing a specific direction
-         * This enables the morter to start attacking enemies in its cone
+         * Use ability: Set up the mortar facing a specific direction
+         * This enables the mortar to start attacking enemies in its cone
          */
         useAbility(direction: Vector2D): boolean {
             // Store the facing direction (normalized)
@@ -177,7 +177,7 @@ export const createMorterHero = (deps: MorterHeroDeps) => {
         }
 
         /**
-         * Attack with morter projectile that has splash damage
+         * Attack with mortar projectile that has splash damage
          */
         override attack(target: CombatTarget): void {
             // Don't apply damage directly - projectile will handle it
@@ -195,8 +195,8 @@ export const createMorterHero = (deps: MorterHeroDeps) => {
                 Math.sin(angle) * speed
             );
 
-            // Create morter projectile with splash damage
-            const projectile = new MorterProjectile(
+            // Create mortar projectile with splash damage
+            const projectile = new MortarProjectile(
                 new Vector2D(this.position.x, this.position.y),
                 velocity,
                 this.owner,
@@ -210,26 +210,26 @@ export const createMorterHero = (deps: MorterHeroDeps) => {
         /**
          * Get and clear projectiles from last shot (for game state to manage)
          */
-        getAndClearLastShotProjectiles(): MorterProjectile[] {
+        getAndClearLastShotProjectiles(): MortarProjectile[] {
             const projectiles = this.lastShotProjectiles;
             this.lastShotProjectiles = [];
             return projectiles;
         }
 
         /**
-         * Check if morter is set up and ready to fire
+         * Check if mortar is set up and ready to fire
          */
         isReadyToFire(): boolean {
             return this.isSetup && this.facingDirection !== null;
         }
 
         /**
-         * Get the facing direction of the morter
+         * Get the facing direction of the mortar
          */
         getFacingDirection(): Vector2D | null {
             return this.facingDirection;
         }
     }
 
-    return { Morter, MorterProjectile };
+    return { Mortar, MortarProjectile };
 };

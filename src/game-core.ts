@@ -11,7 +11,7 @@ import { createDrillerHero } from './heroes/driller';
 import { createGraveHero } from './heroes/grave';
 import { createInfluenceBallHero } from './heroes/influence-ball';
 import { createMarineHero } from './heroes/marine';
-import { createMorterHero } from './heroes/morter';
+import { createMortarHero } from './heroes/mortar';
 import { createRayHero } from './heroes/ray';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 
@@ -2396,7 +2396,7 @@ const { Beam } = createBeamHero({
     AbilityBullet
 });
 
-const { Morter, MorterProjectile } = createMorterHero({
+const { Mortar, MortarProjectile } = createMortarHero({
     Unit,
     Vector2D,
     Constants
@@ -2416,8 +2416,8 @@ export {
     Driller,
     Dagger,
     Beam,
-    Morter,
-    MorterProjectile
+    Mortar,
+    MortarProjectile
 };
 
 /**
@@ -2916,7 +2916,7 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
-    morterProjectiles: MorterProjectile[] = [];
+    mortarProjectiles: MortarProjectile[] = [];
     laserBeams: LaserBeam[] = [];
     impactParticles: ImpactParticle[] = [];
     influenceZones: InfluenceZone[] = [];
@@ -3237,11 +3237,11 @@ export class GameState {
                     }
                 }
                 
-                // Handle Morter projectiles
-                if (unit instanceof Morter) {
+                // Handle Mortar projectiles
+                if (unit instanceof Mortar) {
                     const projectiles = unit.getAndClearLastShotProjectiles();
                     if (projectiles.length > 0) {
-                        this.morterProjectiles.push(...projectiles);
+                        this.mortarProjectiles.push(...projectiles);
                     }
                 }
                 
@@ -3588,8 +3588,8 @@ export class GameState {
         }
         this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
 
-        // Update morter projectiles and check for splash damage hits
-        for (const projectile of this.morterProjectiles) {
+        // Update mortar projectiles and check for splash damage hits
+        for (const projectile of this.mortarProjectiles) {
             projectile.update(deltaTime);
             
             // Check hits against enemies
@@ -3682,7 +3682,7 @@ export class GameState {
                 projectile.lifetime = projectile.maxLifetime;
             }
         }
-        this.morterProjectiles = this.morterProjectiles.filter(projectile => !projectile.shouldDespawn());
+        this.mortarProjectiles = this.mortarProjectiles.filter(projectile => !projectile.shouldDespawn());
 
         // Update minion projectiles and check for hits
         for (const projectile of this.minionProjectiles) {
@@ -4574,7 +4574,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Morter'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -4602,8 +4602,8 @@ export class GameState {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
-            case 'Morter':
-                return unit instanceof Morter;
+            case 'Mortar':
+                return unit instanceof Mortar;
             default:
                 return false;
         }
@@ -5450,8 +5450,8 @@ export class GameState {
                 return new Dagger(spawnPosition, owner);
             case 'Beam':
                 return new Beam(spawnPosition, owner);
-            case 'Morter':
-                return new Morter(spawnPosition, owner);
+            case 'Mortar':
+                return new Mortar(spawnPosition, owner);
             default:
                 return null;
         }
