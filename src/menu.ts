@@ -1256,6 +1256,7 @@ export interface GameSettings {
     graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan'; // Game mode selection
+    networkManager?: NetworkManager; // Network manager for LAN/online play
 }
 
 export class MainMenu {
@@ -2078,6 +2079,34 @@ export class MainMenu {
         answerContainer.appendChild(connectButton);
 
         this.contentElement.appendChild(answerContainer);
+
+        // Start Game button (only for host)
+        const startGameButton = this.createButton('START GAME', () => {
+            if (!this.networkManager) {
+                alert('Network manager not initialized.');
+                return;
+            }
+
+            if (this.networkManager.getPeerCount() === 0) {
+                alert('Please wait for at least one player to connect before starting.');
+                return;
+            }
+
+            // Set game mode to LAN
+            this.settings.gameMode = 'lan';
+            // Pass network manager to settings
+            this.settings.networkManager = this.networkManager;
+            
+            // Start the game
+            if (this.onStartCallback) {
+                this.hide();
+                this.onStartCallback(this.settings);
+            }
+        }, '#FF8800');
+        startGameButton.style.marginBottom = '20px';
+        startGameButton.style.padding = '15px 40px';
+        startGameButton.style.fontSize = '24px';
+        this.contentElement.appendChild(startGameButton);
 
         // Cancel button
         const cancelButton = this.createButton('CANCEL', () => {
