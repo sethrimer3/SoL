@@ -1771,6 +1771,7 @@ export class MainMenu {
         }
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
+            this.contentElement.style.justifyContent = 'center';
         }
         // Clear any pending timeouts
         if (this.lanServerListTimeout !== null) {
@@ -1799,6 +1800,7 @@ export class MainMenu {
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
+        container.style.justifyContent = 'flex-start';
         
         // Title graphic - raised a little
         const titleGraphic = document.createElement('img');
@@ -1807,7 +1809,7 @@ export class MainMenu {
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
         titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = isCompactLayout ? '12px' : '20px';
+        titleGraphic.style.marginBottom = isCompactLayout ? '6px' : '12px';
         titleGraphic.style.alignSelf = 'center';
         container.appendChild(titleGraphic);
 
@@ -1816,7 +1818,7 @@ export class MainMenu {
         carouselContainer.style.width = '100%';
         carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
         carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginTop = isCompactLayout ? '4px' : '6px';
+        carouselContainer.style.marginTop = '0';
         carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
         container.appendChild(carouselContainer);
 
@@ -1844,7 +1846,12 @@ export class MainMenu {
             }
         ];
 
-        this.carouselMenu = new CarouselMenuView(carouselContainer, menuOptions, 1); // Default to "START" button
+        this.carouselMenu = new CarouselMenuView(
+            carouselContainer,
+            menuOptions,
+            1,
+            'rgba(0, 0, 0, 0.5)'
+        ); // Default to "START" button
         this.carouselMenu.onRender(() => {
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
@@ -2784,19 +2791,19 @@ export class MainMenu {
             { 
                 id: Faction.RADIANT, 
                 name: 'Radiant', 
-                description: 'Masters of light manipulation. Enhanced mirror efficiency and faster light-based attacks.',
+                description: 'Well-Balanced, Ranged-Focused',
                 color: '#00AAFF'
             },
             { 
                 id: Faction.AURUM, 
                 name: 'Aurum', 
-                description: 'Wealth-oriented civilization. Economic bonuses and resource multiplication.',
+                description: 'Fast-Paced, Melee-Focused',
                 color: '#FFD700'
             },
             { 
                 id: Faction.SOLARI, 
                 name: 'Solari', 
-                description: 'Sun-worshipping empire. Stronger structures and enhanced solar collection.',
+                description: 'Complex Strategy, Ability-Focused',
                 color: '#FF6600'
             }
         ];
@@ -3953,10 +3960,17 @@ class CarouselMenuView {
     private hasDragged: boolean = false;
     private isCompactLayout: boolean = false;
     private resizeHandler: (() => void) | null = null;
+    private optionBackgroundColor: string;
 
-    constructor(container: HTMLElement, options: MenuOption[], initialIndex: number = 0) {
+    constructor(
+        container: HTMLElement,
+        options: MenuOption[],
+        initialIndex: number = 0,
+        optionBackgroundColor: string = 'transparent'
+    ) {
         this.container = container;
         this.options = options;
+        this.optionBackgroundColor = optionBackgroundColor;
         // Validate and clamp initialIndex to valid range
         const validatedIndex = Math.max(0, Math.min(initialIndex, options.length - 1));
         this.currentIndex = validatedIndex;
@@ -4212,7 +4226,7 @@ class CarouselMenuView {
             optionElement.style.top = `${centerY - size / 2}px`;
             optionElement.style.width = `${size}px`;
             optionElement.style.height = `${size}px`;
-            optionElement.style.backgroundColor = 'transparent';
+            optionElement.style.backgroundColor = this.optionBackgroundColor;
             optionElement.style.border = '2px solid transparent';
             optionElement.style.borderRadius = '10px';
             optionElement.style.opacity = opacity.toString();
