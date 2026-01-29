@@ -119,13 +119,20 @@ interface MenuAsteroid {
 }
 
 class BackgroundParticleLayer {
-    private static readonly PARTICLE_COUNT = 8;
+    private static readonly PARTICLE_COUNT = 24;
     private static readonly PARTICLE_RADIUS = 250;
     private static readonly MAX_VELOCITY = 0.3;
+    private static readonly MIN_VELOCITY = 0.02;
     private static readonly FRICTION = 0.98;
     private static readonly COLOR_TRANSITION_SPEED = 0.002;
     private static readonly ATTRACTION_STRENGTH = 0.15;
     private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
+    private static readonly EDGE_REPULSION_DISTANCE = 300;
+    private static readonly EDGE_REPULSION_STRENGTH = 0.05;
+    private static readonly EDGE_GLOW_DISTANCE = 400;
+    // Normalization factor for edge glow intensity scaled by particle count
+    // Higher particle count requires higher normalization to maintain visual consistency
+    private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -134,6 +141,12 @@ class BackgroundParticleLayer {
     private animationFrameId: number | null = null;
     private isActive: boolean = false;
     private lastColorChangeMs: number = 0;
+    private edgeGlows: { top: number[]; right: number[]; bottom: number[]; left: number[] } = {
+        top: [0, 0, 0],
+        right: [0, 0, 0],
+        bottom: [0, 0, 0],
+        left: [0, 0, 0]
+    };
     
     private readonly gradientColors = [
         [138, 43, 226],   // Blue Violet
@@ -268,6 +281,12 @@ class BackgroundParticleLayer {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
         
+        // Reset edge glows
+        this.edgeGlows.top = [0, 0, 0];
+        this.edgeGlows.right = [0, 0, 0];
+        this.edgeGlows.bottom = [0, 0, 0];
+        this.edgeGlows.left = [0, 0, 0];
+        
         // Apply attraction/repulsion forces
         for (let i = 0; i < this.particles.length; i++) {
             const p1 = this.particles[i];
@@ -290,6 +309,31 @@ class BackgroundParticleLayer {
                 }
             }
             
+            // Apply edge repulsion
+            const edgeRepulsion = BackgroundParticleLayer.EDGE_REPULSION_DISTANCE;
+            const edgeStrength = BackgroundParticleLayer.EDGE_REPULSION_STRENGTH;
+            
+            // Left edge
+            if (p1.x < edgeRepulsion) {
+                const force = (1 - p1.x / edgeRepulsion) * edgeStrength;
+                p1.velocityX += force;
+            }
+            // Right edge
+            if (p1.x > width - edgeRepulsion) {
+                const force = (1 - (width - p1.x) / edgeRepulsion) * edgeStrength;
+                p1.velocityX -= force;
+            }
+            // Top edge
+            if (p1.y < edgeRepulsion) {
+                const force = (1 - p1.y / edgeRepulsion) * edgeStrength;
+                p1.velocityY += force;
+            }
+            // Bottom edge
+            if (p1.y > height - edgeRepulsion) {
+                const force = (1 - (height - p1.y) / edgeRepulsion) * edgeStrength;
+                p1.velocityY -= force;
+            }
+            
             // Apply friction
             p1.velocityX *= BackgroundParticleLayer.FRICTION;
             p1.velocityY *= BackgroundParticleLayer.FRICTION;
@@ -300,16 +344,70 @@ class BackgroundParticleLayer {
                 p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MAX_VELOCITY;
                 p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
             }
+            // Apply minimum velocity to keep particles moving
+            if (speed < BackgroundParticleLayer.MIN_VELOCITY) {
+                // Give particles a small random velocity if completely stopped
+                const angle = Math.random() * Math.PI * 2;
+                p1.velocityX = Math.cos(angle) * BackgroundParticleLayer.MIN_VELOCITY;
+                p1.velocityY = Math.sin(angle) * BackgroundParticleLayer.MIN_VELOCITY;
+            }
             
             // Update position
             p1.x += p1.velocityX;
             p1.y += p1.velocityY;
             
-            // Wrap around screen edges
-            if (p1.x < -p1.radius) p1.x = width + p1.radius;
-            if (p1.x > width + p1.radius) p1.x = -p1.radius;
-            if (p1.y < -p1.radius) p1.y = height + p1.radius;
-            if (p1.y > height + p1.radius) p1.y = -p1.radius;
+            // Keep particles on screen (bounce back instead of wrapping)
+            if (p1.x < 0) {
+                p1.x = 0;
+                p1.velocityX = Math.abs(p1.velocityX);
+            }
+            if (p1.x > width) {
+                p1.x = width;
+                p1.velocityX = -Math.abs(p1.velocityX);
+            }
+            if (p1.y < 0) {
+                p1.y = 0;
+                p1.velocityY = Math.abs(p1.velocityY);
+            }
+            if (p1.y > height) {
+                p1.y = height;
+                p1.velocityY = -Math.abs(p1.velocityY);
+            }
+            
+            // Calculate edge glow contributions
+            const glowDistance = BackgroundParticleLayer.EDGE_GLOW_DISTANCE;
+            const r = Math.round(p1.colorR);
+            const g = Math.round(p1.colorG);
+            const b = Math.round(p1.colorB);
+            
+            // Top edge glow
+            if (p1.y < glowDistance) {
+                const intensity = (1 - p1.y / glowDistance);
+                this.edgeGlows.top[0] += r * intensity;
+                this.edgeGlows.top[1] += g * intensity;
+                this.edgeGlows.top[2] += b * intensity;
+            }
+            // Bottom edge glow
+            if (p1.y > height - glowDistance) {
+                const intensity = (1 - (height - p1.y) / glowDistance);
+                this.edgeGlows.bottom[0] += r * intensity;
+                this.edgeGlows.bottom[1] += g * intensity;
+                this.edgeGlows.bottom[2] += b * intensity;
+            }
+            // Left edge glow
+            if (p1.x < glowDistance) {
+                const intensity = (1 - p1.x / glowDistance);
+                this.edgeGlows.left[0] += r * intensity;
+                this.edgeGlows.left[1] += g * intensity;
+                this.edgeGlows.left[2] += b * intensity;
+            }
+            // Right edge glow
+            if (p1.x > width - glowDistance) {
+                const intensity = (1 - (width - p1.x) / glowDistance);
+                this.edgeGlows.right[0] += r * intensity;
+                this.edgeGlows.right[1] += g * intensity;
+                this.edgeGlows.right[2] += b * intensity;
+            }
             
             // Smoothly transition colors
             p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
@@ -325,6 +423,64 @@ class BackgroundParticleLayer {
         // Clear with black background
         this.context.fillStyle = '#000000';
         this.context.fillRect(0, 0, width, height);
+        
+        // Draw edge glows first (under particles)
+        this.context.globalCompositeOperation = 'screen';
+        this.context.filter = 'blur(40px)';
+        
+        const glowHeight = 60;
+        const glowWidth = 60;
+        
+        // Normalize and draw edge glows
+        const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
+        
+        // Top edge
+        const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
+        const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
+        const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
+        if (topR + topG + topB > 0) {
+            const gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
+            gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
+            gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, 0, width, glowHeight);
+        }
+        
+        // Bottom edge
+        const bottomR = Math.min(255, Math.round(this.edgeGlows.bottom[0] / maxGlow * 255));
+        const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
+        const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
+        if (bottomR + bottomG + bottomB > 0) {
+            const gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
+            gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
+            gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, height - glowHeight, width, glowHeight);
+        }
+        
+        // Left edge
+        const leftR = Math.min(255, Math.round(this.edgeGlows.left[0] / maxGlow * 255));
+        const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
+        const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
+        if (leftR + leftG + leftB > 0) {
+            const gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
+            gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
+            gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, 0, glowWidth, height);
+        }
+        
+        // Right edge
+        const rightR = Math.min(255, Math.round(this.edgeGlows.right[0] / maxGlow * 255));
+        const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
+        const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
+        if (rightR + rightG + rightB > 0) {
+            const gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
+            gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
+            gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(width - glowWidth, 0, glowWidth, height);
+        }
         
         // Draw particles with blur effect (reduced blur for better performance)
         this.context.filter = 'blur(60px)';
@@ -604,7 +760,7 @@ class MenuAtmosphereLayer {
         const sunCenter = this.getSunCenter();
         for (const asteroid of this.asteroids) {
             const points = this.getAsteroidPoints(asteroid);
-            this.renderAsteroidShadow(asteroid, points, sunCenter);
+            // Dropshadow removed per requirements
             this.renderAsteroidBody(asteroid, points);
         }
     }
@@ -1644,14 +1800,14 @@ export class MainMenu {
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
-        // Title graphic
+        // Title graphic - raised a little
         const titleGraphic = document.createElement('img');
         titleGraphic.src = this.resolveAssetPath('ASSETS/sprites/menu/titleGraphic.svg');
         titleGraphic.alt = 'Speed of Light RTS';
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
         titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = isCompactLayout ? '6px' : '8px';
+        titleGraphic.style.marginBottom = isCompactLayout ? '12px' : '20px';
         titleGraphic.style.alignSelf = 'center';
         container.appendChild(titleGraphic);
 
@@ -3410,7 +3566,7 @@ export class MainMenu {
  * Faction carousel view - displays factions in a horizontal carousel
  */
 class FactionCarouselView {
-    private static readonly ITEM_SPACING_PX = 220;
+    private static readonly ITEM_SPACING_PX = 160;
     private static readonly BASE_SIZE_PX = 320;
     private static readonly TEXT_SCALE = 2.4;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
@@ -3612,7 +3768,7 @@ class FactionCarouselView {
 
     private updateLayoutMetrics(): void {
         this.isCompactLayout = window.innerWidth < 600;
-        const targetHeight = this.isCompactLayout ? '360px' : '480px';
+        const targetHeight = this.isCompactLayout ? '460px' : '600px';
         if (this.container.style.height !== targetHeight) {
             this.container.style.height = targetHeight;
         }
@@ -4102,20 +4258,7 @@ class CarouselMenuView {
             this.container.appendChild(optionElement);
         }
         
-        // Add instruction text
-        const instructionElement = document.createElement('div');
-        instructionElement.textContent = 'Swipe or drag to browse • Tap center to select';
-        instructionElement.style.position = 'absolute';
-        instructionElement.style.bottom = '20px';
-        instructionElement.style.left = '50%';
-        instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = '#AAAAAA';
-        instructionElement.style.fontSize = `${24 * layoutScale}px`;
-        instructionElement.style.fontWeight = '300';
-        instructionElement.style.pointerEvents = 'none';
-        instructionElement.dataset.particleText = 'true';
-        instructionElement.dataset.particleColor = '#AAAAAA';
-        this.container.appendChild(instructionElement);
+        // Instruction text removed per requirements
 
         if (this.onRenderCallback) {
             this.onRenderCallback();
