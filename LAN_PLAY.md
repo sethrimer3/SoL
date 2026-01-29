@@ -53,15 +53,21 @@ SoL now supports local area network (LAN) multiplayer using WebRTC peer-to-peer 
 - Lobby system for connection setup
 - Network manager integration with game settings
 - Basic message passing infrastructure
+- Game state command replication system
+- Network command queue and processing
+- Command execution for player actions (unit movement, abilities, hero purchase, etc.)
+- Host/Client player assignment
+- Network manager integration with game core
 
 ### 🚧 In Progress / TODO
 
-- Game state synchronization (command replication)
+- Local player command capture (sending commands from input handlers)
 - Latency compensation and prediction
 - Reconnection handling
 - Player ready state management
 - In-game network statistics display
 - Game state validation and anti-cheat
+- State hash synchronization for desync detection
 
 ## Technical Details
 
@@ -78,13 +84,34 @@ The connection process uses a manual signaling mechanism:
 
 The network protocol supports the following message types:
 
-- `GAME_COMMAND`: Player actions to be replicated
-- `GAME_STATE`: Full game state synchronization
+- `GAME_COMMAND`: Player actions to be replicated (movement, abilities, purchases)
+- `GAME_STATE`: Full game state synchronization (future enhancement)
 - `PLAYER_JOIN`: New player joining the lobby
 - `PLAYER_LEAVE`: Player leaving the lobby
 - `LOBBY_UPDATE`: Lobby state changes
 - `GAME_START`: Game start signal
 - `PING`/`PONG`: Connection health checks
+
+### Game Command Replication
+
+The implementation uses a command replication system for game state synchronization:
+
+1. **Command Queue**: Each game instance maintains a `pendingCommands` queue for incoming network commands
+2. **Command Processing**: Commands are processed at the start of each game update tick, ensuring deterministic execution
+3. **Supported Commands**:
+   - `unit_move`: Move units to target position
+   - `unit_ability`: Activate unit ability in specified direction
+   - `hero_purchase`: Queue hero unit production at forge
+   - `building_purchase`: Place building at position
+   - `mirror_purchase`: Build new solar mirror
+   - `forge_move`: Set forge target position
+   - `set_rally_path`: Set minion spawn path
+
+4. **Player Assignment**:
+   - Host player is always Player 0 (bottom-left spawn)
+   - Client player is always Player 1 (top-right spawn)
+   - Each client only controls their assigned player
+   - AI is disabled for both players in LAN mode
 
 ### Future Enhancements
 
