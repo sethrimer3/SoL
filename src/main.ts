@@ -1473,6 +1473,12 @@ class GameController {
         // Don't update game logic if paused
         if (this.isPaused) return;
         
+        // Check if game has ended
+        const winner = this.game.checkVictoryConditions();
+        if (winner && this.game.isRunning) {
+            this.game.isRunning = false;
+        }
+        
         if (this.game.isRunning) {
             this.game.update(deltaTime);
         }
