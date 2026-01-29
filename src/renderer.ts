@@ -694,30 +694,7 @@ export class GameRenderer {
         // Draw Voronoi segments before the sprite
         this.drawVoronoiSegments(sun, screenPos, screenRadius);
 
-        if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
-            const diameterPx = screenRadius * 2;
-            this.ctx.drawImage(
-                sunSprite,
-                screenPos.x - screenRadius,
-                screenPos.y - screenRadius,
-                diameterPx,
-                diameterPx
-            );
-        } else {
-            // Draw sun core with gradient as fallback until sprite loads
-            const coreGradient = this.ctx.createRadialGradient(
-                screenPos.x, screenPos.y, 0,
-                screenPos.x, screenPos.y, screenRadius * 0.6
-            );
-            coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
-            coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
-            coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
-
-            this.ctx.fillStyle = coreGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        // Don't draw sprite overlay - show pure Voronoi pattern
     }
 
     /**
@@ -731,7 +708,7 @@ export class GameRenderer {
         this.ctx.clip();
 
         // Sample points in a grid within and around the sun
-        const resolution = 3; // Pixels per sample (lower = higher quality but slower)
+        const resolution = 1; // Pixels per sample (lower = higher quality but slower)
         const startX = Math.floor(screenPos.x - screenRadius);
         const endX = Math.ceil(screenPos.x + screenRadius);
         const startY = Math.floor(screenPos.y - screenRadius);
@@ -787,7 +764,7 @@ export class GameRenderer {
                 data[idx] = Math.round(closestSegment.currentColor.r);     // R
                 data[idx + 1] = Math.round(closestSegment.currentColor.g); // G
                 data[idx + 2] = Math.round(closestSegment.currentColor.b); // B
-                data[idx + 3] = 180; // Alpha (0.7 * 255 ≈ 178)
+                data[idx + 3] = 230; // Alpha - more opaque for better visibility
             }
         }
 
