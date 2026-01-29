@@ -130,6 +130,9 @@ class BackgroundParticleLayer {
     private static readonly EDGE_REPULSION_DISTANCE = 300;
     private static readonly EDGE_REPULSION_STRENGTH = 0.05;
     private static readonly EDGE_GLOW_DISTANCE = 400;
+    // Normalization factor for edge glow intensity scaled by particle count
+    // Higher particle count requires higher normalization to maintain visual consistency
+    private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -342,9 +345,11 @@ class BackgroundParticleLayer {
                 p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
             }
             // Apply minimum velocity to keep particles moving
-            if (speed > 0 && speed < BackgroundParticleLayer.MIN_VELOCITY) {
-                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MIN_VELOCITY;
-                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MIN_VELOCITY;
+            if (speed < BackgroundParticleLayer.MIN_VELOCITY) {
+                // Give particles a small random velocity if completely stopped
+                const angle = Math.random() * Math.PI * 2;
+                p1.velocityX = Math.cos(angle) * BackgroundParticleLayer.MIN_VELOCITY;
+                p1.velocityY = Math.sin(angle) * BackgroundParticleLayer.MIN_VELOCITY;
             }
             
             // Update position
@@ -427,7 +432,7 @@ class BackgroundParticleLayer {
         const glowWidth = 60;
         
         // Normalize and draw edge glows
-        const maxGlow = 3000; // Normalization factor
+        const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
         
         // Top edge
         const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
