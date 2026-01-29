@@ -1265,11 +1265,12 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
+    private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -1612,6 +1613,11 @@ export class MainMenu {
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
         }
+        // Clear any pending timeouts
+        if (this.lanServerListTimeout !== null) {
+            clearTimeout(this.lanServerListTimeout);
+            this.lanServerListTimeout = null;
+        }
         this.setTestLevelButtonVisible(false);
     }
 
@@ -1886,8 +1892,10 @@ export class MainMenu {
 
         // TODO: Implement actual LAN server discovery
         // Simulate no servers found after a delay
-        setTimeout(() => {
-            placeholderText.textContent = 'No LAN servers found';
+        this.lanServerListTimeout = window.setTimeout(() => {
+            if (placeholderText.isConnected) {
+                placeholderText.textContent = 'No LAN servers found';
+            }
         }, 1500);
 
         container.appendChild(serverListContainer);
@@ -2012,7 +2020,7 @@ export class MainMenu {
             this.createTextInput(
                 this.settings.username,
                 (value) => {
-                    this.saveUsername(value || this.generateRandomUsername());
+                    this.saveUsername(value);
                 },
                 'Enter your username'
             )
@@ -2186,7 +2194,7 @@ export class MainMenu {
                     break;
                 case 'online':
                     // Show online play placeholder
-                    this.currentScreen = 'main';
+                    this.currentScreen = 'online';
                     this.startMenuTransition();
                     this.renderOnlinePlaceholderScreen(this.contentElement);
                     break;
@@ -2913,6 +2921,21 @@ export class MainMenu {
         return container;
     }
 
+    /**
+     * Validate and sanitize username
+     */
+    private validateUsername(username: string): string {
+        // Trim and limit length
+        let sanitized = username.trim().substring(0, 20);
+        
+        // If empty or invalid, generate random username
+        if (sanitized.length < 1) {
+            return this.generateRandomUsername();
+        }
+        
+        return sanitized;
+    }
+
     private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
         const input = document.createElement('input');
         input.type = 'text';
@@ -2927,18 +2950,19 @@ export class MainMenu {
         input.style.fontFamily = 'inherit';
         input.style.fontWeight = '300';
         input.style.minWidth = '200px';
+        input.maxLength = 20;
         input.style.outline = 'none';
 
-        input.addEventListener('input', () => {
-            onChange(input.value);
+        // Update on blur instead of every keystroke for efficiency
+        input.addEventListener('blur', () => {
+            const validatedValue = this.validateUsername(input.value);
+            input.value = validatedValue;
+            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            onChange(validatedValue);
         });
 
         input.addEventListener('focus', () => {
             input.style.borderColor = 'rgba(255, 255, 255, 0.6)';
-        });
-
-        input.addEventListener('blur', () => {
-            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
         });
 
         return input;
