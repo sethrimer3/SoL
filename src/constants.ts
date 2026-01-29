@@ -43,11 +43,19 @@ export const BEAM_PERPENDICULAR_COMPONENT = 0.3; // Perpendicular push component
 export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by zero in fluid calculations
 
 // Rendering constants
-export const DUST_PARTICLE_SIZE = 2;
+export const DUST_PARTICLE_SIZE = 1;
 export const SPACE_DUST_PARTICLE_COUNT = 3000;
+export const DUST_MIN_VELOCITY = 0.08;
 export const DUST_REPULSION_RADIUS_PX = 28;
 export const DUST_REPULSION_CELL_SIZE_PX = 32;
 export const DUST_REPULSION_STRENGTH = 14;
+export const DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC = 3;
+export const MIRROR_DUST_PUSH_RADIUS_PX = 110;
+export const MIRROR_DUST_PUSH_FORCE_MULTIPLIER = 1.1;
+export const FORGE_DUST_PUSH_RADIUS_PX = 160;
+export const FORGE_DUST_PUSH_FORCE_MULTIPLIER = 0.9;
+export const STARLING_DUST_PUSH_RADIUS_PX = 50;
+export const STARLING_DUST_PUSH_FORCE_MULTIPLIER = 0.5;
 
 // Sprite scaling constants
 export const DUST_SPRITE_SCALE_FACTOR = 3;
@@ -95,6 +103,8 @@ export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Unit
 // Countdown and mirror constants
 export const COUNTDOWN_DURATION = 3.0; // Countdown duration in seconds
 export const MIRROR_COUNTDOWN_DEPLOY_DISTANCE = 150; // Distance mirrors move from base during countdown
+export const MIRROR_MAX_HEALTH = 100;
+export const MIRROR_REGEN_PER_SEC = 2;
 
 // Marine unit constants
 export const MARINE_MAX_HEALTH = 100;
@@ -128,6 +138,9 @@ export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
 export const STARLING_PROJECTILE_MAX_RANGE_PX = 140; // Maximum travel distance
 export const STARLING_PROJECTILE_HIT_RADIUS_PX = 8; // Hit radius for starling projectiles
 export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion starlings
+export const STARLING_LASER_IMPACT_PARTICLES = 3; // Number of particles spawned at laser impact
+export const STARLING_LASER_PARTICLE_SPEED = 30; // Speed of impact particles in pixels per second
+export const STARLING_LASER_PARTICLE_LIFETIME = 0.3; // Lifetime of impact particles in seconds
 export const FORGE_FLAME_ALPHA = 0.3;
 export const FORGE_FLAME_SIZE_MULTIPLIER = 0.3;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
@@ -145,7 +158,7 @@ export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
 export const FORGE_CRUNCH_WAVE_RADIUS = 300; // Radius of wave push effect
 export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
-export const STARLING_COST_PER_SOLARIUM = 50; // Solarium needed per starling spawned
+export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
 
 // Minigun building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
@@ -216,6 +229,7 @@ export const CASING_COLLISION_DAMPING = 0.3;
 
 // Unit movement constants
 export const UNIT_MOVE_SPEED = 100; // Pixels per second
+export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
@@ -228,6 +242,7 @@ export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes
 export const UNIT_STRUCTURE_STANDOFF_PX = 4; // Extra spacing to keep units outside structures
 export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint arrival detection
 export const MIN_WAYPOINT_DISTANCE = 50; // Minimum distance between path waypoints in pixels
+export const UNIT_PATH_DRAW_RADIUS = 50; // Maximum distance from unit to initiate path drawing (pixels)
 
 // Deterministic state hash cadence
 export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
@@ -235,7 +250,7 @@ export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
 export const MIRROR_MAX_GLOW_DISTANCE = 1000; // Maximum distance for glow and efficiency calculations
-export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum solarium generation multiplier at close range
+export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum energy generation multiplier at close range
 
 // Ability constants
 export const MARINE_ABILITY_COOLDOWN = 5.0; // 5 seconds
@@ -247,7 +262,7 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
-export const CLICK_DRAG_THRESHOLD = 5; // Pixels of movement to distinguish click from drag
+export const CLICK_DRAG_THRESHOLD = 10; // Pixels of movement to distinguish click from drag (increased for better tap/drag distinction)
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
 
@@ -322,6 +337,17 @@ export const BEAM_ABILITY_COOLDOWN = 8.0; // 8 seconds
 export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
 export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
 export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
+
+// Mortar unit constants (Radiant hero - stationary artillery with cone detection)
+export const MORTAR_MAX_HEALTH = 120;
+export const MORTAR_ATTACK_RANGE = 450; // Long range artillery
+export const MORTAR_ATTACK_DAMAGE = 40; // High damage per shot
+export const MORTAR_ATTACK_SPEED = 0.5; // Low fire rate (0.5 attacks per second = 2 seconds between shots)
+export const MORTAR_ABILITY_COOLDOWN = 0; // No cooldown, setup is the ability
+export const MORTAR_DETECTION_CONE_ANGLE = (150 * Math.PI) / 180; // 150 degrees detection cone
+export const MORTAR_SPLASH_RADIUS = 80; // Radius of splash damage
+export const MORTAR_SPLASH_DAMAGE_FALLOFF = 0.5; // 50% damage at edge of splash radius
+export const MORTAR_PROJECTILE_SPEED = 300; // Speed of mortar shells
 
 // AI Strategy types
 export enum AIStrategy {

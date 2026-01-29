@@ -4,6 +4,16 @@
  */
 
 import * as Constants from './constants';
+import { NetworkManager, GameCommand, NetworkEvent, MessageType } from './network';
+import { createBeamHero } from './heroes/beam';
+import { createDaggerHero } from './heroes/dagger';
+import { createDrillerHero } from './heroes/driller';
+import { createGraveHero } from './heroes/grave';
+import { createInfluenceBallHero } from './heroes/influence-ball';
+import { createMarineHero } from './heroes/marine';
+import { createMortarHero } from './heroes/mortar';
+import { createRayHero } from './heroes/ray';
+import { createTurretDeployerHero } from './heroes/turret-deployer';
 
 /**
  * Three playable factions in the game
@@ -197,10 +207,10 @@ export class Asteroid {
 }
 
 /**
- * Solar Mirror - reflects light to generate Solarium
+ * Solar Mirror - reflects light to generate Energy
  */
 export class SolarMirror {
-    health: number = 100.0;
+    health: number = Constants.MIRROR_MAX_HEALTH;
     efficiency: number = 1.0; // 0.0 to 1.0
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
@@ -371,16 +381,16 @@ export class SolarMirror {
     }
 
     /**
-     * Generate Solarium based on light received and distance to closest sun
+     * Generate Energy based on light received and distance to closest sun
      */
-    generateSolarium(deltaTime: number): number {
-        return this.getSolariumRatePerSec() * deltaTime;
+    generateEnergy(deltaTime: number): number {
+        return this.getEnergyRatePerSec() * deltaTime;
     }
 
     /**
-     * Get solarium generation rate per second
+     * Get energy generation rate per second
      */
-    getSolariumRatePerSec(): number {
+    getEnergyRatePerSec(): number {
         const baseGenerationRatePerSec = 10.0;
 
         // Apply distance-based multiplier (closer = more efficient)
@@ -607,6 +617,8 @@ export class SolarMirror {
     }
 }
 
+export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
+
 /**
  * Stellar Forge - Main base that produces units
  */
@@ -628,7 +640,7 @@ export class StellarForge {
     readonly radius: number = 40; // For rendering and selection
     crunchTimer: number = 0; // Timer until next crunch
     currentCrunch: ForgeCrunch | null = null; // Active crunch effect
-    pendingSolarium: number = 0; // Solarium accumulated since last crunch
+    pendingEnergy: number = 0; // Energy accumulated since last crunch
     minionPath: Vector2D[] = []; // Path that minions will follow
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     rotation: number = 0; // Current rotation angle in radians
@@ -666,11 +678,12 @@ export class StellarForge {
     /**
      * Attempt to produce a unit
      */
-    produceUnit(unitType: string, cost: number, playerSolarium: number): boolean {
-        if (!this.canProduceUnits()) {
+    produceUnit(unitType: string, cost: number, playerEnergy: number): boolean {
+        // Allow queuing even without sunlight (removed canProduceUnits check)
+        if (this.health <= 0) {
             return false;
         }
-        if (playerSolarium < cost) {
+        if (playerEnergy < cost) {
             return false;
         }
         this.unitQueue.push(unitType);
@@ -880,7 +893,7 @@ export class StellarForge {
 
     /**
      * Check if a crunch should happen and trigger it if ready
-     * Returns the amount of solarium to use for spawning minions
+     * Returns the amount of energy to use for spawning minions
      */
     shouldCrunch(): number {
         if (this.crunchTimer <= 0 && this.health > 0 && this.isReceivingLight) {
@@ -895,19 +908,19 @@ export class StellarForge {
                 this.rotation -= Math.PI * 2;
             }
             
-            // Return the pending solarium for minion spawning
-            const solariumForMinions = this.pendingSolarium;
-            this.pendingSolarium = 0;
-            return solariumForMinions;
+            // Return the pending energy for minion spawning
+            const energyForMinions = this.pendingEnergy;
+            this.pendingEnergy = 0;
+            return energyForMinions;
         }
         return 0;
     }
 
     /**
-     * Add solarium to pending amount (called when mirrors generate solarium)
+     * Add energy to pending amount (called when mirrors generate energy)
      */
-    addPendingSolarium(amount: number): void {
-        this.pendingSolarium += amount;
+    addPendingEnergy(amount: number): void {
+        this.pendingEnergy += amount;
     }
 
     /**
@@ -947,7 +960,7 @@ export class Building {
     health: number;
     maxHealth: number;
     attackCooldown: number = 0;
-    target: Unit | StellarForge | Building | null = null;
+    target: CombatTarget | null = null;
     buildProgress: number = 0; // 0 to 1, building is complete at 1
     isComplete: boolean = false;
     
@@ -969,7 +982,7 @@ export class Building {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
@@ -1001,7 +1014,7 @@ export class Building {
     /**
      * Check if target is dead
      */
-    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
+    protected isTargetDead(target: CombatTarget): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -1011,8 +1024,8 @@ export class Building {
     /**
      * Find nearest enemy
      */
-    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
+    protected findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
+        let nearest: CombatTarget | null = null;
         let minDistance = Infinity;
 
         for (const enemy of enemies) {
@@ -1031,7 +1044,7 @@ export class Building {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -1053,7 +1066,7 @@ export class Building {
     }
 
     /**
-     * Add build progress (from solarium or mirror light)
+     * Add build progress (from energy or mirror light)
      */
     addBuildProgress(amount: number): void {
         if (this.isComplete) return;
@@ -1092,7 +1105,7 @@ export class Minigun extends Building {
     /**
      * Attack with visual effects like Marine
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Apply damage
         super.attack(target);
 
@@ -1219,6 +1232,9 @@ export class SpaceDustSwirler extends Building {
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
+    productionQueue: string[] = []; // Queue of items to produce
+    currentProduction: string | null = null; // Currently producing item
+    productionProgress: number = 0; // Progress of current production (0-1)
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -1237,29 +1253,217 @@ export class SubsidiaryFactory extends Building {
      * Note: SubsidiaryFactory is a production building with no attack capability,
      * so we don't call super.update() which handles attack logic.
      */
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[], allUnits: Unit[]): void {
+    update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[]): void {
         // Only produce when complete
         if (!this.isComplete) return;
 
-        this.productionTimer += deltaTime;
-        
-        // Production happens at intervals (placeholder for future implementation)
-        if (this.productionTimer >= Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL) {
-            this.productionTimer = 0;
-            // TODO: Implement solar mirror and special unit production
+        // Start production if idle
+        if (!this.currentProduction && this.productionQueue.length > 0) {
+            this.currentProduction = this.productionQueue.shift() || null;
+            this.productionProgress = 0;
         }
+
+        // Advance production
+        if (this.currentProduction) {
+            const productionTime = this.getProductionTime(this.currentProduction);
+            this.productionProgress += deltaTime / productionTime;
+            
+            if (this.productionProgress >= 1.0) {
+                // Production complete
+                this.productionProgress = 0;
+                this.currentProduction = null;
+            }
+        }
+    }
+    
+    /**
+     * Enqueue an item for production
+     */
+    enqueueProduction(itemType: string): void {
+        this.productionQueue.push(itemType);
+    }
+    
+    /**
+     * Get the completed item and clear it
+     */
+    getCompletedProduction(): string | null {
+        if (this.currentProduction && this.productionProgress >= 1.0) {
+            const completed = this.currentProduction;
+            this.currentProduction = null;
+            this.productionProgress = 0;
+            return completed;
+        }
+        return null;
+    }
+    
+    /**
+     * Get production time for an item type
+     */
+    private getProductionTime(itemType: string): number {
+        if (itemType === 'solar-mirror') {
+            return Constants.BUILDING_BUILD_TIME;
+        }
+        return Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL;
     }
 }
 
 /**
  * Sun/Star - Light source
  */
+/**
+ * Represents a Voronoi segment within the sun
+ */
+export interface SunVoronoiSegment {
+    seedPoint: Vector2D; // The seed point for this Voronoi cell
+    startColor: { r: number; g: number; b: number };
+    currentColor: { r: number; g: number; b: number };
+    targetColor: { r: number; g: number; b: number };
+    transitionProgress: number;
+    transitionSpeed: number;
+}
+
 export class Sun {
+    public voronoiSegments: SunVoronoiSegment[] = [];
+
     constructor(
         public position: Vector2D,
         public intensity: number = 1.0,
         public radius: number = 100.0
-    ) {}
+    ) {
+        this.initializeVoronoiSegments();
+    }
+
+    /**
+     * Initialize Voronoi segments within the sun
+     */
+    private initializeVoronoiSegments(): void {
+        const numSegments = 80; // Number of Voronoi segments
+        
+        // Generate seed points for Voronoi diagram
+        // Use Poisson disk sampling for more even distribution
+        const seedPoints: Vector2D[] = [];
+        const minDistance = this.radius * 0.15; // Minimum distance between seed points (reduced for 80 segments)
+        const maxAttempts = 30;
+        const maxTotalAttempts = numSegments * maxAttempts * 2; // Safety limit
+        let totalAttempts = 0;
+        
+        // Start with a seed at the center
+        seedPoints.push(new Vector2D(this.position.x, this.position.y));
+        
+        // Generate remaining seeds using rejection sampling
+        while (seedPoints.length < numSegments && totalAttempts < maxTotalAttempts) {
+            let placed = false;
+            
+            for (let attempt = 0; attempt < maxAttempts && !placed; attempt++) {
+                totalAttempts++;
+                
+                // Generate random point within circle
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.sqrt(Math.random()) * this.radius * 0.9;
+                
+                const candidatePoint = new Vector2D(
+                    this.position.x + Math.cos(angle) * distance,
+                    this.position.y + Math.sin(angle) * distance
+                );
+                
+                // Check if it's far enough from all existing seeds
+                let tooClose = false;
+                for (const existingSeed of seedPoints) {
+                    const dx = candidatePoint.x - existingSeed.x;
+                    const dy = candidatePoint.y - existingSeed.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < minDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                
+                if (!tooClose) {
+                    seedPoints.push(candidatePoint);
+                    placed = true;
+                }
+            }
+            
+            // If we couldn't place after maxAttempts, reduce minDistance requirement
+            if (!placed && seedPoints.length < numSegments) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.sqrt(Math.random()) * this.radius * 0.9;
+                seedPoints.push(new Vector2D(
+                    this.position.x + Math.cos(angle) * distance,
+                    this.position.y + Math.sin(angle) * distance
+                ));
+            }
+        }
+        
+        // Create segments with initial colors
+        for (const seedPoint of seedPoints) {
+            const initialColor = this.getWeightedRandomColor();
+            
+            this.voronoiSegments.push({
+                seedPoint: seedPoint,
+                startColor: { ...initialColor },
+                currentColor: { ...initialColor },
+                targetColor: { ...initialColor },
+                transitionProgress: 1.0,
+                transitionSpeed: 0.0008 + Math.random() * 0.0015 // Slow random speed
+            });
+        }
+    }
+
+    /**
+     * Get a weighted random sun color
+     * - Common: warm yellow and orange
+     * - Slightly rare: red and deep orange
+     * - Very rare: dark grey and deep red
+     */
+    private getWeightedRandomColor(): { r: number; g: number; b: number } {
+        const rand = Math.random();
+        
+        // Weighted distribution
+        if (rand < 0.25) {
+            // Warm yellow (common)
+            return { r: 255, g: 220 + Math.random() * 35, b: 100 + Math.random() * 50 };
+        } else if (rand < 0.50) {
+            // Orange (common)
+            return { r: 255, g: 140 + Math.random() * 40, b: 50 + Math.random() * 30 };
+        } else if (rand < 0.70) {
+            // Red (slightly rare)
+            return { r: 220 + Math.random() * 35, g: 50 + Math.random() * 40, b: 30 + Math.random() * 30 };
+        } else if (rand < 0.85) {
+            // Deep orange (slightly rare)
+            return { r: 255, g: 80 + Math.random() * 60, b: 20 + Math.random() * 30 };
+        } else if (rand < 0.95) {
+            // Deep red (very rare)
+            return { r: 150 + Math.random() * 50, g: 20 + Math.random() * 30, b: 10 + Math.random() * 20 };
+        } else {
+            // Dark grey (very rare)
+            return { r: 60 + Math.random() * 40, g: 50 + Math.random() * 30, b: 45 + Math.random() * 30 };
+        }
+    }
+
+    /**
+     * Update Voronoi segment color animations
+     */
+    public updateVoronoiSegments(deltaTime: number): void {
+        for (const segment of this.voronoiSegments) {
+            segment.transitionProgress += segment.transitionSpeed * deltaTime;
+            
+            if (segment.transitionProgress >= 1.0) {
+                // Transition complete, pick new target color
+                segment.transitionProgress = 0;
+                segment.startColor = { ...segment.targetColor };
+                segment.currentColor = { ...segment.targetColor };
+                segment.targetColor = this.getWeightedRandomColor();
+                segment.transitionSpeed = 0.0008 + Math.random() * 0.0015; // New random speed
+            } else {
+                // Interpolate between start and target color using linear interpolation
+                const t = segment.transitionProgress;
+                segment.currentColor.r = segment.startColor.r + (segment.targetColor.r - segment.startColor.r) * t;
+                segment.currentColor.g = segment.startColor.g + (segment.targetColor.g - segment.startColor.g) * t;
+                segment.currentColor.b = segment.startColor.b + (segment.targetColor.b - segment.startColor.b) * t;
+            }
+        }
+    }
 
     /**
      * Emit a light ray in specified direction
@@ -1273,7 +1477,7 @@ export class Sun {
  * Player in the game
  */
 export class Player {
-    solarium: number = 100.0; // Starting currency
+    energy: number = 100.0; // Starting currency
     stellarForge: StellarForge | null = null;
     solarMirrors: SolarMirror[] = [];
     units: Unit[] = [];
@@ -1289,7 +1493,7 @@ export class Player {
     // Statistics tracking
     unitsCreated: number = 0;
     unitsLost: number = 0;
-    solariumGathered: number = 0;
+    energyGathered: number = 0;
 
     constructor(
         public name: string,
@@ -1304,19 +1508,19 @@ export class Player {
     }
 
     /**
-     * Add Solarium to player's resources
+     * Add Energy to player's resources
      */
-    addSolarium(amount: number): void {
-        this.solarium += amount;
-        this.solariumGathered += amount;
+    addEnergy(amount: number): void {
+        this.energy += amount;
+        this.energyGathered += amount;
     }
 
     /**
-     * Attempt to spend Solarium
+     * Attempt to spend Energy
      */
-    spendSolarium(amount: number): boolean {
-        if (this.solarium >= amount) {
-            this.solarium -= amount;
+    spendEnergy(amount: number): boolean {
+        if (this.energy >= amount) {
+            this.energy -= amount;
             return true;
         }
         return false;
@@ -1408,6 +1612,18 @@ export class SpaceDustParticle {
         // Apply friction to gradually slow down
         this.velocity.x *= 0.98;
         this.velocity.y *= 0.98;
+
+        const driftSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        if (driftSpeed < Constants.DUST_MIN_VELOCITY) {
+            if (driftSpeed === 0) {
+                this.velocity.x = Constants.DUST_MIN_VELOCITY;
+                this.velocity.y = 0;
+            } else {
+                const driftScale = Constants.DUST_MIN_VELOCITY / driftSpeed;
+                this.velocity.x *= driftScale;
+                this.velocity.y *= driftScale;
+            }
+        }
     }
 
     /**
@@ -1726,7 +1942,7 @@ export class AbilityBullet {
     /**
      * Check if bullet hits a target
      */
-    checkHit(target: Unit | StellarForge): boolean {
+    checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
         return distance < 10; // Hit radius
     }
@@ -1763,9 +1979,53 @@ export class MinionProjectile {
         return this.distanceTraveledPx >= this.maxRangePx;
     }
 
-    checkHit(target: Unit | StellarForge | Building): boolean {
+    checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
         return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
+    }
+}
+
+/**
+ * Laser beam fired by Starlings (instant hit-scan weapon)
+ */
+export class LaserBeam {
+    lifetime: number = 0;
+    maxLifetime: number = 0.1; // 100ms visible duration
+    
+    constructor(
+        public startPos: Vector2D,
+        public endPos: Vector2D,
+        public owner: Player,
+        public damage: number
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Impact particle spawned at laser beam endpoint
+ */
+export class ImpactParticle {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public velocity: Vector2D,
+        public maxLifetime: number,
+        public faction: Faction
+    ) {}
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+    
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
     }
 }
 
@@ -1777,12 +2037,16 @@ export class Unit {
     maxHealth: number;
     attackCooldown: number = 0;
     abilityCooldown: number = 0; // Cooldown for special ability
-    target: Unit | StellarForge | Building | null = null;
+    target: CombatTarget | null = null;
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     collisionRadiusPx: number;
+    rotation: number = 0; // Current facing angle in radians
+    velocity: Vector2D = new Vector2D(0, 0);
+    protected waypoints: Vector2D[] = []; // Path waypoints to follow
+    protected currentWaypointIndex: number = 0; // Current waypoint in path
     
     constructor(
         public position: Vector2D,
@@ -1804,7 +2068,7 @@ export class Unit {
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
@@ -1833,6 +2097,38 @@ export class Unit {
                 this.attackCooldown = 1.0 / this.attackSpeed;
             }
         }
+
+        // Rotate to face target when attacking (overrides movement rotation)
+        if (this.target && !this.isTargetDead(this.target)) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= this.attackRange) {
+                const dx = this.target.position.x - this.position.x;
+                const dy = this.target.position.y - this.position.y;
+                const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
+                const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
+                const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                
+                if (Math.abs(rotationDelta) <= maxRotationStep) {
+                    this.rotation = targetRotation;
+                } else {
+                    this.rotation += Math.sign(rotationDelta) * maxRotationStep;
+                }
+                
+                // Normalize rotation to [0, 2π)
+                this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            }
+        }
+    }
+
+    /**
+     * Set a path for the unit to follow through multiple waypoints
+     */
+    setPath(waypoints: Vector2D[]): void {
+        this.waypoints = waypoints.map(wp => new Vector2D(wp.x, wp.y));
+        this.currentWaypointIndex = 0;
+        if (this.waypoints.length > 0) {
+            this.rallyPoint = this.waypoints[0];
+        }
     }
 
     protected moveTowardRallyPoint(
@@ -1842,6 +2138,8 @@ export class Unit {
         asteroids: Asteroid[] = []
     ): void {
         if (!this.rallyPoint) {
+            this.velocity.x = 0;
+            this.velocity.y = 0;
             return;
         }
 
@@ -1850,8 +2148,21 @@ export class Unit {
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
 
         if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
-            this.rallyPoint = null;
-            return;
+            // Check if there are more waypoints to follow
+            if (this.waypoints.length > 0 && this.currentWaypointIndex < this.waypoints.length - 1) {
+                // Move to next waypoint
+                this.currentWaypointIndex++;
+                this.rallyPoint = this.waypoints[this.currentWaypointIndex];
+                return;
+            } else {
+                // No more waypoints, clear everything
+                this.rallyPoint = null;
+                this.waypoints = [];
+                this.currentWaypointIndex = 0;
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+                return;
+            }
         }
 
         let directionX = dx / distanceToTarget;
@@ -1953,9 +2264,30 @@ export class Unit {
             directionY /= directionLength;
         }
 
+        // Update rotation to face movement direction with smooth turning
+        if (directionLength > 0) {
+            // Add π/2 so the TOP of the sprite is treated as the FRONT (not the bottom/right side)
+            const targetRotation = Math.atan2(directionY, directionX) + Math.PI / 2;
+            const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
+            const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+            
+            if (Math.abs(rotationDelta) <= maxRotationStep) {
+                this.rotation = targetRotation;
+            } else {
+                this.rotation += Math.sign(rotationDelta) * maxRotationStep;
+            }
+            
+            // Normalize rotation to [0, 2π) using modulo
+            this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+        }
+
         const moveDistance = moveSpeed * deltaTime;
-        this.position.x += directionX * moveDistance;
-        this.position.y += directionY * moveDistance;
+        const moveX = directionX * moveDistance;
+        const moveY = directionY * moveDistance;
+        this.position.x += moveX;
+        this.position.y += moveY;
+        this.velocity.x = directionX * moveSpeed;
+        this.velocity.y = directionY * moveSpeed;
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
@@ -1964,9 +2296,19 @@ export class Unit {
     }
 
     /**
+     * Get shortest angle delta between two angles (in radians)
+     */
+    private getShortestAngleDelta(from: number, to: number): number {
+        let delta = to - from;
+        while (delta > Math.PI) delta -= Math.PI * 2;
+        while (delta < -Math.PI) delta += Math.PI * 2;
+        return delta;
+    }
+
+    /**
      * Check if target is dead
      */
-    protected isTargetDead(target: Unit | StellarForge | Building): boolean {
+    protected isTargetDead(target: CombatTarget): boolean {
         if ('health' in target) {
             return target.health <= 0;
         }
@@ -1976,8 +2318,8 @@ export class Unit {
     /**
      * Find nearest enemy
      */
-    protected findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
+    protected findNearestEnemy(enemies: CombatTarget[]): CombatTarget | null {
+        let nearest: CombatTarget | null = null;
         let minDistance = Infinity;
 
         for (const enemy of enemies) {
@@ -1996,7 +2338,7 @@ export class Unit {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -2045,315 +2387,83 @@ export class Unit {
     }
 }
 
-/**
- * Marine unit - fast shooting with visual effects
- */
-export class Marine extends Unit {
-    private lastShotEffects: { 
-        muzzleFlash?: MuzzleFlash, 
-        casing?: BulletCasing, 
-        bouncingBullet?: BouncingBullet 
-    } = {};
+const { Marine } = createMarineHero({
+    Unit,
+    Vector2D,
+    Constants,
+    MuzzleFlash,
+    BulletCasing,
+    BouncingBullet,
+    AbilityBullet
+});
 
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.MARINE_MAX_HEALTH,
-            Constants.MARINE_ATTACK_RANGE,
-            Constants.MARINE_ATTACK_DAMAGE,
-            Constants.MARINE_ATTACK_SPEED,
-            Constants.MARINE_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Marine is a hero unit for Radiant faction
-    }
+const { Grave, GraveProjectile } = createGraveHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-    /**
-     * Attack with visual effects
-     */
-    attack(target: Unit | StellarForge | Building): void {
-        // Apply damage
-        super.attack(target);
+const { Ray, RayBeamSegment } = createRayHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Calculate angle to target
-        const dx = target.position.x - this.position.x;
-        const dy = target.position.y - this.position.y;
-        const angle = Math.atan2(dy, dx);
+const { InfluenceBall, InfluenceZone, InfluenceBallProjectile } = createInfluenceBallHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
-            new Vector2D(this.position.x, this.position.y),
-            angle
-        );
+const { TurretDeployer, DeployedTurret } = createTurretDeployerHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create bullet casing with slight angle deviation
-        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5; // Eject to the side
-        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
-                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
-        this.lastShotEffects.casing = new BulletCasing(
-            new Vector2D(this.position.x, this.position.y),
-            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
-        );
+const { Driller } = createDrillerHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Create bouncing bullet at target position
-        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0; // Bounce away from impact
-        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
-                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
-        this.lastShotEffects.bouncingBullet = new BouncingBullet(
-            new Vector2D(target.position.x, target.position.y),
-            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
-        );
-    }
+const { Dagger } = createDaggerHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
 
-    /**
-     * Get effects from last shot (for game state to manage)
-     */
-    getAndClearLastShotEffects(): { 
-        muzzleFlash?: MuzzleFlash, 
-        casing?: BulletCasing, 
-        bouncingBullet?: BouncingBullet 
-    } {
-        const effects = this.lastShotEffects;
-        this.lastShotEffects = {};
-        return effects;
-    }
+const { Beam } = createBeamHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
 
-    /**
-     * Use special ability: Bullet Storm
-     * Fires a spread of bullets in the specified direction
-     */
-    useAbility(direction: Vector2D): boolean {
-        // Check if ability is ready
-        if (!super.useAbility(direction)) {
-            return false;
-        }
+const { Mortar, MortarProjectile } = createMortarHero({
+    Unit,
+    Vector2D,
+    Constants
+});
 
-        // Calculate base angle from direction
-        const baseAngle = Math.atan2(direction.y, direction.x);
-        
-        // Create bullets with spread
-        const spreadAngle = Constants.MARINE_ABILITY_SPREAD_ANGLE;
-        const bulletCount = Constants.MARINE_ABILITY_BULLET_COUNT;
-        
-        for (let i = 0; i < bulletCount; i++) {
-            // Calculate angle for this bullet within the spread
-            // Distribute bullets evenly within the spread angle
-            // Use max to avoid division by zero if bulletCount is 1
-            const angleOffset = (i / Math.max(bulletCount - 1, 1) - 0.5) * spreadAngle * 2;
-            const bulletAngle = baseAngle + angleOffset;
-            
-            // Calculate velocity
-            const speed = Constants.MARINE_ABILITY_BULLET_SPEED;
-            const velocity = new Vector2D(
-                Math.cos(bulletAngle) * speed,
-                Math.sin(bulletAngle) * speed
-            );
-            
-            // Create bullet
-            const bullet = new AbilityBullet(
-                new Vector2D(this.position.x, this.position.y),
-                velocity,
-                this.owner
-            );
-            
-            this.lastAbilityEffects.push(bullet);
-        }
-
-        return true;
-    }
-}
-
-/**
- * Projectile that orbits a Grave unit with gravitational attraction
- */
-export class GraveProjectile {
-    velocity: Vector2D;
-    lifetime: number = 0;
-    isAttacking: boolean = false;
-    targetEnemy: Unit | StellarForge | Building | null = null;
-    trail: Vector2D[] = []; // Trail of positions
-    
-    constructor(
-        public position: Vector2D,
-        velocity: Vector2D,
-        public owner: Player
-    ) {
-        this.velocity = velocity;
-    }
-
-    /**
-     * Update projectile position with gravitational attraction to grave
-     */
-    update(deltaTime: number, gravePosition: Vector2D): void {
-        if (!this.isAttacking) {
-            // Apply gravitational attraction to grave
-            const dx = gravePosition.x - this.position.x;
-            const dy = gravePosition.y - this.position.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            if (distance > 0) {
-                // Normalize direction
-                const dirX = dx / distance;
-                const dirY = dy / distance;
-                
-                // Apply attraction force
-                const force = Constants.GRAVE_PROJECTILE_ATTRACTION_FORCE;
-                this.velocity.x += dirX * force * deltaTime;
-                this.velocity.y += dirY * force * deltaTime;
-                
-                // Maintain minimum speed to keep orbiting
-                const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-                if (speed < Constants.GRAVE_PROJECTILE_MIN_SPEED) {
-                    const scale = Constants.GRAVE_PROJECTILE_MIN_SPEED / speed;
-                    this.velocity.x *= scale;
-                    this.velocity.y *= scale;
-                }
-            }
-        }
-        
-        // Update position
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-        
-        // Update trail when attacking
-        if (this.isAttacking) {
-            this.trail.push(new Vector2D(this.position.x, this.position.y));
-            if (this.trail.length > Constants.GRAVE_PROJECTILE_TRAIL_LENGTH) {
-                this.trail.shift(); // Remove oldest trail point
-            }
-            this.lifetime += deltaTime;
-        }
-        
-        // Check if hit target
-        if (this.isAttacking && this.targetEnemy) {
-            const distance = this.position.distanceTo(this.targetEnemy.position);
-            if (distance < Constants.GRAVE_PROJECTILE_HIT_DISTANCE) {
-                // Hit the target
-                if ('health' in this.targetEnemy) {
-                    this.targetEnemy.health -= Constants.GRAVE_ATTACK_DAMAGE;
-                }
-                // Mark for removal by returning to grave
-                this.isAttacking = false;
-                this.trail = [];
-                this.targetEnemy = null;
-            }
-        }
-    }
-
-    /**
-     * Launch projectile toward target
-     */
-    launchAtTarget(target: Unit | StellarForge | Building): void {
-        this.isAttacking = true;
-        this.targetEnemy = target;
-        this.trail = [];
-        this.lifetime = 0;
-        
-        // Set velocity toward target
-        const dx = target.position.x - this.position.x;
-        const dy = target.position.y - this.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance > 0) {
-            const dirX = dx / distance;
-            const dirY = dy / distance;
-            this.velocity.x = dirX * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
-            this.velocity.y = dirY * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
-        }
-    }
-
-    /**
-     * Reset projectile to orbit mode
-     */
-    returnToOrbit(): void {
-        this.isAttacking = false;
-        this.trail = [];
-        this.targetEnemy = null;
-    }
-}
-
-/**
- * Grave unit - has orbiting projectiles that attack enemies
- */
-export class Grave extends Unit {
-    projectiles: GraveProjectile[] = [];
-    projectileLaunchCooldown: number = 0;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.GRAVE_MAX_HEALTH,
-            Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER, // Hero units have reduced range
-            Constants.GRAVE_ATTACK_DAMAGE,
-            Constants.GRAVE_ATTACK_SPEED,
-            5.0 // Default ability cooldown
-        );
-        this.isHero = true; // Grave is a hero unit for Aurum faction
-        
-        // Initialize orbiting projectiles
-        for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {
-            const angle = (i / Constants.GRAVE_NUM_PROJECTILES) * Math.PI * 2;
-            const offsetX = Math.cos(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
-            const offsetY = Math.sin(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
-            
-            // Give initial tangential velocity for orbit
-            const tangentVelX = -Math.sin(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-            const tangentVelY = Math.cos(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-            
-            this.projectiles.push(new GraveProjectile(
-                new Vector2D(position.x + offsetX, position.y + offsetY),
-                new Vector2D(tangentVelX, tangentVelY),
-                owner
-            ));
-        }
-    }
-
-    /**
-     * Update grave and its projectiles
-     */
-    update(deltaTime: number, enemies: (Unit | StellarForge)[], allUnits: Unit[], asteroids: Asteroid[] = []): void {
-        // Update base unit logic
-        super.update(deltaTime, enemies, allUnits, asteroids);
-        
-        // Update projectile launch cooldown
-        if (this.projectileLaunchCooldown > 0) {
-            this.projectileLaunchCooldown -= deltaTime;
-        }
-        
-        // Update all projectiles
-        for (const projectile of this.projectiles) {
-            projectile.update(deltaTime, this.position);
-        }
-        
-        // Launch projectiles at enemies if in range
-        if (this.target && this.projectileLaunchCooldown <= 0) {
-            const distance = this.position.distanceTo(this.target.position);
-            if (distance <= this.attackRange) {
-                // Find an available projectile (not currently attacking)
-                const availableProjectile = this.projectiles.find(p => !p.isAttacking);
-                if (availableProjectile) {
-                    availableProjectile.launchAtTarget(this.target);
-                    this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
-                }
-            }
-        }
-    }
-
-    /**
-     * Grave doesn't use the base attack (projectiles do the damage)
-     */
-    attack(target: Unit | StellarForge | Building): void {
-        // Projectiles handle the actual attacking
-    }
-
-    /**
-     * Get all projectiles for rendering
-     */
-    getProjectiles(): GraveProjectile[] {
-        return this.projectiles;
-    }
-}
+export {
+    Marine,
+    Grave,
+    GraveProjectile,
+    Ray,
+    RayBeamSegment,
+    InfluenceBall,
+    InfluenceZone,
+    InfluenceBallProjectile,
+    TurretDeployer,
+    DeployedTurret,
+    Driller,
+    Dagger,
+    Beam,
+    Mortar,
+    MortarProjectile
+};
 
 /**
  * Starling unit - minion that spawns from stellar forge and has AI behavior
@@ -2364,7 +2474,9 @@ export class Starling extends Unit {
     private currentPathWaypointIndex: number = 0; // Current waypoint index in the assigned path
     private assignedPath: Vector2D[] = [];
     private hasManualOrder: boolean = false;
-    private lastShotProjectiles: MinionProjectile[] = [];
+    private lastShotLasers: LaserBeam[] = [];
+    private pathHash: string = ''; // Unique identifier for the assigned path
+    private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
@@ -2378,15 +2490,48 @@ export class Starling extends Unit {
             Constants.STARLING_COLLISION_RADIUS_PX
         );
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.pathHash = this.generatePathHash(this.assignedPath);
+    }
+    
+    /**
+     * Generate a unique hash for the assigned path to identify starlings with the same movement instructions
+     */
+    private generatePathHash(path: Vector2D[]): string {
+        if (path.length === 0) {
+            return 'no-path';
+        }
+        // Create hash from path waypoints (rounded to avoid floating point issues)
+        return path.map(waypoint => 
+            `${Math.round(waypoint.x)},${Math.round(waypoint.y)}`
+        ).join('|');
     }
 
     setManualRallyPoint(target: Vector2D): void {
         this.rallyPoint = target;
         this.hasManualOrder = true;
+        // Reset the final waypoint flag since we're now moving to a new destination
+        this.hasReachedFinalWaypoint = false;
+    }
+
+    setPath(path: Vector2D[]): void {
+        this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.pathHash = this.generatePathHash(this.assignedPath);
+        this.currentPathWaypointIndex = 0;
+        this.hasManualOrder = true;
+        this.hasReachedFinalWaypoint = false;
+        this.rallyPoint = null; // Clear rally point when following a path
     }
 
     getAssignedPathLength(): number {
         return this.assignedPath.length;
+    }
+    
+    getPathHash(): string {
+        return this.pathHash;
+    }
+    
+    getHasReachedFinalWaypoint(): boolean {
+        return this.hasReachedFinalWaypoint;
     }
 
     getCurrentPathWaypointIndex(): number {
@@ -2398,15 +2543,20 @@ export class Starling extends Unit {
     }
 
     getAndClearLastShotProjectiles(): MinionProjectile[] {
-        const projectiles = this.lastShotProjectiles;
-        this.lastShotProjectiles = [];
-        return projectiles;
+        // Legacy method - no longer used for lasers
+        return [];
+    }
+    
+    getAndClearLastShotLasers(): LaserBeam[] {
+        const lasers = this.lastShotLasers;
+        this.lastShotLasers = [];
+        return lasers;
     }
 
     /**
      * Update starling AI behavior (call this before regular update)
      */
-    updateAI(gameState: GameState, enemies: (Unit | StellarForge | Building)[]): void {
+    updateAI(gameState: GameState, enemies: CombatTarget[]): void {
         if (this.hasManualOrder) {
             return;
         }
@@ -2427,6 +2577,7 @@ export class Starling extends Unit {
                 } else {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = rallyTarget;
+                    this.hasReachedFinalWaypoint = true;
                     return;
                 }
             } else {
@@ -2534,11 +2685,69 @@ export class Starling extends Unit {
     }
 
     /**
+     * Override moveTowardRallyPoint to implement group stopping behavior
+     * Starlings at their final waypoint will stop when touching other stopped starlings from the same group
+     */
+    protected moveTowardRallyPoint(
+        deltaTime: number,
+        moveSpeed: number,
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
+        // Check if we should stop due to touching a stopped starling from our group
+        // This only applies when we're heading to the final waypoint (not intermediate waypoints)
+        if (this.assignedPath.length > 0 && 
+            this.currentPathWaypointIndex === this.assignedPath.length - 1 &&
+            !this.hasReachedFinalWaypoint &&
+            this.rallyPoint !== null) {
+            
+            // Check for collision with other stopped starlings from the same group
+            const stopDistance = Constants.UNIT_AVOIDANCE_RANGE_PX; // Use avoidance range as collision detection range
+            
+            for (let i = 0; i < allUnits.length; i++) {
+                const otherUnit = allUnits[i];
+                
+                // Skip if not a starling, is self, is dead, or is not from the same team
+                if (!(otherUnit instanceof Starling) || otherUnit === this || otherUnit.isDead() || otherUnit.owner !== this.owner) {
+                    continue;
+                }
+                
+                // Check if other starling is from the same group (same path hash)
+                if (otherUnit.pathHash !== this.pathHash) {
+                    continue;
+                }
+                
+                // Check if other starling has reached its final waypoint and stopped
+                if (!otherUnit.hasReachedFinalWaypoint) {
+                    continue;
+                }
+                
+                // Check if we're close enough to the stopped starling
+                const offsetX = this.position.x - otherUnit.position.x;
+                const offsetY = this.position.y - otherUnit.position.y;
+                const distanceSq = offsetX * offsetX + offsetY * offsetY;
+                
+                if (distanceSq < stopDistance * stopDistance) {
+                    // Stop this starling - we've touched a stopped starling from our group
+                    this.rallyPoint = null;
+                    this.velocity.x = 0;
+                    this.velocity.y = 0;
+                    this.hasReachedFinalWaypoint = true;
+                    return;
+                }
+            }
+        }
+        
+        // Call parent implementation for normal movement
+        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids);
+    }
+
+    /**
      * Override update to use custom movement speed
      */
     update(
         deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
+        enemies: CombatTarget[],
         allUnits: Unit[] = [],
         asteroids: Asteroid[] = []
     ): void {
@@ -2573,23 +2782,27 @@ export class Starling extends Unit {
         }
     }
 
-    attack(target: Unit | StellarForge | Building): void {
+    attack(target: CombatTarget): void {
         const dx = target.position.x - this.position.x;
         const dy = target.position.y - this.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         if (distance <= 0) {
             return;
         }
-        const velocity = new Vector2D(
-            (dx / distance) * Constants.STARLING_PROJECTILE_SPEED,
-            (dy / distance) * Constants.STARLING_PROJECTILE_SPEED
-        );
-        this.lastShotProjectiles.push(new MinionProjectile(
+        
+        // Create laser beam for visual effect
+        const laserBeam = new LaserBeam(
             new Vector2D(this.position.x, this.position.y),
-            velocity,
+            new Vector2D(target.position.x, target.position.y),
             this.owner,
             this.attackDamage
-        ));
+        );
+        this.lastShotLasers.push(laserBeam);
+        
+        // Deal instant damage to target
+        if ('takeDamage' in target) {
+            target.takeDamage(this.attackDamage);
+        }
     }
 }
 
@@ -2675,571 +2888,6 @@ export class WarpGate {
     }
 }
 
-/**
- * Ray beam segment for bouncing beam ability
- */
-export class RayBeamSegment {
-    lifetime: number = 0;
-    maxLifetime: number = 0.5; // 0.5 seconds per segment
-    
-    constructor(
-        public startPos: Vector2D,
-        public endPos: Vector2D,
-        public owner: Player
-    ) {}
-    
-    update(deltaTime: number): boolean {
-        this.lifetime += deltaTime;
-        return this.lifetime >= this.maxLifetime;
-    }
-}
-
-/**
- * Ray hero unit (Solari faction) - shoots bouncing beam
- */
-export class Ray extends Unit {
-    private beamSegments: RayBeamSegment[] = [];
-    drillDirection: Vector2D | null = null; // Used temporarily to store ability direction
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.RAY_MAX_HEALTH,
-            Constants.RAY_ATTACK_RANGE,
-            Constants.RAY_ATTACK_DAMAGE,
-            Constants.RAY_ATTACK_SPEED,
-            Constants.RAY_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Ray is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Ray's bouncing beam ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Store direction for GameState to process
-        this.drillDirection = direction;
-        
-        return true;
-    }
-    
-    /**
-     * Get beam segments for rendering
-     */
-    getBeamSegments(): RayBeamSegment[] {
-        return this.beamSegments;
-    }
-    
-    /**
-     * Set beam segments (called by GameState after calculating bounces)
-     */
-    setBeamSegments(segments: RayBeamSegment[]): void {
-        this.beamSegments = segments;
-    }
-    
-    /**
-     * Update beam segments
-     */
-    updateBeamSegments(deltaTime: number): void {
-        this.beamSegments = this.beamSegments.filter(segment => !segment.update(deltaTime));
-    }
-}
-
-/**
- * Influence zone created by InfluenceBall ability
- */
-export class InfluenceZone {
-    lifetime: number = 0;
-    
-    constructor(
-        public position: Vector2D,
-        public owner: Player,
-        public radius: number = Constants.INFLUENCE_BALL_EXPLOSION_RADIUS,
-        public duration: number = Constants.INFLUENCE_BALL_DURATION
-    ) {}
-    
-    update(deltaTime: number): boolean {
-        this.lifetime += deltaTime;
-        return this.lifetime >= this.duration;
-    }
-    
-    isExpired(): boolean {
-        return this.lifetime >= this.duration;
-    }
-}
-
-/**
- * Influence Ball projectile
- */
-export class InfluenceBallProjectile {
-    velocity: Vector2D;
-    lifetime: number = 0;
-    maxLifetime: number = 5.0; // Max 5 seconds before auto-explode
-    
-    constructor(
-        public position: Vector2D,
-        velocity: Vector2D,
-        public owner: Player
-    ) {
-        this.velocity = velocity;
-    }
-    
-    update(deltaTime: number): void {
-        this.position.x += this.velocity.x * deltaTime;
-        this.position.y += this.velocity.y * deltaTime;
-        this.lifetime += deltaTime;
-    }
-    
-    shouldExplode(): boolean {
-        return this.lifetime >= this.maxLifetime;
-    }
-}
-
-/**
- * Influence Ball hero unit (Solari faction) - creates temporary influence zones
- */
-export class InfluenceBall extends Unit {
-    private projectileToCreate: InfluenceBallProjectile | null = null;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.INFLUENCE_BALL_MAX_HEALTH,
-            Constants.INFLUENCE_BALL_ATTACK_RANGE,
-            Constants.INFLUENCE_BALL_ATTACK_DAMAGE,
-            Constants.INFLUENCE_BALL_ATTACK_SPEED,
-            Constants.INFLUENCE_BALL_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // InfluenceBall is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Influence Ball's area control ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Create influence ball projectile
-        const velocity = new Vector2D(
-            direction.x * Constants.INFLUENCE_BALL_PROJECTILE_SPEED,
-            direction.y * Constants.INFLUENCE_BALL_PROJECTILE_SPEED
-        );
-        
-        this.projectileToCreate = new InfluenceBallProjectile(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner
-        );
-        
-        return true;
-    }
-    
-    /**
-     * Get and clear pending projectile
-     */
-    getAndClearProjectile(): InfluenceBallProjectile | null {
-        const proj = this.projectileToCreate;
-        this.projectileToCreate = null;
-        return proj;
-    }
-}
-
-/**
- * Deployed turret that attaches to asteroids
- */
-export class DeployedTurret {
-    health: number;
-    maxHealth: number = Constants.DEPLOYED_TURRET_MAX_HEALTH;
-    attackCooldown: number = 0;
-    target: Unit | StellarForge | Building | null = null;
-    
-    constructor(
-        public position: Vector2D,
-        public owner: Player,
-        public attachedToAsteroid: Asteroid | null = null
-    ) {
-        this.health = this.maxHealth;
-    }
-    
-    update(deltaTime: number, enemies: (Unit | StellarForge | Building)[]): void {
-        // Update attack cooldown
-        if (this.attackCooldown > 0) {
-            this.attackCooldown -= deltaTime;
-        }
-        
-        // Find target if don't have one or current target is dead
-        if (!this.target || this.isTargetDead(this.target)) {
-            this.target = this.findNearestEnemy(enemies);
-        }
-        
-        // Attack if target in range and cooldown ready
-        if (this.target && this.attackCooldown <= 0) {
-            const distance = this.position.distanceTo(this.target.position);
-            if (distance <= Constants.DEPLOYED_TURRET_ATTACK_RANGE) {
-                this.attack(this.target);
-                this.attackCooldown = 1.0 / Constants.DEPLOYED_TURRET_ATTACK_SPEED;
-            }
-        }
-    }
-    
-    private isTargetDead(target: Unit | StellarForge | Building): boolean {
-        if ('health' in target) {
-            return target.health <= 0;
-        }
-        return false;
-    }
-    
-    private findNearestEnemy(enemies: (Unit | StellarForge | Building)[]): Unit | StellarForge | Building | null {
-        let nearest: Unit | StellarForge | Building | null = null;
-        let minDistance = Infinity;
-        
-        for (const enemy of enemies) {
-            if ('health' in enemy && enemy.health <= 0) continue;
-            
-            const distance = this.position.distanceTo(enemy.position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearest = enemy;
-            }
-        }
-        
-        return nearest;
-    }
-    
-    attack(target: Unit | StellarForge | Building): void {
-        if ('health' in target) {
-            target.health -= Constants.DEPLOYED_TURRET_ATTACK_DAMAGE;
-        }
-    }
-    
-    takeDamage(amount: number): void {
-        this.health -= amount;
-    }
-    
-    isDead(): boolean {
-        return this.health <= 0;
-    }
-}
-
-/**
- * Turret Deployer hero unit (Solari faction) - deploys turrets on asteroids
- */
-export class TurretDeployer extends Unit {
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.TURRET_DEPLOYER_MAX_HEALTH,
-            Constants.TURRET_DEPLOYER_ATTACK_RANGE,
-            Constants.TURRET_DEPLOYER_ATTACK_DAMAGE,
-            Constants.TURRET_DEPLOYER_ATTACK_SPEED,
-            Constants.TURRET_DEPLOYER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // TurretDeployer is a hero unit for Solari faction
-    }
-    
-    /**
-     * Use Turret Deployer's turret placement ability
-     * The turret deployment will be handled by GameState which has access to asteroids
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Signal that ability was used, GameState will handle turret placement
-        return true;
-    }
-}
-
-/**
- * Driller hero unit (Aurum faction) - drills through asteroids
- */
-export class Driller extends Unit {
-    isDrilling: boolean = false;
-    isHidden: boolean = false; // Hidden when inside asteroid
-    drillDirection: Vector2D | null = null;
-    drillVelocity: Vector2D = new Vector2D(0, 0);
-    hiddenInAsteroid: Asteroid | null = null;
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.DRILLER_MAX_HEALTH,
-            Constants.DRILLER_ATTACK_RANGE,
-            Constants.DRILLER_ATTACK_DAMAGE,
-            Constants.DRILLER_ATTACK_SPEED,
-            Constants.DRILLER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Driller is a hero unit for Aurum faction
-    }
-    
-    /**
-     * Driller has no normal attack - only the drilling ability
-     */
-    attack(target: Unit | StellarForge | Building): void {
-        // Driller does not have a normal attack - it only attacks via drilling ability
-        // This is intentional per the unit design
-    }
-    
-    /**
-     * Use Driller's drilling ability
-     */
-    useAbility(direction: Vector2D): boolean {
-        // Check if already drilling
-        if (this.isDrilling) {
-            return false;
-        }
-        
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Start drilling
-        this.isDrilling = true;
-        this.isHidden = false;
-        this.drillDirection = direction.normalize();
-        this.drillVelocity = new Vector2D(
-            this.drillDirection.x * Constants.DRILLER_DRILL_SPEED,
-            this.drillDirection.y * Constants.DRILLER_DRILL_SPEED
-        );
-        
-        return true;
-    }
-    
-    /**
-     * Update drilling movement
-     */
-    updateDrilling(deltaTime: number): void {
-        if (this.isDrilling && this.drillVelocity) {
-            this.position.x += this.drillVelocity.x * deltaTime;
-            this.position.y += this.drillVelocity.y * deltaTime;
-        }
-    }
-    
-    /**
-     * Stop drilling and start cooldown
-     */
-    stopDrilling(): void {
-        this.isDrilling = false;
-        this.drillVelocity = new Vector2D(0, 0);
-        // Cooldown timer already set by useAbility
-    }
-    
-    /**
-     * Hide in asteroid
-     */
-    hideInAsteroid(asteroid: Asteroid): void {
-        this.isHidden = true;
-        this.hiddenInAsteroid = asteroid;
-        this.position = new Vector2D(asteroid.position.x, asteroid.position.y);
-    }
-    
-    /**
-     * Check if driller is hidden
-     */
-    isHiddenInAsteroid(): boolean {
-        return this.isHidden;
-    }
-}
-
-/**
- * Dagger hero unit (Radiant faction) - cloaked assassin
- * Always cloaked and invisible to enemies. Cannot see enemies until ability is used.
- * Becomes visible for 8 seconds after using ability.
- */
-export class Dagger extends Unit {
-    isCloaked: boolean = true; // Always cloaked unless ability was recently used
-    visibilityTimer: number = 0; // Time remaining while visible after ability use
-    canSeeEnemies: boolean = false; // Can only see enemies after using ability
-    enemyVisionTimer: number = 0; // Time remaining with enemy vision
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.DAGGER_MAX_HEALTH,
-            Constants.DAGGER_ATTACK_RANGE,
-            Constants.DAGGER_ATTACK_DAMAGE,
-            Constants.DAGGER_ATTACK_SPEED,
-            Constants.DAGGER_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Dagger is a hero unit for Radiant faction
-    }
-    
-    /**
-     * Update visibility and enemy vision timers
-     */
-    updateTimers(deltaTime: number): void {
-        // Update visibility timer (visible to enemies after ability use)
-        if (this.visibilityTimer > 0) {
-            this.visibilityTimer -= deltaTime;
-            if (this.visibilityTimer <= 0) {
-                this.visibilityTimer = 0;
-                this.isCloaked = true; // Return to cloaked state
-            }
-        }
-        
-        // Update enemy vision timer (can see enemies after ability use)
-        if (this.enemyVisionTimer > 0) {
-            this.enemyVisionTimer -= deltaTime;
-            if (this.enemyVisionTimer <= 0) {
-                this.enemyVisionTimer = 0;
-                this.canSeeEnemies = false; // Lose ability to see enemies
-            }
-        }
-    }
-    
-    /**
-     * Use Dagger's ability: short-range directional attack
-     * Deals damage in a cone and reveals the Dagger for 8 seconds
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Reveal Dagger for 8 seconds
-        this.isCloaked = false;
-        this.visibilityTimer = Constants.DAGGER_VISIBILITY_DURATION;
-        
-        // Grant enemy vision for 8 seconds
-        this.canSeeEnemies = true;
-        this.enemyVisionTimer = Constants.DAGGER_VISIBILITY_DURATION;
-        
-        // Calculate attack direction
-        const attackDir = direction.normalize();
-        const attackAngle = Math.atan2(attackDir.y, attackDir.x);
-        
-        // Create a short-range directional attack projectile
-        const speed = 400; // Fast projectile speed
-        const velocity = new Vector2D(
-            Math.cos(attackAngle) * speed,
-            Math.sin(attackAngle) * speed
-        );
-        
-        // Create ability bullet
-        const bullet = new AbilityBullet(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner,
-            Constants.DAGGER_ABILITY_DAMAGE
-        );
-        
-        // Set short range for the projectile
-        bullet.maxRange = Constants.DAGGER_ABILITY_RANGE;
-        
-        this.lastAbilityEffects.push(bullet);
-        
-        return true;
-    }
-    
-    /**
-     * Override update to filter enemies based on vision
-     */
-    update(
-        deltaTime: number,
-        enemies: (Unit | StellarForge | Building)[],
-        allUnits: Unit[],
-        asteroids: Asteroid[] = []
-    ): void {
-        // Filter enemies - Dagger can only see enemies if it has enemy vision
-        let visibleEnemies = enemies;
-        if (!this.canSeeEnemies) {
-            visibleEnemies = []; // Cannot see any enemies when lacking enemy vision
-        }
-        
-        // Call parent update with filtered enemy list
-        super.update(deltaTime, visibleEnemies, allUnits, asteroids);
-    }
-    
-    /**
-     * Check if this Dagger is cloaked (invisible to enemies)
-     */
-    isCloakedToEnemies(): boolean {
-        return this.isCloaked;
-    }
-    
-    /**
-     * Check if this Dagger can currently see enemies
-     */
-    hasEnemyVision(): boolean {
-        return this.canSeeEnemies;
-    }
-}
-
-/**
- * Beam hero unit (Radiant faction) - sniper with distance-based damage
- * Fires a thin beam that does more damage the further away the target is
- */
-export class Beam extends Unit {
-    public lastBeamDamage: number = 0; // For displaying multiplier
-    public lastBeamDistance: number = 0; // For calculating multiplier
-    public lastBeamMultiplier: number = 0; // For display above unit
-    public lastBeamTime: number = 0; // When the last beam was fired
-    
-    constructor(position: Vector2D, owner: Player) {
-        super(
-            position,
-            owner,
-            Constants.BEAM_MAX_HEALTH,
-            Constants.BEAM_ATTACK_RANGE,
-            Constants.BEAM_ATTACK_DAMAGE,
-            Constants.BEAM_ATTACK_SPEED,
-            Constants.BEAM_ABILITY_COOLDOWN
-        );
-        this.isHero = true; // Beam is a hero unit for Radiant faction
-    }
-    
-    /**
-     * Use Beam's ability: long-range sniper beam with distance-based damage
-     * Deals more damage the further away the target is
-     */
-    useAbility(direction: Vector2D): boolean {
-        if (!super.useAbility(direction)) {
-            return false;
-        }
-        
-        // Calculate beam direction
-        const beamDir = direction.normalize();
-        
-        // Create a thin beam projectile that travels in a straight line
-        const speed = 1000; // Very fast beam speed
-        const velocity = new Vector2D(
-            beamDir.x * speed,
-            beamDir.y * speed
-        );
-        
-        // Create ability bullet for the beam
-        const bullet = new AbilityBullet(
-            new Vector2D(this.position.x, this.position.y),
-            velocity,
-            this.owner,
-            Constants.BEAM_ABILITY_BASE_DAMAGE // Base damage, will be modified on hit
-        );
-        
-        // Set long range for the sniper beam
-        bullet.maxRange = Constants.BEAM_ABILITY_MAX_RANGE;
-        
-        // Mark this as a beam projectile for special damage calculation
-        bullet.isBeamProjectile = true;
-        bullet.beamOwner = this;
-        
-        this.lastAbilityEffects.push(bullet);
-        
-        return true;
-    }
-}
 
 /**
  * Damage number that floats upward and fades out
@@ -3247,20 +2895,26 @@ export class Beam extends Unit {
 export class DamageNumber {
     public position: Vector2D;
     public damage: number;
+    public remainingHealth: number; // For remaining-life mode
     public creationTime: number;
     public velocity: Vector2D;
     public maxHealth: number; // For calculating size proportional to health
+    public unitId: string | null; // Track which unit this belongs to (for replacement)
 
     constructor(
         position: Vector2D,
         damage: number,
         creationTime: number,
-        maxHealth: number = 100
+        maxHealth: number = 100,
+        remainingHealth: number = 0,
+        unitId: string | null = null
     ) {
         this.position = new Vector2D(position.x, position.y);
         this.damage = Math.round(damage);
+        this.remainingHealth = Math.round(remainingHealth);
         this.creationTime = creationTime;
         this.maxHealth = maxHealth;
+        this.unitId = unitId;
         // Random horizontal drift
         this.velocity = new Vector2D(
             (Math.random() - 0.5) * 20,
@@ -3307,6 +2961,9 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
+    mortarProjectiles: MortarProjectile[] = [];
+    laserBeams: LaserBeam[] = [];
+    impactParticles: ImpactParticle[] = [];
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
@@ -3319,6 +2976,12 @@ export class GameState {
     isCountdownActive: boolean = true; // Start with countdown active
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
     mapSize: number = 2000; // Map size in world units
+    damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
+    
+    // Network support
+    networkManager: NetworkManager | null = null; // Network manager for LAN/online play
+    localPlayerIndex: number = 0; // Index of the local player (0 or 1)
+    pendingCommands: GameCommand[] = []; // Commands from network to be processed
 
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
@@ -3331,6 +2994,11 @@ export class GameState {
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+
+        // Process pending network commands from remote players
+        if (this.networkManager) {
+            this.processPendingNetworkCommands();
+        }
 
         // Handle countdown
         if (this.isCountdownActive) {
@@ -3349,6 +3017,11 @@ export class GameState {
             }
         }
 
+        // Update sun Voronoi segments for procedural color fading
+        for (const sun of this.suns) {
+            sun.updateVoronoiSegments(deltaTime);
+        }
+
         // Update asteroids
         for (const asteroid of this.asteroids) {
             asteroid.update(deltaTime);
@@ -3362,6 +3035,10 @@ export class GameState {
         for (const player of this.players) {
             if (player.isDefeated()) {
                 continue;
+            }
+
+            if (player.solarMirrors.length > 0) {
+                player.solarMirrors = player.solarMirrors.filter(mirror => mirror.health > 0);
             }
 
             // Update light status for Stellar Forge
@@ -3380,14 +3057,22 @@ export class GameState {
                         player.stellarForge.targetPosition = null;
                         player.stellarForge.velocity = new Vector2D(0, 0);
                     }
+
+                    this.applyDustPushFromMovingEntity(
+                        player.stellarForge.position,
+                        player.stellarForge.velocity,
+                        Constants.FORGE_DUST_PUSH_RADIUS_PX,
+                        Constants.FORGE_DUST_PUSH_FORCE_MULTIPLIER,
+                        deltaTime
+                    );
                 }
                 
-                // Check for forge crunch (spawns minions with excess solarium)
+                // Check for forge crunch (spawns minions with excess energy)
                 if (!this.isCountdownActive) {
-                    const solariumForMinions = player.stellarForge.shouldCrunch();
-                    if (solariumForMinions > 0) {
-                        // Calculate number of starlings to spawn based on solarium
-                        const numStarlings = Math.floor(solariumForMinions / Constants.STARLING_COST_PER_SOLARIUM);
+                    const energyForMinions = player.stellarForge.shouldCrunch();
+                    if (energyForMinions > 0) {
+                        // Calculate number of starlings to spawn based on energy
+                        const numStarlings = Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY);
                         
                         // Spawn starlings at the wave edge during wave phase
                         for (let i = 0; i < numStarlings; i++) {
@@ -3403,7 +3088,7 @@ export class GameState {
                         }
                         
                         if (numStarlings > 0) {
-                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${solariumForMinions.toFixed(0)} solarium`);
+                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${energyForMinions.toFixed(0)} energy`);
                         }
                     }
                 }
@@ -3440,16 +3125,35 @@ export class GameState {
                     mirror.targetPosition = null;
                     mirror.velocity = new Vector2D(0, 0);
                 }
+
+                this.applyDustPushFromMovingEntity(
+                    mirror.position,
+                    mirror.velocity,
+                    Constants.MIRROR_DUST_PUSH_RADIUS_PX,
+                    Constants.MIRROR_DUST_PUSH_FORCE_MULTIPLIER,
+                    deltaTime
+                );
                 
                 mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids, deltaTime);
                 
-                // Generate solarium even during countdown once mirrors reach position
+                // Generate energy even during countdown once mirrors reach position
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
-                    const solariumGenerated = mirror.generateSolarium(deltaTime);
-                    // Add to forge's pending solarium pool for next crunch
-                    player.stellarForge.addPendingSolarium(solariumGenerated);
+                    const energyGenerated = mirror.generateEnergy(deltaTime);
+                    // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
+                    player.addEnergy(energyGenerated);
+                    player.stellarForge.addPendingEnergy(energyGenerated);
+                }
+
+                if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
+                    const distanceToForge = player.stellarForge.position.distanceTo(mirror.position);
+                    if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
+                        mirror.health = Math.min(
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
+                        );
+                    }
                 }
             }
         }
@@ -3475,11 +3179,16 @@ export class GameState {
             if (player.isDefeated()) continue;
 
             // Get enemies (units and structures not owned by this player)
-            const enemies: (Unit | StellarForge | Building)[] = [];
+            const enemies: CombatTarget[] = [];
             for (const otherPlayer of this.players) {
                 if (otherPlayer !== player && !otherPlayer.isDefeated()) {
                     enemies.push(...otherPlayer.units);
                     enemies.push(...otherPlayer.buildings);
+                    for (const mirror of otherPlayer.solarMirrors) {
+                        if (mirror.health > 0) {
+                            enemies.push(mirror);
+                        }
+                    }
                     if (otherPlayer.stellarForge) {
                         enemies.push(otherPlayer.stellarForge);
                     }
@@ -3495,6 +3204,16 @@ export class GameState {
                     }
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
+
+                    if (unit instanceof Starling) {
+                        this.applyDustPushFromMovingEntity(
+                            unit.position,
+                            unit.velocity,
+                            Constants.STARLING_DUST_PUSH_RADIUS_PX,
+                            Constants.STARLING_DUST_PUSH_FORCE_MULTIPLIER,
+                            deltaTime
+                        );
+                    }
                     
                     // Apply fluid forces from Grave projectiles
                     if (unit instanceof Grave) {
@@ -3532,9 +3251,26 @@ export class GameState {
                 this.abilityBullets.push(...abilityEffects);
 
                 if (unit instanceof Starling) {
-                    const projectiles = unit.getAndClearLastShotProjectiles();
-                    if (projectiles.length > 0) {
-                        this.minionProjectiles.push(...projectiles);
+                    const lasers = unit.getAndClearLastShotLasers();
+                    if (lasers.length > 0) {
+                        this.laserBeams.push(...lasers);
+                        
+                        // Spawn impact particles at laser endpoints
+                        for (const laser of lasers) {
+                            for (let i = 0; i < Constants.STARLING_LASER_IMPACT_PARTICLES; i++) {
+                                const angle = (Math.PI * 2 * i) / Constants.STARLING_LASER_IMPACT_PARTICLES;
+                                const velocity = new Vector2D(
+                                    Math.cos(angle) * Constants.STARLING_LASER_PARTICLE_SPEED,
+                                    Math.sin(angle) * Constants.STARLING_LASER_PARTICLE_SPEED
+                                );
+                                this.impactParticles.push(new ImpactParticle(
+                                    new Vector2D(laser.endPos.x, laser.endPos.y),
+                                    velocity,
+                                    Constants.STARLING_LASER_PARTICLE_LIFETIME,
+                                    laser.owner.faction
+                                ));
+                            }
+                        }
                     }
                 }
                 
@@ -3543,6 +3279,14 @@ export class GameState {
                     const projectile = unit.getAndClearProjectile();
                     if (projectile) {
                         this.influenceBallProjectiles.push(projectile);
+                    }
+                }
+                
+                // Handle Mortar projectiles
+                if (unit instanceof Mortar) {
+                    const projectiles = unit.getAndClearLastShotProjectiles();
+                    if (projectiles.length > 0) {
+                        this.mortarProjectiles.push(...projectiles);
                     }
                 }
                 
@@ -3628,6 +3372,22 @@ export class GameState {
                         this.bouncingBullets.push(effects.bouncingBullet);
                     }
                 }
+                
+                // If building is a SubsidiaryFactory, check for completed production
+                if (building instanceof SubsidiaryFactory) {
+                    const completed = building.getCompletedProduction();
+                    if (completed === 'solar-mirror') {
+                        // Spawn solar mirror near the factory
+                        const spawnAngle = Math.random() * Math.PI * 2;
+                        const spawnDistance = 80; // Spawn 80 pixels away from factory
+                        const spawnPos = new Vector2D(
+                            building.position.x + Math.cos(spawnAngle) * spawnDistance,
+                            building.position.y + Math.sin(spawnAngle) * spawnDistance
+                        );
+                        const mirror = new SolarMirror(spawnPos, player);
+                        player.solarMirrors.push(mirror);
+                    }
+                }
             }
             } // End of countdown check for buildings
 
@@ -3641,13 +3401,13 @@ export class GameState {
                                      building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
                 
                 if (isInInfluence && player.stellarForge) {
-                    // Building inside influence: take solarium from forge
+                    // Building inside influence: take energy from forge
                     // Calculate build progress per second (inverse of build time)
                     const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
                     const buildProgress = buildRate * deltaTime;
                     
-                    // TODO: Split solarium between buildings and hero units
-                    // For now, buildings get solarium if available
+                    // TODO: Split energy between buildings and hero units
+                    // For now, buildings get energy if available
                     building.addBuildProgress(buildProgress);
                 } else {
                     // Building outside influence: powered by mirrors shining on it
@@ -3799,15 +3559,44 @@ export class GameState {
                         
                         unit.takeDamage(finalDamage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             finalDamage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
                     }
+                }
+
+                if (bullet.shouldDespawn()) {
+                    continue;
+                }
+
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health <= 0) {
+                        continue;
+                    }
+                    if (bullet.checkHit(mirror)) {
+                        mirror.health -= bullet.damage;
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
+                            mirror.position,
+                            bullet.damage,
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
+                        bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                        break;
+                    }
+                }
+
+                if (bullet.shouldDespawn()) {
+                    continue;
                 }
 
                 // Check hits on Stellar Forge
@@ -3830,17 +3619,115 @@ export class GameState {
                     
                     player.stellarForge.health -= finalDamage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         finalDamage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
             }
         }
         this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
+
+        // Update mortar projectiles and check for splash damage hits
+        for (const projectile of this.mortarProjectiles) {
+            projectile.update(deltaTime);
+            
+            // Check hits against enemies
+            let shouldExplode = false;
+            for (const player of this.players) {
+                // Skip if same team as projectile
+                if (player === projectile.owner) {
+                    continue;
+                }
+
+                // Check if projectile hit any unit
+                for (const unit of player.units) {
+                    if (projectile.checkHit(unit)) {
+                        shouldExplode = true;
+                        break;
+                    }
+                }
+                
+                if (shouldExplode) {
+                    break;
+                }
+            }
+            
+            // If projectile hit something or reached max lifetime, apply splash damage
+            if (shouldExplode || projectile.shouldDespawn()) {
+                // Collect all enemy targets for splash damage
+                const allEnemyTargets: CombatTarget[] = [];
+                
+                for (const player of this.players) {
+                    if (player === projectile.owner) {
+                        continue;
+                    }
+                    
+                    // Add units as potential targets
+                    allEnemyTargets.push(...player.units);
+                    
+                    // Add forge as potential target
+                    if (player.stellarForge && player.stellarForge.health > 0) {
+                        allEnemyTargets.push(player.stellarForge);
+                    }
+                    
+                    // Add buildings as potential targets
+                    for (const building of player.buildings) {
+                        if (building.health > 0) {
+                            allEnemyTargets.push(building);
+                        }
+                    }
+                }
+                
+                // Apply splash damage to all targets in range
+                const damagedTargets = projectile.applySplashDamage(allEnemyTargets);
+                
+                // Create damage numbers for all damaged targets
+                for (const target of damagedTargets) {
+                    const distance = projectile.position.distanceTo(target.position);
+                    const damageMultiplier = 1.0 - (distance / projectile.splashRadius) * (1.0 - Constants.MORTAR_SPLASH_DAMAGE_FALLOFF);
+                    const finalDamage = Math.round(projectile.damage * damageMultiplier);
+                    
+                    if (target instanceof Unit) {
+                        const unitKey = `unit_${target.position.x}_${target.position.y}_${target.owner.name}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            unitKey
+                        );
+                    } else if ('isBuilding' in target && target.isBuilding) {
+                        const buildingKey = `building_${target.position.x}_${target.position.y}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            buildingKey
+                        );
+                    } else if ('isForge' in target && target.isForge) {
+                        const forgeKey = `forge_${target.position.x}_${target.position.y}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            forgeKey
+                        );
+                    }
+                }
+                
+                // Mark projectile for removal
+                projectile.lifetime = projectile.maxLifetime;
+            }
+        }
+        this.mortarProjectiles = this.mortarProjectiles.filter(projectile => !projectile.shouldDespawn());
 
         // Update minion projectiles and check for hits
         for (const projectile of this.minionProjectiles) {
@@ -3876,12 +3763,37 @@ export class GameState {
                     if (projectile.checkHit(unit)) {
                         unit.takeDamage(projectile.damage);
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                        this.addDamageNumber(
                             unit.position,
                             projectile.damage,
-                            this.gameTime,
-                            unit.maxHealth
-                        ));
+                            unit.maxHealth,
+                            unit.health,
+                            unitKey
+                        );
+                        hasHit = true;
+                        break;
+                    }
+                }
+
+                if (hasHit) {
+                    break;
+                }
+
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health <= 0) {
+                        continue;
+                    }
+                    if (projectile.checkHit(mirror)) {
+                        mirror.health -= projectile.damage;
+                        const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
+                        this.addDamageNumber(
+                            mirror.position,
+                            projectile.damage,
+                            Constants.MIRROR_MAX_HEALTH,
+                            mirror.health,
+                            mirrorKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -3895,12 +3807,14 @@ export class GameState {
                     if (projectile.checkHit(building)) {
                         building.health -= projectile.damage;
                         // Create damage number
-                        this.damageNumbers.push(new DamageNumber(
+                        const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                        this.addDamageNumber(
                             building.position,
                             projectile.damage,
-                            this.gameTime,
-                            building.maxHealth
-                        ));
+                            building.maxHealth,
+                            building.health,
+                            buildingKey
+                        );
                         hasHit = true;
                         break;
                     }
@@ -3913,12 +3827,14 @@ export class GameState {
                 if (player.stellarForge && projectile.checkHit(player.stellarForge)) {
                     player.stellarForge.health -= projectile.damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         projectile.damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     hasHit = true;
                     break;
                 }
@@ -3929,6 +3845,15 @@ export class GameState {
             }
         }
         this.minionProjectiles = this.minionProjectiles.filter(projectile => !projectile.shouldDespawn());
+        
+        // Update laser beams (visual effects only)
+        this.laserBeams = this.laserBeams.filter(laser => !laser.update(deltaTime));
+        
+        // Update impact particles (visual effects only)
+        for (const particle of this.impactParticles) {
+            particle.update(deltaTime);
+        }
+        this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -3969,11 +3894,16 @@ export class GameState {
         this.influenceBallProjectiles = this.influenceBallProjectiles.filter(p => !p.shouldExplode());
         
         // Update deployed turrets
-        const allUnitsAndStructures: (Unit | StellarForge | Building)[] = [];
+        const allUnitsAndStructures: CombatTarget[] = [];
         for (const player of this.players) {
             if (!player.isDefeated()) {
                 allUnitsAndStructures.push(...player.units);
                 allUnitsAndStructures.push(...player.buildings);
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health > 0) {
+                        allUnitsAndStructures.push(mirror);
+                    }
+                }
                 if (player.stellarForge) {
                     allUnitsAndStructures.push(player.stellarForge);
                 }
@@ -3982,14 +3912,7 @@ export class GameState {
         
         for (const turret of this.deployedTurrets) {
             // Get enemies for this turret
-            const enemies = allUnitsAndStructures.filter(e => {
-                if (e instanceof Unit || e instanceof Building) {
-                    return e.owner !== turret.owner;
-                } else if (e instanceof StellarForge) {
-                    return e.owner !== turret.owner;
-                }
-                return false;
-            });
+            const enemies = allUnitsAndStructures.filter(e => e.owner !== turret.owner);
             
             turret.update(deltaTime, enemies);
         }
@@ -4214,12 +4137,17 @@ export class GameState {
         }
     }
 
-    private getEnemiesForPlayer(player: Player): (Unit | StellarForge | Building)[] {
-        const enemies: (Unit | StellarForge | Building)[] = [];
+    private getEnemiesForPlayer(player: Player): CombatTarget[] {
+        const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
             if (otherPlayer !== player && !otherPlayer.isDefeated()) {
                 enemies.push(...otherPlayer.units);
                 enemies.push(...otherPlayer.buildings);
+                for (const mirror of otherPlayer.solarMirrors) {
+                    if (mirror.health > 0) {
+                        enemies.push(mirror);
+                    }
+                }
                 if (otherPlayer.stellarForge) {
                     enemies.push(otherPlayer.stellarForge);
                 }
@@ -4301,7 +4229,7 @@ export class GameState {
         }
 
         // Check if we can afford a mirror
-        if (player.solarium < Constants.SOLAR_MIRROR_COST) {
+        if (player.energy < Constants.SOLAR_MIRROR_COST) {
             return;
         }
 
@@ -4327,7 +4255,7 @@ export class GameState {
         );
 
         // Purchase the mirror
-        if (player.spendSolarium(Constants.SOLAR_MIRROR_COST)) {
+        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
             const newMirror = new SolarMirror(mirrorPosition, player);
             player.solarMirrors.push(newMirror);
         }
@@ -4335,7 +4263,7 @@ export class GameState {
 
     private updateAiDefenseForPlayer(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
+        enemies: CombatTarget[]
     ): void {
         if (this.gameTime < player.aiNextDefenseCommandSec) {
             return;
@@ -4481,7 +4409,7 @@ export class GameState {
             if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
                 continue;
             }
-            if (!player.spendSolarium(Constants.HERO_UNIT_COST)) {
+            if (!player.spendEnergy(Constants.HERO_UNIT_COST)) {
                 return;
             }
             player.stellarForge.enqueueHeroUnit(heroType);
@@ -4492,7 +4420,7 @@ export class GameState {
 
     private updateAiStructuresForPlayer(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
+        enemies: CombatTarget[]
     ): void {
         if (this.gameTime < player.aiNextStructureCommandSec) {
             return;
@@ -4513,46 +4441,46 @@ export class GameState {
         switch (player.aiStrategy) {
             case Constants.AIStrategy.ECONOMIC:
                 // Economic: Build factory first, then minimal defenses
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 }
                 break;
                 
             case Constants.AIStrategy.DEFENSIVE:
                 // Defensive: Prioritize defenses heavily
-                if (swirlerCount < 2 && player.solarium >= Constants.SWIRLER_COST) {
+                if (swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                } else if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 5 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 5 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
                 
             case Constants.AIStrategy.AGGRESSIVE:
                 // Aggressive: Build factory early, skip most defenses
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
                 
             case Constants.AIStrategy.WAVES:
                 // Waves: Balanced approach with factory priority
-                if (!hasSubsidiaryFactory && player.solarium >= Constants.SUBSIDIARY_FACTORY_COST) {
+                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 2 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.solarium >= Constants.SWIRLER_COST) {
+                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.solarium >= Constants.MINIGUN_COST) {
+                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
@@ -4573,19 +4501,19 @@ export class GameState {
         switch (buildType) {
             case 'subsidiaryFactory':
                 placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                if (placement && player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                     player.buildings.push(new SubsidiaryFactory(placement, player));
                 }
                 break;
             case 'swirler':
                 placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.SWIRLER_COST)) {
+                if (placement && player.spendEnergy(Constants.SWIRLER_COST)) {
                     player.buildings.push(new SpaceDustSwirler(placement, player));
                 }
                 break;
             case 'minigun':
                 placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player);
-                if (placement && player.spendSolarium(Constants.MINIGUN_COST)) {
+                if (placement && player.spendEnergy(Constants.MINIGUN_COST)) {
                     player.buildings.push(new Minigun(placement, player));
                 }
                 break;
@@ -4636,8 +4564,8 @@ export class GameState {
 
     private findAiThreat(
         player: Player,
-        enemies: (Unit | StellarForge | Building)[]
-    ): { enemy: Unit | StellarForge | Building; guardPoint: Vector2D } | null {
+        enemies: CombatTarget[]
+    ): { enemy: CombatTarget; guardPoint: Vector2D } | null {
         if (!player.stellarForge) {
             return null;
         }
@@ -4647,7 +4575,7 @@ export class GameState {
             guardPoints.push(mirror.position);
         }
 
-        let closestThreat: Unit | StellarForge | Building | null = null;
+        let closestThreat: CombatTarget | null = null;
         let closestGuardPoint: Vector2D | null = null;
         let closestDistanceSq = Infinity;
         const defenseRadiusSq = Constants.AI_DEFENSE_RADIUS_PX * Constants.AI_DEFENSE_RADIUS_PX;
@@ -4691,7 +4619,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -4719,6 +4647,8 @@ export class GameState {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Mortar':
+                return unit instanceof Mortar;
             default:
                 return false;
         }
@@ -4730,6 +4660,27 @@ export class GameState {
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
         return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+    }
+
+    private applyDustPushFromMovingEntity(
+        position: Vector2D,
+        velocity: Vector2D,
+        radiusPx: number,
+        forceMultiplier: number,
+        deltaTime: number
+    ): void {
+        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
+        if (speed <= 0) {
+            return;
+        }
+        const effectiveSpeed = Math.max(speed, Constants.DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC);
+        this.applyFluidForceFromMovingObject(
+            position,
+            velocity,
+            radiusPx,
+            effectiveSpeed * forceMultiplier,
+            deltaTime
+        );
     }
 
     /**
@@ -4941,7 +4892,7 @@ export class GameState {
      * - They are in shadow but within proximity range of player unit, OR
      * - They are in shadow but within player's influence radius
      */
-    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: Unit | StellarForge | Building): boolean {
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget): boolean {
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
             // Dagger is only visible to enemies if not cloaked
@@ -5077,12 +5028,16 @@ export class GameState {
                     const maxHealth = closestHit.type === 'forge' 
                         ? Constants.STELLAR_FORGE_MAX_HEALTH 
                         : (closestHit.target as Unit).maxHealth;
-                    this.damageNumbers.push(new DamageNumber(
+                    const targetKey = closestHit.type === 'forge'
+                        ? `forge_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as StellarForge).owner.name}`
+                        : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as Unit).owner.name}`;
+                    this.addDamageNumber(
                         closestHit.target.position,
                         Constants.RAY_BEAM_DAMAGE,
-                        this.gameTime,
-                        maxHealth
-                    ));
+                        maxHealth,
+                        closestHit.target.health,
+                        targetKey
+                    );
                 }
                 break;
             } else if (closestHit.type === 'sun' || closestHit.type === 'edge') {
@@ -5258,12 +5213,14 @@ export class GameState {
                 if (distance < 15) {
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
+                    this.addDamageNumber(
                         unit.position,
                         Constants.DRILLER_DRILL_DAMAGE,
-                        this.gameTime,
-                        unit.maxHealth
-                    ));
+                        unit.maxHealth,
+                        unit.health,
+                        unitKey
+                    );
                 }
             }
             
@@ -5274,12 +5231,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     building.takeDamage(damage);
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const buildingKey = `building_${building.position.x}_${building.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         building.position,
                         damage,
-                        this.gameTime,
-                        building.maxHealth
-                    ));
+                        building.maxHealth,
+                        building.health,
+                        buildingKey
+                    );
                     // Continue drilling through building
                 }
             }
@@ -5291,12 +5250,14 @@ export class GameState {
                     const damage = Constants.DRILLER_DRILL_DAMAGE * Constants.DRILLER_BUILDING_DAMAGE_MULTIPLIER;
                     player.stellarForge.health -= damage;
                     // Create damage number
-                    this.damageNumbers.push(new DamageNumber(
+                    const forgeKey = `forge_${player.stellarForge.position.x}_${player.stellarForge.position.y}_${player.name}`;
+                    this.addDamageNumber(
                         player.stellarForge.position,
                         damage,
-                        this.gameTime,
-                        Constants.STELLAR_FORGE_MAX_HEALTH
-                    ));
+                        Constants.STELLAR_FORGE_MAX_HEALTH,
+                        player.stellarForge.health,
+                        forgeKey
+                    );
                     // Continue drilling through
                 }
             }
@@ -5388,19 +5349,7 @@ export class GameState {
                 let pushCount = 0;
 
                 // Check all obstacles and accumulate push directions
-                // Check suns
-                for (const sun of this.suns) {
-                    const dx = unit.position.x - sun.position.x;
-                    const dy = unit.position.y - sun.position.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const minDist = sun.radius + unit.collisionRadiusPx;
-                    if (dist < minDist) {
-                        const pushStrength = (minDist - dist) / minDist;
-                        pushX += (dx / dist) * pushStrength;
-                        pushY += (dy / dist) * pushStrength;
-                        pushCount++;
-                    }
-                }
+                // Suns no longer block movement
 
                 // Check asteroids
                 for (const asteroid of this.asteroids) {
@@ -5546,6 +5495,8 @@ export class GameState {
                 return new Dagger(spawnPosition, owner);
             case 'Beam':
                 return new Beam(spawnPosition, owner);
+            case 'Mortar':
+                return new Mortar(spawnPosition, owner);
             default:
                 return null;
         }
@@ -5556,13 +5507,7 @@ export class GameState {
         unitRadius: number = Constants.UNIT_RADIUS_PX,
         ignoredObject: SolarMirror | StellarForge | Building | null = null
     ): boolean {
-        // Check collision with suns
-        for (const sun of this.suns) {
-            const distance = position.distanceTo(sun.position);
-            if (distance < sun.radius + unitRadius) {
-                return true; // Collision with sun
-            }
-        }
+        // Suns no longer block movement or placement
 
         // Check collision with asteroids
         for (const asteroid of this.asteroids) {
@@ -5638,11 +5583,14 @@ export class GameState {
             mix(particle.position.y);
             mix(particle.velocity.x);
             mix(particle.velocity.y);
+            mix(particle.glowTransition);
+            mixInt(particle.glowState);
+            mixInt(particle.targetGlowState);
             mixString(particle.baseColor);
         }
 
         for (const player of this.players) {
-            mix(player.solarium);
+            mix(player.energy);
             mixInt(player.isAi ? 1 : 0);
             mix(player.aiNextMirrorCommandSec);
             mix(player.aiNextDefenseCommandSec);
@@ -5662,6 +5610,8 @@ export class GameState {
                 mixString(player.stellarForge.heroProductionUnitType ?? '');
                 mix(player.stellarForge.heroProductionRemainingSec);
                 mix(player.stellarForge.heroProductionDurationSec);
+                mix(player.stellarForge.crunchTimer);
+                mix(player.stellarForge.rotation);
                 if (player.stellarForge.targetPosition) {
                     mix(player.stellarForge.targetPosition.x);
                     mix(player.stellarForge.targetPosition.y);
@@ -5695,6 +5645,9 @@ export class GameState {
             for (const unit of player.units) {
                 mix(unit.position.x);
                 mix(unit.position.y);
+                mix(unit.velocity.x);
+                mix(unit.velocity.y);
+                mix(unit.rotation);
                 mix(unit.health);
                 mix(unit.isHero ? 1 : 0);
                 mix(unit.collisionRadiusPx);
@@ -5820,6 +5773,227 @@ export class GameState {
             const mirror = new SolarMirror(pos, player);
             player.solarMirrors.push(mirror);
         }
+    }
+
+    /**
+     * Add a damage number with proper handling for display mode
+     */
+    addDamageNumber(
+        position: Vector2D,
+        damage: number,
+        maxHealth: number,
+        currentHealth: number,
+        unitKey: string | null = null
+    ): void {
+        const remainingHealth = Math.max(0, currentHealth);
+
+        // If in remaining-life mode and unitKey is provided, remove previous damage numbers for this unit
+        if (this.damageDisplayMode === 'remaining-life' && unitKey !== null) {
+            this.damageNumbers = this.damageNumbers.filter(dn => dn.unitId !== unitKey);
+        }
+
+        this.damageNumbers.push(new DamageNumber(
+            position,
+            damage,
+            this.gameTime,
+            maxHealth,
+            remainingHealth,
+            unitKey
+        ));
+    }
+
+    /**
+     * Set up network manager and register event handlers
+     */
+    setupNetworkManager(networkManager: NetworkManager, localPlayerIndex: number): void {
+        this.networkManager = networkManager;
+        this.localPlayerIndex = localPlayerIndex;
+        
+        // Listen for incoming game commands from remote players
+        this.networkManager.on(NetworkEvent.MESSAGE_RECEIVED, (data: any) => {
+            if (data && typeof data === 'object' && 'type' in data && data.type === MessageType.GAME_COMMAND) {
+                const command = data.data as GameCommand;
+                this.receiveNetworkCommand(command);
+            }
+        });
+    }
+
+    /**
+     * Send a game command to all connected peers
+     */
+    sendGameCommand(command: string, data: any): void {
+        if (!this.networkManager) return;
+        
+        const gameCommand: GameCommand = {
+            tick: Math.floor(this.gameTime * 60), // Convert time to tick number (60 ticks per second)
+            playerId: this.networkManager.getLocalPlayerId(),
+            command: command,
+            data: data
+        };
+        
+        this.networkManager.sendGameCommand(gameCommand);
+    }
+
+    /**
+     * Receive and queue a game command from the network
+     */
+    receiveNetworkCommand(command: GameCommand): void {
+        // Add to pending commands queue to be processed in next update
+        this.pendingCommands.push(command);
+    }
+
+    /**
+     * Process all pending network commands
+     */
+    processPendingNetworkCommands(): void {
+        if (this.pendingCommands.length === 0) return;
+        
+        // Sort commands by tick to ensure consistent execution order
+        this.pendingCommands.sort((a, b) => a.tick - b.tick);
+        
+        // Process all pending commands
+        for (const cmd of this.pendingCommands) {
+            this.executeNetworkCommand(cmd);
+        }
+        
+        // Clear the processed commands
+        this.pendingCommands = [];
+    }
+
+    /**
+     * Execute a network command
+     */
+    private executeNetworkCommand(cmd: GameCommand): void {
+        // Determine which player this command is for
+        // Remote player is always the opposite of local player
+        const remotePlayerIndex = this.localPlayerIndex === 0 ? 1 : 0;
+        const player = this.players[remotePlayerIndex];
+        
+        if (!player) return;
+        
+        switch (cmd.command) {
+            case 'unit_move':
+                this.executeUnitMoveCommand(player, cmd.data);
+                break;
+            case 'unit_ability':
+                this.executeUnitAbilityCommand(player, cmd.data);
+                break;
+            case 'hero_purchase':
+                this.executeHeroPurchaseCommand(player, cmd.data);
+                break;
+            case 'building_purchase':
+                this.executeBuildingPurchaseCommand(player, cmd.data);
+                break;
+            case 'mirror_purchase':
+                this.executeMirrorPurchaseCommand(player, cmd.data);
+                break;
+            case 'forge_move':
+                this.executeForgeMoveCommand(player, cmd.data);
+                break;
+            case 'set_rally_path':
+                this.executeSetRallyPathCommand(player, cmd.data);
+                break;
+            default:
+                console.warn('Unknown network command:', cmd.command);
+        }
+    }
+
+    private executeUnitMoveCommand(player: Player, data: any): void {
+        const { unitIds, targetX, targetY } = data;
+        const target = new Vector2D(targetX, targetY);
+        
+        for (const unitId of unitIds) {
+            const unit = player.units.find(u => this.getUnitId(u) === unitId);
+            if (unit) {
+                unit.rallyPoint = target;
+            } else {
+                console.warn(`Unit not found for network command: ${unitId}`);
+            }
+        }
+    }
+
+    private executeUnitAbilityCommand(player: Player, data: any): void {
+        const { unitId, directionX, directionY } = data;
+        const direction = new Vector2D(directionX, directionY);
+        
+        const unit = player.units.find(u => this.getUnitId(u) === unitId);
+        if (unit) {
+            unit.useAbility(direction);
+        } else {
+            console.warn(`Unit not found for ability command: ${unitId}`);
+        }
+    }
+
+    private executeHeroPurchaseCommand(player: Player, data: any): void {
+        const { heroType } = data;
+        if (player.stellarForge) {
+            player.stellarForge.enqueueHeroUnit(heroType);
+            player.stellarForge.startHeroProductionIfIdle();
+        }
+    }
+
+    private executeBuildingPurchaseCommand(player: Player, data: any): void {
+        const { buildingType, positionX, positionY } = data;
+        const position = new Vector2D(positionX, positionY);
+        
+        // Check if player can afford the building
+        let cost = 0;
+        if (buildingType === 'Minigun') {
+            cost = Constants.MINIGUN_COST;
+        } else if (buildingType === 'SpaceDustSwirler') {
+            cost = Constants.SWIRLER_COST;
+        } else if (buildingType === 'SubsidiaryFactory') {
+            cost = Constants.SUBSIDIARY_FACTORY_COST;
+        }
+        
+        if (player.spendEnergy(cost)) {
+            // Create the building
+            if (buildingType === 'Minigun') {
+                player.buildings.push(new Minigun(position, player));
+            } else if (buildingType === 'SpaceDustSwirler') {
+                player.buildings.push(new SpaceDustSwirler(position, player));
+            } else if (buildingType === 'SubsidiaryFactory') {
+                player.buildings.push(new SubsidiaryFactory(position, player));
+            }
+        }
+    }
+
+    private executeMirrorPurchaseCommand(player: Player, data: any): void {
+        const { positionX, positionY } = data;
+        const position = new Vector2D(positionX, positionY);
+        
+        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
+            player.solarMirrors.push(new SolarMirror(position, player));
+        }
+    }
+
+    private executeForgeMoveCommand(player: Player, data: any): void {
+        const { targetX, targetY } = data;
+        const target = new Vector2D(targetX, targetY);
+        
+        if (player.stellarForge) {
+            player.stellarForge.targetPosition = target;
+        }
+    }
+
+    private executeSetRallyPathCommand(player: Player, data: any): void {
+        const { waypoints } = data;
+        const path = waypoints.map((wp: any) => new Vector2D(wp.x, wp.y));
+        
+        if (player.stellarForge) {
+            player.stellarForge.setMinionPath(path);
+        }
+    }
+
+    /**
+     * Generate a unique ID for a unit (for network synchronization)
+     * Note: This is a temporary solution. In production, units should have explicit unique IDs.
+     */
+    private getUnitId(unit: Unit): string {
+        // Use a combination of owner, position, health, and type for uniqueness
+        // This is not perfect but works for most cases in the current implementation
+        const ownerIndex = this.players.indexOf(unit.owner);
+        return `${ownerIndex}_${unit.position.x.toFixed(1)}_${unit.position.y.toFixed(1)}_${unit.maxHealth}_${unit.constructor.name}`;
     }
 }
 

@@ -2,9 +2,77 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
+
+type GraphicVariant = 'svg' | 'png' | 'stub';
+type GraphicKey =
+    | 'centralSun'
+    | 'stellarForge'
+    | 'forgeFlameHot'
+    | 'forgeFlameCold'
+    | 'solarMirror'
+    | 'starling'
+    | 'heroMarine'
+    | 'heroGrave'
+    | 'heroDagger'
+    | 'heroBeam'
+    | 'heroMortar'
+    | 'heroRay'
+    | 'heroInfluenceBall'
+    | 'heroTurretDeployer'
+    | 'heroDriller';
+
+type GraphicOption = {
+    key: GraphicKey;
+    label: string;
+    svgPath?: string;
+    pngPath?: string;
+};
+
+type InGameMenuTab = 'main' | 'options' | 'graphics';
+
+type InGameMenuAction =
+    | { type: 'resume' }
+    | { type: 'toggleInfo' }
+    | { type: 'surrender' }
+    | { type: 'tab'; tab: InGameMenuTab }
+    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
+    | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
+    | { type: 'healthDisplayMode'; mode: 'bar' | 'number' };
+
+type InGameMenuLayout = {
+    screenWidth: number;
+    screenHeight: number;
+    panelX: number;
+    panelY: number;
+    panelWidth: number;
+    panelHeight: number;
+    isCompactLayout: boolean;
+    titleY: number;
+    tabs: Array<{
+        tab: InGameMenuTab;
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+    }>;
+    contentTopY: number;
+    contentBottomY: number;
+    buttonWidth: number;
+    buttonHeight: number;
+    buttonX: number;
+    buttonSpacing: number;
+    graphicsListX: number;
+    graphicsListY: number;
+    graphicsListWidth: number;
+    graphicsListHeight: number;
+    graphicsRowHeight: number;
+    graphicsButtonWidth: number;
+    graphicsButtonHeight: number;
+    graphicsButtonGap: number;
+};
 
 type ForgeFlameState = {
     warmth: number;
@@ -38,6 +106,10 @@ export class GameRenderer {
     public playerColor: string = Constants.PLAYER_1_COLOR; // Player 1 color (customizable)
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
     public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
+    public inGameMenuTab: InGameMenuTab = 'main';
+    public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
+    public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
+    public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
 
     private readonly HERO_SPRITE_SCALE = 6;
     private readonly FORGE_SPRITE_SCALE = 2.2;
@@ -45,6 +117,94 @@ export class GameRenderer {
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private graphicsOptionByKey = new Map<GraphicKey, GraphicOption>();
+    private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
+    private graphicsMenuScrollOffset = 0;
+
+    private readonly graphicsOptions: GraphicOption[] = [
+        {
+            key: 'centralSun',
+            label: 'Central Sun',
+            svgPath: 'ASSETS/sprites/environment/centralSun.svg',
+            pngPath: 'ASSETS/sprites/environment/centralSun.png'
+        },
+        {
+            key: 'stellarForge',
+            label: 'Stellar Forge Base',
+            svgPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.png'
+        },
+        {
+            key: 'forgeFlameHot',
+            label: 'Forge Flame (Hot)',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png'
+        },
+        {
+            key: 'forgeFlameCold',
+            label: 'Forge Flame (Cold)',
+            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png'
+        },
+        {
+            key: 'solarMirror',
+            label: 'Solar Mirror',
+            svgPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.png'
+        },
+        {
+            key: 'starling',
+            label: 'Starling',
+            svgPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg',
+            pngPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).png'
+        },
+        {
+            key: 'heroMarine',
+            label: 'Hero: Marine',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.png'
+        },
+        {
+            key: 'heroGrave',
+            label: 'Hero: Grave',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.png'
+        },
+        {
+            key: 'heroRay',
+            label: 'Hero: Ray',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
+        },
+        {
+            key: 'heroInfluenceBall',
+            label: 'Hero: Influence Ball',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.png'
+        },
+        {
+            key: 'heroTurretDeployer',
+            label: 'Hero: Turret Deployer',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.png'
+        },
+        {
+            key: 'heroDriller',
+            label: 'Hero: Driller',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.png'
+        },
+        {
+            key: 'heroDagger',
+            label: 'Hero: Dagger',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.png'
+        },
+        {
+            key: 'heroBeam',
+            label: 'Hero: Beam',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
+        }
+    ];
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -63,7 +223,7 @@ export class GameRenderer {
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
     private readonly FORGE_MAX_HEALTH = 1000;
-    private readonly MIRROR_MAX_HEALTH = 100;
+    private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
     // Parallax star layers for depth
     private starLayers: Array<{
@@ -83,6 +243,14 @@ export class GameRenderer {
         
         // Initialize star layers with random positions
         this.initializeStarLayers();
+
+        const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
+        for (const option of this.graphicsOptions) {
+            this.graphicsOptionByKey.set(option.key, option);
+            const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
+            const shouldPreferPng = defaultPngKeys.includes(option.key) && option.pngPath;
+            this.graphicsVariantByKey.set(option.key, shouldPreferPng ? 'png' : defaultVariant);
+        }
     }
 
     private resizeCanvas(): void {
@@ -135,7 +303,7 @@ export class GameRenderer {
     /**
      * Convert world coordinates to screen coordinates
      */
-    private worldToScreen(worldPos: Vector2D): Vector2D {
+    worldToScreen(worldPos: Vector2D): Vector2D {
         const dpr = window.devicePixelRatio || 1;
         const centerX = (this.canvas.width / dpr) / 2;
         const centerY = (this.canvas.height / dpr) / 2;
@@ -297,16 +465,43 @@ export class GameRenderer {
         return isDistBuild ? `../${path}` : path;
     }
 
+    private getGraphicVariant(key: GraphicKey): GraphicVariant {
+        return this.graphicsVariantByKey.get(key) ?? 'stub';
+    }
+
+    public setGraphicsVariant(key: GraphicKey, variant: GraphicVariant): void {
+        this.graphicsVariantByKey.set(key, variant);
+    }
+
+    public setInGameMenuTab(tab: InGameMenuTab): void {
+        this.inGameMenuTab = tab;
+    }
+
+    private getGraphicAssetPath(key: GraphicKey): string | null {
+        const option = this.graphicsOptionByKey.get(key);
+        if (!option) {
+            return null;
+        }
+        const variant = this.getGraphicVariant(key);
+        if (variant === 'svg') {
+            return option.svgPath ?? null;
+        }
+        if (variant === 'png') {
+            return option.pngPath ?? null;
+        }
+        return null;
+    }
+
     private getForgeSpritePath(forge: StellarForge): string | null {
         if (forge.owner.faction === Faction.RADIANT) {
-            return 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg';
+            return this.getGraphicAssetPath('stellarForge');
         }
         return null;
     }
 
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
         if (mirror.owner.faction === Faction.RADIANT) {
-            return 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg';
+            return this.getGraphicAssetPath('solarMirror');
         }
         return null;
     }
@@ -314,37 +509,35 @@ export class GameRenderer {
     private getStarlingSpritePath(starling: Starling): string | null {
         if (starling.owner.faction === Faction.RADIANT) {
             // Use level 1 starling sprite
-            return 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg';
+            return this.getGraphicAssetPath('starling');
         }
         return null;
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        let targetPosition: Vector2D | null = null;
+        // Use the unit's smooth rotation if it's moving
         if (starling.rallyPoint) {
             const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
             if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                targetPosition = starling.rallyPoint;
+                // Use the smoothly interpolated rotation from the unit's movement logic
+                return starling.rotation;
             }
         }
 
-        if (!targetPosition && starling.target && 'position' in starling.target) {
+        // If not moving but has a target, face the target
+        if (starling.target && 'position' in starling.target) {
             if (!('health' in starling.target) || starling.target.health > 0) {
-                targetPosition = starling.target.position;
+                const targetPosition = starling.target.position;
+                const dx = targetPosition.x - starling.position.x;
+                const dy = targetPosition.y - starling.position.y;
+                if (dx !== 0 || dy !== 0) {
+                    // Add π/2 so the TOP of the sprite is treated as the FRONT
+                    return Math.atan2(dy, dx) + Math.PI / 2;
+                }
             }
         }
 
-        if (!targetPosition) {
-            return null;
-        }
-
-        const dx = targetPosition.x - starling.position.x;
-        const dy = targetPosition.y - starling.position.y;
-        if (dx === 0 && dy === 0) {
-            return null;
-        }
-
-        return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+        return starling.rotation;
     }
 
     private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
@@ -386,16 +579,31 @@ export class GameRenderer {
             return null;
         }
         if (unit instanceof Marine) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg';
+            return this.getGraphicAssetPath('heroMarine');
         }
         if (unit instanceof Grave) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg';
+            return this.getGraphicAssetPath('heroGrave');
         }
         if (unit instanceof Dagger) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg';
+            return this.getGraphicAssetPath('heroDagger');
         }
         if (unit instanceof Beam) {
-            return 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg';
+            return this.getGraphicAssetPath('heroBeam');
+        }
+        if (unit instanceof Mortar) {
+            return this.getGraphicAssetPath('heroMortar');
+        }
+        if (unit instanceof Ray) {
+            return this.getGraphicAssetPath('heroRay');
+        }
+        if (unit instanceof InfluenceBall) {
+            return this.getGraphicAssetPath('heroInfluenceBall');
+        }
+        if (unit instanceof TurretDeployer) {
+            return this.getGraphicAssetPath('heroTurretDeployer');
+        }
+        if (unit instanceof Driller) {
+            return this.getGraphicAssetPath('heroDriller');
         }
         return null;
     }
@@ -470,7 +678,8 @@ export class GameRenderer {
     private drawSun(sun: Sun): void {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
-        const sunSprite = this.getSpriteImage('ASSETS/sprites/environment/centralSun.svg');
+        const sunSpritePath = this.getGraphicAssetPath('centralSun');
+        const sunSprite = sunSpritePath ? this.getSpriteImage(sunSpritePath) : null;
 
         // Draw sun glow (outer glow)
         const gradient = this.ctx.createRadialGradient(
@@ -487,30 +696,97 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        if (sunSprite.complete && sunSprite.naturalWidth > 0) {
-            const diameterPx = screenRadius * 2;
-            this.ctx.drawImage(
-                sunSprite,
-                screenPos.x - screenRadius,
-                screenPos.y - screenRadius,
-                diameterPx,
-                diameterPx
-            );
-        } else {
-            // Draw sun core with gradient as fallback until sprite loads
-            const coreGradient = this.ctx.createRadialGradient(
-                screenPos.x, screenPos.y, 0,
-                screenPos.x, screenPos.y, screenRadius * 0.6
-            );
-            coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
-            coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
-            coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
+        // Draw Voronoi segments before the sprite
+        this.drawVoronoiSegments(sun, screenPos, screenRadius);
 
-            this.ctx.fillStyle = coreGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
-            this.ctx.fill();
+        // Don't draw sprite overlay - show pure Voronoi pattern
+    }
+
+    /**
+     * Draw Voronoi segments within the sun
+     */
+    private drawVoronoiSegments(sun: Sun, screenPos: Vector2D, screenRadius: number): void {
+        const VORONOI_CLIP_FACTOR = 0.85;
+        
+        // Create a circular clipping region for the sun
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius * VORONOI_CLIP_FACTOR, 0, Math.PI * 2);
+        this.ctx.clip();
+
+        // Sample points in a grid within and around the sun
+        const resolution = 1; // Pixels per sample (lower = higher quality but slower)
+        const startX = Math.floor(screenPos.x - screenRadius);
+        const endX = Math.ceil(screenPos.x + screenRadius);
+        const startY = Math.floor(screenPos.y - screenRadius);
+        const endY = Math.ceil(screenPos.y + screenRadius);
+
+        // Create an ImageData to write pixels directly for better performance
+        const width = Math.ceil((endX - startX) / resolution);
+        const height = Math.ceil((endY - startY) / resolution);
+        const imageData = this.ctx.createImageData(width, height);
+        const data = imageData.data;
+
+        // For each pixel in the region
+        for (let py = 0; py < height; py++) {
+            const worldY = startY + py * resolution;
+            const worldScreenY = worldY;
+            
+            for (let px = 0; px < width; px++) {
+                const screenX = startX + px * resolution;
+                const screenY = worldScreenY;
+                
+                // Check if this screen point is within the sun's radius
+                const dx = screenX - screenPos.x;
+                const dy = screenY - screenPos.y;
+                const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+                
+                const VORONOI_CLIP_FACTOR = 0.85;
+                if (distFromCenter > screenRadius * VORONOI_CLIP_FACTOR) {
+                    // Outside the sun - make transparent
+                    const idx = (py * width + px) * 4;
+                    data[idx + 3] = 0; // Alpha = 0
+                    continue;
+                }
+                
+                // Convert screen position back to world position
+                const worldPoint = this.screenToWorld(screenX, screenY);
+                
+                // Find the closest Voronoi seed point
+                if (sun.voronoiSegments.length === 0) {
+                    // No segments - skip this pixel
+                    const idx = (py * width + px) * 4;
+                    data[idx + 3] = 0;
+                    continue;
+                }
+                
+                let closestSegment = sun.voronoiSegments[0];
+                let minDist = Infinity;
+                
+                for (const segment of sun.voronoiSegments) {
+                    const sdx = worldPoint.x - segment.seedPoint.x;
+                    const sdy = worldPoint.y - segment.seedPoint.y;
+                    const dist = sdx * sdx + sdy * sdy; // Use squared distance for performance
+                    
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestSegment = segment;
+                    }
+                }
+                
+                // Set pixel color based on the closest segment
+                const idx = (py * width + px) * 4;
+                data[idx] = Math.round(closestSegment.currentColor.r);     // R
+                data[idx + 1] = Math.round(closestSegment.currentColor.g); // G
+                data[idx + 2] = Math.round(closestSegment.currentColor.b); // B
+                data[idx + 3] = 230; // Alpha - more opaque for better visibility
+            }
         }
+
+        // Draw the ImageData to the canvas
+        this.ctx.putImageData(imageData, startX, startY);
+
+        this.ctx.restore();
     }
 
     private drawForgeFlames(
@@ -521,21 +797,26 @@ export class GameRenderer {
         shouldDim: boolean
     ): void {
         const flameState = this.getForgeFlameState(forge, game.gameTime);
-        const hotSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png');
-        const coldSprite = this.getSpriteImage('ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png');
+        const hotSpritePath = this.getGraphicAssetPath('forgeFlameHot');
+        const coldSpritePath = this.getGraphicAssetPath('forgeFlameCold');
+        if (!hotSpritePath || !coldSpritePath) {
+            return;
+        }
+        const hotSprite = this.getSpriteImage(hotSpritePath);
+        const coldSprite = this.getSpriteImage(coldSpritePath);
 
         if (!hotSprite.complete || hotSprite.naturalWidth === 0 || !coldSprite.complete || coldSprite.naturalWidth === 0) {
             return;
         }
 
         const flameSize = forgeSpriteSize * Constants.FORGE_FLAME_SIZE_MULTIPLIER;
-        const flameOffset = flameSize * Constants.FORGE_FLAME_OFFSET_MULTIPLIER;
         const shadeMultiplier = shouldDim ? (1 - Constants.SHADE_OPACITY) : 1;
         const baseAlpha = Constants.FORGE_FLAME_ALPHA * shadeMultiplier;
         const hotAlpha = baseAlpha * flameState.warmth;
         const coldAlpha = baseAlpha * (1 - flameState.warmth);
 
-        const flameOffsets = [-flameOffset, flameOffset];
+        // Both flames overlap at the same position instead of being side by side
+        const flameOffsets = [0, 0];
 
         for (let i = 0; i < flameOffsets.length; i++) {
             const offsetX = flameOffsets[i];
@@ -786,20 +1067,7 @@ export class GameRenderer {
             this.ctx.stroke();
         }
 
-        if (forge.health < this.FORGE_MAX_HEALTH) {
-            // Draw health bar
-            const barWidth = size * 2;
-            const barHeight = 6;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y - size - 15;
-            
-            this.ctx.fillStyle = '#333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            const healthPercent = forge.health / this.FORGE_MAX_HEALTH;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
-        }
+        this.drawHealthDisplay(screenPos, forge.health, this.FORGE_MAX_HEALTH, size, -size - 15);
 
         if (forge.heroProductionUnitType && forge.heroProductionDurationSec > 0) {
             const barWidth = size * 2;
@@ -914,6 +1182,8 @@ export class GameRenderer {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Mortar':
+                return unit instanceof Mortar;
             default:
                 return false;
         }
@@ -975,7 +1245,24 @@ export class GameRenderer {
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
-    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState): void {
+    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy mirrors
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy mirrors
+            }
+            
+            // Check if in shadow for dimming effect - darken color instead of using alpha
+            const inShadow = game.isPointInShadow(mirror.position);
+            if (inShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            }
+        }
+        
         const screenPos = this.worldToScreen(mirror.position);
         const size = 20 * this.zoom;
 
@@ -1076,10 +1363,8 @@ export class GameRenderer {
 
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
-            // Determine the color for the mirror (player color, brighter and paler)
-            const isEnemy = this.viewingPlayer && mirror.owner !== this.viewingPlayer;
-            const baseColor = isEnemy ? this.enemyColor : this.playerColor;
-            const mirrorColor = this.brightenAndPaleColor(baseColor);
+            // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
+            const mirrorColor = this.brightenAndPaleColor(displayColor);
             
             // Use tinted sprite for solar mirror
             const mirrorSprite = this.getTintedSprite(mirrorSpritePath, mirrorColor);
@@ -1112,12 +1397,12 @@ export class GameRenderer {
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw border for the surface
-            this.ctx.strokeStyle = color;
+            this.ctx.strokeStyle = displayColor;
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw small indicator dots at the ends
-            this.ctx.fillStyle = color;
+            this.ctx.fillStyle = displayColor;
             this.ctx.beginPath();
             this.ctx.arc(-surfaceLength / 2, 0, 3, 0, Math.PI * 2);
             this.ctx.fill();
@@ -1153,19 +1438,7 @@ export class GameRenderer {
             this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, color);
         }
 
-        if (mirror.health < this.MIRROR_MAX_HEALTH) {
-            const barWidth = size * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y - size - 10;
-            
-            this.ctx.fillStyle = '#333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            const healthPercent = mirror.health / this.MIRROR_MAX_HEALTH;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
-        }
+        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10);
 
         if (mirror.isSelected) {
             const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
@@ -1173,27 +1446,27 @@ export class GameRenderer {
             const hasLoSToForge = forge
                 ? mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)
                 : false;
-            const solariumRate = hasLoSToSun && hasLoSToForge ? mirror.getSolariumRatePerSec() : 0;
+            const energyRate = hasLoSToSun && hasLoSToForge ? mirror.getEnergyRatePerSec() : 0;
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
             this.ctx.font = `${12 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`+${solariumRate.toFixed(0)}/s`, screenPos.x, textY);
+            this.ctx.fillText(`+${energyRate.toFixed(0)}/s`, screenPos.x, textY);
         }
     }
 
     /**
-     * Draw space dust particle with sprite and glow effects
+     * Draw space dust particle with lightweight circle rendering
      */
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
-        const size = Constants.DUST_PARTICLE_SIZE * this.zoom * Constants.DUST_SPRITE_SCALE_FACTOR;
-        
+        const baseSize = Constants.DUST_PARTICLE_SIZE * this.zoom;
+
         // Check if particle is in shadow
         const inShadow = game.isPointInShadow(particle.position);
-        
+
         if (viewingPlayerIndex !== null) {
             // If particle is in shade, only draw if it's visible to player's units
             if (inShadow) {
@@ -1204,86 +1477,26 @@ export class GameRenderer {
                 }
             }
         }
-        
-        // Determine which sprite to use based on glow state and influence
-        let spritePath = 'ASSETS/sprites/environment/spaceDust/spaceDust.png';
-        let tintColor = particle.currentColor;
-        
-        // Check if particle is in player influence
-        let inInfluence = false;
-        if (viewingPlayerIndex !== null) {
-            const viewingPlayer = game.players[viewingPlayerIndex];
-            if (viewingPlayer.stellarForge) {
-                const distanceToForge = particle.position.distanceTo(viewingPlayer.stellarForge.position);
-                inInfluence = distanceToForge < Constants.INFLUENCE_RADIUS;
-            }
+
+        let glowLevel = particle.glowState;
+        if (particle.glowTransition > 0 && particle.glowState !== particle.targetGlowState) {
+            glowLevel = particle.glowState + (particle.targetGlowState - particle.glowState) * particle.glowTransition;
         }
-        
-        // Determine sprite and interpolation based on glow state and influence
-        let sprite1: HTMLCanvasElement | null = null;
-        let sprite2: HTMLCanvasElement | null = null;
-        let interpolation = 0;
-        
-        if (inInfluence) {
-            // In influence: cross-fade from normal -> slight glow -> full glow
-            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            }
-        } else {
-            // Not in influence: cross-fade for movement-based glow
-            if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_NORMAL && particle.targetGlowState > Constants.DUST_GLOW_STATE_NORMAL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_SLIGHT) {
-                if (particle.targetGlowState === Constants.DUST_GLOW_STATE_FULL) {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                    interpolation = particle.glowTransition;
-                } else if (particle.targetGlowState === Constants.DUST_GLOW_STATE_NORMAL) {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                    sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDust.png', tintColor);
-                    interpolation = particle.glowTransition;
-                } else {
-                    sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                }
-            } else if (particle.glowState === Constants.DUST_GLOW_STATE_FULL) {
-                sprite1 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustGlow.png', tintColor);
-                sprite2 = this.getTintedSprite('ASSETS/sprites/environment/spaceDust/spaceDustSlightGlow.png', tintColor);
-                interpolation = particle.glowTransition;
-            }
-        }
-        
-        // Draw the sprite(s) with interpolation
-        if (sprite1 && sprite2 && interpolation > 0) {
-            // Draw both sprites with alpha blending for smooth transition
-            this.ctx.globalAlpha = 1 - interpolation;
-            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-            this.ctx.globalAlpha = interpolation;
-            this.ctx.drawImage(sprite2, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-            this.ctx.globalAlpha = 1.0;
-        } else if (sprite1) {
-            // Draw single sprite
-            this.ctx.drawImage(sprite1, screenPos.x - size / 2, screenPos.y - size / 2, size, size);
-        } else {
-            // Fallback to circle if sprites not loaded
-            this.ctx.fillStyle = tintColor;
+
+        if (glowLevel > 0) {
+            const glowSize = baseSize * (1.2 + glowLevel * 0.35);
+            this.ctx.fillStyle = particle.currentColor;
+            this.ctx.globalAlpha = 0.15 + glowLevel * 0.1;
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, Constants.DUST_PARTICLE_SIZE * this.zoom, 0, Math.PI * 2);
+            this.ctx.arc(screenPos.x, screenPos.y, glowSize, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
         }
+
+        this.ctx.fillStyle = particle.currentColor;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
+        this.ctx.fill();
     }
 
     private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
@@ -1560,13 +1773,18 @@ export class GameRenderer {
             
         if (heroSprite) {
             const spriteSize = size * this.HERO_SPRITE_SCALE;
+            const rotationRad = unit.rotation;
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationRad);
             this.ctx.drawImage(
                 heroSprite,
-                screenPos.x - spriteSize / 2,
-                screenPos.y - spriteSize / 2,
+                -spriteSize / 2,
+                -spriteSize / 2,
                 spriteSize,
                 spriteSize
             );
+            this.ctx.restore();
         } else {
             this.ctx.fillStyle = displayColor;
             this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
@@ -1577,23 +1795,10 @@ export class GameRenderer {
             this.ctx.stroke();
         }
 
-        if (unit.health < unit.maxHealth) {
-            // Draw health bar
-            const barWidth = size * 3;
-            const barHeight = 3;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y - size - 8;
-            
-            this.ctx.fillStyle = '#333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            const healthPercent = unit.health / unit.maxHealth;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
-        }
+        this.drawHealthDisplay(screenPos, unit.health, unit.maxHealth, size, -size - 8);
 
         // Draw direction indicator if unit has a target
-        if (unit.target) {
+        if (!unit.isHero && unit.target) {
             const dx = unit.target.position.x - unit.position.x;
             const dy = unit.target.position.y - unit.position.y;
             const angle = Math.atan2(dy, dx);
@@ -1743,6 +1948,86 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a mortar projectile (larger, more visible artillery shell)
+     */
+    private drawMortarProjectile(projectile: any): void {
+        const screenPos = this.worldToScreen(projectile.position);
+        const size = 6 * this.zoom; // Larger than other projectiles
+        const color = this.getFactionColor(projectile.owner.faction);
+
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main projectile
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw inner highlight
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x - size * 0.2, screenPos.y - size * 0.2, size * 0.4, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a laser beam
+     */
+    private drawLaserBeam(laser: LaserBeam): void {
+        const startScreen = this.worldToScreen(laser.startPos);
+        const endScreen = this.worldToScreen(laser.endPos);
+        const color = this.getFactionColor(laser.owner.faction);
+        
+        // Calculate fade based on lifetime
+        const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
+        
+        // Draw the main laser beam
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = alpha * 0.8;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        // Draw a glowing outer beam
+        this.ctx.globalAlpha = alpha * 0.3;
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw an impact particle
+     */
+    private drawImpactParticle(particle: ImpactParticle): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const color = this.getFactionColor(particle.faction);
+        const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
+        const size = 1 * this.zoom;
+        
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
      * Draw an influence zone
      */
     private drawInfluenceZone(zone: InfluenceZone): void {
@@ -1816,18 +2101,7 @@ export class GameRenderer {
         this.ctx.fillStyle = color;
         this.ctx.fillRect(screenPos.x - size * 0.3, screenPos.y - size, size * 0.6, size);
         
-        if (turret.health < turret.maxHealth) {
-            // Draw health bar
-            const healthBarWidth = size * 1.5;
-            const healthBarHeight = 4 * this.zoom;
-            const healthPercentage = turret.health / turret.maxHealth;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth, healthBarHeight);
-            
-            this.ctx.fillStyle = healthPercentage > 0.3 ? '#00FF00' : '#FF0000';
-            this.ctx.fillRect(screenPos.x - healthBarWidth / 2, screenPos.y + size, healthBarWidth * healthPercentage, healthBarHeight);
-        }
+        this.drawHealthDisplay(screenPos, turret.health, turret.maxHealth, size, size);
     }
 
     /**
@@ -1875,6 +2149,81 @@ export class GameRenderer {
     }
 
     /**
+     * Draw merged attack range outlines for selected starlings
+     * Shows the combined outline instead of individual circles
+     */
+    private drawMergedStarlingRanges(game: GameState): void {
+        // Collect all selected friendly starlings
+        const selectedStarlings: Starling[] = [];
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && this.viewingPlayer && unit.owner === this.viewingPlayer) {
+                selectedStarlings.push(unit);
+            }
+        }
+
+        if (selectedStarlings.length === 0) {
+            return;
+        }
+
+        const color = this.getFactionColor(this.viewingPlayer!.faction);
+        
+        // For merged ranges, we draw the outline of all overlapping circles
+        // Using a simplified approach: draw arc segments that are on the outer boundary
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
+        this.ctx.beginPath();
+
+        for (let i = 0; i < selectedStarlings.length; i++) {
+            const starling = selectedStarlings[i];
+            const screenPos = this.worldToScreen(starling.position);
+            const radius = starling.attackRange * this.zoom;
+            
+            // Draw arc segments that don't overlap with other starlings
+            const angleStep = Math.PI / 32; // Sample 64 points around circle
+            let pathStarted = false;
+            
+            for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
+                const px = starling.position.x + Math.cos(angle) * starling.attackRange;
+                const py = starling.position.y + Math.sin(angle) * starling.attackRange;
+                
+                // Check if this point is outside all other starling ranges
+                let isOuterPoint = true;
+                for (let j = 0; j < selectedStarlings.length; j++) {
+                    if (i === j) continue;
+                    const other = selectedStarlings[j];
+                    const dx = px - other.position.x;
+                    const dy = py - other.position.y;
+                    const distSq = dx * dx + dy * dy;
+                    const otherRadiusSq = other.attackRange * other.attackRange;
+                    
+                    if (distSq < otherRadiusSq) {
+                        isOuterPoint = false;
+                        break;
+                    }
+                }
+                
+                const screenX = this.worldToScreen({x: px, y: py} as Vector2D).x;
+                const screenY = this.worldToScreen({x: px, y: py} as Vector2D).y;
+                
+                if (isOuterPoint) {
+                    if (!pathStarted) {
+                        this.ctx.moveTo(screenX, screenY);
+                        pathStarted = true;
+                    } else {
+                        this.ctx.lineTo(screenX, screenY);
+                    }
+                } else {
+                    pathStarted = false;
+                }
+            }
+        }
+
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
      * Draw a Starling unit (minion from stellar forge)
      */
     private drawStarling(starling: Starling, color: string, game: GameState, isEnemy: boolean): void {
@@ -1899,17 +2248,8 @@ export class GameRenderer {
             }
         }
         
-        // Draw attack range circle for selected starlings (only friendly units)
-        if (isSelected && !isEnemy) {
-            const attackRangeScreenRadius = starling.attackRange * this.zoom;
-            this.ctx.strokeStyle = color;
-            this.ctx.lineWidth = 1;
-            this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, attackRangeScreenRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
+        // Note: Range circles for starlings are drawn separately as merged outlines
+        // in drawMergedStarlingRanges() before individual starlings are rendered
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = this.getStarlingSpritePath(starling);
@@ -1957,19 +2297,55 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
-        // Draw health bar if damaged
-        if (starling.health < starling.maxHealth) {
-            const barWidth = size * 3;
-            const barHeight = 3;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y - size * 6 - 10; // Position above sprite
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, starling.health, starling.maxHealth, size, -size * 6 - 10);
+        
+        // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
+        // to show only a single line from the closest starling when multiple are selected
+    }
+
+    /**
+     * Draw move order lines for selected starlings
+     * Shows a single line from the closest starling to the destination when multiple are selected
+     */
+    private drawStarlingMoveLines(game: GameState): void {
+        if (!this.viewingPlayer) return;
+        
+        // Group selected starlings by their rally point (using string key for proper Map comparison)
+        const starlingsByRallyPoint = new Map<string, {rallyPoint: Vector2D, starlings: Starling[]}>();
+        
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && unit.owner === this.viewingPlayer && unit.rallyPoint && unit.moveOrder > 0) {
+                const key = `${unit.rallyPoint.x},${unit.rallyPoint.y}`;
+                if (!starlingsByRallyPoint.has(key)) {
+                    starlingsByRallyPoint.set(key, {rallyPoint: unit.rallyPoint, starlings: []});
+                }
+                starlingsByRallyPoint.get(key)!.starlings.push(unit);
+            }
+        }
+        
+        const color = this.getFactionColor(this.viewingPlayer.faction);
+        
+        // For each rally point, draw a single line from the closest starling
+        for (const [key, group] of starlingsByRallyPoint) {
+            if (group.starlings.length === 0) continue;
             
-            this.ctx.fillStyle = '#333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            // Find the closest starling to the rally point
+            let closestStarling = group.starlings[0];
+            let minDistSq = Infinity;
             
-            const healthPercent = starling.health / starling.maxHealth;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+            for (const starling of group.starlings) {
+                const dx = group.rallyPoint.x - starling.position.x;
+                const dy = group.rallyPoint.y - starling.position.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq < minDistSq) {
+                    minDistSq = distSq;
+                    closestStarling = starling;
+                }
+            }
+            
+            // Draw move order indicator from the closest starling only
+            this.drawMoveOrderIndicator(closestStarling.position, group.rallyPoint, closestStarling.moveOrder, color);
         }
     }
 
@@ -2290,6 +2666,111 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Mortar hero unit with detection cone visualization
+     */
+    private drawMortar(mortar: any, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(mortar.position, this.viewingPlayer, mortar);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            const inShadow = game.isPointInShadow(mortar.position);
+            if (inShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            }
+        }
+        
+        // Draw detection cone if set up and not enemy
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
+            const halfConeAngle = Constants.MORTAR_DETECTION_CONE_ANGLE / 2;
+            const coneRadius = Constants.MORTAR_ATTACK_RANGE * this.zoom;
+            
+            // Draw detection cone
+            this.ctx.fillStyle = shouldDim ? this.darkenColor(color, Constants.SHADE_OPACITY * 0.5) : color;
+            this.ctx.globalAlpha = 0.15;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.arc(
+                screenPos.x,
+                screenPos.y,
+                coneRadius,
+                facingAngle - halfConeAngle,
+                facingAngle + halfConeAngle
+            );
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
+            
+            // Draw cone outline
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(color, Constants.SHADE_OPACITY) : color;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.arc(
+                screenPos.x,
+                screenPos.y,
+                coneRadius,
+                facingAngle - halfConeAngle,
+                facingAngle + halfConeAngle
+            );
+            this.ctx.lineTo(screenPos.x, screenPos.y);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+        
+        // Draw base unit
+        this.drawUnit(mortar, displayColor, game, isEnemy);
+        
+        // Draw setup indicator - show artillery barrel/turret for friendly units
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
+            const barrelLength = 15 * this.zoom;
+            
+            // Draw barrel
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#888888', Constants.SHADE_OPACITY) : '#888888';
+            this.ctx.lineWidth = 4 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(
+                screenPos.x + Math.cos(facingAngle) * barrelLength,
+                screenPos.y + Math.sin(facingAngle) * barrelLength
+            );
+            this.ctx.stroke();
+        } else if (!isEnemy && !mortar.isSetup) {
+            // Show "not set up" indicator
+            const screenPos = this.worldToScreen(mortar.position);
+            const size = 12 * this.zoom;
+            
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFAA00', Constants.SHADE_OPACITY) : '#FFAA00'; // Orange
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.7;
+            
+            // Draw exclamation mark
+            this.ctx.beginPath();
+            // Vertical line
+            this.ctx.moveTo(screenPos.x, screenPos.y - size);
+            this.ctx.lineTo(screenPos.x, screenPos.y - size * 0.3);
+            this.ctx.stroke();
+            
+            // Dot
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y - size * 0.1, 1.5 * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
      * Draw a Minigun building
      */
     private drawMinigun(building: Minigun, color: string, game: GameState, isEnemy: boolean): void {
@@ -2380,20 +2861,7 @@ export class GameRenderer {
         );
         this.ctx.stroke();
 
-        if (building.health < building.maxHealth) {
-            // Draw health bar
-            const healthBarWidth = radius * 2;
-            const healthBarHeight = 4;
-            const healthBarX = screenPos.x - healthBarWidth / 2;
-            const healthBarY = screenPos.y - radius - 10;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-            
-            const healthPercent = building.health / building.maxHealth;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
-        }
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
 
     /**
@@ -2494,20 +2962,8 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Draw health bar if damaged
-        if (building.health < building.maxHealth) {
-            const healthBarWidth = radius * 2;
-            const healthBarHeight = 4;
-            const healthBarX = screenPos.x - healthBarWidth / 2;
-            const healthBarY = screenPos.y - radius - 10;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-            
-            const healthPercent = building.health / building.maxHealth;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
-        }
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
 
     /**
@@ -2608,20 +3064,8 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Draw health bar if damaged
-        if (building.health < building.maxHealth) {
-            const healthBarWidth = radius * 2;
-            const healthBarHeight = 4;
-            const healthBarX = screenPos.x - healthBarWidth / 2;
-            const healthBarY = screenPos.y - radius - 10;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth, healthBarHeight);
-            
-            const healthPercent = building.health / building.maxHealth;
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : (healthPercent > 0.25 ? '#FFFF00' : '#FF0000');
-            this.ctx.fillRect(healthBarX, healthBarY, healthBarWidth * healthPercent, healthBarHeight);
-        }
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
 
     /**
@@ -2764,7 +3208,7 @@ export class GameRenderer {
                 this.ctx.fillStyle = color;
                 this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
                 this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.fillText(`Solarium: ${player.solarium.toFixed(1)}`, 20, y + 20);
+                this.ctx.fillText(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20);
                 
                 if (player.stellarForge) {
                     const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
@@ -2866,6 +3310,30 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(this.abilityArrowStart.x, this.abilityArrowStart.y, 8, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+
+    /**
+     * Draw a path preview for selected units (not from base)
+     */
+    private drawUnitPathPreview(): void {
+        // Only draw if we have path points and no forge (meaning it's a unit path, not a base path)
+        if (!this.pathPreviewForge && this.pathPreviewPoints.length > 0) {
+            // Get the average position of selected units as the start point
+            let avgX = 0;
+            let avgY = 0;
+            let count = 0;
+            
+            for (const unit of this.selectedUnits) {
+                avgX += unit.position.x;
+                avgY += unit.position.y;
+                count++;
+            }
+            
+            if (count > 0) {
+                const startWorld = new Vector2D(avgX / count, avgY / count);
+                this.drawMinionPathPreview(startWorld, this.pathPreviewPoints, this.pathPreviewEnd);
+            }
+        }
     }
 
     /**
@@ -3134,21 +3602,113 @@ export class GameRenderer {
             const screenPos = this.worldToScreen(damageNumber.position);
             const opacity = damageNumber.getOpacity(game.gameTime);
             
+            // Determine what to display based on mode
+            const displayValue = this.damageDisplayMode === 'remaining-life' 
+                ? damageNumber.remainingHealth 
+                : damageNumber.damage;
+            
             // Calculate size based on damage proportion to max health
             // Range: 8px (small) to 24px (large)
             const damageRatio = damageNumber.damage / damageNumber.maxHealth;
             const fontSize = Math.max(8, Math.min(24, 8 + damageRatio * 80));
             
             this.ctx.font = `bold ${fontSize}px Doto`;
-            this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            
+            // For remaining life mode, color based on health percentage
+            if (this.damageDisplayMode === 'remaining-life') {
+                const healthPercent = damageNumber.remainingHealth / damageNumber.maxHealth;
+                const color = this.getHealthColor(healthPercent);
+                this.ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
+            } else {
+                // Damage numbers are red
+                this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
+            }
+            
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             
             // Add stroke for readability
             this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})`;
             this.ctx.lineWidth = 2;
-            this.ctx.strokeText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
-            this.ctx.fillText(damageNumber.damage.toString(), screenPos.x, screenPos.y);
+            this.ctx.strokeText(displayValue.toString(), screenPos.x, screenPos.y);
+            this.ctx.fillText(displayValue.toString(), screenPos.x, screenPos.y);
+        }
+    }
+
+    /**
+     * Get health color based on percentage (green -> yellow -> red)
+     */
+    private getHealthColor(healthPercent: number): { r: number; g: number; b: number } {
+        if (healthPercent > 0.6) {
+            // Green zone: interpolate from green (0, 255, 0) to yellow (255, 255, 0)
+            const t = (healthPercent - 0.6) / 0.4; // 0 at 60%, 1 at 100%
+            return {
+                r: Math.round(255 * (1 - t)),
+                g: 255,
+                b: 0
+            };
+        } else if (healthPercent > 0.3) {
+            // Yellow zone: interpolate from orange-red (255, 165, 0) to yellow (255, 255, 0)
+            const t = (healthPercent - 0.3) / 0.3; // 0 at 30%, 1 at 60%
+            return {
+                r: 255,
+                g: Math.round(165 + 90 * t),
+                b: 0
+            };
+        } else {
+            // Red zone: interpolate from dark red (180, 0, 0) to orange-red (255, 165, 0)
+            const t = healthPercent / 0.3; // 0 at 0%, 1 at 30%
+            return {
+                r: Math.round(180 + 75 * t),
+                g: Math.round(165 * t),
+                b: 0
+            };
+        }
+    }
+
+    /**
+     * Draw health display (bar or number) for an entity
+     */
+    private drawHealthDisplay(
+        screenPos: { x: number; y: number },
+        currentHealth: number,
+        maxHealth: number,
+        size: number,
+        yOffset: number
+    ): void {
+        if (currentHealth >= maxHealth) {
+            return; // Don't draw if at full health
+        }
+
+        const healthPercent = currentHealth / maxHealth;
+
+        if (this.healthDisplayMode === 'bar') {
+            // Draw health bar
+            const barWidth = size * 3;
+            const barHeight = 3;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + yOffset;
+            
+            this.ctx.fillStyle = '#333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+        } else {
+            // Draw health number
+            const healthColor = this.getHealthColor(healthPercent);
+            const fontSize = Math.max(10, size * 1.5);
+            
+            this.ctx.font = `bold ${fontSize}px Doto`;
+            this.ctx.fillStyle = `rgb(${healthColor.r}, ${healthColor.g}, ${healthColor.b})`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'bottom';
+            
+            // Add stroke for readability
+            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
+            this.ctx.fillText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
         }
     }
 
@@ -3297,11 +3857,9 @@ export class GameRenderer {
             const color = this.getFactionColor(player.faction);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
-            // Draw Solar Mirrors
-            if (!isEnemy) {
-                for (const mirror of player.solarMirrors) {
-                    this.drawSolarMirror(mirror, color, game);
-                }
+            // Draw Solar Mirrors (including enemy mirrors with visibility checks)
+            for (const mirror of player.solarMirrors) {
+                this.drawSolarMirror(mirror, color, game, isEnemy);
             }
 
             // Draw Stellar Forge
@@ -3317,6 +3875,9 @@ export class GameRenderer {
 
         // Draw warp gate shockwaves
         this.updateAndDrawWarpGateShockwaves();
+
+        // Draw merged range outlines for selected starlings before drawing units
+        this.drawMergedStarlingRanges(game);
 
         // Draw units
         for (const player of game.players) {
@@ -3342,11 +3903,16 @@ export class GameRenderer {
                     this.drawDagger(unit, color, game, isEnemy);
                 } else if (unit instanceof Beam) {
                     this.drawBeam(unit, color, game, isEnemy);
+                } else if (unit instanceof Mortar) {
+                    this.drawMortar(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
             }
         }
+
+        // Draw move order lines for selected starlings (single line per group)
+        this.drawStarlingMoveLines(game);
 
         // Draw buildings
         for (const player of game.players) {
@@ -3391,6 +3957,23 @@ export class GameRenderer {
             this.drawMinionProjectile(projectile);
         }
         
+        // Draw mortar projectiles
+        for (const projectile of game.mortarProjectiles) {
+            this.drawMortarProjectile(projectile);
+        }
+        
+        // Draw laser beams
+        for (const laser of game.laserBeams) {
+            this.drawLaserBeam(laser);
+        }
+        
+        // Draw impact particles (only on high graphics quality)
+        if (this.graphicsQuality === 'high') {
+            for (const particle of game.impactParticles) {
+                this.drawImpactParticle(particle);
+            }
+        }
+        
         // Draw influence zones
         for (const zone of game.influenceZones) {
             this.drawInfluenceZone(zone);
@@ -3420,6 +4003,9 @@ export class GameRenderer {
 
         // Draw ability arrow for hero units
         this.drawAbilityArrow();
+
+        // Draw unit path preview
+        this.drawUnitPathPreview();
 
         // Draw tap and swipe visual effects
         this.updateAndDrawProductionButtonWaves();
@@ -3456,6 +4042,11 @@ export class GameRenderer {
         // Draw in-game menu button (top-left, always visible when not in countdown)
         if (!game.isCountdownActive && !winner) {
             this.drawMenuButton();
+        }
+        
+        // Draw production progress indicator (top-right)
+        if (!game.isCountdownActive && !winner) {
+            this.drawProductionProgress(game);
         }
         
         // Draw in-game menu overlay if open
@@ -3495,24 +4086,372 @@ export class GameRenderer {
     }
 
     /**
-     * Draw in-game menu overlay
+     * Draw production progress indicator in top-right corner
      */
-    private drawInGameMenuOverlay(): void {
+    private drawProductionProgress(game: GameState): void {
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const margin = 10;
+        const boxWidth = 200;
+        const boxHeight = 60;
+        const x = screenWidth - boxWidth - margin;
+        let y = margin;
+        
+        // Check for player's production
+        const player = game.players.find((p) => !p.isAi);
+        if (!player) {
+            return;
+        }
+        
+        // Draw hero production from stellar forge
+        if (player.stellarForge && player.stellarForge.heroProductionUnitType) {
+            const forge = player.stellarForge;
+            
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            
+            // Draw border
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            
+            // Draw production name
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            
+            const productionName = this.getProductionDisplayName(forge.heroProductionUnitType!);
+            this.ctx.fillText(productionName, x + 8, y + 8);
+            
+            // Calculate progress (guard against division by zero)
+            const progress = forge.heroProductionDurationSec > 0 
+                ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
+                : 0;
+            
+            // Draw progress bar
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
+            
+            y += boxHeight + 8;
+        }
+        
+        // Draw building construction progress
+        // Note: find() stops at first match, typically only one building under construction
+        const buildingInProgress = player.buildings.find((building) => !building.isComplete);
+        if (buildingInProgress) {
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            
+            // Draw border
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            
+            // Draw building name
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            
+            const buildingName = this.getBuildingDisplayName(buildingInProgress);
+            this.ctx.fillText(`Building ${buildingName}`, x + 8, y + 8);
+            
+            // Draw progress bar
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, buildingInProgress.buildProgress);
+        }
+        
+        // Reset text alignment
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
+    }
+    
+    /**
+     * Draw a progress bar
+     */
+    private drawProgressBar(x: number, y: number, width: number, height: number, progress: number): void {
+        // Draw progress bar background
+        this.ctx.fillStyle = 'rgba(100, 100, 100, 0.8)';
+        this.ctx.fillRect(x, y, width, height);
+        
+        // Draw progress bar fill
+        this.ctx.fillStyle = '#4CAF50';
+        this.ctx.fillRect(x, y, width * progress, height);
+        
+        // Draw progress bar border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(x, y, width, height);
+        
+        // Draw progress percentage
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 12px Doto';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`${Math.floor(progress * 100)}%`, x + width / 2, y + height / 2);
+    }
+    
+    /**
+     * Get display name for building type
+     */
+    private getBuildingDisplayName(building: Building): string {
+        if (building instanceof Minigun) {
+            return 'Minigun';
+        } else if (building instanceof SpaceDustSwirler) {
+            return 'Space Dust Swirler';
+        } else if (building instanceof SubsidiaryFactory) {
+            return 'Subsidiary Factory';
+        }
+        return 'Building';
+    }
+    
+    /**
+     * Get display name for production unit type
+     */
+    private getProductionDisplayName(unitType: string): string {
+        const nameMap: { [key: string]: string } = {
+            'marine': 'Marine',
+            'grave': 'Grave',
+            'ray': 'Ray',
+            'influenceball': 'Influence Ball',
+            'turretdeployer': 'Turret Deployer',
+            'driller': 'Driller',
+            'dagger': 'Dagger',
+            'beam': 'Beam'
+        };
+        return nameMap[unitType.toLowerCase()] || unitType;
+    }
+
+    private getInGameMenuLayout(): InGameMenuLayout {
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
         const isCompactLayout = screenWidth < 600;
+        const panelWidth = Math.min(480, screenWidth - 40);
+        const panelHeight = Math.min(460, screenHeight - 40);
+        const panelX = (screenWidth - panelWidth) / 2;
+        const panelY = (screenHeight - panelHeight) / 2;
+        const panelPaddingX = isCompactLayout ? 14 : 20;
+        const panelPaddingY = isCompactLayout ? 16 : 20;
+        const titleY = panelY + (isCompactLayout ? 34 : 42);
+        const tabHeight = isCompactLayout ? 30 : 34;
+        const tabGap = 12;
+        const tabWidth = (panelWidth - panelPaddingX * 2 - tabGap * 2) / 3;
+        const tabY = titleY + (isCompactLayout ? 16 : 18);
+        const tabX = panelX + panelPaddingX;
+        const tabs: InGameMenuLayout['tabs'] = [
+            { tab: 'main', x: tabX, y: tabY, width: tabWidth, height: tabHeight },
+            { tab: 'options', x: tabX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight },
+            { tab: 'graphics', x: tabX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight }
+        ];
+        const contentTopY = tabY + tabHeight + (isCompactLayout ? 16 : 20);
+        const contentBottomY = panelY + panelHeight - panelPaddingY;
+        const buttonWidth = Math.min(300, panelWidth - panelPaddingX * 2);
+        const buttonHeight = isCompactLayout ? 44 : 50;
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+        const buttonSpacing = isCompactLayout ? 14 : 20;
+        const graphicsListX = panelX + panelPaddingX;
+        const graphicsListY = contentTopY;
+        const graphicsListWidth = panelWidth - panelPaddingX * 2;
+        const graphicsListHeight = Math.max(0, contentBottomY - contentTopY);
+        const graphicsRowHeight = isCompactLayout ? 44 : 48;
+        const graphicsButtonWidth = isCompactLayout ? 54 : 60;
+        const graphicsButtonHeight = isCompactLayout ? 26 : 30;
+        const graphicsButtonGap = 8;
+
+        return {
+            screenWidth,
+            screenHeight,
+            panelX,
+            panelY,
+            panelWidth,
+            panelHeight,
+            isCompactLayout,
+            titleY,
+            tabs,
+            contentTopY,
+            contentBottomY,
+            buttonWidth,
+            buttonHeight,
+            buttonX,
+            buttonSpacing,
+            graphicsListX,
+            graphicsListY,
+            graphicsListWidth,
+            graphicsListHeight,
+            graphicsRowHeight,
+            graphicsButtonWidth,
+            graphicsButtonHeight,
+            graphicsButtonGap
+        };
+    }
+
+    private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
+        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
+        return Math.max(0, contentHeight - layout.graphicsListHeight);
+    }
+
+    public handleInGameMenuScroll(screenX: number, screenY: number, deltaY: number): boolean {
+        if (!this.showInGameMenu || this.inGameMenuTab !== 'graphics') {
+            return false;
+        }
+        const layout = this.getInGameMenuLayout();
+        const isWithinList =
+            screenX >= layout.graphicsListX &&
+            screenX <= layout.graphicsListX + layout.graphicsListWidth &&
+            screenY >= layout.graphicsListY &&
+            screenY <= layout.graphicsListY + layout.graphicsListHeight;
+        if (!isWithinList) {
+            return false;
+        }
+        const maxScroll = this.getGraphicsMenuMaxScroll(layout);
+        if (maxScroll === 0) {
+            return true;
+        }
+        this.graphicsMenuScrollOffset = Math.min(
+            maxScroll,
+            Math.max(0, this.graphicsMenuScrollOffset + deltaY)
+        );
+        return true;
+    }
+
+    public getInGameMenuAction(screenX: number, screenY: number): InGameMenuAction | null {
+        if (!this.showInGameMenu) {
+            return null;
+        }
+        const layout = this.getInGameMenuLayout();
+        for (const tab of layout.tabs) {
+            const isWithinTab =
+                screenX >= tab.x &&
+                screenX <= tab.x + tab.width &&
+                screenY >= tab.y &&
+                screenY <= tab.y + tab.height;
+            if (isWithinTab) {
+                return { type: 'tab', tab: tab.tab };
+            }
+        }
+
+        if (this.inGameMenuTab === 'main') {
+            let buttonY = layout.contentTopY;
+            const buttons: Array<{ action: InGameMenuAction }> = [
+                { action: { type: 'resume' } },
+                { action: { type: 'toggleInfo' } },
+                { action: { type: 'surrender' } }
+            ];
+            for (const button of buttons) {
+                const isWithinButton =
+                    screenX >= layout.buttonX &&
+                    screenX <= layout.buttonX + layout.buttonWidth &&
+                    screenY >= buttonY &&
+                    screenY <= buttonY + layout.buttonHeight;
+                if (isWithinButton) {
+                    return button.action;
+                }
+                buttonY += layout.buttonHeight + layout.buttonSpacing;
+            }
+            return null;
+        }
+
+        if (this.inGameMenuTab === 'options') {
+            let optionY = layout.contentTopY;
+            const optionHeight = layout.buttonHeight;
+            const optionSpacing = layout.buttonSpacing;
+            const optionX = layout.buttonX;
+            const optionWidth = layout.buttonWidth;
+            const buttonWidth = optionWidth * 0.35;
+            const buttonGap = 10;
+
+            // Damage Display Mode buttons
+            const damageButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const damageButton2X = optionX + optionWidth - buttonWidth;
+            
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= damageButton1X && screenX <= damageButton1X + buttonWidth) {
+                    return { type: 'damageDisplayMode', mode: 'damage' };
+                }
+                if (screenX >= damageButton2X && screenX <= damageButton2X + buttonWidth) {
+                    return { type: 'damageDisplayMode', mode: 'remaining-life' };
+                }
+            }
+            
+            optionY += optionHeight + optionSpacing;
+
+            // Health Display Mode buttons
+            const healthButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const healthButton2X = optionX + optionWidth - buttonWidth;
+            
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= healthButton1X && screenX <= healthButton1X + buttonWidth) {
+                    return { type: 'healthDisplayMode', mode: 'bar' };
+                }
+                if (screenX >= healthButton2X && screenX <= healthButton2X + buttonWidth) {
+                    return { type: 'healthDisplayMode', mode: 'number' };
+                }
+            }
+            
+            return null;
+        }
+
+        const isWithinList =
+            screenX >= layout.graphicsListX &&
+            screenX <= layout.graphicsListX + layout.graphicsListWidth &&
+            screenY >= layout.graphicsListY &&
+            screenY <= layout.graphicsListY + layout.graphicsListHeight;
+        if (!isWithinList) {
+            return null;
+        }
+
+        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
+        const localY = screenY - layout.graphicsListY + this.graphicsMenuScrollOffset;
+        if (localY < 0 || localY > contentHeight) {
+            return null;
+        }
+        const rowIndex = Math.floor(localY / layout.graphicsRowHeight);
+        const option = this.graphicsOptions[rowIndex];
+        if (!option) {
+            return null;
+        }
+
+        const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+        const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
+        const rowY = layout.graphicsListY + rowIndex * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
+        const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
+        const variants: GraphicVariant[] = ['svg', 'png', 'stub'];
+        for (let i = 0; i < variants.length; i += 1) {
+            const buttonX = buttonStartX + i * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
+            const isWithinButton =
+                screenX >= buttonX &&
+                screenX <= buttonX + layout.graphicsButtonWidth &&
+                screenY >= buttonY &&
+                screenY <= buttonY + layout.graphicsButtonHeight;
+            if (isWithinButton) {
+                return { type: 'graphicsVariant', key: option.key, variant: variants[i] };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Draw in-game menu overlay
+     */
+    private drawInGameMenuOverlay(): void {
+        const layout = this.getInGameMenuLayout();
+        const screenWidth = layout.screenWidth;
+        const screenHeight = layout.screenHeight;
+        const isCompactLayout = layout.isCompactLayout;
         
         // Semi-transparent background
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
         
         // Menu panel
-        const panelWidth = Math.min(400, screenWidth - 40);
-        const panelHeight = Math.min(350, screenHeight - 40);
-        const panelX = (screenWidth - panelWidth) / 2;
-        const panelY = (screenHeight - panelHeight) / 2;
-        
+        const panelWidth = layout.panelWidth;
+        const panelHeight = layout.panelHeight;
+        const panelX = layout.panelX;
+        const panelY = layout.panelY;
+
         this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
         this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
         
@@ -3523,35 +4462,222 @@ export class GameRenderer {
         
         // Title
         this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `bold ${isCompactLayout ? 24 : 32}px Doto`;
+        this.ctx.font = `bold ${isCompactLayout ? 22 : 30}px Doto`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME MENU', screenWidth / 2, panelY + 50);
-        
-        // Menu buttons
-        const buttonWidth = Math.min(300, panelWidth - 40);
-        const buttonHeight = isCompactLayout ? 44 : 50;
-        const buttonX = (screenWidth - buttonWidth) / 2;
-        let buttonY = panelY + (isCompactLayout ? 80 : 100);
-        const buttonSpacing = isCompactLayout ? 14 : 20;
-        
-        // Helper function to draw a button
-        const drawButton = (label: string, y: number) => {
-            this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
-            this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.fillText('GAME MENU', screenWidth / 2, layout.titleY);
+
+        for (const tab of layout.tabs) {
+            const isActive = this.inGameMenuTab === tab.tab;
+            this.ctx.fillStyle = isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(60, 60, 60, 0.9)';
+            this.ctx.fillRect(tab.x, tab.y, tab.width, tab.height);
+            this.ctx.strokeStyle = isActive ? '#FFD700' : '#FFFFFF';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+            this.ctx.strokeRect(tab.x, tab.y, tab.width, tab.height);
             this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
-            this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
-        };
-        
-        drawButton('Resume', buttonY);
-        buttonY += buttonHeight + buttonSpacing;
-        drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
-        buttonY += buttonHeight + buttonSpacing;
-        drawButton('Surrender', buttonY);
-        
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            const tabLabel = tab.tab === 'main' ? 'Main' : tab.tab === 'options' ? 'Options' : 'Graphics';
+            this.ctx.fillText(tabLabel, tab.x + tab.width / 2, tab.y + tab.height * 0.68);
+        }
+
+        if (this.inGameMenuTab === 'main') {
+            // Menu buttons
+            let buttonY = layout.contentTopY;
+            const buttonWidth = layout.buttonWidth;
+            const buttonHeight = layout.buttonHeight;
+            const buttonX = layout.buttonX;
+            const buttonSpacing = layout.buttonSpacing;
+
+            // Helper function to draw a button
+            const drawButton = (label: string, y: number) => {
+                this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
+                this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
+                this.ctx.strokeStyle = '#FFFFFF';
+                this.ctx.lineWidth = 2;
+                this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
+                this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
+            };
+
+            drawButton('Resume', buttonY);
+            buttonY += buttonHeight + buttonSpacing;
+            drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
+            buttonY += buttonHeight + buttonSpacing;
+            drawButton('Surrender', buttonY);
+        } else if (this.inGameMenuTab === 'options') {
+            // Options tab content
+            let optionY = layout.contentTopY;
+            const optionHeight = layout.buttonHeight;
+            const optionSpacing = layout.buttonSpacing;
+            const optionX = layout.buttonX;
+            const optionWidth = layout.buttonWidth;
+
+            // Helper function to draw an option toggle
+            const drawOptionToggle = (label: string, y: number, isActive: boolean) => {
+                // Draw label
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 16 : 18}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(label, optionX, y + (optionHeight * 0.4));
+                
+                // Draw toggle buttons
+                const buttonWidth = optionWidth * 0.35;
+                const buttonGap = 10;
+                const button1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+                const button2X = optionX + optionWidth - buttonWidth;
+                
+                return { button1X, button2X, buttonWidth };
+            };
+
+            // Damage Display Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Damage Display:', optionX, optionY + (optionHeight * 0.4));
+            
+            const damageButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+            
+            // Damage button
+            const isDamageMode = this.damageDisplayMode === 'damage';
+            this.ctx.fillStyle = isDamageMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isDamageMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Dmg #', damageButtons.button1X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            // Remaining Life button
+            const isRemainingMode = this.damageDisplayMode === 'remaining-life';
+            this.ctx.fillStyle = isRemainingMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isRemainingMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('HP Left', damageButtons.button2X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            optionY += optionHeight + optionSpacing;
+
+            // Health Display Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Health Display:', optionX, optionY + (optionHeight * 0.4));
+            
+            const healthButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+            
+            // Bar button
+            const isBarMode = this.healthDisplayMode === 'bar';
+            this.ctx.fillStyle = isBarMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isBarMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Bar', healthButtons.button1X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+            
+            // Number button
+            const isNumberMode = this.healthDisplayMode === 'number';
+            this.ctx.fillStyle = isNumberMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isNumberMode ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Number', healthButtons.button2X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+        } else {
+            const maxScroll = this.getGraphicsMenuMaxScroll(layout);
+            if (this.graphicsMenuScrollOffset > maxScroll) {
+                this.graphicsMenuScrollOffset = maxScroll;
+            }
+            this.ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+            this.ctx.fillRect(
+                layout.graphicsListX,
+                layout.graphicsListY,
+                layout.graphicsListWidth,
+                layout.graphicsListHeight
+            );
+            this.ctx.save();
+            this.ctx.beginPath();
+            this.ctx.rect(
+                layout.graphicsListX,
+                layout.graphicsListY,
+                layout.graphicsListWidth,
+                layout.graphicsListHeight
+            );
+            this.ctx.clip();
+
+            const labelX = layout.graphicsListX + 8;
+            const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+            const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
+            const variants: Array<{ variant: GraphicVariant; label: string }> = [
+                { variant: 'svg', label: 'SVG' },
+                { variant: 'png', label: 'PNG' },
+                { variant: 'stub', label: 'Stub' }
+            ];
+
+            for (let i = 0; i < this.graphicsOptions.length; i += 1) {
+                const option = this.graphicsOptions[i];
+                const rowY = layout.graphicsListY + i * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
+                if (rowY + layout.graphicsRowHeight < layout.graphicsListY || rowY > layout.graphicsListY + layout.graphicsListHeight) {
+                    continue;
+                }
+                this.ctx.fillStyle = i % 2 === 0 ? 'rgba(40, 40, 40, 0.6)' : 'rgba(55, 55, 55, 0.6)';
+                this.ctx.fillRect(layout.graphicsListX, rowY, layout.graphicsListWidth, layout.graphicsRowHeight);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 13 : 15}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(option.label, labelX, rowY + layout.graphicsRowHeight * 0.65);
+
+                const selectedVariant = this.getGraphicVariant(option.key);
+                const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
+                for (let j = 0; j < variants.length; j += 1) {
+                    const variant = variants[j];
+                    const buttonX = buttonStartX + j * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
+                    const isSelected = selectedVariant === variant.variant;
+                    const isAvailable =
+                        variant.variant === 'stub' ||
+                        (variant.variant === 'svg' && option.svgPath) ||
+                        (variant.variant === 'png' && option.pngPath);
+                    this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+                    if (!isAvailable) {
+                        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.5)';
+                    }
+                    this.ctx.fillRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
+                    this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
+                    this.ctx.lineWidth = 1.5;
+                    this.ctx.strokeRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
+                    this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
+                    this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText(
+                        variant.label,
+                        buttonX + layout.graphicsButtonWidth / 2,
+                        buttonY + layout.graphicsButtonHeight * 0.68
+                    );
+                }
+            }
+
+            this.ctx.restore();
+        }
+
         this.ctx.textAlign = 'left';
     }
 
@@ -3625,8 +4751,7 @@ export class GameRenderer {
         const stats = [
             { label: 'Units Created', key: 'unitsCreated' },
             { label: 'Units Lost', key: 'unitsLost' },
-            { label: 'Solarium Gathered', key: 'solariumGathered' },
-            { label: 'Final Solarium', key: 'solarium' }
+            { label: 'Energy Gathered', key: 'energyGathered' }
         ];
         
         for (const stat of stats) {
@@ -3637,7 +4762,7 @@ export class GameRenderer {
             
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
-                const value = stat.key === 'solarium' ? player[stat.key].toFixed(1) : player[stat.key];
+                const value = stat.key === 'energy' ? player[stat.key].toFixed(1) : player[stat.key];
                 const colX = playerStartX + playerColumnWidth * (i + 1);
                 this.ctx.fillText(String(value), colX, y);
             }

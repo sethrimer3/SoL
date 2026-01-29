@@ -4,6 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
+import { NetworkManager, LANSignaling, LobbyInfo, MessageType, NetworkEvent } from './network';
 
 export interface MenuOption {
     id: string;
@@ -118,13 +119,20 @@ interface MenuAsteroid {
 }
 
 class BackgroundParticleLayer {
-    private static readonly PARTICLE_COUNT = 8;
-    private static readonly PARTICLE_RADIUS = 250;
+    private static readonly PARTICLE_COUNT = 24;
+    private static readonly PARTICLE_RADIUS = 75;  // 30% of original 250
     private static readonly MAX_VELOCITY = 0.3;
+    private static readonly MIN_VELOCITY = 0.02;
     private static readonly FRICTION = 0.98;
     private static readonly COLOR_TRANSITION_SPEED = 0.002;
     private static readonly ATTRACTION_STRENGTH = 0.15;
     private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
+    private static readonly EDGE_REPULSION_DISTANCE = 300;
+    private static readonly EDGE_REPULSION_STRENGTH = 0.05;
+    private static readonly EDGE_GLOW_DISTANCE = 400;
+    // Normalization factor for edge glow intensity scaled by particle count
+    // Higher particle count requires higher normalization to maintain visual consistency
+    private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -133,6 +141,12 @@ class BackgroundParticleLayer {
     private animationFrameId: number | null = null;
     private isActive: boolean = false;
     private lastColorChangeMs: number = 0;
+    private edgeGlows: { top: number[]; right: number[]; bottom: number[]; left: number[] } = {
+        top: [0, 0, 0],
+        right: [0, 0, 0],
+        bottom: [0, 0, 0],
+        left: [0, 0, 0]
+    };
     
     private readonly gradientColors = [
         [138, 43, 226],   // Blue Violet
@@ -267,6 +281,12 @@ class BackgroundParticleLayer {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
         
+        // Reset edge glows
+        this.edgeGlows.top = [0, 0, 0];
+        this.edgeGlows.right = [0, 0, 0];
+        this.edgeGlows.bottom = [0, 0, 0];
+        this.edgeGlows.left = [0, 0, 0];
+        
         // Apply attraction/repulsion forces
         for (let i = 0; i < this.particles.length; i++) {
             const p1 = this.particles[i];
@@ -289,6 +309,31 @@ class BackgroundParticleLayer {
                 }
             }
             
+            // Apply edge repulsion
+            const edgeRepulsion = BackgroundParticleLayer.EDGE_REPULSION_DISTANCE;
+            const edgeStrength = BackgroundParticleLayer.EDGE_REPULSION_STRENGTH;
+            
+            // Left edge
+            if (p1.x < edgeRepulsion) {
+                const force = (1 - p1.x / edgeRepulsion) * edgeStrength;
+                p1.velocityX += force;
+            }
+            // Right edge
+            if (p1.x > width - edgeRepulsion) {
+                const force = (1 - (width - p1.x) / edgeRepulsion) * edgeStrength;
+                p1.velocityX -= force;
+            }
+            // Top edge
+            if (p1.y < edgeRepulsion) {
+                const force = (1 - p1.y / edgeRepulsion) * edgeStrength;
+                p1.velocityY += force;
+            }
+            // Bottom edge
+            if (p1.y > height - edgeRepulsion) {
+                const force = (1 - (height - p1.y) / edgeRepulsion) * edgeStrength;
+                p1.velocityY -= force;
+            }
+            
             // Apply friction
             p1.velocityX *= BackgroundParticleLayer.FRICTION;
             p1.velocityY *= BackgroundParticleLayer.FRICTION;
@@ -299,16 +344,70 @@ class BackgroundParticleLayer {
                 p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MAX_VELOCITY;
                 p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
             }
+            // Apply minimum velocity to keep particles moving
+            if (speed < BackgroundParticleLayer.MIN_VELOCITY) {
+                // Give particles a small random velocity if completely stopped
+                const angle = Math.random() * Math.PI * 2;
+                p1.velocityX = Math.cos(angle) * BackgroundParticleLayer.MIN_VELOCITY;
+                p1.velocityY = Math.sin(angle) * BackgroundParticleLayer.MIN_VELOCITY;
+            }
             
             // Update position
             p1.x += p1.velocityX;
             p1.y += p1.velocityY;
             
-            // Wrap around screen edges
-            if (p1.x < -p1.radius) p1.x = width + p1.radius;
-            if (p1.x > width + p1.radius) p1.x = -p1.radius;
-            if (p1.y < -p1.radius) p1.y = height + p1.radius;
-            if (p1.y > height + p1.radius) p1.y = -p1.radius;
+            // Keep particles on screen (bounce back instead of wrapping)
+            if (p1.x < 0) {
+                p1.x = 0;
+                p1.velocityX = Math.abs(p1.velocityX);
+            }
+            if (p1.x > width) {
+                p1.x = width;
+                p1.velocityX = -Math.abs(p1.velocityX);
+            }
+            if (p1.y < 0) {
+                p1.y = 0;
+                p1.velocityY = Math.abs(p1.velocityY);
+            }
+            if (p1.y > height) {
+                p1.y = height;
+                p1.velocityY = -Math.abs(p1.velocityY);
+            }
+            
+            // Calculate edge glow contributions
+            const glowDistance = BackgroundParticleLayer.EDGE_GLOW_DISTANCE;
+            const r = Math.round(p1.colorR);
+            const g = Math.round(p1.colorG);
+            const b = Math.round(p1.colorB);
+            
+            // Top edge glow
+            if (p1.y < glowDistance) {
+                const intensity = (1 - p1.y / glowDistance);
+                this.edgeGlows.top[0] += r * intensity;
+                this.edgeGlows.top[1] += g * intensity;
+                this.edgeGlows.top[2] += b * intensity;
+            }
+            // Bottom edge glow
+            if (p1.y > height - glowDistance) {
+                const intensity = (1 - (height - p1.y) / glowDistance);
+                this.edgeGlows.bottom[0] += r * intensity;
+                this.edgeGlows.bottom[1] += g * intensity;
+                this.edgeGlows.bottom[2] += b * intensity;
+            }
+            // Left edge glow
+            if (p1.x < glowDistance) {
+                const intensity = (1 - p1.x / glowDistance);
+                this.edgeGlows.left[0] += r * intensity;
+                this.edgeGlows.left[1] += g * intensity;
+                this.edgeGlows.left[2] += b * intensity;
+            }
+            // Right edge glow
+            if (p1.x > width - glowDistance) {
+                const intensity = (1 - (width - p1.x) / glowDistance);
+                this.edgeGlows.right[0] += r * intensity;
+                this.edgeGlows.right[1] += g * intensity;
+                this.edgeGlows.right[2] += b * intensity;
+            }
             
             // Smoothly transition colors
             p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
@@ -324,6 +423,64 @@ class BackgroundParticleLayer {
         // Clear with black background
         this.context.fillStyle = '#000000';
         this.context.fillRect(0, 0, width, height);
+        
+        // Draw edge glows first (under particles)
+        this.context.globalCompositeOperation = 'screen';
+        this.context.filter = 'blur(40px)';
+        
+        const glowHeight = 60;
+        const glowWidth = 60;
+        
+        // Normalize and draw edge glows
+        const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
+        
+        // Top edge
+        const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
+        const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
+        const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
+        if (topR + topG + topB > 0) {
+            const gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
+            gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
+            gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, 0, width, glowHeight);
+        }
+        
+        // Bottom edge
+        const bottomR = Math.min(255, Math.round(this.edgeGlows.bottom[0] / maxGlow * 255));
+        const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
+        const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
+        if (bottomR + bottomG + bottomB > 0) {
+            const gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
+            gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
+            gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, height - glowHeight, width, glowHeight);
+        }
+        
+        // Left edge
+        const leftR = Math.min(255, Math.round(this.edgeGlows.left[0] / maxGlow * 255));
+        const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
+        const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
+        if (leftR + leftG + leftB > 0) {
+            const gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
+            gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
+            gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(0, 0, glowWidth, height);
+        }
+        
+        // Right edge
+        const rightR = Math.min(255, Math.round(this.edgeGlows.right[0] / maxGlow * 255));
+        const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
+        const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
+        if (rightR + rightG + rightB > 0) {
+            const gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
+            gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
+            gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
+            this.context.fillStyle = gradient;
+            this.context.fillRect(width - glowWidth, 0, glowWidth, height);
+        }
         
         // Draw particles with blur effect (reduced blur for better performance)
         this.context.filter = 'blur(60px)';
@@ -603,7 +760,7 @@ class MenuAtmosphereLayer {
         const sunCenter = this.getSunCenter();
         for (const asteroid of this.asteroids) {
             const points = this.getAsteroidPoints(asteroid);
-            this.renderAsteroidShadow(asteroid, points, sunCenter);
+            // Dropshadow removed per requirements
             this.renderAsteroidBody(asteroid, points);
         }
     }
@@ -1250,6 +1407,12 @@ export interface GameSettings {
     selectedBaseLoadout: string | null; // Base loadout ID
     selectedSpawnLoadout: string | null; // Spawn loadout ID
     colorScheme: string; // Color scheme ID
+    damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
+    healthDisplayMode: 'bar' | 'number'; // How to display unit health
+    graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
+    username: string; // Player's username for multiplayer
+    gameMode: 'ai' | 'online' | 'lan'; // Game mode selection
+    networkManager?: NetworkManager; // Network manager for LAN/online play
 }
 
 export class MainMenu {
@@ -1260,10 +1423,13 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
+    private testLevelButton: HTMLButtonElement | null = null;
+    private lanServerListTimeout: number | null = null; // Track timeout for cleanup
+    private networkManager: NetworkManager | null = null; // Network manager for LAN play
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -1326,6 +1492,14 @@ export class MainMenu {
             description: 'Classic 1v1 map with a single sun at the center. Balanced gameplay with moderate obstacles.',
             numSuns: 1,
             numAsteroids: 10,
+            mapSize: 2000
+        },
+        {
+            id: 'test-level',
+            name: 'Test Level',
+            description: 'Minimal layout for AI testing with a single sun, mirrored bases, and no asteroids.',
+            numSuns: 1,
+            numAsteroids: 0,
             mapSize: 2000
         },
         {
@@ -1399,7 +1573,12 @@ export class MainMenu {
             enemyColor: '#FF6B6B',   // Slightly light red
             selectedBaseLoadout: null,
             selectedSpawnLoadout: null,
-            colorScheme: 'SpaceBlack' // Default color scheme
+            colorScheme: 'SpaceBlack', // Default color scheme
+            damageDisplayMode: 'damage', // Default to showing damage numbers
+            healthDisplayMode: 'bar', // Default to showing health bars
+            graphicsQuality: 'high', // Default to high graphics
+            username: this.getOrGenerateUsername(), // Load or generate username
+            gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
         
@@ -1447,6 +1626,8 @@ export class MainMenu {
         );
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
+        this.testLevelButton = this.createTestLevelButton();
+        menu.appendChild(this.testLevelButton);
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(content);
@@ -1466,6 +1647,59 @@ export class MainMenu {
         });
         
         return menu;
+    }
+
+    private createTestLevelButton(): HTMLButtonElement {
+        const button = document.createElement('button');
+        button.textContent = 'TEST LEVEL';
+        button.type = 'button';
+        button.style.position = 'absolute';
+        button.style.top = '20px';
+        button.style.right = '20px';
+        button.style.padding = '10px 16px';
+        button.style.borderRadius = '6px';
+        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
+        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+        button.style.color = '#FFFFFF';
+        button.style.fontFamily = 'Arial, sans-serif';
+        button.style.fontWeight = '500';
+        button.style.fontSize = '14px';
+        button.style.letterSpacing = '0.08em';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2';
+        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
+
+        button.addEventListener('mouseenter', () => {
+            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
+            button.style.borderColor = '#FFD700';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        button.addEventListener('click', () => {
+            const testMap = this.availableMaps.find(map => map.id === 'test-level');
+            if (!testMap) {
+                return;
+            }
+            this.settings.selectedMap = testMap;
+            this.hide();
+            if (this.onStartCallback) {
+                this.ensureDefaultHeroSelection();
+                this.onStartCallback(this.settings);
+            }
+        });
+
+        return button;
+    }
+
+    private setTestLevelButtonVisible(isVisible: boolean): void {
+        if (!this.testLevelButton) {
+            return;
+        }
+        this.testLevelButton.style.display = isVisible ? 'block' : 'none';
     }
 
     private getSelectedHeroNames(): string[] {
@@ -1489,6 +1723,35 @@ export class MainMenu {
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
     }
 
+    /**
+     * Generate a random username in the format "player#XXXX"
+     */
+    private generateRandomUsername(): string {
+        const randomNumber = Math.floor(Math.random() * 10000);
+        return `player#${randomNumber.toString().padStart(4, '0')}`;
+    }
+
+    /**
+     * Get username from localStorage or generate a new one
+     */
+    private getOrGenerateUsername(): string {
+        const storedUsername = localStorage.getItem('sol_username');
+        if (storedUsername && storedUsername.trim() !== '') {
+            return storedUsername;
+        }
+        const newUsername = this.generateRandomUsername();
+        localStorage.setItem('sol_username', newUsername);
+        return newUsername;
+    }
+
+    /**
+     * Save username to localStorage
+     */
+    private saveUsername(username: string): void {
+        localStorage.setItem('sol_username', username);
+        this.settings.username = username;
+    }
+
     private resolveAssetPath(path: string): string {
         if (!path.startsWith('ASSETS/')) {
             return path;
@@ -1509,6 +1772,12 @@ export class MainMenu {
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
         }
+        // Clear any pending timeouts
+        if (this.lanServerListTimeout !== null) {
+            clearTimeout(this.lanServerListTimeout);
+            this.lanServerListTimeout = null;
+        }
+        this.setTestLevelButtonVisible(false);
     }
 
     private setMenuParticleDensity(multiplier: number): void {
@@ -1526,18 +1795,19 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
+        this.setTestLevelButtonVisible(true);
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         
-        // Title graphic
+        // Title graphic - raised a little
         const titleGraphic = document.createElement('img');
         titleGraphic.src = this.resolveAssetPath('ASSETS/sprites/menu/titleGraphic.svg');
         titleGraphic.alt = 'Speed of Light RTS';
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
         titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = isCompactLayout ? '8px' : '12px';
+        titleGraphic.style.marginBottom = isCompactLayout ? '12px' : '20px';
         titleGraphic.style.alignSelf = 'center';
         container.appendChild(titleGraphic);
 
@@ -1546,7 +1816,8 @@ export class MainMenu {
         carouselContainer.style.width = '100%';
         carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
         carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = '32px';
+        carouselContainer.style.marginTop = isCompactLayout ? '4px' : '6px';
+        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
         container.appendChild(carouselContainer);
 
         // Create carousel menu with main menu options
@@ -1589,11 +1860,9 @@ export class MainMenu {
                     this.renderFactionSelectionScreen(this.contentElement);
                     break;
                 case 'start':
-                    this.hide();
-                    if (this.onStartCallback) {
-                        this.ensureDefaultHeroSelection();
-                        this.onStartCallback(this.settings);
-                    }
+                    this.currentScreen = 'game-mode-select';
+                    this.startMenuTransition();
+                    this.renderGameModeSelectionScreen(this.contentElement);
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
@@ -1716,6 +1985,531 @@ export class MainMenu {
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
+    private renderLANScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'LAN Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Host server button
+        const hostButton = this.createButton('HOST SERVER', () => {
+            this.showHostLobbyDialog();
+        }, '#00AA00');
+        hostButton.style.marginBottom = '20px';
+        hostButton.style.padding = '15px 40px';
+        hostButton.style.fontSize = '28px';
+        container.appendChild(hostButton);
+
+        // Join server button
+        const joinButton = this.createButton('JOIN SERVER', () => {
+            this.showJoinLobbyDialog();
+        }, '#0088FF');
+        joinButton.style.marginBottom = '40px';
+        joinButton.style.padding = '15px 40px';
+        joinButton.style.fontSize = '28px';
+        container.appendChild(joinButton);
+
+        // Info section
+        const infoContainer = document.createElement('div');
+        infoContainer.style.maxWidth = '600px';
+        infoContainer.style.width = '100%';
+        infoContainer.style.padding = '20px';
+        infoContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        infoContainer.style.borderRadius = '10px';
+        infoContainer.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+        infoContainer.style.marginBottom = '30px';
+
+        const infoTitle = document.createElement('h3');
+        infoTitle.textContent = 'How LAN Play Works';
+        infoTitle.style.fontSize = '24px';
+        infoTitle.style.marginBottom = '15px';
+        infoTitle.style.color = '#FFD700';
+        infoTitle.style.textAlign = 'center';
+        infoContainer.appendChild(infoTitle);
+
+        const infoText = document.createElement('p');
+        infoText.innerHTML = `
+            <strong>For Host:</strong><br>
+            1. Click "HOST SERVER" to create a lobby<br>
+            2. Share the connection code with other players<br>
+            3. Wait for players to join<br>
+            4. Start the game when ready<br><br>
+            <strong>For Client:</strong><br>
+            1. Click "JOIN SERVER"<br>
+            2. Enter the connection code from the host<br>
+            3. Wait in lobby for host to start the game
+        `;
+        infoText.style.color = '#CCCCCC';
+        infoText.style.fontSize = '16px';
+        infoText.style.lineHeight = '1.6';
+        infoContainer.appendChild(infoText);
+
+        container.appendChild(infoContainer);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private async showHostLobbyDialog(): Promise<void> {
+        // Initialize network manager
+        const playerId = `player_${Date.now()}`;
+        this.networkManager = new NetworkManager(playerId);
+
+        // Create lobby
+        const lobbyName = `${this.settings.username}'s lobby`;
+        const lobby = this.networkManager.createLobby(lobbyName, this.settings.username, 2);
+
+        try {
+            // Generate connection offer
+            const offer = await this.networkManager.createOfferForPeer('client');
+            const connectionCode = await LANSignaling.generateHostCode(offer, playerId, this.settings.username);
+
+            // Show lobby screen with connection code
+            this.renderHostLobbyScreen(lobby, connectionCode, playerId);
+        } catch (error) {
+            console.error('Failed to create lobby:', error);
+            alert('Failed to create lobby. Please try again.');
+        }
+    }
+
+    private async showJoinLobbyDialog(): Promise<void> {
+        // Prompt for connection code
+        const code = prompt('Enter the connection code from the host:');
+        if (!code) return;
+
+        try {
+            // Parse connection code
+            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
+
+            // Initialize network manager
+            const playerId = `player_${Date.now()}`;
+            this.networkManager = new NetworkManager(playerId);
+
+            // Create answer
+            const answer = await this.networkManager.connectToPeer(hostId, offer);
+            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
+
+            // Show dialog with answer code
+            this.renderClientAnswerScreen(answerCode, hostUsername);
+        } catch (error) {
+            console.error('Failed to join lobby:', error);
+            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
+
+    private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string, hostPlayerId: string): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Lobby: ' + lobby.name;
+        title.style.fontSize = isCompactLayout ? '28px' : '36px';
+        title.style.marginBottom = '20px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Connection code display
+        const codeContainer = document.createElement('div');
+        codeContainer.style.maxWidth = '600px';
+        codeContainer.style.width = '100%';
+        codeContainer.style.padding = '20px';
+        codeContainer.style.backgroundColor = 'rgba(0, 100, 0, 0.3)';
+        codeContainer.style.borderRadius = '10px';
+        codeContainer.style.border = '2px solid rgba(0, 255, 0, 0.3)';
+        codeContainer.style.marginBottom = '20px';
+
+        const codeLabel = document.createElement('p');
+        codeLabel.textContent = 'Share this connection code:';
+        codeLabel.style.color = '#CCCCCC';
+        codeLabel.style.fontSize = '18px';
+        codeLabel.style.marginBottom = '10px';
+        codeContainer.appendChild(codeLabel);
+
+        const codeText = document.createElement('textarea');
+        codeText.value = connectionCode;
+        codeText.readOnly = true;
+        codeText.style.width = '100%';
+        codeText.style.height = '80px';
+        codeText.style.padding = '10px';
+        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        codeText.style.color = '#00FF00';
+        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        codeText.style.borderRadius = '5px';
+        codeText.style.fontSize = '14px';
+        codeText.style.fontFamily = 'monospace';
+        codeText.style.resize = 'none';
+        codeContainer.appendChild(codeText);
+
+        const copyButton = this.createButton('COPY CODE', async () => {
+            try {
+                await navigator.clipboard.writeText(codeText.value);
+                alert('Connection code copied to clipboard!');
+            } catch (err) {
+                // Fallback for older browsers
+                codeText.select();
+                document.execCommand('copy');
+                alert('Connection code copied to clipboard!');
+            }
+        }, '#008800');
+        copyButton.style.marginTop = '10px';
+        copyButton.style.padding = '10px 20px';
+        copyButton.style.fontSize = '16px';
+        codeContainer.appendChild(copyButton);
+
+        this.contentElement.appendChild(codeContainer);
+
+        // Waiting for answer code input
+        const answerContainer = document.createElement('div');
+        answerContainer.style.maxWidth = '600px';
+        answerContainer.style.width = '100%';
+        answerContainer.style.padding = '20px';
+        answerContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
+        answerContainer.style.borderRadius = '10px';
+        answerContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
+        answerContainer.style.marginBottom = '30px';
+
+        const answerLabel = document.createElement('p');
+        answerLabel.textContent = 'Paste the answer code from the client:';
+        answerLabel.style.color = '#CCCCCC';
+        answerLabel.style.fontSize = '18px';
+        answerLabel.style.marginBottom = '10px';
+        answerContainer.appendChild(answerLabel);
+
+        const answerInput = document.createElement('textarea');
+        answerInput.placeholder = 'Paste answer code here...';
+        answerInput.style.width = '100%';
+        answerInput.style.height = '80px';
+        answerInput.style.padding = '10px';
+        answerInput.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        answerInput.style.color = '#FFFFFF';
+        answerInput.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        answerInput.style.borderRadius = '5px';
+        answerInput.style.fontSize = '14px';
+        answerInput.style.fontFamily = 'monospace';
+        answerInput.style.resize = 'none';
+        answerContainer.appendChild(answerInput);
+
+        const connectButton = this.createButton('CONNECT', async () => {
+            const answerCode = answerInput.value.trim();
+            if (!answerCode) {
+                alert('Please paste the answer code from the client.');
+                return;
+            }
+
+            try {
+                const { answer, playerId: clientId, username: clientUsername } = LANSignaling.parseAnswerCode(answerCode);
+                await this.networkManager?.completeConnection(clientId, answer);
+                
+                // Send lobby update to client
+                if (this.networkManager && this.networkManager.getLobby()) {
+                    const lobby = this.networkManager.getLobby()!;
+                    lobby.players.push({
+                        id: clientId,
+                        username: clientUsername,
+                        isHost: false,
+                        isReady: true
+                    });
+                    this.networkManager.broadcast({
+                        type: MessageType.LOBBY_UPDATE,
+                        senderId: hostPlayerId,
+                        timestamp: Date.now(),
+                        data: lobby
+                    });
+                }
+                
+                alert(`${clientUsername} connected! You can now start the game.`);
+            } catch (error) {
+                console.error('Failed to connect client:', error);
+                alert(`Failed to connect: ${error instanceof Error ? error.message : 'Invalid answer code'}`);
+            }
+        }, '#0088FF');
+        connectButton.style.marginTop = '10px';
+        connectButton.style.padding = '10px 20px';
+        connectButton.style.fontSize = '16px';
+        answerContainer.appendChild(connectButton);
+
+        this.contentElement.appendChild(answerContainer);
+
+        // Start Game button (only for host)
+        const startGameButton = this.createButton('START GAME', () => {
+            if (!this.networkManager) {
+                alert('Network manager not initialized.');
+                return;
+            }
+
+            if (this.networkManager.getPeerCount() === 0) {
+                alert('Please wait for at least one player to connect before starting.');
+                return;
+            }
+
+            // Notify peers that game is starting
+            this.networkManager.startGame();
+
+            // Set game mode to LAN
+            this.settings.gameMode = 'lan';
+            // Pass network manager to settings
+            this.settings.networkManager = this.networkManager;
+            
+            // Start the game
+            if (this.onStartCallback) {
+                this.hide();
+                this.onStartCallback(this.settings);
+            }
+        }, '#FF8800');
+        startGameButton.style.marginBottom = '20px';
+        startGameButton.style.padding = '15px 40px';
+        startGameButton.style.fontSize = '24px';
+        this.contentElement.appendChild(startGameButton);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderClientAnswerScreen(answerCode: string, hostUsername: string): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = `Joining ${hostUsername}'s Lobby`;
+        title.style.fontSize = '32px';
+        title.style.marginBottom = '20px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Instructions
+        const instructions = document.createElement('p');
+        instructions.textContent = 'Send this answer code to the host:';
+        instructions.style.color = '#CCCCCC';
+        instructions.style.fontSize = '18px';
+        instructions.style.textAlign = 'center';
+        instructions.style.marginBottom = '20px';
+        this.contentElement.appendChild(instructions);
+
+        // Answer code display
+        const codeContainer = document.createElement('div');
+        codeContainer.style.maxWidth = '600px';
+        codeContainer.style.width = '100%';
+        codeContainer.style.padding = '20px';
+        codeContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
+        codeContainer.style.borderRadius = '10px';
+        codeContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
+        codeContainer.style.marginBottom = '30px';
+
+        const codeText = document.createElement('textarea');
+        codeText.value = answerCode;
+        codeText.readOnly = true;
+        codeText.style.width = '100%';
+        codeText.style.height = '80px';
+        codeText.style.padding = '10px';
+        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        codeText.style.color = '#0088FF';
+        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        codeText.style.borderRadius = '5px';
+        codeText.style.fontSize = '14px';
+        codeText.style.fontFamily = 'monospace';
+        codeText.style.resize = 'none';
+        codeContainer.appendChild(codeText);
+
+        const copyButton = this.createButton('COPY CODE', async () => {
+            try {
+                await navigator.clipboard.writeText(codeText.value);
+                alert('Answer code copied to clipboard!');
+            } catch (err) {
+                // Fallback for older browsers
+                codeText.select();
+                document.execCommand('copy');
+                alert('Answer code copied to clipboard!');
+            }
+        }, '#0088FF');
+        copyButton.style.marginTop = '10px';
+        copyButton.style.padding = '10px 20px';
+        copyButton.style.fontSize = '16px';
+        codeContainer.appendChild(copyButton);
+
+        this.contentElement.appendChild(codeContainer);
+
+        // Waiting message
+        const waitingText = document.createElement('p');
+        waitingText.textContent = 'Waiting for host to complete connection...';
+        waitingText.style.color = '#888888';
+        waitingText.style.fontSize = '18px';
+        waitingText.style.textAlign = 'center';
+        waitingText.style.marginBottom = '30px';
+        this.contentElement.appendChild(waitingText);
+
+        // Listen for game start
+        this.networkManager?.on(NetworkEvent.MESSAGE_RECEIVED, (data) => {
+            if (data && data.type === MessageType.GAME_START) {
+                // Hide menu and start game
+                if (this.onStartCallback) {
+                    this.settings.gameMode = 'lan';
+                    this.settings.networkManager = this.networkManager!;
+                    this.hide();
+                    this.onStartCallback(this.settings);
+                }
+            }
+        });
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderClientWaitingScreen(): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Connecting to Host...';
+        title.style.fontSize = '36px';
+        title.style.marginBottom = '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Info text
+        const infoText = document.createElement('p');
+        infoText.textContent = 'Waiting for host to complete the connection...';
+        infoText.style.color = '#CCCCCC';
+        infoText.style.fontSize = '20px';
+        infoText.style.textAlign = 'center';
+        infoText.style.marginBottom = '30px';
+        this.contentElement.appendChild(infoText);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderOnlinePlaceholderScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Online Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Coming soon message
+        const message = document.createElement('div');
+        message.style.maxWidth = '600px';
+        message.style.padding = '40px';
+        message.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        message.style.borderRadius = '10px';
+        message.style.border = '2px solid rgba(255, 215, 0, 0.3)';
+        message.style.marginBottom = '30px';
+
+        const messageTitle = document.createElement('h3');
+        messageTitle.textContent = 'Coming Soon!';
+        messageTitle.style.fontSize = '32px';
+        messageTitle.style.color = '#FFD700';
+        messageTitle.style.textAlign = 'center';
+        messageTitle.style.marginBottom = '20px';
+        messageTitle.style.fontWeight = '300';
+        message.appendChild(messageTitle);
+
+        const messageText = document.createElement('p');
+        messageText.innerHTML = `
+            Online multiplayer is currently in development.<br><br>
+            <strong>Features:</strong><br>
+            • Simple, efficient data transmission<br>
+            • Prioritized for speed and minimal data size<br>
+            • Cross-platform matchmaking<br>
+            • Ranked and casual modes
+        `;
+        messageText.style.fontSize = '20px';
+        messageText.style.color = '#CCCCCC';
+        messageText.style.textAlign = 'center';
+        messageText.style.lineHeight = '1.6';
+        message.appendChild(messageText);
+
+        container.appendChild(message);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
@@ -1753,6 +2547,19 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(difficultySection);
+
+        // Username setting
+        const usernameSection = this.createSettingSection(
+            'Username',
+            this.createTextInput(
+                this.settings.username,
+                (value) => {
+                    this.saveUsername(value);
+                },
+                'Enter your username'
+            )
+        );
+        settingsContainer.appendChild(usernameSection);
 
         // Sound setting
         const soundSection = this.createSettingSection(
@@ -1813,6 +2620,19 @@ export class MainMenu {
         );
         settingsContainer.appendChild(enemyColorSection);
 
+        // Graphics Quality setting
+        const graphicsQualitySection = this.createSettingSection(
+            'Graphics Quality',
+            this.createSelect(
+                ['low', 'medium', 'high'],
+                this.settings.graphicsQuality,
+                (value) => {
+                    this.settings.graphicsQuality = value as 'low' | 'medium' | 'high';
+                }
+            )
+        );
+        settingsContainer.appendChild(graphicsQualitySection);
+
         // Color Scheme setting
         const colorSchemeSection = this.createSettingSection(
             'Color Scheme',
@@ -1836,6 +2656,100 @@ export class MainMenu {
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderGameModeSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Select Game Mode';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Create carousel menu container
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
+        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
+        container.appendChild(carouselContainer);
+
+        // Create game mode options
+        const gameModeOptions: MenuOption[] = [
+            {
+                id: 'ai',
+                name: 'AI',
+                description: 'Play against computer opponent'
+            },
+            {
+                id: 'online',
+                name: 'ONLINE',
+                description: 'Play against players worldwide'
+            },
+            {
+                id: 'lan',
+                name: 'LAN',
+                description: 'Play on local network'
+            }
+        ];
+
+        // Default to AI mode (index 0)
+        this.carouselMenu = new CarouselMenuView(carouselContainer, gameModeOptions, 0);
+        this.carouselMenu.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onNavigate(() => {
+            this.startMenuTransition();
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onSelect((option: MenuOption) => {
+            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan';
+            
+            switch (option.id) {
+                case 'ai':
+                    // Start AI game directly
+                    this.hide();
+                    if (this.onStartCallback) {
+                        this.ensureDefaultHeroSelection();
+                        this.onStartCallback(this.settings);
+                    }
+                    break;
+                case 'online':
+                    // Show online play placeholder
+                    this.currentScreen = 'online';
+                    this.startMenuTransition();
+                    this.renderOnlinePlaceholderScreen(this.contentElement);
+                    break;
+                case 'lan':
+                    // Show LAN menu
+                    this.currentScreen = 'lan';
+                    this.startMenuTransition();
+                    this.renderLANScreen(this.contentElement);
+                    break;
+            }
+        });
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'main';
+            this.startMenuTransition();
+            this.renderMainScreen(this.contentElement);
+        }, '#666666');
+        backButton.style.marginTop = '30px';
+        container.appendChild(backButton);
+
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
@@ -2542,6 +3456,53 @@ export class MainMenu {
     }
 
     /**
+     * Validate and sanitize username
+     */
+    private validateUsername(username: string): string {
+        // Trim and limit length
+        let sanitized = username.trim().substring(0, 20);
+        
+        // If empty or invalid, generate random username
+        if (sanitized.length < 1) {
+            return this.generateRandomUsername();
+        }
+        
+        return sanitized;
+    }
+
+    private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.placeholder = placeholder;
+        input.style.fontSize = '20px';
+        input.style.padding = '8px 15px';
+        input.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        input.style.color = '#FFFFFF';
+        input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        input.style.borderRadius = '5px';
+        input.style.fontFamily = 'inherit';
+        input.style.fontWeight = '300';
+        input.style.minWidth = '200px';
+        input.maxLength = 20;
+        input.style.outline = 'none';
+
+        // Update on blur instead of every keystroke for efficiency
+        input.addEventListener('blur', () => {
+            const validatedValue = this.validateUsername(input.value);
+            input.value = validatedValue;
+            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            onChange(validatedValue);
+        });
+
+        input.addEventListener('focus', () => {
+            input.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        return input;
+    }
+
+    /**
      * Set callback for when start button is clicked
      */
     onStart(callback: (settings: GameSettings) => void): void {
@@ -2605,7 +3566,7 @@ export class MainMenu {
  * Faction carousel view - displays factions in a horizontal carousel
  */
 class FactionCarouselView {
-    private static readonly ITEM_SPACING_PX = 220;
+    private static readonly ITEM_SPACING_PX = 160;
     private static readonly BASE_SIZE_PX = 320;
     private static readonly TEXT_SCALE = 2.4;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
@@ -2807,7 +3768,7 @@ class FactionCarouselView {
 
     private updateLayoutMetrics(): void {
         this.isCompactLayout = window.innerWidth < 600;
-        const targetHeight = this.isCompactLayout ? '360px' : '480px';
+        const targetHeight = this.isCompactLayout ? '460px' : '600px';
         if (this.container.style.height !== targetHeight) {
             this.container.style.height = targetHeight;
         }
@@ -2966,9 +3927,9 @@ class FactionCarouselView {
  */
 class CarouselMenuView {
     // Animation constants
-    private static readonly ITEM_WIDTH = 600;
-    private static readonly BASE_SIZE = 360;
-    private static readonly TEXT_SCALE = 3;
+    private static readonly ITEM_WIDTH = 260;
+    private static readonly BASE_SIZE = 220;
+    private static readonly TEXT_SCALE = 2;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
     private static readonly VELOCITY_FACTOR = 0.001;
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
@@ -3169,7 +4130,10 @@ class CarouselMenuView {
     private updateLayoutMetrics(): void {
         const isCompactLayout = window.innerWidth < 600;
         this.isCompactLayout = isCompactLayout;
-        const targetHeight = this.isCompactLayout ? '360px' : '600px';
+        const layoutScale = this.getLayoutScale();
+        const baseSize = CarouselMenuView.BASE_SIZE * layoutScale;
+        const instructionPadding = 120 * layoutScale;
+        const targetHeight = `${Math.round(baseSize + instructionPadding)}px`;
         if (this.container.style.height !== targetHeight) {
             this.container.style.height = targetHeight;
         }
@@ -3294,20 +4258,7 @@ class CarouselMenuView {
             this.container.appendChild(optionElement);
         }
         
-        // Add instruction text
-        const instructionElement = document.createElement('div');
-        instructionElement.textContent = 'Swipe or drag to browse • Tap center to select';
-        instructionElement.style.position = 'absolute';
-        instructionElement.style.bottom = '20px';
-        instructionElement.style.left = '50%';
-        instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = '#AAAAAA';
-        instructionElement.style.fontSize = `${24 * layoutScale}px`;
-        instructionElement.style.fontWeight = '300';
-        instructionElement.style.pointerEvents = 'none';
-        instructionElement.dataset.particleText = 'true';
-        instructionElement.dataset.particleColor = '#AAAAAA';
-        this.container.appendChild(instructionElement);
+        // Instruction text removed per requirements
 
         if (this.onRenderCallback) {
             this.onRenderCallback();

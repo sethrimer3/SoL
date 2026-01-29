@@ -47,11 +47,20 @@
 ## Priority 3: Multiplayer & Platform
 
 ### Networking
-- [ ] Implement server-client architecture
-- [ ] Add real-time synchronization
+- [x] Implement peer-to-peer architecture (WebRTC)
+- [x] Add basic LAN lobby system
+- [x] Implement connection code signaling
+- [x] Add game command synchronization infrastructure
+- [x] Integrate network manager with game core
+- [x] Add command queue and processing
+- [x] Implement command execution for player actions
+- [ ] Capture and send local player commands from input handlers
+- [ ] Add real-time game state validation
 - [ ] Handle latency and prediction
+- [ ] Implement reconnection handling
+- [ ] Add state hash synchronization for desync detection
+- [ ] Add server-client architecture for online play
 - [ ] Implement matchmaking system
-- [ ] Add lobby and game room management
 
 ### Cross-Platform Support
 - [ ] Create desktop client (Windows, macOS, Linux)

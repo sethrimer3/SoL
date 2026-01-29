@@ -8,7 +8,7 @@ import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 
 class GameController {
-    private game: GameState | null = null;
+    public game: GameState | null = null;
     private renderer: GameRenderer;
     private lastTime: number = 0;
     private isRunning: boolean = false;
@@ -36,6 +36,21 @@ class GameController {
     private hasOnlyHeroUnitsSelected(): boolean {
         return this.selectedUnits.size > 0 && 
                Array.from(this.selectedUnits).every(unit => unit.isHero);
+    }
+
+    /**
+     * Check if a world position is near any selected unit
+     */
+    private isDragStartNearSelectedUnits(worldPos: Vector2D): boolean {
+        if (this.selectedUnits.size === 0) return false;
+        
+        for (const unit of this.selectedUnits) {
+            const distance = unit.position.distanceTo(worldPos);
+            if (distance <= Constants.UNIT_PATH_DRAW_RADIUS) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private getHeroUnitType(heroName: string): string | null {
@@ -88,12 +103,18 @@ class GameController {
     }
 
     private getClickedHeroButton(
-        worldPos: Vector2D,
+        screenX: number,
+        screenY: number,
         forge: StellarForge,
         heroNames: string[]
     ): { heroName: string; buttonPos: Vector2D } | null {
-        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX;
-        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX;
+        // Convert forge position to screen space
+        const forgeScreenPos = this.renderer.worldToScreen(forge.position);
+        
+        // Button measurements in screen space (affected by zoom)
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
+        
         const positions = [
             { x: 0, y: -1 },
             { x: 1, y: 0 },
@@ -103,12 +124,19 @@ class GameController {
         const displayHeroes = heroNames.slice(0, positions.length);
         for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
-            const buttonPos = new Vector2D(
-                forge.position.x + pos.x * buttonDistance,
-                forge.position.y + pos.y * buttonDistance
-            );
-            if (worldPos.distanceTo(buttonPos) <= buttonRadius) {
-                return { heroName: displayHeroes[i], buttonPos };
+            // Calculate button position in screen space
+            const buttonScreenX = forgeScreenPos.x + pos.x * buttonDistance;
+            const buttonScreenY = forgeScreenPos.y + pos.y * buttonDistance;
+            
+            // Check distance in screen space
+            const dx = screenX - buttonScreenX;
+            const dy = screenY - buttonScreenY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= buttonRadius) {
+                // Convert button screen position back to world position for the wave effect
+                const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                return { heroName: displayHeroes[i], buttonPos: buttonWorldPos };
             }
         }
         return null;
@@ -210,6 +238,30 @@ class GameController {
             this.renderer.colorScheme = colorScheme;
         }
         
+        // Set damage and health display modes from settings
+        this.renderer.damageDisplayMode = settings.damageDisplayMode;
+        this.renderer.healthDisplayMode = settings.healthDisplayMode;
+        this.game.damageDisplayMode = settings.damageDisplayMode;
+        
+        // Set graphics quality from settings
+        this.renderer.graphicsQuality = settings.graphicsQuality;
+        
+        // Set up network manager for LAN play
+        if (settings.gameMode === 'lan' && settings.networkManager) {
+            // Determine local player index based on whether this client is the host
+            const isHost = settings.networkManager.isLobbyHost();
+            const localPlayerIndex = isHost ? 0 : 1;
+            
+            // Set up AI flag for players (local player is not AI, remote player is not AI either)
+            this.game.players[0].isAi = false;
+            this.game.players[1].isAi = false;
+            
+            // Set up network manager in game state
+            this.game.setupNetworkManager(settings.networkManager, localPlayerIndex);
+            
+            console.log(`LAN mode: Local player is Player ${localPlayerIndex + 1} (${isHost ? 'Host' : 'Client'})`);
+        }
+        
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
             this.renderer.viewingPlayer = this.game.players[0];
@@ -251,9 +303,51 @@ class GameController {
             // Two suns positioned diagonally
             game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else if (map.id === 'test-level') {
+            // Single sun at center for test level
+            game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
         } else {
             // Single sun at center (default for all other maps)
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        }
+
+        if (map.id === 'test-level') {
+            const leftForgePosition = new Vector2D(-700, 0);
+            const rightForgePosition = new Vector2D(700, 0);
+            const mirrorOffset = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+            const mirrorPositionsLeft = [
+                new Vector2D(leftForgePosition.x, leftForgePosition.y - mirrorOffset),
+                new Vector2D(leftForgePosition.x, leftForgePosition.y + mirrorOffset)
+            ];
+            const mirrorPositionsRight = [
+                new Vector2D(rightForgePosition.x, rightForgePosition.y - mirrorOffset),
+                new Vector2D(rightForgePosition.x, rightForgePosition.y + mirrorOffset)
+            ];
+
+            const playerPositions = [leftForgePosition, rightForgePosition];
+            const mirrorPositions = [mirrorPositionsLeft, mirrorPositionsRight];
+
+            for (let i = 0; i < game.players.length; i++) {
+                const player = game.players[i];
+                const forgePosition = playerPositions[i] ?? leftForgePosition;
+                const mirrorPositionSet = mirrorPositions[i] ?? mirrorPositionsLeft;
+                player.stellarForge = null;
+                player.solarMirrors = [];
+                game.initializePlayer(player, forgePosition, mirrorPositionSet);
+            }
+
+            if (game.players.length >= 2) {
+                const player = game.players[0];
+                const enemyPlayer = game.players[1];
+                if (player.stellarForge && enemyPlayer.stellarForge) {
+                    player.stellarForge.initializeDefaultPath(enemyPlayer.stellarForge.position);
+                    enemyPlayer.stellarForge.initializeDefaultPath(player.stellarForge.position);
+                }
+            }
+
+            game.asteroids = [];
+            game.spaceDust = [];
+            return game;
         }
         
         // Reinitialize asteroids based on map (keeps strategic asteroids from createStandardGame)
@@ -269,7 +363,8 @@ class GameController {
         
         // Reinitialize space dust
         game.spaceDust = [];
-        game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, map.mapSize, map.mapSize, colorScheme?.spaceDustPalette);
+        const particleCount = map.id === 'test-level' ? 3000 : Constants.SPACE_DUST_PARTICLE_COUNT;
+        game.initializeSpaceDust(particleCount, map.mapSize, map.mapSize, colorScheme?.spaceDustPalette);
         
         return game;
     }
@@ -279,6 +374,14 @@ class GameController {
         const isMobileDevice = (): boolean => {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
                 || ('ontouchstart' in window);
+        };
+
+        const getCanvasPosition = (clientX: number, clientY: number): { x: number; y: number } => {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: clientX - rect.left,
+                y: clientY - rect.top
+            };
         };
 
         // Touch/Mouse support for mobile and desktop
@@ -306,9 +409,19 @@ class GameController {
         // Mouse wheel zoom - zoom towards cursor
         canvas.addEventListener('wheel', (e: WheelEvent) => {
             e.preventDefault();
+
+            if (this.showInGameMenu) {
+                const menuPos = getCanvasPosition(e.clientX, e.clientY);
+                const didScrollMenu = this.renderer.handleInGameMenuScroll(menuPos.x, menuPos.y, e.deltaY);
+                if (didScrollMenu) {
+                    return;
+                }
+            }
+
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
             
             // Get world position under mouse before zoom
-            const worldPosBeforeZoom = this.renderer.screenToWorld(e.clientX, e.clientY);
+            const worldPosBeforeZoom = this.renderer.screenToWorld(screenPos.x, screenPos.y);
             
             // Apply zoom
             const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -316,7 +429,7 @@ class GameController {
             this.renderer.setZoom(oldZoom * zoomDelta);
             
             // Get world position under mouse after zoom
-            const worldPosAfterZoom = this.renderer.screenToWorld(e.clientX, e.clientY);
+            const worldPosAfterZoom = this.renderer.screenToWorld(screenPos.x, screenPos.y);
             
             // Adjust camera to keep world position under cursor the same
             const currentCamera = this.renderer.camera;
@@ -366,7 +479,7 @@ class GameController {
                     currentCamera.x - dx / this.renderer.zoom,
                     currentCamera.y - dy / this.renderer.zoom
                 ));
-            } else if (totalMovement > 5) {
+            } else if (totalMovement > Constants.CLICK_DRAG_THRESHOLD) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
@@ -379,6 +492,25 @@ class GameController {
                         this.renderer.pathPreviewForge = this.selectedBase;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
+                    } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
+                        // Check if drag started near selected units - if so, draw movement path
+                        const dragStartWorld = this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y);
+                        if (this.isDragStartNearSelectedUnits(dragStartWorld)) {
+                            // Drawing a movement path for selected units
+                            this.isDrawingPath = true;
+                            this.pathPoints = [];
+                            this.renderer.pathPreviewForge = null; // No forge for unit paths
+                            this.renderer.pathPreviewPoints = this.pathPoints;
+                            this.cancelHold();
+                        } else if (hasOnlyHeroUnits) {
+                            // For hero units away from units, use arrow dragging mode
+                            this.isDraggingHeroArrow = true;
+                            this.cancelHold();
+                        } else {
+                            // For regular (non-hero) units when drag doesn't start near them, use selection rectangle
+                            this.isSelecting = true;
+                            this.cancelHold();
+                        }
                     } else if (hasOnlyHeroUnits) {
                         // For hero units, use arrow dragging mode
                         this.isDraggingHeroArrow = true;
@@ -389,29 +521,31 @@ class GameController {
                         this.cancelHold();
                     }
                 }
+            }
+            
+            // Update visual feedback continuously (not just when threshold exceeded)
+            // This fixes the janky rectangle/arrow update issue
+            if (this.isSelecting) {
+                // Update selection rectangle (for normal unit selection)
+                this.renderer.selectionStart = this.selectionStartScreen;
+                this.renderer.selectionEnd = new Vector2D(x, y);
+            } else if (this.isDraggingHeroArrow) {
+                // Update arrow direction (for hero ability casting)
+                this.renderer.abilityArrowStart = this.selectionStartScreen;
+                this.renderer.abilityArrowEnd = new Vector2D(x, y);
+            } else if (this.isDrawingPath) {
+                // Collect path waypoints as we drag
+                const worldPos = this.renderer.screenToWorld(x, y);
                 
-                if (this.isSelecting) {
-                    // Update selection rectangle (for normal unit selection)
-                    this.renderer.selectionStart = this.selectionStartScreen;
-                    this.renderer.selectionEnd = new Vector2D(x, y);
-                } else if (this.isDraggingHeroArrow) {
-                    // Update arrow direction (for hero ability casting)
-                    this.renderer.abilityArrowStart = this.selectionStartScreen;
-                    this.renderer.abilityArrowEnd = new Vector2D(x, y);
-                } else if (this.isDrawingPath) {
-                    // Collect path waypoints as we drag
-                    const worldPos = this.renderer.screenToWorld(x, y);
-                    
-                    // Add waypoint if we've moved far enough from the last one
-                    if (this.pathPoints.length === 0 || 
-                        this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
-                        this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
-                    }
-                    
-                    this.renderer.pathPreviewForge = this.selectedBase;
-                    this.renderer.pathPreviewPoints = this.pathPoints;
-                    this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
+                // Add waypoint if we've moved far enough from the last one
+                if (this.pathPoints.length === 0 || 
+                    this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
+                    this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
                 }
+                
+                // pathPreviewForge was already set when initiating path drawing (selectedBase for base paths, null for unit paths)
+                this.renderer.pathPreviewPoints = this.pathPoints;
+                this.renderer.pathPreviewEnd = new Vector2D(worldPos.x, worldPos.y);
             }
             
             lastX = x;
@@ -443,51 +577,37 @@ class GameController {
                 
                 // Check in-game menu clicks
                 if (this.showInGameMenu && !winner) {
-                    const dpr = window.devicePixelRatio || 1;
-                    const screenWidth = this.renderer.canvas.width / dpr;
-                    const screenHeight = this.renderer.canvas.height / dpr;
-                    const buttonWidth = 300;
-                    const buttonHeight = 50;
-                    const buttonX = (screenWidth - buttonWidth) / 2;
-                    const panelHeight = 350;
-                    const panelY = (screenHeight - panelHeight) / 2;
-                    let buttonY = panelY + 100;
-                    const buttonSpacing = 20;
-                    
-                    // Check Resume button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.toggleInGameMenu();
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        this.endHold();
-                        return;
-                    }
-                    buttonY += buttonHeight + buttonSpacing;
-                    
-                    // Check Toggle Info button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.toggleInfo();
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        this.endHold();
-                        return;
-                    }
-                    buttonY += buttonHeight + buttonSpacing;
-                    
-                    // Check Surrender button
-                    if (lastX >= buttonX && lastX <= buttonX + buttonWidth && 
-                        lastY >= buttonY && lastY <= buttonY + buttonHeight) {
-                        this.surrender();
+                    const menuAction = this.renderer.getInGameMenuAction(lastX, lastY);
+                    if (menuAction) {
+                        switch (menuAction.type) {
+                            case 'resume':
+                                this.toggleInGameMenu();
+                                break;
+                            case 'toggleInfo':
+                                this.toggleInfo();
+                                break;
+                            case 'surrender':
+                                this.surrender();
+                                break;
+                            case 'tab':
+                                this.renderer.setInGameMenuTab(menuAction.tab);
+                                break;
+                            case 'graphicsVariant':
+                                this.renderer.setGraphicsVariant(menuAction.key, menuAction.variant);
+                                break;
+                            case 'damageDisplayMode':
+                                this.renderer.damageDisplayMode = menuAction.mode;
+                                if (this.game) {
+                                    this.game.damageDisplayMode = menuAction.mode;
+                                }
+                                break;
+                            case 'healthDisplayMode':
+                                this.renderer.healthDisplayMode = menuAction.mode;
+                                break;
+                            default:
+                                break;
+                        }
+
                         isPanning = false;
                         isMouseDown = false;
                         this.isSelecting = false;
@@ -622,29 +742,38 @@ class GameController {
                     // Check if player owns this gate
                     if (gate.owner !== player) continue;
                     
-                    // Calculate button positions in world space
-                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS; // Use world space radius
-                    const buttonDistance = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
+                    // Convert gate position to screen space
+                    const gateScreenPos = this.renderer.worldToScreen(gate.position);
+                    
+                    // Calculate button positions in screen space (matching renderer)
+                    const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
+                    const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
                     const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
-                        const buttonPos = new Vector2D(
-                            gate.position.x + Math.cos(angle) * buttonDistance,
-                            gate.position.y + Math.sin(angle) * buttonDistance
-                        );
+                        // Calculate button position in screen space
+                        const buttonScreenX = gateScreenPos.x + Math.cos(angle) * buttonDistance;
+                        const buttonScreenY = gateScreenPos.y + Math.sin(angle) * buttonDistance;
                         
-                        const distance = worldPos.distanceTo(buttonPos);
+                        // Check distance in screen space
+                        const dx = lastX - buttonScreenX;
+                        const dy = lastY - buttonScreenY;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
                         if (distance <= buttonRadius) {
-                            this.renderer.createProductionButtonWave(buttonPos);
+                            // Convert button screen position to world position for the wave effect
+                            const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                            this.renderer.createProductionButtonWave(buttonWorldPos);
                             console.log(
-                                `Warp gate button clicked: ${labels[i]} (index ${i}) | solarium=${player.solarium.toFixed(1)}`
+                                `Warp gate button clicked: ${labels[i]} (index ${i}) | energy=${player.energy.toFixed(1)}`
                             );
                             // Button clicked!
                             if (i === 0) {
                                 // First button - create Minigun building
-                                if (player.spendSolarium(Constants.MINIGUN_COST)) {
+                                if (player.spendEnergy(Constants.MINIGUN_COST)) {
                                     const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(minigun);
                                     console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -659,11 +788,11 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Minigun');
+                                    console.log('Not enough energy to build Minigun');
                                 }
                             } else if (i === 1) {
                                 // Second button - create Space Dust Swirler building
-                                if (player.spendSolarium(Constants.SWIRLER_COST)) {
+                                if (player.spendEnergy(Constants.SWIRLER_COST)) {
                                     const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(swirler);
                                     console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -678,7 +807,7 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Space Dust Swirler');
+                                    console.log('Not enough energy to build Space Dust Swirler');
                                 }
                             } else if (i === 2) {
                                 // Third button (bottom) - create Subsidiary Factory building
@@ -686,7 +815,7 @@ class GameController {
                                 const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {
                                     console.log('Only one Subsidiary Factory can exist at a time');
-                                } else if (player.spendSolarium(Constants.SUBSIDIARY_FACTORY_COST)) {
+                                } else if (player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                                     const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(subFactory);
                                     console.log(`Subsidiary Factory building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
@@ -701,7 +830,7 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough solarium to build Subsidiary Factory');
+                                    console.log('Not enough energy to build Subsidiary Factory');
                                 }
                             }
                             // Other buttons can be added later for different building types
@@ -720,7 +849,8 @@ class GameController {
 
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHero = this.getClickedHeroButton(
-                        worldPos,
+                        lastX,
+                        lastY,
                         player.stellarForge,
                         this.renderer.selectedHeroNames
                     );
@@ -733,19 +863,19 @@ class GameController {
                             const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
                             const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
                             console.log(
-                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | solarium=${player.solarium.toFixed(1)}`
+                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | energy=${player.energy.toFixed(1)}`
                             );
                             if (isHeroAlive) {
                                 console.log(`${clickedHeroName} is already active`);
                             } else if (isHeroProducing) {
                                 console.log(`${clickedHeroName} is already being produced`);
-                            } else if (player.spendSolarium(Constants.HERO_UNIT_COST)) {
+                            } else if (player.spendEnergy(Constants.HERO_UNIT_COST)) {
                                 player.stellarForge.enqueueHeroUnit(heroUnitType);
                                 player.stellarForge.startHeroProductionIfIdle();
                                 console.log(`Queued hero ${clickedHeroName} for forging`);
                                 isHeroQueued = true;
                             } else {
-                                console.log('Not enough solarium to forge hero');
+                                console.log('Not enough energy to forge hero');
                             }
                         }
 
@@ -815,11 +945,29 @@ class GameController {
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
-            } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.selectedBase && this.game) {
+            } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.game) {
                 // Finalize the path drawing
-                if (this.pathPoints.length > 0) {
+                if (this.selectedBase && this.selectedBase.isSelected) {
+                    // Path for base (minion spawning)
                     this.selectedBase.setMinionPath(this.pathPoints);
-                    console.log(`Path set with ${this.pathPoints.length} waypoints`);
+                    console.log(`Base path set with ${this.pathPoints.length} waypoints`);
+                } else if (this.selectedUnits.size > 0) {
+                    // Path for selected units
+                    console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
+                    
+                    // Increment move order counter
+                    this.moveOrderCounter++;
+                    
+                    // Set path for all selected units
+                    for (const unit of this.selectedUnits) {
+                        // All units now support path following
+                        unit.setPath(this.pathPoints);
+                        unit.moveOrder = this.moveOrderCounter;
+                    }
+                    
+                    // Deselect units after setting path
+                    this.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
                 }
                 this.clearPathPreview();
             } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
@@ -927,13 +1075,15 @@ class GameController {
         // Mouse events
         canvas.addEventListener('mousedown', (e: MouseEvent) => {
             isMouseDown = true;
-            startDrag(e.clientX, e.clientY);
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
+            startDrag(screenPos.x, screenPos.y);
         });
 
         canvas.addEventListener('mousemove', (e: MouseEvent) => {
-            lastMouseX = e.clientX;
-            lastMouseY = e.clientY;
-            moveDrag(e.clientX, e.clientY, false);
+            const screenPos = getCanvasPosition(e.clientX, e.clientY);
+            lastMouseX = screenPos.x;
+            lastMouseY = screenPos.y;
+            moveDrag(screenPos.x, screenPos.y, false);
         });
 
         canvas.addEventListener('mouseup', () => {
@@ -949,22 +1099,23 @@ class GameController {
             if (e.touches.length === 1) {
                 e.preventDefault();
                 isMouseDown = true;
-                startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                const touchPos = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                startDrag(touchPos.x, touchPos.y);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
                 // Two finger touch - prepare for panning and zooming
                 isMouseDown = true;
                 isPanning = false;
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
+                const touch1 = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                const touch2 = getCanvasPosition(e.touches[1].clientX, e.touches[1].clientY);
                 
                 // Calculate center point between two touches
-                lastX = (touch1.clientX + touch2.clientX) / 2;
-                lastY = (touch1.clientY + touch2.clientY) / 2;
+                lastX = (touch1.x + touch2.x) / 2;
+                lastY = (touch1.y + touch2.y) / 2;
                 
                 // Calculate initial distance for pinch zoom
-                const dx = touch2.clientX - touch1.clientX;
-                const dy = touch2.clientY - touch1.clientY;
+                const dx = touch2.x - touch1.x;
+                const dy = touch2.y - touch1.y;
                 lastPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 
                 this.cancelHold();
@@ -974,20 +1125,20 @@ class GameController {
         canvas.addEventListener('touchmove', (e: TouchEvent) => {
             if (e.touches.length === 1 && isMouseDown) {
                 e.preventDefault();
-                const touch = e.touches[0];
-                moveDrag(touch.clientX, touch.clientY, false);
+                const touchPos = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                moveDrag(touchPos.x, touchPos.y, false);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
-                const touch1 = e.touches[0];
-                const touch2 = e.touches[1];
+                const touch1 = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                const touch2 = getCanvasPosition(e.touches[1].clientX, e.touches[1].clientY);
                 
                 // Calculate current center point
-                const currentX = (touch1.clientX + touch2.clientX) / 2;
-                const currentY = (touch1.clientY + touch2.clientY) / 2;
+                const currentX = (touch1.x + touch2.x) / 2;
+                const currentY = (touch1.y + touch2.y) / 2;
                 
                 // Calculate current distance for pinch zoom
-                const dx = touch2.clientX - touch1.clientX;
-                const dy = touch2.clientY - touch1.clientY;
+                const dx = touch2.x - touch1.x;
+                const dy = touch2.y - touch1.y;
                 const currentPinchDistance = Math.sqrt(dx * dx + dy * dy);
                 
                 // Handle pinch zoom if distance changed significantly
@@ -1019,15 +1170,32 @@ class GameController {
         }, { passive: false });
 
         canvas.addEventListener('touchend', (e: TouchEvent) => {
+            if (e.touches.length === 1) {
+                const touchPos = getCanvasPosition(
+                    e.touches[0].clientX,
+                    e.touches[0].clientY
+                );
+                lastX = touchPos.x;
+                lastY = touchPos.y;
+                lastMouseX = touchPos.x;
+                lastMouseY = touchPos.y;
+            } else if (e.changedTouches.length > 0) {
+                const touchPos = getCanvasPosition(
+                    e.changedTouches[0].clientX,
+                    e.changedTouches[0].clientY
+                );
+                lastX = touchPos.x;
+                lastY = touchPos.y;
+                lastMouseX = touchPos.x;
+                lastMouseY = touchPos.y;
+            }
+
             if (e.touches.length === 0) {
                 // All touches ended
                 endDrag();
                 lastPinchDistance = 0;
             } else if (e.touches.length === 1) {
                 // One touch remaining, transition from two-finger to one-finger mode
-                const touch = e.touches[0];
-                lastX = touch.clientX;
-                lastY = touch.clientY;
                 isPanning = false;
                 lastPinchDistance = 0;
             }
@@ -1076,11 +1244,14 @@ class GameController {
             // Early exit if no input is active
             const hasKeyboardInput = keysPressed.size > 0;
             // Disable edge panning on mobile devices
+            const dpr = window.devicePixelRatio || 1;
+            const screenWidth = canvas.width / dpr;
+            const screenHeight = canvas.height / dpr;
             const hasEdgeInput = !isMobile && !isMouseDown && !isPanning && (
                 lastMouseX < EDGE_PAN_THRESHOLD ||
-                lastMouseX > canvas.width - EDGE_PAN_THRESHOLD ||
+                lastMouseX > screenWidth - EDGE_PAN_THRESHOLD ||
                 lastMouseY < EDGE_PAN_THRESHOLD ||
-                lastMouseY > canvas.height - EDGE_PAN_THRESHOLD
+                lastMouseY > screenHeight - EDGE_PAN_THRESHOLD
             );
             
             if (hasKeyboardInput || hasEdgeInput) {
@@ -1097,9 +1268,9 @@ class GameController {
                 // Edge panning (only if not dragging with mouse and not on mobile)
                 if (hasEdgeInput) {
                     if (lastMouseX < EDGE_PAN_THRESHOLD) dx -= EDGE_PAN_SPEED;
-                    if (lastMouseX > canvas.width - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
+                    if (lastMouseX > screenWidth - EDGE_PAN_THRESHOLD) dx += EDGE_PAN_SPEED;
                     if (lastMouseY < EDGE_PAN_THRESHOLD) dy -= EDGE_PAN_SPEED;
-                    if (lastMouseY > canvas.height - EDGE_PAN_THRESHOLD) dy += EDGE_PAN_SPEED;
+                    if (lastMouseY > screenHeight - EDGE_PAN_THRESHOLD) dy += EDGE_PAN_SPEED;
                 }
 
                 if (dx !== 0 || dy !== 0) {
@@ -1297,6 +1468,12 @@ class GameController {
         // Don't update game logic if paused
         if (this.isPaused) return;
         
+        // Check if game has ended
+        const winner = this.game.checkVictoryConditions();
+        if (winner && this.game.isRunning) {
+            this.game.isRunning = false;
+        }
+        
         if (this.game.isRunning) {
             this.game.update(deltaTime);
         }
@@ -1412,5 +1589,7 @@ class GameController {
 
 // Start game when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new GameController();
+    const controller = new GameController();
+    // Expose for dev/testing purposes
+    (window as any).gameController = controller;
 });

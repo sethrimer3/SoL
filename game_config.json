@@ -17,8 +17,8 @@
       "description": "Gold/wealth-oriented faction",
       "color": "#DAA520",
       "bonuses": {
-        "starting_solarium": 1.5,
-        "solarium_generation": 1.1
+        "starting_energy": 1.5,
+        "energy_generation": 1.1
       }
     },
     "Solari": {
@@ -43,14 +43,14 @@
       "health": 100,
       "cost": 50,
       "build_time": 10,
-      "description": "Reflects sunlight to generate Solarium",
+      "description": "Reflects sunlight to generate Energy",
       "generation_rate": 10
     }
   },
   "resources": {
-    "solarium": {
-      "name": "Solarium",
-      "short_name": "Sol",
+    "energy": {
+      "name": "Energy",
+      "short_name": "E",
       "description": "Primary currency generated from solar mirrors",
       "starting_amount": 100
     }

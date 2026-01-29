@@ -21,7 +21,7 @@
 ┌─────────────────────────┐   ┌─────────────────────────┐
 │      PLAYER 1           │   │      PLAYER 2           │
 │  Faction: Radiant       │   │  Faction: Aurum         │
-│  Solarium: 100 Sol      │   │  Solarium: 100 Sol      │
+│  Energy: 100 Sol      │   │  Energy: 100 Sol      │
 └─────────────────────────┘   └─────────────────────────┘
             │                               │
     ┌───────┴────────┐              ┌───────┴────────┐
@@ -61,7 +61,7 @@
               │  For Each Player:       │
               │  1. Check if defeated   │
               │  2. Update forge light  │
-              │  3. Generate Solarium   │
+              │  3. Generate Energy   │
               └─────────────────────────┘
                             │
                             ▼
@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, health, completion flags, mirror reflection angles, unit rally points, unit collision radii, unit move orders, minion path progress, AI command timers, minion projectile state, and space dust positions/velocities/base colors) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, unit rally points, unit collision radii, unit move orders, minion path progress, AI command timers, minion projectile state, and space dust positions/velocities/glow state/base colors) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -93,6 +93,8 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 17, "command": "buildStructure", "playerIndex": 0, "structureType": "Minigun", "targetWorld": { "x": 420, "y": 420 } }
 ]
 ```
+
+The command list above was revalidated after correcting unit facing rotation to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
@@ -115,7 +117,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
     │  FORGE  │      Produces units
     └─────────┘
          │
-         │ Uses Solarium
+         │ Uses Energy
          ▼
     ┌─────────┐
     │  UNITS  │ ◄─── Only produced when
@@ -131,7 +133,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 │ Light-based  │     │ Wealth focus │     │ Sun worship  │
 │──────────────│     │──────────────│     │──────────────│
 │ +10% Mirror  │     │ +50% Start   │     │ +20% Forge   │
-│ Efficiency   │     │   Solarium   │     │   Health     │
+│ Efficiency   │     │   Energy   │     │   Health     │
 │              │     │              │     │              │
 │ +20% Light   │     │ +10% Sol     │     │ +10% Unit    │
 │ Detection    │     │ Generation   │     │ Production   │
@@ -143,15 +145,15 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ### Solar Mirror Operation
 ```
 if (has_line_of_sight_to_sun AND has_line_of_sight_to_forge):
-    generate_solarium(rate * efficiency * delta_time)
-    player.add_solarium(generated_amount)
+    generate_energy(rate * efficiency * delta_time)
+    player.add_energy(generated_amount)
 ```
 
 ### Unit Production
 ```
-if (forge.is_receiving_light AND player.solarium >= unit_cost):
+if (forge.is_receiving_light AND player.energy >= unit_cost):
     produce_unit()
-    player.spend_solarium(unit_cost)
+    player.spend_energy(unit_cost)
 ```
 
 ### Victory Condition

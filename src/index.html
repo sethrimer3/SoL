@@ -72,6 +72,11 @@
             gap: 8px;
         }
 
+        .loading-logo {
+            width: min(360px, 70vw);
+            height: auto;
+        }
+
         .logo-title {
             font-size: 52px;
             font-weight: 700;
@@ -87,49 +92,13 @@
             text-transform: uppercase;
         }
 
-        .orbit {
-            position: relative;
-            width: 220px;
-            height: 140px;
-            margin-top: 30px;
-        }
-
-        .orbit::before {
-            content: "";
+        .loading-animation {
             position: absolute;
-            inset: 0;
-            border: 2px dashed rgba(255, 215, 0, 0.35);
-            border-radius: 50%;
-            box-shadow: 0 0 18px rgba(255, 215, 0, 0.15);
-        }
-
-        .orbiting-p {
-            position: absolute;
-            top: 50%;
+            bottom: 32px;
             left: 50%;
-            font-size: 26px;
-            font-weight: 700;
-            color: #FFD700;
-            text-shadow: 0 0 16px rgba(255, 215, 0, 0.7);
-            animation: ellipticalOrbit 2.8s linear infinite;
-        }
-
-        @keyframes ellipticalOrbit {
-            0% {
-                transform: translate(-50%, -50%) translate(90px, 0);
-            }
-            25% {
-                transform: translate(-50%, -50%) translate(0, 45px);
-            }
-            50% {
-                transform: translate(-50%, -50%) translate(-90px, 0);
-            }
-            75% {
-                transform: translate(-50%, -50%) translate(0, -45px);
-            }
-            100% {
-                transform: translate(-50%, -50%) translate(90px, 0);
-            }
+            transform: translateX(-50%);
+            width: min(240px, 60vw);
+            height: auto;
         }
     </style>
 </head>
@@ -137,17 +106,35 @@
     <div id="loading">
         <div class="build-badge">Build 1</div>
         <div class="logo">
-            <div class="logo-title">Gravy Time</div>
+            <img class="loading-logo" src="../ASSETS/sprites/loadingScreen/gravyThymeLogo.png" alt="Gravythyme logo">
             <div class="logo-subtitle">Speed of Light RTS</div>
         </div>
-        <div class="orbit">
-            <div class="orbiting-p">p</div>
-        </div>
+        <img id="loadingAnimationFrame" class="loading-animation" src="../ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png" alt="Loading animation">
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
         const loadingStartMs = performance.now();
         const minimumLoadingDurationMs = 3000;
+        const animationFrameCount = 25;
+        const animationFrameDurationMs = 80;
+        const animationFrames = Array.from({ length: animationFrameCount }, (_, frameIndex) => {
+            const frameNumber = frameIndex + 1;
+            return `../ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`;
+        });
+        const preloadedAnimationFrames = animationFrames.map((frameSrc) => {
+            const image = new Image();
+            image.src = frameSrc;
+            return image;
+        });
+        const loadingAnimationFrame = document.getElementById('loadingAnimationFrame');
+        let animationFrameIndex = 0;
+        const animationIntervalId = setInterval(() => {
+            if (!loadingAnimationFrame) {
+                return;
+            }
+            animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
+            loadingAnimationFrame.src = animationFrames[animationFrameIndex];
+        }, animationFrameDurationMs);
 
         // Hide loading screen once game is loaded
         window.addEventListener('load', () => {
@@ -158,6 +145,7 @@
                 if (loading) {
                     loading.style.display = 'none';
                 }
+                clearInterval(animationIntervalId);
             }, remainingMs);
         });
     </script>

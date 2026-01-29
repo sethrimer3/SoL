@@ -32,7 +32,7 @@ Three distinct races with unique characteristics:
 The elite, powerful units controlled directly by players:
 - **Roster**: Each faction has 12 unique hero units
 - **Loadout System**: Before each game, players select 4 heroes from their faction's roster as their loadout
-- **Production Cost**: Requires solarium investment (costs increase for duplicates, though only one of each type allowed)
+- **Production Cost**: Requires energy investment (costs increase for duplicates, though only one of each type allowed)
 - **Uniqueness**: Only one instance of each hero unit can exist on the battlefield at a time
 - **Control**: Players can directly control up to 4 hero units simultaneously
 - **Strategic Importance**: Heroes are more powerful than minions but require more resources
@@ -47,22 +47,22 @@ Smaller automated units that form the backbone of your army:
   - Option 2: Multiple minion types per faction
   - Option 3: Multiple types with player-selectable production focus
 
-### Resource System: Solarium (Sol)
+### Resource System: Energy (E)
 **NEW ECONOMY MODEL** - Sunlight-to-Production Direct Conversion:
 - Solar Mirrors collect sunlight and reflect it to the Stellar Forge
 - The Stellar Forge "crunches" periodically (like a hammer coming down)
 - Each crunch consumes all accumulated sunlight since the last crunch
 - **Production Priority System**:
-  1. If a hero unit is being constructed, accumulated solarium goes toward that hero
-  2. If no hero is being built, accumulated solarium produces minion units
-  3. **Example**: Hero costs 500 solarium, each crunch accumulates 200 solarium
+  1. If a hero unit is being constructed, accumulated energy goes toward that hero
+  2. If no hero is being built, accumulated energy produces minion units
+  3. **Example**: Hero costs 500 energy, each crunch accumulates 200 energy
      - Crunch 1: 200 toward hero (300 remaining)
      - Crunch 2: 200 toward hero (100 remaining)
      - Crunch 3: 200 accumulated - hero completes (uses 100), remaining 100 produces minions
 - **Production Rate**: More sunlight = more units per crunch
   - More Solar Mirrors = more sunlight
   - Closer Solar Mirrors to light sources = more efficient collection
-- No traditional "bank" of solarium - resources are immediately used each crunch
+- No traditional "bank" of energy - resources are immediately used each crunch
 
 ### Solar Mirrors
 - Resource collection structures
@@ -108,7 +108,7 @@ Smaller automated units that form the backbone of your army:
 2. Game start: Players begin with Stellar Forge and initial Solar Mirrors
 3. Position mirrors to maximize light collection
 4. Stellar Forge begins "crunching" - producing minions automatically
-5. Use accumulated solarium to produce hero units from loadout
+5. Use accumulated energy to produce hero units from loadout
 6. Command hero units and minion swarms
 7. Attack enemy positions, mirrors, and heroes
 8. Protect own resource infrastructure and Stellar Forge
@@ -129,7 +129,7 @@ Smaller automated units that form the backbone of your army:
 🚧 Loadout selection interface (faction + hero selection)
 🚧 Stellar Forge selection and movement mechanics
 🚧 Hero production buttons on Stellar Forge UI
-🚧 New solarium economy (crunch-based production)
+🚧 New energy economy (crunch-based production)
 🚧 Minion unit auto-production
 🚧 Hero/Minion differentiation and balance
 
