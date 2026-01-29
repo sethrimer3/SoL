@@ -6537,7 +6537,7 @@ export class GameState {
         for (const unitId of unitIds) {
             const unit = player.units.find(u => this.getUnitId(u) === unitId);
             if (unit) {
-                unit.setTarget(target);
+                unit.rallyPoint = target;
             }
         }
     }
@@ -6555,7 +6555,8 @@ export class GameState {
     private executeHeroPurchaseCommand(player: Player, data: any): void {
         const { heroType } = data;
         if (player.stellarForge) {
-            player.stellarForge.queueHeroUnit(heroType, player);
+            player.stellarForge.enqueueHeroUnit(heroType);
+            player.stellarForge.startHeroProductionIfIdle();
         }
     }
 
@@ -6568,7 +6569,7 @@ export class GameState {
         if (buildingType === 'Minigun') {
             cost = Constants.MINIGUN_COST;
         } else if (buildingType === 'SpaceDustSwirler') {
-            cost = Constants.SPACE_DUST_SWIRLER_COST;
+            cost = Constants.SWIRLER_COST;
         } else if (buildingType === 'SubsidiaryFactory') {
             cost = Constants.SUBSIDIARY_FACTORY_COST;
         }
@@ -6589,7 +6590,7 @@ export class GameState {
         const { positionX, positionY } = data;
         const position = new Vector2D(positionX, positionY);
         
-        if (player.spendEnergy(Constants.MIRROR_COST)) {
+        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
             player.solarMirrors.push(new SolarMirror(position, player));
         }
     }
@@ -6599,7 +6600,7 @@ export class GameState {
         const target = new Vector2D(targetX, targetY);
         
         if (player.stellarForge) {
-            player.stellarForge.setTargetPosition(target);
+            player.stellarForge.targetPosition = target;
         }
     }
 
