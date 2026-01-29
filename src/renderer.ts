@@ -2689,8 +2689,8 @@ export class GameRenderer {
         if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
             const screenPos = this.worldToScreen(mortar.position);
             const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
-            const halfConeAngle = Constants.MORTER_DETECTION_CONE_ANGLE / 2;
-            const coneRadius = Constants.MORTER_ATTACK_RANGE * this.zoom;
+            const halfConeAngle = Constants.MORTAR_DETECTION_CONE_ANGLE / 2;
+            const coneRadius = Constants.MORTAR_ATTACK_RANGE * this.zoom;
             
             // Draw detection cone
             this.ctx.fillStyle = shouldDim ? this.darkenColor(color, Constants.SHADE_OPACITY * 0.5) : color;

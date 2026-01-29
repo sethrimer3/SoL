@@ -63,7 +63,7 @@ export const createMortarHero = (deps: MortarHeroDeps) => {
                 
                 if (distance <= this.splashRadius) {
                     // Calculate damage falloff based on distance
-                    const damageMultiplier = 1.0 - (distance / this.splashRadius) * (1.0 - Constants.MORTER_SPLASH_DAMAGE_FALLOFF);
+                    const damageMultiplier = 1.0 - (distance / this.splashRadius) * (1.0 - Constants.MORTAR_SPLASH_DAMAGE_FALLOFF);
                     const finalDamage = this.damage * damageMultiplier;
                     
                     // Apply damage
@@ -92,11 +92,11 @@ export const createMortarHero = (deps: MortarHeroDeps) => {
             super(
                 position,
                 owner,
-                Constants.MORTER_MAX_HEALTH,
-                Constants.MORTER_ATTACK_RANGE,
-                Constants.MORTER_ATTACK_DAMAGE,
-                Constants.MORTER_ATTACK_SPEED,
-                Constants.MORTER_ABILITY_COOLDOWN
+                Constants.MORTAR_MAX_HEALTH,
+                Constants.MORTAR_ATTACK_RANGE,
+                Constants.MORTAR_ATTACK_DAMAGE,
+                Constants.MORTAR_ATTACK_SPEED,
+                Constants.MORTAR_ABILITY_COOLDOWN
             );
             this.isHero = true; // Mortar is a hero unit for Radiant faction
         }
@@ -152,7 +152,7 @@ export const createMortarHero = (deps: MortarHeroDeps) => {
 
             const enemiesInCone: CombatTarget[] = [];
             const facingAngle = Math.atan2(this.facingDirection.y, this.facingDirection.x);
-            const halfConeAngle = Constants.MORTER_DETECTION_CONE_ANGLE / 2;
+            const halfConeAngle = Constants.MORTAR_DETECTION_CONE_ANGLE / 2;
 
             for (const enemy of enemies) {
                 // Calculate angle to enemy
@@ -189,7 +189,7 @@ export const createMortarHero = (deps: MortarHeroDeps) => {
             const angle = Math.atan2(dy, dx);
 
             // Create projectile velocity
-            const speed = Constants.MORTER_PROJECTILE_SPEED;
+            const speed = Constants.MORTAR_PROJECTILE_SPEED;
             const velocity = new Vector2D(
                 Math.cos(angle) * speed,
                 Math.sin(angle) * speed
@@ -201,7 +201,7 @@ export const createMortarHero = (deps: MortarHeroDeps) => {
                 velocity,
                 this.owner,
                 this.attackDamage,
-                Constants.MORTER_SPLASH_RADIUS
+                Constants.MORTAR_SPLASH_RADIUS
             );
 
             this.lastShotProjectiles.push(projectile);

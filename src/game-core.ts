@@ -3645,7 +3645,7 @@ export class GameState {
                 // Create damage numbers for all damaged targets
                 for (const target of damagedTargets) {
                     const distance = projectile.position.distanceTo(target.position);
-                    const damageMultiplier = 1.0 - (distance / projectile.splashRadius) * (1.0 - Constants.MORTER_SPLASH_DAMAGE_FALLOFF);
+                    const damageMultiplier = 1.0 - (distance / projectile.splashRadius) * (1.0 - Constants.MORTAR_SPLASH_DAMAGE_FALLOFF);
                     const finalDamage = Math.round(projectile.damage * damageMultiplier);
                     
                     if (target instanceof Unit) {
