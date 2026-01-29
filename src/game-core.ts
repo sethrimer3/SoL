@@ -4,7 +4,7 @@
  */
 
 import * as Constants from './constants';
-import { NetworkManager, GameCommand } from './network';
+import { NetworkManager, GameCommand, NetworkEvent, MessageType } from './network';
 
 /**
  * Three playable factions in the game
@@ -6443,9 +6443,10 @@ export class GameState {
         this.localPlayerIndex = localPlayerIndex;
         
         // Listen for incoming game commands from remote players
-        this.networkManager.on('message_received' as any, (data: any) => {
-            if (data && data.type === 'game_command') {
-                this.receiveNetworkCommand(data.data as GameCommand);
+        this.networkManager.on(NetworkEvent.MESSAGE_RECEIVED, (data: any) => {
+            if (data && typeof data === 'object' && 'type' in data && data.type === MessageType.GAME_COMMAND) {
+                const command = data.data as GameCommand;
+                this.receiveNetworkCommand(command);
             }
         });
     }
@@ -6538,6 +6539,8 @@ export class GameState {
             const unit = player.units.find(u => this.getUnitId(u) === unitId);
             if (unit) {
                 unit.rallyPoint = target;
+            } else {
+                console.warn(`Unit not found for network command: ${unitId}`);
             }
         }
     }
@@ -6549,6 +6552,8 @@ export class GameState {
         const unit = player.units.find(u => this.getUnitId(u) === unitId);
         if (unit) {
             unit.useAbility(direction);
+        } else {
+            console.warn(`Unit not found for ability command: ${unitId}`);
         }
     }
 
@@ -6615,11 +6620,13 @@ export class GameState {
 
     /**
      * Generate a unique ID for a unit (for network synchronization)
+     * Note: This is a temporary solution. In production, units should have explicit unique IDs.
      */
     private getUnitId(unit: Unit): string {
-        // Use position and creation time as a simple unique ID
-        // In a real implementation, units should have explicit IDs assigned at creation
-        return `${unit.position.x.toFixed(2)}_${unit.position.y.toFixed(2)}_${unit.constructor.name}`;
+        // Use a combination of owner, position, health, and type for uniqueness
+        // This is not perfect but works for most cases in the current implementation
+        const ownerIndex = this.players.indexOf(unit.owner);
+        return `${ownerIndex}_${unit.position.x.toFixed(1)}_${unit.position.y.toFixed(1)}_${unit.maxHealth}_${unit.constructor.name}`;
     }
 }
 
