@@ -669,7 +669,8 @@ export class StellarForge {
      * Attempt to produce a unit
      */
     produceUnit(unitType: string, cost: number, playerEnergy: number): boolean {
-        if (!this.canProduceUnits()) {
+        // Allow queuing even without sunlight (removed canProduceUnits check)
+        if (this.health <= 0) {
             return false;
         }
         if (playerEnergy < cost) {
@@ -1221,6 +1222,9 @@ export class SpaceDustSwirler extends Building {
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
+    productionQueue: string[] = []; // Queue of items to produce
+    currentProduction: string | null = null; // Currently producing item
+    productionProgress: number = 0; // Progress of current production (0-1)
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -1243,13 +1247,53 @@ export class SubsidiaryFactory extends Building {
         // Only produce when complete
         if (!this.isComplete) return;
 
-        this.productionTimer += deltaTime;
-        
-        // Production happens at intervals (placeholder for future implementation)
-        if (this.productionTimer >= Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL) {
-            this.productionTimer = 0;
-            // TODO: Implement solar mirror and special unit production
+        // Start production if idle
+        if (!this.currentProduction && this.productionQueue.length > 0) {
+            this.currentProduction = this.productionQueue.shift() || null;
+            this.productionProgress = 0;
         }
+
+        // Advance production
+        if (this.currentProduction) {
+            const productionTime = this.getProductionTime(this.currentProduction);
+            this.productionProgress += deltaTime / productionTime;
+            
+            if (this.productionProgress >= 1.0) {
+                // Production complete
+                this.productionProgress = 0;
+                this.currentProduction = null;
+            }
+        }
+    }
+    
+    /**
+     * Enqueue an item for production
+     */
+    enqueueProduction(itemType: string): void {
+        this.productionQueue.push(itemType);
+    }
+    
+    /**
+     * Get the completed item and clear it
+     */
+    getCompletedProduction(): string | null {
+        if (this.currentProduction && this.productionProgress >= 1.0) {
+            const completed = this.currentProduction;
+            this.currentProduction = null;
+            this.productionProgress = 0;
+            return completed;
+        }
+        return null;
+    }
+    
+    /**
+     * Get production time for an item type
+     */
+    private getProductionTime(itemType: string): number {
+        if (itemType === 'solar-mirror') {
+            return Constants.BUILDING_BUILD_TIME;
+        }
+        return Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL;
     }
 }
 
@@ -1879,6 +1923,50 @@ export class MinionProjectile {
     checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
         return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
+    }
+}
+
+/**
+ * Laser beam fired by Starlings (instant hit-scan weapon)
+ */
+export class LaserBeam {
+    lifetime: number = 0;
+    maxLifetime: number = 0.1; // 100ms visible duration
+    
+    constructor(
+        public startPos: Vector2D,
+        public endPos: Vector2D,
+        public owner: Player,
+        public damage: number
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Impact particle spawned at laser beam endpoint
+ */
+export class ImpactParticle {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public velocity: Vector2D,
+        public maxLifetime: number,
+        public faction: Faction
+    ) {}
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+    
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
     }
 }
 
@@ -2513,7 +2601,7 @@ export class Starling extends Unit {
     private currentPathWaypointIndex: number = 0; // Current waypoint index in the assigned path
     private assignedPath: Vector2D[] = [];
     private hasManualOrder: boolean = false;
-    private lastShotProjectiles: MinionProjectile[] = [];
+    private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
     
@@ -2582,9 +2670,14 @@ export class Starling extends Unit {
     }
 
     getAndClearLastShotProjectiles(): MinionProjectile[] {
-        const projectiles = this.lastShotProjectiles;
-        this.lastShotProjectiles = [];
-        return projectiles;
+        // Legacy method - no longer used for lasers
+        return [];
+    }
+    
+    getAndClearLastShotLasers(): LaserBeam[] {
+        const lasers = this.lastShotLasers;
+        this.lastShotLasers = [];
+        return lasers;
     }
 
     /**
@@ -2823,16 +2916,20 @@ export class Starling extends Unit {
         if (distance <= 0) {
             return;
         }
-        const velocity = new Vector2D(
-            (dx / distance) * Constants.STARLING_PROJECTILE_SPEED,
-            (dy / distance) * Constants.STARLING_PROJECTILE_SPEED
-        );
-        this.lastShotProjectiles.push(new MinionProjectile(
+        
+        // Create laser beam for visual effect
+        const laserBeam = new LaserBeam(
             new Vector2D(this.position.x, this.position.y),
-            velocity,
+            new Vector2D(target.position.x, target.position.y),
             this.owner,
             this.attackDamage
-        ));
+        );
+        this.lastShotLasers.push(laserBeam);
+        
+        // Deal instant damage to target
+        if ('takeDamage' in target) {
+            target.takeDamage(this.attackDamage);
+        }
     }
 }
 
@@ -3556,6 +3653,8 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
+    laserBeams: LaserBeam[] = [];
+    impactParticles: ImpactParticle[] = [];
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
@@ -3833,9 +3932,26 @@ export class GameState {
                 this.abilityBullets.push(...abilityEffects);
 
                 if (unit instanceof Starling) {
-                    const projectiles = unit.getAndClearLastShotProjectiles();
-                    if (projectiles.length > 0) {
-                        this.minionProjectiles.push(...projectiles);
+                    const lasers = unit.getAndClearLastShotLasers();
+                    if (lasers.length > 0) {
+                        this.laserBeams.push(...lasers);
+                        
+                        // Spawn impact particles at laser endpoints
+                        for (const laser of lasers) {
+                            for (let i = 0; i < Constants.STARLING_LASER_IMPACT_PARTICLES; i++) {
+                                const angle = (Math.PI * 2 * i) / Constants.STARLING_LASER_IMPACT_PARTICLES;
+                                const velocity = new Vector2D(
+                                    Math.cos(angle) * Constants.STARLING_LASER_PARTICLE_SPEED,
+                                    Math.sin(angle) * Constants.STARLING_LASER_PARTICLE_SPEED
+                                );
+                                this.impactParticles.push(new ImpactParticle(
+                                    new Vector2D(laser.endPos.x, laser.endPos.y),
+                                    velocity,
+                                    Constants.STARLING_LASER_PARTICLE_LIFETIME,
+                                    laser.owner.faction
+                                ));
+                            }
+                        }
                     }
                 }
                 
@@ -3927,6 +4043,22 @@ export class GameState {
                     }
                     if (effects.bouncingBullet) {
                         this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                }
+                
+                // If building is a SubsidiaryFactory, check for completed production
+                if (building instanceof SubsidiaryFactory) {
+                    const completed = building.getCompletedProduction();
+                    if (completed === 'solar-mirror') {
+                        // Spawn solar mirror near the factory
+                        const spawnAngle = Math.random() * Math.PI * 2;
+                        const spawnDistance = 80; // Spawn 80 pixels away from factory
+                        const spawnPos = new Vector2D(
+                            building.position.x + Math.cos(spawnAngle) * spawnDistance,
+                            building.position.y + Math.sin(spawnAngle) * spawnDistance
+                        );
+                        const mirror = new SolarMirror(spawnPos, player);
+                        player.solarMirrors.push(mirror);
                     }
                 }
             }
@@ -4290,6 +4422,15 @@ export class GameState {
             }
         }
         this.minionProjectiles = this.minionProjectiles.filter(projectile => !projectile.shouldDespawn());
+        
+        // Update laser beams (visual effects only)
+        this.laserBeams = this.laserBeams.filter(laser => !laser.update(deltaTime));
+        
+        // Update impact particles (visual effects only)
+        for (const particle of this.impactParticles) {
+            particle.update(deltaTime);
+        }
+        this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -5783,19 +5924,7 @@ export class GameState {
                 let pushCount = 0;
 
                 // Check all obstacles and accumulate push directions
-                // Check suns
-                for (const sun of this.suns) {
-                    const dx = unit.position.x - sun.position.x;
-                    const dy = unit.position.y - sun.position.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const minDist = sun.radius + unit.collisionRadiusPx;
-                    if (dist < minDist) {
-                        const pushStrength = (minDist - dist) / minDist;
-                        pushX += (dx / dist) * pushStrength;
-                        pushY += (dy / dist) * pushStrength;
-                        pushCount++;
-                    }
-                }
+                // Suns no longer block movement
 
                 // Check asteroids
                 for (const asteroid of this.asteroids) {
@@ -5951,13 +6080,7 @@ export class GameState {
         unitRadius: number = Constants.UNIT_RADIUS_PX,
         ignoredObject: SolarMirror | StellarForge | Building | null = null
     ): boolean {
-        // Check collision with suns
-        for (const sun of this.suns) {
-            const distance = position.distanceTo(sun.position);
-            if (distance < sun.radius + unitRadius) {
-                return true; // Collision with sun
-            }
-        }
+        // Suns no longer block movement or placement
 
         // Check collision with asteroids
         for (const asteroid of this.asteroids) {
