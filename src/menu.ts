@@ -4,7 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
-import { NetworkManager, LANSignaling, LobbyInfo } from './network';
+import { NetworkManager, LANSignaling, LobbyInfo, MessageType, NetworkEvent } from './network';
 
 export interface MenuOption {
     id: string;
@@ -1926,10 +1926,10 @@ export class MainMenu {
         try {
             // Generate connection offer
             const offer = await this.networkManager.createOfferForPeer('client');
-            const connectionCode = await LANSignaling.generateHostCode(offer);
+            const connectionCode = await LANSignaling.generateHostCode(offer, playerId, this.settings.username);
 
             // Show lobby screen with connection code
-            this.renderHostLobbyScreen(lobby, connectionCode);
+            this.renderHostLobbyScreen(lobby, connectionCode, playerId);
         } catch (error) {
             console.error('Failed to create lobby:', error);
             alert('Failed to create lobby. Please try again.');
@@ -1943,28 +1943,25 @@ export class MainMenu {
 
         try {
             // Parse connection code
-            const offer = LANSignaling.parseHostCode(code);
+            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
 
             // Initialize network manager
             const playerId = `player_${Date.now()}`;
             this.networkManager = new NetworkManager(playerId);
 
             // Create answer
-            const answer = await this.networkManager.connectToPeer('host', offer);
-            const answerCode = await LANSignaling.generateAnswerCode(answer);
+            const answer = await this.networkManager.connectToPeer(hostId, offer);
+            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
 
-            // Show dialog with answer code to send back to host
-            alert(`Copy this code and send it to the host:\n\n${answerCode}`);
-
-            // Show waiting screen
-            this.renderClientWaitingScreen();
+            // Show dialog with answer code
+            this.renderClientAnswerScreen(answerCode, hostUsername);
         } catch (error) {
             console.error('Failed to join lobby:', error);
-            alert('Invalid connection code. Please check and try again.');
+            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
 
-    private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string): void {
+    private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string, hostPlayerId: string): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
@@ -2013,10 +2010,16 @@ export class MainMenu {
         codeText.style.resize = 'none';
         codeContainer.appendChild(codeText);
 
-        const copyButton = this.createButton('COPY CODE', () => {
-            codeText.select();
-            document.execCommand('copy');
-            alert('Connection code copied to clipboard!');
+        const copyButton = this.createButton('COPY CODE', async () => {
+            try {
+                await navigator.clipboard.writeText(codeText.value);
+                alert('Connection code copied to clipboard!');
+            } catch (err) {
+                // Fallback for older browsers
+                codeText.select();
+                document.execCommand('copy');
+                alert('Connection code copied to clipboard!');
+            }
         }, '#008800');
         copyButton.style.marginTop = '10px';
         copyButton.style.padding = '10px 20px';
@@ -2064,13 +2067,30 @@ export class MainMenu {
             }
 
             try {
-                const answer = LANSignaling.parseAnswerCode(answerCode);
-                await this.networkManager?.completeConnection('client', answer);
-                alert('Client connected! You can now start the game.');
-                // TODO: Update UI to show connected players
+                const { answer, playerId: clientId, username: clientUsername } = LANSignaling.parseAnswerCode(answerCode);
+                await this.networkManager?.completeConnection(clientId, answer);
+                
+                // Send lobby update to client
+                if (this.networkManager && this.networkManager.getLobby()) {
+                    const lobby = this.networkManager.getLobby()!;
+                    lobby.players.push({
+                        id: clientId,
+                        username: clientUsername,
+                        isHost: false,
+                        isReady: true
+                    });
+                    this.networkManager.broadcast({
+                        type: MessageType.LOBBY_UPDATE,
+                        senderId: hostPlayerId,
+                        timestamp: Date.now(),
+                        data: lobby
+                    });
+                }
+                
+                alert(`${clientUsername} connected! You can now start the game.`);
             } catch (error) {
                 console.error('Failed to connect client:', error);
-                alert('Invalid answer code. Please check and try again.');
+                alert(`Failed to connect: ${error instanceof Error ? error.message : 'Invalid answer code'}`);
             }
         }, '#0088FF');
         connectButton.style.marginTop = '10px';
@@ -2092,6 +2112,9 @@ export class MainMenu {
                 return;
             }
 
+            // Notify peers that game is starting
+            this.networkManager.startGame();
+
             // Set game mode to LAN
             this.settings.gameMode = 'lan';
             // Pass network manager to settings
@@ -2107,6 +2130,110 @@ export class MainMenu {
         startGameButton.style.padding = '15px 40px';
         startGameButton.style.fontSize = '24px';
         this.contentElement.appendChild(startGameButton);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderClientAnswerScreen(answerCode: string, hostUsername: string): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = `Joining ${hostUsername}'s Lobby`;
+        title.style.fontSize = '32px';
+        title.style.marginBottom = '20px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Instructions
+        const instructions = document.createElement('p');
+        instructions.textContent = 'Send this answer code to the host:';
+        instructions.style.color = '#CCCCCC';
+        instructions.style.fontSize = '18px';
+        instructions.style.textAlign = 'center';
+        instructions.style.marginBottom = '20px';
+        this.contentElement.appendChild(instructions);
+
+        // Answer code display
+        const codeContainer = document.createElement('div');
+        codeContainer.style.maxWidth = '600px';
+        codeContainer.style.width = '100%';
+        codeContainer.style.padding = '20px';
+        codeContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
+        codeContainer.style.borderRadius = '10px';
+        codeContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
+        codeContainer.style.marginBottom = '30px';
+
+        const codeText = document.createElement('textarea');
+        codeText.value = answerCode;
+        codeText.readOnly = true;
+        codeText.style.width = '100%';
+        codeText.style.height = '80px';
+        codeText.style.padding = '10px';
+        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        codeText.style.color = '#0088FF';
+        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        codeText.style.borderRadius = '5px';
+        codeText.style.fontSize = '14px';
+        codeText.style.fontFamily = 'monospace';
+        codeText.style.resize = 'none';
+        codeContainer.appendChild(codeText);
+
+        const copyButton = this.createButton('COPY CODE', async () => {
+            try {
+                await navigator.clipboard.writeText(codeText.value);
+                alert('Answer code copied to clipboard!');
+            } catch (err) {
+                // Fallback for older browsers
+                codeText.select();
+                document.execCommand('copy');
+                alert('Answer code copied to clipboard!');
+            }
+        }, '#0088FF');
+        copyButton.style.marginTop = '10px';
+        copyButton.style.padding = '10px 20px';
+        copyButton.style.fontSize = '16px';
+        codeContainer.appendChild(copyButton);
+
+        this.contentElement.appendChild(codeContainer);
+
+        // Waiting message
+        const waitingText = document.createElement('p');
+        waitingText.textContent = 'Waiting for host to complete connection...';
+        waitingText.style.color = '#888888';
+        waitingText.style.fontSize = '18px';
+        waitingText.style.textAlign = 'center';
+        waitingText.style.marginBottom = '30px';
+        this.contentElement.appendChild(waitingText);
+
+        // Listen for game start
+        this.networkManager?.on(NetworkEvent.MESSAGE_RECEIVED, (data) => {
+            if (data && data.type === MessageType.GAME_START) {
+                // Hide menu and start game
+                if (this.onStartCallback) {
+                    this.settings.gameMode = 'lan';
+                    this.settings.networkManager = this.networkManager!;
+                    this.hide();
+                    this.onStartCallback(this.settings);
+                }
+            }
+        });
 
         // Cancel button
         const cancelButton = this.createButton('CANCEL', () => {

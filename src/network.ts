@@ -123,7 +123,10 @@ export class PeerConnection {
         const offer = await this.connection.createOffer();
         await this.connection.setLocalDescription(offer);
         
-        return offer;
+        // Wait for ICE gathering to complete
+        await this.waitForIceGathering();
+        
+        return this.connection.localDescription!;
     }
 
     /**
@@ -143,7 +146,35 @@ export class PeerConnection {
         const answer = await this.connection.createAnswer();
         await this.connection.setLocalDescription(answer);
         
-        return answer;
+        // Wait for ICE gathering to complete
+        await this.waitForIceGathering();
+        
+        return this.connection.localDescription!;
+    }
+
+    /**
+     * Wait for ICE gathering to complete
+     */
+    private waitForIceGathering(): Promise<void> {
+        if (!this.connection) {
+            return Promise.reject(new Error('Connection not initialized'));
+        }
+
+        return new Promise((resolve) => {
+            if (this.connection!.iceGatheringState === 'complete') {
+                resolve();
+                return;
+            }
+
+            const checkState = () => {
+                if (this.connection!.iceGatheringState === 'complete') {
+                    this.connection!.removeEventListener('icegatheringstatechange', checkState);
+                    resolve();
+                }
+            };
+
+            this.connection!.addEventListener('icegatheringstatechange', checkState);
+        });
     }
 
     /**
@@ -544,13 +575,15 @@ export class NetworkManager {
         this.peers.clear();
         this.lobby = null;
         this.isHost = false;
+        // Clear event listeners to prevent memory leaks
+        this.eventListeners.clear();
     }
 
     /**
      * Generate unique lobby ID
      */
     private generateLobbyId(): string {
-        return `lobby_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `lobby_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     }
 
     /**
@@ -597,10 +630,12 @@ export class LANSignaling {
     /**
      * Generate connection code for host
      */
-    static async generateHostCode(offer: RTCSessionDescriptionInit): Promise<string> {
+    static async generateHostCode(offer: RTCSessionDescriptionInit, playerId: string, username: string): Promise<string> {
         const data = {
             type: 'offer',
-            sdp: offer
+            sdp: offer,
+            playerId: playerId,
+            username: username
         };
         return btoa(JSON.stringify(data));
     }
@@ -608,13 +643,17 @@ export class LANSignaling {
     /**
      * Parse host connection code
      */
-    static parseHostCode(code: string): RTCSessionDescriptionInit {
+    static parseHostCode(code: string): { offer: RTCSessionDescriptionInit, playerId: string, username: string } {
         try {
             const data = JSON.parse(atob(code));
             if (data.type !== 'offer') {
                 throw new Error('Invalid connection code: not an offer');
             }
-            return data.sdp;
+            return {
+                offer: data.sdp,
+                playerId: data.playerId || 'host',
+                username: data.username || 'Host'
+            };
         } catch (error) {
             throw new Error('Invalid connection code format');
         }
@@ -623,10 +662,12 @@ export class LANSignaling {
     /**
      * Generate answer code for client
      */
-    static async generateAnswerCode(answer: RTCSessionDescriptionInit): Promise<string> {
+    static async generateAnswerCode(answer: RTCSessionDescriptionInit, playerId: string, username: string): Promise<string> {
         const data = {
             type: 'answer',
-            sdp: answer
+            sdp: answer,
+            playerId: playerId,
+            username: username
         };
         return btoa(JSON.stringify(data));
     }
@@ -634,13 +675,17 @@ export class LANSignaling {
     /**
      * Parse client answer code
      */
-    static parseAnswerCode(code: string): RTCSessionDescriptionInit {
+    static parseAnswerCode(code: string): { answer: RTCSessionDescriptionInit, playerId: string, username: string } {
         try {
             const data = JSON.parse(atob(code));
             if (data.type !== 'answer') {
                 throw new Error('Invalid connection code: not an answer');
             }
-            return data.sdp;
+            return {
+                answer: data.sdp,
+                playerId: data.playerId || 'client',
+                username: data.username || 'Client'
+            };
         } catch (error) {
             throw new Error('Invalid connection code format');
         }
