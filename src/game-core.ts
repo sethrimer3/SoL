@@ -669,7 +669,8 @@ export class StellarForge {
      * Attempt to produce a unit
      */
     produceUnit(unitType: string, cost: number, playerEnergy: number): boolean {
-        if (!this.canProduceUnits()) {
+        // Allow queuing even without sunlight (removed canProduceUnits check)
+        if (this.health <= 0) {
             return false;
         }
         if (playerEnergy < cost) {
@@ -1883,6 +1884,26 @@ export class MinionProjectile {
 }
 
 /**
+ * Laser beam fired by Starlings (instant hit-scan weapon)
+ */
+export class LaserBeam {
+    lifetime: number = 0;
+    maxLifetime: number = 0.1; // 100ms visible duration
+    
+    constructor(
+        public startPos: Vector2D,
+        public endPos: Vector2D,
+        public owner: Player,
+        public damage: number
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
  * Base Unit class
  */
 export class Unit {
@@ -2513,7 +2534,7 @@ export class Starling extends Unit {
     private currentPathWaypointIndex: number = 0; // Current waypoint index in the assigned path
     private assignedPath: Vector2D[] = [];
     private hasManualOrder: boolean = false;
-    private lastShotProjectiles: MinionProjectile[] = [];
+    private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
     
@@ -2582,9 +2603,14 @@ export class Starling extends Unit {
     }
 
     getAndClearLastShotProjectiles(): MinionProjectile[] {
-        const projectiles = this.lastShotProjectiles;
-        this.lastShotProjectiles = [];
-        return projectiles;
+        // Legacy method - no longer used for lasers
+        return [];
+    }
+    
+    getAndClearLastShotLasers(): LaserBeam[] {
+        const lasers = this.lastShotLasers;
+        this.lastShotLasers = [];
+        return lasers;
     }
 
     /**
@@ -2823,16 +2849,20 @@ export class Starling extends Unit {
         if (distance <= 0) {
             return;
         }
-        const velocity = new Vector2D(
-            (dx / distance) * Constants.STARLING_PROJECTILE_SPEED,
-            (dy / distance) * Constants.STARLING_PROJECTILE_SPEED
-        );
-        this.lastShotProjectiles.push(new MinionProjectile(
+        
+        // Create laser beam for visual effect
+        const laserBeam = new LaserBeam(
             new Vector2D(this.position.x, this.position.y),
-            velocity,
+            new Vector2D(target.position.x, target.position.y),
             this.owner,
             this.attackDamage
-        ));
+        );
+        this.lastShotLasers.push(laserBeam);
+        
+        // Deal instant damage to target
+        if ('takeDamage' in target) {
+            target.takeDamage(this.attackDamage);
+        }
     }
 }
 
@@ -3556,6 +3586,7 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
+    laserBeams: LaserBeam[] = [];
     influenceZones: InfluenceZone[] = [];
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
@@ -3833,9 +3864,9 @@ export class GameState {
                 this.abilityBullets.push(...abilityEffects);
 
                 if (unit instanceof Starling) {
-                    const projectiles = unit.getAndClearLastShotProjectiles();
-                    if (projectiles.length > 0) {
-                        this.minionProjectiles.push(...projectiles);
+                    const lasers = unit.getAndClearLastShotLasers();
+                    if (lasers.length > 0) {
+                        this.laserBeams.push(...lasers);
                     }
                 }
                 
@@ -4290,6 +4321,9 @@ export class GameState {
             }
         }
         this.minionProjectiles = this.minionProjectiles.filter(projectile => !projectile.shouldDespawn());
+        
+        // Update laser beams (visual effects only)
+        this.laserBeams = this.laserBeams.filter(laser => !laser.update(deltaTime));
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -5783,19 +5817,7 @@ export class GameState {
                 let pushCount = 0;
 
                 // Check all obstacles and accumulate push directions
-                // Check suns
-                for (const sun of this.suns) {
-                    const dx = unit.position.x - sun.position.x;
-                    const dy = unit.position.y - sun.position.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const minDist = sun.radius + unit.collisionRadiusPx;
-                    if (dist < minDist) {
-                        const pushStrength = (minDist - dist) / minDist;
-                        pushX += (dx / dist) * pushStrength;
-                        pushY += (dy / dist) * pushStrength;
-                        pushCount++;
-                    }
-                }
+                // Suns no longer block movement
 
                 // Check asteroids
                 for (const asteroid of this.asteroids) {
@@ -5951,13 +5973,7 @@ export class GameState {
         unitRadius: number = Constants.UNIT_RADIUS_PX,
         ignoredObject: SolarMirror | StellarForge | Building | null = null
     ): boolean {
-        // Check collision with suns
-        for (const sun of this.suns) {
-            const distance = position.distanceTo(sun.position);
-            if (distance < sun.radius + unitRadius) {
-                return true; // Collision with sun
-            }
-        }
+        // Suns no longer block movement or placement
 
         // Check collision with asteroids
         for (const asteroid of this.asteroids) {
