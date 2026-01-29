@@ -530,8 +530,8 @@ export class GameRenderer {
                 const dx = targetPosition.x - starling.position.x;
                 const dy = targetPosition.y - starling.position.y;
                 if (dx !== 0 || dy !== 0) {
-                    // Subtract π/2 to make the TOP of the sprite be the FRONT
-                    return Math.atan2(dy, dx) - Math.PI / 2;
+                    // Add π/2 so the TOP of the sprite is treated as the FRONT
+                    return Math.atan2(dy, dx) + Math.PI / 2;
                 }
             }
         }
