@@ -1332,17 +1332,21 @@ export class Sun {
         // Generate seed points for Voronoi diagram
         // Use Poisson disk sampling for more even distribution
         const seedPoints: Vector2D[] = [];
-        const minDistance = this.radius * 0.25; // Minimum distance between seed points
+        const minDistance = this.radius * 0.15; // Minimum distance between seed points (reduced for 80 segments)
         const maxAttempts = 30;
+        const maxTotalAttempts = numSegments * maxAttempts * 2; // Safety limit
+        let totalAttempts = 0;
         
         // Start with a seed at the center
         seedPoints.push(new Vector2D(this.position.x, this.position.y));
         
         // Generate remaining seeds using rejection sampling
-        while (seedPoints.length < numSegments) {
+        while (seedPoints.length < numSegments && totalAttempts < maxTotalAttempts) {
             let placed = false;
             
             for (let attempt = 0; attempt < maxAttempts && !placed; attempt++) {
+                totalAttempts++;
+                
                 // Generate random point within circle
                 const angle = Math.random() * Math.PI * 2;
                 const distance = Math.sqrt(Math.random()) * this.radius * 0.9;

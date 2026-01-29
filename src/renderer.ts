@@ -701,10 +701,12 @@ export class GameRenderer {
      * Draw Voronoi segments within the sun
      */
     private drawVoronoiSegments(sun: Sun, screenPos: Vector2D, screenRadius: number): void {
+        const VORONOI_CLIP_FACTOR = 0.85;
+        
         // Create a circular clipping region for the sun
         this.ctx.save();
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.85, 0, Math.PI * 2);
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius * VORONOI_CLIP_FACTOR, 0, Math.PI * 2);
         this.ctx.clip();
 
         // Sample points in a grid within and around the sun
@@ -726,15 +728,16 @@ export class GameRenderer {
             const worldScreenY = worldY;
             
             for (let px = 0; px < width; px++) {
-                const worldX = startX + px * resolution;
-                const worldScreenX = worldX;
+                const screenX = startX + px * resolution;
+                const screenY = worldScreenY;
                 
                 // Check if this screen point is within the sun's radius
-                const dx = worldScreenX - screenPos.x;
-                const dy = worldScreenY - screenPos.y;
+                const dx = screenX - screenPos.x;
+                const dy = screenY - screenPos.y;
                 const distFromCenter = Math.sqrt(dx * dx + dy * dy);
                 
-                if (distFromCenter > screenRadius * 0.85) {
+                const VORONOI_CLIP_FACTOR = 0.85;
+                if (distFromCenter > screenRadius * VORONOI_CLIP_FACTOR) {
                     // Outside the sun - make transparent
                     const idx = (py * width + px) * 4;
                     data[idx + 3] = 0; // Alpha = 0
@@ -742,9 +745,16 @@ export class GameRenderer {
                 }
                 
                 // Convert screen position back to world position
-                const worldPoint = this.screenToWorld(worldScreenX, worldScreenY);
+                const worldPoint = this.screenToWorld(screenX, screenY);
                 
                 // Find the closest Voronoi seed point
+                if (sun.voronoiSegments.length === 0) {
+                    // No segments - skip this pixel
+                    const idx = (py * width + px) * 4;
+                    data[idx + 3] = 0;
+                    continue;
+                }
+                
                 let closestSegment = sun.voronoiSegments[0];
                 let minDist = Infinity;
                 
