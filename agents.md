@@ -296,6 +296,39 @@ When modifying simulation code, ensure:
 
 ---
 
+## 11. Hero Unit File Guidelines
+
+When adding or refactoring hero units, keep each hero (and its ability helpers) in a dedicated file
+under `src/heroes/` using the established factory pattern.
+
+### Structure
+- **One hero per file**: `src/heroes/<hero-name>.ts` should export `create<HeroName>Hero(...)`.
+- **Ability helpers in the same file**: related helper classes (projectiles, zones, beam segments, turrets)
+  must live alongside their hero class.
+- **No runtime imports from `game-core.ts`**: use the factory dependency injection pattern to avoid circular
+  dependencies. Type-only imports from `game-core.ts` are acceptable.
+
+### Integration Steps (Do Not Skip)
+1. **Add/extend hero file**: create `create<HeroName>Hero` and keep logic identical to the previous
+   behavior when refactoring.
+2. **Wire into `game-core.ts`**:
+   - Import `create<HeroName>Hero` at the top.
+   - Instantiate the hero via the factory and export the resulting class(es).
+   - Update `createHeroUnit(...)` to include the new hero type string.
+3. **Update UI/rendering** (if a new hero):
+   - Add sprite entries in `src/renderer.ts`.
+   - Update hero production UI names and availability checks.
+4. **Update AI and balance hooks**:
+   - Add hero to the AI hero type lists and any faction mappings.
+   - Add constants for stats/abilities in `src/constants.ts`.
+
+### Consistency Rules
+- **No behavior changes during refactors**: a file split must be a pure move (logic and constants stay identical).
+- **Preserve deterministic simulation rules**: no new wall-clock time or nondeterministic RNG in hero logic.
+- **Keep exports stable**: `game-core.ts` should continue to export hero classes and helpers for renderer/main.
+
+---
+
 ## Summary
 
 This codebase prioritizes **determinism**, **performance**, and **clarity** above all else. Every line of code should support these goals. When in doubt:
