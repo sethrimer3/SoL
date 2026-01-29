@@ -349,6 +349,24 @@ export const MORTAR_SPLASH_RADIUS = 80; // Radius of splash damage
 export const MORTAR_SPLASH_DAMAGE_FALLOFF = 0.5; // 50% damage at edge of splash radius
 export const MORTAR_PROJECTILE_SPEED = 300; // Speed of mortar shells
 
+// Preist unit constants (healing support hero)
+export const PREIST_MAX_HEALTH = 110;
+export const PREIST_ATTACK_RANGE = 0; // No attack
+export const PREIST_ATTACK_DAMAGE = 0; // No damage
+export const PREIST_ATTACK_SPEED = 0; // No attack
+export const PREIST_ABILITY_COOLDOWN = 10.0; // 10 seconds
+export const PREIST_HEALING_RANGE = 350; // Range for healing beams
+export const PREIST_HEALING_PER_SECOND = 0.02; // 2% of max health per second per beam
+export const PREIST_TARGET_LOCK_DURATION = 0.5; // Stay on target for at least 0.5 seconds
+export const PREIST_NUM_BEAMS = 2; // Number of healing beams
+export const PREIST_HEALING_BOMB_SPEED = 400; // Speed of healing bomb projectile
+export const PREIST_HEALING_BOMB_MAX_RANGE = 500; // Maximum range for healing bomb
+export const PREIST_HEALING_BOMB_PARTICLE_COUNT = 50; // Number of wild particles
+export const PREIST_HEALING_BOMB_PARTICLE_HEALING = 0.01; // 1% of max health per particle
+export const PREIST_HEALING_BOMB_EXPLOSION_RADIUS = 120; // Radius of particle explosion area
+export const PREIST_HEALING_BOMB_PARTICLE_SPEED = 200; // Speed of wild particles
+export const PREIST_HEALING_BOMB_PARTICLE_LIFETIME = 0.5; // Lifetime of wild particles
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy

@@ -12,6 +12,7 @@ import { createGraveHero } from './heroes/grave';
 import { createInfluenceBallHero } from './heroes/influence-ball';
 import { createMarineHero } from './heroes/marine';
 import { createMortarHero } from './heroes/mortar';
+import { createPreistHero } from './heroes/preist';
 import { createRayHero } from './heroes/ray';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 
@@ -1888,6 +1889,10 @@ export class BouncingBullet {
     }
 }
 
+// Forward declarations for optional properties
+type Beam = any;
+type Preist = any;
+
 /**
  * Ability bullet for special attacks
  */
@@ -1901,6 +1906,10 @@ export class AbilityBullet {
     // Optional properties for Beam sniper projectile
     isBeamProjectile?: boolean;
     beamOwner?: Beam;
+    
+    // Optional properties for Preist healing bomb
+    isHealingBomb?: boolean;
+    healingBombOwner?: Preist;
     
     constructor(
         public position: Vector2D,
@@ -2298,7 +2307,7 @@ export class Unit {
     /**
      * Get shortest angle delta between two angles (in radians)
      */
-    private getShortestAngleDelta(from: number, to: number): number {
+    protected getShortestAngleDelta(from: number, to: number): number {
         let delta = to - from;
         while (delta > Math.PI) delta -= Math.PI * 2;
         while (delta < -Math.PI) delta += Math.PI * 2;
@@ -2447,6 +2456,13 @@ const { Mortar, MortarProjectile } = createMortarHero({
     Constants
 });
 
+const { Preist, HealingBombParticle } = createPreistHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
+
 export {
     Marine,
     Grave,
@@ -2462,7 +2478,9 @@ export {
     Dagger,
     Beam,
     Mortar,
-    MortarProjectile
+    MortarProjectile,
+    Preist,
+    HealingBombParticle
 };
 
 /**
@@ -3521,6 +3539,11 @@ export class GameState {
         for (const bullet of this.abilityBullets) {
             bullet.update(deltaTime);
             
+            // Check if healing bomb reached max range or lifetime - if so, explode
+            if (bullet.isHealingBomb && bullet.healingBombOwner && bullet.shouldDespawn()) {
+                bullet.healingBombOwner.explodeHealingBomb(bullet.position);
+            }
+            
             // Apply fluid-like force to space dust particles
             const bulletSpeed = Math.sqrt(bullet.velocity.x ** 2 + bullet.velocity.y ** 2);
             this.applyFluidForceFromMovingObject(
@@ -3535,6 +3558,11 @@ export class GameState {
             for (const player of this.players) {
                 // Skip if same team as bullet
                 if (player === bullet.owner) {
+                    continue;
+                }
+                
+                // Skip hit detection for healing bombs (they explode on max range/lifetime)
+                if (bullet.isHealingBomb) {
                     continue;
                 }
 
@@ -5497,6 +5525,8 @@ export class GameState {
                 return new Beam(spawnPosition, owner);
             case 'Mortar':
                 return new Mortar(spawnPosition, owner);
+            case 'Preist':
+                return new Preist(spawnPosition, owner);
             default:
                 return null;
         }
