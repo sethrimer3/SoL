@@ -1252,6 +1252,7 @@ export interface GameSettings {
     colorScheme: string; // Color scheme ID
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
+    graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
 }
 
 export class MainMenu {
@@ -1412,7 +1413,8 @@ export class MainMenu {
             selectedSpawnLoadout: null,
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
-            healthDisplayMode: 'bar' // Default to showing health bars
+            healthDisplayMode: 'bar', // Default to showing health bars
+            graphicsQuality: 'high' // Default to high graphics
         };
         this.ensureDefaultHeroSelection();
         
@@ -1883,6 +1885,19 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(enemyColorSection);
+
+        // Graphics Quality setting
+        const graphicsQualitySection = this.createSettingSection(
+            'Graphics Quality',
+            this.createSelect(
+                ['low', 'medium', 'high'],
+                this.settings.graphicsQuality,
+                (value) => {
+                    this.settings.graphicsQuality = value as 'low' | 'medium' | 'high';
+                }
+            )
+        );
+        settingsContainer.appendChild(graphicsQualitySection);
 
         // Color Scheme setting
         const colorSchemeSection = this.createSettingSection(

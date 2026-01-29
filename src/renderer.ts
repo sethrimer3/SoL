@@ -108,6 +108,7 @@ export class GameRenderer {
     public inGameMenuTab: InGameMenuTab = 'main';
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
+    public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
 
     private readonly HERO_SPRITE_SCALE = 6;
     private readonly FORGE_SPRITE_SCALE = 2.2;
@@ -3763,9 +3764,11 @@ export class GameRenderer {
             this.drawLaserBeam(laser);
         }
         
-        // Draw impact particles
-        for (const particle of game.impactParticles) {
-            this.drawImpactParticle(particle);
+        // Draw impact particles (only on high graphics quality)
+        if (this.graphicsQuality === 'high') {
+            for (const particle of game.impactParticles) {
+                this.drawImpactParticle(particle);
+            }
         }
         
         // Draw influence zones

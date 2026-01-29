@@ -243,6 +243,9 @@ class GameController {
         this.renderer.healthDisplayMode = settings.healthDisplayMode;
         this.game.damageDisplayMode = settings.damageDisplayMode;
         
+        // Set graphics quality from settings
+        this.renderer.graphicsQuality = settings.graphicsQuality;
+        
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
             this.renderer.viewingPlayer = this.game.players[0];
@@ -344,7 +347,8 @@ class GameController {
         
         // Reinitialize space dust
         game.spaceDust = [];
-        game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, map.mapSize, map.mapSize, colorScheme?.spaceDustPalette);
+        const particleCount = map.id === 'test-level' ? 3000 : Constants.SPACE_DUST_PARTICLE_COUNT;
+        game.initializeSpaceDust(particleCount, map.mapSize, map.mapSize, colorScheme?.spaceDustPalette);
         
         return game;
     }
