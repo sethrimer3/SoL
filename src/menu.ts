@@ -120,7 +120,7 @@ interface MenuAsteroid {
 
 class BackgroundParticleLayer {
     private static readonly PARTICLE_COUNT = 24;
-    private static readonly PARTICLE_RADIUS = 250;
+    private static readonly PARTICLE_RADIUS = 75;  // 30% of original 250
     private static readonly MAX_VELOCITY = 0.3;
     private static readonly MIN_VELOCITY = 0.02;
     private static readonly FRICTION = 0.98;
