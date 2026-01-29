@@ -676,6 +676,19 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a selection indicator (green dashed circle) for selected buildings
+     */
+    private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
+        this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
+        this.ctx.lineWidth = 3;
+        this.ctx.setLineDash([5, 5]);
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.setLineDash([]); // Reset dash pattern
+    }
+
+    /**
      * Draw a sun
      */
     private drawSun(sun: Sun): void {
@@ -2913,13 +2926,7 @@ export class GameRenderer {
 
         // Draw selection indicator if selected
         if (building.isSelected) {
-            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
-            this.ctx.lineWidth = 3;
-            this.ctx.setLineDash([5, 5]);
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]); // Reset dash pattern
+            this.drawBuildingSelectionIndicator(screenPos, radius);
         }
 
         // Draw turret base (smaller circle in center)
@@ -3028,13 +3035,7 @@ export class GameRenderer {
 
         // Draw selection indicator if selected
         if (building.isSelected) {
-            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
-            this.ctx.lineWidth = 3;
-            this.ctx.setLineDash([5, 5]);
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]); // Reset dash pattern
+            this.drawBuildingSelectionIndicator(screenPos, radius);
         }
 
         // Draw swirl pattern in center (3 curved arcs rotating counter-clockwise)
@@ -3141,14 +3142,7 @@ export class GameRenderer {
 
         // Draw selection indicator if selected
         if (building.isSelected) {
-            this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
-            this.ctx.lineWidth = 3;
-            this.ctx.setLineDash([5, 5]);
-            this.ctx.beginPath();
-            // Draw circle around the hexagon
-            this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]); // Reset dash pattern
+            this.drawBuildingSelectionIndicator(screenPos, radius);
         }
 
         // Draw production indicator (rotating inner hexagon)

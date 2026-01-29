@@ -190,6 +190,7 @@ class GameController {
         this.selectedUnits.clear();
         this.selectedMirrors.clear();
         this.selectedBase = null;
+        this.selectedBuildings.clear();
         this.renderer.selectedUnits = this.selectedUnits;
         
         // Reset states
@@ -665,7 +666,7 @@ class GameController {
                         this.clearPathPreview();
                         console.log('Stellar Forge deselected');
                     } else {
-                        // Select forge, deselect units and mirrors
+                        // Select forge, deselect units, mirrors, and buildings
                         player.stellarForge.isSelected = true;
                         this.selectedBase = player.stellarForge;
                         this.selectedUnits.clear();
@@ -675,6 +676,11 @@ class GameController {
                         for (const mirror of player.solarMirrors) {
                             mirror.isSelected = false;
                         }
+                        // Deselect all buildings
+                        for (const building of player.buildings) {
+                            building.isSelected = false;
+                        }
+                        this.selectedBuildings.clear();
                         this.clearPathPreview();
                         console.log('Stellar Forge selected');
                     }
@@ -706,7 +712,7 @@ class GameController {
                         this.clearPathPreview();
                         console.log('Solar Mirror deselected');
                     } else {
-                        // Select mirror, deselect forge and units
+                        // Select mirror, deselect forge, units, and buildings
                         clickedMirror.isSelected = true;
                         this.selectedMirrors.clear();
                         this.selectedMirrors.add(clickedMirror);
@@ -722,6 +728,11 @@ class GameController {
                                 mirror.isSelected = false;
                             }
                         }
+                        // Deselect all buildings
+                        for (const building of player.buildings) {
+                            building.isSelected = false;
+                        }
+                        this.selectedBuildings.clear();
                         this.clearPathPreview();
                         console.log('Solar Mirror selected');
                     }
@@ -931,6 +942,11 @@ class GameController {
                             this.selectedUnits.clear();
                             this.selectedMirrors.clear();
                             this.renderer.selectedUnits = this.selectedUnits;
+                            // Deselect all buildings
+                            for (const building of player.buildings) {
+                                building.isSelected = false;
+                            }
+                            this.selectedBuildings.clear();
                             this.clearPathPreview();
                         }
 
@@ -953,6 +969,11 @@ class GameController {
                     this.selectedUnits.clear();
                     this.selectedMirrors.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                    // Deselect all buildings
+                    for (const building of player.buildings) {
+                        building.isSelected = false;
+                    }
+                    this.selectedBuildings.clear();
                     console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -974,6 +995,11 @@ class GameController {
                     this.selectedUnits.clear();
                     this.selectedMirrors.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                    // Deselect all buildings
+                    for (const building of player.buildings) {
+                        building.isSelected = false;
+                    }
+                    this.selectedBuildings.clear();
                     console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -1011,9 +1037,16 @@ class GameController {
                         unit.moveOrder = this.moveOrderCounter;
                     }
                     
-                    // Deselect units after setting path
+                    // Deselect units and buildings after setting path
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                    const player = this.game.players[0];
+                    if (player) {
+                        for (const building of player.buildings) {
+                            building.isSelected = false;
+                        }
+                        this.selectedBuildings.clear();
+                    }
                 }
                 this.clearPathPreview();
             } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
@@ -1457,6 +1490,12 @@ class GameController {
         // Get the player's units (assume player 1 is the human player)
         const player = this.game.players[0];
         if (!player || player.isDefeated()) return;
+
+        // Deselect all buildings
+        for (const building of player.buildings) {
+            building.isSelected = false;
+        }
+        this.selectedBuildings.clear();
 
         // Select units within the rectangle
         for (const unit of player.units) {
