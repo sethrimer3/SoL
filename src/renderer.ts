@@ -519,7 +519,7 @@ export class GameRenderer {
             const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
             if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
                 // Use the smoothly interpolated rotation from the unit's movement logic
-                return starling.rotation + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+                return starling.rotation;
             }
         }
 
@@ -530,12 +530,13 @@ export class GameRenderer {
                 const dx = targetPosition.x - starling.position.x;
                 const dy = targetPosition.y - starling.position.y;
                 if (dx !== 0 || dy !== 0) {
-                    return Math.atan2(dy, dx) + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+                    // Subtract π/2 to make the TOP of the sprite be the FRONT
+                    return Math.atan2(dy, dx) - Math.PI / 2;
                 }
             }
         }
 
-        return starling.rotation + Constants.STARLING_SPRITE_ROTATION_OFFSET_RAD;
+        return starling.rotation;
     }
 
     private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {

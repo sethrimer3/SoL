@@ -1253,6 +1253,8 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
+    username: string; // Player's username for multiplayer
+    gameMode: 'ai' | 'online' | 'lan'; // Game mode selection
 }
 
 export class MainMenu {
@@ -1263,11 +1265,12 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
+    private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -1414,7 +1417,9 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'high' // Default to high graphics
+            graphicsQuality: 'high', // Default to high graphics
+            username: this.getOrGenerateUsername(), // Load or generate username
+            gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
         
@@ -1559,6 +1564,35 @@ export class MainMenu {
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
     }
 
+    /**
+     * Generate a random username in the format "player#XXXX"
+     */
+    private generateRandomUsername(): string {
+        const randomNumber = Math.floor(Math.random() * 10000);
+        return `player#${randomNumber.toString().padStart(4, '0')}`;
+    }
+
+    /**
+     * Get username from localStorage or generate a new one
+     */
+    private getOrGenerateUsername(): string {
+        const storedUsername = localStorage.getItem('sol_username');
+        if (storedUsername && storedUsername.trim() !== '') {
+            return storedUsername;
+        }
+        const newUsername = this.generateRandomUsername();
+        localStorage.setItem('sol_username', newUsername);
+        return newUsername;
+    }
+
+    /**
+     * Save username to localStorage
+     */
+    private saveUsername(username: string): void {
+        localStorage.setItem('sol_username', username);
+        this.settings.username = username;
+    }
+
     private resolveAssetPath(path: string): string {
         if (!path.startsWith('ASSETS/')) {
             return path;
@@ -1578,6 +1612,11 @@ export class MainMenu {
         }
         if (this.contentElement) {
             this.contentElement.innerHTML = '';
+        }
+        // Clear any pending timeouts
+        if (this.lanServerListTimeout !== null) {
+            clearTimeout(this.lanServerListTimeout);
+            this.lanServerListTimeout = null;
         }
         this.setTestLevelButtonVisible(false);
     }
@@ -1662,11 +1701,9 @@ export class MainMenu {
                     this.renderFactionSelectionScreen(this.contentElement);
                     break;
                 case 'start':
-                    this.hide();
-                    if (this.onStartCallback) {
-                        this.ensureDefaultHeroSelection();
-                        this.onStartCallback(this.settings);
-                    }
+                    this.currentScreen = 'game-mode-select';
+                    this.startMenuTransition();
+                    this.renderGameModeSelectionScreen(this.contentElement);
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
@@ -1789,6 +1826,156 @@ export class MainMenu {
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
+    private renderLANScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'LAN Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Host server button
+        const hostButton = this.createButton('HOST SERVER', () => {
+            // Create lobby name with username
+            const lobbyName = `${this.settings.username}'s lobby`;
+            console.log('Hosting LAN server:', lobbyName);
+            // TODO: Implement actual LAN server hosting
+            alert(`LAN server "${lobbyName}" created!\n\nThis feature is coming soon.`);
+        }, '#00AA00');
+        hostButton.style.marginBottom = '40px';
+        hostButton.style.padding = '15px 40px';
+        hostButton.style.fontSize = '28px';
+        container.appendChild(hostButton);
+
+        // Server list title
+        const serverListTitle = document.createElement('h3');
+        serverListTitle.textContent = 'Available Servers';
+        serverListTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
+        serverListTitle.style.marginBottom = '20px';
+        serverListTitle.style.color = '#FFFFFF';
+        serverListTitle.style.textAlign = 'center';
+        serverListTitle.style.fontWeight = '300';
+        serverListTitle.dataset.particleText = 'true';
+        serverListTitle.dataset.particleColor = '#FFFFFF';
+        container.appendChild(serverListTitle);
+
+        // Server list container
+        const serverListContainer = document.createElement('div');
+        serverListContainer.style.maxWidth = '600px';
+        serverListContainer.style.width = '100%';
+        serverListContainer.style.minHeight = '200px';
+        serverListContainer.style.padding = '20px';
+        serverListContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        serverListContainer.style.borderRadius = '10px';
+        serverListContainer.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+        serverListContainer.style.marginBottom = '30px';
+
+        // Placeholder text for empty server list
+        const placeholderText = document.createElement('p');
+        placeholderText.textContent = 'Scanning for LAN servers...';
+        placeholderText.style.color = '#888888';
+        placeholderText.style.textAlign = 'center';
+        placeholderText.style.fontSize = '20px';
+        placeholderText.style.marginTop = '80px';
+        serverListContainer.appendChild(placeholderText);
+
+        // TODO: Implement actual LAN server discovery
+        // Simulate no servers found after a delay
+        this.lanServerListTimeout = window.setTimeout(() => {
+            if (placeholderText.isConnected) {
+                placeholderText.textContent = 'No LAN servers found';
+            }
+        }, 1500);
+
+        container.appendChild(serverListContainer);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderOnlinePlaceholderScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Online Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Coming soon message
+        const message = document.createElement('div');
+        message.style.maxWidth = '600px';
+        message.style.padding = '40px';
+        message.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        message.style.borderRadius = '10px';
+        message.style.border = '2px solid rgba(255, 215, 0, 0.3)';
+        message.style.marginBottom = '30px';
+
+        const messageTitle = document.createElement('h3');
+        messageTitle.textContent = 'Coming Soon!';
+        messageTitle.style.fontSize = '32px';
+        messageTitle.style.color = '#FFD700';
+        messageTitle.style.textAlign = 'center';
+        messageTitle.style.marginBottom = '20px';
+        messageTitle.style.fontWeight = '300';
+        message.appendChild(messageTitle);
+
+        const messageText = document.createElement('p');
+        messageText.innerHTML = `
+            Online multiplayer is currently in development.<br><br>
+            <strong>Features:</strong><br>
+            • Simple, efficient data transmission<br>
+            • Prioritized for speed and minimal data size<br>
+            • Cross-platform matchmaking<br>
+            • Ranked and casual modes
+        `;
+        messageText.style.fontSize = '20px';
+        messageText.style.color = '#CCCCCC';
+        messageText.style.textAlign = 'center';
+        messageText.style.lineHeight = '1.6';
+        message.appendChild(messageText);
+
+        container.appendChild(message);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
@@ -1826,6 +2013,19 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(difficultySection);
+
+        // Username setting
+        const usernameSection = this.createSettingSection(
+            'Username',
+            this.createTextInput(
+                this.settings.username,
+                (value) => {
+                    this.saveUsername(value);
+                },
+                'Enter your username'
+            )
+        );
+        settingsContainer.appendChild(usernameSection);
 
         // Sound setting
         const soundSection = this.createSettingSection(
@@ -1922,6 +2122,100 @@ export class MainMenu {
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderGameModeSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Select Game Mode';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Create carousel menu container
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
+        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
+        container.appendChild(carouselContainer);
+
+        // Create game mode options
+        const gameModeOptions: MenuOption[] = [
+            {
+                id: 'ai',
+                name: 'AI',
+                description: 'Play against computer opponent'
+            },
+            {
+                id: 'online',
+                name: 'ONLINE',
+                description: 'Play against players worldwide'
+            },
+            {
+                id: 'lan',
+                name: 'LAN',
+                description: 'Play on local network'
+            }
+        ];
+
+        // Default to AI mode (index 0)
+        this.carouselMenu = new CarouselMenuView(carouselContainer, gameModeOptions, 0);
+        this.carouselMenu.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onNavigate(() => {
+            this.startMenuTransition();
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onSelect((option: MenuOption) => {
+            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan';
+            
+            switch (option.id) {
+                case 'ai':
+                    // Start AI game directly
+                    this.hide();
+                    if (this.onStartCallback) {
+                        this.ensureDefaultHeroSelection();
+                        this.onStartCallback(this.settings);
+                    }
+                    break;
+                case 'online':
+                    // Show online play placeholder
+                    this.currentScreen = 'online';
+                    this.startMenuTransition();
+                    this.renderOnlinePlaceholderScreen(this.contentElement);
+                    break;
+                case 'lan':
+                    // Show LAN menu
+                    this.currentScreen = 'lan';
+                    this.startMenuTransition();
+                    this.renderLANScreen(this.contentElement);
+                    break;
+            }
+        });
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'main';
+            this.startMenuTransition();
+            this.renderMainScreen(this.contentElement);
+        }, '#666666');
+        backButton.style.marginTop = '30px';
+        container.appendChild(backButton);
+
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
@@ -2625,6 +2919,53 @@ export class MainMenu {
         container.appendChild(input);
 
         return container;
+    }
+
+    /**
+     * Validate and sanitize username
+     */
+    private validateUsername(username: string): string {
+        // Trim and limit length
+        let sanitized = username.trim().substring(0, 20);
+        
+        // If empty or invalid, generate random username
+        if (sanitized.length < 1) {
+            return this.generateRandomUsername();
+        }
+        
+        return sanitized;
+    }
+
+    private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.placeholder = placeholder;
+        input.style.fontSize = '20px';
+        input.style.padding = '8px 15px';
+        input.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        input.style.color = '#FFFFFF';
+        input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        input.style.borderRadius = '5px';
+        input.style.fontFamily = 'inherit';
+        input.style.fontWeight = '300';
+        input.style.minWidth = '200px';
+        input.maxLength = 20;
+        input.style.outline = 'none';
+
+        // Update on blur instead of every keystroke for efficiency
+        input.addEventListener('blur', () => {
+            const validatedValue = this.validateUsername(input.value);
+            input.value = validatedValue;
+            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+            onChange(validatedValue);
+        });
+
+        input.addEventListener('focus', () => {
+            input.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        return input;
     }
 
     /**
