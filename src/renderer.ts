@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -18,6 +18,7 @@ type GraphicKey =
     | 'heroGrave'
     | 'heroDagger'
     | 'heroBeam'
+    | 'heroMortar'
     | 'heroRay'
     | 'heroInfluenceBall'
     | 'heroTurretDeployer'
@@ -588,6 +589,9 @@ export class GameRenderer {
         }
         if (unit instanceof Beam) {
             return this.getGraphicAssetPath('heroBeam');
+        }
+        if (unit instanceof Mortar) {
+            return this.getGraphicAssetPath('heroMortar');
         }
         if (unit instanceof Ray) {
             return this.getGraphicAssetPath('heroRay');
@@ -1178,6 +1182,8 @@ export class GameRenderer {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Mortar':
+                return unit instanceof Mortar;
             default:
                 return false;
         }
@@ -1942,6 +1948,38 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a mortar projectile (larger, more visible artillery shell)
+     */
+    private drawMortarProjectile(projectile: any): void {
+        const screenPos = this.worldToScreen(projectile.position);
+        const size = 6 * this.zoom; // Larger than other projectiles
+        const color = this.getFactionColor(projectile.owner.faction);
+
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main projectile
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw inner highlight
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x - size * 0.2, screenPos.y - size * 0.2, size * 0.4, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
      * Draw a laser beam
      */
     private drawLaserBeam(laser: LaserBeam): void {
@@ -2622,6 +2660,111 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeText(multiplierText, screenPos.x, screenPos.y + yOffset);
             this.ctx.fillText(multiplierText, screenPos.x, screenPos.y + yOffset);
+            
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw a Mortar hero unit with detection cone visualization
+     */
+    private drawMortar(mortar: any, color: string, game: GameState, isEnemy: boolean): void {
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(mortar.position, this.viewingPlayer, mortar);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            const inShadow = game.isPointInShadow(mortar.position);
+            if (inShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            }
+        }
+        
+        // Draw detection cone if set up and not enemy
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
+            const halfConeAngle = Constants.MORTAR_DETECTION_CONE_ANGLE / 2;
+            const coneRadius = Constants.MORTAR_ATTACK_RANGE * this.zoom;
+            
+            // Draw detection cone
+            this.ctx.fillStyle = shouldDim ? this.darkenColor(color, Constants.SHADE_OPACITY * 0.5) : color;
+            this.ctx.globalAlpha = 0.15;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.arc(
+                screenPos.x,
+                screenPos.y,
+                coneRadius,
+                facingAngle - halfConeAngle,
+                facingAngle + halfConeAngle
+            );
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
+            
+            // Draw cone outline
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(color, Constants.SHADE_OPACITY) : color;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.arc(
+                screenPos.x,
+                screenPos.y,
+                coneRadius,
+                facingAngle - halfConeAngle,
+                facingAngle + halfConeAngle
+            );
+            this.ctx.lineTo(screenPos.x, screenPos.y);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+        
+        // Draw base unit
+        this.drawUnit(mortar, displayColor, game, isEnemy);
+        
+        // Draw setup indicator - show artillery barrel/turret for friendly units
+        if (!isEnemy && mortar.isSetup && mortar.facingDirection) {
+            const screenPos = this.worldToScreen(mortar.position);
+            const facingAngle = Math.atan2(mortar.facingDirection.y, mortar.facingDirection.x);
+            const barrelLength = 15 * this.zoom;
+            
+            // Draw barrel
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#888888', Constants.SHADE_OPACITY) : '#888888';
+            this.ctx.lineWidth = 4 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(
+                screenPos.x + Math.cos(facingAngle) * barrelLength,
+                screenPos.y + Math.sin(facingAngle) * barrelLength
+            );
+            this.ctx.stroke();
+        } else if (!isEnemy && !mortar.isSetup) {
+            // Show "not set up" indicator
+            const screenPos = this.worldToScreen(mortar.position);
+            const size = 12 * this.zoom;
+            
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFAA00', Constants.SHADE_OPACITY) : '#FFAA00'; // Orange
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.7;
+            
+            // Draw exclamation mark
+            this.ctx.beginPath();
+            // Vertical line
+            this.ctx.moveTo(screenPos.x, screenPos.y - size);
+            this.ctx.lineTo(screenPos.x, screenPos.y - size * 0.3);
+            this.ctx.stroke();
+            
+            // Dot
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y - size * 0.1, 1.5 * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
             
             this.ctx.globalAlpha = 1.0;
         }
@@ -3760,6 +3903,8 @@ export class GameRenderer {
                     this.drawDagger(unit, color, game, isEnemy);
                 } else if (unit instanceof Beam) {
                     this.drawBeam(unit, color, game, isEnemy);
+                } else if (unit instanceof Mortar) {
+                    this.drawMortar(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -3810,6 +3955,11 @@ export class GameRenderer {
         // Draw minion projectiles
         for (const projectile of game.minionProjectiles) {
             this.drawMinionProjectile(projectile);
+        }
+        
+        // Draw mortar projectiles
+        for (const projectile of game.mortarProjectiles) {
+            this.drawMortarProjectile(projectile);
         }
         
         // Draw laser beams
