@@ -11,6 +11,7 @@ import { createDrillerHero } from './heroes/driller';
 import { createGraveHero } from './heroes/grave';
 import { createInfluenceBallHero } from './heroes/influence-ball';
 import { createMarineHero } from './heroes/marine';
+import { createMorterHero } from './heroes/morter';
 import { createRayHero } from './heroes/ray';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 
@@ -2395,6 +2396,12 @@ const { Beam } = createBeamHero({
     AbilityBullet
 });
 
+const { Morter, MorterProjectile } = createMorterHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 export {
     Marine,
     Grave,
@@ -2408,7 +2415,9 @@ export {
     DeployedTurret,
     Driller,
     Dagger,
-    Beam
+    Beam,
+    Morter,
+    MorterProjectile
 };
 
 /**
@@ -2907,6 +2916,7 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
+    morterProjectiles: MorterProjectile[] = [];
     laserBeams: LaserBeam[] = [];
     impactParticles: ImpactParticle[] = [];
     influenceZones: InfluenceZone[] = [];
@@ -3224,6 +3234,14 @@ export class GameState {
                     const projectile = unit.getAndClearProjectile();
                     if (projectile) {
                         this.influenceBallProjectiles.push(projectile);
+                    }
+                }
+                
+                // Handle Morter projectiles
+                if (unit instanceof Morter) {
+                    const projectiles = unit.getAndClearLastShotProjectiles();
+                    if (projectiles.length > 0) {
+                        this.morterProjectiles.push(...projectiles);
                     }
                 }
                 
@@ -3569,6 +3587,102 @@ export class GameState {
             }
         }
         this.abilityBullets = this.abilityBullets.filter(bullet => !bullet.shouldDespawn());
+
+        // Update morter projectiles and check for splash damage hits
+        for (const projectile of this.morterProjectiles) {
+            projectile.update(deltaTime);
+            
+            // Check hits against enemies
+            let shouldExplode = false;
+            for (const player of this.players) {
+                // Skip if same team as projectile
+                if (player === projectile.owner) {
+                    continue;
+                }
+
+                // Check if projectile hit any unit
+                for (const unit of player.units) {
+                    if (projectile.checkHit(unit)) {
+                        shouldExplode = true;
+                        break;
+                    }
+                }
+                
+                if (shouldExplode) {
+                    break;
+                }
+            }
+            
+            // If projectile hit something or reached max lifetime, apply splash damage
+            if (shouldExplode || projectile.shouldDespawn()) {
+                // Collect all enemy targets for splash damage
+                const allEnemyTargets: CombatTarget[] = [];
+                
+                for (const player of this.players) {
+                    if (player === projectile.owner) {
+                        continue;
+                    }
+                    
+                    // Add units as potential targets
+                    allEnemyTargets.push(...player.units);
+                    
+                    // Add forge as potential target
+                    if (player.stellarForge && player.stellarForge.health > 0) {
+                        allEnemyTargets.push(player.stellarForge);
+                    }
+                    
+                    // Add buildings as potential targets
+                    for (const building of player.buildings) {
+                        if (building.health > 0) {
+                            allEnemyTargets.push(building);
+                        }
+                    }
+                }
+                
+                // Apply splash damage to all targets in range
+                const damagedTargets = projectile.applySplashDamage(allEnemyTargets);
+                
+                // Create damage numbers for all damaged targets
+                for (const target of damagedTargets) {
+                    const distance = projectile.position.distanceTo(target.position);
+                    const damageMultiplier = 1.0 - (distance / projectile.splashRadius) * (1.0 - Constants.MORTER_SPLASH_DAMAGE_FALLOFF);
+                    const finalDamage = Math.round(projectile.damage * damageMultiplier);
+                    
+                    if (target instanceof Unit) {
+                        const unitKey = `unit_${target.position.x}_${target.position.y}_${target.owner.name}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            unitKey
+                        );
+                    } else if ('isBuilding' in target && target.isBuilding) {
+                        const buildingKey = `building_${target.position.x}_${target.position.y}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            buildingKey
+                        );
+                    } else if ('isForge' in target && target.isForge) {
+                        const forgeKey = `forge_${target.position.x}_${target.position.y}`;
+                        this.addDamageNumber(
+                            target.position,
+                            finalDamage,
+                            target.maxHealth,
+                            target.health,
+                            forgeKey
+                        );
+                    }
+                }
+                
+                // Mark projectile for removal
+                projectile.lifetime = projectile.maxLifetime;
+            }
+        }
+        this.morterProjectiles = this.morterProjectiles.filter(projectile => !projectile.shouldDespawn());
 
         // Update minion projectiles and check for hits
         for (const projectile of this.minionProjectiles) {
@@ -4460,7 +4574,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam'];
+                return ['Marine', 'Dagger', 'Beam', 'Morter'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -4488,6 +4602,8 @@ export class GameState {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Morter':
+                return unit instanceof Morter;
             default:
                 return false;
         }
@@ -5334,6 +5450,8 @@ export class GameState {
                 return new Dagger(spawnPosition, owner);
             case 'Beam':
                 return new Beam(spawnPosition, owner);
+            case 'Morter':
+                return new Morter(spawnPosition, owner);
             default:
                 return null;
         }
