@@ -1301,80 +1301,129 @@ export class SubsidiaryFactory extends Building {
  * Sun/Star - Light source
  */
 /**
- * Represents a color particle within the sun fractal
+ * Represents a Voronoi segment within the sun
  */
-export interface SunColorParticle {
-    position: Vector2D;
+export interface SunVoronoiSegment {
+    seedPoint: Vector2D; // The seed point for this Voronoi cell
     startColor: { r: number; g: number; b: number };
     currentColor: { r: number; g: number; b: number };
     targetColor: { r: number; g: number; b: number };
     transitionProgress: number;
     transitionSpeed: number;
-    size: number;
 }
 
 export class Sun {
-    public colorParticles: SunColorParticle[] = [];
+    public voronoiSegments: SunVoronoiSegment[] = [];
 
     constructor(
         public position: Vector2D,
         public intensity: number = 1.0,
         public radius: number = 100.0
     ) {
-        this.initializeColorParticles();
+        this.initializeVoronoiSegments();
     }
 
     /**
-     * Initialize color particles distributed within the sun
+     * Initialize Voronoi segments within the sun
      */
-    private initializeColorParticles(): void {
-        const numParticles = 150; // Number of colored spaces in the fractal
+    private initializeVoronoiSegments(): void {
+        const numSegments = 80; // Number of Voronoi segments
         
-        for (let i = 0; i < numParticles; i++) {
-            // Distribute particles randomly within the sun's radius
-            const angle = Math.random() * Math.PI * 2;
-            const distance = Math.sqrt(Math.random()) * this.radius * 0.8; // 80% of radius
+        // Generate seed points for Voronoi diagram
+        // Use Poisson disk sampling for more even distribution
+        const seedPoints: Vector2D[] = [];
+        const minDistance = this.radius * 0.15; // Minimum distance between seed points (reduced for 80 segments)
+        const maxAttempts = 30;
+        const maxTotalAttempts = numSegments * maxAttempts * 2; // Safety limit
+        let totalAttempts = 0;
+        
+        // Start with a seed at the center
+        seedPoints.push(new Vector2D(this.position.x, this.position.y));
+        
+        // Generate remaining seeds using rejection sampling
+        while (seedPoints.length < numSegments && totalAttempts < maxTotalAttempts) {
+            let placed = false;
             
-            const particlePos = new Vector2D(
-                this.position.x + Math.cos(angle) * distance,
-                this.position.y + Math.sin(angle) * distance
-            );
+            for (let attempt = 0; attempt < maxAttempts && !placed; attempt++) {
+                totalAttempts++;
+                
+                // Generate random point within circle
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.sqrt(Math.random()) * this.radius * 0.9;
+                
+                const candidatePoint = new Vector2D(
+                    this.position.x + Math.cos(angle) * distance,
+                    this.position.y + Math.sin(angle) * distance
+                );
+                
+                // Check if it's far enough from all existing seeds
+                let tooClose = false;
+                for (const existingSeed of seedPoints) {
+                    const dx = candidatePoint.x - existingSeed.x;
+                    const dy = candidatePoint.y - existingSeed.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < minDistance) {
+                        tooClose = true;
+                        break;
+                    }
+                }
+                
+                if (!tooClose) {
+                    seedPoints.push(candidatePoint);
+                    placed = true;
+                }
+            }
             
+            // If we couldn't place after maxAttempts, reduce minDistance requirement
+            if (!placed && seedPoints.length < numSegments) {
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.sqrt(Math.random()) * this.radius * 0.9;
+                seedPoints.push(new Vector2D(
+                    this.position.x + Math.cos(angle) * distance,
+                    this.position.y + Math.sin(angle) * distance
+                ));
+            }
+        }
+        
+        // Create segments with initial colors
+        for (const seedPoint of seedPoints) {
             const initialColor = this.getWeightedRandomColor();
             
-            this.colorParticles.push({
-                position: particlePos,
+            this.voronoiSegments.push({
+                seedPoint: seedPoint,
                 startColor: { ...initialColor },
                 currentColor: { ...initialColor },
                 targetColor: { ...initialColor },
                 transitionProgress: 1.0,
-                transitionSpeed: 0.001 + Math.random() * 0.002, // Slow random speed
-                size: 1.5 + Math.random() * 2.5 // Random size for visual variety
+                transitionSpeed: 0.0008 + Math.random() * 0.0015 // Slow random speed
             });
         }
     }
 
     /**
-     * Get a weighted random sun color (orange/red common, extremes rare)
+     * Get a weighted random sun color
+     * - Common: warm yellow and orange
+     * - Slightly rare: red and deep orange
+     * - Very rare: dark grey and deep red
      */
     private getWeightedRandomColor(): { r: number; g: number; b: number } {
         const rand = Math.random();
         
         // Weighted distribution
-        if (rand < 0.35) {
-            // Light orange (common)
+        if (rand < 0.25) {
+            // Warm yellow (common)
+            return { r: 255, g: 220 + Math.random() * 35, b: 100 + Math.random() * 50 };
+        } else if (rand < 0.50) {
+            // Orange (common)
             return { r: 255, g: 140 + Math.random() * 40, b: 50 + Math.random() * 30 };
         } else if (rand < 0.70) {
-            // Red-orange (common)
-            return { r: 255, g: 80 + Math.random() * 60, b: 30 + Math.random() * 30 };
+            // Red (slightly rare)
+            return { r: 220 + Math.random() * 35, g: 50 + Math.random() * 40, b: 30 + Math.random() * 30 };
         } else if (rand < 0.85) {
-            // Deep red (less common)
-            return { r: 200 + Math.random() * 55, g: 40 + Math.random() * 40, b: 20 + Math.random() * 20 };
-        } else if (rand < 0.93) {
-            // Warm yellow (rare)
-            return { r: 255, g: 220 + Math.random() * 35, b: 100 + Math.random() * 50 };
-        } else if (rand < 0.97) {
-            // Dark red (rare)
+            // Deep orange (slightly rare)
+            return { r: 255, g: 80 + Math.random() * 60, b: 20 + Math.random() * 30 };
+        } else if (rand < 0.95) {
+            // Deep red (very rare)
             return { r: 150 + Math.random() * 50, g: 20 + Math.random() * 30, b: 10 + Math.random() * 20 };
         } else {
             // Dark grey (very rare)
@@ -1383,25 +1432,25 @@ export class Sun {
     }
 
     /**
-     * Update color particle animations
+     * Update Voronoi segment color animations
      */
-    public updateColorParticles(deltaTime: number): void {
-        for (const particle of this.colorParticles) {
-            particle.transitionProgress += particle.transitionSpeed * deltaTime;
+    public updateVoronoiSegments(deltaTime: number): void {
+        for (const segment of this.voronoiSegments) {
+            segment.transitionProgress += segment.transitionSpeed * deltaTime;
             
-            if (particle.transitionProgress >= 1.0) {
+            if (segment.transitionProgress >= 1.0) {
                 // Transition complete, pick new target color
-                particle.transitionProgress = 0;
-                particle.startColor = { ...particle.targetColor };
-                particle.currentColor = { ...particle.targetColor };
-                particle.targetColor = this.getWeightedRandomColor();
-                particle.transitionSpeed = 0.001 + Math.random() * 0.002; // New random speed
+                segment.transitionProgress = 0;
+                segment.startColor = { ...segment.targetColor };
+                segment.currentColor = { ...segment.targetColor };
+                segment.targetColor = this.getWeightedRandomColor();
+                segment.transitionSpeed = 0.0008 + Math.random() * 0.0015; // New random speed
             } else {
                 // Interpolate between start and target color using linear interpolation
-                const t = particle.transitionProgress;
-                particle.currentColor.r = particle.startColor.r + (particle.targetColor.r - particle.startColor.r) * t;
-                particle.currentColor.g = particle.startColor.g + (particle.targetColor.g - particle.startColor.g) * t;
-                particle.currentColor.b = particle.startColor.b + (particle.targetColor.b - particle.startColor.b) * t;
+                const t = segment.transitionProgress;
+                segment.currentColor.r = segment.startColor.r + (segment.targetColor.r - segment.startColor.r) * t;
+                segment.currentColor.g = segment.startColor.g + (segment.targetColor.g - segment.startColor.g) * t;
+                segment.currentColor.b = segment.startColor.b + (segment.targetColor.b - segment.startColor.b) * t;
             }
         }
     }
@@ -3698,9 +3747,9 @@ export class GameState {
             }
         }
 
-        // Update sun color particles for fractal color fading
+        // Update sun Voronoi segments for procedural color fading
         for (const sun of this.suns) {
-            sun.updateColorParticles(deltaTime);
+            sun.updateVoronoiSegments(deltaTime);
         }
 
         // Update asteroids

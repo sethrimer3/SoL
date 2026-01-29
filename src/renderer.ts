@@ -691,45 +691,97 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
-        // Draw color particles (fractal spaces) before the sprite
-        for (const particle of sun.colorParticles) {
-            const particleScreenPos = this.worldToScreen(particle.position);
-            const particleScreenSize = particle.size * this.zoom;
+        // Draw Voronoi segments before the sprite
+        this.drawVoronoiSegments(sun, screenPos, screenRadius);
+
+        // Don't draw sprite overlay - show pure Voronoi pattern
+    }
+
+    /**
+     * Draw Voronoi segments within the sun
+     */
+    private drawVoronoiSegments(sun: Sun, screenPos: Vector2D, screenRadius: number): void {
+        const VORONOI_CLIP_FACTOR = 0.85;
+        
+        // Create a circular clipping region for the sun
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius * VORONOI_CLIP_FACTOR, 0, Math.PI * 2);
+        this.ctx.clip();
+
+        // Sample points in a grid within and around the sun
+        const resolution = 1; // Pixels per sample (lower = higher quality but slower)
+        const startX = Math.floor(screenPos.x - screenRadius);
+        const endX = Math.ceil(screenPos.x + screenRadius);
+        const startY = Math.floor(screenPos.y - screenRadius);
+        const endY = Math.ceil(screenPos.y + screenRadius);
+
+        // Create an ImageData to write pixels directly for better performance
+        const width = Math.ceil((endX - startX) / resolution);
+        const height = Math.ceil((endY - startY) / resolution);
+        const imageData = this.ctx.createImageData(width, height);
+        const data = imageData.data;
+
+        // For each pixel in the region
+        for (let py = 0; py < height; py++) {
+            const worldY = startY + py * resolution;
+            const worldScreenY = worldY;
             
-            const r = Math.round(particle.currentColor.r);
-            const g = Math.round(particle.currentColor.g);
-            const b = Math.round(particle.currentColor.b);
-            
-            this.ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.7)`;
-            this.ctx.beginPath();
-            this.ctx.arc(particleScreenPos.x, particleScreenPos.y, particleScreenSize, 0, Math.PI * 2);
-            this.ctx.fill();
+            for (let px = 0; px < width; px++) {
+                const screenX = startX + px * resolution;
+                const screenY = worldScreenY;
+                
+                // Check if this screen point is within the sun's radius
+                const dx = screenX - screenPos.x;
+                const dy = screenY - screenPos.y;
+                const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+                
+                const VORONOI_CLIP_FACTOR = 0.85;
+                if (distFromCenter > screenRadius * VORONOI_CLIP_FACTOR) {
+                    // Outside the sun - make transparent
+                    const idx = (py * width + px) * 4;
+                    data[idx + 3] = 0; // Alpha = 0
+                    continue;
+                }
+                
+                // Convert screen position back to world position
+                const worldPoint = this.screenToWorld(screenX, screenY);
+                
+                // Find the closest Voronoi seed point
+                if (sun.voronoiSegments.length === 0) {
+                    // No segments - skip this pixel
+                    const idx = (py * width + px) * 4;
+                    data[idx + 3] = 0;
+                    continue;
+                }
+                
+                let closestSegment = sun.voronoiSegments[0];
+                let minDist = Infinity;
+                
+                for (const segment of sun.voronoiSegments) {
+                    const sdx = worldPoint.x - segment.seedPoint.x;
+                    const sdy = worldPoint.y - segment.seedPoint.y;
+                    const dist = sdx * sdx + sdy * sdy; // Use squared distance for performance
+                    
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closestSegment = segment;
+                    }
+                }
+                
+                // Set pixel color based on the closest segment
+                const idx = (py * width + px) * 4;
+                data[idx] = Math.round(closestSegment.currentColor.r);     // R
+                data[idx + 1] = Math.round(closestSegment.currentColor.g); // G
+                data[idx + 2] = Math.round(closestSegment.currentColor.b); // B
+                data[idx + 3] = 230; // Alpha - more opaque for better visibility
+            }
         }
 
-        if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
-            const diameterPx = screenRadius * 2;
-            this.ctx.drawImage(
-                sunSprite,
-                screenPos.x - screenRadius,
-                screenPos.y - screenRadius,
-                diameterPx,
-                diameterPx
-            );
-        } else {
-            // Draw sun core with gradient as fallback until sprite loads
-            const coreGradient = this.ctx.createRadialGradient(
-                screenPos.x, screenPos.y, 0,
-                screenPos.x, screenPos.y, screenRadius * 0.6
-            );
-            coreGradient.addColorStop(0, this.colorScheme.sunCore.inner);
-            coreGradient.addColorStop(0.5, this.colorScheme.sunCore.mid);
-            coreGradient.addColorStop(1, this.colorScheme.sunCore.outer);
+        // Draw the ImageData to the canvas
+        this.ctx.putImageData(imageData, startX, startY);
 
-            this.ctx.fillStyle = coreGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.6, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        this.ctx.restore();
     }
 
     private drawForgeFlames(
