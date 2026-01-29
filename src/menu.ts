@@ -1265,7 +1265,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -1695,11 +1695,9 @@ export class MainMenu {
                     this.renderFactionSelectionScreen(this.contentElement);
                     break;
                 case 'start':
-                    this.hide();
-                    if (this.onStartCallback) {
-                        this.ensureDefaultHeroSelection();
-                        this.onStartCallback(this.settings);
-                    }
+                    this.currentScreen = 'game-mode-select';
+                    this.startMenuTransition();
+                    this.renderGameModeSelectionScreen(this.contentElement);
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
@@ -1819,6 +1817,154 @@ export class MainMenu {
             this.renderMainScreen(this.contentElement);
         }, '#666666');
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderLANScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'LAN Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Host server button
+        const hostButton = this.createButton('HOST SERVER', () => {
+            // Create lobby name with username
+            const lobbyName = `${this.settings.username}'s lobby`;
+            console.log('Hosting LAN server:', lobbyName);
+            // TODO: Implement actual LAN server hosting
+            alert(`LAN server "${lobbyName}" created!\n\nThis feature is coming soon.`);
+        }, '#00AA00');
+        hostButton.style.marginBottom = '40px';
+        hostButton.style.padding = '15px 40px';
+        hostButton.style.fontSize = '28px';
+        container.appendChild(hostButton);
+
+        // Server list title
+        const serverListTitle = document.createElement('h3');
+        serverListTitle.textContent = 'Available Servers';
+        serverListTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
+        serverListTitle.style.marginBottom = '20px';
+        serverListTitle.style.color = '#FFFFFF';
+        serverListTitle.style.textAlign = 'center';
+        serverListTitle.style.fontWeight = '300';
+        serverListTitle.dataset.particleText = 'true';
+        serverListTitle.dataset.particleColor = '#FFFFFF';
+        container.appendChild(serverListTitle);
+
+        // Server list container
+        const serverListContainer = document.createElement('div');
+        serverListContainer.style.maxWidth = '600px';
+        serverListContainer.style.width = '100%';
+        serverListContainer.style.minHeight = '200px';
+        serverListContainer.style.padding = '20px';
+        serverListContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        serverListContainer.style.borderRadius = '10px';
+        serverListContainer.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+        serverListContainer.style.marginBottom = '30px';
+
+        // Placeholder text for empty server list
+        const placeholderText = document.createElement('p');
+        placeholderText.textContent = 'Scanning for LAN servers...';
+        placeholderText.style.color = '#888888';
+        placeholderText.style.textAlign = 'center';
+        placeholderText.style.fontSize = '20px';
+        placeholderText.style.marginTop = '80px';
+        serverListContainer.appendChild(placeholderText);
+
+        // TODO: Implement actual LAN server discovery
+        // Simulate no servers found after a delay
+        setTimeout(() => {
+            placeholderText.textContent = 'No LAN servers found';
+        }, 1500);
+
+        container.appendChild(serverListContainer);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderOnlinePlaceholderScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Online Play';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Coming soon message
+        const message = document.createElement('div');
+        message.style.maxWidth = '600px';
+        message.style.padding = '40px';
+        message.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        message.style.borderRadius = '10px';
+        message.style.border = '2px solid rgba(255, 215, 0, 0.3)';
+        message.style.marginBottom = '30px';
+
+        const messageTitle = document.createElement('h3');
+        messageTitle.textContent = 'Coming Soon!';
+        messageTitle.style.fontSize = '32px';
+        messageTitle.style.color = '#FFD700';
+        messageTitle.style.textAlign = 'center';
+        messageTitle.style.marginBottom = '20px';
+        messageTitle.style.fontWeight = '300';
+        message.appendChild(messageTitle);
+
+        const messageText = document.createElement('p');
+        messageText.innerHTML = `
+            Online multiplayer is currently in development.<br><br>
+            <strong>Features:</strong><br>
+            • Simple, efficient data transmission<br>
+            • Prioritized for speed and minimal data size<br>
+            • Cross-platform matchmaking<br>
+            • Ranked and casual modes
+        `;
+        messageText.style.fontSize = '20px';
+        messageText.style.color = '#CCCCCC';
+        messageText.style.textAlign = 'center';
+        messageText.style.lineHeight = '1.6';
+        message.appendChild(messageText);
+
+        container.appendChild(message);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
@@ -1968,6 +2114,100 @@ export class MainMenu {
         }, '#666666');
         backButton.style.marginTop = '30px';
         container.appendChild(backButton);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderGameModeSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Select Game Mode';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Create carousel menu container
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
+        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
+        container.appendChild(carouselContainer);
+
+        // Create game mode options
+        const gameModeOptions: MenuOption[] = [
+            {
+                id: 'ai',
+                name: 'AI',
+                description: 'Play against computer opponent'
+            },
+            {
+                id: 'online',
+                name: 'ONLINE',
+                description: 'Play against players worldwide'
+            },
+            {
+                id: 'lan',
+                name: 'LAN',
+                description: 'Play on local network'
+            }
+        ];
+
+        // Default to AI mode (index 0)
+        this.carouselMenu = new CarouselMenuView(carouselContainer, gameModeOptions, 0);
+        this.carouselMenu.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onNavigate(() => {
+            this.startMenuTransition();
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.carouselMenu.onSelect((option: MenuOption) => {
+            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan';
+            
+            switch (option.id) {
+                case 'ai':
+                    // Start AI game directly
+                    this.hide();
+                    if (this.onStartCallback) {
+                        this.ensureDefaultHeroSelection();
+                        this.onStartCallback(this.settings);
+                    }
+                    break;
+                case 'online':
+                    // Show online play placeholder
+                    this.currentScreen = 'main';
+                    this.startMenuTransition();
+                    this.renderOnlinePlaceholderScreen(this.contentElement);
+                    break;
+                case 'lan':
+                    // Show LAN menu
+                    this.currentScreen = 'lan';
+                    this.startMenuTransition();
+                    this.renderLANScreen(this.contentElement);
+                    break;
+            }
+        });
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'main';
+            this.startMenuTransition();
+            this.renderMainScreen(this.contentElement);
+        }, '#666666');
+        backButton.style.marginTop = '30px';
+        container.appendChild(backButton);
+
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
