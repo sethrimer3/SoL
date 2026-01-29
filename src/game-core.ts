@@ -2045,6 +2045,8 @@ export class Unit {
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
     velocity: Vector2D = new Vector2D(0, 0);
+    protected waypoints: Vector2D[] = []; // Path waypoints to follow
+    protected currentWaypointIndex: number = 0; // Current waypoint in path
     
     constructor(
         public position: Vector2D,
@@ -2095,6 +2097,38 @@ export class Unit {
                 this.attackCooldown = 1.0 / this.attackSpeed;
             }
         }
+
+        // Rotate to face target when attacking (overrides movement rotation)
+        if (this.target && !this.isTargetDead(this.target)) {
+            const distance = this.position.distanceTo(this.target.position);
+            if (distance <= this.attackRange) {
+                const dx = this.target.position.x - this.position.x;
+                const dy = this.target.position.y - this.position.y;
+                const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
+                const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
+                const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                
+                if (Math.abs(rotationDelta) <= maxRotationStep) {
+                    this.rotation = targetRotation;
+                } else {
+                    this.rotation += Math.sign(rotationDelta) * maxRotationStep;
+                }
+                
+                // Normalize rotation to [0, 2π)
+                this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            }
+        }
+    }
+
+    /**
+     * Set a path for the unit to follow through multiple waypoints
+     */
+    setPath(waypoints: Vector2D[]): void {
+        this.waypoints = waypoints.map(wp => new Vector2D(wp.x, wp.y));
+        this.currentWaypointIndex = 0;
+        if (this.waypoints.length > 0) {
+            this.rallyPoint = this.waypoints[0];
+        }
     }
 
     protected moveTowardRallyPoint(
@@ -2114,10 +2148,21 @@ export class Unit {
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
 
         if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
-            this.rallyPoint = null;
-            this.velocity.x = 0;
-            this.velocity.y = 0;
-            return;
+            // Check if there are more waypoints to follow
+            if (this.waypoints.length > 0 && this.currentWaypointIndex < this.waypoints.length - 1) {
+                // Move to next waypoint
+                this.currentWaypointIndex++;
+                this.rallyPoint = this.waypoints[this.currentWaypointIndex];
+                return;
+            } else {
+                // No more waypoints, clear everything
+                this.rallyPoint = null;
+                this.waypoints = [];
+                this.currentWaypointIndex = 0;
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+                return;
+            }
         }
 
         let directionX = dx / distanceToTarget;

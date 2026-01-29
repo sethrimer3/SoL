@@ -960,13 +960,8 @@ class GameController {
                     
                     // Set path for all selected units
                     for (const unit of this.selectedUnits) {
-                        if (unit instanceof Starling) {
-                            unit.setPath(this.pathPoints);
-                        } else {
-                            // For non-Starling units, just set the final waypoint as rally point
-                            const finalWaypoint = this.pathPoints[this.pathPoints.length - 1];
-                            unit.rallyPoint = new Vector2D(finalWaypoint.x, finalWaypoint.y);
-                        }
+                        // All units now support path following
+                        unit.setPath(this.pathPoints);
                         unit.moveOrder = this.moveOrderCounter;
                     }
                     
