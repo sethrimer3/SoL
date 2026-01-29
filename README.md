@@ -100,14 +100,19 @@ python3 -m http.server 8080
 ✅ Line-of-sight system for solar mirrors  
 ✅ Ray tracing foundation for light/shadow  
 ✅ Cross-platform support (Mobile & Desktop)  
+✅ LAN multiplayer (WebRTC peer-to-peer)  
 
 ## Future Development
 
 - Full ray-tracing implementation for shadows
 - Unit types and combat system
 - AI opponents
-- Multiplayer with crossplay
+- Enhanced multiplayer with crossplay and matchmaking
 - Advanced lighting effects
+
+## Multiplayer
+
+SoL supports local area network (LAN) multiplayer for 1v1 matches using WebRTC. See [LAN_PLAY.md](./LAN_PLAY.md) for detailed instructions on how to host or join LAN games.
 
 ## Legacy Python Implementation
 
