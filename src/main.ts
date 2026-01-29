@@ -246,6 +246,22 @@ class GameController {
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
         
+        // Set up network manager for LAN play
+        if (settings.gameMode === 'lan' && settings.networkManager) {
+            // Determine local player index based on whether this client is the host
+            const isHost = settings.networkManager.isLobbyHost();
+            const localPlayerIndex = isHost ? 0 : 1;
+            
+            // Set up AI flag for players (local player is not AI, remote player is not AI either)
+            this.game.players[0].isAi = false;
+            this.game.players[1].isAi = false;
+            
+            // Set up network manager in game state
+            this.game.setupNetworkManager(settings.networkManager, localPlayerIndex);
+            
+            console.log(`LAN mode: Local player is Player ${localPlayerIndex + 1} (${isHost ? 'Host' : 'Client'})`);
+        }
+        
         // Set the viewing player for the renderer (player 1 is the human player)
         if (this.game.players.length > 0) {
             this.renderer.viewingPlayer = this.game.players[0];

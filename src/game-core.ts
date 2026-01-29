@@ -4,6 +4,7 @@
  */
 
 import * as Constants from './constants';
+import { NetworkManager, GameCommand } from './network';
 
 /**
  * Three playable factions in the game
@@ -3718,6 +3719,11 @@ export class GameState {
     mirrorsMovedToSun: boolean = false; // Track if mirrors have been moved
     mapSize: number = 2000; // Map size in world units
     damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
+    
+    // Network support
+    networkManager: NetworkManager | null = null; // Network manager for LAN/online play
+    localPlayerIndex: number = 0; // Index of the local player (0 or 1)
+    pendingCommands: GameCommand[] = []; // Commands from network to be processed
 
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
@@ -3730,6 +3736,11 @@ export class GameState {
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+
+        // Process pending network commands from remote players
+        if (this.networkManager) {
+            this.processPendingNetworkCommands();
+        }
 
         // Handle countdown
         if (this.isCountdownActive) {
@@ -6422,6 +6433,192 @@ export class GameState {
             remainingHealth,
             unitKey
         ));
+    }
+
+    /**
+     * Set up network manager and register event handlers
+     */
+    setupNetworkManager(networkManager: NetworkManager, localPlayerIndex: number): void {
+        this.networkManager = networkManager;
+        this.localPlayerIndex = localPlayerIndex;
+        
+        // Listen for incoming game commands from remote players
+        this.networkManager.on('message_received' as any, (data: any) => {
+            if (data && data.type === 'game_command') {
+                this.receiveNetworkCommand(data.data as GameCommand);
+            }
+        });
+    }
+
+    /**
+     * Send a game command to all connected peers
+     */
+    sendGameCommand(command: string, data: any): void {
+        if (!this.networkManager) return;
+        
+        const gameCommand: GameCommand = {
+            tick: Math.floor(this.gameTime * 60), // Convert time to tick number (60 ticks per second)
+            playerId: this.networkManager.getLocalPlayerId(),
+            command: command,
+            data: data
+        };
+        
+        this.networkManager.sendGameCommand(gameCommand);
+    }
+
+    /**
+     * Receive and queue a game command from the network
+     */
+    receiveNetworkCommand(command: GameCommand): void {
+        // Add to pending commands queue to be processed in next update
+        this.pendingCommands.push(command);
+    }
+
+    /**
+     * Process all pending network commands
+     */
+    processPendingNetworkCommands(): void {
+        if (this.pendingCommands.length === 0) return;
+        
+        // Sort commands by tick to ensure consistent execution order
+        this.pendingCommands.sort((a, b) => a.tick - b.tick);
+        
+        // Process all pending commands
+        for (const cmd of this.pendingCommands) {
+            this.executeNetworkCommand(cmd);
+        }
+        
+        // Clear the processed commands
+        this.pendingCommands = [];
+    }
+
+    /**
+     * Execute a network command
+     */
+    private executeNetworkCommand(cmd: GameCommand): void {
+        // Determine which player this command is for
+        // Remote player is always the opposite of local player
+        const remotePlayerIndex = this.localPlayerIndex === 0 ? 1 : 0;
+        const player = this.players[remotePlayerIndex];
+        
+        if (!player) return;
+        
+        switch (cmd.command) {
+            case 'unit_move':
+                this.executeUnitMoveCommand(player, cmd.data);
+                break;
+            case 'unit_ability':
+                this.executeUnitAbilityCommand(player, cmd.data);
+                break;
+            case 'hero_purchase':
+                this.executeHeroPurchaseCommand(player, cmd.data);
+                break;
+            case 'building_purchase':
+                this.executeBuildingPurchaseCommand(player, cmd.data);
+                break;
+            case 'mirror_purchase':
+                this.executeMirrorPurchaseCommand(player, cmd.data);
+                break;
+            case 'forge_move':
+                this.executeForgeMoveCommand(player, cmd.data);
+                break;
+            case 'set_rally_path':
+                this.executeSetRallyPathCommand(player, cmd.data);
+                break;
+            default:
+                console.warn('Unknown network command:', cmd.command);
+        }
+    }
+
+    private executeUnitMoveCommand(player: Player, data: any): void {
+        const { unitIds, targetX, targetY } = data;
+        const target = new Vector2D(targetX, targetY);
+        
+        for (const unitId of unitIds) {
+            const unit = player.units.find(u => this.getUnitId(u) === unitId);
+            if (unit) {
+                unit.setTarget(target);
+            }
+        }
+    }
+
+    private executeUnitAbilityCommand(player: Player, data: any): void {
+        const { unitId, directionX, directionY } = data;
+        const direction = new Vector2D(directionX, directionY);
+        
+        const unit = player.units.find(u => this.getUnitId(u) === unitId);
+        if (unit) {
+            unit.useAbility(direction);
+        }
+    }
+
+    private executeHeroPurchaseCommand(player: Player, data: any): void {
+        const { heroType } = data;
+        if (player.stellarForge) {
+            player.stellarForge.queueHeroUnit(heroType, player);
+        }
+    }
+
+    private executeBuildingPurchaseCommand(player: Player, data: any): void {
+        const { buildingType, positionX, positionY } = data;
+        const position = new Vector2D(positionX, positionY);
+        
+        // Check if player can afford the building
+        let cost = 0;
+        if (buildingType === 'Minigun') {
+            cost = Constants.MINIGUN_COST;
+        } else if (buildingType === 'SpaceDustSwirler') {
+            cost = Constants.SPACE_DUST_SWIRLER_COST;
+        } else if (buildingType === 'SubsidiaryFactory') {
+            cost = Constants.SUBSIDIARY_FACTORY_COST;
+        }
+        
+        if (player.spendEnergy(cost)) {
+            // Create the building
+            if (buildingType === 'Minigun') {
+                player.buildings.push(new Minigun(position, player));
+            } else if (buildingType === 'SpaceDustSwirler') {
+                player.buildings.push(new SpaceDustSwirler(position, player));
+            } else if (buildingType === 'SubsidiaryFactory') {
+                player.buildings.push(new SubsidiaryFactory(position, player));
+            }
+        }
+    }
+
+    private executeMirrorPurchaseCommand(player: Player, data: any): void {
+        const { positionX, positionY } = data;
+        const position = new Vector2D(positionX, positionY);
+        
+        if (player.spendEnergy(Constants.MIRROR_COST)) {
+            player.solarMirrors.push(new SolarMirror(position, player));
+        }
+    }
+
+    private executeForgeMoveCommand(player: Player, data: any): void {
+        const { targetX, targetY } = data;
+        const target = new Vector2D(targetX, targetY);
+        
+        if (player.stellarForge) {
+            player.stellarForge.setTargetPosition(target);
+        }
+    }
+
+    private executeSetRallyPathCommand(player: Player, data: any): void {
+        const { waypoints } = data;
+        const path = waypoints.map((wp: any) => new Vector2D(wp.x, wp.y));
+        
+        if (player.stellarForge) {
+            player.stellarForge.setMinionPath(path);
+        }
+    }
+
+    /**
+     * Generate a unique ID for a unit (for network synchronization)
+     */
+    private getUnitId(unit: Unit): string {
+        // Use position and creation time as a simple unique ID
+        // In a real implementation, units should have explicit IDs assigned at creation
+        return `${unit.position.x.toFixed(2)}_${unit.position.y.toFixed(2)}_${unit.constructor.name}`;
     }
 }
 
