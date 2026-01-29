@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -605,6 +605,9 @@ export class GameRenderer {
         if (unit instanceof Driller) {
             return this.getGraphicAssetPath('heroDriller');
         }
+        if (unit instanceof Preist) {
+            return this.getGraphicAssetPath('heroPreist');
+        }
         return null;
     }
 
@@ -1184,6 +1187,8 @@ export class GameRenderer {
                 return unit instanceof Beam;
             case 'Mortar':
                 return unit instanceof Mortar;
+            case 'Preist':
+                return unit instanceof Preist;
             default:
                 return false;
         }
@@ -2770,6 +2775,80 @@ export class GameRenderer {
         }
     }
 
+    private drawPreist(preist: Preist, color: string, game: GameState, isEnemy: boolean): void {
+        // Draw base unit
+        this.drawUnit(preist, color, game, isEnemy);
+
+        // Don't draw healing beams for enemy units (unless you can see them)
+        if (isEnemy) {
+            return;
+        }
+
+        // Draw healing beams to targets
+        const beamTargets = preist.getHealingBeamTargets();
+        const screenPos = this.worldToScreen(preist.position);
+        
+        this.ctx.save();
+        
+        for (const target of beamTargets) {
+            if (!target) continue;
+            
+            const targetScreenPos = this.worldToScreen(target.position);
+            
+            // Draw healing beam as a pulsing green line
+            this.ctx.strokeStyle = '#00FF88';
+            this.ctx.lineWidth = 3 * this.zoom;
+            this.ctx.globalAlpha = 0.6 + 0.2 * Math.sin(game.gameTime * 5);
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
+            this.ctx.stroke();
+            
+            // Draw particles along the beam
+            const numParticles = 5;
+            for (let i = 0; i < numParticles; i++) {
+                const t = (i / numParticles + game.gameTime * 0.5) % 1.0;
+                const particleX = screenPos.x + (targetScreenPos.x - screenPos.x) * t;
+                const particleY = screenPos.y + (targetScreenPos.y - screenPos.y) * t;
+                
+                this.ctx.fillStyle = '#00FF88';
+                this.ctx.globalAlpha = 0.8;
+                this.ctx.beginPath();
+                this.ctx.arc(particleX, particleY, 2 * this.zoom, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+        
+        // Draw healing bomb particles
+        const particles = preist.getHealingBombParticles();
+        for (const particle of particles) {
+            const particleScreenPos = this.worldToScreen(particle.position);
+            
+            // Draw particle as a glowing green dot
+            this.ctx.fillStyle = '#00FF88';
+            this.ctx.globalAlpha = 0.8 * (1 - particle.lifetime / particle.maxLifetime);
+            this.ctx.beginPath();
+            this.ctx.arc(particleScreenPos.x, particleScreenPos.y, 3 * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
+            
+            // Draw glow
+            const gradient = this.ctx.createRadialGradient(
+                particleScreenPos.x, particleScreenPos.y, 0,
+                particleScreenPos.x, particleScreenPos.y, 8 * this.zoom
+            );
+            gradient.addColorStop(0, 'rgba(0, 255, 136, 0.4)');
+            gradient.addColorStop(1, 'rgba(0, 255, 136, 0)');
+            this.ctx.fillStyle = gradient;
+            this.ctx.globalAlpha = 0.6 * (1 - particle.lifetime / particle.maxLifetime);
+            this.ctx.beginPath();
+            this.ctx.arc(particleScreenPos.x, particleScreenPos.y, 8 * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.restore();
+    }
+
     /**
      * Draw a Minigun building
      */
@@ -3905,6 +3984,8 @@ export class GameRenderer {
                     this.drawBeam(unit, color, game, isEnemy);
                 } else if (unit instanceof Mortar) {
                     this.drawMortar(unit, color, game, isEnemy);
+                } else if (unit instanceof Preist) {
+                    this.drawPreist(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
