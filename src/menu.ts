@@ -4,6 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
+import { NetworkManager, LANSignaling, LobbyInfo } from './network';
 
 export interface MenuOption {
     id: string;
@@ -1271,6 +1272,7 @@ export class MainMenu {
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
+    private networkManager: NetworkManager | null = null; // Network manager for LAN play
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -1847,58 +1849,58 @@ export class MainMenu {
 
         // Host server button
         const hostButton = this.createButton('HOST SERVER', () => {
-            // Create lobby name with username
-            const lobbyName = `${this.settings.username}'s lobby`;
-            console.log('Hosting LAN server:', lobbyName);
-            // TODO: Implement actual LAN server hosting
-            alert(`LAN server "${lobbyName}" created!\n\nThis feature is coming soon.`);
+            this.showHostLobbyDialog();
         }, '#00AA00');
-        hostButton.style.marginBottom = '40px';
+        hostButton.style.marginBottom = '20px';
         hostButton.style.padding = '15px 40px';
         hostButton.style.fontSize = '28px';
         container.appendChild(hostButton);
 
-        // Server list title
-        const serverListTitle = document.createElement('h3');
-        serverListTitle.textContent = 'Available Servers';
-        serverListTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
-        serverListTitle.style.marginBottom = '20px';
-        serverListTitle.style.color = '#FFFFFF';
-        serverListTitle.style.textAlign = 'center';
-        serverListTitle.style.fontWeight = '300';
-        serverListTitle.dataset.particleText = 'true';
-        serverListTitle.dataset.particleColor = '#FFFFFF';
-        container.appendChild(serverListTitle);
+        // Join server button
+        const joinButton = this.createButton('JOIN SERVER', () => {
+            this.showJoinLobbyDialog();
+        }, '#0088FF');
+        joinButton.style.marginBottom = '40px';
+        joinButton.style.padding = '15px 40px';
+        joinButton.style.fontSize = '28px';
+        container.appendChild(joinButton);
 
-        // Server list container
-        const serverListContainer = document.createElement('div');
-        serverListContainer.style.maxWidth = '600px';
-        serverListContainer.style.width = '100%';
-        serverListContainer.style.minHeight = '200px';
-        serverListContainer.style.padding = '20px';
-        serverListContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-        serverListContainer.style.borderRadius = '10px';
-        serverListContainer.style.border = '2px solid rgba(255, 255, 255, 0.2)';
-        serverListContainer.style.marginBottom = '30px';
+        // Info section
+        const infoContainer = document.createElement('div');
+        infoContainer.style.maxWidth = '600px';
+        infoContainer.style.width = '100%';
+        infoContainer.style.padding = '20px';
+        infoContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        infoContainer.style.borderRadius = '10px';
+        infoContainer.style.border = '2px solid rgba(255, 255, 255, 0.2)';
+        infoContainer.style.marginBottom = '30px';
 
-        // Placeholder text for empty server list
-        const placeholderText = document.createElement('p');
-        placeholderText.textContent = 'Scanning for LAN servers...';
-        placeholderText.style.color = '#888888';
-        placeholderText.style.textAlign = 'center';
-        placeholderText.style.fontSize = '20px';
-        placeholderText.style.marginTop = '80px';
-        serverListContainer.appendChild(placeholderText);
+        const infoTitle = document.createElement('h3');
+        infoTitle.textContent = 'How LAN Play Works';
+        infoTitle.style.fontSize = '24px';
+        infoTitle.style.marginBottom = '15px';
+        infoTitle.style.color = '#FFD700';
+        infoTitle.style.textAlign = 'center';
+        infoContainer.appendChild(infoTitle);
 
-        // TODO: Implement actual LAN server discovery
-        // Simulate no servers found after a delay
-        this.lanServerListTimeout = window.setTimeout(() => {
-            if (placeholderText.isConnected) {
-                placeholderText.textContent = 'No LAN servers found';
-            }
-        }, 1500);
+        const infoText = document.createElement('p');
+        infoText.innerHTML = `
+            <strong>For Host:</strong><br>
+            1. Click "HOST SERVER" to create a lobby<br>
+            2. Share the connection code with other players<br>
+            3. Wait for players to join<br>
+            4. Start the game when ready<br><br>
+            <strong>For Client:</strong><br>
+            1. Click "JOIN SERVER"<br>
+            2. Enter the connection code from the host<br>
+            3. Wait in lobby for host to start the game
+        `;
+        infoText.style.color = '#CCCCCC';
+        infoText.style.fontSize = '16px';
+        infoText.style.lineHeight = '1.6';
+        infoContainer.appendChild(infoText);
 
-        container.appendChild(serverListContainer);
+        container.appendChild(infoContainer);
 
         // Back button
         const backButton = this.createButton('BACK', () => {
@@ -1907,6 +1909,226 @@ export class MainMenu {
             this.renderGameModeSelectionScreen(this.contentElement);
         }, '#666666');
         container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private async showHostLobbyDialog(): Promise<void> {
+        // Initialize network manager
+        const playerId = `player_${Date.now()}`;
+        this.networkManager = new NetworkManager(playerId);
+
+        // Create lobby
+        const lobbyName = `${this.settings.username}'s lobby`;
+        const lobby = this.networkManager.createLobby(lobbyName, this.settings.username, 2);
+
+        try {
+            // Generate connection offer
+            const offer = await this.networkManager.createOfferForPeer('client');
+            const connectionCode = await LANSignaling.generateHostCode(offer);
+
+            // Show lobby screen with connection code
+            this.renderHostLobbyScreen(lobby, connectionCode);
+        } catch (error) {
+            console.error('Failed to create lobby:', error);
+            alert('Failed to create lobby. Please try again.');
+        }
+    }
+
+    private async showJoinLobbyDialog(): Promise<void> {
+        // Prompt for connection code
+        const code = prompt('Enter the connection code from the host:');
+        if (!code) return;
+
+        try {
+            // Parse connection code
+            const offer = LANSignaling.parseHostCode(code);
+
+            // Initialize network manager
+            const playerId = `player_${Date.now()}`;
+            this.networkManager = new NetworkManager(playerId);
+
+            // Create answer
+            const answer = await this.networkManager.connectToPeer('host', offer);
+            const answerCode = await LANSignaling.generateAnswerCode(answer);
+
+            // Show dialog with answer code to send back to host
+            alert(`Copy this code and send it to the host:\n\n${answerCode}`);
+
+            // Show waiting screen
+            this.renderClientWaitingScreen();
+        } catch (error) {
+            console.error('Failed to join lobby:', error);
+            alert('Invalid connection code. Please check and try again.');
+        }
+    }
+
+    private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Lobby: ' + lobby.name;
+        title.style.fontSize = isCompactLayout ? '28px' : '36px';
+        title.style.marginBottom = '20px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Connection code display
+        const codeContainer = document.createElement('div');
+        codeContainer.style.maxWidth = '600px';
+        codeContainer.style.width = '100%';
+        codeContainer.style.padding = '20px';
+        codeContainer.style.backgroundColor = 'rgba(0, 100, 0, 0.3)';
+        codeContainer.style.borderRadius = '10px';
+        codeContainer.style.border = '2px solid rgba(0, 255, 0, 0.3)';
+        codeContainer.style.marginBottom = '20px';
+
+        const codeLabel = document.createElement('p');
+        codeLabel.textContent = 'Share this connection code:';
+        codeLabel.style.color = '#CCCCCC';
+        codeLabel.style.fontSize = '18px';
+        codeLabel.style.marginBottom = '10px';
+        codeContainer.appendChild(codeLabel);
+
+        const codeText = document.createElement('textarea');
+        codeText.value = connectionCode;
+        codeText.readOnly = true;
+        codeText.style.width = '100%';
+        codeText.style.height = '80px';
+        codeText.style.padding = '10px';
+        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        codeText.style.color = '#00FF00';
+        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        codeText.style.borderRadius = '5px';
+        codeText.style.fontSize = '14px';
+        codeText.style.fontFamily = 'monospace';
+        codeText.style.resize = 'none';
+        codeContainer.appendChild(codeText);
+
+        const copyButton = this.createButton('COPY CODE', () => {
+            codeText.select();
+            document.execCommand('copy');
+            alert('Connection code copied to clipboard!');
+        }, '#008800');
+        copyButton.style.marginTop = '10px';
+        copyButton.style.padding = '10px 20px';
+        copyButton.style.fontSize = '16px';
+        codeContainer.appendChild(copyButton);
+
+        this.contentElement.appendChild(codeContainer);
+
+        // Waiting for answer code input
+        const answerContainer = document.createElement('div');
+        answerContainer.style.maxWidth = '600px';
+        answerContainer.style.width = '100%';
+        answerContainer.style.padding = '20px';
+        answerContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
+        answerContainer.style.borderRadius = '10px';
+        answerContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
+        answerContainer.style.marginBottom = '30px';
+
+        const answerLabel = document.createElement('p');
+        answerLabel.textContent = 'Paste the answer code from the client:';
+        answerLabel.style.color = '#CCCCCC';
+        answerLabel.style.fontSize = '18px';
+        answerLabel.style.marginBottom = '10px';
+        answerContainer.appendChild(answerLabel);
+
+        const answerInput = document.createElement('textarea');
+        answerInput.placeholder = 'Paste answer code here...';
+        answerInput.style.width = '100%';
+        answerInput.style.height = '80px';
+        answerInput.style.padding = '10px';
+        answerInput.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        answerInput.style.color = '#FFFFFF';
+        answerInput.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+        answerInput.style.borderRadius = '5px';
+        answerInput.style.fontSize = '14px';
+        answerInput.style.fontFamily = 'monospace';
+        answerInput.style.resize = 'none';
+        answerContainer.appendChild(answerInput);
+
+        const connectButton = this.createButton('CONNECT', async () => {
+            const answerCode = answerInput.value.trim();
+            if (!answerCode) {
+                alert('Please paste the answer code from the client.');
+                return;
+            }
+
+            try {
+                const answer = LANSignaling.parseAnswerCode(answerCode);
+                await this.networkManager?.completeConnection('client', answer);
+                alert('Client connected! You can now start the game.');
+                // TODO: Update UI to show connected players
+            } catch (error) {
+                console.error('Failed to connect client:', error);
+                alert('Invalid answer code. Please check and try again.');
+            }
+        }, '#0088FF');
+        connectButton.style.marginTop = '10px';
+        connectButton.style.padding = '10px 20px';
+        connectButton.style.fontSize = '16px';
+        answerContainer.appendChild(connectButton);
+
+        this.contentElement.appendChild(answerContainer);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderClientWaitingScreen(): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Connecting to Host...';
+        title.style.fontSize = '36px';
+        title.style.marginBottom = '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        this.contentElement.appendChild(title);
+
+        // Info text
+        const infoText = document.createElement('p');
+        infoText.textContent = 'Waiting for host to complete the connection...';
+        infoText.style.color = '#CCCCCC';
+        infoText.style.fontSize = '20px';
+        infoText.style.textAlign = 'center';
+        infoText.style.marginBottom = '30px';
+        this.contentElement.appendChild(infoText);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.networkManager) {
+                this.networkManager.disconnect();
+                this.networkManager = null;
+            }
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }, '#666666');
+        this.contentElement.appendChild(cancelButton);
 
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
