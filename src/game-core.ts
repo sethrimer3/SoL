@@ -4647,7 +4647,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Mortar'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -4677,6 +4677,8 @@ export class GameState {
                 return unit instanceof Beam;
             case 'Mortar':
                 return unit instanceof Mortar;
+            case 'Preist':
+                return unit instanceof Preist;
             default:
                 return false;
         }
