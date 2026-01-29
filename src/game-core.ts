@@ -1222,6 +1222,9 @@ export class SpaceDustSwirler extends Building {
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
+    productionQueue: string[] = []; // Queue of items to produce
+    currentProduction: string | null = null; // Currently producing item
+    productionProgress: number = 0; // Progress of current production (0-1)
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -1244,13 +1247,53 @@ export class SubsidiaryFactory extends Building {
         // Only produce when complete
         if (!this.isComplete) return;
 
-        this.productionTimer += deltaTime;
-        
-        // Production happens at intervals (placeholder for future implementation)
-        if (this.productionTimer >= Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL) {
-            this.productionTimer = 0;
-            // TODO: Implement solar mirror and special unit production
+        // Start production if idle
+        if (!this.currentProduction && this.productionQueue.length > 0) {
+            this.currentProduction = this.productionQueue.shift() || null;
+            this.productionProgress = 0;
         }
+
+        // Advance production
+        if (this.currentProduction) {
+            const productionTime = this.getProductionTime(this.currentProduction);
+            this.productionProgress += deltaTime / productionTime;
+            
+            if (this.productionProgress >= 1.0) {
+                // Production complete
+                this.productionProgress = 0;
+                this.currentProduction = null;
+            }
+        }
+    }
+    
+    /**
+     * Enqueue an item for production
+     */
+    enqueueProduction(itemType: string): void {
+        this.productionQueue.push(itemType);
+    }
+    
+    /**
+     * Get the completed item and clear it
+     */
+    getCompletedProduction(): string | null {
+        if (this.currentProduction && this.productionProgress >= 1.0) {
+            const completed = this.currentProduction;
+            this.currentProduction = null;
+            this.productionProgress = 0;
+            return completed;
+        }
+        return null;
+    }
+    
+    /**
+     * Get production time for an item type
+     */
+    private getProductionTime(itemType: string): number {
+        if (itemType === 'solar-mirror') {
+            return Constants.BUILDING_BUILD_TIME;
+        }
+        return Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL;
     }
 }
 
@@ -4000,6 +4043,22 @@ export class GameState {
                     }
                     if (effects.bouncingBullet) {
                         this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                }
+                
+                // If building is a SubsidiaryFactory, check for completed production
+                if (building instanceof SubsidiaryFactory) {
+                    const completed = building.getCompletedProduction();
+                    if (completed === 'solar-mirror') {
+                        // Spawn solar mirror near the factory
+                        const spawnAngle = Math.random() * Math.PI * 2;
+                        const spawnDistance = 80; // Spawn 80 pixels away from factory
+                        const spawnPos = new Vector2D(
+                            building.position.x + Math.cos(spawnAngle) * spawnDistance,
+                            building.position.y + Math.sin(spawnAngle) * spawnDistance
+                        );
+                        const mirror = new SolarMirror(spawnPos, player);
+                        player.solarMirrors.push(mirror);
                     }
                 }
             }
