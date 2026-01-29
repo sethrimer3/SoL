@@ -1253,6 +1253,8 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
+    username: string; // Player's username for multiplayer
+    gameMode: 'ai' | 'online' | 'lan'; // Game mode selection
 }
 
 export class MainMenu {
@@ -1414,7 +1416,9 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'high' // Default to high graphics
+            graphicsQuality: 'high', // Default to high graphics
+            username: this.getOrGenerateUsername(), // Load or generate username
+            gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
         
@@ -1557,6 +1561,35 @@ export class MainMenu {
             }
         }
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
+    }
+
+    /**
+     * Generate a random username in the format "player#XXXX"
+     */
+    private generateRandomUsername(): string {
+        const randomNumber = Math.floor(Math.random() * 10000);
+        return `player#${randomNumber.toString().padStart(4, '0')}`;
+    }
+
+    /**
+     * Get username from localStorage or generate a new one
+     */
+    private getOrGenerateUsername(): string {
+        const storedUsername = localStorage.getItem('sol_username');
+        if (storedUsername && storedUsername.trim() !== '') {
+            return storedUsername;
+        }
+        const newUsername = this.generateRandomUsername();
+        localStorage.setItem('sol_username', newUsername);
+        return newUsername;
+    }
+
+    /**
+     * Save username to localStorage
+     */
+    private saveUsername(username: string): void {
+        localStorage.setItem('sol_username', username);
+        this.settings.username = username;
     }
 
     private resolveAssetPath(path: string): string {
@@ -1826,6 +1859,19 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(difficultySection);
+
+        // Username setting
+        const usernameSection = this.createSettingSection(
+            'Username',
+            this.createTextInput(
+                this.settings.username,
+                (value) => {
+                    this.saveUsername(value || this.generateRandomUsername());
+                },
+                'Enter your username'
+            )
+        );
+        settingsContainer.appendChild(usernameSection);
 
         // Sound setting
         const soundSection = this.createSettingSection(
@@ -2625,6 +2671,37 @@ export class MainMenu {
         container.appendChild(input);
 
         return container;
+    }
+
+    private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentValue;
+        input.placeholder = placeholder;
+        input.style.fontSize = '20px';
+        input.style.padding = '8px 15px';
+        input.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        input.style.color = '#FFFFFF';
+        input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        input.style.borderRadius = '5px';
+        input.style.fontFamily = 'inherit';
+        input.style.fontWeight = '300';
+        input.style.minWidth = '200px';
+        input.style.outline = 'none';
+
+        input.addEventListener('input', () => {
+            onChange(input.value);
+        });
+
+        input.addEventListener('focus', () => {
+            input.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        input.addEventListener('blur', () => {
+            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        });
+
+        return input;
     }
 
     /**
