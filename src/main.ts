@@ -23,7 +23,7 @@ class GameController {
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
-    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun, SpaceDustSwirler, SubsidiaryFactory)
+    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, SpaceDustSwirler, SubsidiaryFactory/Foundry)
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
@@ -807,7 +807,7 @@ class GameController {
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-                    const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
+                    const labels = ['Cannon', 'Swirler', 'Foundry', 'Locked'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
@@ -829,11 +829,11 @@ class GameController {
                             );
                             // Button clicked!
                             if (i === 0) {
-                                // First button - create Minigun building
+                                // First button - create Cannon building
                                 if (player.spendEnergy(Constants.MINIGUN_COST)) {
                                     const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(minigun);
-                                    console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                                     
                                     // Emit shockwave when building starts warping in
                                     this.scatterParticles(gate.position);
@@ -843,9 +843,12 @@ class GameController {
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough energy to build Minigun');
+                                    console.log('Not enough energy to build Cannon');
                                 }
                             } else if (i === 1) {
                                 // Second button - create Space Dust Swirler building
@@ -862,20 +865,23 @@ class GameController {
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
                                     this.implodeParticles(gate.position);
                                 } else {
                                     console.log('Not enough energy to build Space Dust Swirler');
                                 }
                             } else if (i === 2) {
-                                // Third button (bottom) - create Subsidiary Factory building
-                                // Check if player already has a Subsidiary Factory
+                                // Third button (bottom) - create Foundry building
+                                // Check if player already has a Foundry
                                 const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {
-                                    console.log('Only one Subsidiary Factory can exist at a time');
+                                    console.log('Only one Foundry can exist at a time');
                                 } else if (player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                                     const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(subFactory);
-                                    console.log(`Subsidiary Factory building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                                     
                                     // Emit shockwave when building starts warping in
                                     this.scatterParticles(gate.position);
@@ -885,9 +891,12 @@ class GameController {
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough energy to build Subsidiary Factory');
+                                    console.log('Not enough energy to build Foundry');
                                 }
                             }
                             // Other buttons can be added later for different building types
@@ -1679,6 +1688,10 @@ class GameController {
             if (this.currentWarpGate.shouldEmitShockwave()) {
                 this.scatterParticles(this.currentWarpGate.position);
                 this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
+            }
+
+            if (!isStillHolding && this.currentWarpGate.isComplete) {
+                this.currentWarpGate = null;
             }
         }
     }

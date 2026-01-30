@@ -1099,7 +1099,7 @@ export class Building {
 }
 
 /**
- * Minigun Building - Offensive building for Radiant faction
+ * Cannon Building - Offensive building for Radiant faction
  * Fast-shooting defensive turret with visual effects like Marine
  */
 export class Minigun extends Building {
@@ -1246,7 +1246,7 @@ export class SpaceDustSwirler extends Building {
 }
 
 /**
- * Subsidiary Factory Building - Production building
+ * Foundry Building - Production building
  * Can produce solar mirrors and special units. Only one can exist at a time.
  */
 export class SubsidiaryFactory extends Building {
@@ -3434,7 +3434,7 @@ export class GameState {
                 for (const building of player.buildings) {
                     building.update(deltaTime, enemies, allUnits);
 
-                // If building is a Minigun, collect its effects
+                // If building is a Cannon, collect its effects
                 if (building instanceof Minigun) {
                     const effects = building.getAndClearLastShotEffects();
                     if (effects.muzzleFlash) {
@@ -3448,7 +3448,7 @@ export class GameState {
                     }
                 }
                 
-                // If building is a SubsidiaryFactory, check for completed production
+                // If building is a Foundry, check for completed production
                 if (building instanceof SubsidiaryFactory) {
                     const completed = building.getCompletedProduction();
                     if (completed === 'solar-mirror') {
@@ -6118,21 +6118,21 @@ export class GameState {
         
         // Check if player can afford the building
         let cost = 0;
-        if (buildingType === 'Minigun') {
+        if (buildingType === 'Minigun' || buildingType === 'Cannon') {
             cost = Constants.MINIGUN_COST;
         } else if (buildingType === 'SpaceDustSwirler') {
             cost = Constants.SWIRLER_COST;
-        } else if (buildingType === 'SubsidiaryFactory') {
+        } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
             cost = Constants.SUBSIDIARY_FACTORY_COST;
         }
         
         if (player.spendEnergy(cost)) {
             // Create the building
-            if (buildingType === 'Minigun') {
+            if (buildingType === 'Minigun' || buildingType === 'Cannon') {
                 player.buildings.push(new Minigun(position, player));
             } else if (buildingType === 'SpaceDustSwirler') {
                 player.buildings.push(new SpaceDustSwirler(position, player));
-            } else if (buildingType === 'SubsidiaryFactory') {
+            } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
                 player.buildings.push(new SubsidiaryFactory(position, player));
             }
         }
