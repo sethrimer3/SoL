@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -23,7 +23,7 @@ class GameController {
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
-    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, SpaceDustSwirler, SubsidiaryFactory/Foundry)
+    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
@@ -666,6 +666,13 @@ class GameController {
                 
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
+                    if (this.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setLinkedStructure(player.stellarForge);
+                            mirror.isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                    }
                     if (player.stellarForge.isSelected) {
                         // Deselect forge
                         player.stellarForge.isSelected = false;
@@ -764,6 +771,17 @@ class GameController {
                 }
                 
                 if (clickedBuilding) {
+                    const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
+                        clickedBuilding instanceof GatlingTower ||
+                        clickedBuilding instanceof SpaceDustSwirler ||
+                        clickedBuilding instanceof SubsidiaryFactory;
+                    if (isCompatibleMirrorTarget && this.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setLinkedStructure(clickedBuilding);
+                            mirror.isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                    }
                     if (clickedBuilding.isSelected) {
                         // Deselect building
                         clickedBuilding.isSelected = false;
@@ -814,7 +832,7 @@ class GameController {
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-                    const labels = ['Cannon', 'Swirler', 'Foundry', 'Locked'];
+                    const labels = ['Cannon', 'Gatling', 'Swirler', 'Foundry'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
@@ -858,7 +876,29 @@ class GameController {
                                     console.log('Not enough energy to build Cannon');
                                 }
                             } else if (i === 1) {
-                                // Second button - create Space Dust Swirler building
+                                // Second button - create Gatling Tower building
+                                if (player.spendEnergy(Constants.GATLING_COST)) {
+                                    const gatling = new GatlingTower(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(gatling);
+                                    console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    
+                                    // Emit shockwave when building starts warping in
+                                    this.scatterParticles(gate.position);
+                                    
+                                    // Remove the warp gate (implode effect)
+                                    const gateIndex = this.game.warpGates.indexOf(gate);
+                                    if (gateIndex > -1) {
+                                        this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
+                                    this.implodeParticles(gate.position);
+                                } else {
+                                    console.log('Not enough energy to build Gatling Tower');
+                                }
+                            } else if (i === 2) {
+                                // Third button - create Space Dust Swirler building
                                 if (player.spendEnergy(Constants.SWIRLER_COST)) {
                                     const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(swirler);
@@ -879,8 +919,8 @@ class GameController {
                                 } else {
                                     console.log('Not enough energy to build Space Dust Swirler');
                                 }
-                            } else if (i === 2) {
-                                // Third button (bottom) - create Foundry building
+                            } else if (i === 3) {
+                                // Fourth button - create Foundry building
                                 // Check if player already has a Foundry
                                 const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {

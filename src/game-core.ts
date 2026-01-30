@@ -215,6 +215,7 @@ export class SolarMirror {
     health: number = Constants.MIRROR_MAX_HEALTH;
     efficiency: number = 1.0; // 0.0 to 1.0
     isSelected: boolean = false;
+    linkedStructure: StellarForge | Building | null = null;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
@@ -304,16 +305,24 @@ export class SolarMirror {
         asteroids: Asteroid[] = [],
         players: Player[] = []
     ): boolean {
+        return this.hasLineOfSightToStructure(forge, asteroids, players);
+    }
+
+    hasLineOfSightToStructure(
+        structure: StellarForge | Building,
+        asteroids: Asteroid[] = [],
+        players: Player[] = []
+    ): boolean {
         const direction = new Vector2D(
-            forge.position.x - this.position.x,
-            forge.position.y - this.position.y
+            structure.position.x - this.position.x,
+            structure.position.y - this.position.y
         ).normalize();
-        const distanceToForge = this.position.distanceTo(forge.position);
+        const distanceToStructure = this.position.distanceTo(structure.position);
         const ray = new LightRay(this.position, direction);
 
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-            if (intersectionDist !== null && intersectionDist < distanceToForge) {
+            if (intersectionDist !== null && intersectionDist < distanceToStructure) {
                 return false;
             }
         }
@@ -323,19 +332,20 @@ export class SolarMirror {
         for (const player of players) {
             for (const mirror of player.solarMirrors) {
                 if (mirror === this) continue;
-                if (this.isCircleBlockingRay(direction, distanceToForge, mirror.position, mirrorRadiusPx)) {
+                if (this.isCircleBlockingRay(direction, distanceToStructure, mirror.position, mirrorRadiusPx)) {
                     return false;
                 }
             }
 
             for (const building of player.buildings) {
-                if (this.isCircleBlockingRay(direction, distanceToForge, building.position, building.radius)) {
+                if (building === structure) continue;
+                if (this.isCircleBlockingRay(direction, distanceToStructure, building.position, building.radius)) {
                     return false;
                 }
             }
 
-            if (player.stellarForge && player.stellarForge !== forge) {
-                if (this.isCircleBlockingRay(direction, distanceToForge, player.stellarForge.position, player.stellarForge.radius)) {
+            if (player.stellarForge && player.stellarForge !== structure) {
+                if (this.isCircleBlockingRay(direction, distanceToStructure, player.stellarForge.position, player.stellarForge.radius)) {
                     return false;
                 }
             }
@@ -409,11 +419,24 @@ export class SolarMirror {
         this.targetPosition = target;
     }
 
+    setLinkedStructure(structure: StellarForge | Building | null): void {
+        this.linkedStructure = structure;
+    }
+
+    getLinkedStructure(fallbackForge: StellarForge | null): StellarForge | Building | null {
+        return this.linkedStructure ?? fallbackForge;
+    }
+
     /**
-     * Update mirror reflection angle based on closest sun and forge
+     * Update mirror reflection angle based on closest sun and linked structure
      */
-    updateReflectionAngle(forge: StellarForge | null, suns: Sun[], asteroids: Asteroid[] = [], deltaTime: number): void {
-        if (!forge) return;
+    updateReflectionAngle(
+        structure: StellarForge | Building | null,
+        suns: Sun[],
+        asteroids: Asteroid[] = [],
+        deltaTime: number
+    ): void {
+        if (!structure) return;
         
         const closestSun = this.getClosestVisibleSun(suns, asteroids);
         if (!closestSun) {
@@ -432,8 +455,8 @@ export class SolarMirror {
         ).normalize();
         
         const forgeDirection = new Vector2D(
-            forge.position.x - this.position.x,
-            forge.position.y - this.position.y
+            structure.position.x - this.position.x,
+            structure.position.y - this.position.y
         ).normalize();
         
         // The bisector direction (average of both directions)
@@ -734,6 +757,8 @@ export class StellarForge {
     updateLightStatus(mirrors: SolarMirror[], suns: Sun[], asteroids: Asteroid[] = [], players: Player[] = []): void {
         this.isReceivingLight = false;
         for (const mirror of mirrors) {
+            const linkedStructure = mirror.getLinkedStructure(this);
+            if (linkedStructure !== this) continue;
             if (mirror.hasLineOfSightToLight(suns, asteroids) &&
                 mirror.hasLineOfSightToForge(this, asteroids, players)) {
                 this.isReceivingLight = true;
@@ -1118,6 +1143,80 @@ export class Minigun extends Building {
             Constants.MINIGUN_ATTACK_RANGE,
             Constants.MINIGUN_ATTACK_DAMAGE,
             Constants.MINIGUN_ATTACK_SPEED
+        );
+    }
+
+    /**
+     * Attack with visual effects like Marine
+     */
+    attack(target: CombatTarget): void {
+        // Apply damage
+        super.attack(target);
+
+        // Calculate angle to target
+        const dx = target.position.x - this.position.x;
+        const dy = target.position.y - this.position.y;
+        const angle = Math.atan2(dy, dx);
+
+        // Create muzzle flash
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
+            new Vector2D(this.position.x, this.position.y),
+            angle
+        );
+
+        // Create bullet casing with slight angle deviation
+        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
+        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
+                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
+        this.lastShotEffects.casing = new BulletCasing(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
+        );
+
+        // Create bouncing bullet at target position
+        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
+        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
+                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(
+            new Vector2D(target.position.x, target.position.y),
+            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
+        );
+    }
+
+    /**
+     * Get effects from last shot (for game state to manage)
+     */
+    getAndClearLastShotEffects(): { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } {
+        const effects = this.lastShotEffects;
+        this.lastShotEffects = {};
+        return effects;
+    }
+}
+
+/**
+ * Gatling Tower Building - Offensive building for Radiant faction
+ * Copy of Cannon/Minigun with identical effects
+ */
+export class GatlingTower extends Building {
+    private lastShotEffects: { 
+        muzzleFlash?: MuzzleFlash, 
+        casing?: BulletCasing, 
+        bouncingBullet?: BouncingBullet 
+    } = {};
+
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.GATLING_MAX_HEALTH,
+            Constants.GATLING_RADIUS,
+            Constants.GATLING_ATTACK_RANGE,
+            Constants.GATLING_ATTACK_DAMAGE,
+            Constants.GATLING_ATTACK_SPEED
         );
     }
 
@@ -3112,10 +3211,19 @@ export class GameState {
                     deltaTime
                 );
                 
-                mirror.updateReflectionAngle(player.stellarForge, this.suns, this.asteroids, deltaTime);
+                if (mirror.linkedStructure instanceof Building && mirror.linkedStructure.isDestroyed()) {
+                    mirror.setLinkedStructure(null);
+                }
+                if (mirror.linkedStructure instanceof StellarForge && mirror.linkedStructure !== player.stellarForge) {
+                    mirror.setLinkedStructure(null);
+                }
+
+                const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+                mirror.updateReflectionAngle(linkedStructure, this.suns, this.asteroids, deltaTime);
                 
                 // Generate energy even during countdown once mirrors reach position
-                if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
+                if (linkedStructure === player.stellarForge &&
+                    mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
                     player.stellarForge &&
                     mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
@@ -3357,8 +3465,8 @@ export class GameState {
                 for (const building of player.buildings) {
                     building.update(deltaTime, enemies, allUnits);
 
-                // If building is a Cannon, collect its effects
-                if (building instanceof Minigun) {
+                // If building is a Cannon or Gatling Tower, collect its effects
+                if (building instanceof Minigun || building instanceof GatlingTower) {
                     const effects = building.getAndClearLastShotEffects();
                     if (effects.muzzleFlash) {
                         this.muzzleFlashes.push(effects.muzzleFlash);
@@ -3413,6 +3521,8 @@ export class GameState {
                     let totalLight = 0;
                     
                     for (const mirror of player.solarMirrors) {
+                        const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+                        if (linkedStructure !== building) continue;
                         // Check if mirror has line of sight to light source
                         if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
                         
@@ -5756,6 +5866,19 @@ export class GameState {
                 mix(mirror.health);
                 mix(mirror.efficiency);
                 mix(mirror.reflectionAngle);
+                if (mirror.linkedStructure) {
+                    if (mirror.linkedStructure instanceof StellarForge) {
+                        mixInt(1);
+                    } else {
+                        mixInt(2);
+                    }
+                    mix(mirror.linkedStructure.position.x);
+                    mix(mirror.linkedStructure.position.y);
+                } else {
+                    mixInt(0);
+                    mix(-1);
+                    mix(-1);
+                }
                 if (mirror.targetPosition) {
                     mix(mirror.targetPosition.x);
                     mix(mirror.targetPosition.y);
@@ -6065,6 +6188,8 @@ export class GameState {
         let cost = 0;
         if (buildingType === 'Minigun' || buildingType === 'Cannon') {
             cost = Constants.MINIGUN_COST;
+        } else if (buildingType === 'Gatling' || buildingType === 'GatlingTower') {
+            cost = Constants.GATLING_COST;
         } else if (buildingType === 'SpaceDustSwirler') {
             cost = Constants.SWIRLER_COST;
         } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
@@ -6075,6 +6200,8 @@ export class GameState {
             // Create the building
             if (buildingType === 'Minigun' || buildingType === 'Cannon') {
                 player.buildings.push(new Minigun(position, player));
+            } else if (buildingType === 'Gatling' || buildingType === 'GatlingTower') {
+                player.buildings.push(new GatlingTower(position, player));
             } else if (buildingType === 'SpaceDustSwirler') {
                 player.buildings.push(new SpaceDustSwirler(position, player));
             } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
