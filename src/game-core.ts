@@ -1577,6 +1577,10 @@ export class SpaceDustParticle {
     glowTransition: number = 0; // 0-1 transition between states
     targetGlowState: number = Constants.DUST_GLOW_STATE_NORMAL;
     lastMovementTime: number = 0; // Time since last significant movement
+    impactColor: string | null = null;
+    impactBlend: number = 0;
+    impactTargetBlend: number = 0;
+    impactHoldTimeSec: number = 0;
     
     constructor(
         public position: Vector2D,
@@ -1642,6 +1646,8 @@ export class SpaceDustParticle {
                 this.glowTransition = 0;
             }
         }
+
+        this.updateImpactBlend(deltaTime);
         
         // Apply friction to gradually slow down
         this.velocity.x *= 0.98;
@@ -1669,14 +1675,31 @@ export class SpaceDustParticle {
     }
 
     /**
+     * Apply a brief color impulse from a nearby unit or attack.
+     */
+    applyImpactColor(impactColor: string, intensity: number): void {
+        if (!impactColor || intensity <= 0) {
+            return;
+        }
+        this.impactColor = impactColor;
+        this.impactTargetBlend = Math.max(this.impactTargetBlend, Math.min(1, intensity));
+        this.impactHoldTimeSec = Constants.DUST_COLOR_IMPACT_HOLD_SEC;
+    }
+
+    /**
      * Update color based on influence
      */
     updateColor(influenceColor: string | null, blendFactor: number): void {
+        let blendedColor = this.baseColor;
         if (influenceColor && blendFactor > 0) {
             // Blend from gray to influence color
-            this.currentColor = this.blendColors(this.baseColor, influenceColor, blendFactor);
+            blendedColor = this.blendColors(this.baseColor, influenceColor, blendFactor);
+        }
+
+        if (this.impactColor && this.impactBlend > 0) {
+            this.currentColor = this.blendColors(blendedColor, this.impactColor, this.impactBlend);
         } else {
-            this.currentColor = this.baseColor;
+            this.currentColor = blendedColor;
         }
     }
 
@@ -1710,6 +1733,29 @@ export class SpaceDustParticle {
         const b = Math.round(b1 + (b2 - b1) * factor);
         
         return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    }
+
+    private updateImpactBlend(deltaTime: number): void {
+        if (this.impactHoldTimeSec > 0) {
+            this.impactHoldTimeSec = Math.max(0, this.impactHoldTimeSec - deltaTime);
+        }
+
+        const targetBlend = this.impactHoldTimeSec > 0 ? this.impactTargetBlend : 0;
+        const fadeSpeed = targetBlend > this.impactBlend
+            ? Constants.DUST_COLOR_FADE_IN_SPEED
+            : Constants.DUST_COLOR_FADE_OUT_SPEED;
+        const blendDelta = fadeSpeed * deltaTime;
+
+        if (this.impactBlend < targetBlend) {
+            this.impactBlend = Math.min(targetBlend, this.impactBlend + blendDelta);
+        } else if (this.impactBlend > targetBlend) {
+            this.impactBlend = Math.max(targetBlend, this.impactBlend - blendDelta);
+        }
+
+        if (targetBlend === 0 && this.impactBlend === 0) {
+            this.impactTargetBlend = 0;
+            this.impactColor = null;
+        }
     }
 
     private static generateBaseColor(palette?: SpaceDustPalette): string {
@@ -3140,6 +3186,7 @@ export class GameState {
                         player.stellarForge.velocity,
                         Constants.FORGE_DUST_PUSH_RADIUS_PX,
                         Constants.FORGE_DUST_PUSH_FORCE_MULTIPLIER,
+                        this.getPlayerImpactColor(player),
                         deltaTime
                     );
                 }
@@ -3208,6 +3255,7 @@ export class GameState {
                     mirror.velocity,
                     Constants.MIRROR_DUST_PUSH_RADIUS_PX,
                     Constants.MIRROR_DUST_PUSH_FORCE_MULTIPLIER,
+                    this.getPlayerImpactColor(player),
                     deltaTime
                 );
                 
@@ -3297,6 +3345,7 @@ export class GameState {
                             unit.velocity,
                             Constants.STARLING_DUST_PUSH_RADIUS_PX,
                             Constants.STARLING_DUST_PUSH_FORCE_MULTIPLIER,
+                            this.getPlayerImpactColor(unit.owner),
                             deltaTime
                         );
                     }
@@ -3312,6 +3361,7 @@ export class GameState {
                                     projectile.velocity,
                                     Constants.GRAVE_PROJECTILE_EFFECT_RADIUS,
                                     projectileSpeed * Constants.GRAVE_PROJECTILE_FORCE_MULTIPLIER,
+                                    this.getPlayerImpactColor(unit.owner),
                                     deltaTime
                                 );
                             }
@@ -3395,6 +3445,7 @@ export class GameState {
                             segment.endPos,
                             Constants.BEAM_EFFECT_RADIUS,
                             Constants.BEAM_FORCE_STRENGTH,
+                            this.getPlayerImpactColor(unit.owner),
                             deltaTime
                         );
                     }
@@ -3658,6 +3709,7 @@ export class GameState {
                 bullet.velocity,
                 Constants.ABILITY_BULLET_EFFECT_RADIUS,
                 bulletSpeed * Constants.ABILITY_BULLET_FORCE_MULTIPLIER,
+                this.getPlayerImpactColor(bullet.owner),
                 deltaTime
             );
 
@@ -3892,6 +3944,7 @@ export class GameState {
                 projectile.velocity,
                 Constants.MINION_PROJECTILE_EFFECT_RADIUS,
                 projectileSpeed * Constants.MINION_PROJECTILE_FORCE_MULTIPLIER,
+                this.getPlayerImpactColor(projectile.owner),
                 deltaTime
             );
 
@@ -4032,6 +4085,7 @@ export class GameState {
                 projectile.velocity,
                 Constants.INFLUENCE_BALL_EFFECT_RADIUS,
                 projectileSpeed * Constants.INFLUENCE_BALL_FORCE_MULTIPLIER,
+                this.getPlayerImpactColor(projectile.owner),
                 deltaTime
             );
 
@@ -4898,6 +4952,7 @@ export class GameState {
         velocity: Vector2D,
         radiusPx: number,
         forceMultiplier: number,
+        impactColor: string | null,
         deltaTime: number
     ): void {
         const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
@@ -4910,6 +4965,7 @@ export class GameState {
             velocity,
             radiusPx,
             effectiveSpeed * forceMultiplier,
+            impactColor,
             deltaTime
         );
     }
@@ -4929,6 +4985,7 @@ export class GameState {
         velocity: Vector2D,
         radius: number,
         strength: number,
+        impactColor: string | null,
         deltaTime: number
     ): void {
         for (const particle of this.spaceDust) {
@@ -4956,6 +5013,13 @@ export class GameState {
                 // Force falls off with distance (inverse square for more realistic fluid behavior)
                 const distanceFactor = 1.0 - (distance / radius);
                 const forceMagnitude = strength * distanceFactor * distanceFactor;
+
+                if (impactColor) {
+                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
+                    if (impactStrength > 0) {
+                        particle.applyImpactColor(impactColor, impactStrength);
+                    }
+                }
                 
                 particle.applyForce(new Vector2D(
                     pushDirection.x * forceMagnitude * deltaTime,
@@ -4980,6 +5044,7 @@ export class GameState {
         endPos: Vector2D,
         radius: number,
         strength: number,
+        impactColor: string | null,
         deltaTime: number
     ): void {
         // Calculate beam direction
@@ -5030,6 +5095,13 @@ export class GameState {
                 // Force falls off with distance from beam
                 const distanceFactor = 1.0 - (distance / radius);
                 const forceMagnitude = strength * distanceFactor * distanceFactor;
+
+                if (impactColor) {
+                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
+                    if (impactStrength > 0) {
+                        particle.applyImpactColor(impactColor, impactStrength);
+                    }
+                }
                 
                 particle.applyForce(new Vector2D(
                     pushDirection.x * forceMagnitude * deltaTime,
@@ -5037,6 +5109,17 @@ export class GameState {
                 ));
             }
         }
+    }
+
+    private getPlayerImpactColor(player: Player): string {
+        const playerIndex = this.players.indexOf(player);
+        if (playerIndex === 0) {
+            return Constants.PLAYER_1_COLOR;
+        }
+        if (playerIndex === 1) {
+            return Constants.PLAYER_2_COLOR;
+        }
+        return Constants.PLAYER_1_COLOR;
     }
 
     /**
@@ -5821,7 +5904,11 @@ export class GameState {
             mix(particle.glowTransition);
             mixInt(particle.glowState);
             mixInt(particle.targetGlowState);
+            mix(particle.impactBlend);
+            mix(particle.impactTargetBlend);
+            mix(particle.impactHoldTimeSec);
             mixString(particle.baseColor);
+            mixString(particle.impactColor ?? '');
         }
 
         for (const player of this.players) {

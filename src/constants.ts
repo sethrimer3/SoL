@@ -56,6 +56,14 @@ export const FORGE_DUST_PUSH_RADIUS_PX = 160;
 export const FORGE_DUST_PUSH_FORCE_MULTIPLIER = 0.9;
 export const STARLING_DUST_PUSH_RADIUS_PX = 50;
 export const STARLING_DUST_PUSH_FORCE_MULTIPLIER = 0.5;
+export const DUST_COLOR_IMPACT_HOLD_SEC = 0.08;
+export const DUST_COLOR_FADE_IN_SPEED = 7.5;
+export const DUST_COLOR_FADE_OUT_SPEED = 1.4;
+export const DUST_COLOR_FORCE_SCALE = 35;
+export const DUST_SHADOW_MAX_DISTANCE_PX = 420;
+export const DUST_SHADOW_LENGTH_PX = 18;
+export const DUST_SHADOW_OPACITY = 0.25;
+export const DUST_SHADOW_WIDTH_PX = 0.6;
 
 // Sprite scaling constants
 export const DUST_SPRITE_SCALE_FACTOR = 3;
