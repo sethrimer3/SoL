@@ -1390,6 +1390,134 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             edge: 'rgba(130, 190, 255, 0)'
         },
         lensFlareHalo: 'rgba(210, 235, 255, 0.18)'
+    },
+    'DeepSpace': {
+        id: 'DeepSpace',
+        name: 'Deep Space',
+        background: '#0A0A1E',
+        asteroidColors: {
+            fillStart: '#4A4A7E',
+            fillEnd: '#2E2E5A',
+            strokeStart: '#6A6A9E',
+            strokeEnd: '#4A4A7A'
+        },
+        spaceDustPalette: {
+            neutral: ['#3A3A5E', '#4A4A6E', '#5A5A7E', '#6A6A8E'],
+            accent: ['#5A4A8F', '#6A5A9F', '#7A6AAF', '#8A7ABF']
+        },
+        sunCore: {
+            inner: 'rgba(220, 200, 255, 1)',     // soft purple-white
+            mid: 'rgba(180, 150, 230, 0.95)',    // lavender
+            outer: 'rgba(140, 100, 200, 0.85)'   // purple edge
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(170, 140, 230, 0.75)',
+            outerGlow2: 'rgba(140, 110, 200, 0.45)',
+            outerGlow3: 'rgba(110, 80, 170, 0.25)',
+            outerGlow4: 'rgba(80, 50, 140, 0)'
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(200, 180, 240, 0.35)',
+            mid: 'rgba(160, 130, 210, 0.18)',
+            edge: 'rgba(120, 90, 180, 0)'
+        },
+        lensFlareHalo: 'rgba(190, 170, 230, 0.18)'
+    },
+    'RedGiant': {
+        id: 'RedGiant',
+        name: 'Red Giant',
+        background: '#1A0A0A',
+        asteroidColors: {
+            fillStart: '#8A5A5A',
+            fillEnd: '#5A3030',
+            strokeStart: '#AA7A7A',
+            strokeEnd: '#7A4A4A'
+        },
+        spaceDustPalette: {
+            neutral: ['#6A4A4A', '#7A5A5A', '#8A6A6A', '#9A7A7A'],
+            accent: ['#8F5A4A', '#9F6A5A', '#AF7A6A', '#BF8A7A']
+        },
+        sunCore: {
+            inner: 'rgba(255, 240, 200, 1)',     // warm white-yellow
+            mid: 'rgba(255, 160, 80, 0.95)',     // bright orange
+            outer: 'rgba(255, 100, 60, 0.85)'    // red-orange edge
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(255, 140, 80, 0.75)',
+            outerGlow2: 'rgba(240, 100, 60, 0.45)',
+            outerGlow3: 'rgba(220, 60, 40, 0.25)',
+            outerGlow4: 'rgba(200, 40, 20, 0)'
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(255, 200, 150, 0.35)',
+            mid: 'rgba(255, 140, 90, 0.18)',
+            edge: 'rgba(240, 100, 60, 0)'
+        },
+        lensFlareHalo: 'rgba(255, 180, 120, 0.18)'
+    },
+    'Nebula': {
+        id: 'Nebula',
+        name: 'Nebula',
+        background: '#150A1A',
+        asteroidColors: {
+            fillStart: '#7A4A7A',
+            fillEnd: '#5A2A5A',
+            strokeStart: '#9A6A9A',
+            strokeEnd: '#7A4A7A'
+        },
+        spaceDustPalette: {
+            neutral: ['#6A4A6A', '#7A5A7A', '#8A6A8A', '#9A7A9A'],
+            accent: ['#8F4A7A', '#9F5A8A', '#AF6A9A', '#BF7AAA']
+        },
+        sunCore: {
+            inner: 'rgba(255, 220, 255, 1)',     // soft pink-white
+            mid: 'rgba(240, 150, 220, 0.95)',    // bright pink
+            outer: 'rgba(200, 100, 180, 0.85)'   // magenta edge
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(230, 140, 210, 0.75)',
+            outerGlow2: 'rgba(200, 100, 180, 0.45)',
+            outerGlow3: 'rgba(170, 70, 150, 0.25)',
+            outerGlow4: 'rgba(140, 50, 120, 0)'
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(240, 180, 230, 0.35)',
+            mid: 'rgba(210, 130, 190, 0.18)',
+            edge: 'rgba(180, 90, 160, 0)'
+        },
+        lensFlareHalo: 'rgba(230, 160, 210, 0.18)'
+    },
+    'GreenAurora': {
+        id: 'GreenAurora',
+        name: 'Green Aurora',
+        background: '#0A1A14',
+        asteroidColors: {
+            fillStart: '#4A7A5A',
+            fillEnd: '#2A5A3A',
+            strokeStart: '#6A9A7A',
+            strokeEnd: '#4A7A5A'
+        },
+        spaceDustPalette: {
+            neutral: ['#4A6A5A', '#5A7A6A', '#6A8A7A', '#7A9A8A'],
+            accent: ['#4A8F6A', '#5A9F7A', '#6AAF8A', '#7ABF9A']
+        },
+        sunCore: {
+            inner: 'rgba(220, 255, 230, 1)',     // soft mint-white
+            mid: 'rgba(160, 240, 180, 0.95)',    // bright mint green
+            outer: 'rgba(100, 200, 140, 0.85)'   // teal-green edge
+        },
+        sunGlow: {
+            outerGlow1: 'rgba(140, 230, 170, 0.75)',
+            outerGlow2: 'rgba(100, 200, 140, 0.45)',
+            outerGlow3: 'rgba(70, 170, 110, 0.25)',
+            outerGlow4: 'rgba(50, 140, 80, 0)'
+        },
+        sunLightRays: {
+            nearCenter: 'rgba(180, 240, 210, 0.35)',
+            mid: 'rgba(130, 210, 170, 0.18)',
+            edge: 'rgba(90, 180, 130, 0)'
+        },
+        lensFlareHalo: 'rgba(160, 230, 190, 0.18)'
     }
 };
 
