@@ -542,7 +542,14 @@ class GameController {
                 // Add waypoint if we've moved far enough from the last one
                 if (this.pathPoints.length === 0 || 
                     this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
-                    this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
+                    
+                    // Check if this position is inside a solid object
+                    const isInsideSolid = this.game?.checkCollision(worldPos, 0) || false;
+                    
+                    if (!isInsideSolid) {
+                        // Only add waypoint if not inside solid object
+                        this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
+                    }
                 }
                 
                 // pathPreviewForge was already set when initiating path drawing (selectedBase for base paths, null for unit paths)
