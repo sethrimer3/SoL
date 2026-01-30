@@ -113,12 +113,16 @@ export class GameRenderer {
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
 
-    private readonly HERO_SPRITE_SCALE = 6;
-    private readonly FORGE_SPRITE_SCALE = 2.2;
+    private readonly HERO_SPRITE_SCALE = 4.2;
+    private readonly FORGE_SPRITE_SCALE = 2.64;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private viewMinX: number = 0;
+    private viewMaxX: number = 0;
+    private viewMinY: number = 0;
+    private viewMaxY: number = 0;
     private graphicsOptionByKey = new Map<GraphicKey, GraphicOption>();
     private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
     private graphicsMenuScrollOffset = 0;
@@ -340,6 +344,24 @@ export class GameRenderer {
                worldPos.x <= halfSize + margin && 
                worldPos.y >= -halfSize - margin && 
                worldPos.y <= halfSize + margin;
+    }
+
+    private updateViewBounds(): void {
+        const dpr = window.devicePixelRatio || 1;
+        const viewHalfWidth = (this.canvas.width / dpr) / (2 * this.zoom);
+        const viewHalfHeight = (this.canvas.height / dpr) / (2 * this.zoom);
+
+        this.viewMinX = this.camera.x - viewHalfWidth;
+        this.viewMaxX = this.camera.x + viewHalfWidth;
+        this.viewMinY = this.camera.y - viewHalfHeight;
+        this.viewMaxY = this.camera.y + viewHalfHeight;
+    }
+
+    private isWithinViewBounds(worldPos: Vector2D, margin: number = 0): boolean {
+        return worldPos.x >= this.viewMinX - margin &&
+               worldPos.x <= this.viewMaxX + margin &&
+               worldPos.y >= this.viewMinY - margin &&
+               worldPos.y <= this.viewMaxY + margin;
     }
 
     /**
@@ -1226,7 +1248,7 @@ export class GameRenderer {
         }
         
         const screenPos = this.worldToScreen(mirror.position);
-        const size = 20 * this.zoom;
+        const size = 14 * this.zoom;
 
         // Save context state
         this.ctx.save();
@@ -2302,6 +2324,9 @@ export class GameRenderer {
 
         for (let i = 0; i < selectedStarlings.length; i++) {
             const starling = selectedStarlings[i];
+            if (!this.isWithinViewBounds(starling.position, starling.attackRange)) {
+                continue;
+            }
             const screenPos = this.worldToScreen(starling.position);
             const radius = starling.attackRange * this.zoom;
             
@@ -3427,6 +3452,9 @@ export class GameRenderer {
 
         // Draw lines from mirrors to sun and linked structures
         for (const mirror of player.solarMirrors) {
+            if (!this.isWithinViewBounds(mirror.position, 120)) {
+                continue;
+            }
             const mirrorScreenPos = this.worldToScreen(mirror.position);
             const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
             
@@ -4027,6 +4055,8 @@ export class GameRenderer {
         this.ctx.fillStyle = this.colorScheme.background;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        this.updateViewBounds();
+
         // Draw parallax star layers
         for (const layer of this.starLayers) {
             this.ctx.fillStyle = '#FFFFFF';
@@ -4062,14 +4092,17 @@ export class GameRenderer {
         // Draw space dust particles (with culling)
         for (const particle of game.spaceDust) {
             // Only render particles within map boundaries
-            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10)) {
+            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
+                this.isWithinViewBounds(particle.position, 60)) {
                 this.drawSpaceDust(particle, game, viewingPlayerIndex);
             }
         }
 
         // Draw suns
         for (const sun of game.suns) {
-            this.drawSun(sun);
+            if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
+                this.drawSun(sun);
+            }
         }
 
         // Draw sun rays with raytracing (light and shadows)
@@ -4083,7 +4116,8 @@ export class GameRenderer {
         // Draw asteroids (with culling - skip rendering beyond map bounds)
         for (const asteroid of game.asteroids) {
             // Only render asteroids within map boundaries
-            if (this.isWithinRenderBounds(asteroid.position, game.mapSize, asteroid.size)) {
+            if (this.isWithinRenderBounds(asteroid.position, game.mapSize, asteroid.size) &&
+                this.isWithinViewBounds(asteroid.position, asteroid.size * 2)) {
                 this.drawAsteroid(asteroid);
             }
         }
@@ -4118,7 +4152,9 @@ export class GameRenderer {
         for (const [color, circles] of circlesByColor) {
             if (circles.length === 1) {
                 // Single circle, draw normally
-                this.drawInfluenceCircle(circles[0].position, circles[0].radius, color);
+                if (this.isWithinViewBounds(circles[0].position, circles[0].radius)) {
+                    this.drawInfluenceCircle(circles[0].position, circles[0].radius, color);
+                }
             } else {
                 // Multiple circles of same color
                 // To get union effect, we'll use a temporary canvas
@@ -4127,6 +4163,9 @@ export class GameRenderer {
                 // Create path with all circles
                 this.ctx.beginPath();
                 for (const circle of circles) {
+                    if (!this.isWithinViewBounds(circle.position, circle.radius)) {
+                        continue;
+                    }
                     const screenPos = this.worldToScreen(circle.position);
                     const screenRadius = circle.radius * this.zoom;
                     this.ctx.moveTo(screenPos.x + screenRadius, screenPos.y);
@@ -4166,18 +4205,24 @@ export class GameRenderer {
 
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
             for (const mirror of player.solarMirrors) {
-                this.drawSolarMirror(mirror, color, game, isEnemy);
+                if (this.isWithinViewBounds(mirror.position, 120)) {
+                    this.drawSolarMirror(mirror, color, game, isEnemy);
+                }
             }
 
             // Draw Stellar Forge
             if (player.stellarForge) {
-                this.drawStellarForge(player.stellarForge, color, game, isEnemy);
+                if (this.isWithinViewBounds(player.stellarForge.position, player.stellarForge.radius * 3)) {
+                    this.drawStellarForge(player.stellarForge, color, game, isEnemy);
+                }
             }
         }
 
         // Draw warp gates
         for (const gate of game.warpGates) {
-            this.drawWarpGate(gate);
+            if (this.isWithinViewBounds(gate.position, Constants.WARP_GATE_RADIUS * 2)) {
+                this.drawWarpGate(gate);
+            }
         }
 
         // Draw warp gate shockwaves
@@ -4194,6 +4239,10 @@ export class GameRenderer {
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
             
             for (const unit of player.units) {
+                const unitMargin = unit.isHero ? 120 : 60;
+                if (!this.isWithinViewBounds(unit.position, unitMargin)) {
+                    continue;
+                }
                 if (unit instanceof Grave) {
                     this.drawGrave(unit, color, game, isEnemy);
                 } else if (unit instanceof Starling) {
@@ -4233,6 +4282,9 @@ export class GameRenderer {
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
             
             for (const building of player.buildings) {
+                if (!this.isWithinViewBounds(building.position, building.radius * 2)) {
+                    continue;
+                }
                 if (building instanceof Minigun || building instanceof GatlingTower) {
                     this.drawMinigun(building, color, game, isEnemy);
                 } else if (building instanceof SpaceDustSwirler) {
@@ -4245,64 +4297,88 @@ export class GameRenderer {
 
         // Draw muzzle flashes
         for (const flash of game.muzzleFlashes) {
-            this.drawMuzzleFlash(flash);
+            if (this.isWithinViewBounds(flash.position, 80)) {
+                this.drawMuzzleFlash(flash);
+            }
         }
 
         // Draw bullet casings
         for (const casing of game.bulletCasings) {
-            this.drawBulletCasing(casing);
+            if (this.isWithinViewBounds(casing.position, 60)) {
+                this.drawBulletCasing(casing);
+            }
         }
 
         // Draw bouncing bullets
         for (const bullet of game.bouncingBullets) {
-            this.drawBouncingBullet(bullet);
+            if (this.isWithinViewBounds(bullet.position, 60)) {
+                this.drawBouncingBullet(bullet);
+            }
         }
 
         // Draw ability bullets
         for (const bullet of game.abilityBullets) {
-            this.drawAbilityBullet(bullet);
+            if (this.isWithinViewBounds(bullet.position, 80)) {
+                this.drawAbilityBullet(bullet);
+            }
         }
 
         // Draw minion projectiles
         for (const projectile of game.minionProjectiles) {
-            this.drawMinionProjectile(projectile);
+            if (this.isWithinViewBounds(projectile.position, 80)) {
+                this.drawMinionProjectile(projectile);
+            }
         }
         
         // Draw mortar projectiles
         for (const projectile of game.mortarProjectiles) {
-            this.drawMortarProjectile(projectile);
+            if (this.isWithinViewBounds(projectile.position, 100)) {
+                this.drawMortarProjectile(projectile);
+            }
         }
         
         // Draw laser beams
         for (const laser of game.laserBeams) {
-            this.drawLaserBeam(laser);
+            if (this.isWithinViewBounds(laser.startPos, 200) || this.isWithinViewBounds(laser.endPos, 200)) {
+                this.drawLaserBeam(laser);
+            }
         }
         
         // Draw impact particles (only on high graphics quality)
         if (this.graphicsQuality === 'high') {
             for (const particle of game.impactParticles) {
-                this.drawImpactParticle(particle);
+                if (this.isWithinViewBounds(particle.position, 120)) {
+                    this.drawImpactParticle(particle);
+                }
             }
         }
         
         // Draw influence zones
         for (const zone of game.influenceZones) {
-            this.drawInfluenceZone(zone);
+            if (this.isWithinViewBounds(zone.position, zone.radius)) {
+                this.drawInfluenceZone(zone);
+            }
         }
         
         // Draw influence ball projectiles
         for (const projectile of game.influenceBallProjectiles) {
-            this.drawInfluenceBallProjectile(projectile);
+            if (this.isWithinViewBounds(projectile.position, 100)) {
+                this.drawInfluenceBallProjectile(projectile);
+            }
         }
         
         // Draw crescent waves
         for (const wave of game.crescentWaves) {
-            this.drawCrescentWave(wave);
+            if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
+                this.drawCrescentWave(wave);
+            }
         }
         
         // Draw deployed turrets
         for (const turret of game.deployedTurrets) {
-            this.drawDeployedTurret(turret);
+            if (this.isWithinViewBounds(turret.position, Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * 2)) {
+                this.drawDeployedTurret(turret);
+            }
         }
 
         // Draw damage numbers
