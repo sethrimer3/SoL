@@ -50,21 +50,6 @@
             z-index: 1000;
         }
 
-        .build-badge {
-            position: absolute;
-            top: 16px;
-            left: 16px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            background: rgba(255, 215, 0, 0.15);
-            border: 1px solid rgba(255, 215, 0, 0.35);
-            color: #FFE48C;
-            font-size: 12px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            box-shadow: 0 0 12px rgba(255, 215, 0, 0.2);
-        }
-
         .logo {
             display: flex;
             flex-direction: column;
@@ -75,21 +60,6 @@
         .loading-logo {
             width: min(360px, 70vw);
             height: auto;
-        }
-
-        .logo-title {
-            font-size: 52px;
-            font-weight: 700;
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
-            text-shadow: 0 0 24px rgba(255, 215, 0, 0.6);
-        }
-
-        .logo-subtitle {
-            font-size: 18px;
-            color: #FFFFFF;
-            letter-spacing: 0.2em;
-            text-transform: uppercase;
         }
 
         .loading-animation {
@@ -104,16 +74,13 @@
 <script defer src="bundle.js"></script></head>
 <body>
     <div id="loading">
-        <div class="build-badge">Build 1</div>
         <div class="logo">
             <img class="loading-logo" src="../ASSETS/sprites/loadingScreen/gravyThymeLogo.png" alt="Gravythyme logo">
-            <div class="logo-subtitle">Speed of Light RTS</div>
         </div>
         <img id="loadingAnimationFrame" class="loading-animation" src="../ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png" alt="Loading animation">
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
-        const loadingStartMs = performance.now();
         const minimumLoadingDurationMs = 3000;
         const animationFrameCount = 25;
         const animationFrameDurationMs = 80;
@@ -136,17 +103,28 @@
             loadingAnimationFrame.src = animationFrames[animationFrameIndex];
         }, animationFrameDurationMs);
 
-        // Hide loading screen once game is loaded
+        let isMinimumDurationComplete = false;
+        let isGameLoaded = false;
+
+        const completeLoadingScreen = () => {
+            if (!isMinimumDurationComplete || !isGameLoaded) {
+                return;
+            }
+            const loading = document.getElementById('loading');
+            if (loading) {
+                loading.style.display = 'none';
+            }
+            clearInterval(animationIntervalId);
+        };
+
+        setTimeout(() => {
+            isMinimumDurationComplete = true;
+            completeLoadingScreen();
+        }, minimumLoadingDurationMs);
+
         window.addEventListener('load', () => {
-            const elapsedMs = performance.now() - loadingStartMs;
-            const remainingMs = Math.max(0, minimumLoadingDurationMs - elapsedMs);
-            setTimeout(() => {
-                const loading = document.getElementById('loading');
-                if (loading) {
-                    loading.style.display = 'none';
-                }
-                clearInterval(animationIntervalId);
-            }, remainingMs);
+            isGameLoaded = true;
+            completeLoadingScreen();
         });
     </script>
 </body>
