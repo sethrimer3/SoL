@@ -1689,10 +1689,6 @@ class GameController {
                 this.scatterParticles(this.currentWarpGate.position);
                 this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
             }
-
-            if (!isStillHolding && this.currentWarpGate.isComplete) {
-                this.currentWarpGate = null;
-            }
         }
     }
 
