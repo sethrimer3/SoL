@@ -303,7 +303,7 @@ export const TURRET_DEPLOYER_ABILITY_COOLDOWN = 12.0; // 12 seconds
 export const DEPLOYED_TURRET_MAX_HEALTH = 150;
 export const DEPLOYED_TURRET_ATTACK_RANGE = 300;
 export const DEPLOYED_TURRET_ATTACK_DAMAGE = 12;
-export const DEPLOYED_TURRET_ATTACK_SPEED = 3; // Attacks per second
+export const DEPLOYED_TURRET_ATTACK_SPEED = 2; // Attacks per second (fires 2 times per second)
 export const TURRET_PROJECTILE_SPEED = 400;
 
 // Driller unit constants (Aurum hero)

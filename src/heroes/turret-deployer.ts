@@ -17,6 +17,8 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
         maxHealth: number = Constants.DEPLOYED_TURRET_MAX_HEALTH;
         attackCooldown: number = 0;
         target: CombatTarget | null = null;
+        firingAnimationProgress: number = 0; // 0-1 progress through firing animation
+        isFiring: boolean = false; // Whether currently in firing animation
 
         constructor(
             public position: Vector2D,
@@ -32,6 +34,16 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
                 this.attackCooldown -= deltaTime;
             }
 
+            // Update firing animation
+            if (this.isFiring) {
+                // Animation completes in 0.1 seconds (quick firing animation)
+                this.firingAnimationProgress += deltaTime * 10;
+                if (this.firingAnimationProgress >= 1.0) {
+                    this.firingAnimationProgress = 0;
+                    this.isFiring = false;
+                }
+            }
+
             // Find target if don't have one or current target is dead
             if (!this.target || this.isTargetDead(this.target)) {
                 this.target = this.findNearestEnemy(enemies);
@@ -43,6 +55,8 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
                 if (distance <= Constants.DEPLOYED_TURRET_ATTACK_RANGE) {
                     this.attack(this.target);
                     this.attackCooldown = 1.0 / Constants.DEPLOYED_TURRET_ATTACK_SPEED;
+                    this.isFiring = true;
+                    this.firingAnimationProgress = 0;
                 }
             }
         }
