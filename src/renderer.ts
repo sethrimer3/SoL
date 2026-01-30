@@ -3057,48 +3057,100 @@ export class GameRenderer {
             return;
         }
 
-        // Draw base (circular platform)
-        this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
 
-        // Draw selection indicator if selected
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
+        const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
+        const topSprite = this.getTintedSprite(topSpritePath, displayColor);
+
+        if (bottomSprite && topSprite) {
+            const spriteScale = (radius * 2) / bottomSprite.width;
+            const bottomWidth = bottomSprite.width * spriteScale;
+            const bottomHeight = bottomSprite.height * spriteScale;
+
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.drawImage(
+                bottomSprite,
+                -bottomWidth / 2,
+                -bottomHeight / 2,
+                bottomWidth,
+                bottomHeight
+            );
+            this.ctx.restore();
+
+            // Draw selection indicator if selected
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
+
+            let gunAngle = 0;
+            if (building.target) {
+                const dx = building.target.position.x - building.position.x;
+                const dy = building.target.position.y - building.position.y;
+                gunAngle = Math.atan2(dy, dx);
+            }
+
+            const topWidth = topSprite.width * spriteScale;
+            const topHeight = topSprite.height * spriteScale;
+            const pivotOffsetFromBottomPx = Constants.DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX * spriteScale;
+            const pivotY = topHeight / 2 - pivotOffsetFromBottomPx;
+
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(gunAngle);
+            this.ctx.drawImage(
+                topSprite,
+                -topWidth / 2,
+                -pivotY,
+                topWidth,
+                topHeight
+            );
+            this.ctx.restore();
+        } else {
+            // Draw base (circular platform)
+            this.ctx.fillStyle = displayColor;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            // Draw selection indicator if selected
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
+
+            // Draw turret base (smaller circle in center)
+            const turretBaseRadius = radius * 0.6;
+            this.ctx.fillStyle = shouldDim ? this.darkenColor('#666666', Constants.SHADE_OPACITY) : '#666666';
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, turretBaseRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            // Draw minigun barrel (pointing toward target if exists)
+            let gunAngle = 0;
+            if (building.target) {
+                const dx = building.target.position.x - building.position.x;
+                const dy = building.target.position.y - building.position.y;
+                gunAngle = Math.atan2(dy, dx);
+            }
+
+            const barrelLength = radius * 1.2;
+            const barrelWidth = 4 * this.zoom;
+
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#333333', Constants.SHADE_OPACITY) : '#333333';
+            this.ctx.lineWidth = barrelWidth;
+            this.ctx.lineCap = 'round';
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(
+                screenPos.x + Math.cos(gunAngle) * barrelLength,
+                screenPos.y + Math.sin(gunAngle) * barrelLength
+            );
+            this.ctx.stroke();
         }
-
-        // Draw turret base (smaller circle in center)
-        const turretBaseRadius = radius * 0.6;
-        this.ctx.fillStyle = shouldDim ? this.darkenColor('#666666', Constants.SHADE_OPACITY) : '#666666';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, turretBaseRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw minigun barrel (pointing toward target if exists)
-        let gunAngle = 0;
-        if (building.target) {
-            const dx = building.target.position.x - building.position.x;
-            const dy = building.target.position.y - building.position.y;
-            gunAngle = Math.atan2(dy, dx);
-        }
-        
-        const barrelLength = radius * 1.2;
-        const barrelWidth = 4 * this.zoom;
-        
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#333333', Constants.SHADE_OPACITY) : '#333333';
-        this.ctx.lineWidth = barrelWidth;
-        this.ctx.lineCap = 'round';
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos.x, screenPos.y);
-        this.ctx.lineTo(
-            screenPos.x + Math.cos(gunAngle) * barrelLength,
-            screenPos.y + Math.sin(gunAngle) * barrelLength
-        );
-        this.ctx.stroke();
 
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
