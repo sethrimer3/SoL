@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -1256,12 +1256,13 @@ export class GameRenderer {
             const closestSun = mirror.getClosestVisibleSun(game.suns, game.asteroids);
             if (closestSun) {
                 const forge = mirror.owner.stellarForge;
+                const linkedStructure = mirror.getLinkedStructure(forge);
                 let reflectDir: Vector2D | null = null;
 
-                if (forge && mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)) {
+                if (linkedStructure && mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)) {
                     reflectDir = new Vector2D(
-                        forge.position.x - mirror.position.x,
-                        forge.position.y - mirror.position.y
+                        linkedStructure.position.x - mirror.position.x,
+                        linkedStructure.position.y - mirror.position.y
                     ).normalize();
                 } else {
                     const sunDir = new Vector2D(
@@ -1405,10 +1406,13 @@ export class GameRenderer {
         if (mirror.isSelected) {
             const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
             const forge = mirror.owner.stellarForge;
-            const hasLoSToForge = forge
-                ? mirror.hasLineOfSightToForge(forge, game.asteroids, game.players)
+            const linkedStructure = mirror.getLinkedStructure(forge);
+            const hasLoSToTarget = linkedStructure
+                ? mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)
                 : false;
-            const energyRate = hasLoSToSun && hasLoSToForge ? mirror.getEnergyRatePerSec() : 0;
+            const energyRate = linkedStructure instanceof StellarForge && hasLoSToSun && hasLoSToTarget
+                ? mirror.getEnergyRatePerSec()
+                : 0;
             const textY = screenPos.y + size + 16 * this.zoom;
 
             this.ctx.fillStyle = '#FFFFAA';
@@ -1657,7 +1661,7 @@ export class GameRenderer {
             const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
             const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
             const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-            const labels = ['Cannon', 'Swirler', 'Foundry', 'Locked'];
+            const labels = ['Cannon', 'Gatling', 'Swirler', 'Foundry'];
             
             for (let i = 0; i < 4; i++) {
                 const angle = angles[i];
@@ -1665,7 +1669,7 @@ export class GameRenderer {
                 const btnY = screenPos.y + Math.sin(angle) * buttonDistance;
                 const labelOffset = buttonRadius + 14 * this.zoom;
 
-                this.ctx.fillStyle = i === 3 ? '#2A2A2A' : '#444444';
+                this.ctx.fillStyle = '#444444';
                 this.ctx.strokeStyle = '#00FFFF';
                 this.ctx.lineWidth = 2;
                 this.ctx.beginPath();
@@ -1674,7 +1678,7 @@ export class GameRenderer {
                 this.ctx.stroke();
 
                 // Draw button label
-                this.ctx.fillStyle = i === 3 ? 'rgba(255, 255, 255, 0.6)' : '#FFFFFF';
+                this.ctx.fillStyle = '#FFFFFF';
                 this.ctx.font = `${11 * this.zoom}px Doto`;
                 this.ctx.textAlign = 'center';
                 this.ctx.textBaseline = 'middle';
@@ -3005,9 +3009,9 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Cannon building
+     * Draw a Cannon/Gatling building
      */
-    private drawMinigun(building: Minigun, color: string, game: GameState, isEnemy: boolean): void {
+    private drawMinigun(building: Minigun | GatlingTower, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
         
@@ -3421,11 +3425,10 @@ export class GameRenderer {
         if (!player.stellarForge) return;
         if (this.viewingPlayer && player !== this.viewingPlayer) return;
 
-        const forgeScreenPos = this.worldToScreen(player.stellarForge.position);
-
-        // Draw lines from mirrors to sun and forge
+        // Draw lines from mirrors to sun and linked structures
         for (const mirror of player.solarMirrors) {
             const mirrorScreenPos = this.worldToScreen(mirror.position);
+            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
             
             // Check line of sight to sun
             const hasLoSToSun = mirror.hasLineOfSightToLight(suns, asteroids);
@@ -3433,8 +3436,10 @@ export class GameRenderer {
                 ? mirror.getClosestVisibleSun(suns, asteroids)
                 : mirror.getClosestSun(suns);
             
-            // Check line of sight to forge
-            const hasLoSToForge = mirror.hasLineOfSightToForge(player.stellarForge, asteroids, players);
+            // Check line of sight to linked structure
+            const hasLoSToTarget = linkedStructure
+                ? mirror.hasLineOfSightToStructure(linkedStructure, asteroids, players)
+                : false;
             
             // Draw line to sun only when blocked
             if (closestSun && !hasLoSToSun) {
@@ -3449,20 +3454,21 @@ export class GameRenderer {
                 this.ctx.setLineDash([]);
             }
             
-            // Draw line to forge only when blocked
-            if (!hasLoSToForge) {
+            // Draw line to structure only when blocked
+            if (linkedStructure && !hasLoSToTarget) {
+                const targetScreenPos = this.worldToScreen(linkedStructure.position);
                 this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.4)';
                 this.ctx.lineWidth = 1.5;
                 this.ctx.setLineDash([3, 3]);
                 this.ctx.beginPath();
                 this.ctx.moveTo(mirrorScreenPos.x, mirrorScreenPos.y);
-                this.ctx.lineTo(forgeScreenPos.x, forgeScreenPos.y);
+                this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
                 this.ctx.stroke();
                 this.ctx.setLineDash([]);
             }
             
             // Draw combined status indicator on the mirror
-            if (hasLoSToSun && hasLoSToForge) {
+            if (hasLoSToSun && hasLoSToTarget) {
                 // Both clear - draw bright yellow glow
                 this.ctx.fillStyle = 'rgba(255, 255, 0, 0.5)';
                 this.ctx.beginPath();
@@ -4227,7 +4233,7 @@ export class GameRenderer {
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
             
             for (const building of player.buildings) {
-                if (building instanceof Minigun) {
+                if (building instanceof Minigun || building instanceof GatlingTower) {
                     this.drawMinigun(building, color, game, isEnemy);
                 } else if (building instanceof SpaceDustSwirler) {
                     this.drawSpaceDustSwirler(building, color, game, isEnemy);
@@ -4506,7 +4512,9 @@ export class GameRenderer {
      * Get display name for building type
      */
     private getBuildingDisplayName(building: Building): string {
-        if (building instanceof Minigun) {
+        if (building instanceof GatlingTower) {
+            return 'Gatling Tower';
+        } else if (building instanceof Minigun) {
             return 'Cannon';
         } else if (building instanceof SpaceDustSwirler) {
             return 'Space Dust Swirler';

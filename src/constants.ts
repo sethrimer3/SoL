@@ -160,12 +160,17 @@ export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
 export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
 
-// Cannon building constants (offensive building for Radiant faction)
+// Cannon/Gatling building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
 export const MINIGUN_ATTACK_RANGE = 350;
 export const MINIGUN_ATTACK_DAMAGE = 12;
 export const MINIGUN_ATTACK_SPEED = 6; // Attacks per second (very fast)
 export const MINIGUN_RADIUS = 30; // Building size
+export const GATLING_MAX_HEALTH = 200;
+export const GATLING_ATTACK_RANGE = 350;
+export const GATLING_ATTACK_DAMAGE = 12;
+export const GATLING_ATTACK_SPEED = 6; // Attacks per second (very fast)
+export const GATLING_RADIUS = 30; // Building size
 
 // Space Dust Swirler building constants (defensive building for Radiant faction)
 export const SWIRLER_MAX_HEALTH = 250;
@@ -192,6 +197,7 @@ export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between u
 
 // Building costs
 export const MINIGUN_COST = 150;
+export const GATLING_COST = 150;
 export const SWIRLER_COST = 200;
 export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
