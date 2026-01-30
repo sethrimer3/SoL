@@ -2123,7 +2123,7 @@ export class GameRenderer {
         const topSprite = this.getTintedSprite(topSpritePath, color);
         
         // Draw bottom (static base)
-        if (bottomSprite && bottomSprite.complete) {
+        if (bottomSprite) {
             const bottomWidth = bottomSprite.width * spriteScale;
             const bottomHeight = bottomSprite.height * spriteScale;
             
@@ -2140,7 +2140,7 @@ export class GameRenderer {
         }
         
         // Draw top (rotating barrel)
-        if (topSprite && topSprite.complete) {
+        if (topSprite) {
             // Calculate rotation angle to face target
             let rotationAngle = 0;
             if (turret.target) {
@@ -2161,7 +2161,7 @@ export class GameRenderer {
             
             const animSprite = turret.isFiring ? this.getTintedSprite(spritePath, color) : topSprite;
             
-            if (animSprite && animSprite.complete) {
+            if (animSprite) {
                 const topWidth = animSprite.width * spriteScale;
                 const topHeight = animSprite.height * spriteScale;
                 
