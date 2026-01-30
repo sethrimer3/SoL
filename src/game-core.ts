@@ -6238,6 +6238,9 @@ export class GameState {
             case 'unit_ability':
                 this.executeUnitAbilityCommand(player, cmd.data);
                 break;
+            case 'unit_path':
+                this.executeUnitPathCommand(player, cmd.data);
+                break;
             case 'hero_purchase':
                 this.executeHeroPurchaseCommand(player, cmd.data);
                 break;
@@ -6246,6 +6249,12 @@ export class GameState {
                 break;
             case 'mirror_purchase':
                 this.executeMirrorPurchaseCommand(player, cmd.data);
+                break;
+            case 'mirror_move':
+                this.executeMirrorMoveCommand(player, cmd.data);
+                break;
+            case 'mirror_link':
+                this.executeMirrorLinkCommand(player, cmd.data);
                 break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
@@ -6259,13 +6268,20 @@ export class GameState {
     }
 
     private executeUnitMoveCommand(player: Player, data: any): void {
-        const { unitIds, targetX, targetY } = data;
+        const { unitIds, targetX, targetY, moveOrder } = data;
         const target = new Vector2D(targetX, targetY);
         
         for (const unitId of unitIds) {
-            const unit = player.units.find(u => this.getUnitId(u) === unitId);
+            const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
             if (unit) {
-                unit.rallyPoint = target;
+                if (unit instanceof Starling) {
+                    unit.setManualRallyPoint(target);
+                } else {
+                    unit.rallyPoint = target;
+                }
+                if (typeof moveOrder === 'number') {
+                    unit.moveOrder = moveOrder;
+                }
             } else {
                 console.warn(`Unit not found for network command: ${unitId}`);
             }
@@ -6276,11 +6292,28 @@ export class GameState {
         const { unitId, directionX, directionY } = data;
         const direction = new Vector2D(directionX, directionY);
         
-        const unit = player.units.find(u => this.getUnitId(u) === unitId);
+        const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
         if (unit) {
             unit.useAbility(direction);
         } else {
             console.warn(`Unit not found for ability command: ${unitId}`);
+        }
+    }
+
+    private executeUnitPathCommand(player: Player, data: any): void {
+        const { unitIds, waypoints, moveOrder } = data;
+        const path = (waypoints ?? []).map((wp: any) => new Vector2D(wp.x, wp.y));
+
+        for (const unitId of unitIds ?? []) {
+            const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
+            if (unit) {
+                unit.setPath(path);
+                if (typeof moveOrder === 'number') {
+                    unit.moveOrder = moveOrder;
+                }
+            } else {
+                console.warn(`Unit not found for path command: ${unitId}`);
+            }
         }
     }
 
@@ -6331,12 +6364,48 @@ export class GameState {
         }
     }
 
+    private executeMirrorMoveCommand(player: Player, data: any): void {
+        const { mirrorIndices, targetX, targetY, moveOrder } = data;
+        const target = new Vector2D(targetX, targetY);
+
+        for (const mirrorIndex of mirrorIndices ?? []) {
+            const mirror = player.solarMirrors[mirrorIndex];
+            if (mirror) {
+                mirror.setTarget(target);
+                if (typeof moveOrder === 'number') {
+                    mirror.moveOrder = moveOrder;
+                }
+            }
+        }
+    }
+
+    private executeMirrorLinkCommand(player: Player, data: any): void {
+        const { mirrorIndices, structureType, buildingIndex } = data;
+        let targetStructure: StellarForge | Building | null = null;
+
+        if (structureType === 'forge') {
+            targetStructure = player.stellarForge ?? null;
+        } else if (structureType === 'building') {
+            targetStructure = player.buildings[buildingIndex] ?? null;
+        }
+
+        for (const mirrorIndex of mirrorIndices ?? []) {
+            const mirror = player.solarMirrors[mirrorIndex];
+            if (mirror) {
+                mirror.setLinkedStructure(targetStructure);
+            }
+        }
+    }
+
     private executeForgeMoveCommand(player: Player, data: any): void {
-        const { targetX, targetY } = data;
+        const { targetX, targetY, moveOrder } = data;
         const target = new Vector2D(targetX, targetY);
         
         if (player.stellarForge) {
             player.stellarForge.targetPosition = target;
+            if (typeof moveOrder === 'number') {
+                player.stellarForge.moveOrder = moveOrder;
+            }
         }
     }
 
@@ -6353,7 +6422,7 @@ export class GameState {
      * Generate a unique ID for a unit (for network synchronization)
      * Note: This is a temporary solution. In production, units should have explicit unique IDs.
      */
-    private getUnitId(unit: Unit): string {
+    getUnitNetworkId(unit: Unit): string {
         // Use a combination of owner, position, health, and type for uniqueness
         // This is not perfect but works for most cases in the current implementation
         const ownerIndex = this.players.indexOf(unit.owner);
