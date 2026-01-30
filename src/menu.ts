@@ -3591,7 +3591,7 @@ export class MainMenu {
  * Faction carousel view - displays factions in a horizontal carousel
  */
 class FactionCarouselView {
-    private static readonly ITEM_SPACING_PX = 160;
+    private static readonly ITEM_SPACING_PX = 200;
     private static readonly BASE_SIZE_PX = 320;
     private static readonly TEXT_SCALE = 2.4;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
@@ -3905,20 +3905,6 @@ class FactionCarouselView {
 
             this.container.appendChild(optionElement);
         }
-
-        const instructionElement = document.createElement('div');
-        instructionElement.textContent = 'Swipe, drag, or use \u2190/\u2192 (A/D) \u2022 Tap side tiles to browse';
-        instructionElement.style.position = 'absolute';
-        instructionElement.style.bottom = '20px';
-        instructionElement.style.left = '50%';
-        instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = '#AAAAAA';
-        instructionElement.style.fontSize = `${22 * layoutScale}px`;
-        instructionElement.style.fontWeight = '300';
-        instructionElement.style.pointerEvents = 'none';
-        instructionElement.dataset.particleText = 'true';
-        instructionElement.dataset.particleColor = '#AAAAAA';
-        this.container.appendChild(instructionElement);
 
         if (this.onRenderCallback) {
             this.onRenderCallback();
