@@ -2107,19 +2107,81 @@ export class GameRenderer {
      */
     private drawDeployedTurret(turret: DeployedTurret): void {
         const screenPos = this.worldToScreen(turret.position);
-        const size = 15 * this.zoom;
-        
         const color = this.getFactionColor(turret.owner.faction);
         
-        // Draw base
-        this.ctx.fillStyle = color;
-        this.ctx.fillRect(screenPos.x - size * 0.6, screenPos.y - size * 0.4, size * 1.2, size * 0.8);
+        // Sprite paths for the radiant cannon
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
         
-        // Draw barrel
-        this.ctx.fillStyle = color;
-        this.ctx.fillRect(screenPos.x - size * 0.3, screenPos.y - size, size * 0.6, size);
+        // Calculate sprite size based on zoom
+        const spriteScale = Constants.DEPLOYED_TURRET_SPRITE_SCALE * this.zoom;
         
-        this.drawHealthDisplay(screenPos, turret.health, turret.maxHealth, size, size);
+        // Load and draw bottom sprite (static base)
+        const bottomSprite = this.getTintedSprite(bottomSpritePath, color);
+        if (bottomSprite) {
+            const bottomWidth = bottomSprite.width * spriteScale;
+            const bottomHeight = bottomSprite.height * spriteScale;
+            
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.drawImage(
+                bottomSprite,
+                -bottomWidth / 2,
+                -bottomHeight / 2,
+                bottomWidth,
+                bottomHeight
+            );
+            this.ctx.restore();
+        }
+        
+        // Calculate rotation angle to face target
+        let rotationAngle = 0;
+        if (turret.target) {
+            const dx = turret.target.position.x - turret.position.x;
+            const dy = turret.target.position.y - turret.position.y;
+            rotationAngle = Math.atan2(dy, dx);
+        }
+        
+        // Select sprite based on firing state
+        let topSpriteToUse: HTMLCanvasElement | null = null;
+        if (turret.isFiring) {
+            // Cycle through animation frames
+            const frameIndex = Math.floor(turret.firingAnimationProgress * Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT);
+            const clampedFrameIndex = Math.min(frameIndex, Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT - 1);
+            const animSpritePath = `ASSETS/sprites/RADIANT/structures/radiantCannonAnimation/radiantCannonFrame (${clampedFrameIndex + 1}).png`;
+            topSpriteToUse = this.getTintedSprite(animSpritePath, color);
+        } else {
+            // Use default top sprite when not firing
+            topSpriteToUse = this.getTintedSprite(topSpritePath, color);
+        }
+        
+        // Draw top sprite (rotating barrel)
+        if (topSpriteToUse) {
+            const topWidth = topSpriteToUse.width * spriteScale;
+            const topHeight = topSpriteToUse.height * spriteScale;
+            
+            // Calculate pivot point: centered horizontally, DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX from bottom
+            // Convert sprite pixels to normalized coordinates
+            const pivotRatio = (Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX - Constants.DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX) / Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX;
+            const pivotOffsetY = pivotRatio * topHeight - topHeight / 2;
+            
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationAngle + Math.PI / 2); // Add PI/2 because sprite top faces upward
+            this.ctx.translate(0, -pivotOffsetY); // Offset for pivot point
+            this.ctx.drawImage(
+                topSpriteToUse,
+                -topWidth / 2,
+                -topHeight / 2,
+                topWidth,
+                topHeight
+            );
+            this.ctx.restore();
+        }
+        
+        // Draw health bar above the turret
+        const displaySize = Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * this.zoom;
+        this.drawHealthDisplay(screenPos, turret.health, turret.maxHealth, displaySize, -displaySize - 10);
     }
 
     /**

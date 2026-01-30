@@ -303,8 +303,14 @@ export const TURRET_DEPLOYER_ABILITY_COOLDOWN = 12.0; // 12 seconds
 export const DEPLOYED_TURRET_MAX_HEALTH = 150;
 export const DEPLOYED_TURRET_ATTACK_RANGE = 300;
 export const DEPLOYED_TURRET_ATTACK_DAMAGE = 12;
-export const DEPLOYED_TURRET_ATTACK_SPEED = 3; // Attacks per second
+export const DEPLOYED_TURRET_ATTACK_SPEED = 2; // Attacks per second (fires 2 times per second)
 export const TURRET_PROJECTILE_SPEED = 400;
+export const DEPLOYED_TURRET_ANIMATION_DURATION = 0.1; // Animation duration in seconds
+export const DEPLOYED_TURRET_SPRITE_SCALE = 0.08; // Base scale factor for turret sprites
+export const DEPLOYED_TURRET_ANIMATION_FRAME_COUNT = 28; // Number of firing animation frames
+export const DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX = 200; // Pivot point distance from bottom of sprite (in sprite pixels)
+export const DEPLOYED_TURRET_SPRITE_HEIGHT_PX = 1100; // Height of turret top sprite in pixels
+export const DEPLOYED_TURRET_HEALTH_BAR_SIZE = 40; // Size for health bar positioning
 
 // Driller unit constants (Aurum hero)
 export const DRILLER_MAX_HEALTH = 140;
