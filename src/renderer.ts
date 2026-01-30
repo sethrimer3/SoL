@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 
@@ -22,7 +22,9 @@ type GraphicKey =
     | 'heroRay'
     | 'heroInfluenceBall'
     | 'heroTurretDeployer'
-    | 'heroDriller';
+    | 'heroDriller'
+    | 'heroPreist'
+    | 'heroTank';
 
 type GraphicOption = {
     key: GraphicKey;
@@ -203,6 +205,18 @@ export class GameRenderer {
             label: 'Hero: Beam',
             svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
             pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
+        },
+        {
+            key: 'heroPreist',
+            label: 'Hero: Preist',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.png'
+        },
+        {
+            key: 'heroTank',
+            label: 'Hero: Tank',
+            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.svg',
+            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.png'
         }
     ];
 
@@ -607,6 +621,9 @@ export class GameRenderer {
         }
         if (unit instanceof Preist) {
             return this.getGraphicAssetPath('heroPreist');
+        }
+        if (unit instanceof Tank) {
+            return this.getGraphicAssetPath('heroTank');
         }
         return null;
     }
@@ -1815,6 +1832,35 @@ export class GameRenderer {
 
         this.drawHealthDisplay(screenPos, unit.health, unit.maxHealth, size, -size - 8);
 
+        // Show stun indicator if unit is stunned
+        if (unit.isStunned()) {
+            this.ctx.fillStyle = '#FFFF00';
+            this.ctx.globalAlpha = 0.7;
+            const stunSize = 6 * this.zoom;
+            
+            // Draw stars around unit to indicate stun
+            for (let i = 0; i < 3; i++) {
+                const angle = (game.gameTime * 3 + i * (Math.PI * 2 / 3)) % (Math.PI * 2);
+                const x = screenPos.x + Math.cos(angle) * (size * 1.8);
+                const y = screenPos.y + Math.sin(angle) * (size * 1.8);
+                
+                this.ctx.beginPath();
+                for (let j = 0; j < 5; j++) {
+                    const starAngle = j * (Math.PI * 2 / 5) - Math.PI / 2;
+                    const starX = x + Math.cos(starAngle) * stunSize * 0.5;
+                    const starY = y + Math.sin(starAngle) * stunSize * 0.5;
+                    if (j === 0) {
+                        this.ctx.moveTo(starX, starY);
+                    } else {
+                        this.ctx.lineTo(starX, starY);
+                    }
+                }
+                this.ctx.closePath();
+                this.ctx.fill();
+            }
+            this.ctx.globalAlpha = 1.0;
+        }
+
         // Draw direction indicator if unit has a target
         if (!unit.isHero && unit.target) {
             const dx = unit.target.position.x - unit.position.x;
@@ -2100,6 +2146,75 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+    
+    /**
+     * Draw a crescent wave from Tank hero ability
+     */
+    private drawCrescentWave(wave: CrescentWave): void {
+        const screenPos = this.worldToScreen(wave.position);
+        const color = this.getFactionColor(wave.owner.faction);
+        
+        this.ctx.save();
+        
+        // Draw wave as an arc segment - match the collision detection size
+        const waveRadius = Constants.TANK_WAVE_WIDTH * this.zoom;
+        const halfAngle = Constants.TANK_WAVE_ANGLE / 2;
+        
+        // Create gradient for wave glow
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, waveRadius * 1.5
+        );
+        gradient.addColorStop(0, `${color}00`);
+        gradient.addColorStop(0.5, `${color}88`);
+        gradient.addColorStop(1, `${color}00`);
+        
+        // Draw main wave arc
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = waveRadius * 0.5;
+        this.ctx.globalAlpha = 0.7;
+        this.ctx.beginPath();
+        this.ctx.arc(
+            screenPos.x, 
+            screenPos.y, 
+            waveRadius,
+            wave.angle - halfAngle,
+            wave.angle + halfAngle
+        );
+        this.ctx.stroke();
+        
+        // Draw wave glow effect
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = 0.4;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y);
+        this.ctx.arc(
+            screenPos.x, 
+            screenPos.y, 
+            waveRadius * 1.5,
+            wave.angle - halfAngle,
+            wave.angle + halfAngle
+        );
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Draw energy particles along the wave front
+        const numParticles = 10;
+        for (let i = 0; i < numParticles; i++) {
+            const angle = wave.angle - halfAngle + (Constants.TANK_WAVE_ANGLE * i / numParticles);
+            const distance = waveRadius * (0.8 + Math.sin(wave.lifetime * 5 + i) * 0.2);
+            const particleX = screenPos.x + Math.cos(angle) * distance;
+            const particleY = screenPos.y + Math.sin(angle) * distance;
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = 0.8;
+            this.ctx.beginPath();
+            this.ctx.arc(particleX, particleY, 3 * this.zoom, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.restore();
     }
     
     /**
@@ -2920,6 +3035,44 @@ export class GameRenderer {
             this.ctx.arc(particleScreenPos.x, particleScreenPos.y, 8 * this.zoom, 0, Math.PI * 2);
             this.ctx.fill();
         }
+        
+        this.ctx.restore();
+    }
+
+    private drawTank(tank: Tank, color: string, game: GameState, isEnemy: boolean): void {
+        // Draw base unit (includes health bar and stun indicator)
+        this.drawUnit(tank, color, game, isEnemy);
+
+        const screenPos = this.worldToScreen(tank.position);
+        
+        // Draw shield around tank
+        this.ctx.save();
+        
+        // Shield visual - pulsing circular shield
+        const shieldRadius = Constants.TANK_SHIELD_RADIUS * this.zoom;
+        const pulseAlpha = 0.2 + 0.1 * Math.sin(game.gameTime * 3);
+        
+        // Shield outer circle
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.globalAlpha = pulseAlpha;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Shield inner glow
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, shieldRadius
+        );
+        gradient.addColorStop(0, 'rgba(100, 150, 255, 0)');
+        gradient.addColorStop(0.7, `rgba(100, 150, 255, ${pulseAlpha * 0.3})`);
+        gradient.addColorStop(1, 'rgba(100, 150, 255, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+        this.ctx.fill();
         
         this.ctx.restore();
     }
@@ -4076,6 +4229,8 @@ export class GameRenderer {
                     this.drawMortar(unit, color, game, isEnemy);
                 } else if (unit instanceof Preist) {
                     this.drawPreist(unit, color, game, isEnemy);
+                } else if (unit instanceof Tank) {
+                    this.drawTank(unit, color, game, isEnemy);
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -4153,6 +4308,11 @@ export class GameRenderer {
         // Draw influence ball projectiles
         for (const projectile of game.influenceBallProjectiles) {
             this.drawInfluenceBallProjectile(projectile);
+        }
+        
+        // Draw crescent waves
+        for (const wave of game.crescentWaves) {
+            this.drawCrescentWave(wave);
         }
         
         // Draw deployed turrets

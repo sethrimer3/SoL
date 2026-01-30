@@ -373,6 +373,21 @@ export const PREIST_HEALING_BOMB_EXPLOSION_RADIUS = 120; // Radius of particle e
 export const PREIST_HEALING_BOMB_PARTICLE_SPEED = 200; // Speed of wild particles
 export const PREIST_HEALING_BOMB_PARTICLE_LIFETIME = 0.5; // Lifetime of wild particles
 
+// Tank hero constants (defensive tank with shield and crescent wave ability)
+export const TANK_MAX_HEALTH = 300; // Very high health (3x Marine)
+export const TANK_ATTACK_RANGE = 0; // Doesn't attack
+export const TANK_ATTACK_DAMAGE = 0; // No damage
+export const TANK_ATTACK_SPEED = 0; // No attack
+export const TANK_DEFENSE = 50; // 50% damage reduction (armor)
+export const TANK_ABILITY_COOLDOWN = 12.0; // 12 seconds
+export const TANK_SHIELD_RADIUS = 60; // Radius of shield around tank that blocks projectiles
+export const TANK_WAVE_ANGLE = Math.PI / 2; // 90 degrees crescent wave
+export const TANK_WAVE_RANGE = 400; // Maximum range of wave
+export const TANK_WAVE_SPEED = 150; // Slow moving wave (pixels per second)
+export const TANK_WAVE_WIDTH = 40; // Width of the wave
+export const TANK_STUN_DURATION = 2.0; // Stuns for 2 seconds
+export const TANK_COLLISION_RADIUS_PX = 20; // Slightly larger collision radius
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy

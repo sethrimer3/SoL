@@ -14,6 +14,7 @@ import { createMarineHero } from './heroes/marine';
 import { createMortarHero } from './heroes/mortar';
 import { createPreistHero } from './heroes/preist';
 import { createRayHero } from './heroes/ray';
+import { createTankHero } from './heroes/tank';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 
 /**
@@ -2073,6 +2074,7 @@ export class Unit {
     velocity: Vector2D = new Vector2D(0, 0);
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
+    stunDuration: number = 0; // Duration of stun effect in seconds
     
     constructor(
         public position: Vector2D,
@@ -2106,6 +2108,13 @@ export class Unit {
         // Update ability cooldown
         if (this.abilityCooldown > 0) {
             this.abilityCooldown -= deltaTime;
+        }
+
+        // Update stun duration
+        if (this.stunDuration > 0) {
+            this.stunDuration -= deltaTime;
+            // While stunned, can't move or attack
+            return;
         }
 
         this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
@@ -2399,6 +2408,20 @@ export class Unit {
     }
 
     /**
+     * Apply stun effect to unit
+     */
+    applyStun(duration: number): void {
+        this.stunDuration = Math.max(this.stunDuration, duration);
+    }
+
+    /**
+     * Check if unit is stunned
+     */
+    isStunned(): boolean {
+        return this.stunDuration > 0;
+    }
+
+    /**
      * Take damage
      */
     takeDamage(amount: number): void {
@@ -2480,6 +2503,12 @@ const { Preist, HealingBombParticle } = createPreistHero({
     AbilityBullet
 });
 
+const { Tank, CrescentWave } = createTankHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 export {
     Marine,
     Grave,
@@ -2497,7 +2526,9 @@ export {
     Mortar,
     MortarProjectile,
     Preist,
-    HealingBombParticle
+    HealingBombParticle,
+    Tank,
+    CrescentWave
 };
 
 /**
@@ -3003,6 +3034,7 @@ export class GameState {
     influenceBallProjectiles: InfluenceBallProjectile[] = [];
     deployedTurrets: DeployedTurret[] = [];
     damageNumbers: DamageNumber[] = [];
+    crescentWaves: CrescentWave[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -3325,6 +3357,14 @@ export class GameState {
                     }
                 }
                 
+                // Handle Tank crescent wave
+                if (unit instanceof Tank) {
+                    const wave = unit.getCrescentWave();
+                    if (wave && !this.crescentWaves.includes(wave)) {
+                        this.crescentWaves.push(wave);
+                    }
+                }
+                
                 // Handle Ray beam updates
                 if (unit instanceof Ray) {
                     unit.updateBeamSegments(deltaTime);
@@ -3556,6 +3596,23 @@ export class GameState {
         for (const bullet of this.abilityBullets) {
             bullet.update(deltaTime);
             
+            // Check if projectile is blocked by Tank shields
+            let isBlocked = false;
+            for (const player of this.players) {
+                for (const unit of player.units) {
+                    if (unit instanceof Tank && unit.isPositionInShield(bullet.position)) {
+                        // Shield blocks projectiles but not friendly fire
+                        if (bullet.owner !== player) {
+                            isBlocked = true;
+                            bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                            break;
+                        }
+                    }
+                }
+                if (isBlocked) break;
+            }
+            if (isBlocked) continue;
+            
             // Check if healing bomb reached max range or lifetime - if so, explode
             if (bullet.isHealingBomb && bullet.healingBombOwner && bullet.shouldDespawn()) {
                 bullet.healingBombOwner.explodeHealingBomb(bullet.position);
@@ -3778,6 +3835,23 @@ export class GameState {
         for (const projectile of this.minionProjectiles) {
             projectile.update(deltaTime);
             
+            // Check if projectile is blocked by Tank shields
+            let isBlocked = false;
+            for (const player of this.players) {
+                for (const unit of player.units) {
+                    if (unit instanceof Tank && unit.isPositionInShield(projectile.position)) {
+                        // Shield blocks projectiles but not friendly fire
+                        if (projectile.owner !== player) {
+                            isBlocked = true;
+                            projectile.distanceTraveledPx = projectile.maxRangePx; // Mark for removal
+                            break;
+                        }
+                    }
+                }
+                if (isBlocked) break;
+            }
+            if (isBlocked) continue;
+            
             // Apply fluid-like force to space dust particles
             const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
             this.applyFluidForceFromMovingObject(
@@ -3937,6 +4011,59 @@ export class GameState {
             }
         }
         this.influenceBallProjectiles = this.influenceBallProjectiles.filter(p => !p.shouldExplode());
+        
+        // Update crescent waves and handle stunning
+        for (const wave of this.crescentWaves) {
+            wave.update(deltaTime);
+            
+            // Check for units in wave and stun them
+            for (const player of this.players) {
+                for (const unit of player.units) {
+                    // Only stun units that haven't been affected by this wave yet
+                    if (!wave.affectedUnits.has(unit) && wave.isPointInWave(unit.position)) {
+                        unit.applyStun(Constants.TANK_STUN_DURATION);
+                        wave.affectedUnits.add(unit);
+                    }
+                }
+            }
+            
+            // Erase projectiles in wave
+            this.abilityBullets = this.abilityBullets.filter(bullet => {
+                if (wave.isPointInWave(bullet.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
+            
+            this.minionProjectiles = this.minionProjectiles.filter(projectile => {
+                if (wave.isPointInWave(projectile.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
+            
+            this.mortarProjectiles = this.mortarProjectiles.filter(projectile => {
+                if (wave.isPointInWave(projectile.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
+            
+            this.influenceBallProjectiles = this.influenceBallProjectiles.filter(projectile => {
+                if (wave.isPointInWave(projectile.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
+            
+            this.bouncingBullets = this.bouncingBullets.filter(bullet => {
+                if (wave.isPointInWave(bullet.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
+        }
+        this.crescentWaves = this.crescentWaves.filter(wave => !wave.shouldDespawn());
         
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];
@@ -4664,7 +4791,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -4696,6 +4823,8 @@ export class GameState {
                 return unit instanceof Mortar;
             case 'Preist':
                 return unit instanceof Preist;
+            case 'Tank':
+                return unit instanceof Tank;
             default:
                 return false;
         }
@@ -5546,6 +5675,8 @@ export class GameState {
                 return new Mortar(spawnPosition, owner);
             case 'Preist':
                 return new Preist(spawnPosition, owner);
+            case 'Tank':
+                return new Tank(spawnPosition, owner);
             default:
                 return null;
         }
