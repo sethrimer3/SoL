@@ -1466,6 +1466,35 @@ export class GameRenderer {
             }
         }
 
+        if (game.suns.length > 0) {
+            const shadowLineWidth = Math.max(0.4, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
+            this.ctx.strokeStyle = `rgba(0, 0, 20, ${Constants.DUST_SHADOW_OPACITY})`;
+            this.ctx.lineWidth = shadowLineWidth;
+
+            for (const sun of game.suns) {
+                const dx = particle.position.x - sun.position.x;
+                const dy = particle.position.y - sun.position.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                if (distance > 0 && distance < Constants.DUST_SHADOW_MAX_DISTANCE_PX) {
+                    const fade = 1.0 - (distance / Constants.DUST_SHADOW_MAX_DISTANCE_PX);
+                    const shadowLength = Constants.DUST_SHADOW_LENGTH_PX * fade;
+                    if (shadowLength > 0) {
+                        const invDistance = 1 / distance;
+                        const dirX = dx * invDistance;
+                        const dirY = dy * invDistance;
+                        const shadowEndX = screenPos.x + dirX * shadowLength * this.zoom;
+                        const shadowEndY = screenPos.y + dirY * shadowLength * this.zoom;
+
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(screenPos.x, screenPos.y);
+                        this.ctx.lineTo(shadowEndX, shadowEndY);
+                        this.ctx.stroke();
+                    }
+                }
+            }
+        }
+
         let glowLevel = particle.glowState;
         if (particle.glowTransition > 0 && particle.glowState !== particle.targetGlowState) {
             glowLevel = particle.glowState + (particle.targetGlowState - particle.glowState) * particle.glowTransition;
