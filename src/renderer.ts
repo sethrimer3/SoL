@@ -3208,8 +3208,8 @@ export class GameRenderer {
             return;
         }
 
-        // Draw influence radius (faint circle)
-        const influenceRadius = Constants.SWIRLER_INFLUENCE_RADIUS * this.zoom;
+        // Draw influence radius (faint circle) - use current radius for smooth animation
+        const influenceRadius = building.currentInfluenceRadius * this.zoom;
         this.ctx.strokeStyle = displayColor;
         this.ctx.globalAlpha = 0.15;
         this.ctx.lineWidth = 1;

@@ -1176,7 +1176,15 @@ export class Minigun extends Building {
  * Space Dust Swirler Building - Defensive building for Radiant faction
  * Swirls space dust in counter-clockwise orbits and deflects non-melee projectiles
  */
+/**
+ * Space Dust Swirler Building - Defensive building that absorbs projectiles
+ * Swirls space dust in counter-clockwise orbits and absorbs projectiles within its influence radius.
+ * The radius starts at half the max and grows over time, but shrinks when projectiles are absorbed.
+ */
 export class SpaceDustSwirler extends Building {
+    currentInfluenceRadius: number; // Current active radius that grows/shrinks
+    targetInfluenceRadius: number; // Target radius we're growing/shrinking towards
+
     constructor(position: Vector2D, owner: Player) {
         super(
             position,
@@ -1187,6 +1195,43 @@ export class SpaceDustSwirler extends Building {
             Constants.SWIRLER_ATTACK_DAMAGE,
             Constants.SWIRLER_ATTACK_SPEED
         );
+        
+        // Start with half the max radius
+        const initialRadius = Constants.SWIRLER_INFLUENCE_RADIUS * Constants.SWIRLER_INITIAL_RADIUS_MULTIPLIER;
+        this.currentInfluenceRadius = initialRadius;
+        this.targetInfluenceRadius = initialRadius;
+    }
+
+    /**
+     * Update swirler state (called each frame)
+     */
+    update(
+        deltaTime: number,
+        enemies: CombatTarget[],
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
+        super.update(deltaTime, enemies, allUnits, asteroids);
+
+        // Only grow radius if building is complete
+        if (this.isComplete) {
+            // Grow target radius towards max over time
+            if (this.targetInfluenceRadius < Constants.SWIRLER_INFLUENCE_RADIUS) {
+                this.targetInfluenceRadius = Math.min(
+                    this.targetInfluenceRadius + Constants.SWIRLER_GROWTH_RATE_PER_SEC * deltaTime,
+                    Constants.SWIRLER_INFLUENCE_RADIUS
+                );
+            }
+
+            // Smoothly interpolate current radius towards target radius
+            const radiusDiff = this.targetInfluenceRadius - this.currentInfluenceRadius;
+            if (Math.abs(radiusDiff) > 0.1) {
+                // Smooth transition: move 20% of the way to target each frame (exponential smoothing)
+                this.currentInfluenceRadius += radiusDiff * 0.2;
+            } else {
+                this.currentInfluenceRadius = this.targetInfluenceRadius;
+            }
+        }
     }
 
     /**
@@ -1200,8 +1245,8 @@ export class SpaceDustSwirler extends Building {
             const dy = particle.position.y - this.position.y;
             const distance = Math.sqrt(dx * dx + dy * dy);
 
-            // Only affect particles within influence radius
-            if (distance > Constants.SWIRLER_INFLUENCE_RADIUS || distance < 1) continue;
+            // Only affect particles within current influence radius
+            if (distance > this.currentInfluenceRadius || distance < 1) continue;
 
             // Calculate tangential (counter-clockwise) direction
             // Counter-clockwise perpendicular: (dy, -dx) normalized
@@ -1209,7 +1254,7 @@ export class SpaceDustSwirler extends Building {
             const tangentY = -dx / distance;
 
             // Calculate speed based on distance (faster closer to tower)
-            const normalizedDistance = distance / Constants.SWIRLER_INFLUENCE_RADIUS;
+            const normalizedDistance = distance / this.currentInfluenceRadius;
             const speedMultiplier = Constants.SWIRLER_DUST_SPEED_MULTIPLIER * (1 - normalizedDistance);
             const orbitSpeed = Constants.SWIRLER_DUST_ORBIT_SPEED_BASE * (1 + speedMultiplier);
 
@@ -1220,28 +1265,47 @@ export class SpaceDustSwirler extends Building {
     }
 
     /**
-     * Check if a projectile should be deflected and apply deflection
-     * Returns true if projectile was deflected
+     * Check if a projectile should be absorbed
+     * Returns true if projectile was absorbed (should be removed from game)
      */
-    deflectProjectile(projectile: MinionProjectile | GraveProjectile | InfluenceBallProjectile): boolean {
+    absorbProjectile(projectile: any): boolean {
         if (!this.isComplete) return false;
 
         const dx = projectile.position.x - this.position.x;
         const dy = projectile.position.y - this.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
-        // Only deflect projectiles within influence radius
-        if (distance > Constants.SWIRLER_INFLUENCE_RADIUS) return false;
+        // Only absorb projectiles within current influence radius
+        if (distance > this.currentInfluenceRadius) return false;
 
-        // Deflect by rotating velocity counter-clockwise by 90 degrees
-        const currentVelX = projectile.velocity.x;
-        const currentVelY = projectile.velocity.y;
+        // Shrink the target radius based on projectile damage
+        // Different projectile types store damage differently
+        let projectileDamage = 5; // Default damage
+        if ('damage' in projectile && typeof projectile.damage === 'number') {
+            projectileDamage = projectile.damage;
+        } else if (projectile.constructor.name === 'GraveProjectile') {
+            // Grave projectiles use GRAVE_ATTACK_DAMAGE
+            projectileDamage = Constants.GRAVE_ATTACK_DAMAGE;
+        } else if (projectile.constructor.name === 'InfluenceBallProjectile') {
+            // Influence ball projectiles don't do direct damage, use a default value
+            projectileDamage = 10;
+        }
         
-        // 90 degree counter-clockwise rotation: (x, y) -> (-y, x)
-        projectile.velocity.x = -currentVelY;
-        projectile.velocity.y = currentVelX;
+        const shrinkAmount = Constants.SWIRLER_SHRINK_BASE_RATE + (projectileDamage * Constants.SWIRLER_SHRINK_DAMAGE_MULTIPLIER);
+        
+        this.targetInfluenceRadius = Math.max(
+            this.targetInfluenceRadius - shrinkAmount,
+            Constants.SWIRLER_MIN_INFLUENCE_RADIUS
+        );
 
-        return true;
+        return true; // Projectile absorbed
+    }
+
+    /**
+     * Legacy method for backward compatibility - now calls absorbProjectile
+     */
+    deflectProjectile(projectile: any): boolean {
+        return this.absorbProjectile(projectile);
     }
 }
 
@@ -3253,17 +3317,29 @@ export class GameState {
                     unit.updateTimers(deltaTime);
                 }
                 
-                // Handle Grave projectile deflection
+                // Handle Grave projectile absorption
                 if (unit instanceof Grave) {
                     for (const projectile of unit.getProjectiles()) {
                         if (projectile.isAttacking) {
-                            // Check for deflection by Space Dust Swirler buildings
+                            // Check for absorption by Space Dust Swirler buildings
+                            let wasAbsorbed = false;
                             for (const player of this.players) {
                                 for (const building of player.buildings) {
                                     if (building instanceof SpaceDustSwirler) {
-                                        building.deflectProjectile(projectile);
+                                        // Don't absorb friendly projectiles
+                                        if (building.owner === projectile.owner) continue;
+                                        
+                                        if (building.absorbProjectile(projectile)) {
+                                            // Make projectile return to grave (stop attacking)
+                                            projectile.isAttacking = false;
+                                            projectile.trail = [];
+                                            projectile.targetEnemy = null;
+                                            wasAbsorbed = true;
+                                            break;
+                                        }
                                     }
                                 }
+                                if (wasAbsorbed) break;
                             }
                         }
                     }
@@ -3709,14 +3785,25 @@ export class GameState {
                 deltaTime
             );
 
-            // Check for deflection by Space Dust Swirler buildings
+            // Check for absorption by Space Dust Swirler buildings
+            let wasAbsorbed = false;
             for (const player of this.players) {
                 for (const building of player.buildings) {
                     if (building instanceof SpaceDustSwirler) {
-                        building.deflectProjectile(projectile);
+                        // Don't absorb friendly projectiles
+                        if (building.owner === projectile.owner) continue;
+                        
+                        if (building.absorbProjectile(projectile)) {
+                            // Mark projectile for removal by setting distance to max
+                            projectile.distanceTraveledPx = projectile.maxRangePx;
+                            wasAbsorbed = true;
+                            break;
+                        }
                     }
                 }
+                if (wasAbsorbed) break;
             }
+            if (wasAbsorbed) continue;
 
             let hasHit = false;
 
@@ -3838,14 +3925,25 @@ export class GameState {
                 deltaTime
             );
 
-            // Check for deflection by Space Dust Swirler buildings
+            // Check for absorption by Space Dust Swirler buildings
+            let wasAbsorbed = false;
             for (const player of this.players) {
                 for (const building of player.buildings) {
                     if (building instanceof SpaceDustSwirler) {
-                        building.deflectProjectile(projectile);
+                        // Don't absorb friendly projectiles
+                        if (building.owner === projectile.owner) continue;
+                        
+                        if (building.absorbProjectile(projectile)) {
+                            // Mark projectile for removal by setting lifetime to max
+                            projectile.lifetime = projectile.maxLifetime;
+                            wasAbsorbed = true;
+                            break;
+                        }
                     }
                 }
+                if (wasAbsorbed) break;
             }
+            if (wasAbsorbed) continue;
             
             // Check if should explode (max lifetime reached)
             if (projectile.shouldExplode()) {
