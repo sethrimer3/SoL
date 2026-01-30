@@ -160,7 +160,7 @@ export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
 export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
 
-// Minigun building constants (offensive building for Radiant faction)
+// Cannon building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
 export const MINIGUN_ATTACK_RANGE = 350;
 export const MINIGUN_ATTACK_DAMAGE = 12;
@@ -178,7 +178,7 @@ export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
 export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
 export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clockwise
 
-// Subsidiary Factory building constants
+// Foundry building constants
 export const SUBSIDIARY_FACTORY_MAX_HEALTH = 500;
 export const SUBSIDIARY_FACTORY_ATTACK_RANGE = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_ATTACK_DAMAGE = 0; // Production building

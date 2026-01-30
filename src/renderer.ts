@@ -1730,7 +1730,7 @@ export class GameRenderer {
             const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
             const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
             const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-            const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
+            const labels = ['Cannon', 'Swirler', 'Foundry', 'Locked'];
             
             for (let i = 0; i < 4; i++) {
                 const angle = angles[i];
@@ -3078,7 +3078,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Minigun building
+     * Draw a Cannon building
      */
     private drawMinigun(building: Minigun, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
@@ -3284,7 +3284,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Subsidiary Factory building
+     * Draw a Foundry building
      */
     private drawSubsidiaryFactory(building: SubsidiaryFactory, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
@@ -4528,11 +4528,11 @@ export class GameRenderer {
      */
     private getBuildingDisplayName(building: Building): string {
         if (building instanceof Minigun) {
-            return 'Minigun';
+            return 'Cannon';
         } else if (building instanceof SpaceDustSwirler) {
             return 'Space Dust Swirler';
         } else if (building instanceof SubsidiaryFactory) {
-            return 'Subsidiary Factory';
+            return 'Foundry';
         }
         return 'Building';
     }
