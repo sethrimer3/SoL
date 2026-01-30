@@ -36,8 +36,8 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
 
             // Update firing animation
             if (this.isFiring) {
-                // Animation completes in 0.1 seconds (quick firing animation)
-                this.firingAnimationProgress += deltaTime * 10;
+                // Animation completes in DEPLOYED_TURRET_ANIMATION_DURATION seconds
+                this.firingAnimationProgress += deltaTime / Constants.DEPLOYED_TURRET_ANIMATION_DURATION;
                 if (this.firingAnimationProgress >= 1.0) {
                     this.firingAnimationProgress = 0;
                     this.isFiring = false;

@@ -2114,15 +2114,10 @@ export class GameRenderer {
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
         
         // Calculate sprite size based on zoom
-        // The sprites are 1024x1024 for bottom and 300x1100 for top
-        // We'll scale them to fit in the game world appropriately
-        const spriteScale = 0.08 * this.zoom; // Adjust scale factor
+        const spriteScale = Constants.DEPLOYED_TURRET_SPRITE_SCALE * this.zoom;
         
-        // Load sprites (using tinted version for faction colors)
+        // Load and draw bottom sprite (static base)
         const bottomSprite = this.getTintedSprite(bottomSpritePath, color);
-        const topSprite = this.getTintedSprite(topSpritePath, color);
-        
-        // Draw bottom (static base)
         if (bottomSprite) {
             const bottomWidth = bottomSprite.width * spriteScale;
             const bottomHeight = bottomSprite.height * spriteScale;
@@ -2139,55 +2134,54 @@ export class GameRenderer {
             this.ctx.restore();
         }
         
-        // Draw top (rotating barrel)
-        if (topSprite) {
-            // Calculate rotation angle to face target
-            let rotationAngle = 0;
-            if (turret.target) {
-                const dx = turret.target.position.x - turret.position.x;
-                const dy = turret.target.position.y - turret.position.y;
-                rotationAngle = Math.atan2(dy, dx);
-            }
-            
-            // Select animation frame based on firing state
-            let spritePath = topSpritePath;
-            if (turret.isFiring) {
-                // Cycle through 28 animation frames
-                const frameCount = 28;
-                const frameIndex = Math.floor(turret.firingAnimationProgress * frameCount);
-                const clampedFrameIndex = Math.min(frameIndex, frameCount - 1);
-                spritePath = `ASSETS/sprites/RADIANT/structures/radiantCannonAnimation/radiantCannonFrame (${clampedFrameIndex + 1}).png`;
-            }
-            
-            const animSprite = turret.isFiring ? this.getTintedSprite(spritePath, color) : topSprite;
-            
-            if (animSprite) {
-                const topWidth = animSprite.width * spriteScale;
-                const topHeight = animSprite.height * spriteScale;
-                
-                // Pivot point: centered horizontally, 200 pixels from bottom of sprite (in world units)
-                // Since the sprite is 1100px tall, 200px from bottom is 900px from top
-                // In normalized coordinates: 900/1100 = 0.818 from top
-                const pivotOffsetY = 0.818 * topHeight - topHeight / 2;
-                
-                this.ctx.save();
-                this.ctx.translate(screenPos.x, screenPos.y);
-                this.ctx.rotate(rotationAngle + Math.PI / 2); // Add PI/2 because sprite top faces upward
-                this.ctx.translate(0, -pivotOffsetY); // Offset for pivot point
-                this.ctx.drawImage(
-                    animSprite,
-                    -topWidth / 2,
-                    -topHeight / 2,
-                    topWidth,
-                    topHeight
-                );
-                this.ctx.restore();
-            }
+        // Calculate rotation angle to face target
+        let rotationAngle = 0;
+        if (turret.target) {
+            const dx = turret.target.position.x - turret.position.x;
+            const dy = turret.target.position.y - turret.position.y;
+            rotationAngle = Math.atan2(dy, dx);
         }
         
-        // Draw health bar
-        const displaySize = 40 * this.zoom; // Size for health bar positioning
-        this.drawHealthDisplay(screenPos, turret.health, turret.maxHealth, displaySize, displaySize);
+        // Select sprite based on firing state
+        let topSpriteToUse: HTMLCanvasElement | null = null;
+        if (turret.isFiring) {
+            // Cycle through animation frames
+            const frameIndex = Math.floor(turret.firingAnimationProgress * Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT);
+            const clampedFrameIndex = Math.min(frameIndex, Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT - 1);
+            const animSpritePath = `ASSETS/sprites/RADIANT/structures/radiantCannonAnimation/radiantCannonFrame (${clampedFrameIndex + 1}).png`;
+            topSpriteToUse = this.getTintedSprite(animSpritePath, color);
+        } else {
+            // Use default top sprite when not firing
+            topSpriteToUse = this.getTintedSprite(topSpritePath, color);
+        }
+        
+        // Draw top sprite (rotating barrel)
+        if (topSpriteToUse) {
+            const topWidth = topSpriteToUse.width * spriteScale;
+            const topHeight = topSpriteToUse.height * spriteScale;
+            
+            // Calculate pivot point: centered horizontally, DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX from bottom
+            // Convert sprite pixels to normalized coordinates
+            const pivotRatio = (Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX - Constants.DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX) / Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX;
+            const pivotOffsetY = pivotRatio * topHeight - topHeight / 2;
+            
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationAngle + Math.PI / 2); // Add PI/2 because sprite top faces upward
+            this.ctx.translate(0, -pivotOffsetY); // Offset for pivot point
+            this.ctx.drawImage(
+                topSpriteToUse,
+                -topWidth / 2,
+                -topHeight / 2,
+                topWidth,
+                topHeight
+            );
+            this.ctx.restore();
+        }
+        
+        // Draw health bar above the turret
+        const displaySize = Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * this.zoom;
+        this.drawHealthDisplay(screenPos, turret.health, turret.maxHealth, displaySize, -displaySize - 10);
     }
 
     /**
