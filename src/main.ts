@@ -31,12 +31,34 @@ class GameController {
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
     private moveOrderCounter: number = 0; // Counter for move order indicators
 
+    private abilityArrowStarts: Vector2D[] = [];
+
     /**
-     * Check if only hero units are currently selected
+     * Check if any hero units are currently selected
      */
-    private hasOnlyHeroUnitsSelected(): boolean {
-        return this.selectedUnits.size > 0 && 
-               Array.from(this.selectedUnits).every(unit => unit.isHero);
+    private hasHeroUnitsSelected(): boolean {
+        if (this.selectedUnits.size === 0) {
+            return false;
+        }
+        for (const unit of this.selectedUnits) {
+            if (unit.isHero) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private updateAbilityArrowStarts(): void {
+        this.abilityArrowStarts.length = 0;
+        if (this.selectionStartScreen) {
+            this.abilityArrowStarts.push(this.selectionStartScreen);
+        }
+        for (const unit of this.selectedUnits) {
+            if (unit.isHero) {
+                this.abilityArrowStarts.push(this.renderer.worldToScreen(unit.position));
+            }
+        }
+        this.renderer.abilityArrowStarts = this.abilityArrowStarts;
     }
 
     /**
@@ -484,7 +506,7 @@ class GameController {
             } else if (totalMovement > Constants.CLICK_DRAG_THRESHOLD) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
-                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const hasHeroUnits = this.hasHeroUnitsSelected();
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDrawingPath) {
                     if (this.selectedBase && this.selectedBase.isSelected) {
@@ -504,7 +526,7 @@ class GameController {
                             this.renderer.pathPreviewForge = null; // No forge for unit paths
                             this.renderer.pathPreviewPoints = this.pathPoints;
                             this.cancelHold();
-                        } else if (hasOnlyHeroUnits) {
+                        } else if (hasHeroUnits) {
                             // For hero units away from units, use arrow dragging mode
                             this.isDraggingHeroArrow = true;
                             this.cancelHold();
@@ -513,7 +535,7 @@ class GameController {
                             this.isSelecting = true;
                             this.cancelHold();
                         }
-                    } else if (hasOnlyHeroUnits) {
+                    } else if (hasHeroUnits) {
                         // For hero units, use arrow dragging mode
                         this.isDraggingHeroArrow = true;
                         this.cancelHold();
@@ -533,7 +555,7 @@ class GameController {
                 this.renderer.selectionEnd = new Vector2D(x, y);
             } else if (this.isDraggingHeroArrow) {
                 // Update arrow direction (for hero ability casting)
-                this.renderer.abilityArrowStart = this.selectionStartScreen;
+                this.updateAbilityArrowStarts();
                 this.renderer.abilityArrowEnd = new Vector2D(x, y);
             } else if (this.isDrawingPath) {
                 // Collect path waypoints as we drag
@@ -1111,17 +1133,17 @@ class GameController {
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
-                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const hasHeroUnits = this.hasHeroUnitsSelected();
                 const shouldUseAbility = this.selectedUnits.size > 0 && (
-                    (!hasOnlyHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
-                    (hasOnlyHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
+                    (!hasHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
+                    (hasHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
                 );
 
                 // If dragged significantly, use ability (for units only)
                 if (shouldUseAbility) {
                     
                     // Only create swipe effect for non-hero units
-                    if (!hasOnlyHeroUnits) {
+                    if (!hasHeroUnits) {
                         this.renderer.createSwipeEffect(
                             this.selectionStartScreen.x,
                             this.selectionStartScreen.y,
@@ -1151,6 +1173,8 @@ class GameController {
                     // Deselect all units after using ability
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                } else if (this.isDraggingHeroArrow && hasHeroUnits) {
+                    // Cancel ability casting if arrow was dragged back to nothing
                 } else {
                     // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
@@ -1202,7 +1226,8 @@ class GameController {
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
-            this.renderer.abilityArrowStart = null;
+            this.abilityArrowStarts.length = 0;
+            this.renderer.abilityArrowStarts = this.abilityArrowStarts;
             this.renderer.abilityArrowEnd = null;
             this.endHold();
         };
