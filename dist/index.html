@@ -81,9 +81,9 @@
     </div>
     <canvas id="gameCanvas"></canvas>
     <script>
-        const minimumLoadingDurationMs = 3000;
+        const minimumLoadingDurationMs = 4000;
         const animationFrameCount = 25;
-        const animationFrameDurationMs = 80;
+        const animationFrameDurationMs = 1000 / 60;
         const animationFrames = Array.from({ length: animationFrameCount }, (_, frameIndex) => {
             const frameNumber = frameIndex + 1;
             return `../ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`;
@@ -95,13 +95,26 @@
         });
         const loadingAnimationFrame = document.getElementById('loadingAnimationFrame');
         let animationFrameIndex = 0;
-        const animationIntervalId = setInterval(() => {
+        let animationRequestId = 0;
+        let lastAnimationTimestamp = performance.now();
+        let animationRemainderMs = 0;
+
+        const updateLoadingAnimation = (timestamp) => {
             if (!loadingAnimationFrame) {
                 return;
             }
-            animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
-            loadingAnimationFrame.src = animationFrames[animationFrameIndex];
-        }, animationFrameDurationMs);
+            const deltaMs = timestamp - lastAnimationTimestamp;
+            lastAnimationTimestamp = timestamp;
+            animationRemainderMs += deltaMs;
+            while (animationRemainderMs >= animationFrameDurationMs) {
+                animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
+                animationRemainderMs -= animationFrameDurationMs;
+            }
+            loadingAnimationFrame.src = preloadedAnimationFrames[animationFrameIndex].src;
+            animationRequestId = requestAnimationFrame(updateLoadingAnimation);
+        };
+
+        animationRequestId = requestAnimationFrame(updateLoadingAnimation);
 
         let isMinimumDurationComplete = false;
         let isGameLoaded = false;
@@ -114,7 +127,7 @@
             if (loading) {
                 loading.style.display = 'none';
             }
-            clearInterval(animationIntervalId);
+            cancelAnimationFrame(animationRequestId);
         };
 
         setTimeout(() => {
