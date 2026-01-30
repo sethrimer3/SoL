@@ -1263,7 +1263,7 @@ export class SpaceDustSwirler extends Building {
      * Check if a projectile should be absorbed
      * Returns true if projectile was absorbed (should be removed from game)
      */
-    absorbProjectile(projectile: MinionProjectile | GraveProjectile | InfluenceBallProjectile): boolean {
+    absorbProjectile(projectile: any): boolean {
         if (!this.isComplete) return false;
 
         const dx = projectile.position.x - this.position.x;
@@ -1288,7 +1288,7 @@ export class SpaceDustSwirler extends Building {
     /**
      * Legacy method for backward compatibility - now calls absorbProjectile
      */
-    deflectProjectile(projectile: MinionProjectile | GraveProjectile | InfluenceBallProjectile): boolean {
+    deflectProjectile(projectile: any): boolean {
         return this.absorbProjectile(projectile);
     }
 }
