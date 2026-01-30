@@ -4055,6 +4055,13 @@ export class GameState {
                 }
                 return true;
             });
+            
+            this.bouncingBullets = this.bouncingBullets.filter(bullet => {
+                if (wave.isPointInWave(bullet.position)) {
+                    return false; // Remove projectile
+                }
+                return true;
+            });
         }
         this.crescentWaves = this.crescentWaves.filter(wave => !wave.shouldDespawn());
         

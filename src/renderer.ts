@@ -2157,54 +2157,53 @@ export class GameRenderer {
         
         this.ctx.save();
         
-        // Draw wave as an arc segment
+        // Draw wave as an arc segment - match the collision detection size
         const waveRadius = Constants.TANK_WAVE_WIDTH * this.zoom;
         const halfAngle = Constants.TANK_WAVE_ANGLE / 2;
         
-        // Create gradient for wave
+        // Create gradient for wave glow
         const gradient = this.ctx.createRadialGradient(
             screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, waveRadius * 3
+            screenPos.x, screenPos.y, waveRadius * 1.5
         );
         gradient.addColorStop(0, `${color}00`);
-        gradient.addColorStop(0.3, `${color}66`);
-        gradient.addColorStop(0.7, `${color}99`);
+        gradient.addColorStop(0.5, `${color}88`);
         gradient.addColorStop(1, `${color}00`);
         
-        // Draw crescent arc
+        // Draw main wave arc
         this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = waveRadius;
+        this.ctx.lineWidth = waveRadius * 0.5;
         this.ctx.globalAlpha = 0.7;
         this.ctx.beginPath();
         this.ctx.arc(
             screenPos.x, 
             screenPos.y, 
-            waveRadius * 2,
+            waveRadius,
             wave.angle - halfAngle,
             wave.angle + halfAngle
         );
         this.ctx.stroke();
         
-        // Draw wave front edge with glow
+        // Draw wave glow effect
         this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = 0.5;
+        this.ctx.globalAlpha = 0.4;
         this.ctx.beginPath();
         this.ctx.moveTo(screenPos.x, screenPos.y);
         this.ctx.arc(
             screenPos.x, 
             screenPos.y, 
-            waveRadius * 3,
+            waveRadius * 1.5,
             wave.angle - halfAngle,
             wave.angle + halfAngle
         );
         this.ctx.closePath();
         this.ctx.fill();
         
-        // Draw energy particles along the wave
+        // Draw energy particles along the wave front
         const numParticles = 10;
         for (let i = 0; i < numParticles; i++) {
             const angle = wave.angle - halfAngle + (Constants.TANK_WAVE_ANGLE * i / numParticles);
-            const distance = waveRadius * (1.5 + Math.sin(wave.lifetime * 5 + i) * 0.5);
+            const distance = waveRadius * (0.8 + Math.sin(wave.lifetime * 5 + i) * 0.2);
             const particleX = screenPos.x + Math.cos(angle) * distance;
             const particleY = screenPos.y + Math.sin(angle) * distance;
             
@@ -3041,7 +3040,7 @@ export class GameRenderer {
     }
 
     private drawTank(tank: Tank, color: string, game: GameState, isEnemy: boolean): void {
-        // Draw base unit
+        // Draw base unit (includes health bar and stun indicator)
         this.drawUnit(tank, color, game, isEnemy);
 
         const screenPos = this.worldToScreen(tank.position);
@@ -3074,34 +3073,6 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
         this.ctx.fill();
-        
-        // Show stun indicator if tank is stunned
-        if (tank.isStunned()) {
-            this.ctx.fillStyle = '#FFFF00';
-            this.ctx.globalAlpha = 0.7;
-            const stunSize = 15 * this.zoom;
-            
-            // Draw stars around unit to indicate stun
-            for (let i = 0; i < 3; i++) {
-                const angle = (game.gameTime * 3 + i * (Math.PI * 2 / 3)) % (Math.PI * 2);
-                const x = screenPos.x + Math.cos(angle) * (20 * this.zoom);
-                const y = screenPos.y + Math.sin(angle) * (20 * this.zoom);
-                
-                this.ctx.beginPath();
-                for (let j = 0; j < 5; j++) {
-                    const starAngle = j * (Math.PI * 2 / 5) - Math.PI / 2;
-                    const starX = x + Math.cos(starAngle) * stunSize * 0.5;
-                    const starY = y + Math.sin(starAngle) * stunSize * 0.5;
-                    if (j === 0) {
-                        this.ctx.moveTo(starX, starY);
-                    } else {
-                        this.ctx.lineTo(starX, starY);
-                    }
-                }
-                this.ctx.closePath();
-                this.ctx.fill();
-            }
-        }
         
         this.ctx.restore();
     }

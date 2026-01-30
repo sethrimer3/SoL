@@ -109,6 +109,12 @@ export const createTankHero = (deps: TankHeroDeps) => {
                 this.abilityCooldown -= deltaTime;
             }
 
+            // Update stun duration - if stunned, can't do anything else
+            if (this.stunDuration > 0) {
+                this.stunDuration -= deltaTime;
+                return;
+            }
+
             this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
 
             // Update rotation based on movement or face nearest enemy
