@@ -1898,6 +1898,35 @@ export class MainMenu {
         this.settings.username = username;
     }
 
+    private async clearPlayerDataAndCache(): Promise<void> {
+        localStorage.clear();
+        sessionStorage.clear();
+
+        if (typeof caches !== 'undefined') {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+        }
+
+        const databaseGetter = indexedDB as IDBFactory & {
+            databases?: () => Promise<Array<{ name?: string }>>;
+        };
+        if (databaseGetter.databases) {
+            const databases = await databaseGetter.databases();
+            await Promise.all(databases.map((database) => {
+                const databaseName = database.name;
+                if (!databaseName) {
+                    return Promise.resolve();
+                }
+                return new Promise<void>((resolve) => {
+                    const deleteRequest = indexedDB.deleteDatabase(databaseName);
+                    deleteRequest.addEventListener('success', () => resolve());
+                    deleteRequest.addEventListener('error', () => resolve());
+                    deleteRequest.addEventListener('blocked', () => resolve());
+                });
+            }));
+        }
+    }
+
     private resolveAssetPath(path: string): string {
         if (!path.startsWith('ASSETS/')) {
             return path;
@@ -2798,6 +2827,22 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(colorSchemeSection);
+
+        const resetButton = this.createButton('DELETE DATA', async () => {
+            const isConfirmed = window.confirm(
+                'Delete all player data and cached files? This will reload the game and start fresh.'
+            );
+            if (!isConfirmed) {
+                return;
+            }
+            await this.clearPlayerDataAndCache();
+            window.location.reload();
+        }, '#FF6666');
+        resetButton.style.fontSize = '18px';
+        resetButton.style.padding = '10px 20px';
+
+        const resetSection = this.createSettingSection('Reset Player Data', resetButton);
+        settingsContainer.appendChild(resetSection);
 
         container.appendChild(settingsContainer);
 
