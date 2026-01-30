@@ -1176,6 +1176,11 @@ export class Minigun extends Building {
  * Space Dust Swirler Building - Defensive building for Radiant faction
  * Swirls space dust in counter-clockwise orbits and deflects non-melee projectiles
  */
+/**
+ * Space Dust Swirler Building - Defensive building that absorbs projectiles
+ * Swirls space dust in counter-clockwise orbits and absorbs projectiles within its influence radius.
+ * The radius starts at half the max and grows over time, but shrinks when projectiles are absorbed.
+ */
 export class SpaceDustSwirler extends Building {
     currentInfluenceRadius: number; // Current active radius that grows/shrinks
     targetInfluenceRadius: number; // Target radius we're growing/shrinking towards
@@ -1274,7 +1279,18 @@ export class SpaceDustSwirler extends Building {
         if (distance > this.currentInfluenceRadius) return false;
 
         // Shrink the target radius based on projectile damage
-        const projectileDamage = 'damage' in projectile ? projectile.damage : 5; // Default to 5 if no damage property
+        // Different projectile types store damage differently
+        let projectileDamage = 5; // Default damage
+        if ('damage' in projectile && typeof projectile.damage === 'number') {
+            projectileDamage = projectile.damage;
+        } else if (projectile.constructor.name === 'GraveProjectile') {
+            // Grave projectiles use GRAVE_ATTACK_DAMAGE
+            projectileDamage = Constants.GRAVE_ATTACK_DAMAGE;
+        } else if (projectile.constructor.name === 'InfluenceBallProjectile') {
+            // Influence ball projectiles don't do direct damage, use a default value
+            projectileDamage = 10;
+        }
+        
         const shrinkAmount = Constants.SWIRLER_SHRINK_BASE_RATE + (projectileDamage * Constants.SWIRLER_SHRINK_DAMAGE_MULTIPLIER);
         
         this.targetInfluenceRadius = Math.max(
@@ -3310,6 +3326,9 @@ export class GameState {
                             for (const player of this.players) {
                                 for (const building of player.buildings) {
                                     if (building instanceof SpaceDustSwirler) {
+                                        // Don't absorb friendly projectiles
+                                        if (building.owner === projectile.owner) continue;
+                                        
                                         if (building.absorbProjectile(projectile)) {
                                             // Make projectile return to grave (stop attacking)
                                             projectile.isAttacking = false;
@@ -3771,6 +3790,9 @@ export class GameState {
             for (const player of this.players) {
                 for (const building of player.buildings) {
                     if (building instanceof SpaceDustSwirler) {
+                        // Don't absorb friendly projectiles
+                        if (building.owner === projectile.owner) continue;
+                        
                         if (building.absorbProjectile(projectile)) {
                             // Mark projectile for removal by setting distance to max
                             projectile.distanceTraveledPx = projectile.maxRangePx;
@@ -3908,6 +3930,9 @@ export class GameState {
             for (const player of this.players) {
                 for (const building of player.buildings) {
                     if (building instanceof SpaceDustSwirler) {
+                        // Don't absorb friendly projectiles
+                        if (building.owner === projectile.owner) continue;
+                        
                         if (building.absorbProjectile(projectile)) {
                             // Mark projectile for removal by setting lifetime to max
                             projectile.lifetime = projectile.maxLifetime;

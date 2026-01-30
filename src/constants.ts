@@ -181,7 +181,6 @@ export const SWIRLER_SHRINK_DAMAGE_MULTIPLIER = 0.5; // Additional shrink per po
 export const SWIRLER_MIN_INFLUENCE_RADIUS = 50; // Minimum radius the swirler can shrink to
 export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
 export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
-export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clockwise
 
 // Foundry building constants
 export const SUBSIDIARY_FACTORY_MAX_HEALTH = 500;
