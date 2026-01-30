@@ -92,7 +92,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after adding space dust impact tint hashing to ensure `stateHash` stability.
+The command list above was revalidated after updating space dust clustering and repulsion tuning to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
