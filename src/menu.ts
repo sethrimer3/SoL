@@ -1482,6 +1482,24 @@ export class MainMenu {
             maxHealth: Constants.BEAM_MAX_HEALTH, attackDamage: Constants.BEAM_ATTACK_DAMAGE, attackSpeed: Constants.BEAM_ATTACK_SPEED,
             attackRange: Constants.BEAM_ATTACK_RANGE, attackIgnoresDefense: true, defense: 6, regen: 3,
             abilityDescription: 'Precision shot: long-range beam that does more damage at greater distances'
+        },
+        {
+            id: 'radiant-mortar', name: 'Mortar', description: 'Siege unit with splash damage', faction: Faction.RADIANT,
+            maxHealth: Constants.MORTAR_MAX_HEALTH, attackDamage: Constants.MORTAR_ATTACK_DAMAGE, attackSpeed: Constants.MORTAR_ATTACK_SPEED,
+            attackRange: Constants.MORTAR_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 2,
+            abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage'
+        },
+        {
+            id: 'radiant-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.RADIANT,
+            maxHealth: Constants.PREIST_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
+            abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles'
+        },
+        {
+            id: 'radiant-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.RADIANT,
+            maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: 0, attackIgnoresDefense: false, defense: Constants.TANK_DEFENSE, regen: 3,
+            abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles'
         }
     ];
     
