@@ -44,11 +44,15 @@ export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by 
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 1;
+export const DUST_PARTICLE_DIAMETER_PX = DUST_PARTICLE_SIZE * 2;
 export const SPACE_DUST_PARTICLE_COUNT = 3000;
 export const DUST_MIN_VELOCITY = 0.08;
-export const DUST_REPULSION_RADIUS_PX = 28;
-export const DUST_REPULSION_CELL_SIZE_PX = 32;
-export const DUST_REPULSION_STRENGTH = 14;
+export const DUST_REPULSION_RADIUS_PX = DUST_PARTICLE_DIAMETER_PX;
+export const DUST_REPULSION_CELL_SIZE_PX = DUST_PARTICLE_DIAMETER_PX * 4;
+export const DUST_REPULSION_STRENGTH = 0.8;
+export const DUST_CLUSTER_COUNT = 8;
+export const DUST_CLUSTER_RADIUS_PX = 220;
+export const DUST_CLUSTER_SPAWN_RATIO = 0.35;
 export const DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC = 3;
 export const MIRROR_DUST_PUSH_RADIUS_PX = 110;
 export const MIRROR_DUST_PUSH_FORCE_MULTIPLIER = 1.1;

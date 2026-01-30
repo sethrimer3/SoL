@@ -4388,7 +4388,8 @@ export class GameState {
                         const distSq = dx * dx + dy * dy;
                         if (distSq > 0 && distSq < repulsionRadiusSq) {
                             const dist = Math.sqrt(distSq);
-                            const strength = (1 - dist / repulsionRadiusPx) * repulsionStrength;
+                            const proximity = 1 - dist / repulsionRadiusPx;
+                            const strength = proximity * proximity * repulsionStrength;
                             forceX += (dx / dist) * strength;
                             forceY += (dy / dist) * strength;
                         }
@@ -6029,9 +6030,33 @@ export class GameState {
      */
     initializeSpaceDust(count: number, width: number, height: number, palette?: SpaceDustPalette): void {
         this.spaceDust = [];
+        const clusterCount = Constants.DUST_CLUSTER_COUNT;
+        const clusterRadiusPx = Constants.DUST_CLUSTER_RADIUS_PX;
+        const clusterSpawnRatio = Constants.DUST_CLUSTER_SPAWN_RATIO;
+        const clusterCenters: Vector2D[] = [];
+
+        for (let i = 0; i < clusterCount; i++) {
+            const centerX = (Math.random() - 0.5) * width;
+            const centerY = (Math.random() - 0.5) * height;
+            clusterCenters.push(new Vector2D(centerX, centerY));
+        }
+
         for (let i = 0; i < count; i++) {
-            const x = (Math.random() - 0.5) * width;
-            const y = (Math.random() - 0.5) * height;
+            const useCluster = Math.random() < clusterSpawnRatio;
+            let x = 0;
+            let y = 0;
+
+            if (useCluster && clusterCenters.length > 0) {
+                const centerIndex = Math.floor(Math.random() * clusterCenters.length);
+                const center = clusterCenters[centerIndex];
+                const angle = Math.random() * Math.PI * 2;
+                const distance = Math.sqrt(Math.random()) * clusterRadiusPx;
+                x = center.x + Math.cos(angle) * distance;
+                y = center.y + Math.sin(angle) * distance;
+            } else {
+                x = (Math.random() - 0.5) * width;
+                y = (Math.random() - 0.5) * height;
+            }
             this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y), undefined, palette));
         }
     }
