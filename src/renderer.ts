@@ -1917,9 +1917,9 @@ export class GameRenderer {
         let outlineColor = '#FFFFFF';
         
         if (ladSun && unit.owner) {
-            // Determine which side the unit's owner is on
+            // Determine which side the unit's owner is on using shared utility
             const ownerSide = unit.owner.stellarForge 
-                ? (unit.owner.stellarForge.position.x < ladSun.position.x ? 'light' : 'dark')
+                ? game.getLadSide(unit.owner.stellarForge.position, ladSun)
                 : 'light';
             
             if (ownerSide === 'light') {
@@ -1993,7 +1993,8 @@ export class GameRenderer {
         } else {
             this.ctx.fillStyle = displayColor;
             this.ctx.strokeStyle = isSelected ? outlineColor : (shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor);
-            this.ctx.lineWidth = isSelected ? 3 : 2; // Thicker outline for better visibility
+            // Use thicker outline in LaD mode for better visibility of white/black outlines
+            this.ctx.lineWidth = isSelected ? 3 : (ladSun ? 2 : 1);
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             this.ctx.fill();

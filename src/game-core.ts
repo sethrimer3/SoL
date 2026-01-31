@@ -5251,6 +5251,14 @@ export class GameState {
     }
 
     /**
+     * Helper method to determine which side of LaD sun a position is on
+     * Public so it can be used by the renderer
+     */
+    getLadSide(position: Vector2D, ladSun: Sun): 'light' | 'dark' {
+        return position.x < ladSun.position.x ? 'light' : 'dark';
+    }
+
+    /**
      * Check visibility in LaD (Light and Dark) mode
      * Units are invisible to the enemy until they cross into enemy territory
      */
@@ -5263,10 +5271,13 @@ export class GameState {
         }
         
         // Determine which side each player is on based on their forge position
-        const playerSide = player.stellarForge ? (player.stellarForge.position.x < ladSun.position.x ? 'light' : 'dark') : 'light';
+        // Default to 'light' if forge is not yet initialized (early game state)
+        const playerSide = player.stellarForge 
+            ? this.getLadSide(player.stellarForge.position, ladSun)
+            : 'light';
         
         // Determine which side the object is on
-        const objectSide = objectPos.x < ladSun.position.x ? 'light' : 'dark';
+        const objectSide = this.getLadSide(objectPos, ladSun);
         
         // If object has an owner
         if (object && 'owner' in object && object.owner) {
