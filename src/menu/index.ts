@@ -1,0 +1,9 @@
+/**
+ * Menu module - exports all menu-related types and classes
+ */
+
+export * from './types';
+export * from './background-particles';
+export * from './atmosphere';
+export * from './particle-layer';
+export * from './color-schemes';
