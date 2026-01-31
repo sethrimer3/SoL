@@ -1543,6 +1543,22 @@ export interface GameSettings {
     networkManager?: NetworkManager; // Network manager for LAN/online play
 }
 
+interface LanLobbyEntry {
+    hostPlayerId: string;
+    lobbyName: string;
+    hostUsername: string;
+    connectionCode: string;
+    maxPlayerCount: number;
+    playerCount: number;
+    lastSeenMs: number;
+    createdMs: number;
+}
+
+const LAN_LOBBY_STORAGE_KEY = 'sol-lan-lobbies';
+const LAN_LOBBY_EXPIRY_MS = 15000;
+const LAN_LOBBY_REFRESH_MS = 2000;
+const LAN_LOBBY_HEARTBEAT_MS = 5000;
+
 export class MainMenu {
     private menuElement: HTMLElement;
     private contentElement!: HTMLElement;
@@ -1557,6 +1573,7 @@ export class MainMenu {
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
+    private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     
     // Hero unit data with complete stats
@@ -1953,6 +1970,10 @@ export class MainMenu {
             clearTimeout(this.lanServerListTimeout);
             this.lanServerListTimeout = null;
         }
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
         this.setTestLevelButtonVisible(false);
     }
 
@@ -1963,6 +1984,186 @@ export class MainMenu {
 
     private startMenuTransition(): void {
         this.menuParticleLayer?.startTransition();
+    }
+
+    private loadLanLobbyEntries(): LanLobbyEntry[] {
+        const storedValue = localStorage.getItem(LAN_LOBBY_STORAGE_KEY);
+        if (!storedValue) {
+            return [];
+        }
+        try {
+            const parsedValue = JSON.parse(storedValue) as LanLobbyEntry[];
+            if (!Array.isArray(parsedValue)) {
+                return [];
+            }
+            return parsedValue;
+        } catch (error) {
+            console.warn('Failed to parse LAN lobby list from storage:', error);
+            return [];
+        }
+    }
+
+    private persistLanLobbyEntries(entries: LanLobbyEntry[]): void {
+        localStorage.setItem(LAN_LOBBY_STORAGE_KEY, JSON.stringify(entries));
+    }
+
+    private pruneLanLobbyEntries(entries: LanLobbyEntry[], nowMs: number): LanLobbyEntry[] {
+        const prunedEntries = entries.filter((entry) => nowMs - entry.lastSeenMs <= LAN_LOBBY_EXPIRY_MS);
+        if (prunedEntries.length !== entries.length) {
+            this.persistLanLobbyEntries(prunedEntries);
+        }
+        return prunedEntries;
+    }
+
+    private registerLanLobbyEntry(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
+        const nowMs = Date.now();
+        const entries = this.loadLanLobbyEntries();
+        const updatedEntries = entries.filter((existingEntry) => existingEntry.hostPlayerId !== entry.hostPlayerId);
+        const existingEntry = entries.find((existingEntry) => existingEntry.hostPlayerId === entry.hostPlayerId);
+        updatedEntries.push({
+            ...entry,
+            createdMs: existingEntry?.createdMs ?? nowMs,
+            lastSeenMs: nowMs
+        });
+        this.persistLanLobbyEntries(updatedEntries);
+    }
+
+    private unregisterLanLobbyEntry(hostPlayerId: string): void {
+        const entries = this.loadLanLobbyEntries();
+        const updatedEntries = entries.filter((entry) => entry.hostPlayerId !== hostPlayerId);
+        if (updatedEntries.length !== entries.length) {
+            this.persistLanLobbyEntries(updatedEntries);
+        }
+    }
+
+    private startLanLobbyHeartbeat(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
+        const heartbeat = () => {
+            this.registerLanLobbyEntry(entry);
+            this.lanLobbyHeartbeatTimeout = window.setTimeout(heartbeat, LAN_LOBBY_HEARTBEAT_MS);
+        };
+        heartbeat();
+    }
+
+    private stopLanLobbyHeartbeat(): void {
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
+    }
+
+    private renderLanLobbyList(listContainer: HTMLElement): void {
+        listContainer.innerHTML = '';
+        const nowMs = Date.now();
+        const entries = this.pruneLanLobbyEntries(this.loadLanLobbyEntries(), nowMs)
+            .sort((left, right) => right.lastSeenMs - left.lastSeenMs);
+
+        if (entries.length === 0) {
+            const emptyState = document.createElement('p');
+            emptyState.textContent = 'No LAN lobbies detected yet. Host a game to make it appear here.';
+            emptyState.style.color = '#888888';
+            emptyState.style.fontSize = '16px';
+            emptyState.style.textAlign = 'center';
+            emptyState.style.margin = '0';
+            listContainer.appendChild(emptyState);
+            return;
+        }
+
+        for (const entry of entries) {
+            const entryCard = document.createElement('div');
+            entryCard.style.display = 'flex';
+            entryCard.style.flexDirection = 'row';
+            entryCard.style.alignItems = 'center';
+            entryCard.style.justifyContent = 'space-between';
+            entryCard.style.gap = '16px';
+            entryCard.style.padding = '14px 18px';
+            entryCard.style.borderRadius = '8px';
+            entryCard.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+            entryCard.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+            entryCard.style.cursor = 'pointer';
+            entryCard.style.transition = 'transform 0.15s ease, border-color 0.15s ease';
+            entryCard.addEventListener('mouseenter', () => {
+                entryCard.style.transform = 'translateY(-2px)';
+                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.6)';
+            });
+            entryCard.addEventListener('mouseleave', () => {
+                entryCard.style.transform = 'translateY(0)';
+                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.3)';
+            });
+
+            const entryInfo = document.createElement('div');
+            entryInfo.style.display = 'flex';
+            entryInfo.style.flexDirection = 'column';
+            entryInfo.style.gap = '4px';
+            entryInfo.style.flex = '1';
+
+            const lobbyName = document.createElement('div');
+            lobbyName.textContent = entry.lobbyName;
+            lobbyName.style.color = '#FFD700';
+            lobbyName.style.fontSize = '18px';
+            lobbyName.style.fontWeight = '600';
+            entryInfo.appendChild(lobbyName);
+
+            const lobbyMeta = document.createElement('div');
+            lobbyMeta.textContent = `${entry.hostUsername} • ${entry.playerCount}/${entry.maxPlayerCount} players`;
+            lobbyMeta.style.color = '#CCCCCC';
+            lobbyMeta.style.fontSize = '14px';
+            entryInfo.appendChild(lobbyMeta);
+
+            const joinButton = this.createButton('JOIN', () => {
+                void this.joinLanLobbyWithCode(entry.connectionCode);
+            }, '#00AAFF');
+            joinButton.style.padding = '8px 18px';
+            joinButton.style.fontSize = '14px';
+            joinButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            entryCard.addEventListener('click', () => {
+                void this.joinLanLobbyWithCode(entry.connectionCode);
+            });
+
+            entryCard.appendChild(entryInfo);
+            entryCard.appendChild(joinButton);
+            listContainer.appendChild(entryCard);
+        }
+    }
+
+    private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
+        if (this.lanServerListTimeout !== null) {
+            clearTimeout(this.lanServerListTimeout);
+        }
+        this.lanServerListTimeout = window.setTimeout(() => {
+            this.renderLanLobbyList(listContainer);
+            this.scheduleLanLobbyListRefresh(listContainer);
+        }, LAN_LOBBY_REFRESH_MS);
+    }
+
+    private async joinLanLobbyWithCode(code: string): Promise<void> {
+        if (!code) {
+            return;
+        }
+        try {
+            this.renderClientWaitingScreen();
+            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
+
+            const playerId = `player_${Date.now()}`;
+            this.networkManager = new NetworkManager(playerId);
+
+            const answer = await this.networkManager.connectToPeer(hostId, offer);
+            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
+
+            this.renderClientAnswerScreen(answerCode, hostUsername);
+        } catch (error) {
+            console.error('Failed to join lobby:', error);
+            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }
     }
 
     private renderMainScreen(container: HTMLElement): void {
@@ -2204,6 +2405,38 @@ export class MainMenu {
         joinButton.style.fontSize = '28px';
         container.appendChild(joinButton);
 
+        // LAN lobby list
+        const listContainer = document.createElement('div');
+        listContainer.style.maxWidth = '720px';
+        listContainer.style.width = '100%';
+        listContainer.style.padding = '20px';
+        listContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        listContainer.style.borderRadius = '12px';
+        listContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        listContainer.style.marginBottom = '30px';
+        listContainer.style.display = 'flex';
+        listContainer.style.flexDirection = 'column';
+        listContainer.style.gap = '14px';
+
+        const listTitle = document.createElement('h3');
+        listTitle.textContent = 'Available LAN Lobbies';
+        listTitle.style.fontSize = '22px';
+        listTitle.style.margin = '0';
+        listTitle.style.color = '#FFD700';
+        listTitle.style.textAlign = 'center';
+        listContainer.appendChild(listTitle);
+
+        const listContent = document.createElement('div');
+        listContent.style.display = 'flex';
+        listContent.style.flexDirection = 'column';
+        listContent.style.gap = '12px';
+        listContainer.appendChild(listContent);
+
+        this.renderLanLobbyList(listContent);
+        this.scheduleLanLobbyListRefresh(listContent);
+
+        container.appendChild(listContainer);
+
         // Info section
         const infoContainer = document.createElement('div');
         infoContainer.style.maxWidth = '600px';
@@ -2277,26 +2510,10 @@ export class MainMenu {
     private async showJoinLobbyDialog(): Promise<void> {
         // Prompt for connection code
         const code = prompt('Enter the connection code from the host:');
-        if (!code) return;
-
-        try {
-            // Parse connection code
-            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
-
-            // Initialize network manager
-            const playerId = `player_${Date.now()}`;
-            this.networkManager = new NetworkManager(playerId);
-
-            // Create answer
-            const answer = await this.networkManager.connectToPeer(hostId, offer);
-            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
-
-            // Show dialog with answer code
-            this.renderClientAnswerScreen(answerCode, hostUsername);
-        } catch (error) {
-            console.error('Failed to join lobby:', error);
-            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        if (!code) {
+            return;
         }
+        await this.joinLanLobbyWithCode(code.trim());
     }
 
     private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string, hostPlayerId: string): void {
@@ -2304,6 +2521,14 @@ export class MainMenu {
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
+        this.startLanLobbyHeartbeat({
+            hostPlayerId: hostPlayerId,
+            lobbyName: lobby.name,
+            hostUsername: lobby.players.find((player) => player.isHost)?.username ?? this.settings.username,
+            connectionCode: connectionCode,
+            maxPlayerCount: lobby.maxPlayers,
+            playerCount: lobby.players.length
+        });
 
         // Title
         const title = document.createElement('h2');
@@ -2423,6 +2648,15 @@ export class MainMenu {
                         timestamp: Date.now(),
                         data: lobby
                     });
+                    const hostPlayer = lobby.players.find((player) => player.isHost);
+                    this.registerLanLobbyEntry({
+                        hostPlayerId: hostPlayerId,
+                        lobbyName: lobby.name,
+                        hostUsername: hostPlayer?.username ?? this.settings.username,
+                        connectionCode: connectionCode,
+                        maxPlayerCount: lobby.maxPlayers,
+                        playerCount: lobby.players.length
+                    });
                 }
                 
                 alert(`${clientUsername} connected! You can now start the game.`);
@@ -2452,6 +2686,8 @@ export class MainMenu {
 
             // Notify peers that game is starting
             this.networkManager.startGame();
+            this.unregisterLanLobbyEntry(hostPlayerId);
+            this.stopLanLobbyHeartbeat();
 
             // Set game mode to LAN
             this.settings.gameMode = 'lan';
@@ -2475,6 +2711,8 @@ export class MainMenu {
                 this.networkManager.disconnect();
                 this.networkManager = null;
             }
+            this.unregisterLanLobbyEntry(hostPlayerId);
+            this.stopLanLobbyHeartbeat();
             this.currentScreen = 'lan';
             this.startMenuTransition();
             this.renderLANScreen(this.contentElement);
