@@ -441,9 +441,9 @@ export class GameRenderer {
     /**
      * Get a sprite with a colored tint and white outline
      */
-    private getOutlinedTintedSprite(path: string, color: string): HTMLCanvasElement | null {
+    private getOutlinedTintedSprite(path: string, color: string, outlineColor: string): HTMLCanvasElement | null {
         const resolvedPath = this.resolveAssetPath(path);
-        const cacheKey = `${resolvedPath}|${color}|outlined`;
+        const cacheKey = `${resolvedPath}|${color}|${outlineColor}|outlined`;
         const cached = this.outlinedSpriteCache.get(cacheKey);
         if (cached) {
             return cached;
@@ -464,9 +464,9 @@ export class GameRenderer {
             return null;
         }
 
-        // Draw white outline by drawing the image multiple times offset in all directions
+        // Draw outline by drawing the image multiple times offset in all directions
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'white';
+        ctx.fillStyle = outlineColor;
         
         // Draw outline in 8 directions
         for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
@@ -475,7 +475,7 @@ export class GameRenderer {
             ctx.drawImage(image, offsetX, offsetY);
         }
         
-        // Fill the outline with white
+        // Fill the outline
         ctx.globalCompositeOperation = 'source-in';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         
@@ -987,10 +987,23 @@ export class GameRenderer {
     private drawStellarForge(forge: StellarForge, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(forge.position);
         const size = 40 * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let forgeColor = color;
+        let outlineColor = '#FFFFFF';
+        if (ladSun) {
+            const ownerSide = game.getLadSide(forge.position, ladSun);
+            if (ownerSide === 'light') {
+                forgeColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                forgeColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
 
         // Check visibility for enemy forges
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = forgeColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
             if (!isVisible) {
@@ -1001,7 +1014,7 @@ export class GameRenderer {
             const inShadow = game.isPointInShadow(forge.position);
             if (inShadow) {
                 shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                displayColor = this.darkenColor(forgeColor, Constants.SHADE_OPACITY);
             }
         }
 
@@ -1067,10 +1080,12 @@ export class GameRenderer {
 
         // Draw base structure - use darkened color if should dim
         const tintColor = shouldDim
-            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
-            : (isEnemy ? this.enemyColor : this.playerColor);
+            ? this.darkenColor(forgeColor, Constants.SHADE_OPACITY)
+            : forgeColor;
         const forgeSpritePath = this.getForgeSpritePath(forge);
-        const forgeSprite = forgeSpritePath ? this.getTintedSprite(forgeSpritePath, tintColor) : null;
+        const forgeSprite = forgeSpritePath
+            ? (ladSun ? this.getOutlinedTintedSprite(forgeSpritePath, tintColor, outlineColor) : this.getTintedSprite(forgeSpritePath, tintColor))
+            : null;
         if (forgeSprite) {
             const spriteSize = size * this.FORGE_SPRITE_SCALE;
             this.ctx.drawImage(
@@ -1092,10 +1107,8 @@ export class GameRenderer {
             this.ctx.stroke();
         } else {
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = forge.isReceivingLight ? 
-                (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
-                (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-            this.ctx.lineWidth = 3;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+            this.ctx.lineWidth = 2;
             
             // Draw as a hexagon with rotation
             this.ctx.beginPath();
@@ -1111,6 +1124,14 @@ export class GameRenderer {
             }
             this.ctx.closePath();
             this.ctx.fill();
+            this.ctx.stroke();
+
+            this.ctx.strokeStyle = forge.isReceivingLight ? 
+                (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
+                (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
+            this.ctx.lineWidth = 3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.8, 0, Math.PI * 2);
             this.ctx.stroke();
         }
 
@@ -1565,9 +1586,13 @@ export class GameRenderer {
             glowLevel = particle.glowState + (particle.targetGlowState - particle.glowState) * particle.glowTransition;
         }
 
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        const isOnLightSide = ladSun ? particle.position.x < ladSun.position.x : false;
+        const dustColor = ladSun ? (isOnLightSide ? '#000000' : '#FFFFFF') : particle.currentColor;
+
         if (glowLevel > 0) {
             const glowSize = baseSize * (1.2 + glowLevel * 0.35);
-            this.ctx.fillStyle = particle.currentColor;
+            this.ctx.fillStyle = dustColor;
             this.ctx.globalAlpha = 0.15 + glowLevel * 0.1;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, glowSize, 0, Math.PI * 2);
@@ -1575,7 +1600,7 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
-        this.ctx.fillStyle = particle.currentColor;
+        this.ctx.fillStyle = dustColor;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
         this.ctx.fill();
@@ -1742,9 +1767,9 @@ export class GameRenderer {
             sunScreenPos.x, sunScreenPos.y, 0,
             sunScreenPos.x, sunScreenPos.y, this.canvas.width
         );
-        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
-        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
+        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.25)');
+        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.12)');
         
         this.ctx.fillStyle = whiteGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1760,9 +1785,9 @@ export class GameRenderer {
             sunScreenPos.x, sunScreenPos.y, 0,
             sunScreenPos.x, sunScreenPos.y, this.canvas.width
         );
-        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
-        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
-        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
+        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.6)');
+        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
         
         this.ctx.fillStyle = blackGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1972,8 +1997,9 @@ export class GameRenderer {
             : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
         
         // Use outlined sprite for selected units, regular tinted sprite otherwise
+        const shouldUseOutlinedSprite = Boolean(ladSun) || (isSelected && !isEnemy);
         const heroSprite = heroSpritePath 
-            ? (isSelected && !isEnemy ? this.getOutlinedTintedSprite(heroSpritePath, tintColor) : this.getTintedSprite(heroSpritePath, tintColor))
+            ? (shouldUseOutlinedSprite ? this.getOutlinedTintedSprite(heroSpritePath, tintColor, outlineColor) : this.getTintedSprite(heroSpritePath, tintColor))
             : null;
             
         if (heroSprite) {
@@ -2391,9 +2417,23 @@ export class GameRenderer {
     /**
      * Draw a deployed turret
      */
-    private drawDeployedTurret(turret: DeployedTurret): void {
+    private drawDeployedTurret(turret: DeployedTurret, game: GameState): void {
         const screenPos = this.worldToScreen(turret.position);
-        const color = this.getFactionColor(turret.owner.faction);
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let color = this.getFactionColor(turret.owner.faction);
+        let outlineColor = '#FFFFFF';
+        if (ladSun && turret.owner) {
+            const ownerSide = turret.owner.stellarForge
+                ? game.getLadSide(turret.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                color = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                color = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
         
         // Sprite paths for the radiant cannon
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
@@ -2403,7 +2443,9 @@ export class GameRenderer {
         const spriteScale = Constants.DEPLOYED_TURRET_SPRITE_SCALE * this.zoom;
         
         // Load and draw bottom sprite (static base)
-        const bottomSprite = this.getTintedSprite(bottomSpritePath, color);
+        const bottomSprite = ladSun
+            ? this.getOutlinedTintedSprite(bottomSpritePath, color, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, color);
         if (bottomSprite) {
             const bottomWidth = bottomSprite.width * spriteScale;
             const bottomHeight = bottomSprite.height * spriteScale;
@@ -2435,10 +2477,14 @@ export class GameRenderer {
             const frameIndex = Math.floor(turret.firingAnimationProgress * Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT);
             const clampedFrameIndex = Math.min(frameIndex, Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT - 1);
             const animSpritePath = `ASSETS/sprites/RADIANT/structures/radiantCannonAnimation/radiantCannonFrame (${clampedFrameIndex + 1}).png`;
-            topSpriteToUse = this.getTintedSprite(animSpritePath, color);
+            topSpriteToUse = ladSun
+                ? this.getOutlinedTintedSprite(animSpritePath, color, outlineColor)
+                : this.getTintedSprite(animSpritePath, color);
         } else {
             // Use default top sprite when not firing
-            topSpriteToUse = this.getTintedSprite(topSpritePath, color);
+            topSpriteToUse = ladSun
+                ? this.getOutlinedTintedSprite(topSpritePath, color, outlineColor)
+                : this.getTintedSprite(topSpritePath, color);
         }
         
         // Draw top sprite (rotating barrel)
@@ -2622,13 +2668,30 @@ export class GameRenderer {
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = this.getStarlingSpritePath(starling);
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let starlingColor = isEnemy ? this.enemyColor : this.playerColor;
+        let outlineColor = '#FFFFFF';
+        if (ladSun && starling.owner) {
+            const ownerSide = starling.owner.stellarForge
+                ? game.getLadSide(starling.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                starlingColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                starlingColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
         const tintColor = shouldDim
-            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
-            : (isEnemy ? this.enemyColor : this.playerColor);
+            ? this.darkenColor(starlingColor, Constants.SHADE_OPACITY)
+            : starlingColor;
+        displayColor = tintColor;
         
         // Use outlined sprite for selected starlings, regular tinted sprite otherwise
+        const shouldUseOutlinedSprite = Boolean(ladSun) || (isSelected && !isEnemy);
         const starlingSprite = starlingSpritePath 
-            ? (isSelected && !isEnemy ? this.getOutlinedTintedSprite(starlingSpritePath, tintColor) : this.getTintedSprite(starlingSpritePath, tintColor))
+            ? (shouldUseOutlinedSprite ? this.getOutlinedTintedSprite(starlingSpritePath, tintColor, outlineColor) : this.getTintedSprite(starlingSpritePath, tintColor))
             : null;
         
         if (starlingSprite) {
@@ -2658,7 +2721,7 @@ export class GameRenderer {
         } else {
             // Fallback to circle rendering if sprite not loaded
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
+            this.ctx.strokeStyle = isSelected ? outlineColor : (shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor);
             this.ctx.lineWidth = isSelected ? 3 : 1;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -3257,10 +3320,25 @@ export class GameRenderer {
     private drawMinigun(building: Minigun | GatlingTower, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let buildingColor = color;
+        let outlineColor = '#FFFFFF';
+        if (ladSun && building.owner) {
+            const ownerSide = building.owner.stellarForge
+                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                buildingColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                buildingColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = buildingColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -3271,7 +3349,7 @@ export class GameRenderer {
             const inShadow = game.isPointInShadow(building.position);
             if (inShadow) {
                 shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
 
@@ -3307,8 +3385,12 @@ export class GameRenderer {
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
 
-        const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
-        const topSprite = this.getTintedSprite(topSpritePath, displayColor);
+        const bottomSprite = ladSun
+            ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, displayColor);
+        const topSprite = ladSun
+            ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(topSpritePath, displayColor);
 
         if (bottomSprite && topSprite) {
             const spriteScale = (radius * 2) / bottomSprite.width;
@@ -3357,7 +3439,7 @@ export class GameRenderer {
         } else {
             // Draw base (circular platform)
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -3408,10 +3490,25 @@ export class GameRenderer {
     private drawSpaceDustSwirler(building: SpaceDustSwirler, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let buildingColor = color;
+        let outlineColor = '#FFFFFF';
+        if (ladSun && building.owner) {
+            const ownerSide = building.owner.stellarForge
+                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                buildingColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                buildingColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = buildingColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -3422,7 +3519,7 @@ export class GameRenderer {
             const inShadow = game.isPointInShadow(building.position);
             if (inShadow) {
                 shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
 
@@ -3467,7 +3564,7 @@ export class GameRenderer {
 
         // Draw base (circular platform with energy pattern)
         this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -3515,10 +3612,25 @@ export class GameRenderer {
     private drawSubsidiaryFactory(building: SubsidiaryFactory, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let buildingColor = color;
+        let outlineColor = '#FFFFFF';
+        if (ladSun && building.owner) {
+            const ownerSide = building.owner.stellarForge
+                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                buildingColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                buildingColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = buildingColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -3529,7 +3641,7 @@ export class GameRenderer {
             const inShadow = game.isPointInShadow(building.position);
             if (inShadow) {
                 shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
 
@@ -3564,7 +3676,7 @@ export class GameRenderer {
 
         // Draw main structure (hexagon shape for industrial look)
         this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -4599,7 +4711,7 @@ export class GameRenderer {
         // Draw deployed turrets
         for (const turret of game.deployedTurrets) {
             if (this.isWithinViewBounds(turret.position, Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * 2)) {
-                this.drawDeployedTurret(turret);
+                this.drawDeployedTurret(turret, game);
             }
         }
 
