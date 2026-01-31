@@ -902,7 +902,7 @@ class GameController {
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-                    const labels = ['Cannon', 'Gatling', 'Swirler', 'Foundry'];
+                    const labels = ['Cannon', 'Gatling', 'Cyclone', 'Foundry'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
@@ -978,11 +978,11 @@ class GameController {
                                     console.log('Not enough energy to build Gatling Tower');
                                 }
                             } else if (i === 2) {
-                                // Third button - create Space Dust Swirler building
+                                // Third button - create Cyclone building
                                 if (player.spendEnergy(Constants.SWIRLER_COST)) {
                                     const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(swirler);
-                                    console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                                     this.sendNetworkCommand('building_purchase', {
                                         buildingType: 'SpaceDustSwirler',
                                         positionX: gate.position.x,
@@ -1002,7 +1002,7 @@ class GameController {
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough energy to build Space Dust Swirler');
+                                    console.log('Not enough energy to build Cyclone');
                                 }
                             } else if (i === 3) {
                                 // Fourth button - create Foundry building

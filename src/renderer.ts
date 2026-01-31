@@ -1746,7 +1746,7 @@ export class GameRenderer {
             const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
             const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
             const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-            const labels = ['Cannon', 'Gatling', 'Swirler', 'Foundry'];
+            const labels = ['Cannon', 'Gatling', 'Cyclone', 'Foundry'];
             
             for (let i = 0; i < 4; i++) {
                 const angle = angles[i];
@@ -3387,7 +3387,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Space Dust Swirler building
+     * Draw a Cyclone (Space Dust Swirler) building
      */
     private drawSpaceDustSwirler(building: SpaceDustSwirler, color: string, game: GameState, isEnemy: boolean): void {
         const screenPos = this.worldToScreen(building.position);
@@ -3470,46 +3470,56 @@ export class GameRenderer {
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
 
-        // Draw base (circular platform with energy pattern)
-        this.ctx.fillStyle = displayColor;
-        const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_bottom.png';
+        const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_middle.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_top.png';
 
-        // Draw selection indicator if selected
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
+        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
+        const bottomSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, displayColor);
+        const middleSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(middleSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(middleSpritePath, displayColor);
+        const topSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(topSpritePath, displayColor);
+
+        const referenceSprite = bottomSprite || middleSprite || topSprite;
+        if (referenceSprite) {
+            const spriteScale = (radius * 2) / referenceSprite.width;
+            const timeSec = game.gameTime;
+            const middleRotationRad = -timeSec * 0.6;
+            const topRotationRad = timeSec * 0.8;
+
+            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+                if (!sprite) {
+                    return;
+                }
+                const spriteWidth = sprite.width * spriteScale;
+                const spriteHeight = sprite.height * spriteScale;
+                this.ctx.save();
+                this.ctx.translate(screenPos.x, screenPos.y);
+                this.ctx.rotate(rotationRad);
+                this.ctx.drawImage(
+                    sprite,
+                    -spriteWidth / 2,
+                    -spriteHeight / 2,
+                    spriteWidth,
+                    spriteHeight
+                );
+                this.ctx.restore();
+            };
+
+            drawLayer(bottomSprite, 0);
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
+
+            drawLayer(middleSprite, middleRotationRad);
+            drawLayer(topSprite, topRotationRad);
         }
-
-        // Draw swirl pattern in center (3 curved arcs rotating counter-clockwise)
-        const swirlRadius = radius * 0.7;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#8A2BE2', Constants.SHADE_OPACITY) : '#8A2BE2'; // Purple color for swirl
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.lineCap = 'round';
-        
-        for (let i = 0; i < 3; i++) {
-            const angle = (Date.now() / 500 + i * Math.PI * 2 / 3) % (Math.PI * 2); // Rotating animation
-            this.ctx.beginPath();
-            this.ctx.arc(
-                screenPos.x, 
-                screenPos.y, 
-                swirlRadius, 
-                angle, 
-                angle + Math.PI / 2
-            );
-            this.ctx.stroke();
-        }
-
-        // Draw central energy core
-        const coreRadius = radius * 0.25;
-        this.ctx.fillStyle = shouldDim ? this.darkenColor('#DDA0DD', Constants.SHADE_OPACITY) : '#DDA0DD'; // Plum color
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
-        this.ctx.fill();
 
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
@@ -3589,56 +3599,61 @@ export class GameRenderer {
             return;
         }
 
-        // Draw main structure (hexagon shape for industrial look)
-        this.ctx.fillStyle = displayColor;
-        const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const x = screenPos.x + Math.cos(angle) * radius;
-            const y = screenPos.y + Math.sin(angle) * radius;
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
+        const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
+
+        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
+        const bottomSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, displayColor);
+        const middleSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(middleSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(middleSpritePath, displayColor);
+        const topSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(topSpritePath, displayColor);
+
+        const referenceSprite = bottomSprite || middleSprite || topSprite;
+        if (referenceSprite) {
+            const spriteScale = (radius * 2) / referenceSprite.width;
+            const timeSec = game.gameTime;
+            const isProducing = Boolean(building.currentProduction);
+            const productionEase = isProducing
+                ? 0.5 - 0.5 * Math.cos(Math.min(1, building.productionProgress) * Math.PI)
+                : 0;
+            const spinSpeedRad = 0.5;
+            const bottomRotationRad = timeSec * spinSpeedRad * productionEase;
+            const topRotationRad = -timeSec * spinSpeedRad * productionEase;
+
+            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+                if (!sprite) {
+                    return;
+                }
+                const spriteWidth = sprite.width * spriteScale;
+                const spriteHeight = sprite.height * spriteScale;
+                this.ctx.save();
+                this.ctx.translate(screenPos.x, screenPos.y);
+                this.ctx.rotate(rotationRad);
+                this.ctx.drawImage(
+                    sprite,
+                    -spriteWidth / 2,
+                    -spriteHeight / 2,
+                    spriteWidth,
+                    spriteHeight
+                );
+                this.ctx.restore();
+            };
+
+            drawLayer(bottomSprite, bottomRotationRad);
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
             }
-        }
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
 
-        // Draw selection indicator if selected
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
+            drawLayer(middleSprite, 0);
+            drawLayer(topSprite, topRotationRad);
         }
-
-        // Draw production indicator (rotating inner hexagon)
-        const innerRadius = radius * 0.6;
-        const rotation = (Date.now() / 1000) % (Math.PI * 2);
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFD700', Constants.SHADE_OPACITY) : '#FFD700'; // Gold color
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i + rotation;
-            const x = screenPos.x + Math.cos(angle) * innerRadius;
-            const y = screenPos.y + Math.sin(angle) * innerRadius;
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
-            }
-        }
-        this.ctx.closePath();
-        this.ctx.stroke();
-
-        // Draw central core
-        const coreRadius = radius * 0.3;
-        this.ctx.fillStyle = shouldDim ? this.darkenColor('#FFD700', Constants.SHADE_OPACITY) : '#FFD700';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
-        this.ctx.fill();
 
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
@@ -4852,7 +4867,7 @@ export class GameRenderer {
         } else if (building instanceof Minigun) {
             return 'Cannon';
         } else if (building instanceof SpaceDustSwirler) {
-            return 'Space Dust Swirler';
+            return 'Cyclone';
         } else if (building instanceof SubsidiaryFactory) {
             return 'Foundry';
         }
