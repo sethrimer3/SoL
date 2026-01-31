@@ -393,6 +393,16 @@ export class GameRenderer {
         }
     }
 
+    private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
+        const factionColor = this.getFactionColor(player.faction);
+        if (!ladSun || !player.stellarForge) {
+            return factionColor;
+        }
+
+        const ownerSide = game.getLadSide(player.stellarForge.position, ladSun);
+        return ownerSide === 'light' ? '#FFFFFF' : '#000000';
+    }
+
     private getSpriteImage(path: string): HTMLImageElement {
         const resolvedPath = this.resolveAssetPath(path);
         const cached = this.spriteImageCache.get(resolvedPath);
@@ -991,10 +1001,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(forge.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(forgeColor, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(forge.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(forgeColor, Constants.SHADE_OPACITY);
+                }
             }
         }
 
@@ -1322,10 +1334,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(mirror.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(mirrorColor, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(mirror.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(mirrorColor, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2506,6 +2520,8 @@ export class GameRenderer {
      * Draw a Grave unit with its orbiting projectiles
      */
     private drawGrave(grave: Grave, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -2516,10 +2532,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(grave.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(grave.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2631,6 +2649,7 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(starling.position);
         const size = 8 * this.zoom * 0.3; // Minion size (30% of normal unit)
         const isSelected = this.selectedUnits.has(starling);
+        const ladSun = game.suns.find(s => s.type === 'lad');
         
         // Check visibility for enemy units
         let shouldDim = false;
@@ -2642,10 +2661,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(starling.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(starling.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2654,7 +2675,6 @@ export class GameRenderer {
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = this.getStarlingSpritePath(starling);
-        const ladSun = game.suns.find(s => s.type === 'lad');
         let starlingColor = isEnemy ? this.enemyColor : this.playerColor;
         let outlineColor = '#FFFFFF';
         if (ladSun && starling.owner) {
@@ -2771,6 +2791,8 @@ export class GameRenderer {
      * Draw a Ray unit (Solari hero)
      */
     private drawRay(ray: Ray, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -2780,10 +2802,12 @@ export class GameRenderer {
                 return; // Don't draw invisible enemy units
             }
             
-            const inShadow = game.isPointInShadow(ray.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(ray.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2826,6 +2850,8 @@ export class GameRenderer {
      * Draw an InfluenceBall unit (Solari hero)
      */
     private drawInfluenceBall(ball: InfluenceBall, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -2835,10 +2861,12 @@ export class GameRenderer {
                 return;
             }
             
-            const inShadow = game.isPointInShadow(ball.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(ball.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2864,6 +2892,8 @@ export class GameRenderer {
      * Draw a TurretDeployer unit (Solari hero)
      */
     private drawTurretDeployer(deployer: TurretDeployer, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -2873,10 +2903,12 @@ export class GameRenderer {
                 return;
             }
             
-            const inShadow = game.isPointInShadow(deployer.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(deployer.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2896,6 +2928,8 @@ export class GameRenderer {
      * Draw a Driller unit (Aurum hero)
      */
     private drawDriller(driller: Driller, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Don't draw if hidden in asteroid
         if (driller.isHiddenInAsteroid()) {
             return;
@@ -2910,10 +2944,12 @@ export class GameRenderer {
                 return;
             }
             
-            const inShadow = game.isPointInShadow(driller.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(driller.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -2941,6 +2977,8 @@ export class GameRenderer {
      * Draw a Dagger hero unit with cloak indicator
      */
     private drawDagger(dagger: Dagger, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -2950,10 +2988,12 @@ export class GameRenderer {
                 return; // Cloaked Dagger is invisible to enemies
             }
             
-            const inShadow = game.isPointInShadow(dagger.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(dagger.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -3009,6 +3049,8 @@ export class GameRenderer {
      * Draw a Beam hero unit with sniper indicator
      */
     private drawBeam(beam: Beam, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -3018,10 +3060,12 @@ export class GameRenderer {
                 return; // Don't draw invisible enemy units
             }
             
-            const inShadow = game.isPointInShadow(beam.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(beam.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -3087,6 +3131,8 @@ export class GameRenderer {
      * Draw a Mortar hero unit with detection cone visualization
      */
     private drawMortar(mortar: any, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
@@ -3096,10 +3142,12 @@ export class GameRenderer {
                 return; // Don't draw invisible enemy units
             }
             
-            const inShadow = game.isPointInShadow(mortar.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(mortar.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
             }
         }
         
@@ -3332,10 +3380,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(building.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(building.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+                }
             }
         }
 
@@ -3502,10 +3552,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(building.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(building.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+                }
             }
         }
 
@@ -3624,10 +3676,12 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(building.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(building.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+                }
             }
         }
 
@@ -4529,7 +4583,7 @@ export class GameRenderer {
         for (const player of game.players) {
             if (player.isDefeated()) continue;
 
-            const color = this.getFactionColor(player.faction);
+            const color = this.getLadPlayerColor(player, ladSun, game);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
 
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
@@ -4564,7 +4618,7 @@ export class GameRenderer {
         for (const player of game.players) {
             if (player.isDefeated()) continue;
             
-            const color = this.getFactionColor(player.faction);
+            const color = this.getLadPlayerColor(player, ladSun, game);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
             
             for (const unit of player.units) {
@@ -4607,7 +4661,7 @@ export class GameRenderer {
         for (const player of game.players) {
             if (player.isDefeated()) continue;
             
-            const color = this.getFactionColor(player.faction);
+            const color = this.getLadPlayerColor(player, ladSun, game);
             const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
             
             for (const building of player.buildings) {
