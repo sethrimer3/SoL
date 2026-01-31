@@ -5,76 +5,7 @@
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
-
-type GraphicVariant = 'svg' | 'png' | 'stub';
-type GraphicKey =
-    | 'centralSun'
-    | 'stellarForge'
-    | 'forgeFlameHot'
-    | 'forgeFlameCold'
-    | 'solarMirror'
-    | 'starling'
-    | 'heroMarine'
-    | 'heroGrave'
-    | 'heroDagger'
-    | 'heroBeam'
-    | 'heroMortar'
-    | 'heroRay'
-    | 'heroInfluenceBall'
-    | 'heroTurretDeployer'
-    | 'heroDriller'
-    | 'heroPreist'
-    | 'heroTank';
-
-type GraphicOption = {
-    key: GraphicKey;
-    label: string;
-    svgPath?: string;
-    pngPath?: string;
-};
-
-type InGameMenuTab = 'main' | 'options' | 'graphics';
-
-type InGameMenuAction =
-    | { type: 'resume' }
-    | { type: 'toggleInfo' }
-    | { type: 'surrender' }
-    | { type: 'tab'; tab: InGameMenuTab }
-    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
-    | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
-    | { type: 'healthDisplayMode'; mode: 'bar' | 'number' };
-
-type InGameMenuLayout = {
-    screenWidth: number;
-    screenHeight: number;
-    panelX: number;
-    panelY: number;
-    panelWidth: number;
-    panelHeight: number;
-    isCompactLayout: boolean;
-    titleY: number;
-    tabs: Array<{
-        tab: InGameMenuTab;
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-    }>;
-    contentTopY: number;
-    contentBottomY: number;
-    buttonWidth: number;
-    buttonHeight: number;
-    buttonX: number;
-    buttonSpacing: number;
-    graphicsListX: number;
-    graphicsListY: number;
-    graphicsListWidth: number;
-    graphicsListHeight: number;
-    graphicsRowHeight: number;
-    graphicsButtonWidth: number;
-    graphicsButtonHeight: number;
-    graphicsButtonGap: number;
-};
+import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 
 type ForgeFlameState = {
     warmth: number;
@@ -127,102 +58,7 @@ export class GameRenderer {
     private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
     private graphicsMenuScrollOffset = 0;
 
-    private readonly graphicsOptions: GraphicOption[] = [
-        {
-            key: 'centralSun',
-            label: 'Central Sun',
-            svgPath: 'ASSETS/sprites/environment/centralSun.svg',
-            pngPath: 'ASSETS/sprites/environment/centralSun.png'
-        },
-        {
-            key: 'stellarForge',
-            label: 'Stellar Forge Base',
-            svgPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.png'
-        },
-        {
-            key: 'forgeFlameHot',
-            label: 'Forge Flame (Hot)',
-            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png'
-        },
-        {
-            key: 'forgeFlameCold',
-            label: 'Forge Flame (Cold)',
-            pngPath: 'ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png'
-        },
-        {
-            key: 'solarMirror',
-            label: 'Solar Mirror',
-            svgPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.png'
-        },
-        {
-            key: 'starling',
-            label: 'Starling',
-            svgPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg',
-            pngPath: 'ASSETS/sprites/RADIANT/starlings/starlingLevel (1).png'
-        },
-        {
-            key: 'heroMarine',
-            label: 'Hero: Marine',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.png'
-        },
-        {
-            key: 'heroGrave',
-            label: 'Hero: Grave',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.png'
-        },
-        {
-            key: 'heroRay',
-            label: 'Hero: Ray',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
-        },
-        {
-            key: 'heroInfluenceBall',
-            label: 'Hero: Influence Ball',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.png'
-        },
-        {
-            key: 'heroTurretDeployer',
-            label: 'Hero: Turret Deployer',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.png'
-        },
-        {
-            key: 'heroDriller',
-            label: 'Hero: Driller',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.png'
-        },
-        {
-            key: 'heroDagger',
-            label: 'Hero: Dagger',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.png'
-        },
-        {
-            key: 'heroBeam',
-            label: 'Hero: Beam',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
-        },
-        {
-            key: 'heroPreist',
-            label: 'Hero: Preist',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.png'
-        },
-        {
-            key: 'heroTank',
-            label: 'Hero: Tank',
-            svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.svg',
-            pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.png'
-        }
-    ];
+    private readonly graphicsOptions = defaultGraphicsOptions;
 
     private static readonly CONTROL_LINES_FULL = [
         'Controls: Drag to select units',
@@ -5041,72 +4877,11 @@ export class GameRenderer {
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        const isCompactLayout = screenWidth < 600;
-        const panelWidth = Math.min(480, screenWidth - 40);
-        const panelHeight = Math.min(460, screenHeight - 40);
-        const panelX = (screenWidth - panelWidth) / 2;
-        const panelY = (screenHeight - panelHeight) / 2;
-        const panelPaddingX = isCompactLayout ? 14 : 20;
-        const panelPaddingY = isCompactLayout ? 16 : 20;
-        const titleY = panelY + (isCompactLayout ? 34 : 42);
-        const tabHeight = isCompactLayout ? 30 : 34;
-        const tabGap = 12;
-        const tabWidth = (panelWidth - panelPaddingX * 2 - tabGap * 2) / 3;
-        const tabY = titleY + (isCompactLayout ? 16 : 18);
-        const tabX = panelX + panelPaddingX;
-        const tabs: InGameMenuLayout['tabs'] = [
-            { tab: 'main', x: tabX, y: tabY, width: tabWidth, height: tabHeight },
-            { tab: 'options', x: tabX + tabWidth + tabGap, y: tabY, width: tabWidth, height: tabHeight },
-            { tab: 'graphics', x: tabX + (tabWidth + tabGap) * 2, y: tabY, width: tabWidth, height: tabHeight }
-        ];
-        const contentTopY = tabY + tabHeight + (isCompactLayout ? 16 : 20);
-        const contentBottomY = panelY + panelHeight - panelPaddingY;
-        const buttonWidth = Math.min(300, panelWidth - panelPaddingX * 2);
-        const buttonHeight = isCompactLayout ? 44 : 50;
-        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
-        const buttonSpacing = isCompactLayout ? 14 : 20;
-        const graphicsListX = panelX + panelPaddingX;
-        const graphicsListY = contentTopY;
-        const graphicsListWidth = panelWidth - panelPaddingX * 2;
-        const graphicsListHeight = Math.max(0, contentBottomY - contentTopY);
-        const graphicsRowHeight = isCompactLayout ? 44 : 48;
-        const graphicsButtonWidth = isCompactLayout ? 54 : 60;
-        const graphicsButtonHeight = isCompactLayout ? 26 : 30;
-        const graphicsButtonGap = 8;
-
-        return {
-            screenWidth,
-            screenHeight,
-            panelX,
-            panelY,
-            panelWidth,
-            panelHeight,
-            isCompactLayout,
-            titleY,
-            tabs,
-            contentTopY,
-            contentBottomY,
-            buttonWidth,
-            buttonHeight,
-            buttonX,
-            buttonSpacing,
-            graphicsListX,
-            graphicsListY,
-            graphicsListWidth,
-            graphicsListHeight,
-            graphicsRowHeight,
-            graphicsButtonWidth,
-            graphicsButtonHeight,
-            graphicsButtonGap
-        };
+        return getInGameMenuLayout(this.canvas.width, this.canvas.height);
     }
 
     private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
-        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
-        return Math.max(0, contentHeight - layout.graphicsListHeight);
+        return getGraphicsMenuMaxScroll(this.graphicsOptions.length, layout);
     }
 
     public handleInGameMenuScroll(screenX: number, screenY: number, deltaY: number): boolean {
