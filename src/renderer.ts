@@ -1785,9 +1785,9 @@ export class GameRenderer {
             sunScreenPos.x, sunScreenPos.y, 0,
             sunScreenPos.x, sunScreenPos.y, this.canvas.width
         );
-        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 0.55)');
-        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.25)');
-        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.12)');
+        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
+        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
         
         this.ctx.fillStyle = whiteGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1803,9 +1803,9 @@ export class GameRenderer {
             sunScreenPos.x, sunScreenPos.y, 0,
             sunScreenPos.x, sunScreenPos.y, this.canvas.width
         );
-        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 0.8)');
-        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.6)');
-        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
+        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.95)');
+        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
         
         this.ctx.fillStyle = blackGradient;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -1845,7 +1845,7 @@ export class GameRenderer {
                     
                     this.ctx.save();
                     // Dark shadows on light side, light shadows on dark side
-                    this.ctx.fillStyle = isOnLightSide ? 'rgba(0, 0, 20, 0.5)' : 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.fillStyle = isOnLightSide ? '#000000' : '#FFFFFF';
                     this.ctx.beginPath();
                     this.ctx.moveTo(sv1.x, sv1.y);
                     this.ctx.lineTo(sv2.x, sv2.y);
@@ -5508,7 +5508,7 @@ export class GameRenderer {
             
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
-                const value = stat.key === 'energy' ? player[stat.key].toFixed(1) : player[stat.key];
+                const value = stat.key === 'energyGathered' ? Math.round(player[stat.key]) : player[stat.key];
                 const colX = playerStartX + playerColumnWidth * (i + 1);
                 this.ctx.fillText(String(value), colX, y);
             }
