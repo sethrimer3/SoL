@@ -13,6 +13,7 @@ import type { GameState } from '../game-state';
 
 export class SolarMirror {
     health: number = Constants.MIRROR_MAX_HEALTH;
+    maxHealth: number = Constants.MIRROR_MAX_HEALTH;
     efficiency: number = 1.0; // 0.0 to 1.0
     isSelected: boolean = false;
     linkedStructure: StellarForge | Building | null = null;

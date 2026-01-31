@@ -61,14 +61,14 @@ export class GameState {
     bouncingBullets: BouncingBullet[] = [];
     abilityBullets: AbilityBullet[] = [];
     minionProjectiles: MinionProjectile[] = [];
-    mortarProjectiles: MortarProjectile[] = [];
+    mortarProjectiles: InstanceType<typeof MortarProjectile>[] = [];
     laserBeams: LaserBeam[] = [];
     impactParticles: ImpactParticle[] = [];
-    influenceZones: InfluenceZone[] = [];
-    influenceBallProjectiles: InfluenceBallProjectile[] = [];
-    deployedTurrets: DeployedTurret[] = [];
+    influenceZones: InstanceType<typeof InfluenceZone>[] = [];
+    influenceBallProjectiles: InstanceType<typeof InfluenceBallProjectile>[] = [];
+    deployedTurrets: InstanceType<typeof DeployedTurret>[] = [];
     damageNumbers: DamageNumber[] = [];
-    crescentWaves: CrescentWave[] = [];
+    crescentWaves: InstanceType<typeof CrescentWave>[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -2270,12 +2270,12 @@ export class GameState {
     /**
      * Process Ray's bouncing beam ability
      */
-    private processRayBeamAbility(ray: Ray): void {
+    private processRayBeamAbility(ray: InstanceType<typeof Ray>): void {
         if (!ray.drillDirection) {
             return;
         }
         
-        const segments: RayBeamSegment[] = [];
+        const segments: InstanceType<typeof RayBeamSegment>[] = [];
         let currentPos = new Vector2D(ray.position.x, ray.position.y);
         let currentDir = ray.drillDirection.normalize();
         let bounces = 0;
@@ -2496,7 +2496,7 @@ export class GameState {
     /**
      * Process turret deployment for TurretDeployer
      */
-    private processTurretDeployment(deployer: TurretDeployer): void {
+    private processTurretDeployment(deployer: InstanceType<typeof TurretDeployer>): void {
         // Find nearest asteroid
         let nearestAsteroid: Asteroid | null = null;
         let minDistance = Infinity;
@@ -2523,7 +2523,7 @@ export class GameState {
     /**
      * Process Driller collisions
      */
-    private processDrillerCollisions(driller: Driller, deltaTime: number): void {
+    private processDrillerCollisions(driller: InstanceType<typeof Driller>, deltaTime: number): void {
         // Check collision with suns (dies)
         for (const sun of this.suns) {
             const distance = driller.position.distanceTo(sun.position);

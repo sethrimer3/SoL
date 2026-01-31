@@ -2306,7 +2306,7 @@ export class GameRenderer {
     /**
      * Draw an influence zone
      */
-    private drawInfluenceZone(zone: InfluenceZone): void {
+    private drawInfluenceZone(zone: InstanceType<typeof InfluenceZone>): void {
         const screenPos = this.worldToScreen(zone.position);
         const radius = zone.radius * this.zoom;
         const opacity = Math.max(0.1, 1.0 - (zone.lifetime / zone.duration));
@@ -2337,7 +2337,7 @@ export class GameRenderer {
     /**
      * Draw an influence ball projectile
      */
-    private drawInfluenceBallProjectile(projectile: InfluenceBallProjectile): void {
+    private drawInfluenceBallProjectile(projectile: InstanceType<typeof InfluenceBallProjectile>): void {
         const screenPos = this.worldToScreen(projectile.position);
         const size = 12 * this.zoom;
         
@@ -2363,7 +2363,7 @@ export class GameRenderer {
     /**
      * Draw a crescent wave from Tank hero ability
      */
-    private drawCrescentWave(wave: CrescentWave): void {
+    private drawCrescentWave(wave: InstanceType<typeof CrescentWave>): void {
         const screenPos = this.worldToScreen(wave.position);
         const color = this.getFactionColor(wave.owner.faction);
         
@@ -2432,7 +2432,7 @@ export class GameRenderer {
     /**
      * Draw a deployed turret
      */
-    private drawDeployedTurret(turret: DeployedTurret, game: GameState): void {
+    private drawDeployedTurret(turret: InstanceType<typeof DeployedTurret>, game: GameState): void {
         const screenPos = this.worldToScreen(turret.position);
         const ladSun = game.suns.find(s => s.type === 'lad');
         let color = this.getFactionColor(turret.owner.faction);
@@ -2539,7 +2539,7 @@ export class GameRenderer {
     /**
      * Draw a Grave unit with its orbiting projectiles
      */
-    private drawGrave(grave: Grave, color: string, game: GameState, isEnemy: boolean): void {
+    private drawGrave(grave: InstanceType<typeof Grave>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -2815,7 +2815,7 @@ export class GameRenderer {
     /**
      * Draw a Ray unit (Solari hero)
      */
-    private drawRay(ray: Ray, color: string, game: GameState, isEnemy: boolean): void {
+    private drawRay(ray: InstanceType<typeof Ray>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -2874,7 +2874,7 @@ export class GameRenderer {
     /**
      * Draw an InfluenceBall unit (Solari hero)
      */
-    private drawInfluenceBall(ball: InfluenceBall, color: string, game: GameState, isEnemy: boolean): void {
+    private drawInfluenceBall(ball: InstanceType<typeof InfluenceBall>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -2916,7 +2916,7 @@ export class GameRenderer {
     /**
      * Draw a TurretDeployer unit (Solari hero)
      */
-    private drawTurretDeployer(deployer: TurretDeployer, color: string, game: GameState, isEnemy: boolean): void {
+    private drawTurretDeployer(deployer: InstanceType<typeof TurretDeployer>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -2952,7 +2952,7 @@ export class GameRenderer {
     /**
      * Draw a Driller unit (Aurum hero)
      */
-    private drawDriller(driller: Driller, color: string, game: GameState, isEnemy: boolean): void {
+    private drawDriller(driller: InstanceType<typeof Driller>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Don't draw if hidden in asteroid
@@ -3001,7 +3001,7 @@ export class GameRenderer {
     /**
      * Draw a Dagger hero unit with cloak indicator
      */
-    private drawDagger(dagger: Dagger, color: string, game: GameState, isEnemy: boolean): void {
+    private drawDagger(dagger: InstanceType<typeof Dagger>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -3073,7 +3073,7 @@ export class GameRenderer {
     /**
      * Draw a Beam hero unit with sniper indicator
      */
-    private drawBeam(beam: Beam, color: string, game: GameState, isEnemy: boolean): void {
+    private drawBeam(beam: InstanceType<typeof Beam>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
@@ -3261,7 +3261,7 @@ export class GameRenderer {
         }
     }
 
-    private drawPreist(preist: Preist, color: string, game: GameState, isEnemy: boolean): void {
+    private drawPreist(preist: InstanceType<typeof Preist>, color: string, game: GameState, isEnemy: boolean): void {
         // Draw base unit
         this.drawUnit(preist, color, game, isEnemy);
 
@@ -3335,7 +3335,7 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
-    private drawTank(tank: Tank, color: string, game: GameState, isEnemy: boolean): void {
+    private drawTank(tank: InstanceType<typeof Tank>, color: string, game: GameState, isEnemy: boolean): void {
         // Draw base unit (includes health bar and stun indicator)
         this.drawUnit(tank, color, game, isEnemy);
 
@@ -3811,7 +3811,7 @@ export class GameRenderer {
     /**
      * Draw a Grave projectile with trail
      */
-    private drawGraveProjectile(projectile: GraveProjectile, color: string): void {
+    private drawGraveProjectile(projectile: InstanceType<typeof GraveProjectile>, color: string): void {
         const screenPos = this.worldToScreen(projectile.position);
         const size = 4 * this.zoom;
         

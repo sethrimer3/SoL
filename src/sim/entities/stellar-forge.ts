@@ -9,6 +9,7 @@ import type { GameState } from '../game-state';
 
 export class StellarForge {
     health: number = 1000.0;
+    maxHealth: number = 1000.0;
     isReceivingLight: boolean = false;
     unitQueue: string[] = [];
     heroProductionUnitType: string | null = null;
