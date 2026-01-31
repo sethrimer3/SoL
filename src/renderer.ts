@@ -1316,9 +1316,25 @@ export class GameRenderer {
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
     private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let mirrorColor = color;
+        let outlineColor = '#FFFFFF';
+        if (ladSun && mirror.owner) {
+            const ownerSide = mirror.owner.stellarForge
+                ? game.getLadSide(mirror.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                mirrorColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                mirrorColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
+
         // Check visibility for enemy mirrors
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = mirrorColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
             if (!isVisible) {
@@ -1329,7 +1345,7 @@ export class GameRenderer {
             const inShadow = game.isPointInShadow(mirror.position);
             if (inShadow) {
                 shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                displayColor = this.darkenColor(mirrorColor, Constants.SHADE_OPACITY);
             }
         }
         
@@ -1435,10 +1451,12 @@ export class GameRenderer {
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
             // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
-            const mirrorColor = this.brightenAndPaleColor(displayColor);
+            const spriteColor = this.brightenAndPaleColor(displayColor);
             
             // Use tinted sprite for solar mirror
-            const mirrorSprite = this.getTintedSprite(mirrorSpritePath, mirrorColor);
+            const mirrorSprite = ladSun
+                ? this.getOutlinedTintedSprite(mirrorSpritePath, spriteColor, outlineColor)
+                : this.getTintedSprite(mirrorSpritePath, spriteColor);
             if (mirrorSprite) {
                 const targetSize = size * 2.4;
                 const scale = targetSize / Math.max(mirrorSprite.width, mirrorSprite.height);
@@ -1468,7 +1486,7 @@ export class GameRenderer {
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw border for the surface
-            this.ctx.strokeStyle = displayColor;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
@@ -1506,7 +1524,7 @@ export class GameRenderer {
         
         // Draw move order indicator if mirror has one
         if (mirror.moveOrder > 0 && mirror.targetPosition) {
-            this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, color);
+            this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor);
         }
 
         this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10);
