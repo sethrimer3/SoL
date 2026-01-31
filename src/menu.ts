@@ -5,1393 +5,14 @@
 import * as Constants from './constants';
 import { Faction } from './game-core';
 import { NetworkManager, LANSignaling, LobbyInfo, MessageType, NetworkEvent } from './network';
-
-export interface MenuOption {
-    id: string;
-    name: string;
-    description: string;
-    icon?: string;
-}
-
-interface FactionCarouselOption {
-    id: Faction;
-    name: string;
-    description: string;
-    color: string;
-}
-
-export interface MapConfig {
-    id: string;
-    name: string;
-    description: string;
-    numSuns: number;
-    numAsteroids: number;
-    mapSize: number;
-}
-
-export interface HeroUnit {
-    id: string;
-    name: string;
-    description: string;
-    faction: Faction;
-    // Combat stats
-    maxHealth: number;
-    attackDamage: number;
-    attackSpeed: number; // attacks per second
-    attackRange: number;
-    attackIgnoresDefense: boolean;
-    // Defensive stats
-    defense: number; // percentage damage reduction (0-100)
-    regen: number; // percentage of health recovered in influence field (0-100)
-    // Ability
-    abilityDescription: string;
-}
-
-export interface BaseLoadout {
-    id: string;
-    name: string;
-    description: string;
-    faction: Faction;
-}
-
-export interface SpawnLoadout {
-    id: string;
-    name: string;
-    description: string;
-    faction: Faction;
-}
-
-interface ParticleTarget {
-    x: number;
-    y: number;
-    color: string;
-}
-
-interface Particle {
-    x: number;
-    y: number;
-    velocityX: number;
-    velocityY: number;
-    targetX: number;
-    targetY: number;
-    baseTargetX: number;
-    baseTargetY: number;
-    colorR: number;
-    colorG: number;
-    colorB: number;
-    targetColorR: number;
-    targetColorG: number;
-    targetColorB: number;
-    sizePx: number;
-    driftPhase: number;
-    driftRadiusPx: number;
-    speedMultiplier: number; // Random multiplier for natural motion (0.8-1.2)
-}
-
-interface BackgroundParticle {
-    x: number;
-    y: number;
-    velocityX: number;
-    velocityY: number;
-    colorR: number;
-    colorG: number;
-    colorB: number;
-    targetColorR: number;
-    targetColorG: number;
-    targetColorB: number;
-    radius: number;
-}
-
-interface MenuAsteroidPoint {
-    angleRad: number;
-    radiusScale: number;
-}
-
-interface MenuAsteroid {
-    x: number;
-    y: number;
-    radiusPx: number;
-    velocityX: number;
-    velocityY: number;
-    rotationRad: number;
-    rotationSpeedRad: number;
-    points: MenuAsteroidPoint[];
-}
-
-class BackgroundParticleLayer {
-    private static readonly PARTICLE_COUNT = 24;
-    private static readonly PARTICLE_RADIUS = 75;  // 30% of original 250
-    private static readonly MAX_VELOCITY = 0.3;
-    private static readonly MIN_VELOCITY = 0.02;
-    private static readonly FRICTION = 0.98;
-    private static readonly COLOR_TRANSITION_SPEED = 0.002;
-    private static readonly ATTRACTION_STRENGTH = 0.15;
-    private static readonly COLOR_CHANGE_INTERVAL_MS = 8000;
-    private static readonly EDGE_REPULSION_DISTANCE = 300;
-    private static readonly EDGE_REPULSION_STRENGTH = 0.05;
-    private static readonly EDGE_GLOW_DISTANCE = 400;
-    // Normalization factor for edge glow intensity scaled by particle count
-    // Higher particle count requires higher normalization to maintain visual consistency
-    private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
-    
-    private canvas: HTMLCanvasElement;
-    private context: CanvasRenderingContext2D;
-    private particles: BackgroundParticle[] = [];
-    private attractionMatrix: number[][] = [];
-    private animationFrameId: number | null = null;
-    private isActive: boolean = false;
-    private lastColorChangeMs: number = 0;
-    private edgeGlows: { top: number[]; right: number[]; bottom: number[]; left: number[] } = {
-        top: [0, 0, 0],
-        right: [0, 0, 0],
-        bottom: [0, 0, 0],
-        left: [0, 0, 0]
-    };
-    
-    private readonly gradientColors = [
-        [138, 43, 226],   // Blue Violet
-        [147, 51, 234],   // Purple
-        [219, 39, 119],   // Pink
-        [236, 72, 153],   // Light Pink
-        [59, 130, 246],   // Blue
-        [14, 165, 233],   // Sky Blue
-        [168, 85, 247],   // Violet
-        [192, 132, 252]   // Light Purple
-    ];
-    
-    constructor(container: HTMLElement) {
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'fixed';
-        this.canvas.style.top = '0';
-        this.canvas.style.left = '0';
-        this.canvas.style.width = '100%';
-        this.canvas.style.height = '100%';
-        this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '-1';
-        
-        const context = this.canvas.getContext('2d');
-        if (!context) {
-            throw new Error('Unable to create background particle canvas context. This may be due to browser compatibility or system limitations.');
-        }
-        this.context = context;
-        
-        container.appendChild(this.canvas);
-        
-        this.resize();
-        this.initializeParticles();
-        this.initializeAttractionMatrix();
-        this.start();
-    }
-    
-    private initializeParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-        
-        this.particles = [];
-        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
-            const color = this.gradientColors[i % this.gradientColors.length];
-            const particle: BackgroundParticle = {
-                x: Math.random() * width,
-                y: Math.random() * height,
-                velocityX: (Math.random() - 0.5) * 0.5,
-                velocityY: (Math.random() - 0.5) * 0.5,
-                colorR: color[0],
-                colorG: color[1],
-                colorB: color[2],
-                targetColorR: color[0],
-                targetColorG: color[1],
-                targetColorB: color[2],
-                radius: BackgroundParticleLayer.PARTICLE_RADIUS
-            };
-            this.particles.push(particle);
-        }
-    }
-    
-    private initializeAttractionMatrix(): void {
-        this.attractionMatrix = [];
-        for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
-            this.attractionMatrix[i] = [];
-            for (let j = 0; j < BackgroundParticleLayer.PARTICLE_COUNT; j++) {
-                if (i === j) {
-                    this.attractionMatrix[i][j] = 0;
-                } else {
-                    // Random attraction (-0.5 to 0.5): negative = repulsion, positive = attraction
-                    this.attractionMatrix[i][j] = (Math.random() - 0.5) * BackgroundParticleLayer.ATTRACTION_STRENGTH;
-                }
-            }
-        }
-    }
-    
-    public resize(): void {
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        this.canvas.width = Math.round(width * devicePixelRatio);
-        this.canvas.height = Math.round(height * devicePixelRatio);
-        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    }
-    
-    public start(): void {
-        if (this.isActive) {
-            return;
-        }
-        this.isActive = true;
-        this.lastColorChangeMs = performance.now();
-        this.animate();
-    }
-    
-    public stop(): void {
-        this.isActive = false;
-        if (this.animationFrameId !== null) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-    }
-    
-    private animate(): void {
-        if (!this.isActive) {
-            return;
-        }
-        
-        const nowMs = performance.now();
-        
-        // Periodically change target colors for smooth transitions
-        if (nowMs - this.lastColorChangeMs >= BackgroundParticleLayer.COLOR_CHANGE_INTERVAL_MS) {
-            this.updateTargetColors();
-            this.lastColorChangeMs = nowMs;
-        }
-        
-        this.updateParticles();
-        this.render();
-        
-        this.animationFrameId = requestAnimationFrame(() => this.animate());
-    }
-    
-    private updateTargetColors(): void {
-        for (let i = 0; i < this.particles.length; i++) {
-            const colorIndex = Math.floor(Math.random() * this.gradientColors.length);
-            const color = this.gradientColors[colorIndex];
-            this.particles[i].targetColorR = color[0];
-            this.particles[i].targetColorG = color[1];
-            this.particles[i].targetColorB = color[2];
-        }
-    }
-    
-    private updateParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-        
-        // Reset edge glows
-        this.edgeGlows.top = [0, 0, 0];
-        this.edgeGlows.right = [0, 0, 0];
-        this.edgeGlows.bottom = [0, 0, 0];
-        this.edgeGlows.left = [0, 0, 0];
-        
-        // Apply attraction/repulsion forces
-        for (let i = 0; i < this.particles.length; i++) {
-            const p1 = this.particles[i];
-            
-            for (let j = 0; j < this.particles.length; j++) {
-                if (i === j) continue;
-                
-                const p2 = this.particles[j];
-                const dx = p2.x - p1.x;
-                const dy = p2.y - p1.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                
-                if (distance > 0) {
-                    const force = this.attractionMatrix[i][j];
-                    const forceX = (dx / distance) * force;
-                    const forceY = (dy / distance) * force;
-                    
-                    p1.velocityX += forceX;
-                    p1.velocityY += forceY;
-                }
-            }
-            
-            // Apply edge repulsion
-            const edgeRepulsion = BackgroundParticleLayer.EDGE_REPULSION_DISTANCE;
-            const edgeStrength = BackgroundParticleLayer.EDGE_REPULSION_STRENGTH;
-            
-            // Left edge
-            if (p1.x < edgeRepulsion) {
-                const force = (1 - p1.x / edgeRepulsion) * edgeStrength;
-                p1.velocityX += force;
-            }
-            // Right edge
-            if (p1.x > width - edgeRepulsion) {
-                const force = (1 - (width - p1.x) / edgeRepulsion) * edgeStrength;
-                p1.velocityX -= force;
-            }
-            // Top edge
-            if (p1.y < edgeRepulsion) {
-                const force = (1 - p1.y / edgeRepulsion) * edgeStrength;
-                p1.velocityY += force;
-            }
-            // Bottom edge
-            if (p1.y > height - edgeRepulsion) {
-                const force = (1 - (height - p1.y) / edgeRepulsion) * edgeStrength;
-                p1.velocityY -= force;
-            }
-            
-            // Apply friction
-            p1.velocityX *= BackgroundParticleLayer.FRICTION;
-            p1.velocityY *= BackgroundParticleLayer.FRICTION;
-            
-            // Limit velocity
-            const speed = Math.sqrt(p1.velocityX * p1.velocityX + p1.velocityY * p1.velocityY);
-            if (speed > BackgroundParticleLayer.MAX_VELOCITY) {
-                p1.velocityX = (p1.velocityX / speed) * BackgroundParticleLayer.MAX_VELOCITY;
-                p1.velocityY = (p1.velocityY / speed) * BackgroundParticleLayer.MAX_VELOCITY;
-            }
-            // Apply minimum velocity to keep particles moving
-            if (speed < BackgroundParticleLayer.MIN_VELOCITY) {
-                // Give particles a small random velocity if completely stopped
-                const angle = Math.random() * Math.PI * 2;
-                p1.velocityX = Math.cos(angle) * BackgroundParticleLayer.MIN_VELOCITY;
-                p1.velocityY = Math.sin(angle) * BackgroundParticleLayer.MIN_VELOCITY;
-            }
-            
-            // Update position
-            p1.x += p1.velocityX;
-            p1.y += p1.velocityY;
-            
-            // Keep particles on screen (bounce back instead of wrapping)
-            if (p1.x < 0) {
-                p1.x = 0;
-                p1.velocityX = Math.abs(p1.velocityX);
-            }
-            if (p1.x > width) {
-                p1.x = width;
-                p1.velocityX = -Math.abs(p1.velocityX);
-            }
-            if (p1.y < 0) {
-                p1.y = 0;
-                p1.velocityY = Math.abs(p1.velocityY);
-            }
-            if (p1.y > height) {
-                p1.y = height;
-                p1.velocityY = -Math.abs(p1.velocityY);
-            }
-            
-            // Calculate edge glow contributions
-            const glowDistance = BackgroundParticleLayer.EDGE_GLOW_DISTANCE;
-            const r = Math.round(p1.colorR);
-            const g = Math.round(p1.colorG);
-            const b = Math.round(p1.colorB);
-            
-            // Top edge glow
-            if (p1.y < glowDistance) {
-                const intensity = (1 - p1.y / glowDistance);
-                this.edgeGlows.top[0] += r * intensity;
-                this.edgeGlows.top[1] += g * intensity;
-                this.edgeGlows.top[2] += b * intensity;
-            }
-            // Bottom edge glow
-            if (p1.y > height - glowDistance) {
-                const intensity = (1 - (height - p1.y) / glowDistance);
-                this.edgeGlows.bottom[0] += r * intensity;
-                this.edgeGlows.bottom[1] += g * intensity;
-                this.edgeGlows.bottom[2] += b * intensity;
-            }
-            // Left edge glow
-            if (p1.x < glowDistance) {
-                const intensity = (1 - p1.x / glowDistance);
-                this.edgeGlows.left[0] += r * intensity;
-                this.edgeGlows.left[1] += g * intensity;
-                this.edgeGlows.left[2] += b * intensity;
-            }
-            // Right edge glow
-            if (p1.x > width - glowDistance) {
-                const intensity = (1 - (width - p1.x) / glowDistance);
-                this.edgeGlows.right[0] += r * intensity;
-                this.edgeGlows.right[1] += g * intensity;
-                this.edgeGlows.right[2] += b * intensity;
-            }
-            
-            // Smoothly transition colors
-            p1.colorR += (p1.targetColorR - p1.colorR) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
-            p1.colorG += (p1.targetColorG - p1.colorG) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
-            p1.colorB += (p1.targetColorB - p1.colorB) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
-        }
-    }
-    
-    private render(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
-        
-        // Clear with black background
-        this.context.fillStyle = '#000000';
-        this.context.fillRect(0, 0, width, height);
-        
-        // Draw edge glows first (under particles)
-        this.context.globalCompositeOperation = 'screen';
-        this.context.filter = 'blur(40px)';
-        
-        const glowHeight = 60;
-        const glowWidth = 60;
-        
-        // Normalize and draw edge glows
-        const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
-        
-        // Top edge
-        const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
-        const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
-        const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
-        if (topR + topG + topB > 0) {
-            const gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
-            gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
-            gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, 0, width, glowHeight);
-        }
-        
-        // Bottom edge
-        const bottomR = Math.min(255, Math.round(this.edgeGlows.bottom[0] / maxGlow * 255));
-        const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
-        const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
-        if (bottomR + bottomG + bottomB > 0) {
-            const gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
-            gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
-            gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, height - glowHeight, width, glowHeight);
-        }
-        
-        // Left edge
-        const leftR = Math.min(255, Math.round(this.edgeGlows.left[0] / maxGlow * 255));
-        const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
-        const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
-        if (leftR + leftG + leftB > 0) {
-            const gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
-            gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
-            gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, 0, glowWidth, height);
-        }
-        
-        // Right edge
-        const rightR = Math.min(255, Math.round(this.edgeGlows.right[0] / maxGlow * 255));
-        const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
-        const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
-        if (rightR + rightG + rightB > 0) {
-            const gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
-            gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
-            gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
-            this.context.fillStyle = gradient;
-            this.context.fillRect(width - glowWidth, 0, glowWidth, height);
-        }
-        
-        // Draw particles with blur effect (reduced blur for better performance)
-        this.context.filter = 'blur(60px)';
-        this.context.globalCompositeOperation = 'screen';
-        
-        for (const particle of this.particles) {
-            const gradient = this.context.createRadialGradient(
-                particle.x, particle.y, 0,
-                particle.x, particle.y, particle.radius
-            );
-            
-            const r = Math.round(particle.colorR);
-            const g = Math.round(particle.colorG);
-            const b = Math.round(particle.colorB);
-            
-            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
-            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-            
-            this.context.fillStyle = gradient;
-            this.context.beginPath();
-            this.context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
-            this.context.fill();
-        }
-        
-        this.context.filter = 'none';
-        this.context.globalCompositeOperation = 'source-over';
-    }
-    
-    public destroy(): void {
-        this.stop();
-        if (this.canvas.parentElement) {
-            this.canvas.parentElement.removeChild(this.canvas);
-        }
-    }
-}
-
-class MenuAtmosphereLayer {
-    private static readonly ASTEROID_COUNT = 14;
-    private static readonly ASTEROID_MIN_RADIUS_PX = 6;
-    private static readonly ASTEROID_MAX_RADIUS_PX = 16;
-    private static readonly ASTEROID_SPEED_MIN = 0.06;
-    private static readonly ASTEROID_SPEED_MAX = 0.18;
-    private static readonly ASTEROID_ROTATION_MIN_RAD = 0.004;
-    private static readonly ASTEROID_ROTATION_MAX_RAD = 0.014;
-    private static readonly SUN_RADIUS_PX = 120;
-    private static readonly SUN_GLOW_RADIUS_PX = 320;
-    private static readonly SUN_OFFSET_X_PX = -28;
-    private static readonly SUN_OFFSET_Y_PX = -22;
-    private static readonly SHADOW_LENGTH_BASE_PX = 120;
-    private static readonly SHADOW_LENGTH_MULTIPLIER = 7.5;
-    private static readonly BOUNDS_MARGIN_PX = 80;
-
-    private container: HTMLElement;
-    private canvas: HTMLCanvasElement;
-    private context: CanvasRenderingContext2D;
-    private asteroids: MenuAsteroid[] = [];
-    private animationFrameId: number | null = null;
-    private isActive: boolean = false;
-    private widthPx: number = 0;
-    private heightPx: number = 0;
-    private sunSprite: HTMLImageElement;
-
-    constructor(container: HTMLElement, sunSpritePath: string) {
-        this.container = container;
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'fixed';
-        this.canvas.style.top = '0';
-        this.canvas.style.left = '0';
-        this.canvas.style.width = '100%';
-        this.canvas.style.height = '100%';
-        this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '0';
-        this.canvas.style.opacity = '0.2';
-
-        const context = this.canvas.getContext('2d');
-        if (!context) {
-            throw new Error('Unable to create menu atmosphere canvas context.');
-        }
-        this.context = context;
-
-        this.sunSprite = new Image();
-        this.sunSprite.src = sunSpritePath;
-
-        this.container.appendChild(this.canvas);
-        this.resize();
-        this.initializeAsteroids();
-        this.start();
-    }
-
-    public start(): void {
-        if (this.isActive) {
-            return;
-        }
-        this.isActive = true;
-        this.animate();
-    }
-
-    public stop(): void {
-        this.isActive = false;
-        if (this.animationFrameId !== null) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-    }
-
-    public resize(): void {
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        const width = window.innerWidth;
-        const height = window.innerHeight;
-        this.widthPx = width;
-        this.heightPx = height;
-        this.canvas.width = Math.round(width * devicePixelRatio);
-        this.canvas.height = Math.round(height * devicePixelRatio);
-        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    }
-
-    public destroy(): void {
-        this.stop();
-        if (this.canvas.parentElement) {
-            this.canvas.parentElement.removeChild(this.canvas);
-        }
-    }
-
-    private initializeAsteroids(): void {
-        this.asteroids = [];
-        for (let i = 0; i < MenuAtmosphereLayer.ASTEROID_COUNT; i++) {
-            this.asteroids.push(this.createAsteroid());
-        }
-    }
-
-    private createAsteroid(): MenuAsteroid {
-        const radiusPx = this.randomRange(
-            MenuAtmosphereLayer.ASTEROID_MIN_RADIUS_PX,
-            MenuAtmosphereLayer.ASTEROID_MAX_RADIUS_PX
-        );
-        const position = this.createSpawnPosition();
-        const velocity = this.createVelocity();
-        const rotationSpeedRad = this.randomRange(
-            MenuAtmosphereLayer.ASTEROID_ROTATION_MIN_RAD,
-            MenuAtmosphereLayer.ASTEROID_ROTATION_MAX_RAD
-        );
-        const points: MenuAsteroidPoint[] = [];
-        const pointCount = 7 + Math.floor(Math.random() * 4);
-        for (let i = 0; i < pointCount; i++) {
-            points.push({
-                angleRad: (Math.PI * 2 * i) / pointCount,
-                radiusScale: 0.7 + Math.random() * 0.5,
-            });
-        }
-        return {
-            x: position.x,
-            y: position.y,
-            radiusPx,
-            velocityX: velocity.x,
-            velocityY: velocity.y,
-            rotationRad: Math.random() * Math.PI * 2,
-            rotationSpeedRad: rotationSpeedRad * (Math.random() > 0.5 ? 1 : -1),
-            points,
-        };
-    }
-
-    private createSpawnPosition(): { x: number; y: number } {
-        const margin = MenuAtmosphereLayer.BOUNDS_MARGIN_PX;
-        const sideRoll = Math.random();
-        if (sideRoll < 0.5) {
-            return {
-                x: this.randomRange(-margin, this.widthPx + margin),
-                y: this.randomRange(-margin * 0.6, this.heightPx * 0.7),
-            };
-        }
-        return {
-            x: this.randomRange(-margin, this.widthPx * 0.7),
-            y: this.randomRange(-margin, this.heightPx + margin),
-        };
-    }
-
-    private createVelocity(): { x: number; y: number } {
-        const speed = this.randomRange(
-            MenuAtmosphereLayer.ASTEROID_SPEED_MIN,
-            MenuAtmosphereLayer.ASTEROID_SPEED_MAX
-        );
-        const angleRad = Math.random() * Math.PI * 2;
-        return {
-            x: Math.cos(angleRad) * speed,
-            y: Math.sin(angleRad) * speed,
-        };
-    }
-
-    private animate(): void {
-        if (!this.isActive) {
-            return;
-        }
-        this.updateAsteroids();
-        this.render();
-        this.animationFrameId = requestAnimationFrame(() => this.animate());
-    }
-
-    private updateAsteroids(): void {
-        const margin = MenuAtmosphereLayer.BOUNDS_MARGIN_PX;
-        const minX = -margin;
-        const minY = -margin;
-        const maxX = this.widthPx + margin;
-        const maxY = this.heightPx + margin;
-
-        for (const asteroid of this.asteroids) {
-            asteroid.x += asteroid.velocityX;
-            asteroid.y += asteroid.velocityY;
-            asteroid.rotationRad += asteroid.rotationSpeedRad;
-
-            if (asteroid.x < minX || asteroid.x > maxX || asteroid.y < minY || asteroid.y > maxY) {
-                const spawn = this.createSpawnPosition();
-                const velocity = this.createVelocity();
-                asteroid.x = spawn.x;
-                asteroid.y = spawn.y;
-                asteroid.velocityX = velocity.x;
-                asteroid.velocityY = velocity.y;
-            }
-        }
-    }
-
-    private render(): void {
-        this.context.clearRect(0, 0, this.widthPx, this.heightPx);
-        this.renderSunGlow();
-        this.renderAsteroids();
-    }
-
-    private renderSunGlow(): void {
-        const sunCenter = this.getSunCenter();
-        const gradient = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.35,
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
-        );
-        gradient.addColorStop(0, 'rgba(255, 240, 200, 0.9)');
-        gradient.addColorStop(0.4, 'rgba(255, 200, 120, 0.5)');
-        gradient.addColorStop(0.7, 'rgba(255, 150, 80, 0.25)');
-        gradient.addColorStop(1, 'rgba(255, 120, 40, 0)');
-
-        this.context.fillStyle = gradient;
-        this.context.beginPath();
-        this.context.arc(
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX,
-            0,
-            Math.PI * 2
-        );
-        this.context.fill();
-
-        if (this.sunSprite.complete && this.sunSprite.naturalWidth > 0) {
-            const diameterPx = MenuAtmosphereLayer.SUN_RADIUS_PX * 2;
-            this.context.drawImage(
-                this.sunSprite,
-                sunCenter.x - MenuAtmosphereLayer.SUN_RADIUS_PX,
-                sunCenter.y - MenuAtmosphereLayer.SUN_RADIUS_PX,
-                diameterPx,
-                diameterPx
-            );
-        } else {
-            this.context.fillStyle = 'rgba(255, 215, 120, 0.95)';
-            this.context.beginPath();
-            this.context.arc(
-                sunCenter.x,
-                sunCenter.y,
-                MenuAtmosphereLayer.SUN_RADIUS_PX,
-                0,
-                Math.PI * 2
-            );
-            this.context.fill();
-        }
-    }
-
-    private renderAsteroids(): void {
-        const sunCenter = this.getSunCenter();
-        for (const asteroid of this.asteroids) {
-            const points = this.getAsteroidPoints(asteroid);
-            // Dropshadow removed per requirements
-            this.renderAsteroidBody(asteroid, points);
-        }
-    }
-
-    private renderAsteroidShadow(
-        asteroid: MenuAsteroid,
-        points: { x: number; y: number }[],
-        sunCenter: { x: number; y: number }
-    ): void {
-        const shadowOffset = this.getShadowOffset(asteroid, sunCenter);
-        const shadowLength =
-            MenuAtmosphereLayer.SHADOW_LENGTH_BASE_PX +
-            asteroid.radiusPx * MenuAtmosphereLayer.SHADOW_LENGTH_MULTIPLIER;
-
-        this.context.fillStyle = 'rgba(20, 14, 12, 0.45)';
-        this.context.beginPath();
-        for (let i = 0; i < points.length; i++) {
-            const point = points[i];
-            if (i === 0) {
-                this.context.moveTo(point.x, point.y);
-            } else {
-                this.context.lineTo(point.x, point.y);
-            }
-        }
-        for (let i = points.length - 1; i >= 0; i--) {
-            const point = points[i];
-            this.context.lineTo(
-                point.x + shadowOffset.x * shadowLength,
-                point.y + shadowOffset.y * shadowLength
-            );
-        }
-        this.context.closePath();
-        this.context.fill();
-    }
-
-    private renderAsteroidBody(asteroid: MenuAsteroid, points: { x: number; y: number }[]): void {
-        this.context.fillStyle = 'rgba(170, 160, 140, 0.8)';
-        this.context.beginPath();
-        for (let i = 0; i < points.length; i++) {
-            const point = points[i];
-            if (i === 0) {
-                this.context.moveTo(point.x, point.y);
-            } else {
-                this.context.lineTo(point.x, point.y);
-            }
-        }
-        this.context.closePath();
-        this.context.fill();
-
-        this.context.strokeStyle = 'rgba(120, 105, 90, 0.65)';
-        this.context.lineWidth = 1;
-        this.context.stroke();
-    }
-
-    private getSunCenter(): { x: number; y: number } {
-        return {
-            x: MenuAtmosphereLayer.SUN_RADIUS_PX + MenuAtmosphereLayer.SUN_OFFSET_X_PX,
-            y: MenuAtmosphereLayer.SUN_RADIUS_PX + MenuAtmosphereLayer.SUN_OFFSET_Y_PX,
-        };
-    }
-
-    private getShadowOffset(asteroid: MenuAsteroid, sunCenter: { x: number; y: number }): { x: number; y: number } {
-        const deltaX = asteroid.x - sunCenter.x;
-        const deltaY = asteroid.y - sunCenter.y;
-        const distance = Math.max(1, Math.hypot(deltaX, deltaY));
-        const normX = deltaX / distance;
-        const normY = deltaY / distance;
-        return {
-            x: normX,
-            y: normY,
-        };
-    }
-
-    private getAsteroidPoints(asteroid: MenuAsteroid): { x: number; y: number }[] {
-        const points: { x: number; y: number }[] = [];
-        const basePoints = asteroid.points;
-        for (let i = 0; i < basePoints.length; i++) {
-            const point = basePoints[i];
-            const angleRad = point.angleRad + asteroid.rotationRad;
-            const radiusPx = asteroid.radiusPx * point.radiusScale;
-            points.push({
-                x: asteroid.x + Math.cos(angleRad) * radiusPx,
-                y: asteroid.y + Math.sin(angleRad) * radiusPx,
-            });
-        }
-        return points;
-    }
-
-    private randomRange(min: number, max: number): number {
-        return min + Math.random() * (max - min);
-    }
-}
-
-class ParticleMenuLayer {
-    private static readonly REFRESH_INTERVAL_MS = 140;
-    private static readonly POSITION_SMOOTHING = 0.08 / 14;
-    private static readonly DRIFT_SPEED = 0.0007 / 6;
-    private static readonly DRIFT_RADIUS_MIN_PX = 0.03;
-    private static readonly DRIFT_RADIUS_MAX_PX = 0.11;
-    private static readonly COLOR_SMOOTHING = 0.08;
-    private static readonly PARTICLE_SIZE_PX = 1.6;
-    private static readonly RELOCATE_MIN_DISTANCE_PX = 4;
-    private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
-    private static readonly BASE_PARTICLE_OPACITY = 0.15;
-    private static readonly PEAK_PARTICLE_OPACITY = 0.4;
-    private static readonly TRANSITION_DURATION_MS = 600;
-
-    private container: HTMLElement;
-    private canvas: HTMLCanvasElement;
-    private context: CanvasRenderingContext2D;
-    private offscreenCanvas: HTMLCanvasElement;
-    private offscreenContext: CanvasRenderingContext2D;
-    private particles: Particle[] = [];
-    private animationFrameId: number | null = null;
-    private isActive: boolean = false;
-    private needsTargetRefresh: boolean = false;
-    private lastTargetRefreshMs: number = 0;
-    private targetRefreshContainer: HTMLElement | null = null;
-    private densityMultiplier: number = 1;
-    private desiredParticleCount: number = 0;
-    private menuContentElement: HTMLElement | null = null;
-    private particleOpacity: number = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-    private menuOpacity: number = 1;
-    private transitionStartMs: number | null = null;
-
-    constructor(container: HTMLElement) {
-        this.container = container;
-        this.canvas = document.createElement('canvas');
-        this.canvas.style.position = 'fixed';
-        this.canvas.style.top = '0';
-        this.canvas.style.left = '0';
-        this.canvas.style.width = '100%';
-        this.canvas.style.height = '100%';
-        this.canvas.style.pointerEvents = 'none';
-        this.canvas.style.zIndex = '2';
-
-        const context = this.canvas.getContext('2d');
-        if (!context) {
-            throw new Error('Unable to create menu particle canvas context.');
-        }
-        this.context = context;
-
-        this.offscreenCanvas = document.createElement('canvas');
-        const offscreenContext = this.offscreenCanvas.getContext('2d');
-        if (!offscreenContext) {
-            throw new Error('Unable to create offscreen particle canvas context.');
-        }
-        this.offscreenContext = offscreenContext;
-
-        this.container.appendChild(this.canvas);
-        // Defer initial resize to ensure container has layout dimensions
-        requestAnimationFrame(() => {
-            try {
-                this.resize();
-            } catch (error) {
-                console.error('Failed to resize particle canvas:', error);
-            }
-        });
-        this.start();
-    }
-
-    public start(): void {
-        if (this.isActive) {
-            return;
-        }
-        this.isActive = true;
-        this.animate();
-    }
-
-    public stop(): void {
-        this.isActive = false;
-        if (this.animationFrameId !== null) {
-            cancelAnimationFrame(this.animationFrameId);
-            this.animationFrameId = null;
-        }
-    }
-
-    public resize(): void {
-        const rect = this.container.getBoundingClientRect();
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        const width = rect.width || window.innerWidth;
-        const height = rect.height || window.innerHeight;
-        this.canvas.width = Math.round(width * devicePixelRatio);
-        this.canvas.height = Math.round(height * devicePixelRatio);
-        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    }
-
-    public setMenuContentElement(element: HTMLElement): void {
-        this.menuContentElement = element;
-        this.applyMenuOpacity();
-    }
-
-    public requestTargetRefresh(container: HTMLElement): void {
-        this.needsTargetRefresh = true;
-        this.targetRefreshContainer = container;
-    }
-
-    public clearTargets(): void {
-        this.setTargets([]);
-    }
-
-    public setDensityMultiplier(multiplier: number): void {
-        this.densityMultiplier = Math.max(0.5, multiplier);
-    }
-
-    public startTransition(): void {
-        this.transitionStartMs = performance.now();
-    }
-
-    private animate(): void {
-        if (!this.isActive) {
-            return;
-        }
-
-        const nowMs = performance.now();
-        if (
-            this.needsTargetRefresh
-            && this.targetRefreshContainer
-            && nowMs - this.lastTargetRefreshMs >= ParticleMenuLayer.REFRESH_INTERVAL_MS
-        ) {
-            this.updateTargetsFromElements(this.targetRefreshContainer);
-            this.lastTargetRefreshMs = nowMs;
-            this.needsTargetRefresh = false;
-        }
-
-        this.updateParticles(nowMs);
-        this.renderParticles();
-        this.animationFrameId = requestAnimationFrame(() => this.animate());
-    }
-
-    private updateTargetsFromElements(container: HTMLElement): void {
-        const targets = this.collectTargets(container);
-        this.setTargets(targets);
-    }
-
-    private setTargets(targets: ParticleTarget[]): void {
-        const updatedParticles: Particle[] = [];
-        const targetCount = targets.length;
-
-        if (targetCount === 0) {
-            this.particles = updatedParticles;
-            this.desiredParticleCount = 0;
-            return;
-        }
-
-        this.desiredParticleCount = targetCount;
-
-        const desiredCount = this.desiredParticleCount;
-        const existingParticles = this.particles.slice();
-        if (existingParticles.length > desiredCount) {
-            existingParticles.length = desiredCount;
-        }
-
-        while (existingParticles.length < desiredCount) {
-            const seed = targets[existingParticles.length % targetCount];
-            existingParticles.push(this.createParticle(seed.x, seed.y, seed.color));
-        }
-
-        for (let i = 0; i < desiredCount; i++) {
-            const target = targets[i % targetCount];
-            const particle = existingParticles[i];
-            const relocatedTarget = this.getRelocatedTarget(target);
-            particle.targetX = relocatedTarget.x;
-            particle.targetY = relocatedTarget.y;
-            particle.baseTargetX = relocatedTarget.x;
-            particle.baseTargetY = relocatedTarget.y;
-            const targetColor = this.parseColor(target.color);
-            particle.targetColorR = targetColor.r;
-            particle.targetColorG = targetColor.g;
-            particle.targetColorB = targetColor.b;
-            particle.sizePx = ParticleMenuLayer.PARTICLE_SIZE_PX;
-            updatedParticles.push(particle);
-        }
-
-        this.particles = updatedParticles;
-    }
-
-    private createParticle(x: number, y: number, color: string): Particle {
-        const driftPhase = Math.random() * Math.PI * 2;
-        const driftRadiusPx = ParticleMenuLayer.DRIFT_RADIUS_MIN_PX
-            + Math.random() * (ParticleMenuLayer.DRIFT_RADIUS_MAX_PX - ParticleMenuLayer.DRIFT_RADIUS_MIN_PX);
-        const speedMultiplier = 0.8 + Math.random() * 0.4; // Random value between 0.8 and 1.2
-        const parsedColor = this.parseColor(color);
-        return {
-            x,
-            y,
-            velocityX: 0,
-            velocityY: 0,
-            targetX: x,
-            targetY: y,
-            baseTargetX: x,
-            baseTargetY: y,
-            colorR: parsedColor.r,
-            colorG: parsedColor.g,
-            colorB: parsedColor.b,
-            targetColorR: parsedColor.r,
-            targetColorG: parsedColor.g,
-            targetColorB: parsedColor.b,
-            sizePx: ParticleMenuLayer.PARTICLE_SIZE_PX,
-            driftPhase,
-            driftRadiusPx,
-            speedMultiplier,
-        };
-    }
-
-    private getRelocatedTarget(target: ParticleTarget): { x: number; y: number } {
-        const minDistancePx = ParticleMenuLayer.RELOCATE_MIN_DISTANCE_PX;
-        const maxDistancePx = ParticleMenuLayer.RELOCATE_MAX_DISTANCE_PX;
-        const distancePx = minDistancePx + Math.random() * (maxDistancePx - minDistancePx);
-        const angleRad = Math.random() * Math.PI * 2;
-        return {
-            x: target.x + Math.cos(angleRad) * distancePx,
-            y: target.y + Math.sin(angleRad) * distancePx,
-        };
-    }
-
-    private updateParticles(nowMs: number): void {
-        this.updateTransition(nowMs);
-        const driftTime = nowMs * ParticleMenuLayer.DRIFT_SPEED;
-        for (const particle of this.particles) {
-            const particleDriftTime = driftTime * particle.speedMultiplier;
-            const driftX = Math.cos(particle.driftPhase + particleDriftTime) * particle.driftRadiusPx;
-            const driftY = Math.sin(particle.driftPhase + particleDriftTime) * particle.driftRadiusPx;
-
-            particle.baseTargetX = particle.targetX + driftX;
-            particle.baseTargetY = particle.targetY + driftY;
-
-            const deltaX = particle.baseTargetX - particle.x;
-            const deltaY = particle.baseTargetY - particle.y;
-
-            const positionSmoothing = ParticleMenuLayer.POSITION_SMOOTHING * particle.speedMultiplier;
-            particle.velocityX += deltaX * positionSmoothing;
-            particle.velocityY += deltaY * positionSmoothing;
-
-            particle.velocityX *= 0.82;
-            particle.velocityY *= 0.82;
-
-            particle.x += particle.velocityX;
-            particle.y += particle.velocityY;
-
-            particle.colorR += (particle.targetColorR - particle.colorR) * ParticleMenuLayer.COLOR_SMOOTHING;
-            particle.colorG += (particle.targetColorG - particle.colorG) * ParticleMenuLayer.COLOR_SMOOTHING;
-            particle.colorB += (particle.targetColorB - particle.colorB) * ParticleMenuLayer.COLOR_SMOOTHING;
-        }
-    }
-
-    private updateTransition(nowMs: number): void {
-        if (this.transitionStartMs === null) {
-            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-            this.menuOpacity = 1;
-            this.applyMenuOpacity();
-            return;
-        }
-
-        const elapsedMs = nowMs - this.transitionStartMs;
-        const totalDurationMs = ParticleMenuLayer.TRANSITION_DURATION_MS;
-        const halfDurationMs = totalDurationMs / 2;
-
-        if (elapsedMs >= totalDurationMs) {
-            this.transitionStartMs = null;
-            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-            this.menuOpacity = 1;
-            this.applyMenuOpacity();
-            return;
-        }
-
-        if (elapsedMs <= halfDurationMs) {
-            const progress = elapsedMs / halfDurationMs;
-            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY
-                + (ParticleMenuLayer.PEAK_PARTICLE_OPACITY - ParticleMenuLayer.BASE_PARTICLE_OPACITY) * progress;
-            this.menuOpacity = 1 - progress;
-        } else {
-            const progress = (elapsedMs - halfDurationMs) / halfDurationMs;
-            this.particleOpacity = ParticleMenuLayer.PEAK_PARTICLE_OPACITY
-                + (ParticleMenuLayer.BASE_PARTICLE_OPACITY - ParticleMenuLayer.PEAK_PARTICLE_OPACITY) * progress;
-            this.menuOpacity = progress;
-        }
-
-        this.applyMenuOpacity();
-    }
-
-    private applyMenuOpacity(): void {
-        if (this.menuContentElement) {
-            this.menuContentElement.style.opacity = this.menuOpacity.toFixed(3);
-        }
-    }
-
-    private renderParticles(): void {
-        const rect = this.container.getBoundingClientRect();
-        const width = rect.width || window.innerWidth;
-        const height = rect.height || window.innerHeight;
-        this.context.clearRect(0, 0, width, height);
-        this.context.globalCompositeOperation = 'lighter';
-        this.context.globalAlpha = this.particleOpacity;
-
-        for (const particle of this.particles) {
-            const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
-            const green = Math.min(255, Math.max(0, Math.round(particle.colorG)));
-            const blue = Math.min(255, Math.max(0, Math.round(particle.colorB)));
-            this.context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
-            this.context.beginPath();
-            this.context.arc(particle.x, particle.y, particle.sizePx, 0, Math.PI * 2);
-            this.context.fill();
-        }
-
-        this.context.globalAlpha = 1;
-        this.context.globalCompositeOperation = 'source-over';
-    }
-
-    private collectTargets(container: HTMLElement): ParticleTarget[] {
-        const elements = Array.from(
-            container.querySelectorAll<HTMLElement>('[data-particle-text], [data-particle-box]')
-        );
-        const targets: ParticleTarget[] = [];
-
-        for (const element of elements) {
-            if (element.dataset.particleText !== undefined) {
-                targets.push(...this.collectTextTargets(element));
-            }
-            if (element.dataset.particleBox !== undefined) {
-                targets.push(...this.collectBoxTargets(element));
-            }
-        }
-
-        return targets;
-    }
-
-    private collectTextTargets(element: HTMLElement): ParticleTarget[] {
-        const text = element.textContent?.trim();
-        if (!text) {
-            return [];
-        }
-
-        const rect = element.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) {
-            return [];
-        }
-
-        const computedStyle = window.getComputedStyle(element);
-        const fontSizePx = Number.parseFloat(computedStyle.fontSize) || 16;
-        const fontFamily = computedStyle.fontFamily || 'Arial, sans-serif';
-        const fontWeight = computedStyle.fontWeight || '600';
-        const textColor = element.dataset.particleColor || '#FFFFFF';
-        const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
-        const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
-
-        this.offscreenCanvas.width = Math.ceil(rect.width);
-        this.offscreenCanvas.height = Math.ceil(rect.height);
-
-        this.offscreenContext.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
-        this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
-        this.offscreenContext.textAlign = 'center';
-        this.offscreenContext.textBaseline = 'middle';
-        this.offscreenContext.fillStyle = '#FFFFFF';
-        this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
-
-        const imageData = this.offscreenContext.getImageData(
-            0,
-            0,
-            this.offscreenCanvas.width,
-            this.offscreenCanvas.height
-        );
-        const data = imageData.data;
-        const targets: ParticleTarget[] = [];
-        const startX = spacingPx / 2;
-        const startY = spacingPx / 2;
-
-        for (let y = startY; y < this.offscreenCanvas.height; y += spacingPx) {
-            for (let x = startX; x < this.offscreenCanvas.width; x += spacingPx) {
-                const index = (Math.floor(y) * this.offscreenCanvas.width + Math.floor(x)) * 4 + 3;
-                if (data[index] > 80) {
-                    targets.push({
-                        x: rect.left + x,
-                        y: rect.top + y,
-                        color: textColor,
-                    });
-                }
-            }
-        }
-
-        return targets;
-    }
-
-    private collectBoxTargets(element: HTMLElement): ParticleTarget[] {
-        const rect = element.getBoundingClientRect();
-        if (rect.width <= 0 || rect.height <= 0) {
-            return [];
-        }
-
-        const color = element.dataset.particleColor || '#FFFFFF';
-        const baseSpacingPx = Math.max(6, Math.round(Math.min(rect.width, rect.height) / 12));
-        const spacingPx = Math.max(3, Math.round(baseSpacingPx / this.densityMultiplier));
-        const targets: ParticleTarget[] = [];
-
-        const left = rect.left;
-        const right = rect.right;
-        const top = rect.top;
-        const bottom = rect.bottom;
-
-        for (let x = left; x <= right; x += spacingPx) {
-            targets.push({ x, y: top, color });
-            targets.push({ x, y: bottom, color });
-        }
-        for (let y = top; y <= bottom; y += spacingPx) {
-            targets.push({ x: left, y, color });
-            targets.push({ x: right, y, color });
-        }
-
-        return targets;
-    }
-
-    private parseColor(color: string): { r: number; g: number; b: number } {
-        const trimmed = color.trim();
-        if (trimmed.startsWith('#')) {
-            const hex = trimmed.slice(1);
-            if (hex.length === 3) {
-                const r = Number.parseInt(hex[0] + hex[0], 16);
-                const g = Number.parseInt(hex[1] + hex[1], 16);
-                const b = Number.parseInt(hex[2] + hex[2], 16);
-                return { r, g, b };
-            }
-            if (hex.length === 6) {
-                const r = Number.parseInt(hex.slice(0, 2), 16);
-                const g = Number.parseInt(hex.slice(2, 4), 16);
-                const b = Number.parseInt(hex.slice(4, 6), 16);
-                return { r, g, b };
-            }
-        }
-        return { r: 255, g: 255, b: 255 };
-    }
-}
-
-export interface ColorScheme {
-    id: string;
-    name: string;
-    background: string;
-    asteroidColors: {
-        fillStart: string;
-        fillEnd: string;
-        strokeStart: string;
-        strokeEnd: string;
-    };
-    spaceDustPalette: {
-        neutral: string[];
-        accent: string[];
-    };
-    sunCore: {
-        inner: string;
-        mid: string;
-        outer: string;
-    };
-    sunGlow: {
-        outerGlow1: string;
-        outerGlow2: string;
-        outerGlow3: string;
-        outerGlow4: string;
-    };
-    sunLightRays: {
-        nearCenter: string;
-        mid: string;
-        edge: string;
-    };
-    lensFlareHalo: string;
-}
-
-export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
-    'SpaceBlack': {
-        id: 'SpaceBlack',
-        name: 'Space Black',
-        background: '#000000',
-        asteroidColors: {
-            fillStart: '#878787',
-            fillEnd: '#505050',
-            strokeStart: '#9B9B9B',
-            strokeEnd: '#646464'
-        },
-        spaceDustPalette: {
-            neutral: ['#5a5a5a', '#6c6c6c', '#7f7f7f', '#8f8f8f'],
-            accent: ['#5b6c8f', '#6a5f8f', '#7a6aa6']
-        },
-        sunCore: {
-            inner: 'rgba(255, 255, 255, 1)',     // #FFFFFF white-hot center
-            mid: 'rgba(255, 230, 120, 1)',       // #FFE678
-            outer: 'rgba(255, 180, 50, 0.9)'     // #FFB432
-        },
-        sunGlow: {
-            outerGlow1: 'rgba(255, 220, 100, 0.8)', // #FFDC64
-            outerGlow2: 'rgba(255, 180, 50, 0.4)',  // #FFB432
-            outerGlow3: 'rgba(255, 140, 30, 0.2)',  // #FF8C1E
-            outerGlow4: 'rgba(255, 100, 0, 0)'      // #FF6400 (fade)
-        },
-        sunLightRays: {
-            nearCenter: 'rgba(255, 245, 215, 0.35)', // #FFF5D7 soft warm cream
-            mid: 'rgba(255, 220, 170, 0.18)',        // #FFDCAA warm peach
-            edge: 'rgba(255, 200, 140, 0)'           // #FFC88C fades to transparent
-        },
-        lensFlareHalo: 'rgba(255, 240, 200, 0.15)'   // #FFF0C8
-    },
-    'ColdIce': {
-        id: 'ColdIce',
-        name: 'Cold Ice',
-        background: '#0B1426',
-        asteroidColors: {
-            fillStart: '#4A3B6E',
-            fillEnd: '#7B63A6',
-            strokeStart: '#6A52A0',
-            strokeEnd: '#B39DE6'
-        },
-        spaceDustPalette: {
-            neutral: ['#6D717B', '#7C808A', '#8A8D97', '#9A9EB0'],
-            accent: ['#6C5A91', '#7B66A8', '#8B75C3', '#9A82D6']
-        },
-        sunCore: {
-            inner: 'rgba(230, 245, 255, 1)',     // soft icy white
-            mid: 'rgba(190, 220, 255, 0.95)',    // pale blue
-            outer: 'rgba(150, 200, 255, 0.85)'   // light blue edge
-        },
-        sunGlow: {
-            outerGlow1: 'rgba(200, 230, 255, 0.75)',
-            outerGlow2: 'rgba(160, 210, 255, 0.45)',
-            outerGlow3: 'rgba(120, 190, 255, 0.25)',
-            outerGlow4: 'rgba(80, 170, 255, 0)'
-        },
-        sunLightRays: {
-            nearCenter: 'rgba(220, 240, 255, 0.35)',
-            mid: 'rgba(170, 215, 255, 0.18)',
-            edge: 'rgba(130, 190, 255, 0)'
-        },
-        lensFlareHalo: 'rgba(210, 235, 255, 0.18)'
-    }
-};
+import { MenuOption, FactionCarouselOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
+import { BackgroundParticleLayer } from './menu/background-particles';
+import { MenuAtmosphereLayer } from './menu/atmosphere';
+import { ParticleMenuLayer } from './menu/particle-layer';
+import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
+
+// Re-export types for backward compatibility
+export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
 
 export interface GameSettings {
     selectedMap: MapConfig;
@@ -1415,6 +36,22 @@ export interface GameSettings {
     networkManager?: NetworkManager; // Network manager for LAN/online play
 }
 
+interface LanLobbyEntry {
+    hostPlayerId: string;
+    lobbyName: string;
+    hostUsername: string;
+    connectionCode: string;
+    maxPlayerCount: number;
+    playerCount: number;
+    lastSeenMs: number;
+    createdMs: number;
+}
+
+const LAN_LOBBY_STORAGE_KEY = 'sol-lan-lobbies';
+const LAN_LOBBY_EXPIRY_MS = 15000;
+const LAN_LOBBY_REFRESH_MS = 2000;
+const LAN_LOBBY_HEARTBEAT_MS = 5000;
+
 export class MainMenu {
     private menuElement: HTMLElement;
     private contentElement!: HTMLElement;
@@ -1428,7 +65,9 @@ export class MainMenu {
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
+    private ladButton: HTMLButtonElement | null = null;
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
+    private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     
     // Hero unit data with complete stats
@@ -1482,6 +121,24 @@ export class MainMenu {
             maxHealth: Constants.BEAM_MAX_HEALTH, attackDamage: Constants.BEAM_ATTACK_DAMAGE, attackSpeed: Constants.BEAM_ATTACK_SPEED,
             attackRange: Constants.BEAM_ATTACK_RANGE, attackIgnoresDefense: true, defense: 6, regen: 3,
             abilityDescription: 'Precision shot: long-range beam that does more damage at greater distances'
+        },
+        {
+            id: 'radiant-mortar', name: 'Mortar', description: 'Siege unit with splash damage', faction: Faction.RADIANT,
+            maxHealth: Constants.MORTAR_MAX_HEALTH, attackDamage: Constants.MORTAR_ATTACK_DAMAGE, attackSpeed: Constants.MORTAR_ATTACK_SPEED,
+            attackRange: Constants.MORTAR_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 2,
+            abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage'
+        },
+        {
+            id: 'radiant-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.RADIANT,
+            maxHealth: Constants.PREIST_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
+            abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles'
+        },
+        {
+            id: 'radiant-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.RADIANT,
+            maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: 0, attackIgnoresDefense: false, defense: Constants.TANK_DEFENSE, regen: 3,
+            abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles'
         }
     ];
     
@@ -1525,6 +182,14 @@ export class MainMenu {
             numSuns: 1,
             numAsteroids: 5,
             mapSize: 3000
+        },
+        {
+            id: 'lad',
+            name: 'LaD',
+            description: 'Light and Dark - A split battlefield with a dual sun. White light on one side, black "light" on the other. Units are invisible until they cross into enemy territory.',
+            numSuns: 1,
+            numAsteroids: 8,
+            mapSize: 2000
         }
     ];
 
@@ -1628,6 +293,8 @@ export class MainMenu {
         this.menuParticleLayer.setMenuContentElement(content);
         this.testLevelButton = this.createTestLevelButton();
         menu.appendChild(this.testLevelButton);
+        this.ladButton = this.createLadButton();
+        menu.appendChild(this.ladButton);
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(content);
@@ -1695,11 +362,64 @@ export class MainMenu {
         return button;
     }
 
+    private createLadButton(): HTMLButtonElement {
+        const button = document.createElement('button');
+        button.textContent = 'LaD';
+        button.type = 'button';
+        button.style.position = 'absolute';
+        button.style.top = '20px';
+        button.style.right = '140px';  // Position to the left of TEST LEVEL button
+        button.style.padding = '10px 16px';
+        button.style.borderRadius = '6px';
+        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
+        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+        button.style.color = '#FFFFFF';
+        button.style.fontFamily = 'Arial, sans-serif';
+        button.style.fontWeight = '500';
+        button.style.fontSize = '14px';
+        button.style.letterSpacing = '0.08em';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2';
+        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
+
+        button.addEventListener('mouseenter', () => {
+            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
+            button.style.borderColor = '#FFD700';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        button.addEventListener('click', () => {
+            const ladMap = this.availableMaps.find(map => map.id === 'lad');
+            if (!ladMap) {
+                return;
+            }
+            this.settings.selectedMap = ladMap;
+            this.hide();
+            if (this.onStartCallback) {
+                this.ensureDefaultHeroSelection();
+                this.onStartCallback(this.settings);
+            }
+        });
+
+        return button;
+    }
+
     private setTestLevelButtonVisible(isVisible: boolean): void {
         if (!this.testLevelButton) {
             return;
         }
         this.testLevelButton.style.display = isVisible ? 'block' : 'none';
+    }
+
+    private setLadButtonVisible(isVisible: boolean): void {
+        if (!this.ladButton) {
+            return;
+        }
+        this.ladButton.style.display = isVisible ? 'block' : 'none';
     }
 
     private getSelectedHeroNames(): string[] {
@@ -1752,6 +472,35 @@ export class MainMenu {
         this.settings.username = username;
     }
 
+    private async clearPlayerDataAndCache(): Promise<void> {
+        localStorage.clear();
+        sessionStorage.clear();
+
+        if (typeof caches !== 'undefined') {
+            const cacheNames = await caches.keys();
+            await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+        }
+
+        const databaseGetter = indexedDB as IDBFactory & {
+            databases?: () => Promise<Array<{ name?: string }>>;
+        };
+        if (databaseGetter.databases) {
+            const databases = await databaseGetter.databases();
+            await Promise.all(databases.map((database) => {
+                const databaseName = database.name;
+                if (!databaseName) {
+                    return Promise.resolve();
+                }
+                return new Promise<void>((resolve) => {
+                    const deleteRequest = indexedDB.deleteDatabase(databaseName);
+                    deleteRequest.addEventListener('success', () => resolve());
+                    deleteRequest.addEventListener('error', () => resolve());
+                    deleteRequest.addEventListener('blocked', () => resolve());
+                });
+            }));
+        }
+    }
+
     private resolveAssetPath(path: string): string {
         if (!path.startsWith('ASSETS/')) {
             return path;
@@ -1778,16 +527,201 @@ export class MainMenu {
             clearTimeout(this.lanServerListTimeout);
             this.lanServerListTimeout = null;
         }
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
         this.setTestLevelButtonVisible(false);
+        this.setLadButtonVisible(false);
     }
 
     private setMenuParticleDensity(multiplier: number): void {
-        const densityScale = 2;
+        const densityScale = Math.SQRT2;
         this.menuParticleLayer?.setDensityMultiplier(multiplier * densityScale);
     }
 
     private startMenuTransition(): void {
         this.menuParticleLayer?.startTransition();
+    }
+
+    private loadLanLobbyEntries(): LanLobbyEntry[] {
+        const storedValue = localStorage.getItem(LAN_LOBBY_STORAGE_KEY);
+        if (!storedValue) {
+            return [];
+        }
+        try {
+            const parsedValue = JSON.parse(storedValue) as LanLobbyEntry[];
+            if (!Array.isArray(parsedValue)) {
+                return [];
+            }
+            return parsedValue;
+        } catch (error) {
+            console.warn('Failed to parse LAN lobby list from storage:', error);
+            return [];
+        }
+    }
+
+    private persistLanLobbyEntries(entries: LanLobbyEntry[]): void {
+        localStorage.setItem(LAN_LOBBY_STORAGE_KEY, JSON.stringify(entries));
+    }
+
+    private pruneLanLobbyEntries(entries: LanLobbyEntry[], nowMs: number): LanLobbyEntry[] {
+        const prunedEntries = entries.filter((entry) => nowMs - entry.lastSeenMs <= LAN_LOBBY_EXPIRY_MS);
+        if (prunedEntries.length !== entries.length) {
+            this.persistLanLobbyEntries(prunedEntries);
+        }
+        return prunedEntries;
+    }
+
+    private registerLanLobbyEntry(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
+        const nowMs = Date.now();
+        const entries = this.loadLanLobbyEntries();
+        const updatedEntries = entries.filter((existingEntry) => existingEntry.hostPlayerId !== entry.hostPlayerId);
+        const existingEntry = entries.find((existingEntry) => existingEntry.hostPlayerId === entry.hostPlayerId);
+        updatedEntries.push({
+            ...entry,
+            createdMs: existingEntry?.createdMs ?? nowMs,
+            lastSeenMs: nowMs
+        });
+        this.persistLanLobbyEntries(updatedEntries);
+    }
+
+    private unregisterLanLobbyEntry(hostPlayerId: string): void {
+        const entries = this.loadLanLobbyEntries();
+        const updatedEntries = entries.filter((entry) => entry.hostPlayerId !== hostPlayerId);
+        if (updatedEntries.length !== entries.length) {
+            this.persistLanLobbyEntries(updatedEntries);
+        }
+    }
+
+    private startLanLobbyHeartbeat(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
+        const heartbeat = () => {
+            this.registerLanLobbyEntry(entry);
+            this.lanLobbyHeartbeatTimeout = window.setTimeout(heartbeat, LAN_LOBBY_HEARTBEAT_MS);
+        };
+        heartbeat();
+    }
+
+    private stopLanLobbyHeartbeat(): void {
+        if (this.lanLobbyHeartbeatTimeout !== null) {
+            clearTimeout(this.lanLobbyHeartbeatTimeout);
+            this.lanLobbyHeartbeatTimeout = null;
+        }
+    }
+
+    private renderLanLobbyList(listContainer: HTMLElement): void {
+        listContainer.innerHTML = '';
+        const nowMs = Date.now();
+        const entries = this.pruneLanLobbyEntries(this.loadLanLobbyEntries(), nowMs)
+            .sort((left, right) => right.lastSeenMs - left.lastSeenMs);
+
+        if (entries.length === 0) {
+            const emptyState = document.createElement('p');
+            emptyState.textContent = 'No LAN lobbies detected yet. Host a game to make it appear here.';
+            emptyState.style.color = '#888888';
+            emptyState.style.fontSize = '16px';
+            emptyState.style.textAlign = 'center';
+            emptyState.style.margin = '0';
+            listContainer.appendChild(emptyState);
+            return;
+        }
+
+        for (const entry of entries) {
+            const entryCard = document.createElement('div');
+            entryCard.style.display = 'flex';
+            entryCard.style.flexDirection = 'row';
+            entryCard.style.alignItems = 'center';
+            entryCard.style.justifyContent = 'space-between';
+            entryCard.style.gap = '16px';
+            entryCard.style.padding = '14px 18px';
+            entryCard.style.borderRadius = '8px';
+            entryCard.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
+            entryCard.style.border = '1px solid rgba(255, 215, 0, 0.3)';
+            entryCard.style.cursor = 'pointer';
+            entryCard.style.transition = 'transform 0.15s ease, border-color 0.15s ease';
+            entryCard.addEventListener('mouseenter', () => {
+                entryCard.style.transform = 'translateY(-2px)';
+                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.6)';
+            });
+            entryCard.addEventListener('mouseleave', () => {
+                entryCard.style.transform = 'translateY(0)';
+                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.3)';
+            });
+
+            const entryInfo = document.createElement('div');
+            entryInfo.style.display = 'flex';
+            entryInfo.style.flexDirection = 'column';
+            entryInfo.style.gap = '4px';
+            entryInfo.style.flex = '1';
+
+            const lobbyName = document.createElement('div');
+            lobbyName.textContent = entry.lobbyName;
+            lobbyName.style.color = '#FFD700';
+            lobbyName.style.fontSize = '18px';
+            lobbyName.style.fontWeight = '600';
+            entryInfo.appendChild(lobbyName);
+
+            const lobbyMeta = document.createElement('div');
+            lobbyMeta.textContent = `${entry.hostUsername} • ${entry.playerCount}/${entry.maxPlayerCount} players`;
+            lobbyMeta.style.color = '#CCCCCC';
+            lobbyMeta.style.fontSize = '14px';
+            entryInfo.appendChild(lobbyMeta);
+
+            const joinButton = this.createButton('JOIN', () => {
+                void this.joinLanLobbyWithCode(entry.connectionCode);
+            }, '#00AAFF');
+            joinButton.style.padding = '8px 18px';
+            joinButton.style.fontSize = '14px';
+            joinButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+            });
+
+            entryCard.addEventListener('click', () => {
+                void this.joinLanLobbyWithCode(entry.connectionCode);
+            });
+
+            entryCard.appendChild(entryInfo);
+            entryCard.appendChild(joinButton);
+            listContainer.appendChild(entryCard);
+        }
+    }
+
+    private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
+        if (this.lanServerListTimeout !== null) {
+            clearTimeout(this.lanServerListTimeout);
+        }
+        this.lanServerListTimeout = window.setTimeout(() => {
+            this.renderLanLobbyList(listContainer);
+            this.scheduleLanLobbyListRefresh(listContainer);
+        }, LAN_LOBBY_REFRESH_MS);
+    }
+
+    private async joinLanLobbyWithCode(code: string): Promise<void> {
+        if (!code) {
+            return;
+        }
+        try {
+            this.renderClientWaitingScreen();
+            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
+
+            const playerId = `player_${Date.now()}`;
+            this.networkManager = new NetworkManager(playerId);
+
+            const answer = await this.networkManager.connectToPeer(hostId, offer);
+            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
+
+            this.renderClientAnswerScreen(answerCode, hostUsername);
+        } catch (error) {
+            console.error('Failed to join lobby:', error);
+            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            this.currentScreen = 'lan';
+            this.startMenuTransition();
+            this.renderLANScreen(this.contentElement);
+        }
     }
 
     private renderMainScreen(container: HTMLElement): void {
@@ -1797,6 +731,7 @@ export class MainMenu {
 
     private renderMainScreenContent(container: HTMLElement): void {
         this.setTestLevelButtonVisible(true);
+        this.setLadButtonVisible(true);
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
@@ -2029,6 +964,38 @@ export class MainMenu {
         joinButton.style.fontSize = '28px';
         container.appendChild(joinButton);
 
+        // LAN lobby list
+        const listContainer = document.createElement('div');
+        listContainer.style.maxWidth = '720px';
+        listContainer.style.width = '100%';
+        listContainer.style.padding = '20px';
+        listContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        listContainer.style.borderRadius = '12px';
+        listContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        listContainer.style.marginBottom = '30px';
+        listContainer.style.display = 'flex';
+        listContainer.style.flexDirection = 'column';
+        listContainer.style.gap = '14px';
+
+        const listTitle = document.createElement('h3');
+        listTitle.textContent = 'Available LAN Lobbies';
+        listTitle.style.fontSize = '22px';
+        listTitle.style.margin = '0';
+        listTitle.style.color = '#FFD700';
+        listTitle.style.textAlign = 'center';
+        listContainer.appendChild(listTitle);
+
+        const listContent = document.createElement('div');
+        listContent.style.display = 'flex';
+        listContent.style.flexDirection = 'column';
+        listContent.style.gap = '12px';
+        listContainer.appendChild(listContent);
+
+        this.renderLanLobbyList(listContent);
+        this.scheduleLanLobbyListRefresh(listContent);
+
+        container.appendChild(listContainer);
+
         // Info section
         const infoContainer = document.createElement('div');
         infoContainer.style.maxWidth = '600px';
@@ -2102,26 +1069,10 @@ export class MainMenu {
     private async showJoinLobbyDialog(): Promise<void> {
         // Prompt for connection code
         const code = prompt('Enter the connection code from the host:');
-        if (!code) return;
-
-        try {
-            // Parse connection code
-            const { offer, playerId: hostId, username: hostUsername } = LANSignaling.parseHostCode(code);
-
-            // Initialize network manager
-            const playerId = `player_${Date.now()}`;
-            this.networkManager = new NetworkManager(playerId);
-
-            // Create answer
-            const answer = await this.networkManager.connectToPeer(hostId, offer);
-            const answerCode = await LANSignaling.generateAnswerCode(answer, playerId, this.settings.username);
-
-            // Show dialog with answer code
-            this.renderClientAnswerScreen(answerCode, hostUsername);
-        } catch (error) {
-            console.error('Failed to join lobby:', error);
-            alert(`Failed to join lobby: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        if (!code) {
+            return;
         }
+        await this.joinLanLobbyWithCode(code.trim());
     }
 
     private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string, hostPlayerId: string): void {
@@ -2129,6 +1080,14 @@ export class MainMenu {
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
+        this.startLanLobbyHeartbeat({
+            hostPlayerId: hostPlayerId,
+            lobbyName: lobby.name,
+            hostUsername: lobby.players.find((player) => player.isHost)?.username ?? this.settings.username,
+            connectionCode: connectionCode,
+            maxPlayerCount: lobby.maxPlayers,
+            playerCount: lobby.players.length
+        });
 
         // Title
         const title = document.createElement('h2');
@@ -2248,6 +1207,15 @@ export class MainMenu {
                         timestamp: Date.now(),
                         data: lobby
                     });
+                    const hostPlayer = lobby.players.find((player) => player.isHost);
+                    this.registerLanLobbyEntry({
+                        hostPlayerId: hostPlayerId,
+                        lobbyName: lobby.name,
+                        hostUsername: hostPlayer?.username ?? this.settings.username,
+                        connectionCode: connectionCode,
+                        maxPlayerCount: lobby.maxPlayers,
+                        playerCount: lobby.players.length
+                    });
                 }
                 
                 alert(`${clientUsername} connected! You can now start the game.`);
@@ -2277,6 +1245,8 @@ export class MainMenu {
 
             // Notify peers that game is starting
             this.networkManager.startGame();
+            this.unregisterLanLobbyEntry(hostPlayerId);
+            this.stopLanLobbyHeartbeat();
 
             // Set game mode to LAN
             this.settings.gameMode = 'lan';
@@ -2300,6 +1270,8 @@ export class MainMenu {
                 this.networkManager.disconnect();
                 this.networkManager = null;
             }
+            this.unregisterLanLobbyEntry(hostPlayerId);
+            this.stopLanLobbyHeartbeat();
             this.currentScreen = 'lan';
             this.startMenuTransition();
             this.renderLANScreen(this.contentElement);
@@ -2652,6 +1624,22 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(colorSchemeSection);
+
+        const resetButton = this.createButton('DELETE DATA', async () => {
+            const isConfirmed = window.confirm(
+                'Delete all player data and cached files? This will reload the game and start fresh.'
+            );
+            if (!isConfirmed) {
+                return;
+            }
+            await this.clearPlayerDataAndCache();
+            window.location.reload();
+        }, '#FF6666');
+        resetButton.style.fontSize = '18px';
+        resetButton.style.padding = '10px 20px';
+
+        const resetSection = this.createSettingSection('Reset Player Data', resetButton);
+        settingsContainer.appendChild(resetSection);
 
         container.appendChild(settingsContainer);
 
@@ -3573,7 +2561,7 @@ export class MainMenu {
  * Faction carousel view - displays factions in a horizontal carousel
  */
 class FactionCarouselView {
-    private static readonly ITEM_SPACING_PX = 160;
+    private static readonly ITEM_SPACING_PX = 200;
     private static readonly BASE_SIZE_PX = 320;
     private static readonly TEXT_SCALE = 2.4;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
@@ -3887,20 +2875,6 @@ class FactionCarouselView {
 
             this.container.appendChild(optionElement);
         }
-
-        const instructionElement = document.createElement('div');
-        instructionElement.textContent = 'Swipe, drag, or use \u2190/\u2192 (A/D) \u2022 Tap side tiles to browse';
-        instructionElement.style.position = 'absolute';
-        instructionElement.style.bottom = '20px';
-        instructionElement.style.left = '50%';
-        instructionElement.style.transform = 'translateX(-50%)';
-        instructionElement.style.color = '#AAAAAA';
-        instructionElement.style.fontSize = `${22 * layoutScale}px`;
-        instructionElement.style.fontWeight = '300';
-        instructionElement.style.pointerEvents = 'none';
-        instructionElement.dataset.particleText = 'true';
-        instructionElement.dataset.particleColor = '#AAAAAA';
-        this.container.appendChild(instructionElement);
 
         if (this.onRenderCallback) {
             this.onRenderCallback();

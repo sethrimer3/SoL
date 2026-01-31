@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, unit rally points, unit collision radii, unit move orders, minion path progress, AI command timers, minion projectile state, and space dust positions/velocities/glow state/base colors) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit collision radii, unit move orders, minion path progress, AI command timers, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -81,20 +81,18 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ```json
 [
   { "tick": 0, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 0 },
-  { "tick": 1, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 0, "targetWorld": { "x": 520, "y": 480 } },
-  { "tick": 3, "command": "selectForge", "playerIndex": 0 },
-  { "tick": 4, "command": "setMinionPath", "playerIndex": 0, "waypointsWorld": [{ "x": 420, "y": 460 }, { "x": 520, "y": 360 }] },
-  { "tick": 6, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
-  { "tick": 8, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
-  { "tick": 9, "command": "moveMirror", "playerIndex": 0, "mirrorIndex": 1, "targetWorld": { "x": 460, "y": 520 } },
-  { "tick": 11, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 440, "y": 440 } },
-  { "tick": 13, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
-  { "tick": 15, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
-  { "tick": 17, "command": "buildStructure", "playerIndex": 0, "structureType": "Minigun", "targetWorld": { "x": 420, "y": 420 } }
+  { "tick": 1, "command": "linkMirrorToStructure", "playerIndex": 0, "mirrorIndex": 0, "structureType": "StellarForge" },
+  { "tick": 3, "command": "setMinionPath", "playerIndex": 0, "waypointsWorld": [{ "x": 420, "y": 460 }, { "x": 520, "y": 360 }] },
+  { "tick": 5, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
+  { "tick": 7, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
+  { "tick": 8, "command": "linkMirrorToStructure", "playerIndex": 0, "mirrorIndex": 1, "structureType": "Foundry" },
+  { "tick": 10, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
+  { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
+  { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "GatlingTower", "targetWorld": { "x": 420, "y": 420 } }
 ]
 ```
 
-The command list above was revalidated after correcting unit facing rotation to ensure `stateHash` stability.
+The command list above was revalidated after adding LAN command mirroring for mirror links, unit paths, and move-order synchronization to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

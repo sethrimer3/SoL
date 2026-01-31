@@ -56,12 +56,12 @@ SoL now supports local area network (LAN) multiplayer using WebRTC peer-to-peer 
 - Game state command replication system
 - Network command queue and processing
 - Command execution for player actions (unit movement, abilities, hero purchase, etc.)
+- Local player command capture and dispatch to peers
 - Host/Client player assignment
 - Network manager integration with game core
 
 ### 🚧 In Progress / TODO
 
-- Local player command capture (sending commands from input handlers)
 - Latency compensation and prediction
 - Reconnection handling
 - Player ready state management
@@ -101,9 +101,12 @@ The implementation uses a command replication system for game state synchronizat
 3. **Supported Commands**:
    - `unit_move`: Move units to target position
    - `unit_ability`: Activate unit ability in specified direction
+   - `unit_path`: Assign a multi-waypoint path to units
    - `hero_purchase`: Queue hero unit production at forge
    - `building_purchase`: Place building at position
    - `mirror_purchase`: Build new solar mirror
+   - `mirror_move`: Move selected solar mirrors to a target
+   - `mirror_link`: Link selected solar mirrors to a forge or building
    - `forge_move`: Set forge target position
    - `set_rally_path`: Set minion spawn path
 

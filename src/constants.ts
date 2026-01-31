@@ -44,11 +44,15 @@ export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by 
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 1;
+export const DUST_PARTICLE_DIAMETER_PX = DUST_PARTICLE_SIZE * 2;
 export const SPACE_DUST_PARTICLE_COUNT = 3000;
 export const DUST_MIN_VELOCITY = 0.08;
-export const DUST_REPULSION_RADIUS_PX = 28;
-export const DUST_REPULSION_CELL_SIZE_PX = 32;
-export const DUST_REPULSION_STRENGTH = 14;
+export const DUST_REPULSION_RADIUS_PX = DUST_PARTICLE_DIAMETER_PX;
+export const DUST_REPULSION_CELL_SIZE_PX = DUST_PARTICLE_DIAMETER_PX * 4;
+export const DUST_REPULSION_STRENGTH = 0.8;
+export const DUST_CLUSTER_COUNT = 8;
+export const DUST_CLUSTER_RADIUS_PX = 220;
+export const DUST_CLUSTER_SPAWN_RATIO = 0.35;
 export const DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC = 3;
 export const MIRROR_DUST_PUSH_RADIUS_PX = 110;
 export const MIRROR_DUST_PUSH_FORCE_MULTIPLIER = 1.1;
@@ -56,6 +60,14 @@ export const FORGE_DUST_PUSH_RADIUS_PX = 160;
 export const FORGE_DUST_PUSH_FORCE_MULTIPLIER = 0.9;
 export const STARLING_DUST_PUSH_RADIUS_PX = 50;
 export const STARLING_DUST_PUSH_FORCE_MULTIPLIER = 0.5;
+export const DUST_COLOR_IMPACT_HOLD_SEC = 0.08;
+export const DUST_COLOR_FADE_IN_SPEED = 7.5;
+export const DUST_COLOR_FADE_OUT_SPEED = 1.4;
+export const DUST_COLOR_FORCE_SCALE = 35;
+export const DUST_SHADOW_MAX_DISTANCE_PX = 420;
+export const DUST_SHADOW_LENGTH_PX = 18;
+export const DUST_SHADOW_OPACITY = 0.25;
+export const DUST_SHADOW_WIDTH_PX = 0.6;
 
 // Sprite scaling constants
 export const DUST_SPRITE_SCALE_FACTOR = 3;
@@ -141,8 +153,8 @@ export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion st
 export const STARLING_LASER_IMPACT_PARTICLES = 3; // Number of particles spawned at laser impact
 export const STARLING_LASER_PARTICLE_SPEED = 30; // Speed of impact particles in pixels per second
 export const STARLING_LASER_PARTICLE_LIFETIME = 0.3; // Lifetime of impact particles in seconds
-export const FORGE_FLAME_ALPHA = 0.3;
-export const FORGE_FLAME_SIZE_MULTIPLIER = 0.3;
+export const FORGE_FLAME_ALPHA = 0.75;
+export const FORGE_FLAME_SIZE_MULTIPLIER = 0.45;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
 export const FORGE_FLAME_WARMTH_FADE_PER_SEC = 2.0;
 export const FORGE_FLAME_OFFSET_MULTIPLIER = 0.35;
@@ -160,12 +172,17 @@ export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
 export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
 
-// Minigun building constants (offensive building for Radiant faction)
+// Cannon/Gatling building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
 export const MINIGUN_ATTACK_RANGE = 350;
 export const MINIGUN_ATTACK_DAMAGE = 12;
 export const MINIGUN_ATTACK_SPEED = 6; // Attacks per second (very fast)
 export const MINIGUN_RADIUS = 30; // Building size
+export const GATLING_MAX_HEALTH = 200;
+export const GATLING_ATTACK_RANGE = 350;
+export const GATLING_ATTACK_DAMAGE = 12;
+export const GATLING_ATTACK_SPEED = 6; // Attacks per second (very fast)
+export const GATLING_RADIUS = 30; // Building size
 
 // Space Dust Swirler building constants (defensive building for Radiant faction)
 export const SWIRLER_MAX_HEALTH = 250;
@@ -173,12 +190,16 @@ export const SWIRLER_ATTACK_RANGE = 0; // No direct attack
 export const SWIRLER_ATTACK_DAMAGE = 0; // Defensive building
 export const SWIRLER_ATTACK_SPEED = 0; // No direct attack
 export const SWIRLER_RADIUS = 35; // Building size
-export const SWIRLER_INFLUENCE_RADIUS = 400; // Range of space dust swirl effect
+export const SWIRLER_INFLUENCE_RADIUS = 400; // Range of space dust swirl effect (max radius)
+export const SWIRLER_INITIAL_RADIUS_MULTIPLIER = 0.5; // Start at 50% of max radius
+export const SWIRLER_GROWTH_RATE_PER_SEC = 30; // Radius growth rate in pixels per second
+export const SWIRLER_SHRINK_BASE_RATE = 20; // Base shrink amount per absorbed projectile
+export const SWIRLER_SHRINK_DAMAGE_MULTIPLIER = 0.5; // Additional shrink per point of damage
+export const SWIRLER_MIN_INFLUENCE_RADIUS = 50; // Minimum radius the swirler can shrink to
 export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
 export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
-export const SWIRLER_DEFLECTION_ANGLE = Math.PI / 2; // 90 degrees counter-clockwise
 
-// Subsidiary Factory building constants
+// Foundry building constants
 export const SUBSIDIARY_FACTORY_MAX_HEALTH = 500;
 export const SUBSIDIARY_FACTORY_ATTACK_RANGE = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_ATTACK_DAMAGE = 0; // Production building
@@ -188,6 +209,7 @@ export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between u
 
 // Building costs
 export const MINIGUN_COST = 150;
+export const GATLING_COST = 150;
 export const SWIRLER_COST = 200;
 export const SUBSIDIARY_FACTORY_COST = 400;
 export const HERO_UNIT_COST = 300;
@@ -303,8 +325,14 @@ export const TURRET_DEPLOYER_ABILITY_COOLDOWN = 12.0; // 12 seconds
 export const DEPLOYED_TURRET_MAX_HEALTH = 150;
 export const DEPLOYED_TURRET_ATTACK_RANGE = 300;
 export const DEPLOYED_TURRET_ATTACK_DAMAGE = 12;
-export const DEPLOYED_TURRET_ATTACK_SPEED = 3; // Attacks per second
+export const DEPLOYED_TURRET_ATTACK_SPEED = 2; // Attacks per second (fires 2 times per second)
 export const TURRET_PROJECTILE_SPEED = 400;
+export const DEPLOYED_TURRET_ANIMATION_DURATION = 0.1; // Animation duration in seconds
+export const DEPLOYED_TURRET_SPRITE_SCALE = 0.08; // Base scale factor for turret sprites
+export const DEPLOYED_TURRET_ANIMATION_FRAME_COUNT = 28; // Number of firing animation frames
+export const DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX = 200; // Pivot point distance from bottom of sprite (in sprite pixels)
+export const DEPLOYED_TURRET_SPRITE_HEIGHT_PX = 1100; // Height of turret top sprite in pixels
+export const DEPLOYED_TURRET_HEALTH_BAR_SIZE = 40; // Size for health bar positioning
 
 // Driller unit constants (Aurum hero)
 export const DRILLER_MAX_HEALTH = 140;
@@ -366,6 +394,21 @@ export const PREIST_HEALING_BOMB_PARTICLE_HEALING = 0.01; // 1% of max health pe
 export const PREIST_HEALING_BOMB_EXPLOSION_RADIUS = 120; // Radius of particle explosion area
 export const PREIST_HEALING_BOMB_PARTICLE_SPEED = 200; // Speed of wild particles
 export const PREIST_HEALING_BOMB_PARTICLE_LIFETIME = 0.5; // Lifetime of wild particles
+
+// Tank hero constants (defensive tank with shield and crescent wave ability)
+export const TANK_MAX_HEALTH = 300; // Very high health (3x Marine)
+export const TANK_ATTACK_RANGE = 0; // Doesn't attack
+export const TANK_ATTACK_DAMAGE = 0; // No damage
+export const TANK_ATTACK_SPEED = 0; // No attack
+export const TANK_DEFENSE = 50; // 50% damage reduction (armor)
+export const TANK_ABILITY_COOLDOWN = 12.0; // 12 seconds
+export const TANK_SHIELD_RADIUS = 60; // Radius of shield around tank that blocks projectiles
+export const TANK_WAVE_ANGLE = Math.PI / 2; // 90 degrees crescent wave
+export const TANK_WAVE_RANGE = 400; // Maximum range of wave
+export const TANK_WAVE_SPEED = 150; // Slow moving wave (pixels per second)
+export const TANK_WAVE_WIDTH = 40; // Width of the wave
+export const TANK_STUN_DURATION = 2.0; // Stuns for 2 seconds
+export const TANK_COLLISION_RADIUS_PX = 20; // Slightly larger collision radius
 
 // AI Strategy types
 export enum AIStrategy {

@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -23,20 +23,43 @@ class GameController {
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
-    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun, SpaceDustSwirler, SubsidiaryFactory)
+    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
     private moveOrderCounter: number = 0; // Counter for move order indicators
+    private localPlayerIndex: number = 0; // Track local player index for LAN mode
+
+    private abilityArrowStarts: Vector2D[] = [];
 
     /**
-     * Check if only hero units are currently selected
+     * Check if any hero units are currently selected
      */
-    private hasOnlyHeroUnitsSelected(): boolean {
-        return this.selectedUnits.size > 0 && 
-               Array.from(this.selectedUnits).every(unit => unit.isHero);
+    private hasHeroUnitsSelected(): boolean {
+        if (this.selectedUnits.size === 0) {
+            return false;
+        }
+        for (const unit of this.selectedUnits) {
+            if (unit.isHero) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private updateAbilityArrowStarts(): void {
+        this.abilityArrowStarts.length = 0;
+        if (this.selectionStartScreen) {
+            this.abilityArrowStarts.push(this.selectionStartScreen);
+        }
+        for (const unit of this.selectedUnits) {
+            if (unit.isHero) {
+                this.abilityArrowStarts.push(this.renderer.worldToScreen(unit.position));
+            }
+        }
+        this.renderer.abilityArrowStarts = this.abilityArrowStarts;
     }
 
     /**
@@ -163,11 +186,28 @@ class GameController {
         this.renderer.showInfo = this.showInfo;
     }
 
+    private getLocalPlayer(): Player | null {
+        if (!this.game) {
+            return null;
+        }
+        return this.game.players[this.localPlayerIndex] ?? null;
+    }
+
+    private sendNetworkCommand(command: string, data: Record<string, unknown>): void {
+        if (!this.game || !this.game.networkManager) {
+            return;
+        }
+        this.game.sendGameCommand(command, data);
+    }
+
     private surrender(): void {
         if (!this.game) return;
         
         // Set player's forge health to 0 to trigger defeat
-        const player = this.game.players[0];
+        const player = this.getLocalPlayer();
+        if (!player) {
+            return;
+        }
         if (player.stellarForge) {
             player.stellarForge.health = 0;
         }
@@ -249,14 +289,20 @@ class GameController {
         this.renderer.graphicsQuality = settings.graphicsQuality;
         
         // Set up network manager for LAN play
+        this.localPlayerIndex = 0;
         if (settings.gameMode === 'lan' && settings.networkManager) {
             // Determine local player index based on whether this client is the host
             const isHost = settings.networkManager.isLobbyHost();
             const localPlayerIndex = isHost ? 0 : 1;
+            this.localPlayerIndex = localPlayerIndex;
             
             // Set up AI flag for players (local player is not AI, remote player is not AI either)
-            this.game.players[0].isAi = false;
-            this.game.players[1].isAi = false;
+            if (this.game.players[0]) {
+                this.game.players[0].isAi = false;
+            }
+            if (this.game.players[1]) {
+                this.game.players[1].isAi = false;
+            }
             
             // Set up network manager in game state
             this.game.setupNetworkManager(settings.networkManager, localPlayerIndex);
@@ -265,13 +311,13 @@ class GameController {
         }
         
         // Set the viewing player for the renderer (player 1 is the human player)
-        if (this.game.players.length > 0) {
-            this.renderer.viewingPlayer = this.game.players[0];
+        const localPlayer = this.getLocalPlayer();
+        if (localPlayer) {
+            this.renderer.viewingPlayer = localPlayer;
             
             // Center camera on player's base and zoom in halfway
-            const player = this.game.players[0];
-            if (player.stellarForge) {
-                this.renderer.setCameraPosition(player.stellarForge.position);
+            if (localPlayer.stellarForge) {
+                this.renderer.setCameraPosition(localPlayer.stellarForge.position);
                 this.renderer.setZoom(0.5); // Halfway zoomed in
             }
         }
@@ -308,6 +354,9 @@ class GameController {
         } else if (map.id === 'test-level') {
             // Single sun at center for test level
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        } else if (map.id === 'lad') {
+            // LaD (Light and Dark) - special dual-nature sun
+            game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0, 'lad'));
         } else {
             // Single sun at center (default for all other maps)
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
@@ -484,7 +533,7 @@ class GameController {
             } else if (totalMovement > Constants.CLICK_DRAG_THRESHOLD) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
-                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const hasHeroUnits = this.hasHeroUnitsSelected();
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDrawingPath) {
                     if (this.selectedBase && this.selectedBase.isSelected) {
@@ -504,7 +553,7 @@ class GameController {
                             this.renderer.pathPreviewForge = null; // No forge for unit paths
                             this.renderer.pathPreviewPoints = this.pathPoints;
                             this.cancelHold();
-                        } else if (hasOnlyHeroUnits) {
+                        } else if (hasHeroUnits) {
                             // For hero units away from units, use arrow dragging mode
                             this.isDraggingHeroArrow = true;
                             this.cancelHold();
@@ -513,7 +562,7 @@ class GameController {
                             this.isSelecting = true;
                             this.cancelHold();
                         }
-                    } else if (hasOnlyHeroUnits) {
+                    } else if (hasHeroUnits) {
                         // For hero units, use arrow dragging mode
                         this.isDraggingHeroArrow = true;
                         this.cancelHold();
@@ -533,7 +582,7 @@ class GameController {
                 this.renderer.selectionEnd = new Vector2D(x, y);
             } else if (this.isDraggingHeroArrow) {
                 // Update arrow direction (for hero ability casting)
-                this.renderer.abilityArrowStart = this.selectionStartScreen;
+                this.updateAbilityArrowStarts();
                 this.renderer.abilityArrowEnd = new Vector2D(x, y);
             } else if (this.isDrawingPath) {
                 // Collect path waypoints as we drag
@@ -542,7 +591,14 @@ class GameController {
                 // Add waypoint if we've moved far enough from the last one
                 if (this.pathPoints.length === 0 || 
                     this.pathPoints[this.pathPoints.length - 1].distanceTo(worldPos) > Constants.MIN_WAYPOINT_DISTANCE) {
-                    this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
+                    
+                    // Check if this position is inside a solid object
+                    const isInsideSolid = this.game?.checkCollision(worldPos, 0) || false;
+                    
+                    if (!isInsideSolid) {
+                        // Only add waypoint if not inside solid object
+                        this.pathPoints.push(new Vector2D(worldPos.x, worldPos.y));
+                    }
                 }
                 
                 // pathPreviewForge was already set when initiating path drawing (selectedBase for base paths, null for unit paths)
@@ -655,10 +711,27 @@ class GameController {
             
             if (this.game && wasClick) {
                 const worldPos = this.renderer.screenToWorld(lastX, lastY);
-                const player = this.game.players[0]; // Assume player 1 is human
+                const player = this.getLocalPlayer();
+                if (!player) {
+                    return;
+                }
                 
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
+                    if (this.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setLinkedStructure(player.stellarForge);
+                            mirror.isSelected = false;
+                        }
+                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
+                            player.solarMirrors.indexOf(mirror)
+                        ).filter((index) => index >= 0);
+                        this.sendNetworkCommand('mirror_link', {
+                            mirrorIndices,
+                            structureType: 'forge'
+                        });
+                        this.selectedMirrors.clear();
+                    }
                     if (player.stellarForge.isSelected) {
                         // Deselect forge
                         player.stellarForge.isSelected = false;
@@ -757,6 +830,28 @@ class GameController {
                 }
                 
                 if (clickedBuilding) {
+                    const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
+                        clickedBuilding instanceof GatlingTower ||
+                        clickedBuilding instanceof SpaceDustSwirler ||
+                        clickedBuilding instanceof SubsidiaryFactory;
+                    if (isCompatibleMirrorTarget && this.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setLinkedStructure(clickedBuilding);
+                            mirror.isSelected = false;
+                        }
+                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
+                            player.solarMirrors.indexOf(mirror)
+                        ).filter((index) => index >= 0);
+                        const buildingIndex = player.buildings.indexOf(clickedBuilding);
+                        if (buildingIndex >= 0) {
+                            this.sendNetworkCommand('mirror_link', {
+                                mirrorIndices,
+                                structureType: 'building',
+                                buildingIndex
+                            });
+                        }
+                        this.selectedMirrors.clear();
+                    }
                     if (clickedBuilding.isSelected) {
                         // Deselect building
                         clickedBuilding.isSelected = false;
@@ -807,7 +902,7 @@ class GameController {
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
                     const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-                    const labels = ['Minigun', 'Swirler', 'Sub Factory', 'Locked'];
+                    const labels = ['Cannon', 'Gatling', 'Swirler', 'Foundry'];
                     
                     for (let i = 0; i < 4; i++) {
                         const angle = angles[i];
@@ -829,11 +924,16 @@ class GameController {
                             );
                             // Button clicked!
                             if (i === 0) {
-                                // First button - create Minigun building
+                                // First button - create Cannon building
                                 if (player.spendEnergy(Constants.MINIGUN_COST)) {
                                     const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(minigun);
-                                    console.log(`Minigun building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    this.sendNetworkCommand('building_purchase', {
+                                        buildingType: 'Minigun',
+                                        positionX: gate.position.x,
+                                        positionY: gate.position.y
+                                    });
                                     
                                     // Emit shockwave when building starts warping in
                                     this.scatterParticles(gate.position);
@@ -843,16 +943,24 @@ class GameController {
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough energy to build Minigun');
+                                    console.log('Not enough energy to build Cannon');
                                 }
                             } else if (i === 1) {
-                                // Second button - create Space Dust Swirler building
-                                if (player.spendEnergy(Constants.SWIRLER_COST)) {
-                                    const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
-                                    player.buildings.push(swirler);
-                                    console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                // Second button - create Gatling Tower building
+                                if (player.spendEnergy(Constants.GATLING_COST)) {
+                                    const gatling = new GatlingTower(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(gatling);
+                                    console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    this.sendNetworkCommand('building_purchase', {
+                                        buildingType: 'Gatling',
+                                        positionX: gate.position.x,
+                                        positionY: gate.position.y
+                                    });
                                     
                                     // Emit shockwave when building starts warping in
                                     this.scatterParticles(gate.position);
@@ -861,21 +969,56 @@ class GameController {
                                     const gateIndex = this.game.warpGates.indexOf(gate);
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
+                                    this.implodeParticles(gate.position);
+                                } else {
+                                    console.log('Not enough energy to build Gatling Tower');
+                                }
+                            } else if (i === 2) {
+                                // Third button - create Space Dust Swirler building
+                                if (player.spendEnergy(Constants.SWIRLER_COST)) {
+                                    const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
+                                    player.buildings.push(swirler);
+                                    console.log(`Space Dust Swirler building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    this.sendNetworkCommand('building_purchase', {
+                                        buildingType: 'SpaceDustSwirler',
+                                        positionX: gate.position.x,
+                                        positionY: gate.position.y
+                                    });
+                                    
+                                    // Emit shockwave when building starts warping in
+                                    this.scatterParticles(gate.position);
+                                    
+                                    // Remove the warp gate (implode effect)
+                                    const gateIndex = this.game.warpGates.indexOf(gate);
+                                    if (gateIndex > -1) {
+                                        this.game.warpGates.splice(gateIndex, 1);
+                                    }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
                                     }
                                     this.implodeParticles(gate.position);
                                 } else {
                                     console.log('Not enough energy to build Space Dust Swirler');
                                 }
-                            } else if (i === 2) {
-                                // Third button (bottom) - create Subsidiary Factory building
-                                // Check if player already has a Subsidiary Factory
+                            } else if (i === 3) {
+                                // Fourth button - create Foundry building
+                                // Check if player already has a Foundry
                                 const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
                                 if (hasSubFactory) {
-                                    console.log('Only one Subsidiary Factory can exist at a time');
+                                    console.log('Only one Foundry can exist at a time');
                                 } else if (player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                                     const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
                                     player.buildings.push(subFactory);
-                                    console.log(`Subsidiary Factory building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                                    this.sendNetworkCommand('building_purchase', {
+                                        buildingType: 'SubsidiaryFactory',
+                                        positionX: gate.position.x,
+                                        positionY: gate.position.y
+                                    });
                                     
                                     // Emit shockwave when building starts warping in
                                     this.scatterParticles(gate.position);
@@ -885,9 +1028,12 @@ class GameController {
                                     if (gateIndex > -1) {
                                         this.game.warpGates.splice(gateIndex, 1);
                                     }
+                                    if (this.currentWarpGate === gate) {
+                                        this.currentWarpGate = null;
+                                    }
                                     this.implodeParticles(gate.position);
                                 } else {
-                                    console.log('Not enough energy to build Subsidiary Factory');
+                                    console.log('Not enough energy to build Foundry');
                                 }
                             }
                             // Other buttons can be added later for different building types
@@ -931,6 +1077,9 @@ class GameController {
                                 player.stellarForge.startHeroProductionIfIdle();
                                 console.log(`Queued hero ${clickedHeroName} for forging`);
                                 isHeroQueued = true;
+                                this.sendNetworkCommand('hero_purchase', {
+                                    heroType: heroUnitType
+                                });
                             } else {
                                 console.log('Not enough energy to forge hero');
                             }
@@ -964,6 +1113,13 @@ class GameController {
                 // If forge is selected and clicked elsewhere, move it
                 if (player.stellarForge && player.stellarForge.isSelected) {
                     player.stellarForge.setTarget(worldPos);
+                    this.moveOrderCounter++;
+                    player.stellarForge.moveOrder = this.moveOrderCounter;
+                    this.sendNetworkCommand('forge_move', {
+                        targetX: worldPos.x,
+                        targetY: worldPos.y,
+                        moveOrder: this.moveOrderCounter
+                    });
                     player.stellarForge.isSelected = false; // Auto-deselect after setting target
                     this.selectedBase = null;
                     this.selectedUnits.clear();
@@ -990,6 +1146,15 @@ class GameController {
                 const selectedMirror = player.solarMirrors.find(m => m.isSelected);
                 if (selectedMirror) {
                     selectedMirror.setTarget(worldPos);
+                    this.moveOrderCounter++;
+                    selectedMirror.moveOrder = this.moveOrderCounter;
+                    const mirrorIndex = player.solarMirrors.indexOf(selectedMirror);
+                    this.sendNetworkCommand('mirror_move', {
+                        mirrorIndices: mirrorIndex >= 0 ? [mirrorIndex] : [],
+                        targetX: worldPos.x,
+                        targetY: worldPos.y,
+                        moveOrder: this.moveOrderCounter
+                    });
                     selectedMirror.isSelected = false; // Auto-deselect after setting target
                     this.selectedBase = null;
                     this.selectedUnits.clear();
@@ -1023,6 +1188,9 @@ class GameController {
                     // Path for base (minion spawning)
                     this.selectedBase.setMinionPath(this.pathPoints);
                     console.log(`Base path set with ${this.pathPoints.length} waypoints`);
+                    this.sendNetworkCommand('set_rally_path', {
+                        waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
+                    });
                 } else if (this.selectedUnits.size > 0) {
                     // Path for selected units
                     console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
@@ -1036,11 +1204,19 @@ class GameController {
                         unit.setPath(this.pathPoints);
                         unit.moveOrder = this.moveOrderCounter;
                     }
+                    const unitIds = this.game
+                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                        : [];
+                    this.sendNetworkCommand('unit_path', {
+                        unitIds,
+                        waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y })),
+                        moveOrder: this.moveOrderCounter
+                    });
                     
                     // Deselect units and buildings after setting path
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
-                    const player = this.game.players[0];
+                    const player = this.getLocalPlayer();
                     if (player) {
                         for (const building of player.buildings) {
                             building.isSelected = false;
@@ -1055,17 +1231,17 @@ class GameController {
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
-                const hasOnlyHeroUnits = this.hasOnlyHeroUnitsSelected();
+                const hasHeroUnits = this.hasHeroUnitsSelected();
                 const shouldUseAbility = this.selectedUnits.size > 0 && (
-                    (!hasOnlyHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
-                    (hasOnlyHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
+                    (!hasHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
+                    (hasHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
                 );
 
                 // If dragged significantly, use ability (for units only)
                 if (shouldUseAbility) {
                     
                     // Only create swipe effect for non-hero units
-                    if (!hasOnlyHeroUnits) {
+                    if (!hasHeroUnits) {
                         this.renderer.createSwipeEffect(
                             this.selectionStartScreen.x,
                             this.selectionStartScreen.y,
@@ -1085,6 +1261,13 @@ class GameController {
                     for (const unit of this.selectedUnits) {
                         if (unit.useAbility(direction)) {
                             anyAbilityUsed = true;
+                            if (this.game) {
+                                this.sendNetworkCommand('unit_ability', {
+                                    unitId: this.game.getUnitNetworkId(unit),
+                                    directionX: direction.x,
+                                    directionY: direction.y
+                                });
+                            }
                         }
                     }
                     
@@ -1095,6 +1278,8 @@ class GameController {
                     // Deselect all units after using ability
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                } else if (this.isDraggingHeroArrow && hasHeroUnits) {
+                    // Cancel ability casting if arrow was dragged back to nothing
                 } else {
                     // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
@@ -1112,6 +1297,15 @@ class GameController {
                         }
                         unit.moveOrder = this.moveOrderCounter;
                     }
+                    const unitIds = this.game
+                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                        : [];
+                    this.sendNetworkCommand('unit_move', {
+                        unitIds,
+                        targetX: worldPos.x,
+                        targetY: worldPos.y,
+                        moveOrder: this.moveOrderCounter
+                    });
                     
                     // Set target for all selected mirrors
                     for (const mirror of this.selectedMirrors) {
@@ -1119,12 +1313,31 @@ class GameController {
                         mirror.moveOrder = this.moveOrderCounter;
                         mirror.isSelected = false;
                     }
+                    const player = this.getLocalPlayer();
+                    if (player) {
+                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
+                            player.solarMirrors.indexOf(mirror)
+                        ).filter((index) => index >= 0);
+                        if (mirrorIndices.length > 0) {
+                            this.sendNetworkCommand('mirror_move', {
+                                mirrorIndices,
+                                targetX: worldPos.x,
+                                targetY: worldPos.y,
+                                moveOrder: this.moveOrderCounter
+                            });
+                        }
+                    }
                     
                     // Set target for selected base
                     if (this.selectedBase) {
                         this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
                         this.selectedBase.moveOrder = this.moveOrderCounter;
                         this.selectedBase.isSelected = false;
+                        this.sendNetworkCommand('forge_move', {
+                            targetX: worldPos.x,
+                            targetY: worldPos.y,
+                            moveOrder: this.moveOrderCounter
+                        });
                     }
                     
                     // Deselect all units immediately
@@ -1146,7 +1359,8 @@ class GameController {
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
-            this.renderer.abilityArrowStart = null;
+            this.abilityArrowStarts.length = 0;
+            this.renderer.abilityArrowStarts = this.abilityArrowStarts;
             this.renderer.abilityArrowEnd = null;
             this.endHold();
         };
@@ -1369,7 +1583,10 @@ class GameController {
     private startHold(worldPos: Vector2D): void {
         if (!this.game) return;
         
-        const player = this.game.players[0]; // Assume player 1 is the human player
+        const player = this.getLocalPlayer();
+        if (!player) {
+            return;
+        }
         if (!player.stellarForge) return;
 
         // Check if any buildings with guns are selected
@@ -1488,8 +1705,10 @@ class GameController {
         this.selectedBase = null;
 
         // Get the player's units (assume player 1 is the human player)
-        const player = this.game.players[0];
-        if (!player || player.isDefeated()) return;
+        const player = this.getLocalPlayer();
+        if (!player || player.isDefeated()) {
+            return;
+        }
 
         // Deselect all buildings
         for (const building of player.buildings) {
@@ -1614,10 +1833,12 @@ class GameController {
             
             if (holdDuration >= Constants.WARP_GATE_INITIAL_DELAY && !this.currentWarpGate) {
                 // Create warp gate after initial delay
-                const player = this.game.players[0];
-                this.currentWarpGate = new WarpGate(this.holdPosition, player);
-                this.currentWarpGate.startCharging();
-                this.game.warpGates.push(this.currentWarpGate);
+                const player = this.getLocalPlayer();
+                if (player) {
+                    this.currentWarpGate = new WarpGate(this.holdPosition, player);
+                    this.currentWarpGate.startCharging();
+                    this.game.warpGates.push(this.currentWarpGate);
+                }
             }
         }
 
@@ -1628,7 +1849,15 @@ class GameController {
             // Calculate charge multiplier based on mirrors if using mirror-based warp gate
             let chargeMultiplier = 1.0;
             if (this.isUsingMirrorsForWarpGate && isStillHolding) {
-                const player = this.game.players[0];
+                const player = this.getLocalPlayer();
+                if (!player) {
+                    this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
+                    if (this.currentWarpGate.shouldEmitShockwave()) {
+                        this.scatterParticles(this.currentWarpGate.position);
+                        this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
+                    }
+                    return;
+                }
                 let totalMirrorPower = 0;
                 
                 for (const mirror of this.selectedMirrors) {
