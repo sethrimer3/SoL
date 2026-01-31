@@ -5209,6 +5209,12 @@ export class GameState {
      * - They are in shadow but within player's influence radius
      */
     isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget): boolean {
+        // Special LaD (Light and Dark) visibility logic
+        const ladSun = this.suns.find(s => s.type === 'lad');
+        if (ladSun) {
+            return this.isObjectVisibleInLadMode(objectPos, player, object, ladSun);
+        }
+        
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
             // Dagger is only visible to enemies if not cloaked
@@ -5242,6 +5248,40 @@ export class GameState {
         }
         
         return false; // Not visible: in shadow and not within proximity or influence range
+    }
+
+    /**
+     * Check visibility in LaD (Light and Dark) mode
+     * Units are invisible to the enemy until they cross into enemy territory
+     */
+    private isObjectVisibleInLadMode(objectPos: Vector2D, player: Player, object: CombatTarget | undefined, ladSun: Sun): boolean {
+        // Special case: if object is a Dagger unit and is cloaked
+        if (object && object instanceof Dagger) {
+            if (object.isCloakedToEnemies() && object.owner !== player) {
+                return false;
+            }
+        }
+        
+        // Determine which side each player is on based on their forge position
+        const playerSide = player.stellarForge ? (player.stellarForge.position.x < ladSun.position.x ? 'light' : 'dark') : 'light';
+        
+        // Determine which side the object is on
+        const objectSide = objectPos.x < ladSun.position.x ? 'light' : 'dark';
+        
+        // If object has an owner
+        if (object && 'owner' in object && object.owner) {
+            const objectOwner = object.owner as Player;
+            // Own units are always visible
+            if (objectOwner === player) {
+                return true;
+            }
+            
+            // Enemy units are only visible if they're on the player's side
+            return objectSide === playerSide;
+        }
+        
+        // Non-owned objects (buildings, etc.) use default visibility
+        return true;
     }
     
     /**

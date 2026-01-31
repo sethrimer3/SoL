@@ -1641,6 +1641,17 @@ export class GameRenderer {
      * Draw sun rays with raytracing (brightens field and casts shadows)
      */
     private drawSunRays(game: GameState): void {
+        // Check if we have a LaD sun for special rendering
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        
+        if (ladSun) {
+            this.drawLadSunRays(game, ladSun);
+        } else {
+            this.drawNormalSunRays(game);
+        }
+    }
+
+    private drawNormalSunRays(game: GameState): void {
         // Draw ambient lighting layers for each sun (brighter closer to sun)
         for (const sun of game.suns) {
             const sunScreenPos = this.worldToScreen(sun.position);
@@ -1715,6 +1726,93 @@ export class GameRenderer {
             }
 
             this.ctx.restore();
+        }
+    }
+
+    private drawLadSunRays(game: GameState, sun: Sun): void {
+        const sunScreenPos = this.worldToScreen(sun.position);
+        
+        // Draw left half (white light)
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.rect(0, 0, sunScreenPos.x, this.canvas.height);
+        this.ctx.clip();
+        
+        const whiteGradient = this.ctx.createRadialGradient(
+            sunScreenPos.x, sunScreenPos.y, 0,
+            sunScreenPos.x, sunScreenPos.y, this.canvas.width
+        );
+        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
+        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.05)');
+        
+        this.ctx.fillStyle = whiteGradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
+        
+        // Draw right half (black "light")
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.rect(sunScreenPos.x, 0, this.canvas.width - sunScreenPos.x, this.canvas.height);
+        this.ctx.clip();
+        
+        const blackGradient = this.ctx.createRadialGradient(
+            sunScreenPos.x, sunScreenPos.y, 0,
+            sunScreenPos.x, sunScreenPos.y, this.canvas.width
+        );
+        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 0.6)');
+        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.4)');
+        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+        
+        this.ctx.fillStyle = blackGradient;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.restore();
+        
+        // Draw asteroid shadows - dark shadows on left (white) side, light shadows on right (dark) side
+        for (const asteroid of game.asteroids) {
+            const worldVertices = asteroid.getWorldVertices();
+            
+            // For each edge of the asteroid, cast a shadow
+            for (let i = 0; i < worldVertices.length; i++) {
+                const v1 = worldVertices[i];
+                const v2 = worldVertices[(i + 1) % worldVertices.length];
+                
+                // Calculate if this edge faces away from the sun
+                const edgeCenter = new Vector2D((v1.x + v2.x) / 2, (v1.y + v2.y) / 2);
+                const toSun = new Vector2D(sun.position.x - edgeCenter.x, sun.position.y - edgeCenter.y);
+                const edgeNormal = new Vector2D(-(v2.y - v1.y), v2.x - v1.x);
+                const dot = toSun.x * edgeNormal.x + toSun.y * edgeNormal.y;
+                
+                if (dot < 0) {
+                    // This edge is facing away from the sun, cast shadow
+                    const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
+                    const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
+                    
+                    const shadow1 = new Vector2D(v1.x + dirFromSun1.x * Constants.SHADOW_LENGTH, v1.y + dirFromSun1.y * Constants.SHADOW_LENGTH);
+                    const shadow2 = new Vector2D(v2.x + dirFromSun2.x * Constants.SHADOW_LENGTH, v2.y + dirFromSun2.y * Constants.SHADOW_LENGTH);
+                    
+                    // Determine which side of the field the shadow is on
+                    const shadowCenterX = (shadow1.x + shadow2.x) / 2;
+                    const isOnLightSide = shadowCenterX < sun.position.x;
+                    
+                    const sv1 = this.worldToScreen(v1);
+                    const sv2 = this.worldToScreen(v2);
+                    const ss1 = this.worldToScreen(shadow1);
+                    const ss2 = this.worldToScreen(shadow2);
+                    
+                    this.ctx.save();
+                    // Dark shadows on light side, light shadows on dark side
+                    this.ctx.fillStyle = isOnLightSide ? 'rgba(0, 0, 20, 0.5)' : 'rgba(255, 255, 255, 0.3)';
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(sv1.x, sv1.y);
+                    this.ctx.lineTo(sv2.x, sv2.y);
+                    this.ctx.lineTo(ss2.x, ss2.y);
+                    this.ctx.lineTo(ss1.x, ss1.y);
+                    this.ctx.closePath();
+                    this.ctx.fill();
+                    this.ctx.restore();
+                }
+            }
         }
     }
 
@@ -1813,9 +1911,31 @@ export class GameRenderer {
         const size = 8 * this.zoom * sizeMultiplier;
         const isSelected = this.selectedUnits.has(unit);
 
+        // Check for LaD mode and adjust colors
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let unitColor = color;
+        let outlineColor = '#FFFFFF';
+        
+        if (ladSun && unit.owner) {
+            // Determine which side the unit's owner is on
+            const ownerSide = unit.owner.stellarForge 
+                ? (unit.owner.stellarForge.position.x < ladSun.position.x ? 'light' : 'dark')
+                : 'light';
+            
+            if (ownerSide === 'light') {
+                // Light side units: white with black outline
+                unitColor = '#FFFFFF';
+                outlineColor = '#000000';
+            } else {
+                // Dark side units: black with white outline
+                unitColor = '#000000';
+                outlineColor = '#FFFFFF';
+            }
+        }
+
         // Check visibility for enemy units
         let shouldDim = false;
-        let displayColor = color;
+        let displayColor = unitColor;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit);
             if (!isVisible) {
@@ -1823,17 +1943,20 @@ export class GameRenderer {
             }
             
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            const inShadow = game.isPointInShadow(unit.position);
-            if (inShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+            // Don't dim in LaD mode as the visibility system is different
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(unit.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(unitColor, Constants.SHADE_OPACITY);
+                }
             }
         }
 
         // Draw attack range circle for selected hero units (only friendly units)
         if (isSelected && unit.isHero && !isEnemy) {
             const attackRangeScreenRadius = unit.attackRange * this.zoom;
-            this.ctx.strokeStyle = color;
+            this.ctx.strokeStyle = unitColor;
             this.ctx.lineWidth = 1;
             this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
             this.ctx.beginPath();
@@ -1845,8 +1968,8 @@ export class GameRenderer {
         // Draw unit body (circle) - use darkened color if should dim
         const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
         const tintColor = shouldDim
-            ? this.darkenColor(isEnemy ? this.enemyColor : this.playerColor, Constants.SHADE_OPACITY)
-            : (isEnemy ? this.enemyColor : this.playerColor);
+            ? this.darkenColor(ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor), Constants.SHADE_OPACITY)
+            : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
         
         // Use outlined sprite for selected units, regular tinted sprite otherwise
         const heroSprite = heroSpritePath 
@@ -1869,8 +1992,8 @@ export class GameRenderer {
             this.ctx.restore();
         } else {
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = isSelected ? '#FFFFFF' : (shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF');
-            this.ctx.lineWidth = isSelected ? 3 : 1;
+            this.ctx.strokeStyle = isSelected ? outlineColor : (shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor);
+            this.ctx.lineWidth = isSelected ? 3 : 2; // Thicker outline for better visibility
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             this.ctx.fill();
