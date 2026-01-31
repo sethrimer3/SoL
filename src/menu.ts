@@ -1589,6 +1589,7 @@ export class MainMenu {
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
+    private ladButton: HTMLButtonElement | null = null;
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
@@ -1705,6 +1706,14 @@ export class MainMenu {
             numSuns: 1,
             numAsteroids: 5,
             mapSize: 3000
+        },
+        {
+            id: 'lad',
+            name: 'LaD',
+            description: 'Light and Dark - A split battlefield with a dual sun. White light on one side, black "light" on the other. Units are invisible until they cross into enemy territory.',
+            numSuns: 1,
+            numAsteroids: 8,
+            mapSize: 2000
         }
     ];
 
@@ -1808,6 +1817,8 @@ export class MainMenu {
         this.menuParticleLayer.setMenuContentElement(content);
         this.testLevelButton = this.createTestLevelButton();
         menu.appendChild(this.testLevelButton);
+        this.ladButton = this.createLadButton();
+        menu.appendChild(this.ladButton);
 
         // Render main screen content into the menu element
         this.renderMainScreenContent(content);
@@ -1875,11 +1886,64 @@ export class MainMenu {
         return button;
     }
 
+    private createLadButton(): HTMLButtonElement {
+        const button = document.createElement('button');
+        button.textContent = 'LaD';
+        button.type = 'button';
+        button.style.position = 'absolute';
+        button.style.top = '20px';
+        button.style.right = '140px';  // Position to the left of TEST LEVEL button
+        button.style.padding = '10px 16px';
+        button.style.borderRadius = '6px';
+        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
+        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+        button.style.color = '#FFFFFF';
+        button.style.fontFamily = 'Arial, sans-serif';
+        button.style.fontWeight = '500';
+        button.style.fontSize = '14px';
+        button.style.letterSpacing = '0.08em';
+        button.style.cursor = 'pointer';
+        button.style.zIndex = '2';
+        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
+
+        button.addEventListener('mouseenter', () => {
+            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
+            button.style.borderColor = '#FFD700';
+        });
+
+        button.addEventListener('mouseleave', () => {
+            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
+            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
+        });
+
+        button.addEventListener('click', () => {
+            const ladMap = this.availableMaps.find(map => map.id === 'lad');
+            if (!ladMap) {
+                return;
+            }
+            this.settings.selectedMap = ladMap;
+            this.hide();
+            if (this.onStartCallback) {
+                this.ensureDefaultHeroSelection();
+                this.onStartCallback(this.settings);
+            }
+        });
+
+        return button;
+    }
+
     private setTestLevelButtonVisible(isVisible: boolean): void {
         if (!this.testLevelButton) {
             return;
         }
         this.testLevelButton.style.display = isVisible ? 'block' : 'none';
+    }
+
+    private setLadButtonVisible(isVisible: boolean): void {
+        if (!this.ladButton) {
+            return;
+        }
+        this.ladButton.style.display = isVisible ? 'block' : 'none';
     }
 
     private getSelectedHeroNames(): string[] {
@@ -1992,6 +2056,7 @@ export class MainMenu {
             this.lanLobbyHeartbeatTimeout = null;
         }
         this.setTestLevelButtonVisible(false);
+        this.setLadButtonVisible(false);
     }
 
     private setMenuParticleDensity(multiplier: number): void {
@@ -2190,6 +2255,7 @@ export class MainMenu {
 
     private renderMainScreenContent(container: HTMLElement): void {
         this.setTestLevelButtonVisible(true);
+        this.setLadButtonVisible(true);
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;

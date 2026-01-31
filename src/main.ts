@@ -354,6 +354,9 @@ class GameController {
         } else if (map.id === 'test-level') {
             // Single sun at center for test level
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        } else if (map.id === 'lad') {
+            // LaD (Light and Dark) - special dual-nature sun
+            game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0, 'lad'));
         } else {
             // Single sun at center (default for all other maps)
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));

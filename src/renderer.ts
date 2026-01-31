@@ -733,6 +733,13 @@ export class GameRenderer {
     private drawSun(sun: Sun): void {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
+        
+        // Special rendering for LaD (Light and Dark) sun
+        if (sun.type === 'lad') {
+            this.drawLadSun(sun, screenPos, screenRadius);
+            return;
+        }
+        
         const sunSpritePath = this.getGraphicAssetPath('centralSun');
         const sunSprite = sunSpritePath ? this.getSpriteImage(sunSpritePath) : null;
 
@@ -768,6 +775,64 @@ export class GameRenderer {
         this.ctx.lineWidth = 3;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.8, 0, Math.PI * 2);
+        this.ctx.stroke();
+    }
+
+    private drawLadSun(sun: Sun, screenPos: Vector2D, screenRadius: number): void {
+        // Save context state
+        this.ctx.save();
+
+        // Draw left half (white)
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, Math.PI / 2, -Math.PI / 2);
+        this.ctx.closePath();
+        this.ctx.clip();
+
+        // White gradient
+        const whiteGradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, screenRadius
+        );
+        whiteGradient.addColorStop(0, '#FFFFFF');
+        whiteGradient.addColorStop(0.5, '#EEEEEE');
+        whiteGradient.addColorStop(0.8, '#CCCCCC');
+        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.3)');
+
+        this.ctx.fillStyle = whiteGradient;
+        this.ctx.fillRect(screenPos.x - screenRadius, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
+
+        // Restore context to draw right half
+        this.ctx.restore();
+        this.ctx.save();
+
+        // Draw right half (black)
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, -Math.PI / 2, Math.PI / 2);
+        this.ctx.closePath();
+        this.ctx.clip();
+
+        // Black gradient
+        const blackGradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, screenRadius
+        );
+        blackGradient.addColorStop(0, '#000000');
+        blackGradient.addColorStop(0.5, '#111111');
+        blackGradient.addColorStop(0.8, '#222222');
+        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
+
+        this.ctx.fillStyle = blackGradient;
+        this.ctx.fillRect(screenPos.x, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
+
+        // Restore context
+        this.ctx.restore();
+
+        // Draw dividing line between light and dark
+        this.ctx.strokeStyle = '#888888';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y - screenRadius);
+        this.ctx.lineTo(screenPos.x, screenPos.y + screenRadius);
         this.ctx.stroke();
     }
 

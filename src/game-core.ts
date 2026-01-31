@@ -1496,7 +1496,8 @@ export class Sun {
     constructor(
         public position: Vector2D,
         public intensity: number = 1.0,
-        public radius: number = 100.0
+        public radius: number = 100.0,
+        public type: 'normal' | 'lad' = 'normal'  // Type for special suns like LaD
     ) {}
 
     /**
