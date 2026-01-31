@@ -4,12 +4,8 @@
 
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
-
-// Type imports for particle class properties
-// These are defined in game-core.ts and will be properly typed when integrated
-type Player = any;
-type CombatTarget = any;
-type Faction = any;
+import type { Player, Faction } from './player';
+import type { CombatTarget } from './buildings';
 
 /**
  * Space dust particle that gets affected by influences and forces

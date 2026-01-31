@@ -47,9 +47,9 @@ import {
     HealingBombParticle,
     Tank,
     CrescentWave,
-    Faction
 } from '../game-core';
 
+import { Faction } from './entities/player';
 export class GameState {
     players: Player[] = [];
     suns: Sun[] = [];

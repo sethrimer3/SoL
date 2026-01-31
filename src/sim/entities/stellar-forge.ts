@@ -8,8 +8,8 @@ import type { Sun } from './sun';
 import type { GameState } from '../game-state';
 
 export class StellarForge {
-    health: number = 1000.0;
-    maxHealth: number = 1000.0;
+    health: number = Constants.STELLAR_FORGE_MAX_HEALTH;
+    maxHealth: number = Constants.STELLAR_FORGE_MAX_HEALTH;
     isReceivingLight: boolean = false;
     unitQueue: string[] = [];
     heroProductionUnitType: string | null = null;
