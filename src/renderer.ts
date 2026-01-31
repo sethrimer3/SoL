@@ -788,17 +788,7 @@ export class GameRenderer {
         this.ctx.closePath();
         this.ctx.clip();
 
-        // White gradient
-        const whiteGradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, screenRadius
-        );
-        whiteGradient.addColorStop(0, '#FFFFFF');
-        whiteGradient.addColorStop(0.5, '#EEEEEE');
-        whiteGradient.addColorStop(0.8, '#CCCCCC');
-        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.3)');
-
-        this.ctx.fillStyle = whiteGradient;
+        this.ctx.fillStyle = '#FFFFFF';
         this.ctx.fillRect(screenPos.x - screenRadius, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
 
         // Restore context to draw right half
@@ -811,24 +801,14 @@ export class GameRenderer {
         this.ctx.closePath();
         this.ctx.clip();
 
-        // Black gradient
-        const blackGradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, screenRadius
-        );
-        blackGradient.addColorStop(0, '#000000');
-        blackGradient.addColorStop(0.5, '#111111');
-        blackGradient.addColorStop(0.8, '#222222');
-        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
-
-        this.ctx.fillStyle = blackGradient;
+        this.ctx.fillStyle = '#000000';
         this.ctx.fillRect(screenPos.x, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
 
         // Restore context
         this.ctx.restore();
 
         // Draw dividing line between light and dark
-        this.ctx.strokeStyle = '#888888';
+        this.ctx.strokeStyle = '#666666';
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.moveTo(screenPos.x, screenPos.y - screenRadius);
@@ -1555,6 +1535,7 @@ export class GameRenderer {
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
         const baseSize = Constants.DUST_PARTICLE_SIZE * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check if particle is in shadow
         const inShadow = game.isPointInShadow(particle.position);
@@ -1570,7 +1551,7 @@ export class GameRenderer {
             }
         }
 
-        if (game.suns.length > 0) {
+        if (game.suns.length > 0 && !ladSun) {
             const shadowLineWidth = Math.max(0.4, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
             this.ctx.strokeStyle = `rgba(0, 0, 20, ${Constants.DUST_SHADOW_OPACITY})`;
             this.ctx.lineWidth = shadowLineWidth;
@@ -1604,9 +1585,12 @@ export class GameRenderer {
             glowLevel = particle.glowState + (particle.targetGlowState - particle.glowState) * particle.glowTransition;
         }
 
-        const ladSun = game.suns.find(s => s.type === 'lad');
         const isOnLightSide = ladSun ? particle.position.x < ladSun.position.x : false;
         const dustColor = ladSun ? (isOnLightSide ? '#000000' : '#FFFFFF') : particle.currentColor;
+
+        if (ladSun) {
+            glowLevel = 0;
+        }
 
         if (glowLevel > 0) {
             const glowSize = baseSize * (1.2 + glowLevel * 0.35);
@@ -1781,15 +1765,7 @@ export class GameRenderer {
         this.ctx.rect(0, 0, sunScreenPos.x, this.canvas.height);
         this.ctx.clip();
         
-        const whiteGradient = this.ctx.createRadialGradient(
-            sunScreenPos.x, sunScreenPos.y, 0,
-            sunScreenPos.x, sunScreenPos.y, this.canvas.width
-        );
-        whiteGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        whiteGradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.95)');
-        whiteGradient.addColorStop(1, 'rgba(255, 255, 255, 0.9)');
-        
-        this.ctx.fillStyle = whiteGradient;
+        this.ctx.fillStyle = '#FFFFFF';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.restore();
         
@@ -1799,15 +1775,7 @@ export class GameRenderer {
         this.ctx.rect(sunScreenPos.x, 0, this.canvas.width - sunScreenPos.x, this.canvas.height);
         this.ctx.clip();
         
-        const blackGradient = this.ctx.createRadialGradient(
-            sunScreenPos.x, sunScreenPos.y, 0,
-            sunScreenPos.x, sunScreenPos.y, this.canvas.width
-        );
-        blackGradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-        blackGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0.95)');
-        blackGradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
-        
-        this.ctx.fillStyle = blackGradient;
+        this.ctx.fillStyle = '#000000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.restore();
         
@@ -4408,35 +4376,42 @@ export class GameRenderer {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         this.updateViewBounds();
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        if (ladSun) {
+            this.drawLadSunRays(game, ladSun);
+        }
 
         // Draw parallax star layers
-        for (const layer of this.starLayers) {
-            this.ctx.fillStyle = '#FFFFFF';
-            const dpr = window.devicePixelRatio || 1;
-            
-            for (const star of layer.stars) {
-                // Calculate star position with parallax effect
-                const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
-                const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
+        if (!ladSun) {
+            for (const layer of this.starLayers) {
+                this.ctx.fillStyle = '#FFFFFF';
+                const dpr = window.devicePixelRatio || 1;
                 
-                // Convert to screen space
-                const centerX = (this.canvas.width / dpr) / 2;
-                const centerY = (this.canvas.height / dpr) / 2;
-                const screenX = centerX + (star.x - parallaxX);
-                const screenY = centerY + (star.y - parallaxY);
-                
-                // Wrap stars around screen edges for infinite scrolling effect
-                const wrappedX = ((screenX + centerX) % (centerX * 2 + Constants.STAR_WRAP_SIZE)) - centerX;
-                const wrappedY = ((screenY + centerY) % (centerY * 2 + Constants.STAR_WRAP_SIZE)) - centerY;
-                
-                // Only draw if on screen
-                if (wrappedX >= -100 && wrappedX <= this.canvas.width / dpr + 100 &&
-                    wrappedY >= -100 && wrappedY <= this.canvas.height / dpr + 100) {
-                    this.ctx.globalAlpha = star.brightness;
-                    this.ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                for (const star of layer.stars) {
+                    // Calculate star position with parallax effect
+                    const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
+                    const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
+                    
+                    // Convert to screen space
+                    const centerX = (this.canvas.width / dpr) / 2;
+                    const centerY = (this.canvas.height / dpr) / 2;
+                    const screenX = centerX + (star.x - parallaxX);
+                    const screenY = centerY + (star.y - parallaxY);
+                    
+                    // Wrap stars around screen edges for infinite scrolling effect
+                    const wrappedX = ((screenX + centerX) % (centerX * 2 + Constants.STAR_WRAP_SIZE)) - centerX;
+                    const wrappedY = ((screenY + centerY) % (centerY * 2 + Constants.STAR_WRAP_SIZE)) - centerY;
+                    
+                    // Only draw if on screen
+                    if (wrappedX >= -100 && wrappedX <= this.canvas.width / dpr + 100 &&
+                        wrappedY >= -100 && wrappedY <= this.canvas.height / dpr + 100) {
+                        this.ctx.globalAlpha = star.brightness;
+                        this.ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                    }
                 }
+                this.ctx.globalAlpha = 1.0;
             }
-            this.ctx.globalAlpha = 1.0;
         }
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
@@ -4458,7 +4433,9 @@ export class GameRenderer {
         }
 
         // Draw sun rays with raytracing (light and shadows)
-        this.drawSunRays(game);
+        if (!ladSun) {
+            this.drawSunRays(game);
+        }
 
         // Draw lens flare effects for visible suns
         for (const sun of game.suns) {
