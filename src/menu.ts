@@ -119,8 +119,9 @@ interface MenuAsteroid {
 }
 
 class BackgroundParticleLayer {
-    private static readonly PARTICLE_COUNT = 24;
-    private static readonly PARTICLE_RADIUS = 75;  // 30% of original 250
+    private static readonly PARTICLE_COUNT = 8;
+    private static readonly PARTICLE_RADIUS_MOBILE_PX = 37.5;
+    private static readonly PARTICLE_RADIUS_DESKTOP_PX = 75;
     private static readonly MAX_VELOCITY = 0.3;
     private static readonly MIN_VELOCITY = 0.02;
     private static readonly FRICTION = 0.98;
@@ -186,7 +187,8 @@ class BackgroundParticleLayer {
     private initializeParticles(): void {
         const width = this.canvas.width / (window.devicePixelRatio || 1);
         const height = this.canvas.height / (window.devicePixelRatio || 1);
-        
+        const particleRadiusPx = this.getParticleRadiusPx();
+
         this.particles = [];
         for (let i = 0; i < BackgroundParticleLayer.PARTICLE_COUNT; i++) {
             const color = this.gradientColors[i % this.gradientColors.length];
@@ -201,7 +203,7 @@ class BackgroundParticleLayer {
                 targetColorR: color[0],
                 targetColorG: color[1],
                 targetColorB: color[2],
-                radius: BackgroundParticleLayer.PARTICLE_RADIUS
+                radius: particleRadiusPx
             };
             this.particles.push(particle);
         }
@@ -229,6 +231,7 @@ class BackgroundParticleLayer {
         this.canvas.width = Math.round(width * devicePixelRatio);
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        this.updateParticleRadii();
     }
     
     public start(): void {
@@ -414,6 +417,20 @@ class BackgroundParticleLayer {
             p1.colorG += (p1.targetColorG - p1.colorG) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
             p1.colorB += (p1.targetColorB - p1.colorB) * BackgroundParticleLayer.COLOR_TRANSITION_SPEED;
         }
+    }
+
+    private updateParticleRadii(): void {
+        const particleRadiusPx = this.getParticleRadiusPx();
+        for (let i = 0; i < this.particles.length; i++) {
+            this.particles[i].radius = particleRadiusPx;
+        }
+    }
+
+    private getParticleRadiusPx(): number {
+        if (window.matchMedia('(min-width: 768px)').matches) {
+            return BackgroundParticleLayer.PARTICLE_RADIUS_DESKTOP_PX;
+        }
+        return BackgroundParticleLayer.PARTICLE_RADIUS_MOBILE_PX;
     }
     
     private render(): void {
@@ -1978,7 +1995,7 @@ export class MainMenu {
     }
 
     private setMenuParticleDensity(multiplier: number): void {
-        const densityScale = 2;
+        const densityScale = Math.SQRT2;
         this.menuParticleLayer?.setDensityMultiplier(multiplier * densityScale);
     }
 
