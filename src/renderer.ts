@@ -990,6 +990,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = forgeColor;
+        }
 
         // Check visibility for enemy forges
         let shouldDim = false;
@@ -1076,7 +1080,7 @@ export class GameRenderer {
             : forgeColor;
         const forgeSpritePath = this.getForgeSpritePath(forge);
         const forgeSprite = forgeSpritePath
-            ? (ladSun ? this.getOutlinedTintedSprite(forgeSpritePath, tintColor, outlineColor) : this.getTintedSprite(forgeSpritePath, tintColor))
+            ? ((ladSun && shouldShowLadOutline) ? this.getOutlinedTintedSprite(forgeSpritePath, tintColor, outlineColor) : this.getTintedSprite(forgeSpritePath, tintColor))
             : null;
         if (forgeSprite) {
             const spriteSize = size * this.FORGE_SPRITE_SCALE;
@@ -1099,7 +1103,8 @@ export class GameRenderer {
             this.ctx.stroke();
         } else {
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
             this.ctx.lineWidth = 2;
             
             // Draw as a hexagon with rotation
@@ -1323,6 +1328,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = mirrorColor;
+        }
 
         // Check visibility for enemy mirrors
         let shouldDim = false;
@@ -1448,7 +1457,7 @@ export class GameRenderer {
             const spriteColor = this.brightenAndPaleColor(displayColor);
             
             // Use tinted sprite for solar mirror
-            const mirrorSprite = ladSun
+            const mirrorSprite = (ladSun && shouldShowLadOutline)
                 ? this.getOutlinedTintedSprite(mirrorSpritePath, spriteColor, outlineColor)
                 : this.getTintedSprite(mirrorSpritePath, spriteColor);
             if (mirrorSprite) {
@@ -1480,7 +1489,8 @@ export class GameRenderer {
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
             // Draw border for the surface
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
 
@@ -1957,6 +1967,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = unitColor;
+        }
 
         // Check visibility for enemy units
         let shouldDim = false;
@@ -1997,7 +2011,7 @@ export class GameRenderer {
             : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
         
         // Use outlined sprite for selected units, regular tinted sprite otherwise
-        const shouldUseOutlinedSprite = Boolean(ladSun) || (isSelected && !isEnemy);
+        const shouldUseOutlinedSprite = (shouldShowLadOutline && Boolean(ladSun)) || (isSelected && !isEnemy);
         const heroSprite = heroSpritePath 
             ? (shouldUseOutlinedSprite ? this.getOutlinedTintedSprite(heroSpritePath, tintColor, outlineColor) : this.getTintedSprite(heroSpritePath, tintColor))
             : null;
@@ -2018,7 +2032,8 @@ export class GameRenderer {
             this.ctx.restore();
         } else {
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = isSelected ? outlineColor : (shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor);
+            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            this.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
             // Use thicker outline in LaD mode for better visibility of white/black outlines
             this.ctx.lineWidth = isSelected ? 3 : (ladSun ? 2 : 1);
             this.ctx.beginPath();
@@ -2434,6 +2449,11 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const isEnemyTurret = Boolean(this.viewingPlayer && turret.owner !== this.viewingPlayer);
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemyTurret;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = color;
+        }
         
         // Sprite paths for the radiant cannon
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
@@ -2443,7 +2463,7 @@ export class GameRenderer {
         const spriteScale = Constants.DEPLOYED_TURRET_SPRITE_SCALE * this.zoom;
         
         // Load and draw bottom sprite (static base)
-        const bottomSprite = ladSun
+        const bottomSprite = (ladSun && shouldShowLadOutline)
             ? this.getOutlinedTintedSprite(bottomSpritePath, color, outlineColor)
             : this.getTintedSprite(bottomSpritePath, color);
         if (bottomSprite) {
@@ -2477,12 +2497,12 @@ export class GameRenderer {
             const frameIndex = Math.floor(turret.firingAnimationProgress * Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT);
             const clampedFrameIndex = Math.min(frameIndex, Constants.DEPLOYED_TURRET_ANIMATION_FRAME_COUNT - 1);
             const animSpritePath = `ASSETS/sprites/RADIANT/structures/radiantCannonAnimation/radiantCannonFrame (${clampedFrameIndex + 1}).png`;
-            topSpriteToUse = ladSun
+            topSpriteToUse = (ladSun && shouldShowLadOutline)
                 ? this.getOutlinedTintedSprite(animSpritePath, color, outlineColor)
                 : this.getTintedSprite(animSpritePath, color);
         } else {
             // Use default top sprite when not firing
-            topSpriteToUse = ladSun
+            topSpriteToUse = (ladSun && shouldShowLadOutline)
                 ? this.getOutlinedTintedSprite(topSpritePath, color, outlineColor)
                 : this.getTintedSprite(topSpritePath, color);
         }
@@ -2689,13 +2709,17 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = starlingColor;
+        }
         const tintColor = shouldDim
             ? this.darkenColor(starlingColor, Constants.SHADE_OPACITY)
             : starlingColor;
         displayColor = tintColor;
         
         // Use outlined sprite for selected starlings, regular tinted sprite otherwise
-        const shouldUseOutlinedSprite = Boolean(ladSun) || (isSelected && !isEnemy);
+        const shouldUseOutlinedSprite = (shouldShowLadOutline && Boolean(ladSun)) || (isSelected && !isEnemy);
         const starlingSprite = starlingSpritePath 
             ? (shouldUseOutlinedSprite ? this.getOutlinedTintedSprite(starlingSpritePath, tintColor, outlineColor) : this.getTintedSprite(starlingSpritePath, tintColor))
             : null;
@@ -2727,7 +2751,8 @@ export class GameRenderer {
         } else {
             // Fallback to circle rendering if sprite not loaded
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = isSelected ? outlineColor : (shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor);
+            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            this.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
             this.ctx.lineWidth = isSelected ? 3 : 1;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -3369,6 +3394,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = buildingColor;
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3421,10 +3450,10 @@ export class GameRenderer {
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
 
-        const bottomSprite = ladSun
+        const bottomSprite = (ladSun && shouldShowLadOutline)
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
-        const topSprite = ladSun
+        const topSprite = (ladSun && shouldShowLadOutline)
             ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(topSpritePath, displayColor);
 
@@ -3475,7 +3504,8 @@ export class GameRenderer {
         } else {
             // Draw base (circular platform)
             this.ctx.fillStyle = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
             this.ctx.lineWidth = 2;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -3541,6 +3571,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = buildingColor;
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3602,7 +3636,8 @@ export class GameRenderer {
 
         // Draw base (circular platform with energy pattern)
         this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+        const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
@@ -3665,6 +3700,10 @@ export class GameRenderer {
                 outlineColor = '#FFFFFF';
             }
         }
+        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
+        if (ladSun && !shouldShowLadOutline) {
+            outlineColor = buildingColor;
+        }
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3716,7 +3755,8 @@ export class GameRenderer {
 
         // Draw main structure (hexagon shape for industrial look)
         this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor(outlineColor, Constants.SHADE_OPACITY) : outlineColor;
+        const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+        this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
         this.ctx.lineWidth = 2;
         this.ctx.beginPath();
         for (let i = 0; i < 6; i++) {
