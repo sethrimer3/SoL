@@ -1,0 +1,568 @@
+/**
+ * Particle systems and effects for SoL game simulation
+ */
+
+import { Vector2D } from '../math';
+import * as Constants from '../../constants';
+
+// Type imports for particle class properties
+// These are defined in game-core.ts and will be properly typed when integrated
+type Player = any;
+type CombatTarget = any;
+type Faction = any;
+
+/**
+ * Space dust particle that gets affected by influences and forces
+ */
+export interface SpaceDustPalette {
+    neutral: string[];
+    accent: string[];
+}
+
+export class SpaceDustParticle {
+    velocity: Vector2D;
+    baseColor: string;
+    currentColor: string;
+    glowState: number = Constants.DUST_GLOW_STATE_NORMAL;
+    glowTransition: number = 0; // 0-1 transition between states
+    targetGlowState: number = Constants.DUST_GLOW_STATE_NORMAL;
+    lastMovementTime: number = 0; // Time since last significant movement
+    impactColor: string | null = null;
+    impactBlend: number = 0;
+    impactTargetBlend: number = 0;
+    impactHoldTimeSec: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        velocity?: Vector2D,
+        palette?: SpaceDustPalette
+    ) {
+        this.baseColor = SpaceDustParticle.generateBaseColor(palette);
+        this.currentColor = this.baseColor;
+        // Initialize with very slow random velocity
+        if (velocity) {
+            this.velocity = velocity;
+        } else {
+            this.velocity = new Vector2D(
+                (Math.random() - 0.5) * 2,  // -1 to 1
+                (Math.random() - 0.5) * 2
+            );
+        }
+    }
+
+    /**
+     * Update particle position based on velocity
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        
+        // Check if particle is moving significantly
+        const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        if (speed > Constants.DUST_FAST_MOVEMENT_THRESHOLD) {
+            // Fast movement - trigger full glow
+            this.targetGlowState = Constants.DUST_GLOW_STATE_FULL;
+            this.lastMovementTime = Date.now();
+        } else if (speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {
+            // Some movement - maintain current glow or go to slight glow
+            if (this.glowState < Constants.DUST_GLOW_STATE_SLIGHT) {
+                this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
+            }
+            this.lastMovementTime = Date.now();
+        } else {
+            // Slow/no movement - fade back to normal based on time since last movement
+            const timeSinceMovement = Date.now() - this.lastMovementTime;
+            if (timeSinceMovement > Constants.DUST_FADE_TO_NORMAL_DELAY_MS) {
+                // After 2 seconds of slow movement, start fading to normal
+                this.targetGlowState = Constants.DUST_GLOW_STATE_NORMAL;
+            } else if (timeSinceMovement > Constants.DUST_FADE_TO_SLIGHT_DELAY_MS && this.glowState === Constants.DUST_GLOW_STATE_FULL) {
+                // After 1 second, fade from full glow to slight glow
+                this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
+            }
+        }
+        
+        // Smooth transition between glow states
+        const transitionSpeed = this.glowState < this.targetGlowState ? Constants.DUST_GLOW_TRANSITION_SPEED_UP : Constants.DUST_GLOW_TRANSITION_SPEED_DOWN;
+        if (this.glowState < this.targetGlowState) {
+            this.glowTransition += deltaTime * transitionSpeed;
+            if (this.glowTransition >= 1.0) {
+                this.glowState = this.targetGlowState;
+                this.glowTransition = 0;
+            }
+        } else if (this.glowState > this.targetGlowState) {
+            this.glowTransition += deltaTime * transitionSpeed;
+            if (this.glowTransition >= 1.0) {
+                this.glowState = this.targetGlowState;
+                this.glowTransition = 0;
+            }
+        }
+
+        this.updateImpactBlend(deltaTime);
+        
+        // Apply friction to gradually slow down
+        this.velocity.x *= 0.98;
+        this.velocity.y *= 0.98;
+
+        const driftSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        if (driftSpeed < Constants.DUST_MIN_VELOCITY) {
+            if (driftSpeed === 0) {
+                this.velocity.x = Constants.DUST_MIN_VELOCITY;
+                this.velocity.y = 0;
+            } else {
+                const driftScale = Constants.DUST_MIN_VELOCITY / driftSpeed;
+                this.velocity.x *= driftScale;
+                this.velocity.y *= driftScale;
+            }
+        }
+    }
+
+    /**
+     * Apply force to particle (from units or attacks)
+     */
+    applyForce(force: Vector2D): void {
+        this.velocity.x += force.x;
+        this.velocity.y += force.y;
+    }
+
+    /**
+     * Apply a brief color impulse from a nearby unit or attack.
+     */
+    applyImpactColor(impactColor: string, intensity: number): void {
+        if (!impactColor || intensity <= 0) {
+            return;
+        }
+        this.impactColor = impactColor;
+        this.impactTargetBlend = Math.max(this.impactTargetBlend, Math.min(1, intensity));
+        this.impactHoldTimeSec = Constants.DUST_COLOR_IMPACT_HOLD_SEC;
+    }
+
+    /**
+     * Update color based on influence
+     */
+    updateColor(influenceColor: string | null, blendFactor: number): void {
+        let blendedColor = this.baseColor;
+        if (influenceColor && blendFactor > 0) {
+            // Blend from gray to influence color
+            blendedColor = this.blendColors(this.baseColor, influenceColor, blendFactor);
+        }
+
+        if (this.impactColor && this.impactBlend > 0) {
+            this.currentColor = this.blendColors(blendedColor, this.impactColor, this.impactBlend);
+        } else {
+            this.currentColor = blendedColor;
+        }
+    }
+
+    /**
+     * Blend two hex colors
+     */
+    private blendColors(color1: string, color2: string, factor: number): string {
+        // Validate hex color format
+        if (!color1 || !color2 || !color1.startsWith('#') || !color2.startsWith('#')) {
+            return this.baseColor;
+        }
+        
+        // Simple hex color blending
+        const c1 = parseInt(color1.slice(1), 16);
+        const c2 = parseInt(color2.slice(1), 16);
+        
+        if (isNaN(c1) || isNaN(c2)) {
+            return this.baseColor;
+        }
+        
+        const r1 = (c1 >> 16) & 0xff;
+        const g1 = (c1 >> 8) & 0xff;
+        const b1 = c1 & 0xff;
+        
+        const r2 = (c2 >> 16) & 0xff;
+        const g2 = (c2 >> 8) & 0xff;
+        const b2 = c2 & 0xff;
+        
+        const r = Math.round(r1 + (r2 - r1) * factor);
+        const g = Math.round(g1 + (g2 - g1) * factor);
+        const b = Math.round(b1 + (b2 - b1) * factor);
+        
+        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+    }
+
+    private updateImpactBlend(deltaTime: number): void {
+        if (this.impactHoldTimeSec > 0) {
+            this.impactHoldTimeSec = Math.max(0, this.impactHoldTimeSec - deltaTime);
+        }
+
+        const targetBlend = this.impactHoldTimeSec > 0 ? this.impactTargetBlend : 0;
+        const fadeSpeed = targetBlend > this.impactBlend
+            ? Constants.DUST_COLOR_FADE_IN_SPEED
+            : Constants.DUST_COLOR_FADE_OUT_SPEED;
+        const blendDelta = fadeSpeed * deltaTime;
+
+        if (this.impactBlend < targetBlend) {
+            this.impactBlend = Math.min(targetBlend, this.impactBlend + blendDelta);
+        } else if (this.impactBlend > targetBlend) {
+            this.impactBlend = Math.max(targetBlend, this.impactBlend - blendDelta);
+        }
+
+        if (targetBlend === 0 && this.impactBlend === 0) {
+            this.impactTargetBlend = 0;
+            this.impactColor = null;
+        }
+    }
+
+    private static generateBaseColor(palette?: SpaceDustPalette): string {
+        if (palette && palette.neutral.length > 0) {
+            const paletteRoll = Math.random();
+            const useAccent = paletteRoll > 0.7 && palette.accent.length > 0;
+            const selection = useAccent ? palette.accent : palette.neutral;
+            const colorIndex = Math.floor(Math.random() * selection.length);
+            return selection[colorIndex];
+        }
+
+        const baseShade = 85 + Math.random() * 110;
+        let r = baseShade;
+        let g = baseShade;
+        let b = baseShade;
+        const tintRoll = Math.random();
+
+        if (tintRoll < 0.18) {
+            r = baseShade - 8;
+            g = baseShade - 4;
+            b = baseShade + 14;
+        } else if (tintRoll < 0.28) {
+            r = baseShade + 10;
+            g = baseShade - 10;
+            b = baseShade + 12;
+        }
+
+        const clamp = (value: number): number => Math.max(0, Math.min(255, Math.round(value)));
+        const red = clamp(r);
+        const green = clamp(g);
+        const blue = clamp(b);
+
+        return `#${((red << 16) | (green << 8) | blue).toString(16).padStart(6, '0')}`;
+    }
+}
+
+/**
+ * Forge crunch effect - periodic event that sucks in dust then pushes it out
+ * Used when the forge "crunches" to spawn minions
+ */
+export class ForgeCrunch {
+    phase: 'suck' | 'wave' | 'idle' = 'idle';
+    phaseTimer: number = 0;
+    
+    constructor(
+        public position: Vector2D
+    ) {}
+
+    /**
+     * Start a new crunch cycle
+     */
+    start(): void {
+        this.phase = 'suck';
+        this.phaseTimer = Constants.FORGE_CRUNCH_SUCK_DURATION;
+    }
+
+    /**
+     * Update crunch phase timers
+     */
+    update(deltaTime: number): void {
+        if (this.phase === 'idle') return;
+
+        this.phaseTimer -= deltaTime;
+        
+        if (this.phaseTimer <= 0) {
+            if (this.phase === 'suck') {
+                // Transition from suck to wave
+                this.phase = 'wave';
+                this.phaseTimer = Constants.FORGE_CRUNCH_WAVE_DURATION;
+            } else if (this.phase === 'wave') {
+                // Crunch complete
+                this.phase = 'idle';
+                this.phaseTimer = 0;
+            }
+        }
+    }
+
+    /**
+     * Check if crunch is active
+     */
+    isActive(): boolean {
+        return this.phase !== 'idle';
+    }
+
+    /**
+     * Get current phase progress (0-1)
+     */
+    getPhaseProgress(): number {
+        if (this.phase === 'idle') return 0;
+        const totalDuration = this.phase === 'suck' 
+            ? Constants.FORGE_CRUNCH_SUCK_DURATION 
+            : Constants.FORGE_CRUNCH_WAVE_DURATION;
+        return 1.0 - (this.phaseTimer / totalDuration);
+    }
+}
+
+/**
+ * Bullet casing that ejects from weapons and interacts with space dust
+ */
+export class BulletCasing {
+    velocity: Vector2D;
+    rotation: number = 0;
+    rotationSpeed: number;
+    lifetime: number = 0;
+    maxLifetime: number = Constants.BULLET_CASING_LIFETIME;
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D
+    ) {
+        this.velocity = velocity;
+        this.rotationSpeed = (Math.random() - 0.5) * 10; // Random spin
+    }
+
+    /**
+     * Update casing position and physics
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.rotation += this.rotationSpeed * deltaTime;
+        
+        // Apply friction
+        this.velocity.x *= 0.95;
+        this.velocity.y *= 0.95;
+        
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if casing should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+
+    /**
+     * Apply collision response when hitting spacedust
+     */
+    applyCollision(force: Vector2D): void {
+        this.velocity.x += force.x * Constants.CASING_COLLISION_DAMPING;
+        this.velocity.y += force.y * Constants.CASING_COLLISION_DAMPING;
+    }
+}
+
+/**
+ * Muzzle flash effect when firing
+ */
+export class MuzzleFlash {
+    lifetime: number = 0;
+    maxLifetime: number = Constants.MUZZLE_FLASH_DURATION;
+    
+    constructor(
+        public position: Vector2D,
+        public angle: number
+    ) {}
+
+    /**
+     * Update flash lifetime
+     */
+    update(deltaTime: number): void {
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if flash should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Bouncing bullet that appears when hitting an enemy
+ */
+export class BouncingBullet {
+    velocity: Vector2D;
+    lifetime: number = 0;
+    maxLifetime: number = Constants.BOUNCING_BULLET_LIFETIME;
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D
+    ) {
+        this.velocity = velocity;
+    }
+
+    /**
+     * Update bullet position
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        
+        // Apply gravity-like effect
+        this.velocity.y += 100 * deltaTime;
+        
+        // Apply friction
+        this.velocity.x *= 0.98;
+        this.velocity.y *= 0.98;
+        
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if bullet should be removed
+     */
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+// Forward declarations for optional properties
+type Beam = any;
+type Preist = any;
+
+/**
+ * Ability bullet for special attacks
+ */
+export class AbilityBullet {
+    velocity: Vector2D;
+    lifetime: number = 0;
+    maxLifetime: number = Constants.MARINE_ABILITY_BULLET_LIFETIME;
+    maxRange: number = Infinity; // Optional max range in pixels (default: no limit)
+    startPosition: Vector2D;
+    
+    // Optional properties for Beam sniper projectile
+    isBeamProjectile?: boolean;
+    beamOwner?: Beam;
+    
+    // Optional properties for Preist healing bomb
+    isHealingBomb?: boolean;
+    healingBombOwner?: Preist;
+    
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D,
+        public owner: Player,
+        public damage: number = Constants.MARINE_ABILITY_BULLET_DAMAGE
+    ) {
+        this.velocity = velocity;
+        this.startPosition = new Vector2D(position.x, position.y);
+    }
+
+    /**
+     * Update bullet position
+     */
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+
+    /**
+     * Check if bullet should be removed
+     */
+    shouldDespawn(): boolean {
+        // Check lifetime
+        if (this.lifetime >= this.maxLifetime) {
+            return true;
+        }
+        
+        // Check max range
+        const distanceTraveled = this.startPosition.distanceTo(this.position);
+        if (distanceTraveled >= this.maxRange) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    /**
+     * Check if bullet hits a target
+     */
+    checkHit(target: CombatTarget): boolean {
+        const distance = this.position.distanceTo(target.position);
+        return distance < 10; // Hit radius
+    }
+}
+
+/**
+ * Minion projectile fired by Starlings
+ */
+export class MinionProjectile {
+    velocity: Vector2D;
+    distanceTraveledPx: number = 0;
+    maxRangePx: number;
+
+    constructor(
+        public position: Vector2D,
+        velocity: Vector2D,
+        public owner: Player,
+        public damage: number,
+        maxRangePx: number = Constants.STARLING_PROJECTILE_MAX_RANGE_PX
+    ) {
+        this.velocity = velocity;
+        this.maxRangePx = maxRangePx;
+    }
+
+    update(deltaTime: number): void {
+        const moveX = this.velocity.x * deltaTime;
+        const moveY = this.velocity.y * deltaTime;
+        this.position.x += moveX;
+        this.position.y += moveY;
+        this.distanceTraveledPx += Math.sqrt(moveX * moveX + moveY * moveY);
+    }
+
+    shouldDespawn(): boolean {
+        return this.distanceTraveledPx >= this.maxRangePx;
+    }
+
+    checkHit(target: CombatTarget): boolean {
+        const distance = this.position.distanceTo(target.position);
+        return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
+    }
+}
+
+/**
+ * Laser beam fired by Starlings (instant hit-scan weapon)
+ */
+export class LaserBeam {
+    lifetime: number = 0;
+    maxLifetime: number = 0.1; // 100ms visible duration
+    
+    constructor(
+        public startPos: Vector2D,
+        public endPos: Vector2D,
+        public owner: Player,
+        public damage: number
+    ) {}
+    
+    update(deltaTime: number): boolean {
+        this.lifetime += deltaTime;
+        return this.lifetime >= this.maxLifetime;
+    }
+}
+
+/**
+ * Impact particle spawned at laser beam endpoint
+ */
+export class ImpactParticle {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public velocity: Vector2D,
+        public maxLifetime: number,
+        public faction: Faction
+    ) {}
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+    }
+    
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}
