@@ -3,12 +3,12 @@
  * Base class for all combat units (heroes and minions)
  */
 
-import { Vector2D } from '../math';
+import { Vector2D, LightRay } from '../math';
 import * as Constants from '../../constants';
-import type { Player } from '../../game-core';
-import type { Asteroid } from '../../game-core';
-import type { AbilityBullet } from '../../game-core';
-import type { CombatTarget } from '../../game-core';
+import type { Player } from './player';
+import type { Asteroid } from './asteroid';
+import type { AbilityBullet } from './particles';
+import type { CombatTarget } from './buildings';
 
 /**
  * Base class for all units in the game

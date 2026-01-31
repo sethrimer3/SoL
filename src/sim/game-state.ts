@@ -3453,3 +3453,104 @@ export class GameState {
         return `${ownerIndex}_${unit.position.x.toFixed(1)}_${unit.position.y.toFixed(1)}_${unit.maxHealth}_${unit.constructor.name}`;
     }
 }
+
+/**
+ * Create a standard game setup
+ */
+export function createStandardGame(playerNames: Array<[string, Faction]>, spaceDustPalette?: SpaceDustPalette): GameState {
+    const game = new GameState();
+
+    // Add sun at center
+    game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+
+    // Create players with starting positions in bottom-left and top-right
+    // Randomly assign which player gets which position
+    const bottomLeft = new Vector2D(-700, 700);
+    const topRight = new Vector2D(700, -700);
+    
+    // Randomly decide player assignment
+    const randomizePositions = Math.random() < 0.5;
+    const positions = randomizePositions 
+        ? [bottomLeft, topRight]
+        : [topRight, bottomLeft];
+
+    for (let i = 0; i < playerNames.length; i++) {
+        if (i >= positions.length) {
+            break;
+        }
+        const [name, faction] = playerNames[i];
+        const player = new Player(name, faction);
+        player.isAi = i !== 0;
+        
+        // Assign random AI strategy for AI players
+        if (player.isAi) {
+            const strategies = [
+                Constants.AIStrategy.ECONOMIC,
+                Constants.AIStrategy.DEFENSIVE,
+                Constants.AIStrategy.AGGRESSIVE,
+                Constants.AIStrategy.WAVES
+            ];
+            player.aiStrategy = strategies[Math.floor(Math.random() * strategies.length)];
+        }
+        
+        const forgePos = positions[i];
+        
+        const mirrorSpawnDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+        const mirrorPositions = [
+            new Vector2D(
+                forgePos.x - mirrorSpawnDistance,
+                forgePos.y
+            ),
+            new Vector2D(
+                forgePos.x + mirrorSpawnDistance,
+                forgePos.y
+            )
+        ];
+        game.initializePlayer(player, forgePos, mirrorPositions);
+        
+        // Hero units (Marine and Grave) are no longer spawned automatically
+        // They must be obtained through other game mechanics
+        
+        game.players.push(player);
+    }
+    
+    // Initialize default minion paths (each forge targets the enemy's spawn location)
+    if (game.players.length >= 2) {
+        for (let i = 0; i < game.players.length; i++) {
+            const player = game.players[i];
+            const enemyIndex = (i + 1) % game.players.length;
+            const enemyPlayer = game.players[enemyIndex];
+            
+            if (player.stellarForge && enemyPlayer.stellarForge) {
+                player.stellarForge.initializeDefaultPath(enemyPlayer.stellarForge.position);
+            }
+        }
+    }
+
+    // Initialize space dust particles
+    game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, 2000, 2000, spaceDustPalette);
+
+    // Initialize random asteroids
+    game.initializeAsteroids(10, 2000, 2000);
+    
+    // Add two large strategic asteroids that cast shadows on the bases
+    // Position them close to the sun to cast shadows toward bottom-left and top-right
+    // Bottom-left shadow: asteroid positioned at top-right of sun (angle ~-45 degrees or 315 degrees)
+    const bottomLeftShadowAngle = -Math.PI / 4; // -45 degrees (top-right quadrant)
+    const bottomLeftAsteroidPos = new Vector2D(
+        Math.cos(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+    game.asteroids.push(new Asteroid(bottomLeftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
+    
+    // Top-right shadow: asteroid positioned at bottom-left of sun (angle ~135 degrees)
+    const topRightShadowAngle = (3 * Math.PI) / 4; // 135 degrees (bottom-left quadrant)
+    const topRightAsteroidPos = new Vector2D(
+        Math.cos(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+    game.asteroids.push(new Asteroid(topRightAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
+
+    game.isRunning = true;
+    return game;
+}

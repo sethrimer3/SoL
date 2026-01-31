@@ -4,38 +4,12 @@
 
 import { Vector2D, LightRay } from '../math';
 import * as Constants from '../../constants';
-
-// Type imports for entities used in method signatures
-// These types are defined in game-core.ts
-export interface Sun {
-    position: Vector2D;
-    radius: number;
-}
-
-export interface Player {
-    solarMirrors: SolarMirror[];
-    buildings: Building[];
-    stellarForge: StellarForge | null;
-}
-
-export interface StellarForge {
-    position: Vector2D;
-    radius: number;
-}
-
-export interface Building {
-    position: Vector2D;
-    radius: number;
-}
-
-export interface Asteroid {
-    getWorldVertices(): Vector2D[];
-}
-
-export interface GameState {
-    suns: Sun[];
-    players: Player[];
-}
+import type { Sun } from './sun';
+import type { Player } from './player';
+import type { StellarForge } from './stellar-forge';
+import type { Building } from './buildings';
+import type { Asteroid } from './asteroid';
+import type { GameState } from '../game-state';
 
 export class SolarMirror {
     health: number = Constants.MIRROR_MAX_HEALTH;

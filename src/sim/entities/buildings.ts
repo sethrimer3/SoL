@@ -5,64 +5,12 @@
 
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
-
-// Import types from game-core (these will need to be available)
-// For now, we'll define the types we need inline to avoid circular dependencies
-// TODO: These types should eventually be extracted to their own modules
-
-export interface Player {
-    id: string;
-    resources: number;
-    energy: number;
-    [key: string]: any;
-}
-
-export interface Unit {
-    position: Vector2D;
-    health: number;
-    [key: string]: any;
-}
-
-export interface Asteroid {
-    position: Vector2D;
-    [key: string]: any;
-}
-
-export interface StellarForge {
-    position: Vector2D;
-    health: number;
-    [key: string]: any;
-}
-
-export interface SolarMirror {
-    position: Vector2D;
-    health: number;
-    [key: string]: any;
-}
-
-export interface SpaceDustParticle {
-    position: Vector2D;
-    velocity: Vector2D;
-    [key: string]: any;
-}
-
-export interface MuzzleFlash {
-    position: Vector2D;
-    angle: number;
-    [key: string]: any;
-}
-
-export interface BulletCasing {
-    position: Vector2D;
-    velocity: Vector2D;
-    [key: string]: any;
-}
-
-export interface BouncingBullet {
-    position: Vector2D;
-    velocity: Vector2D;
-    [key: string]: any;
-}
+import type { Player } from './player';
+import type { Unit } from './unit';
+import type { Asteroid } from './asteroid';
+import type { StellarForge } from './stellar-forge';
+import type { SolarMirror } from './solar-mirror';
+import type { SpaceDustParticle, MuzzleFlash, BulletCasing, BouncingBullet } from './particles';
 
 export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
 

@@ -6,12 +6,13 @@
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import { Unit } from './unit';
-import { LaserBeam, StellarForge } from '../../game-core';
-import type { Player } from '../../game-core';
-import type { CombatTarget } from '../../game-core';
-import type { Asteroid } from '../../game-core';
-import type { MinionProjectile } from '../../game-core';
-import type { GameState, Building } from '../../game-core';
+import { LaserBeam, MinionProjectile } from './particles';
+import { StellarForge } from './stellar-forge';
+import { Building } from './buildings';
+import type { Player } from './player';
+import type { CombatTarget } from './buildings';
+import type { Asteroid } from './asteroid';
+import type { GameState } from '../game-state';
 
 export class Starling extends Unit {
     private explorationTarget: Vector2D | null = null;

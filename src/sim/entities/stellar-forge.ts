@@ -1,11 +1,11 @@
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
-import type { Player } from '../../game-core';
-import type { Asteroid } from '../../game-core';
-import type { ForgeCrunch } from '../../game-core';
-import type { SolarMirror } from '../../game-core';
-import type { Sun } from '../../game-core';
-import type { GameState } from '../../game-core';
+import { ForgeCrunch } from './particles';
+import type { Player } from './player';
+import type { Asteroid } from './asteroid';
+import type { SolarMirror } from './solar-mirror';
+import type { Sun } from './sun';
+import type { GameState } from '../game-state';
 
 export class StellarForge {
     health: number = 1000.0;
