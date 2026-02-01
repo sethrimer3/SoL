@@ -19,7 +19,7 @@ export class StellarForge {
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
-    private readonly baseMaxSpeed: number = 50; // base pixels per second (will be doubled at 100% light)
+    private readonly baseMaxSpeed: number = 50; // base pixels per second (at 100 light/sec, speed is doubled to 100 px/sec)
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
     private readonly slowRadiusPx: number = 80; // Distance to begin slow approach

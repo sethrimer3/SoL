@@ -3,6 +3,7 @@
  */
 
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
+import { SparkleParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
@@ -1369,15 +1370,15 @@ export class GameRenderer {
 
         // Check if mirror is regenerating (within influence radius of forge and below max health)
         const forge = mirror.owner.stellarForge;
-        const isRegenerating = forge && mirror.health < this.MIRROR_MAX_HEALTH &&
-            mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS;
+        const isRegenerating = !!(forge && mirror.health < this.MIRROR_MAX_HEALTH &&
+            mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS);
         // Use player color based on whether this is the viewing player or enemy
         const playerColorToUse = (this.viewingPlayer && mirror.owner === this.viewingPlayer) 
             ? this.playerColor 
             : this.enemyColor;
         
         this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, 
-            isRegenerating ? true : false, 
+            isRegenerating, 
             isRegenerating ? playerColorToUse : undefined);
 
         if (mirror.isSelected) {
@@ -2213,7 +2214,7 @@ export class GameRenderer {
     /**
      * Draw a sparkle particle (for regeneration effects)
      */
-    private drawSparkleParticle(sparkle: any): void {
+    private drawSparkleParticle(sparkle: SparkleParticle): void {
         const screenPos = this.worldToScreen(sparkle.position);
         const opacity = sparkle.getOpacity();
         const size = sparkle.size * this.zoom;
