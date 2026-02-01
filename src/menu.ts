@@ -739,7 +739,7 @@ export class MainMenu {
         
         // Title graphic - raised a little
         const titleGraphic = document.createElement('img');
-        titleGraphic.src = this.resolveAssetPath('ASSETS/sprites/menu/titleGraphic.svg');
+        titleGraphic.src = this.resolveAssetPath('ASSETS/SPRITES/menu/titleGraphic.png');
         titleGraphic.alt = 'Speed of Light RTS';
         titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
         titleGraphic.style.maxWidth = '90%';
