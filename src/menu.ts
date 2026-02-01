@@ -2582,12 +2582,12 @@ export class MainMenu {
         const gameModeText = document.createElement('div');
         let displayMode = this.settings.gameMode === 'ai' ? 'Vs. AI' : 
                           this.settings.gameMode === 'lan' ? 'LAN' : 
-                          this.settings.gameMode === 'online' ? 'Ranked' : 'Vs. AI';
+                          this.settings.gameMode === 'online' ? (this.onlineMode === 'ranked' ? 'Ranked' : 'Unranked') : 'Vs. AI';
         gameModeText.textContent = displayMode;
         gameModeContainer.appendChild(gameModeText);
 
         // For Ranked mode, show MMR and win/loss info (stub data)
-        if (this.settings.gameMode === 'online') {
+        if (this.settings.gameMode === 'online' && this.onlineMode === 'ranked') {
             const mmrText = document.createElement('div');
             mmrText.textContent = 'MMR: 1000';
             mmrText.style.fontSize = '24px';
@@ -2657,7 +2657,7 @@ export class MainMenu {
                 animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
                 animationRemainderMs -= animationFrameDurationMs;
             }
-            const frameNumber = animationFrameCount - animationFrameIndex;
+            const frameNumber = animationFrameIndex + 1;
             loadingAnimation.src = this.resolveAssetPath(`ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`);
             requestAnimationFrame(updateAnimation);
         };
