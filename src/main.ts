@@ -314,7 +314,8 @@ class GameController {
             while (normalizedAngle < -Math.PI) normalizedAngle += Math.PI * 2;
             while (normalizedAngle > Math.PI) normalizedAngle -= Math.PI * 2;
             
-            // If angle points more to the left (negative x), return 0, otherwise 1
+            // Left hemisphere: [-π, -π/2) ∪ (π/2, π] → button 0
+            // Right hemisphere: [-π/2, π/2] → button 1
             return normalizedAngle < -Math.PI / 2 || normalizedAngle > Math.PI / 2 ? 0 : 1;
         }
         return -1;

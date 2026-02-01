@@ -55,6 +55,7 @@ export class GameRenderer {
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
     private viewMinY: number = 0;
@@ -254,6 +255,16 @@ export class GameRenderer {
         image.src = resolvedPath;
         this.spriteImageCache.set(resolvedPath, image);
         return image;
+    }
+
+    /**
+     * Get the cached SoL energy icon
+     */
+    private getSolEnergyIcon(): HTMLImageElement {
+        if (!this.solEnergyIcon) {
+            this.solEnergyIcon = this.getSpriteImage('ASSETS/sprites/interface/SoL_icon.png');
+        }
+        return this.solEnergyIcon;
     }
 
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
@@ -1418,8 +1429,8 @@ export class GameRenderer {
                 ? mirror.getEnergyRatePerSec()
                 : 0;
             
-            // Load and draw SoL icon
-            const solIcon = this.getSpriteImage('ASSETS/sprites/interface/SoL_icon.png');
+            // Get cached SoL icon
+            const solIcon = this.getSolEnergyIcon();
             const iconSize = 16 * this.zoom;
             const textY = screenPos.y + size + 16 * this.zoom;
             
@@ -5188,8 +5199,8 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
             
-            // Load and draw SoL icon
-            const solIcon = this.getSpriteImage('ASSETS/sprites/interface/SoL_icon.png');
+            // Get cached SoL icon
+            const solIcon = this.getSolEnergyIcon();
             const iconSize = compactBoxHeight - 8; // Slightly smaller than box height
             const iconX = x + 4;
             const iconY = y + 4;
