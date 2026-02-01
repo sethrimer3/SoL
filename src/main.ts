@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -19,9 +19,10 @@ class GameController {
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
     private isUsingMirrorsForWarpGate: boolean = false;
+    private mirrorCommandMode: 'warpgate' | 'forge' | null = null; // Track which command was selected
     private menu: MainMenu;
     private selectedUnits: Set<Unit> = new Set();
-    private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
+    private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
     private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
     private isSelecting: boolean = false;
@@ -232,6 +233,7 @@ class GameController {
         this.selectedBase = null;
         this.selectedBuildings.clear();
         this.renderer.selectedUnits = this.selectedUnits;
+        this.renderer.selectedMirrors = this.selectedMirrors;
         
         // Reset states
         this.isPaused = false;
@@ -1050,6 +1052,76 @@ class GameController {
                     }
                 }
 
+                // Check if clicked on mirror command buttons
+                if (this.selectedMirrors.size > 0) {
+                    // Get one of the selected mirrors to determine button positions
+                    const firstMirror = Array.from(this.selectedMirrors)[0] as any;
+                    const mirrorScreenPos = this.renderer.worldToScreen(firstMirror.position);
+                    
+                    // Button layout: Two buttons above the mirror
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
+                    const buttonOffset = 50 * this.renderer.zoom; // Distance from mirror
+                    const buttonSpacing = 30 * this.renderer.zoom; // Space between buttons
+                    
+                    // Button 1: "Create Warp Gate" (top-left)
+                    const warpGateButtonX = mirrorScreenPos.x - buttonSpacing / 2;
+                    const warpGateButtonY = mirrorScreenPos.y - buttonOffset;
+                    
+                    // Button 2: "Forge" (top-right)
+                    const forgeButtonX = mirrorScreenPos.x + buttonSpacing / 2;
+                    const forgeButtonY = mirrorScreenPos.y - buttonOffset;
+                    
+                    // Check if clicked on warp gate button
+                    let dx = lastX - warpGateButtonX;
+                    let dy = lastY - warpGateButtonY;
+                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                        console.log('Mirror command: Create Warp Gate');
+                        this.mirrorCommandMode = 'warpgate';
+                        // User will now tap a location to create the warp gate
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        return;
+                    }
+                    
+                    // Check if clicked on forge button
+                    dx = lastX - forgeButtonX;
+                    dy = lastY - forgeButtonY;
+                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                        console.log('Mirror command: Link to Forge');
+                        // Link all selected mirrors to the forge
+                        if (player.stellarForge) {
+                            for (const mirror of this.selectedMirrors) {
+                                mirror.setLinkedStructure(player.stellarForge);
+                            }
+                            const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                player.solarMirrors.indexOf(mirror)
+                            ).filter((index) => index >= 0);
+                            this.sendNetworkCommand('mirror_link', {
+                                mirrorIndices,
+                                structureType: 'forge'
+                            });
+                            console.log('Mirrors linked to forge');
+                        }
+                        // Deselect mirrors
+                        for (const mirror of this.selectedMirrors) {
+                            (mirror as any).isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                        
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        return;
+                    }
+                }
+
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHero = this.getClickedHeroButton(
                         lastX,
@@ -1637,7 +1709,7 @@ class GameController {
         // Check if any mirrors are selected
         const hasSelectedMirrors = this.selectedMirrors.size > 0;
         
-        if (hasSelectedMirrors) {
+        if (hasSelectedMirrors && this.mirrorCommandMode === 'warpgate') {
             // Mirror-based warp gate: check if any selected mirror has line of sight to hold position
             let canCreateWarpGate = false;
             
@@ -1670,20 +1742,24 @@ class GameController {
             }
             
             if (canCreateWarpGate) {
-                this.holdStartTime = Date.now();
-                this.holdPosition = worldPos;
-                this.isUsingMirrorsForWarpGate = true;
-                console.log('Starting mirror-based warp gate at', worldPos);
-            }
-        } else {
-            // Normal warp gate: check if position is in player's influence
-            const distance = worldPos.distanceTo(player.stellarForge.position);
-            if (distance < Constants.INFLUENCE_RADIUS) {
-                this.holdStartTime = Date.now();
-                this.holdPosition = worldPos;
-                this.isUsingMirrorsForWarpGate = false;
+                // Create warp gate immediately
+                const warpGate = new WarpGate(worldPos, player);
+                warpGate.startCharging();
+                this.game.warpGates.push(warpGate);
+                this.currentWarpGate = warpGate;
+                
+                // Link all selected mirrors to the warp gate
+                for (const mirror of this.selectedMirrors) {
+                    mirror.setLinkedStructure(warpGate);
+                }
+                
+                console.log('Mirror-based warp gate created at', worldPos);
+                
+                // Clear command mode and selections
+                this.mirrorCommandMode = null;
             }
         }
+        // NOTE: Removed old influence-based warp gate creation - now only via mirrors
     }
 
     private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
@@ -1746,35 +1822,30 @@ class GameController {
             player.stellarForge.isSelected = false;
         }
 
-        // Update renderer's selected units
+        // Update renderer's selected units and mirrors
         this.renderer.selectedUnits = this.selectedUnits;
+        this.renderer.selectedMirrors = this.selectedMirrors;
 
         // Log selection for debugging
         console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}`);
     }
 
     private cancelHold(): void {
-        if (!this.game) return;
-        
-        if (this.currentWarpGate) {
-            this.currentWarpGate.cancel();
-            this.implodeParticles(this.currentWarpGate.position); // Changed from scatterParticles to implodeParticles
-            const index = this.game.warpGates.indexOf(this.currentWarpGate);
-            if (index > -1) {
-                this.game.warpGates.splice(index, 1);
-            }
-        }
+        // Deprecated: Hold-based warp gate creation is no longer used
+        // Warp gates are now created instantly via mirror commands
         this.holdStartTime = null;
         this.holdPosition = null;
         this.currentWarpGate = null;
         this.isUsingMirrorsForWarpGate = false;
+        this.mirrorCommandMode = null;
     }
 
     private endHold(): void {
+        // Deprecated: Hold-based warp gate creation is no longer used
         this.holdStartTime = null;
         this.holdPosition = null;
         this.isUsingMirrorsForWarpGate = false;
-        // Don't remove currentWarpGate here, it might still be charging
+        this.mirrorCommandMode = null;
     }
 
     /**
@@ -1827,87 +1898,16 @@ class GameController {
             this.game.update(deltaTime);
         }
 
-        // Update warp gate hold mechanic
-        if (this.holdStartTime && this.holdPosition) {
-            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
-            
-            if (holdDuration >= Constants.WARP_GATE_INITIAL_DELAY && !this.currentWarpGate) {
-                // Create warp gate after initial delay
-                const player = this.getLocalPlayer();
-                if (player) {
-                    this.currentWarpGate = new WarpGate(this.holdPosition, player);
-                    this.currentWarpGate.startCharging();
-                    this.game.warpGates.push(this.currentWarpGate);
-                }
-            }
-        }
-
-        // Update current warp gate
-        if (this.currentWarpGate) {
-            const isStillHolding = this.holdStartTime !== null && this.holdPosition !== null;
-            
-            // Calculate charge multiplier based on mirrors if using mirror-based warp gate
-            let chargeMultiplier = 1.0;
-            if (this.isUsingMirrorsForWarpGate && isStillHolding) {
-                const player = this.getLocalPlayer();
-                if (!player) {
-                    this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
-                    if (this.currentWarpGate.shouldEmitShockwave()) {
-                        this.scatterParticles(this.currentWarpGate.position);
-                        this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
-                    }
-                    return;
-                }
-                let totalMirrorPower = 0;
+        // Update warp gates (energy is transferred via game-state.ts mirror update)
+        // Only update for completion checks and shockwave emissions
+        for (const gate of this.game.warpGates) {
+            if (!gate.isComplete && gate.isCharging) {
+                gate.update(deltaTime);
                 
-                for (const mirror of this.selectedMirrors) {
-                    // Check if mirror is powered
-                    if (!mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) continue;
-                    
-                    // Check if mirror has line of sight to warp gate
-                    const ray = new LightRay(
-                        mirror.position,
-                        new Vector2D(
-                            this.currentWarpGate.position.x - mirror.position.x,
-                            this.currentWarpGate.position.y - mirror.position.y
-                        ).normalize(),
-                        1.0
-                    );
-                    
-                    let hasLineOfSight = true;
-                    for (const asteroid of this.game.asteroids) {
-                        if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                            hasLineOfSight = false;
-                            break;
-                        }
-                    }
-                    
-                    if (hasLineOfSight) {
-                        // Calculate mirror power based on distance to closest sun
-                        const closestSun = this.game.suns.reduce((closest, sun) => {
-                            const distToSun = mirror.position.distanceTo(sun.position);
-                            const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
-                            return distToSun < distToClosest ? sun : closest;
-                        }, null as Sun | null);
-                        
-                        if (closestSun) {
-                            const distanceToSun = mirror.position.distanceTo(closestSun.position);
-                            const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE)));
-                            totalMirrorPower += distanceMultiplier;
-                        }
-                    }
+                if (gate.shouldEmitShockwave()) {
+                    this.scatterParticles(gate.position);
+                    this.renderer.createWarpGateShockwave(gate.position);
                 }
-                
-                // Charge multiplier increases with more mirrors/power
-                // Base is 0.5x (slower than normal), each mirror adds power
-                chargeMultiplier = 0.5 + (totalMirrorPower * 0.5);
-            }
-            
-            this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
-
-            if (this.currentWarpGate.shouldEmitShockwave()) {
-                this.scatterParticles(this.currentWarpGate.position);
-                this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
             }
         }
     }

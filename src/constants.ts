@@ -11,7 +11,8 @@ export const PLAYER_2_COLOR = '#FF0000';
 export const LAD_GOLDEN_OUTLINE = '#ffb805'; // Golden outline color for units/structures in LaD mode
 
 // Warp gate constants
-export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete
+export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete (deprecated, now energy-based)
+export const WARP_GATE_ENERGY_REQUIRED = 100; // Total energy needed to mature a warp gate
 export const WARP_GATE_INITIAL_DELAY = 1.0; // Seconds before warp gate starts
 export const WARP_GATE_SPIRAL_RADIUS = 200;
 export const WARP_GATE_SPIRAL_MIN_DISTANCE = 5;
@@ -210,11 +211,13 @@ export const SUBSIDIARY_FACTORY_ATTACK_SPEED = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_RADIUS = 40; // Building size
 export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between unit productions
 
-// Building costs
-export const MINIGUN_COST = 150;
-export const GATLING_COST = 150;
-export const SWIRLER_COST = 200;
-export const SUBSIDIARY_FACTORY_COST = 400;
+// Building costs (energy-based construction)
+// Note: Internal names are different from display names
+// MINIGUN = Cannon, GATLING = Gatling Tower, SWIRLER = Cyclone, SUBSIDIARY_FACTORY = Workshop/Foundry
+export const MINIGUN_COST = 500; // Cannon
+export const GATLING_COST = 250; // Gatling
+export const SWIRLER_COST = 750; // Cyclone
+export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
