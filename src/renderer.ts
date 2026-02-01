@@ -582,7 +582,7 @@ export class GameRenderer {
         // On light background (white): use duller gold (darken by 30%)
         // On dark background (black): use brighter gold (the base color)
         // Interpolate between them based on background luminance
-        const dullingFactor = 0.7 + (luminance * 0.3); // Range from 0.7 (dark) to 1.0 (light becomes duller)
+        const dullingFactor = 0.7 + ((1 - luminance) * 0.3); // Range from 0.7 (light bg) to 1.0 (dark bg)
         
         return this.darkenColor(Constants.LAD_GOLDEN_OUTLINE, dullingFactor);
     }
@@ -864,9 +864,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy forges when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = forgeColor;
-        }
 
         // Check visibility for enemy forges
         let shouldDim = false;
@@ -1205,9 +1202,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy mirrors when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = mirrorColor;
-        }
 
         // Check visibility for enemy mirrors
         let shouldDim = false;
@@ -1916,9 +1910,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy units when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = unitColor;
-        }
 
         // Check visibility for enemy units
         let shouldDim = false;
@@ -3442,9 +3433,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy buildings when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
         const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
@@ -3626,9 +3614,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy swirlers when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
         const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
@@ -3773,9 +3758,6 @@ export class GameRenderer {
         }
         // In LaD mode, show golden outline for both player and enemy factories when visible
         const shouldShowLadOutline = Boolean(ladSun);
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
         const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
