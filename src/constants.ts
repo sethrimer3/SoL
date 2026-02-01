@@ -7,8 +7,12 @@ export const INFLUENCE_RADIUS = 300;
 export const PLAYER_1_COLOR = '#0066FF';
 export const PLAYER_2_COLOR = '#FF0000';
 
+// LaD (Light and Darkness) mode constants
+export const LAD_GOLDEN_OUTLINE = '#ffb805'; // Golden outline color for units/structures in LaD mode
+
 // Warp gate constants
-export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete
+export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete (deprecated, now energy-based)
+export const WARP_GATE_ENERGY_REQUIRED = 100; // Total energy needed to mature a warp gate
 export const WARP_GATE_INITIAL_DELAY = 1.0; // Seconds before warp gate starts
 export const WARP_GATE_SPIRAL_RADIUS = 200;
 export const WARP_GATE_SPIRAL_MIN_DISTANCE = 5;
@@ -207,11 +211,13 @@ export const SUBSIDIARY_FACTORY_ATTACK_SPEED = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_RADIUS = 40; // Building size
 export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between unit productions
 
-// Building costs
-export const MINIGUN_COST = 150;
-export const GATLING_COST = 150;
-export const SWIRLER_COST = 200;
-export const SUBSIDIARY_FACTORY_COST = 400;
+// Building costs (energy-based construction)
+// Note: Internal names are different from display names
+// MINIGUN = Cannon, GATLING = Gatling Tower, SWIRLER = Cyclone, SUBSIDIARY_FACTORY = Workshop/Foundry
+export const MINIGUN_COST = 500; // Cannon
+export const GATLING_COST = 250; // Gatling
+export const SWIRLER_COST = 750; // Cyclone
+export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
@@ -285,6 +291,7 @@ export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
 export const CLICK_DRAG_THRESHOLD = 10; // Pixels of movement to distinguish click from drag (increased for better tap/drag distinction)
+export const SMALL_SELECTION_THRESHOLD = 50; // Maximum selection box size (pixels) to be considered a single-click for double-tap detection
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
 

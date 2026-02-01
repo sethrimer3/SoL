@@ -25,7 +25,8 @@ import {
     AbilityBullet,
     MinionProjectile,
     LaserBeam,
-    ImpactParticle
+    ImpactParticle,
+    SparkleParticle
 } from './entities/particles';
 import {
     Marine,
@@ -69,6 +70,7 @@ export class GameState {
     deployedTurrets: InstanceType<typeof DeployedTurret>[] = [];
     damageNumbers: DamageNumber[] = [];
     crescentWaves: InstanceType<typeof CrescentWave>[] = [];
+    sparkleParticles: SparkleParticle[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -242,15 +244,29 @@ export class GameState {
                 const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
                 mirror.updateReflectionAngle(linkedStructure, this.suns, this.asteroids, deltaTime);
                 
-                // Generate energy even during countdown once mirrors reach position
-                if (linkedStructure === player.stellarForge &&
-                    mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
-                    player.stellarForge &&
-                    mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
+                // Generate energy and apply to linked structure
+                if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
-                    // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
-                    player.addEnergy(energyGenerated);
-                    player.stellarForge.addPendingEnergy(energyGenerated);
+                    
+                    if (linkedStructure instanceof StellarForge &&
+                        player.stellarForge &&
+                        mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
+                        // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
+                        player.addEnergy(energyGenerated);
+                        player.stellarForge.addPendingEnergy(energyGenerated);
+                    } else if (linkedStructure instanceof Building &&
+                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
+                        // Provide energy to building being constructed
+                        if (!linkedStructure.isComplete) {
+                            linkedStructure.addEnergy(energyGenerated);
+                        }
+                    } else if (linkedStructure instanceof WarpGate &&
+                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
+                        // Provide energy to warp gate
+                        if (linkedStructure.isCharging && !linkedStructure.isComplete) {
+                            linkedStructure.addEnergy(energyGenerated);
+                        }
+                    }
                 }
 
                 if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
@@ -260,6 +276,30 @@ export class GameState {
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
                         );
+                        
+                        // Spawn sparkle particles for regeneration visual effect
+                        // Spawn ~2-3 particles per second
+                        if (Math.random() < deltaTime * 2.5) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = Math.random() * 25;
+                            const sparklePos = new Vector2D(
+                                mirror.position.x + Math.cos(angle) * distance,
+                                mirror.position.y + Math.sin(angle) * distance
+                            );
+                            const velocity = new Vector2D(
+                                (Math.random() - 0.5) * 30,
+                                (Math.random() - 0.5) * 30 - 20 // Slight upward bias
+                            );
+                            // Use player's color for sparkles
+                            const playerColor = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                            this.sparkleParticles.push(new SparkleParticle(
+                                sparklePos,
+                                velocity,
+                                0.8, // lifetime in seconds
+                                playerColor,
+                                2 + Math.random() * 2 // size 2-4
+                            ));
+                        }
                     }
                 }
             }
@@ -1043,6 +1083,12 @@ export class GameState {
             particle.update(deltaTime);
         }
         this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
+        
+        // Update sparkle particles (regeneration visual effects)
+        for (const sparkle of this.sparkleParticles) {
+            sparkle.update(deltaTime);
+        }
+        this.sparkleParticles = this.sparkleParticles.filter(sparkle => !sparkle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));

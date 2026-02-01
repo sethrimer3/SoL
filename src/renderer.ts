@@ -3,6 +3,7 @@
  */
 
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
+import { SparkleParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
@@ -24,6 +25,7 @@ export class GameRenderer {
     public abilityArrowStarts: Vector2D[] = []; // Arrow starts for hero ability casting
     public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
     public selectedUnits: Set<Unit> = new Set();
+    public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
     public pathPreviewForge: StellarForge | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
@@ -561,6 +563,32 @@ export class GameRenderer {
     }
 
     /**
+     * Adjust golden outline brightness based on background
+     * Returns brighter gold on dark background, duller gold on light background
+     */
+    private getGoldenOutlineColor(backgroundColor: string): string {
+        // Parse background color to determine if it's light or dark
+        let hex = backgroundColor.replace('#', '');
+        if (hex.length === 3) {
+            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+        }
+        
+        const r = parseInt(hex.substring(0, 2), 16) || 0;
+        const g = parseInt(hex.substring(2, 4), 16) || 0;
+        const b = parseInt(hex.substring(4, 6), 16) || 0;
+        
+        // Calculate luminance (perceived brightness)
+        const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+        
+        // On light background (white): use duller gold (darken by 30%)
+        // On dark background (black): use brighter gold (the base color)
+        // Interpolate between them based on background luminance
+        const dullingFactor = 0.7 + ((1 - luminance) * 0.3); // Range from 0.7 (light bg) to 1.0 (dark bg)
+        
+        return this.darkenColor(Constants.LAD_GOLDEN_OUTLINE, dullingFactor);
+    }
+
+    /**
      * Draw a selection indicator (green dashed circle) for selected buildings
      */
     private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
@@ -659,6 +687,13 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.moveTo(screenPos.x, screenPos.y - screenRadius);
         this.ctx.lineTo(screenPos.x, screenPos.y + screenRadius);
+        this.ctx.stroke();
+
+        // Draw golden circle outline around the sun
+        this.ctx.strokeStyle = Constants.LAD_GOLDEN_OUTLINE;
+        this.ctx.lineWidth = 4;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         this.ctx.stroke();
     }
 
@@ -819,17 +854,17 @@ export class GameRenderer {
         if (ladSun) {
             const ownerSide = game.getLadSide(forge.position, ladSun);
             if (ownerSide === 'light') {
+                // Light side forge: white with golden outline (dull in light)
                 forgeColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(forgeColor);
             } else {
+                // Dark side forge: black with golden outline (bright in darkness)
                 forgeColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(forgeColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = forgeColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy forges when visible
+        const shouldShowLadOutline = Boolean(ladSun);
 
         // Check visibility for enemy forges
         let shouldDim = false;
@@ -916,7 +951,7 @@ export class GameRenderer {
             : forgeColor;
         const forgeSpritePath = this.getForgeSpritePath(forge);
         const forgeSprite = forgeSpritePath
-            ? ((ladSun && shouldShowLadOutline) ? this.getOutlinedTintedSprite(forgeSpritePath, tintColor, outlineColor) : this.getTintedSprite(forgeSpritePath, tintColor))
+            ? (ladSun ? this.getOutlinedTintedSprite(forgeSpritePath, tintColor, outlineColor) : this.getTintedSprite(forgeSpritePath, tintColor))
             : null;
         if (forgeSprite) {
             const spriteSize = size * this.FORGE_SPRITE_SCALE;
@@ -929,14 +964,6 @@ export class GameRenderer {
             );
 
             this.drawForgeFlames(forge, screenPos, spriteSize, game, shouldDim);
-
-            this.ctx.strokeStyle = forge.isReceivingLight
-                ? (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00')
-                : (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, spriteSize * 0.52, 0, Math.PI * 2);
-            this.ctx.stroke();
         } else {
             this.ctx.fillStyle = displayColor;
             const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
@@ -957,14 +984,6 @@ export class GameRenderer {
             }
             this.ctx.closePath();
             this.ctx.fill();
-            this.ctx.stroke();
-
-            this.ctx.strokeStyle = forge.isReceivingLight ? 
-                (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
-                (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.8, 0, Math.PI * 2);
             this.ctx.stroke();
         }
 
@@ -1157,17 +1176,17 @@ export class GameRenderer {
                 ? game.getLadSide(mirror.owner.stellarForge.position, ladSun)
                 : 'light';
             if (ownerSide === 'light') {
+                // Light side mirror: white with golden outline (dull in light)
                 mirrorColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(mirrorColor);
             } else {
+                // Dark side mirror: black with golden outline (bright in darkness)
                 mirrorColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(mirrorColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = mirrorColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy mirrors when visible
+        const shouldShowLadOutline = Boolean(ladSun);
 
         // Check visibility for enemy mirrors
         let shouldDim = false;
@@ -1292,8 +1311,8 @@ export class GameRenderer {
             // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
             const spriteColor = this.brightenAndPaleColor(displayColor);
             
-            // Use tinted sprite for solar mirror
-            const mirrorSprite = (ladSun && shouldShowLadOutline)
+            // Use outlined sprite in LaD mode for all mirrors (player and enemy)
+            const mirrorSprite = ladSun
                 ? this.getOutlinedTintedSprite(mirrorSpritePath, spriteColor, outlineColor)
                 : this.getTintedSprite(mirrorSpritePath, spriteColor);
             if (mirrorSprite) {
@@ -1367,7 +1386,18 @@ export class GameRenderer {
             this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor);
         }
 
-        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10);
+        // Check if mirror is regenerating (within influence radius of forge and below max health)
+        const forge = mirror.owner.stellarForge;
+        const isRegenerating = !!(forge && mirror.health < this.MIRROR_MAX_HEALTH &&
+            mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS);
+        // Use player color based on whether this is the viewing player or enemy
+        const playerColorToUse = (this.viewingPlayer && mirror.owner === this.viewingPlayer) 
+            ? this.playerColor 
+            : this.enemyColor;
+        
+        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, 
+            isRegenerating, 
+            isRegenerating ? playerColorToUse : undefined);
 
         if (mirror.isSelected) {
             const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
@@ -1789,6 +1819,16 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, chargeProgress * Math.PI * 2);
             this.ctx.stroke();
+            
+            // Draw energy progress text
+            const energyProgress = `${gate.accumulatedEnergy.toFixed(0)}/${Constants.WARP_GATE_ENERGY_REQUIRED}`;
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${12 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(energyProgress, screenPos.x, screenPos.y + maxRadius + 20 * this.zoom);
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
         } else {
             // Draw completed warp gate
             this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
@@ -1835,6 +1875,65 @@ export class GameRenderer {
     }
 
     /**
+     * Draw command buttons for selected solar mirrors
+     */
+    private drawMirrorCommandButtons(mirrors: Set<SolarMirror>): void {
+        if (mirrors.size === 0) return;
+        
+        // Get one of the selected mirrors to determine button positions
+        const firstMirror = Array.from(mirrors)[0];
+        const screenPos = this.worldToScreen(firstMirror.position);
+        
+        // Button layout: Two buttons above the mirror
+        const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
+        const buttonOffset = 50 * this.zoom; // Distance from mirror
+        const buttonSpacing = 30 * this.zoom; // Space between buttons
+        
+        // Button 1: "Create Warp Gate" (left)
+        const warpGateButtonX = screenPos.x - buttonSpacing / 2;
+        const warpGateButtonY = screenPos.y - buttonOffset;
+        
+        // Button 2: "Forge" (right)
+        const forgeButtonX = screenPos.x + buttonSpacing / 2;
+        const forgeButtonY = screenPos.y - buttonOffset;
+        
+        // Draw "Warp Gate" button
+        this.ctx.fillStyle = '#444444';
+        this.ctx.strokeStyle = '#00FFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${9 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
+        this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
+        
+        // Draw "Forge" button
+        this.ctx.fillStyle = '#444444';
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${11 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
+        
+        // Reset text alignment
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
+    }
+
+    /**
      * Draw a unit
      */
     private drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean, sizeMultiplier: number = 1.0): void {
@@ -1854,19 +1953,17 @@ export class GameRenderer {
                 : 'light';
             
             if (ownerSide === 'light') {
-                // Light side units: white with black outline
+                // Light side units: white with golden outline (dull in light)
                 unitColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(unitColor);
             } else {
-                // Dark side units: black with white outline
+                // Dark side units: black with golden outline (bright in darkness)
                 unitColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(unitColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = unitColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy units when visible
+        const shouldShowLadOutline = Boolean(ladSun);
 
         // Check visibility for enemy units
         let shouldDim = false;
@@ -1906,8 +2003,8 @@ export class GameRenderer {
             ? this.darkenColor(ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor), Constants.SHADE_OPACITY)
             : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
         
-        // Use outlined sprite for selected units, regular tinted sprite otherwise
-        const shouldUseOutlinedSprite = (shouldShowLadOutline && Boolean(ladSun)) || (isSelected && !isEnemy);
+        // Use outlined sprite for LaD mode (all units), or for selected friendly units
+        const shouldUseOutlinedSprite = Boolean(ladSun) || (isSelected && !isEnemy);
         const heroSprite = heroSpritePath 
             ? (shouldUseOutlinedSprite ? this.getOutlinedTintedSprite(heroSpritePath, tintColor, outlineColor) : this.getTintedSprite(heroSpritePath, tintColor))
             : null;
@@ -1928,9 +2025,9 @@ export class GameRenderer {
             this.ctx.restore();
         } else {
             this.ctx.fillStyle = displayColor;
-            const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
+            const strokeColor = Boolean(ladSun) ? outlineColor : displayColor;
             this.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
-            // Use thicker outline in LaD mode for better visibility of white/black outlines
+            // Use thicker outline in LaD mode for better visibility of golden outlines
             this.ctx.lineWidth = isSelected ? 3 : (ladSun ? 2 : 1);
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -2197,6 +2294,48 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a sparkle particle (for regeneration effects)
+     */
+    private drawSparkleParticle(sparkle: SparkleParticle): void {
+        const screenPos = this.worldToScreen(sparkle.position);
+        const opacity = sparkle.getOpacity();
+        const size = sparkle.size * this.zoom;
+        
+        // Draw sparkle as a bright star-shaped particle
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.globalAlpha = opacity;
+        
+        // Draw a cross/star shape
+        this.ctx.strokeStyle = sparkle.color;
+        this.ctx.lineWidth = Math.max(1, size * 0.4);
+        this.ctx.lineCap = 'round';
+        
+        // Horizontal line
+        this.ctx.beginPath();
+        this.ctx.moveTo(-size, 0);
+        this.ctx.lineTo(size, 0);
+        this.ctx.stroke();
+        
+        // Vertical line
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -size);
+        this.ctx.lineTo(0, size);
+        this.ctx.stroke();
+        
+        // Draw a glowing center
+        const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+        gradient.addColorStop(0, sparkle.color);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.restore();
     }
     
     /**
@@ -3264,6 +3403,66 @@ export class GameRenderer {
     }
 
     /**
+     * Draw warp gate effect for buildings that are warping in.
+     */
+    private drawWarpGateProductionEffect(
+        screenPos: { x: number; y: number },
+        radius: number,
+        game: GameState,
+        displayColor: string,
+        outlineColor: string,
+        shouldUseOutlinedSprite: boolean
+    ): void {
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_bottom.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_top.png';
+        const bottomSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, displayColor);
+        const topSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(topSpritePath, displayColor);
+        const referenceSprite = bottomSprite || topSprite;
+        if (!referenceSprite) {
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            return;
+        }
+
+        const spriteScale = (radius * 2) / referenceSprite.width;
+        const timeSec = game.gameTime;
+        const rotationSpeedRad = 0.9;
+        const bottomRotationRad = -timeSec * rotationSpeedRad;
+        const topRotationRad = timeSec * rotationSpeedRad;
+
+        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+            if (!sprite) {
+                return;
+            }
+            const spriteWidth = sprite.width * spriteScale;
+            const spriteHeight = sprite.height * spriteScale;
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationRad);
+            this.ctx.drawImage(
+                sprite,
+                -spriteWidth / 2,
+                -spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+            this.ctx.restore();
+        };
+
+        drawLayer(bottomSprite, bottomRotationRad);
+        drawLayer(topSprite, topRotationRad);
+    }
+
+    /**
      * Draw a Cannon/Gatling building
      */
     private drawMinigun(building: Minigun | GatlingTower, color: string, game: GameState, isEnemy: boolean): void {
@@ -3277,17 +3476,18 @@ export class GameRenderer {
                 ? game.getLadSide(building.owner.stellarForge.position, ladSun)
                 : 'light';
             if (ownerSide === 'light') {
+                // Light side building: white with golden outline (dull in light)
                 buildingColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             } else {
+                // Dark side building: black with golden outline (bright in darkness)
                 buildingColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy buildings when visible
+        const shouldShowLadOutline = Boolean(ladSun);
+        const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3310,13 +3510,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3329,7 +3534,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#00FF00';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3340,10 +3545,10 @@ export class GameRenderer {
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
 
-        const bottomSprite = (ladSun && shouldShowLadOutline)
+        const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
-        const topSprite = (ladSun && shouldShowLadOutline)
+        const topSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(topSpritePath, displayColor);
 
@@ -3452,17 +3657,18 @@ export class GameRenderer {
                 ? game.getLadSide(building.owner.stellarForge.position, ladSun)
                 : 'light';
             if (ownerSide === 'light') {
+                // Light side swirler: white with golden outline (dull in light)
                 buildingColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             } else {
+                // Dark side swirler: black with golden outline (bright in darkness)
                 buildingColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy swirlers when visible
+        const shouldShowLadOutline = Boolean(ladSun);
+        const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3485,13 +3691,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(138, 43, 226, 0.2)'; // Purple tint
-            this.ctx.strokeStyle = '#8A2BE2';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3504,7 +3715,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#8A2BE2';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3526,7 +3737,6 @@ export class GameRenderer {
         const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_middle.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_top.png';
 
-        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
@@ -3591,17 +3801,18 @@ export class GameRenderer {
                 ? game.getLadSide(building.owner.stellarForge.position, ladSun)
                 : 'light';
             if (ownerSide === 'light') {
+                // Light side factory: white with golden outline (dull in light)
                 buildingColor = '#FFFFFF';
-                outlineColor = '#000000';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             } else {
+                // Dark side factory: black with golden outline (bright in darkness)
                 buildingColor = '#000000';
-                outlineColor = '#FFFFFF';
+                outlineColor = this.getGoldenOutlineColor(buildingColor);
             }
         }
-        const shouldShowLadOutline = Boolean(ladSun) && !isEnemy;
-        if (ladSun && !shouldShowLadOutline) {
-            outlineColor = buildingColor;
-        }
+        // In LaD mode, show golden outline for both player and enemy factories when visible
+        const shouldShowLadOutline = Boolean(ladSun);
+        const shouldUseOutlinedSprite = Boolean(ladSun);
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3624,13 +3835,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.2)'; // Gold tint
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3643,7 +3859,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#FFD700';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3655,7 +3871,6 @@ export class GameRenderer {
         const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
 
-        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
@@ -4326,7 +4541,9 @@ export class GameRenderer {
         currentHealth: number,
         maxHealth: number,
         size: number,
-        yOffset: number
+        yOffset: number,
+        isRegenerating: boolean = false,
+        playerColor?: string
     ): void {
         if (currentHealth >= maxHealth) {
             return; // Don't draw if at full health
@@ -4346,6 +4563,28 @@ export class GameRenderer {
             
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+            
+            // Draw + sign if regenerating
+            if (isRegenerating) {
+                const plusSize = 8;
+                const plusX = barX + barWidth + 5;
+                const plusY = barY + barHeight / 2;
+                
+                this.ctx.strokeStyle = playerColor || '#00FF00';
+                this.ctx.lineWidth = 2;
+                
+                // Horizontal line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX - plusSize / 2, plusY);
+                this.ctx.lineTo(plusX + plusSize / 2, plusY);
+                this.ctx.stroke();
+                
+                // Vertical line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX, plusY - plusSize / 2);
+                this.ctx.lineTo(plusX, plusY + plusSize / 2);
+                this.ctx.stroke();
+            }
         } else {
             // Draw health number
             const healthColor = this.getHealthColor(healthPercent);
@@ -4361,6 +4600,28 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
             this.ctx.fillText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
+            
+            // Draw + sign if regenerating
+            if (isRegenerating) {
+                const plusSize = fontSize * 0.6;
+                const plusX = screenPos.x + fontSize * 0.8;
+                const plusY = screenPos.y + yOffset - fontSize / 2;
+                
+                this.ctx.strokeStyle = playerColor || '#00FF00';
+                this.ctx.lineWidth = 2;
+                
+                // Horizontal line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX - plusSize / 2, plusY);
+                this.ctx.lineTo(plusX + plusSize / 2, plusY);
+                this.ctx.stroke();
+                
+                // Vertical line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX, plusY - plusSize / 2);
+                this.ctx.lineTo(plusX, plusY + plusSize / 2);
+                this.ctx.stroke();
+            }
         }
     }
 
@@ -4679,6 +4940,13 @@ export class GameRenderer {
             }
         }
         
+        // Draw sparkle particles (regeneration effects)
+        for (const sparkle of game.sparkleParticles) {
+            if (this.isWithinViewBounds(sparkle.position, 50)) {
+                this.drawSparkleParticle(sparkle);
+            }
+        }
+        
         // Draw influence zones
         for (const zone of game.influenceZones) {
             if (this.isWithinViewBounds(zone.position, zone.radius)) {
@@ -4712,6 +4980,9 @@ export class GameRenderer {
 
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
+        
+        // Draw mirror command buttons if mirrors are selected
+        this.drawMirrorCommandButtons(this.selectedMirrors);
 
         // Draw UI
         this.drawUI(game);
@@ -4820,6 +5091,54 @@ export class GameRenderer {
         if (!player) {
             return;
         }
+        
+        // Draw incoming SoL energy and starlings count
+        const compactBoxHeight = 30;
+        
+        // Draw incoming energy box
+        if (player.stellarForge) {
+            const forge = player.stellarForge;
+            const energyRate = forge.incomingLightPerSec;
+            
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+            
+            // Draw border - green if receiving light, red otherwise
+            this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+            
+            // Draw text
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(`Energy: ${energyRate.toFixed(1)}/s`, x + 8, y + compactBoxHeight / 2);
+            
+            y += compactBoxHeight + 5;
+        }
+        
+        // Count starlings
+        const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
+        
+        // Draw starlings count box
+        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+        this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+        
+        // Draw border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+        
+        // Draw text
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 14px Doto';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`Starlings: ${starlingCount}`, x + 8, y + compactBoxHeight / 2);
+        
+        y += compactBoxHeight + 8;
         
         // Draw hero production from stellar forge
         if (player.stellarForge && player.stellarForge.heroProductionUnitType) {
