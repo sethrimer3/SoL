@@ -2407,16 +2407,10 @@ export class GameRenderer {
         if (topSpriteToUse) {
             const topWidth = topSpriteToUse.width * spriteScale;
             const topHeight = topSpriteToUse.height * spriteScale;
-            
-            // Calculate pivot point: centered horizontally, DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX from bottom
-            // Convert sprite pixels to normalized coordinates
-            const pivotRatio = (Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX - Constants.DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX) / Constants.DEPLOYED_TURRET_SPRITE_HEIGHT_PX;
-            const pivotOffsetY = pivotRatio * topHeight - topHeight / 2;
-            
+
             this.ctx.save();
             this.ctx.translate(screenPos.x, screenPos.y);
             this.ctx.rotate(rotationAngle + Math.PI / 2); // Add PI/2 because sprite top faces upward
-            this.ctx.translate(0, -pivotOffsetY); // Offset for pivot point
             this.ctx.drawImage(
                 topSpriteToUse,
                 -topWidth / 2,
@@ -3383,16 +3377,14 @@ export class GameRenderer {
 
             const topWidth = topSprite.width * spriteScale;
             const topHeight = topSprite.height * spriteScale;
-            const pivotOffsetFromBottomPx = Constants.DEPLOYED_TURRET_PIVOT_FROM_BOTTOM_PX * spriteScale;
-            const pivotY = topHeight / 2 - pivotOffsetFromBottomPx;
 
             this.ctx.save();
             this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.rotate(gunAngle);
+            this.ctx.rotate(gunAngle + Math.PI / 2);
             this.ctx.drawImage(
                 topSprite,
                 -topWidth / 2,
-                -pivotY,
+                -topHeight / 2,
                 topWidth,
                 topHeight
             );
