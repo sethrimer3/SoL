@@ -964,14 +964,6 @@ export class GameRenderer {
             );
 
             this.drawForgeFlames(forge, screenPos, spriteSize, game, shouldDim);
-
-            this.ctx.strokeStyle = forge.isReceivingLight
-                ? (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00')
-                : (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, spriteSize * 0.52, 0, Math.PI * 2);
-            this.ctx.stroke();
         } else {
             this.ctx.fillStyle = displayColor;
             const strokeColor = shouldShowLadOutline ? outlineColor : displayColor;
@@ -992,14 +984,6 @@ export class GameRenderer {
             }
             this.ctx.closePath();
             this.ctx.fill();
-            this.ctx.stroke();
-
-            this.ctx.strokeStyle = forge.isReceivingLight ? 
-                (shouldDim ? this.darkenColor('#00FF00', Constants.SHADE_OPACITY) : '#00FF00') : 
-                (shouldDim ? this.darkenColor('#FF0000', Constants.SHADE_OPACITY) : '#FF0000');
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.8, 0, Math.PI * 2);
             this.ctx.stroke();
         }
 
@@ -5107,6 +5091,54 @@ export class GameRenderer {
         if (!player) {
             return;
         }
+        
+        // Draw incoming SoL energy and starlings count
+        const compactBoxHeight = 30;
+        
+        // Draw incoming energy box
+        if (player.stellarForge) {
+            const forge = player.stellarForge;
+            const energyRate = forge.incomingLightPerSec;
+            
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+            
+            // Draw border - green if receiving light, red otherwise
+            this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+            
+            // Draw text
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(`Energy: ${energyRate.toFixed(1)}/s`, x + 8, y + compactBoxHeight / 2);
+            
+            y += compactBoxHeight + 5;
+        }
+        
+        // Count starlings
+        const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
+        
+        // Draw starlings count box
+        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+        this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+        
+        // Draw border
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+        
+        // Draw text
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 14px Doto';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`Starlings: ${starlingCount}`, x + 8, y + compactBoxHeight / 2);
+        
+        y += compactBoxHeight + 8;
         
         // Draw hero production from stellar forge
         if (player.stellarForge && player.stellarForge.heroProductionUnitType) {

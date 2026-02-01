@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -32,6 +32,10 @@ class GameController {
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
     private moveOrderCounter: number = 0; // Counter for move order indicators
     private localPlayerIndex: number = 0; // Track local player index for LAN mode
+    private lastTapTime: number = 0; // Timestamp of last tap for double-tap detection
+    private lastTapPosition: Vector2D | null = null; // Position of last tap
+    private readonly DOUBLE_TAP_THRESHOLD_MS = 300; // Max time between taps (ms)
+    private readonly DOUBLE_TAP_POSITION_THRESHOLD = 30; // Max distance between taps (pixels)
 
     private abilityArrowStarts: Vector2D[] = [];
 
@@ -125,6 +129,116 @@ class GameController {
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
         return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+    }
+
+    /**
+     * Check if this click is a double-tap
+     */
+    private isDoubleTap(screenX: number, screenY: number): boolean {
+        const now = Date.now();
+        const timeDiff = now - this.lastTapTime;
+        
+        if (timeDiff > this.DOUBLE_TAP_THRESHOLD_MS) {
+            // Too much time passed, not a double-tap
+            this.lastTapTime = now;
+            this.lastTapPosition = new Vector2D(screenX, screenY);
+            return false;
+        }
+        
+        if (this.lastTapPosition) {
+            // Use squared distance to avoid expensive Math.sqrt
+            const distanceSquared = 
+                Math.pow(screenX - this.lastTapPosition.x, 2) + 
+                Math.pow(screenY - this.lastTapPosition.y, 2);
+            
+            const thresholdSquared = this.DOUBLE_TAP_POSITION_THRESHOLD * this.DOUBLE_TAP_POSITION_THRESHOLD;
+            
+            if (distanceSquared <= thresholdSquared) {
+                // This is a double-tap!
+                this.lastTapTime = 0; // Reset to avoid triple-tap being detected as another double-tap
+                this.lastTapPosition = null;
+                return true;
+            }
+        }
+        
+        // Not close enough, update position
+        this.lastTapTime = now;
+        this.lastTapPosition = new Vector2D(screenX, screenY);
+        return false;
+    }
+
+    /**
+     * Clear all selections and deselect all entities
+     */
+    private clearAllSelections(): void {
+        const player = this.getLocalPlayer();
+        if (!player) return;
+        
+        // Clear selection sets
+        this.selectedUnits.clear();
+        this.selectedMirrors.clear();
+        this.selectedBase = null;
+        this.selectedBuildings.clear();
+        
+        // Deselect all entities
+        if (player.stellarForge) {
+            player.stellarForge.isSelected = false;
+        }
+        for (const mirror of player.solarMirrors) {
+            mirror.isSelected = false;
+        }
+        for (const building of player.buildings) {
+            building.isSelected = false;
+        }
+        
+        this.renderer.selectedUnits = this.selectedUnits;
+    }
+
+    /**
+     * Select all starlings owned by the player
+     */
+    private selectAllStarlings(): void {
+        if (!this.game) return;
+        
+        const player = this.getLocalPlayer();
+        if (!player) return;
+        
+        // Clear all selections
+        this.clearAllSelections();
+        
+        // Select all starlings
+        for (const unit of player.units) {
+            if (unit instanceof Starling) {
+                this.selectedUnits.add(unit);
+            }
+        }
+        
+        this.renderer.selectedUnits = this.selectedUnits;
+        console.log(`Double-tap: Selected all ${this.selectedUnits.size} starlings`);
+    }
+
+    /**
+     * Select all buildings of the same type as the clicked building
+     */
+    private selectAllBuildingsOfType(clickedBuilding: Building): void {
+        if (!this.game) return;
+        
+        const player = this.getLocalPlayer();
+        if (!player) return;
+        
+        // Clear all selections
+        this.clearAllSelections();
+        
+        // Select all buildings of the same type
+        const buildingType = clickedBuilding.constructor;
+        for (const building of player.buildings) {
+            if (building.constructor === buildingType) {
+                building.isSelected = true;
+                this.selectedBuildings.add(building);
+            }
+        }
+        
+        console.log(`Double-tap: Selected all ${this.selectedBuildings.size} buildings of type ${buildingType.name}`);
     }
 
     private getClickedHeroButton(
@@ -854,7 +968,14 @@ class GameController {
                         }
                         this.selectedMirrors.clear();
                     }
-                    if (clickedBuilding.isSelected) {
+                    
+                    // Check if this is a double-tap
+                    const isDoubleTap = this.isDoubleTap(lastX, lastY);
+                    
+                    if (isDoubleTap) {
+                        // Double-tap: select all buildings of this type
+                        this.selectAllBuildingsOfType(clickedBuilding);
+                    } else if (clickedBuilding.isSelected) {
                         // Deselect building
                         clickedBuilding.isSelected = false;
                         this.selectedBuildings.delete(clickedBuilding);
@@ -1765,6 +1886,12 @@ class GameController {
     private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
         if (!this.game) return;
 
+        // Check if this is a small selection (single click area) and a double-tap
+        const selectionWidth = Math.abs(screenEnd.x - screenStart.x);
+        const selectionHeight = Math.abs(screenEnd.y - screenStart.y);
+        const isSmallSelection = selectionWidth < Constants.SMALL_SELECTION_THRESHOLD && selectionHeight < Constants.SMALL_SELECTION_THRESHOLD;
+        const isDoubleTap = isSmallSelection && this.isDoubleTap(screenEnd.x, screenEnd.y);
+
         // Convert screen coordinates to world coordinates
         const worldStart = this.renderer.screenToWorld(screenStart.x, screenStart.y);
         const worldEnd = this.renderer.screenToWorld(screenEnd.x, screenEnd.y);
@@ -1775,16 +1902,31 @@ class GameController {
         const minY = Math.min(worldStart.y, worldEnd.y);
         const maxY = Math.max(worldStart.y, worldEnd.y);
 
-        // Clear previous selection
-        this.selectedUnits.clear();
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-
         // Get the player's units (assume player 1 is the human player)
         const player = this.getLocalPlayer();
         if (!player || player.isDefeated()) {
             return;
         }
+
+        // If double-tap, check what was clicked and select all of that type
+        if (isDoubleTap) {
+            // Check if clicked on a starling
+            for (const unit of player.units) {
+                if (unit instanceof Starling &&
+                    unit.position.x >= minX && unit.position.x <= maxX &&
+                    unit.position.y >= minY && unit.position.y <= maxY) {
+                    this.selectAllStarlings();
+                    return;
+                }
+            }
+            
+            // Not a starling, continue with normal selection
+        }
+
+        // Clear previous selection
+        this.selectedUnits.clear();
+        this.selectedMirrors.clear();
+        this.selectedBase = null;
 
         // Deselect all buildings
         for (const building of player.buildings) {
