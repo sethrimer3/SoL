@@ -146,12 +146,14 @@ class GameController {
         }
         
         if (this.lastTapPosition) {
-            const distance = Math.sqrt(
+            // Use squared distance to avoid expensive Math.sqrt
+            const distanceSquared = 
                 Math.pow(screenX - this.lastTapPosition.x, 2) + 
-                Math.pow(screenY - this.lastTapPosition.y, 2)
-            );
+                Math.pow(screenY - this.lastTapPosition.y, 2);
             
-            if (distance <= this.DOUBLE_TAP_POSITION_THRESHOLD) {
+            const thresholdSquared = this.DOUBLE_TAP_POSITION_THRESHOLD * this.DOUBLE_TAP_POSITION_THRESHOLD;
+            
+            if (distanceSquared <= thresholdSquared) {
                 // This is a double-tap!
                 this.lastTapTime = 0; // Reset to avoid triple-tap being detected as another double-tap
                 this.lastTapPosition = null;
@@ -166,21 +168,19 @@ class GameController {
     }
 
     /**
-     * Select all starlings owned by the player
+     * Clear all selections and deselect all entities
      */
-    private selectAllStarlings(): void {
-        if (!this.game) return;
-        
+    private clearAllSelections(): void {
         const player = this.getLocalPlayer();
         if (!player) return;
         
-        // Clear previous selections
+        // Clear selection sets
         this.selectedUnits.clear();
         this.selectedMirrors.clear();
         this.selectedBase = null;
         this.selectedBuildings.clear();
         
-        // Deselect all
+        // Deselect all entities
         if (player.stellarForge) {
             player.stellarForge.isSelected = false;
         }
@@ -190,6 +190,21 @@ class GameController {
         for (const building of player.buildings) {
             building.isSelected = false;
         }
+        
+        this.renderer.selectedUnits = this.selectedUnits;
+    }
+
+    /**
+     * Select all starlings owned by the player
+     */
+    private selectAllStarlings(): void {
+        if (!this.game) return;
+        
+        const player = this.getLocalPlayer();
+        if (!player) return;
+        
+        // Clear all selections
+        this.clearAllSelections();
         
         // Select all starlings
         for (const unit of player.units) {
@@ -211,20 +226,8 @@ class GameController {
         const player = this.getLocalPlayer();
         if (!player) return;
         
-        // Clear previous selections
-        this.selectedUnits.clear();
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-        this.selectedBuildings.clear();
-        
-        // Deselect all
-        if (player.stellarForge) {
-            player.stellarForge.isSelected = false;
-        }
-        for (const mirror of player.solarMirrors) {
-            mirror.isSelected = false;
-        }
-        this.renderer.selectedUnits = this.selectedUnits;
+        // Clear all selections
+        this.clearAllSelections();
         
         // Select all buildings of the same type
         const buildingType = clickedBuilding.constructor;
@@ -232,8 +235,6 @@ class GameController {
             if (building.constructor === buildingType) {
                 building.isSelected = true;
                 this.selectedBuildings.add(building);
-            } else {
-                building.isSelected = false;
             }
         }
         
