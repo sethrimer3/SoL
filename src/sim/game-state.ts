@@ -3046,6 +3046,37 @@ export class GameState {
             mixInt(this.players.indexOf(projectile.owner));
         }
 
+        mixInt(this.muzzleFlashes.length);
+        for (const flash of this.muzzleFlashes) {
+            mix(flash.position.x);
+            mix(flash.position.y);
+            mix(flash.angle);
+            mix(flash.lifetime);
+            mix(flash.maxLifetime);
+        }
+
+        mixInt(this.bulletCasings.length);
+        for (const casing of this.bulletCasings) {
+            mix(casing.position.x);
+            mix(casing.position.y);
+            mix(casing.velocity.x);
+            mix(casing.velocity.y);
+            mix(casing.rotation);
+            mix(casing.rotationSpeed);
+            mix(casing.lifetime);
+            mix(casing.maxLifetime);
+        }
+
+        mixInt(this.bouncingBullets.length);
+        for (const bullet of this.bouncingBullets) {
+            mix(bullet.position.x);
+            mix(bullet.position.y);
+            mix(bullet.velocity.x);
+            mix(bullet.velocity.y);
+            mix(bullet.lifetime);
+            mix(bullet.maxLifetime);
+        }
+
         this.stateHash = hash >>> 0;
     }
 

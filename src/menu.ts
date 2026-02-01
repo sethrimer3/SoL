@@ -69,6 +69,9 @@ export class MainMenu {
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
+    private titleGraphicLoadPromise: Promise<void> | null = null;
+    private isTitleGraphicLoaded: boolean = false;
+    private mainScreenRenderToken: number = 0;
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -296,8 +299,16 @@ export class MainMenu {
         this.ladButton = this.createLadButton();
         menu.appendChild(this.ladButton);
 
-        // Render main screen content into the menu element
-        this.renderMainScreenContent(content);
+        this.renderTitleLoadingScreen(content);
+        void this.ensureTitleGraphicLoaded().then(() => {
+            if (!this.menuElement) {
+                return;
+            }
+            if (this.currentScreen !== 'main') {
+                return;
+            }
+            this.renderMainScreenContent(content);
+        });
 
         this.resizeHandler = () => {
             this.backgroundParticleLayer?.resize();
@@ -726,7 +737,58 @@ export class MainMenu {
 
     private renderMainScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.renderMainScreenContent(container);
+        this.renderMainScreenWhenReady(container);
+    }
+
+    private renderMainScreenWhenReady(container: HTMLElement): void {
+        const renderToken = ++this.mainScreenRenderToken;
+        this.renderTitleLoadingScreen(container);
+        void this.ensureTitleGraphicLoaded().then(() => {
+            if (this.currentScreen !== 'main') {
+                return;
+            }
+            if (renderToken !== this.mainScreenRenderToken) {
+                return;
+            }
+            this.renderMainScreenContent(container);
+        });
+    }
+
+    private renderTitleLoadingScreen(container: HTMLElement): void {
+        container.innerHTML = '';
+        container.style.justifyContent = 'center';
+        const loadingText = document.createElement('div');
+        loadingText.textContent = 'Loading title...';
+        loadingText.style.fontSize = '24px';
+        loadingText.style.color = '#D0D0D0';
+        loadingText.style.fontWeight = '300';
+        loadingText.style.textAlign = 'center';
+        loadingText.dataset.particleText = 'true';
+        loadingText.dataset.particleColor = '#D0D0D0';
+        container.appendChild(loadingText);
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private ensureTitleGraphicLoaded(): Promise<void> {
+        if (this.isTitleGraphicLoaded) {
+            return Promise.resolve();
+        }
+        if (!this.titleGraphicLoadPromise) {
+            this.titleGraphicLoadPromise = new Promise((resolve) => {
+                const titleGraphic = new Image();
+                titleGraphic.onload = () => {
+                    this.isTitleGraphicLoaded = true;
+                    resolve();
+                };
+                titleGraphic.onerror = () => {
+                    console.warn('Failed to preload title graphic.');
+                    this.isTitleGraphicLoaded = true;
+                    resolve();
+                };
+                titleGraphic.src = this.resolveAssetPath('ASSETS/SPRITES/menu/titleGraphic.png');
+            });
+        }
+        return this.titleGraphicLoadPromise;
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
@@ -791,7 +853,6 @@ export class MainMenu {
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
         this.carouselMenu.onNavigate(() => {
-            this.startMenuTransition();
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
         this.carouselMenu.onSelect((option: MenuOption) => {
