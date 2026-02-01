@@ -3264,6 +3264,66 @@ export class GameRenderer {
     }
 
     /**
+     * Draw warp gate effect for buildings that are warping in.
+     */
+    private drawWarpGateProductionEffect(
+        screenPos: { x: number; y: number },
+        radius: number,
+        game: GameState,
+        displayColor: string,
+        outlineColor: string,
+        shouldUseOutlinedSprite: boolean
+    ): void {
+        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_bottom.png';
+        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_top.png';
+        const bottomSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(bottomSpritePath, displayColor);
+        const topSprite = shouldUseOutlinedSprite
+            ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
+            : this.getTintedSprite(topSpritePath, displayColor);
+        const referenceSprite = bottomSprite || topSprite;
+        if (!referenceSprite) {
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            return;
+        }
+
+        const spriteScale = (radius * 2) / referenceSprite.width;
+        const timeSec = game.gameTime;
+        const rotationSpeedRad = 0.9;
+        const bottomRotationRad = -timeSec * rotationSpeedRad;
+        const topRotationRad = timeSec * rotationSpeedRad;
+
+        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+            if (!sprite) {
+                return;
+            }
+            const spriteWidth = sprite.width * spriteScale;
+            const spriteHeight = sprite.height * spriteScale;
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(rotationRad);
+            this.ctx.drawImage(
+                sprite,
+                -spriteWidth / 2,
+                -spriteHeight / 2,
+                spriteWidth,
+                spriteHeight
+            );
+            this.ctx.restore();
+        };
+
+        drawLayer(bottomSprite, bottomRotationRad);
+        drawLayer(topSprite, topRotationRad);
+    }
+
+    /**
      * Draw a Cannon/Gatling building
      */
     private drawMinigun(building: Minigun | GatlingTower, color: string, game: GameState, isEnemy: boolean): void {
@@ -3288,6 +3348,7 @@ export class GameRenderer {
         if (ladSun && !shouldShowLadOutline) {
             outlineColor = buildingColor;
         }
+        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3310,13 +3371,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3329,7 +3395,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#00FF00';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3340,10 +3406,10 @@ export class GameRenderer {
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
 
-        const bottomSprite = (ladSun && shouldShowLadOutline)
+        const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
-        const topSprite = (ladSun && shouldShowLadOutline)
+        const topSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(topSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(topSpritePath, displayColor);
 
@@ -3463,6 +3529,7 @@ export class GameRenderer {
         if (ladSun && !shouldShowLadOutline) {
             outlineColor = buildingColor;
         }
+        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3485,13 +3552,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(138, 43, 226, 0.2)'; // Purple tint
-            this.ctx.strokeStyle = '#8A2BE2';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3504,7 +3576,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#8A2BE2';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3526,7 +3598,6 @@ export class GameRenderer {
         const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_middle.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_top.png';
 
-        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
@@ -3602,6 +3673,7 @@ export class GameRenderer {
         if (ladSun && !shouldShowLadOutline) {
             outlineColor = buildingColor;
         }
+        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         
         // Check visibility for enemy buildings
         let shouldDim = false;
@@ -3624,13 +3696,18 @@ export class GameRenderer {
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
-            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.2)'; // Gold tint
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            this.drawWarpGateProductionEffect(
+                screenPos,
+                radius,
+                game,
+                displayColor,
+                outlineColor,
+                shouldUseOutlinedSprite
+            );
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -3643,7 +3720,7 @@ export class GameRenderer {
             
             this.ctx.fillStyle = '#FFD700';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            
+
             // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
@@ -3655,7 +3732,6 @@ export class GameRenderer {
         const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
 
-        const shouldUseOutlinedSprite = Boolean(ladSun) && shouldShowLadOutline;
         const bottomSprite = shouldUseOutlinedSprite
             ? this.getOutlinedTintedSprite(bottomSpritePath, displayColor, outlineColor)
             : this.getTintedSprite(bottomSpritePath, displayColor);
