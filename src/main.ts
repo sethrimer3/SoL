@@ -294,10 +294,8 @@ class GameController {
         if (numButtons === 4) {
             // Stellar forge: 4 buttons in cardinal directions
             // Top = 0 (-90°), Right = 1 (0°), Bottom = 2 (90°), Left = 3 (180°)
-            // Normalize angle to [0, 2π]
-            let normalizedAngle = dragAngleRad;
-            while (normalizedAngle < 0) normalizedAngle += Math.PI * 2;
-            while (normalizedAngle >= Math.PI * 2) normalizedAngle -= Math.PI * 2;
+            // Normalize angle to [0, 2π] using modulo for efficiency
+            let normalizedAngle = ((dragAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
             
             // Adjust so that -90° (upward) is 0°
             normalizedAngle += Math.PI / 2;
@@ -309,10 +307,8 @@ class GameController {
         } else if (numButtons === 2) {
             // Solar mirrors: 2 buttons (left and right)
             // Left = 0 (pointing left), Right = 1 (pointing right)
-            // Normalize angle to [-π, π]
-            let normalizedAngle = dragAngleRad;
-            while (normalizedAngle < -Math.PI) normalizedAngle += Math.PI * 2;
-            while (normalizedAngle > Math.PI) normalizedAngle -= Math.PI * 2;
+            // Normalize angle to [-π, π] using atan2 for efficiency
+            const normalizedAngle = Math.atan2(Math.sin(dragAngleRad), Math.cos(dragAngleRad));
             
             // Left hemisphere: [-π, -π/2) ∪ (π/2, π] → button 0
             // Right hemisphere: [-π/2, π/2] → button 1

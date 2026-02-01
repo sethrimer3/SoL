@@ -1438,7 +1438,8 @@ export class GameRenderer {
             this.ctx.font = `${12 * this.zoom}px Doto`;
             const energyText = `+${energyRate.toFixed(0)}/s`;
             const textWidth = this.ctx.measureText(energyText).width;
-            const totalWidth = iconSize + 2 * this.zoom + textWidth; // icon + spacing + text
+            const spacing = Constants.SOL_ICON_TEXT_SPACING * this.zoom;
+            const totalWidth = iconSize + spacing + textWidth; // icon + spacing + text
             const startX = screenPos.x - totalWidth / 2;
             
             // Draw icon
@@ -1450,7 +1451,7 @@ export class GameRenderer {
             this.ctx.fillStyle = '#FFFFAA';
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(energyText, startX + iconSize + 2 * this.zoom, textY);
+            this.ctx.fillText(energyText, startX + iconSize + spacing, textY);
         }
     }
 
