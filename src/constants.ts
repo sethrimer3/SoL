@@ -7,6 +7,9 @@ export const INFLUENCE_RADIUS = 300;
 export const PLAYER_1_COLOR = '#0066FF';
 export const PLAYER_2_COLOR = '#FF0000';
 
+// LaD (Light and Darkness) mode constants
+export const LAD_GOLDEN_OUTLINE = '#ffb805'; // Golden outline color for units/structures in LaD mode
+
 // Warp gate constants
 export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete
 export const WARP_GATE_INITIAL_DELAY = 1.0; // Seconds before warp gate starts
