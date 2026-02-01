@@ -244,15 +244,29 @@ export class GameState {
                 const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
                 mirror.updateReflectionAngle(linkedStructure, this.suns, this.asteroids, deltaTime);
                 
-                // Generate energy even during countdown once mirrors reach position
-                if (linkedStructure === player.stellarForge &&
-                    mirror.hasLineOfSightToLight(this.suns, this.asteroids) &&
-                    player.stellarForge &&
-                    mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
+                // Generate energy and apply to linked structure
+                if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
-                    // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
-                    player.addEnergy(energyGenerated);
-                    player.stellarForge.addPendingEnergy(energyGenerated);
+                    
+                    if (linkedStructure === player.stellarForge &&
+                        player.stellarForge &&
+                        mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
+                        // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
+                        player.addEnergy(energyGenerated);
+                        player.stellarForge.addPendingEnergy(energyGenerated);
+                    } else if (linkedStructure instanceof Building &&
+                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
+                        // Provide energy to building being constructed
+                        if (!linkedStructure.isComplete) {
+                            linkedStructure.addEnergy(energyGenerated);
+                        }
+                    } else if ('accumulatedEnergy' in linkedStructure &&
+                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
+                        // Provide energy to warp gate
+                        if ('isCharging' in linkedStructure && linkedStructure.isCharging && !linkedStructure.isComplete) {
+                            linkedStructure.addEnergy(energyGenerated);
+                        }
+                    }
                 }
 
                 if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {

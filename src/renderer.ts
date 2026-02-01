@@ -25,6 +25,7 @@ export class GameRenderer {
     public abilityArrowStarts: Vector2D[] = []; // Arrow starts for hero ability casting
     public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
     public selectedUnits: Set<Unit> = new Set();
+    public selectedMirrors: Set<any> = new Set(); // Set of selected SolarMirror
     public pathPreviewForge: StellarForge | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
@@ -1834,6 +1835,16 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, chargeProgress * Math.PI * 2);
             this.ctx.stroke();
+            
+            // Draw energy progress text
+            const energyProgress = `${gate.accumulatedEnergy.toFixed(0)}/${Constants.WARP_GATE_ENERGY_REQUIRED}`;
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${12 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(energyProgress, screenPos.x, screenPos.y + maxRadius + 20 * this.zoom);
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
         } else {
             // Draw completed warp gate
             this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
@@ -1877,6 +1888,65 @@ export class GameRenderer {
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
         }
+    }
+
+    /**
+     * Draw command buttons for selected solar mirrors
+     */
+    private drawMirrorCommandButtons(mirrors: Set<any>): void {
+        if (mirrors.size === 0) return;
+        
+        // Get one of the selected mirrors to determine button positions
+        const firstMirror = Array.from(mirrors)[0];
+        const screenPos = this.worldToScreen(firstMirror.position);
+        
+        // Button layout: Two buttons above the mirror
+        const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
+        const buttonOffset = 50 * this.zoom; // Distance from mirror
+        const buttonSpacing = 30 * this.zoom; // Space between buttons
+        
+        // Button 1: "Create Warp Gate" (left)
+        const warpGateButtonX = screenPos.x - buttonSpacing / 2;
+        const warpGateButtonY = screenPos.y - buttonOffset;
+        
+        // Button 2: "Forge" (right)
+        const forgeButtonX = screenPos.x + buttonSpacing / 2;
+        const forgeButtonY = screenPos.y - buttonOffset;
+        
+        // Draw "Warp Gate" button
+        this.ctx.fillStyle = '#444444';
+        this.ctx.strokeStyle = '#00FFFF';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${9 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
+        this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
+        
+        // Draw "Forge" button
+        this.ctx.fillStyle = '#444444';
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${11 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
+        
+        // Reset text alignment
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
     }
 
     /**
@@ -4926,6 +4996,9 @@ export class GameRenderer {
 
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
+        
+        // Draw mirror command buttons if mirrors are selected
+        this.drawMirrorCommandButtons(this.selectedMirrors);
 
         // Draw UI
         this.drawUI(game);

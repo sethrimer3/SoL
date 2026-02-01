@@ -8,6 +8,7 @@ import type { Sun } from './sun';
 import type { Player } from './player';
 import type { StellarForge } from './stellar-forge';
 import type { Building } from './buildings';
+import type { WarpGate } from './warp-gate';
 import type { Asteroid } from './asteroid';
 import type { GameState } from '../game-state';
 
@@ -16,7 +17,7 @@ export class SolarMirror {
     maxHealth: number = Constants.MIRROR_MAX_HEALTH;
     efficiency: number = 1.0; // 0.0 to 1.0
     isSelected: boolean = false;
-    linkedStructure: StellarForge | Building | null = null;
+    linkedStructure: StellarForge | Building | WarpGate | null = null;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
@@ -220,11 +221,11 @@ export class SolarMirror {
         this.targetPosition = target;
     }
 
-    setLinkedStructure(structure: StellarForge | Building | null): void {
+    setLinkedStructure(structure: StellarForge | Building | WarpGate | null): void {
         this.linkedStructure = structure;
     }
 
-    getLinkedStructure(fallbackForge: StellarForge | null): StellarForge | Building | null {
+    getLinkedStructure(fallbackForge: StellarForge | null): StellarForge | Building | WarpGate | null {
         return this.linkedStructure ?? fallbackForge;
     }
 
@@ -232,7 +233,7 @@ export class SolarMirror {
      * Update mirror reflection angle based on closest sun and linked structure
      */
     updateReflectionAngle(
-        structure: StellarForge | Building | null,
+        structure: StellarForge | Building | WarpGate | null,
         suns: Sun[],
         asteroids: Asteroid[] = [],
         deltaTime: number

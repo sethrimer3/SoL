@@ -10,7 +10,8 @@ import type { Player } from './player';
  * Warp gate being conjured by player
  */
 export class WarpGate {
-    chargeTime: number = 0;
+    chargeTime: number = 0; // Deprecated - kept for compatibility
+    accumulatedEnergy: number = 0; // Energy accumulated from mirrors
     isCharging: boolean = false;
     isComplete: boolean = false;
     health: number = 100;
@@ -22,26 +23,34 @@ export class WarpGate {
     ) {}
 
     /**
-     * Update warp gate charging
+     * Update warp gate charging - now energy-based
      */
     update(deltaTime: number, isStillHolding: boolean, chargeMultiplier: number = 1.0): void {
         if (!this.isCharging || this.isComplete) {
             return;
         }
 
-        if (!isStillHolding) {
-            // Player let go, cancel the warp gate
-            this.cancel();
-            return;
-        }
-
+        // For backward compatibility, still update chargeTime but it's not used for completion
         this.chargeTime += deltaTime * chargeMultiplier;
 
-        // Check if fully charged
-        if (this.chargeTime >= Constants.WARP_GATE_CHARGE_TIME) {
+        // Check if fully charged based on energy
+        if (this.accumulatedEnergy >= Constants.WARP_GATE_ENERGY_REQUIRED) {
             this.isComplete = true;
             this.isCharging = false;
         }
+    }
+
+    /**
+     * Add energy to the warp gate from mirrors
+     */
+    addEnergy(amount: number): void {
+        if (!this.isCharging || this.isComplete) {
+            return;
+        }
+        this.accumulatedEnergy += amount;
+        
+        // Update chargeTime for visual compatibility (approximate progress)
+        this.chargeTime = (this.accumulatedEnergy / Constants.WARP_GATE_ENERGY_REQUIRED) * Constants.WARP_GATE_CHARGE_TIME;
     }
 
     /**

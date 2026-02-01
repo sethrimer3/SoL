@@ -19,6 +19,7 @@ class GameController {
     private holdPosition: Vector2D | null = null;
     private currentWarpGate: WarpGate | null = null;
     private isUsingMirrorsForWarpGate: boolean = false;
+    private mirrorCommandMode: 'warpgate' | 'forge' | null = null; // Track which command was selected
     private menu: MainMenu;
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
@@ -232,6 +233,7 @@ class GameController {
         this.selectedBase = null;
         this.selectedBuildings.clear();
         this.renderer.selectedUnits = this.selectedUnits;
+        this.renderer.selectedMirrors = this.selectedMirrors;
         
         // Reset states
         this.isPaused = false;
@@ -1050,6 +1052,76 @@ class GameController {
                     }
                 }
 
+                // Check if clicked on mirror command buttons
+                if (this.selectedMirrors.size > 0) {
+                    // Get one of the selected mirrors to determine button positions
+                    const firstMirror = Array.from(this.selectedMirrors)[0] as any;
+                    const mirrorScreenPos = this.renderer.worldToScreen(firstMirror.position);
+                    
+                    // Button layout: Two buttons above the mirror
+                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
+                    const buttonOffset = 50 * this.renderer.zoom; // Distance from mirror
+                    const buttonSpacing = 30 * this.renderer.zoom; // Space between buttons
+                    
+                    // Button 1: "Create Warp Gate" (top-left)
+                    const warpGateButtonX = mirrorScreenPos.x - buttonSpacing / 2;
+                    const warpGateButtonY = mirrorScreenPos.y - buttonOffset;
+                    
+                    // Button 2: "Forge" (top-right)
+                    const forgeButtonX = mirrorScreenPos.x + buttonSpacing / 2;
+                    const forgeButtonY = mirrorScreenPos.y - buttonOffset;
+                    
+                    // Check if clicked on warp gate button
+                    let dx = lastX - warpGateButtonX;
+                    let dy = lastY - warpGateButtonY;
+                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                        console.log('Mirror command: Create Warp Gate');
+                        this.mirrorCommandMode = 'warpgate';
+                        // User will now tap a location to create the warp gate
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        return;
+                    }
+                    
+                    // Check if clicked on forge button
+                    dx = lastX - forgeButtonX;
+                    dy = lastY - forgeButtonY;
+                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                        console.log('Mirror command: Link to Forge');
+                        // Link all selected mirrors to the forge
+                        if (player.stellarForge) {
+                            for (const mirror of this.selectedMirrors) {
+                                mirror.setLinkedStructure(player.stellarForge);
+                            }
+                            const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                player.solarMirrors.indexOf(mirror)
+                            ).filter((index) => index >= 0);
+                            this.sendNetworkCommand('mirror_link', {
+                                mirrorIndices,
+                                structureType: 'forge'
+                            });
+                            console.log('Mirrors linked to forge');
+                        }
+                        // Deselect mirrors
+                        for (const mirror of this.selectedMirrors) {
+                            (mirror as any).isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                        
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        return;
+                    }
+                }
+
                 if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
                     const clickedHero = this.getClickedHeroButton(
                         lastX,
@@ -1637,7 +1709,7 @@ class GameController {
         // Check if any mirrors are selected
         const hasSelectedMirrors = this.selectedMirrors.size > 0;
         
-        if (hasSelectedMirrors) {
+        if (hasSelectedMirrors && this.mirrorCommandMode === 'warpgate') {
             // Mirror-based warp gate: check if any selected mirror has line of sight to hold position
             let canCreateWarpGate = false;
             
@@ -1670,20 +1742,24 @@ class GameController {
             }
             
             if (canCreateWarpGate) {
-                this.holdStartTime = Date.now();
-                this.holdPosition = worldPos;
-                this.isUsingMirrorsForWarpGate = true;
-                console.log('Starting mirror-based warp gate at', worldPos);
-            }
-        } else {
-            // Normal warp gate: check if position is in player's influence
-            const distance = worldPos.distanceTo(player.stellarForge.position);
-            if (distance < Constants.INFLUENCE_RADIUS) {
-                this.holdStartTime = Date.now();
-                this.holdPosition = worldPos;
-                this.isUsingMirrorsForWarpGate = false;
+                // Create warp gate immediately
+                const warpGate = new WarpGate(worldPos, player);
+                warpGate.startCharging();
+                this.game.warpGates.push(warpGate);
+                this.currentWarpGate = warpGate;
+                
+                // Link all selected mirrors to the warp gate
+                for (const mirror of this.selectedMirrors) {
+                    mirror.setLinkedStructure(warpGate);
+                }
+                
+                console.log('Mirror-based warp gate created at', worldPos);
+                
+                // Clear command mode and selections
+                this.mirrorCommandMode = null;
             }
         }
+        // NOTE: Removed old influence-based warp gate creation - now only via mirrors
     }
 
     private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
@@ -1746,8 +1822,9 @@ class GameController {
             player.stellarForge.isSelected = false;
         }
 
-        // Update renderer's selected units
+        // Update renderer's selected units and mirrors
         this.renderer.selectedUnits = this.selectedUnits;
+        this.renderer.selectedMirrors = this.selectedMirrors;
 
         // Log selection for debugging
         console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}`);

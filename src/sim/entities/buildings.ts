@@ -24,6 +24,8 @@ export class Building {
     attackCooldown: number = 0;
     target: CombatTarget | null = null;
     buildProgress: number = 0; // 0 to 1, building is complete at 1
+    accumulatedEnergy: number = 0; // Energy accumulated from mirrors during construction
+    energyRequired: number = 0; // Total energy required to complete construction
     isComplete: boolean = false;
     isSelected: boolean = false;
     
@@ -142,6 +144,23 @@ export class Building {
     }
 
     /**
+     * Add energy to building during construction
+     */
+    addEnergy(amount: number): void {
+        if (this.isComplete) return;
+        
+        this.accumulatedEnergy += amount;
+        
+        // Update build progress based on energy
+        if (this.energyRequired > 0) {
+            this.buildProgress = Math.min(1.0, this.accumulatedEnergy / this.energyRequired);
+            if (this.buildProgress >= 1.0) {
+                this.isComplete = true;
+            }
+        }
+    }
+
+    /**
      * Check if a point is within the building's radius
      */
     containsPoint(point: Vector2D): boolean {
@@ -179,6 +198,7 @@ export class Minigun extends Building {
             Constants.MINIGUN_ATTACK_DAMAGE,
             Constants.MINIGUN_ATTACK_SPEED
         );
+        this.energyRequired = Constants.MINIGUN_COST;
     }
 
     /**
@@ -253,6 +273,7 @@ export class GatlingTower extends Building {
             Constants.GATLING_ATTACK_DAMAGE,
             Constants.GATLING_ATTACK_SPEED
         );
+        this.energyRequired = Constants.GATLING_COST;
     }
 
     /**
@@ -329,6 +350,8 @@ export class SpaceDustSwirler extends Building {
             Constants.SWIRLER_ATTACK_DAMAGE,
             Constants.SWIRLER_ATTACK_SPEED
         );
+        
+        this.energyRequired = Constants.SWIRLER_COST;
         
         // Start with half the max radius
         const initialRadius = Constants.SWIRLER_INFLUENCE_RADIUS * Constants.SWIRLER_INITIAL_RADIUS_MULTIPLIER;
@@ -463,6 +486,7 @@ export class SubsidiaryFactory extends Building {
             Constants.SUBSIDIARY_FACTORY_ATTACK_DAMAGE,
             Constants.SUBSIDIARY_FACTORY_ATTACK_SPEED
         );
+        this.energyRequired = Constants.SUBSIDIARY_FACTORY_COST;
     }
 
     /**
