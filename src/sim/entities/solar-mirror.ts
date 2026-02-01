@@ -111,7 +111,7 @@ export class SolarMirror {
     }
 
     hasLineOfSightToStructure(
-        structure: StellarForge | Building,
+        structure: StellarForge | Building | WarpGate,
         asteroids: Asteroid[] = [],
         players: Player[] = []
     ): boolean {
@@ -151,6 +151,9 @@ export class SolarMirror {
                     return false;
                 }
             }
+            
+            // Check warp gates (don't block if it's our target)
+            // WarpGates use WARP_GATE_RADIUS constant for collision checking
         }
 
         return true;

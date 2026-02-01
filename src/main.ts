@@ -1831,27 +1831,21 @@ class GameController {
     }
 
     private cancelHold(): void {
-        if (!this.game) return;
-        
-        if (this.currentWarpGate) {
-            this.currentWarpGate.cancel();
-            this.implodeParticles(this.currentWarpGate.position); // Changed from scatterParticles to implodeParticles
-            const index = this.game.warpGates.indexOf(this.currentWarpGate);
-            if (index > -1) {
-                this.game.warpGates.splice(index, 1);
-            }
-        }
+        // Deprecated: Hold-based warp gate creation is no longer used
+        // Warp gates are now created instantly via mirror commands
         this.holdStartTime = null;
         this.holdPosition = null;
         this.currentWarpGate = null;
         this.isUsingMirrorsForWarpGate = false;
+        this.mirrorCommandMode = null;
     }
 
     private endHold(): void {
+        // Deprecated: Hold-based warp gate creation is no longer used
         this.holdStartTime = null;
         this.holdPosition = null;
         this.isUsingMirrorsForWarpGate = false;
-        // Don't remove currentWarpGate here, it might still be charging
+        this.mirrorCommandMode = null;
     }
 
     /**
@@ -1904,87 +1898,16 @@ class GameController {
             this.game.update(deltaTime);
         }
 
-        // Update warp gate hold mechanic
-        if (this.holdStartTime && this.holdPosition) {
-            const holdDuration = (Date.now() - this.holdStartTime) / 1000;
-            
-            if (holdDuration >= Constants.WARP_GATE_INITIAL_DELAY && !this.currentWarpGate) {
-                // Create warp gate after initial delay
-                const player = this.getLocalPlayer();
-                if (player) {
-                    this.currentWarpGate = new WarpGate(this.holdPosition, player);
-                    this.currentWarpGate.startCharging();
-                    this.game.warpGates.push(this.currentWarpGate);
-                }
-            }
-        }
-
-        // Update current warp gate
-        if (this.currentWarpGate) {
-            const isStillHolding = this.holdStartTime !== null && this.holdPosition !== null;
-            
-            // Calculate charge multiplier based on mirrors if using mirror-based warp gate
-            let chargeMultiplier = 1.0;
-            if (this.isUsingMirrorsForWarpGate && isStillHolding) {
-                const player = this.getLocalPlayer();
-                if (!player) {
-                    this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
-                    if (this.currentWarpGate.shouldEmitShockwave()) {
-                        this.scatterParticles(this.currentWarpGate.position);
-                        this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
-                    }
-                    return;
-                }
-                let totalMirrorPower = 0;
+        // Update warp gates (energy is transferred via game-state.ts mirror update)
+        // Only update for completion checks and shockwave emissions
+        for (const gate of this.game.warpGates) {
+            if (!gate.isComplete && gate.isCharging) {
+                gate.update(deltaTime, true, 1.0);
                 
-                for (const mirror of this.selectedMirrors) {
-                    // Check if mirror is powered
-                    if (!mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) continue;
-                    
-                    // Check if mirror has line of sight to warp gate
-                    const ray = new LightRay(
-                        mirror.position,
-                        new Vector2D(
-                            this.currentWarpGate.position.x - mirror.position.x,
-                            this.currentWarpGate.position.y - mirror.position.y
-                        ).normalize(),
-                        1.0
-                    );
-                    
-                    let hasLineOfSight = true;
-                    for (const asteroid of this.game.asteroids) {
-                        if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                            hasLineOfSight = false;
-                            break;
-                        }
-                    }
-                    
-                    if (hasLineOfSight) {
-                        // Calculate mirror power based on distance to closest sun
-                        const closestSun = this.game.suns.reduce((closest, sun) => {
-                            const distToSun = mirror.position.distanceTo(sun.position);
-                            const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
-                            return distToSun < distToClosest ? sun : closest;
-                        }, null as Sun | null);
-                        
-                        if (closestSun) {
-                            const distanceToSun = mirror.position.distanceTo(closestSun.position);
-                            const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE)));
-                            totalMirrorPower += distanceMultiplier;
-                        }
-                    }
+                if (gate.shouldEmitShockwave()) {
+                    this.scatterParticles(gate.position);
+                    this.renderer.createWarpGateShockwave(gate.position);
                 }
-                
-                // Charge multiplier increases with more mirrors/power
-                // Base is 0.5x (slower than normal), each mirror adds power
-                chargeMultiplier = 0.5 + (totalMirrorPower * 0.5);
-            }
-            
-            this.currentWarpGate.update(deltaTime, isStillHolding, chargeMultiplier);
-
-            if (this.currentWarpGate.shouldEmitShockwave()) {
-                this.scatterParticles(this.currentWarpGate.position);
-                this.renderer.createWarpGateShockwave(this.currentWarpGate.position);
             }
         }
     }
