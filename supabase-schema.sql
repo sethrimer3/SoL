@@ -144,9 +144,68 @@ $$ LANGUAGE plpgsql;
 -- Note: For anonymous access (no authentication), you may need to adjust policies
 -- or use service role key for development. For production, implement proper authentication.
 
--- Alternative policies for anonymous/anon key access (development):
+-- Alternative policies for anonymous/anon key access (development/beta):
+-- These policies allow anonymous users to interact with the system without authentication.
+-- Replace the JWT-based policies above with these for anonymous access:
+
+-- IMPORTANT: To use anonymous access, uncomment and run the following:
+
 -- DROP POLICY IF EXISTS "Anyone can view waiting rooms" ON game_rooms;
+-- DROP POLICY IF EXISTS "Players can view their room" ON game_rooms;
+-- DROP POLICY IF EXISTS "Anyone can create room" ON game_rooms;
+-- DROP POLICY IF EXISTS "Host can update room" ON game_rooms;
+-- DROP POLICY IF EXISTS "Host can delete room" ON game_rooms;
+
 -- CREATE POLICY "Anon can view waiting rooms"
 --     ON game_rooms FOR SELECT
 --     TO anon
 --     USING (status = 'waiting');
+
+-- CREATE POLICY "Anon can view all rooms"
+--     ON game_rooms FOR SELECT
+--     TO anon
+--     USING (true);
+
+-- CREATE POLICY "Anon can create rooms"
+--     ON game_rooms FOR INSERT
+--     TO anon
+--     WITH CHECK (true);
+
+-- CREATE POLICY "Anon can update any room"
+--     ON game_rooms FOR UPDATE
+--     TO anon
+--     USING (true);
+
+-- CREATE POLICY "Anon can delete any room"
+--     ON game_rooms FOR DELETE
+--     TO anon
+--     USING (true);
+
+-- For room_players table with anonymous access:
+-- DROP POLICY IF EXISTS "Players can view room members" ON room_players;
+-- DROP POLICY IF EXISTS "Anyone can join room" ON room_players;
+-- DROP POLICY IF EXISTS "Players can update self" ON room_players;
+-- DROP POLICY IF EXISTS "Players can leave" ON room_players;
+
+-- CREATE POLICY "Anon can view room players"
+--     ON room_players FOR SELECT
+--     TO anon
+--     USING (true);
+
+-- CREATE POLICY "Anon can join rooms"
+--     ON room_players FOR INSERT
+--     TO anon
+--     WITH CHECK (true);
+
+-- CREATE POLICY "Anon can update room players"
+--     ON room_players FOR UPDATE
+--     TO anon
+--     USING (true);
+
+-- CREATE POLICY "Anon can leave rooms"
+--     ON room_players FOR DELETE
+--     TO anon
+--     USING (true);
+
+-- NOTE: Anonymous policies are less secure but suitable for beta testing.
+-- For production, implement proper authentication via Supabase Auth.

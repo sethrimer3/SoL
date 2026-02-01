@@ -314,11 +314,18 @@ export class OnlineNetworkManager {
             payload: compact
         });
 
-        // Process queued commands if any
-        if (this.commandQueue.length > 0) {
+        // Process all queued commands if any (prevents bottleneck)
+        while (this.commandQueue.length > 0) {
             const queued = this.commandQueue.shift();
-            if (queued) {
-                await this.sendGameCommand(queued);
+            if (queued && this.connected) {
+                const queuedCompact = this.compactCommand(queued);
+                await this.channel.send({
+                    type: 'broadcast',
+                    event: 'game_command',
+                    payload: queuedCompact
+                });
+            } else {
+                break;
             }
         }
     }
@@ -407,32 +414,44 @@ export class OnlineNetworkManager {
 
     /**
      * Shorten player ID for bandwidth savings
+     * Note: In production, maintain a bidirectional mapping of short <-> full IDs
+     * For now, we return the full ID to avoid collision issues
      */
     private shortenId(id: string): string {
-        // Take first 8 characters of ID (should be unique enough)
-        return id.substring(0, 8);
+        // TODO: Implement proper ID mapping for production use
+        // For beta/development, return full ID to ensure correctness
+        return id;
     }
 
     /**
      * Expand shortened player ID
+     * Note: Should use maintained mapping in production
      */
     private expandId(shortId: string): string {
-        // In practice, maintain a mapping of short IDs to full IDs
-        return shortId; // Simplified for now
+        // TODO: Implement proper ID expansion from mapping
+        // For beta/development, ID is already full
+        return shortId;
     }
 
     /**
-     * Minimize data by removing unnecessary fields
+     * Minimize data by removing unnecessary fields and reducing precision selectively
      */
     private minimizeData(data: any): any {
         if (!data) return data;
         
-        // Remove precision from numbers where possible
-        if (typeof data === 'object' && !Array.isArray(data)) {
+        // For arrays, minimize each element
+        if (Array.isArray(data)) {
+            return data.map(item => this.minimizeData(item));
+        }
+        
+        // For objects, selectively apply precision reduction
+        if (typeof data === 'object') {
             const minimized: any = {};
             for (const key in data) {
                 const value = data[key];
-                if (typeof value === 'number') {
+                
+                // Only reduce precision for coordinate-like fields
+                if (typeof value === 'number' && this.shouldReducePrecision(key)) {
                     // Round positions to 1 decimal place for RTS
                     minimized[key] = Math.round(value * 10) / 10;
                 } else if (typeof value === 'object') {
@@ -445,6 +464,15 @@ export class OnlineNetworkManager {
         }
         
         return data;
+    }
+
+    /**
+     * Check if a field should have reduced precision
+     */
+    private shouldReducePrecision(key: string): boolean {
+        // Only reduce precision for position/coordinate fields
+        const positionFields = ['x', 'y', 'targetX', 'targetY', 'posX', 'posY', 'rotation'];
+        return positionFields.includes(key);
     }
 
     /**

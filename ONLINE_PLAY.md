@@ -189,7 +189,7 @@ await networkManager.sendCommandBatch([
 
 - **Per command**: ~50 bytes (after compression)
 - **Per second**: ~1KB (20 commands/sec average)
-- **Per minute**: ~60KB
+- **Per minute**: ~60KB (consistent with ~1KB/sec)
 - **10-minute game**: ~600KB per player
 
 ### Scalability

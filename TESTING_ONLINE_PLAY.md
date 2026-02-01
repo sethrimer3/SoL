@@ -66,7 +66,7 @@
 4. Check total data transferred
 
 **Expected Results:**
-- ~60KB per minute per player
+- ~1KB per second (60KB per minute)
 - Average command size ~50 bytes
 - No excessive data transfer
 

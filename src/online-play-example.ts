@@ -220,9 +220,14 @@ export class OnlinePlayExample {
     }
 
     /**
-     * Generate unique player ID
+     * Generate unique player ID using crypto API
      */
     private generatePlayerId(): string {
+        // Use crypto.randomUUID() if available (modern browsers)
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            return `player_${crypto.randomUUID()}`;
+        }
+        // Fallback for older environments
         return `player_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     }
 
