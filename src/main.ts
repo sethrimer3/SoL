@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -205,7 +205,7 @@ class GameController {
     /**
      * Select all buildings of the same type as the clicked building
      */
-    private selectAllBuildingsOfType(clickedBuilding: any): void {
+    private selectAllBuildingsOfType(clickedBuilding: Building): void {
         if (!this.game) return;
         
         const player = this.getLocalPlayer();
@@ -1888,7 +1888,7 @@ class GameController {
         // Check if this is a small selection (single click area) and a double-tap
         const selectionWidth = Math.abs(screenEnd.x - screenStart.x);
         const selectionHeight = Math.abs(screenEnd.y - screenStart.y);
-        const isSmallSelection = selectionWidth < 50 && selectionHeight < 50;
+        const isSmallSelection = selectionWidth < Constants.SMALL_SELECTION_THRESHOLD && selectionHeight < Constants.SMALL_SELECTION_THRESHOLD;
         const isDoubleTap = isSmallSelection && this.isDoubleTap(screenEnd.x, screenEnd.y);
 
         // Convert screen coordinates to world coordinates
