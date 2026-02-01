@@ -1371,9 +1371,14 @@ export class GameRenderer {
         const forge = mirror.owner.stellarForge;
         const isRegenerating = forge && mirror.health < this.MIRROR_MAX_HEALTH &&
             mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS;
-        const playerColor = this.getPlayerColor(mirror.owner);
+        // Use player color based on whether this is the viewing player or enemy
+        const playerColorToUse = (this.viewingPlayer && mirror.owner === this.viewingPlayer) 
+            ? this.playerColor 
+            : this.enemyColor;
         
-        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, isRegenerating, playerColor);
+        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, 
+            isRegenerating ? true : false, 
+            isRegenerating ? playerColorToUse : undefined);
 
         if (mirror.isSelected) {
             const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
