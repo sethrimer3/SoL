@@ -28,6 +28,7 @@ class GameController {
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
+    private isDraggingBuildingArrow: boolean = false; // Flag for building ability arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
     private moveOrderCounter: number = 0; // Counter for move order indicators
@@ -279,6 +280,41 @@ class GameController {
             }
         }
         return null;
+    }
+
+    /**
+     * Get the nearest button index based on drag angle from building position
+     * For stellar forge: 4 buttons in cardinal directions (top=0, right=1, bottom=2, left=3)
+     * For solar mirrors: 2 buttons (left=0, right=1)
+     */
+    private getNearestButtonIndexFromAngle(
+        dragAngleRad: number,
+        numButtons: number
+    ): number {
+        if (numButtons === 4) {
+            // Stellar forge: 4 buttons in cardinal directions
+            // Top = 0 (-90°), Right = 1 (0°), Bottom = 2 (90°), Left = 3 (180°)
+            // Normalize angle to [0, 2π] using modulo for efficiency
+            let normalizedAngle = ((dragAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            
+            // Adjust so that -90° (upward) is 0°
+            normalizedAngle += Math.PI / 2;
+            if (normalizedAngle >= Math.PI * 2) normalizedAngle -= Math.PI * 2;
+            
+            // Divide into 4 quadrants
+            const buttonIndex = Math.floor((normalizedAngle + Math.PI / 4) / (Math.PI / 2)) % 4;
+            return buttonIndex;
+        } else if (numButtons === 2) {
+            // Solar mirrors: 2 buttons (left and right)
+            // Left = 0 (pointing left), Right = 1 (pointing right)
+            // Normalize angle to [-π, π] using atan2 for efficiency
+            const normalizedAngle = Math.atan2(Math.sin(dragAngleRad), Math.cos(dragAngleRad));
+            
+            // Left hemisphere: [-π, -π/2) ∪ (π/2, π] → button 0
+            // Right hemisphere: [-π/2, π/2] → button 1
+            return normalizedAngle < -Math.PI / 2 || normalizedAngle > Math.PI / 2 ? 0 : 1;
+        }
+        return -1;
     }
 
     private clearPathPreview(): void {
@@ -651,8 +687,18 @@ class GameController {
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasHeroUnits = this.hasHeroUnitsSelected();
                 
-                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDrawingPath) {
-                    if (this.selectedBase && this.selectedBase.isSelected) {
+                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDraggingBuildingArrow && !this.isDrawingPath) {
+                    // Check if a building with production options is selected (stellar forge or solar mirrors)
+                    const player = this.getLocalPlayer();
+                    if (player && player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
+                        // Stellar forge is selected with hero buttons visible - use building arrow mode
+                        this.isDraggingBuildingArrow = true;
+                        this.cancelHold();
+                    } else if (this.selectedMirrors.size > 0) {
+                        // Solar mirrors are selected - use building arrow mode
+                        this.isDraggingBuildingArrow = true;
+                        this.cancelHold();
+                    } else if (this.selectedBase && this.selectedBase.isSelected) {
                         // Drawing a path from the selected base
                         this.isDrawingPath = true;
                         this.pathPoints = [];
@@ -700,6 +746,27 @@ class GameController {
                 // Update arrow direction (for hero ability casting)
                 this.updateAbilityArrowStarts();
                 this.renderer.abilityArrowEnd = new Vector2D(x, y);
+            } else if (this.isDraggingBuildingArrow) {
+                // Update arrow direction for building abilities
+                const player = this.getLocalPlayer();
+                if (this.selectionStartScreen) {
+                    this.renderer.buildingAbilityArrowStart = this.selectionStartScreen;
+                    this.renderer.buildingAbilityArrowEnd = new Vector2D(x, y);
+                    
+                    // Calculate angle and determine which button is highlighted
+                    const dx = x - this.selectionStartScreen.x;
+                    const dy = y - this.selectionStartScreen.y;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    // Determine number of buttons based on what's selected
+                    if (player && player.stellarForge && player.stellarForge.isSelected) {
+                        // Stellar forge has 4 buttons
+                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                    } else if (this.selectedMirrors.size > 0) {
+                        // Solar mirrors have 2 buttons
+                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 2);
+                    }
+                }
             } else if (this.isDrawingPath) {
                 // Collect path waypoints as we drag
                 const worldPos = this.renderer.screenToWorld(x, y);
@@ -1471,6 +1538,48 @@ class GameController {
                     // Deselect all units after using ability
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                } else if (this.isDraggingBuildingArrow && totalMovement >= abilityDragThreshold) {
+                    // Building ability arrow was dragged - activate the highlighted button
+                    const player = this.getLocalPlayer();
+                    if (player && this.renderer.highlightedButtonIndex >= 0) {
+                        if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
+                            // Stellar forge button selected
+                            const heroNames = this.renderer.selectedHeroNames;
+                            if (this.renderer.highlightedButtonIndex < heroNames.length) {
+                                const selectedHeroName = heroNames[this.renderer.highlightedButtonIndex];
+                                const heroUnitType = this.getHeroUnitType(selectedHeroName);
+                                
+                                if (heroUnitType) {
+                                    const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
+                                    const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                                    
+                                    if (!isHeroAlive && !isHeroProducing && player.spendEnergy(Constants.HERO_UNIT_COST)) {
+                                        player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                        player.stellarForge.startHeroProductionIfIdle();
+                                        console.log(`Radial selection: Queued hero ${selectedHeroName} for forging`);
+                                        this.sendNetworkCommand('hero_purchase', {
+                                            heroType: heroUnitType
+                                        });
+                                        
+                                        // Deselect forge
+                                        player.stellarForge.isSelected = false;
+                                        this.selectedBase = null;
+                                    }
+                                }
+                            }
+                        } else if (this.selectedMirrors.size > 0) {
+                            // Solar mirror button selected
+                            if (this.renderer.highlightedButtonIndex === 0) {
+                                // Warp gate button
+                                this.mirrorCommandMode = 'warpgate';
+                                console.log('Radial selection: Mirror command mode set to warpgate');
+                            } else if (this.renderer.highlightedButtonIndex === 1) {
+                                // Forge button
+                                this.mirrorCommandMode = 'forge';
+                                console.log('Radial selection: Mirror command mode set to forge');
+                            }
+                        }
+                    }
                 } else if (this.isDraggingHeroArrow && hasHeroUnits) {
                     // Cancel ability casting if arrow was dragged back to nothing
                 } else {
@@ -1547,6 +1656,7 @@ class GameController {
             isMouseDown = false;
             this.isSelecting = false;
             this.isDraggingHeroArrow = false;
+            this.isDraggingBuildingArrow = false;
             this.isDrawingPath = false;
             this.pathPoints = [];
             this.selectionStartScreen = null;
@@ -1555,6 +1665,9 @@ class GameController {
             this.abilityArrowStarts.length = 0;
             this.renderer.abilityArrowStarts = this.abilityArrowStarts;
             this.renderer.abilityArrowEnd = null;
+            this.renderer.buildingAbilityArrowStart = null;
+            this.renderer.buildingAbilityArrowEnd = null;
+            this.renderer.highlightedButtonIndex = -1;
             this.endHold();
         };
 
