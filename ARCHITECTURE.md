@@ -92,7 +92,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after adding LAN command mirroring for mirror links, unit paths, and move-order synchronization to ensure `stateHash` stability.
+The command list above was revalidated after hashing cannon firing effects (muzzle flashes, bullet casings, bouncing bullets) and adding LAN command mirroring for mirror links, unit paths, and move-order synchronization to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
