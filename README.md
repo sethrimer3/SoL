@@ -101,6 +101,7 @@ python3 -m http.server 8080
 ✅ Ray tracing foundation for light/shadow  
 ✅ Cross-platform support (Mobile & Desktop)  
 ✅ LAN multiplayer (WebRTC peer-to-peer)  
+✅ Online multiplayer (Supabase - Beta)  
 
 ## Future Development
 
@@ -112,7 +113,10 @@ python3 -m http.server 8080
 
 ## Multiplayer
 
-SoL supports local area network (LAN) multiplayer for 1v1 matches using WebRTC. See [LAN_PLAY.md](./LAN_PLAY.md) for detailed instructions on how to host or join LAN games.
+SoL supports two types of multiplayer:
+
+- **LAN Play**: Local area network multiplayer for 1v1 matches using WebRTC peer-to-peer. See [LAN_PLAY.md](./LAN_PLAY.md) for details.
+- **Online Play (Beta)**: Internet multiplayer using Supabase for fast, accurate RTS gameplay. See [ONLINE_PLAY.md](./ONLINE_PLAY.md) for setup and usage instructions.
 
 ## Legacy Python Implementation
 

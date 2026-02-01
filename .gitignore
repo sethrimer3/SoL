@@ -32,6 +32,11 @@ yarn-error.log
 package-lock.json
 dist/
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+
 # IDE
 .vscode/
 .idea/
