@@ -25,7 +25,8 @@ import {
     AbilityBullet,
     MinionProjectile,
     LaserBeam,
-    ImpactParticle
+    ImpactParticle,
+    SparkleParticle
 } from './entities/particles';
 import {
     Marine,
@@ -69,6 +70,7 @@ export class GameState {
     deployedTurrets: InstanceType<typeof DeployedTurret>[] = [];
     damageNumbers: DamageNumber[] = [];
     crescentWaves: InstanceType<typeof CrescentWave>[] = [];
+    sparkleParticles: SparkleParticle[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -260,6 +262,30 @@ export class GameState {
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
                         );
+                        
+                        // Spawn sparkle particles for regeneration visual effect
+                        // Spawn ~2-3 particles per second
+                        if (Math.random() < deltaTime * 2.5) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const distance = Math.random() * 25;
+                            const sparklePos = new Vector2D(
+                                mirror.position.x + Math.cos(angle) * distance,
+                                mirror.position.y + Math.sin(angle) * distance
+                            );
+                            const velocity = new Vector2D(
+                                (Math.random() - 0.5) * 30,
+                                (Math.random() - 0.5) * 30 - 20 // Slight upward bias
+                            );
+                            // Use player's color for sparkles
+                            const playerColor = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                            this.sparkleParticles.push(new SparkleParticle(
+                                sparklePos,
+                                velocity,
+                                0.8, // lifetime in seconds
+                                playerColor,
+                                2 + Math.random() * 2 // size 2-4
+                            ));
+                        }
                     }
                 }
             }
@@ -1043,6 +1069,12 @@ export class GameState {
             particle.update(deltaTime);
         }
         this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
+        
+        // Update sparkle particles (regeneration visual effects)
+        for (const sparkle of this.sparkleParticles) {
+            sparkle.update(deltaTime);
+        }
+        this.sparkleParticles = this.sparkleParticles.filter(sparkle => !sparkle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));

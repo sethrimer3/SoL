@@ -1367,7 +1367,13 @@ export class GameRenderer {
             this.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor);
         }
 
-        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10);
+        // Check if mirror is regenerating (within influence radius of forge and below max health)
+        const forge = mirror.owner.stellarForge;
+        const isRegenerating = forge && mirror.health < this.MIRROR_MAX_HEALTH &&
+            mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS;
+        const playerColor = this.getPlayerColor(mirror.owner);
+        
+        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, isRegenerating, playerColor);
 
         if (mirror.isSelected) {
             const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
@@ -2197,6 +2203,48 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a sparkle particle (for regeneration effects)
+     */
+    private drawSparkleParticle(sparkle: any): void {
+        const screenPos = this.worldToScreen(sparkle.position);
+        const opacity = sparkle.getOpacity();
+        const size = sparkle.size * this.zoom;
+        
+        // Draw sparkle as a bright star-shaped particle
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.globalAlpha = opacity;
+        
+        // Draw a cross/star shape
+        this.ctx.strokeStyle = sparkle.color;
+        this.ctx.lineWidth = Math.max(1, size * 0.4);
+        this.ctx.lineCap = 'round';
+        
+        // Horizontal line
+        this.ctx.beginPath();
+        this.ctx.moveTo(-size, 0);
+        this.ctx.lineTo(size, 0);
+        this.ctx.stroke();
+        
+        // Vertical line
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, -size);
+        this.ctx.lineTo(0, size);
+        this.ctx.stroke();
+        
+        // Draw a glowing center
+        const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+        gradient.addColorStop(0, sparkle.color);
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(0, 0, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.restore();
     }
     
     /**
@@ -4402,7 +4450,9 @@ export class GameRenderer {
         currentHealth: number,
         maxHealth: number,
         size: number,
-        yOffset: number
+        yOffset: number,
+        isRegenerating: boolean = false,
+        playerColor?: string
     ): void {
         if (currentHealth >= maxHealth) {
             return; // Don't draw if at full health
@@ -4422,6 +4472,28 @@ export class GameRenderer {
             
             this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
             this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
+            
+            // Draw + sign if regenerating
+            if (isRegenerating) {
+                const plusSize = 8;
+                const plusX = barX + barWidth + 5;
+                const plusY = barY + barHeight / 2;
+                
+                this.ctx.strokeStyle = playerColor || '#00FF00';
+                this.ctx.lineWidth = 2;
+                
+                // Horizontal line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX - plusSize / 2, plusY);
+                this.ctx.lineTo(plusX + plusSize / 2, plusY);
+                this.ctx.stroke();
+                
+                // Vertical line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX, plusY - plusSize / 2);
+                this.ctx.lineTo(plusX, plusY + plusSize / 2);
+                this.ctx.stroke();
+            }
         } else {
             // Draw health number
             const healthColor = this.getHealthColor(healthPercent);
@@ -4437,6 +4509,28 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
             this.ctx.fillText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
+            
+            // Draw + sign if regenerating
+            if (isRegenerating) {
+                const plusSize = fontSize * 0.6;
+                const plusX = screenPos.x + fontSize * 0.8;
+                const plusY = screenPos.y + yOffset - fontSize / 2;
+                
+                this.ctx.strokeStyle = playerColor || '#00FF00';
+                this.ctx.lineWidth = 2;
+                
+                // Horizontal line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX - plusSize / 2, plusY);
+                this.ctx.lineTo(plusX + plusSize / 2, plusY);
+                this.ctx.stroke();
+                
+                // Vertical line of +
+                this.ctx.beginPath();
+                this.ctx.moveTo(plusX, plusY - plusSize / 2);
+                this.ctx.lineTo(plusX, plusY + plusSize / 2);
+                this.ctx.stroke();
+            }
         }
     }
 
@@ -4752,6 +4846,13 @@ export class GameRenderer {
                 if (this.isWithinViewBounds(particle.position, 120)) {
                     this.drawImpactParticle(particle);
                 }
+            }
+        }
+        
+        // Draw sparkle particles (regeneration effects)
+        for (const sparkle of game.sparkleParticles) {
+            if (this.isWithinViewBounds(sparkle.position, 50)) {
+                this.drawSparkleParticle(sparkle);
             }
         }
         
