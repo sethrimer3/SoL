@@ -25,13 +25,13 @@ export class WarpGate {
     /**
      * Update warp gate charging - now energy-based
      */
-    update(deltaTime: number, isStillHolding: boolean, chargeMultiplier: number = 1.0): void {
+    update(deltaTime: number): void {
         if (!this.isCharging || this.isComplete) {
             return;
         }
 
-        // For backward compatibility, still update chargeTime but it's not used for completion
-        this.chargeTime += deltaTime * chargeMultiplier;
+        // For backward compatibility, still update chargeTime based on energy progress
+        this.chargeTime = (this.accumulatedEnergy / Constants.WARP_GATE_ENERGY_REQUIRED) * Constants.WARP_GATE_CHARGE_TIME;
 
         // Check if fully charged based on energy
         if (this.accumulatedEnergy >= Constants.WARP_GATE_ENERGY_REQUIRED) {

@@ -25,7 +25,7 @@ export class GameRenderer {
     public abilityArrowStarts: Vector2D[] = []; // Arrow starts for hero ability casting
     public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
     public selectedUnits: Set<Unit> = new Set();
-    public selectedMirrors: Set<any> = new Set(); // Set of selected SolarMirror
+    public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
     public pathPreviewForge: StellarForge | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
@@ -1893,7 +1893,7 @@ export class GameRenderer {
     /**
      * Draw command buttons for selected solar mirrors
      */
-    private drawMirrorCommandButtons(mirrors: Set<any>): void {
+    private drawMirrorCommandButtons(mirrors: Set<SolarMirror>): void {
         if (mirrors.size === 0) return;
         
         // Get one of the selected mirrors to determine button positions

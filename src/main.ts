@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -22,7 +22,7 @@ class GameController {
     private mirrorCommandMode: 'warpgate' | 'forge' | null = null; // Track which command was selected
     private menu: MainMenu;
     private selectedUnits: Set<Unit> = new Set();
-    private selectedMirrors: Set<any> = new Set(); // Set of SolarMirror
+    private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
     private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
     private isSelecting: boolean = false;
@@ -1902,7 +1902,7 @@ class GameController {
         // Only update for completion checks and shockwave emissions
         for (const gate of this.game.warpGates) {
             if (!gate.isComplete && gate.isCharging) {
-                gate.update(deltaTime, true, 1.0);
+                gate.update(deltaTime);
                 
                 if (gate.shouldEmitShockwave()) {
                     this.scatterParticles(gate.position);

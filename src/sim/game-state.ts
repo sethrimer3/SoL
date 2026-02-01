@@ -248,7 +248,7 @@ export class GameState {
                 if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
                     
-                    if (linkedStructure === player.stellarForge &&
+                    if (linkedStructure instanceof StellarForge &&
                         player.stellarForge &&
                         mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
                         // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
@@ -260,10 +260,10 @@ export class GameState {
                         if (!linkedStructure.isComplete) {
                             linkedStructure.addEnergy(energyGenerated);
                         }
-                    } else if ('accumulatedEnergy' in linkedStructure &&
+                    } else if (linkedStructure instanceof WarpGate &&
                                mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
                         // Provide energy to warp gate
-                        if ('isCharging' in linkedStructure && linkedStructure.isCharging && !linkedStructure.isComplete) {
+                        if (linkedStructure.isCharging && !linkedStructure.isComplete) {
                             linkedStructure.addEnergy(energyGenerated);
                         }
                     }

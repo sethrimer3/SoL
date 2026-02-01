@@ -211,7 +211,9 @@ export const SUBSIDIARY_FACTORY_ATTACK_SPEED = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_RADIUS = 40; // Building size
 export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between unit productions
 
-// Building costs (updated for energy-based construction)
+// Building costs (energy-based construction)
+// Note: Internal names are different from display names
+// MINIGUN = Cannon, GATLING = Gatling Tower, SWIRLER = Cyclone, SUBSIDIARY_FACTORY = Workshop/Foundry
 export const MINIGUN_COST = 500; // Cannon
 export const GATLING_COST = 250; // Gatling
 export const SWIRLER_COST = 750; // Cyclone
