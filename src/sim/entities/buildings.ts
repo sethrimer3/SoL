@@ -10,7 +10,8 @@ import type { Unit } from './unit';
 import type { Asteroid } from './asteroid';
 import type { StellarForge } from './stellar-forge';
 import type { SolarMirror } from './solar-mirror';
-import type { SpaceDustParticle, MuzzleFlash, BulletCasing, BouncingBullet } from './particles';
+import { BulletCasing, BouncingBullet, MuzzleFlash } from './particles';
+import type { SpaceDustParticle } from './particles';
 
 export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
 
@@ -193,28 +194,28 @@ export class Minigun extends Building {
         const angle = Math.atan2(dy, dx);
 
         // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = {
-            position: new Vector2D(this.position.x, this.position.y),
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
+            new Vector2D(this.position.x, this.position.y),
             angle
-        } as MuzzleFlash;
+        );
 
         // Create bullet casing with slight angle deviation
         const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
                            Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
-        this.lastShotEffects.casing = {
-            position: new Vector2D(this.position.x, this.position.y),
-            velocity: new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
-        } as BulletCasing;
+        this.lastShotEffects.casing = new BulletCasing(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
+        );
 
         // Create bouncing bullet at target position
         const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
         const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
                            Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
-        this.lastShotEffects.bouncingBullet = {
-            position: new Vector2D(target.position.x, target.position.y),
-            velocity: new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
-        } as BouncingBullet;
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(
+            new Vector2D(target.position.x, target.position.y),
+            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
+        );
     }
 
     /**
@@ -267,28 +268,28 @@ export class GatlingTower extends Building {
         const angle = Math.atan2(dy, dx);
 
         // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = {
-            position: new Vector2D(this.position.x, this.position.y),
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(
+            new Vector2D(this.position.x, this.position.y),
             angle
-        } as MuzzleFlash;
+        );
 
         // Create bullet casing with slight angle deviation
         const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
         const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
                            Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
-        this.lastShotEffects.casing = {
-            position: new Vector2D(this.position.x, this.position.y),
-            velocity: new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
-        } as BulletCasing;
+        this.lastShotEffects.casing = new BulletCasing(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
+        );
 
         // Create bouncing bullet at target position
         const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
         const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
                            Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
-        this.lastShotEffects.bouncingBullet = {
-            position: new Vector2D(target.position.x, target.position.y),
-            velocity: new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
-        } as BouncingBullet;
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(
+            new Vector2D(target.position.x, target.position.y),
+            new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
+        );
     }
 
     /**
