@@ -11,6 +11,7 @@ export class StellarForge {
     health: number = Constants.STELLAR_FORGE_MAX_HEALTH;
     maxHealth: number = Constants.STELLAR_FORGE_MAX_HEALTH;
     isReceivingLight: boolean = false;
+    incomingLightPerSec: number = 0; // Track incoming light energy per second
     unitQueue: string[] = [];
     heroProductionUnitType: string | null = null;
     heroProductionRemainingSec: number = 0;
@@ -18,7 +19,7 @@ export class StellarForge {
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
-    private readonly maxSpeed: number = 50; // pixels per second
+    private readonly baseMaxSpeed: number = 50; // base pixels per second (at 100 light/sec, speed is doubled to 100 px/sec)
     private readonly acceleration: number = 30; // pixels per second^2
     private readonly deceleration: number = 50; // pixels per second^2
     private readonly slowRadiusPx: number = 80; // Distance to begin slow approach
@@ -113,19 +114,36 @@ export class StellarForge {
     }
 
     /**
-     * Update whether forge is receiving light from mirrors
+     * Update whether forge is receiving light from mirrors and calculate incoming light energy
      */
     updateLightStatus(mirrors: SolarMirror[], suns: Sun[], asteroids: Asteroid[] = [], players: Player[] = []): void {
         this.isReceivingLight = false;
+        this.incomingLightPerSec = 0; // Reset light accumulator
+        
         for (const mirror of mirrors) {
             const linkedStructure = mirror.getLinkedStructure(this);
             if (linkedStructure !== this) continue;
             if (mirror.hasLineOfSightToLight(suns, asteroids) &&
                 mirror.hasLineOfSightToForge(this, asteroids, players)) {
                 this.isReceivingLight = true;
-                break;
+                // Accumulate energy from each mirror that has line of sight
+                this.incomingLightPerSec += mirror.getEnergyRatePerSec();
             }
         }
+    }
+
+    /**
+     * Calculate current max speed based on incoming light
+     * 100 light/sec = 100% speed = 2x base speed (100 px/sec)
+     * 0 light/sec = can't move
+     */
+    private getCurrentMaxSpeed(): number {
+        if (!this.isReceivingLight || this.incomingLightPerSec <= 0) {
+            return 0; // Can't move without light
+        }
+        // Calculate speed multiplier: 100 light/sec = 2x base speed
+        const speedMultiplier = Math.min(2.0, this.incomingLightPerSec / 100);
+        return this.baseMaxSpeed * speedMultiplier;
     }
 
     /**
@@ -145,8 +163,11 @@ export class StellarForge {
             }
         }
 
-        if (!this.targetPosition) {
-            // No target, apply deceleration
+        // Get current max speed based on light
+        const currentMaxSpeed = this.getCurrentMaxSpeed();
+
+        if (!this.targetPosition || currentMaxSpeed === 0) {
+            // No target or no light, apply deceleration
             const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
             if (speed > 0.1) {
                 const decelAmount = this.deceleration * deltaTime;
@@ -158,7 +179,7 @@ export class StellarForge {
                 this.velocity.y = 0;
             }
         } else {
-            // Moving toward target
+            // Moving toward target (only if we have light)
             const dx = this.targetPosition.x - this.position.x;
             const dy = this.targetPosition.y - this.position.y;
             const distanceToTarget = Math.sqrt(dx ** 2 + dy ** 2);
@@ -191,7 +212,7 @@ export class StellarForge {
 
                 if (distanceToTarget <= this.slowRadiusPx) {
                     const slowFactor = Math.max(0, distanceToTarget / this.slowRadiusPx);
-                    const desiredSpeed = this.maxSpeed * slowFactor;
+                    const desiredSpeed = currentMaxSpeed * slowFactor;
                     this.velocity.x = directionX * desiredSpeed;
                     this.velocity.y = directionY * desiredSpeed;
                 } else {
@@ -201,9 +222,9 @@ export class StellarForge {
 
                     // Clamp to max speed
                     const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-                    if (currentSpeed > this.maxSpeed) {
-                        this.velocity.x = (this.velocity.x / currentSpeed) * this.maxSpeed;
-                        this.velocity.y = (this.velocity.y / currentSpeed) * this.maxSpeed;
+                    if (currentSpeed > currentMaxSpeed) {
+                        this.velocity.x = (this.velocity.x / currentSpeed) * currentMaxSpeed;
+                        this.velocity.y = (this.velocity.y / currentSpeed) * currentMaxSpeed;
                     }
                 }
             }

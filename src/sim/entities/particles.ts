@@ -562,3 +562,36 @@ export class ImpactParticle {
         return this.lifetime >= this.maxLifetime;
     }
 }
+
+/**
+ * Sparkle particle for regenerating units/structures
+ */
+export class SparkleParticle {
+    lifetime: number = 0;
+    
+    constructor(
+        public position: Vector2D,
+        public velocity: Vector2D,
+        public maxLifetime: number,
+        public color: string,
+        public size: number = 2
+    ) {}
+    
+    update(deltaTime: number): void {
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
+        this.lifetime += deltaTime;
+        // Slow down velocity over time
+        this.velocity.x *= 0.95;
+        this.velocity.y *= 0.95;
+    }
+    
+    getOpacity(): number {
+        // Fade out over lifetime
+        return Math.max(0, 1 - (this.lifetime / this.maxLifetime));
+    }
+    
+    shouldDespawn(): boolean {
+        return this.lifetime >= this.maxLifetime;
+    }
+}

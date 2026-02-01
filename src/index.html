@@ -85,7 +85,8 @@
         const animationFrameCount = 25;
         const animationFrameDurationMs = 1000 / 60;
         const animationFrames = Array.from({ length: animationFrameCount }, (_, frameIndex) => {
-            const frameNumber = frameIndex + 1;
+            // Reverse the animation by counting from high to low
+            const frameNumber = animationFrameCount - frameIndex;
             return `../ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`;
         });
         const preloadedAnimationFrames = animationFrames.map((frameSrc) => {
@@ -115,6 +116,52 @@
         };
 
         animationRequestId = requestAnimationFrame(updateLoadingAnimation);
+
+        // Preload all game sprites during loading screen
+        const gameSprites = [
+            // Structures
+            '../ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg',
+            '../ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.png',
+            '../ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlame.png',
+            '../ASSETS/sprites/RADIANT/stellarForgeBases/radiantForgeFlameCold.png',
+            '../ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.svg',
+            '../ASSETS/sprites/RADIANT/solarMirrors/radiantSolarMirror.png',
+            // Minions
+            '../ASSETS/sprites/RADIANT/starlings/starlingLevel (1).svg',
+            '../ASSETS/sprites/RADIANT/starlings/starlingLevel (1).png',
+            // Hero units
+            '../ASSETS/sprites/RADIANT/heroUnits/Marine.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Marine.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Grave.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Grave.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Ray.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Uniter.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Uniter.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Engineer.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Engineer.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Drill.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Drill.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Dagger.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Dagger.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Beam.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/priest.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Tank.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Tank.png',
+            '../ASSETS/sprites/RADIANT/heroUnits/Artillery.svg',
+            '../ASSETS/sprites/RADIANT/heroUnits/Artillery.png',
+            // Environment
+            '../ASSETS/sprites/environment/centralSun.svg',
+            '../ASSETS/sprites/environment/centralSun.png'
+        ];
+        
+        // Preload sprites in background
+        const preloadedSprites = gameSprites.map(spritePath => {
+            const img = new Image();
+            img.src = spritePath;
+            return img;
+        });
 
         let isMinimumDurationComplete = false;
         let isGameLoaded = false;
