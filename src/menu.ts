@@ -69,8 +69,6 @@ export class MainMenu {
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
-    private titleGraphicLoadPromise: Promise<void> | null = null;
-    private isTitleGraphicLoaded: boolean = false;
     private mainScreenRenderToken: number = 0;
     
     // Hero unit data with complete stats
@@ -299,16 +297,8 @@ export class MainMenu {
         this.ladButton = this.createLadButton();
         menu.appendChild(this.ladButton);
 
-        this.renderTitleLoadingScreen(content);
-        void this.ensureTitleGraphicLoaded().then(() => {
-            if (!this.menuElement) {
-                return;
-            }
-            if (this.currentScreen !== 'main') {
-                return;
-            }
-            this.renderMainScreenContent(content);
-        });
+        // Menu images are now preloaded in index.html, so we can render directly
+        this.renderMainScreenContent(content);
 
         this.resizeHandler = () => {
             this.backgroundParticleLayer?.resize();
@@ -742,53 +732,14 @@ export class MainMenu {
 
     private renderMainScreenWhenReady(container: HTMLElement): void {
         const renderToken = ++this.mainScreenRenderToken;
-        this.renderTitleLoadingScreen(container);
-        void this.ensureTitleGraphicLoaded().then(() => {
-            if (this.currentScreen !== 'main') {
-                return;
-            }
-            if (renderToken !== this.mainScreenRenderToken) {
-                return;
-            }
-            this.renderMainScreenContent(container);
-        });
-    }
-
-    private renderTitleLoadingScreen(container: HTMLElement): void {
-        container.innerHTML = '';
-        container.style.justifyContent = 'center';
-        const loadingText = document.createElement('div');
-        loadingText.textContent = 'Loading title...';
-        loadingText.style.fontSize = '24px';
-        loadingText.style.color = '#D0D0D0';
-        loadingText.style.fontWeight = '300';
-        loadingText.style.textAlign = 'center';
-        loadingText.dataset.particleText = 'true';
-        loadingText.dataset.particleColor = '#D0D0D0';
-        container.appendChild(loadingText);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-    }
-
-    private ensureTitleGraphicLoaded(): Promise<void> {
-        if (this.isTitleGraphicLoaded) {
-            return Promise.resolve();
+        // Menu images are now preloaded in index.html
+        if (this.currentScreen !== 'main') {
+            return;
         }
-        if (!this.titleGraphicLoadPromise) {
-            this.titleGraphicLoadPromise = new Promise((resolve) => {
-                const titleGraphic = new Image();
-                titleGraphic.onload = () => {
-                    this.isTitleGraphicLoaded = true;
-                    resolve();
-                };
-                titleGraphic.onerror = () => {
-                    console.warn('Failed to preload title graphic.');
-                    this.isTitleGraphicLoaded = true;
-                    resolve();
-                };
-                titleGraphic.src = this.resolveAssetPath('ASSETS/SPRITES/menu/titleGraphic.png');
-            });
+        if (renderToken !== this.mainScreenRenderToken) {
+            return;
         }
-        return this.titleGraphicLoadPromise;
+        this.renderMainScreenContent(container);
     }
 
     private renderMainScreenContent(container: HTMLElement): void {

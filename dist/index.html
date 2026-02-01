@@ -36,6 +36,11 @@
             align-items: center;
             color: #FFD700;
             z-index: 1000;
+            transition: opacity 1s ease-out;
+        }
+
+        #loading.fade-out {
+            opacity: 0;
         }
 
         .logo {
@@ -43,6 +48,15 @@
             flex-direction: column;
             align-items: center;
             gap: 8px;
+            opacity: 0;
+            animation: fadeInOut 4s ease-in-out forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; }
         }
 
         .loading-logo {
@@ -93,7 +107,13 @@
 
         animationRequestId = requestAnimationFrame(updateLoadingAnimation);
 
-        // Preload all game sprites during loading screen
+        // Preload all menu and game sprites during loading screen
+        const menuSprites = [
+            // Menu images
+            '../ASSETS/SPRITES/menu/titleGraphic.png',
+            '../ASSETS/sprites/environment/centralSun.svg'
+        ];
+
         const gameSprites = [
             // Structures
             '../ASSETS/sprites/RADIANT/stellarForgeBases/radiantBaseType1.svg',
@@ -128,11 +148,33 @@
             '../ASSETS/sprites/RADIANT/heroUnits/Artillery.svg',
             '../ASSETS/sprites/RADIANT/heroUnits/Artillery.png',
             // Environment
-            '../ASSETS/sprites/environment/centralSun.svg',
             '../ASSETS/sprites/environment/centralSun.png'
         ];
         
-        // Preload sprites in background
+        // Preload menu sprites (must complete before showing menu)
+        let menuSpritesLoaded = 0;
+        let areMenuSpritesLoaded = false;
+        const preloadedMenuSprites = menuSprites.map(spritePath => {
+            const img = new Image();
+            img.onload = () => {
+                menuSpritesLoaded++;
+                if (menuSpritesLoaded === menuSprites.length) {
+                    areMenuSpritesLoaded = true;
+                    completeLoadingScreen();
+                }
+            };
+            img.onerror = () => {
+                menuSpritesLoaded++;
+                if (menuSpritesLoaded === menuSprites.length) {
+                    areMenuSpritesLoaded = true;
+                    completeLoadingScreen();
+                }
+            };
+            img.src = spritePath;
+            return img;
+        });
+
+        // Preload game sprites in background (non-blocking)
         const preloadedSprites = gameSprites.map(spritePath => {
             const img = new Image();
             img.src = spritePath;
@@ -143,12 +185,17 @@
         let isGameLoaded = false;
 
         const completeLoadingScreen = () => {
-            if (!isMinimumDurationComplete || !isGameLoaded) {
+            if (!isMinimumDurationComplete || !isGameLoaded || !areMenuSpritesLoaded) {
                 return;
             }
             const loading = document.getElementById('loading');
             if (loading) {
-                loading.style.display = 'none';
+                // Add fade-out class
+                loading.classList.add('fade-out');
+                // Wait for fade-out animation to complete
+                setTimeout(() => {
+                    loading.style.display = 'none';
+                }, 1000);
             }
             cancelAnimationFrame(animationRequestId);
         };
