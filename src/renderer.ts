@@ -5404,7 +5404,7 @@ export class GameRenderer {
         
         // Calculate next crunch starling count
         const nextCrunchStarlings = player.stellarForge 
-            ? Math.floor(player.stellarForge.pendingEnergy / Constants.STARLING_COST_PER_ENERGY)
+            ? Math.floor((player.stellarForge.pendingEnergy ?? 0) / Constants.STARLING_COST_PER_ENERGY)
             : 0;
         
         // Draw starlings count box
