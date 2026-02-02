@@ -133,6 +133,85 @@ class GameController {
     }
 
     /**
+     * Handle foundry button press
+     */
+    private handleFoundryButtonPress(player: Player, foundry: SubsidiaryFactory, buttonIndex: number): void {
+        if (!this.game) return;
+
+        // Get building index for network sync
+        const buildingId = player.buildings.indexOf(foundry);
+        if (buildingId < 0) {
+            console.error('Foundry not found in player buildings array');
+            return;
+        }
+
+        switch (buttonIndex) {
+            case 0: // Top button - Upgrade foundry
+                if (foundry.canUpgradeFoundry() && player.spendEnergy(Constants.FOUNDRY_UPGRADE_COST)) {
+                    foundry.upgradeFoundry();
+                    console.log(`Upgraded foundry to level ${foundry.level}`);
+                    this.sendNetworkCommand('foundry_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade foundry or not enough energy');
+                }
+                break;
+            case 1: // Right button - Upgrade starlings
+                if (foundry.canUpgradeStarlings() && player.spendEnergy(Constants.STARLING_UPGRADE_COST)) {
+                    foundry.upgradeStarlings();
+                    console.log(`Upgraded starlings to tier ${foundry.starlingUpgradeTier}`);
+                    // Update all existing starlings' sprite levels
+                    const newSpriteLevel = foundry.starlingUpgradeTier + 1; // Tier 0->level 1, tier 1->level 2, etc.
+                    for (const unit of player.units) {
+                        if (unit instanceof Starling) {
+                            unit.spriteLevel = newSpriteLevel;
+                        }
+                    }
+                    this.sendNetworkCommand('starling_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade starlings or not enough energy');
+                }
+                break;
+            case 2: // Bottom button - Create solar mirror
+                if (player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
+                    const newMirror = new SolarMirror(
+                        new Vector2D(foundry.position.x, foundry.position.y),
+                        player
+                    );
+                    player.solarMirrors.push(newMirror);
+                    console.log(`Created solar mirror at foundry (cost: ${Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST})`);
+                    this.sendNetworkCommand('mirror_create_at_foundry', {
+                        positionX: foundry.position.x,
+                        positionY: foundry.position.y
+                    });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Not enough energy to create solar mirror');
+                }
+                break;
+            case 3: // Left button - Upgrade structures
+                if (foundry.canUpgradeStructures() && player.spendEnergy(Constants.STRUCTURE_UPGRADE_COST)) {
+                    foundry.upgradeStructures();
+                    console.log(`Upgraded structures to tier ${foundry.structureUpgradeTier}`);
+                    this.sendNetworkCommand('structure_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade structures or not enough energy');
+                }
+                break;
+        }
+    }
+
+    /**
      * Check if this click is a double-tap
      */
     private isDoubleTap(screenX: number, screenY: number): boolean {
@@ -698,6 +777,14 @@ class GameController {
                         // Solar mirrors are selected - use building arrow mode
                         this.isDraggingBuildingArrow = true;
                         this.cancelHold();
+                    } else if (this.selectedBuildings.size === 1) {
+                        // Check if a foundry is selected
+                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                            // Foundry is selected - use building arrow mode
+                            this.isDraggingBuildingArrow = true;
+                            this.cancelHold();
+                        }
                     } else if (this.selectedBase && this.selectedBase.isSelected) {
                         // Drawing a path from the selected base
                         this.isDrawingPath = true;
@@ -765,6 +852,12 @@ class GameController {
                     } else if (this.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 buttons
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 2);
+                    } else if (this.selectedBuildings.size === 1) {
+                        // Foundry building has 4 buttons
+                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        if (selectedBuilding instanceof SubsidiaryFactory) {
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                        }
                     }
                 }
             } else if (this.isDrawingPath) {
@@ -1577,6 +1670,12 @@ class GameController {
                                 // Forge button
                                 this.mirrorCommandMode = 'forge';
                                 console.log('Radial selection: Mirror command mode set to forge');
+                            }
+                        } else if (this.selectedBuildings.size === 1) {
+                            // Foundry building button selected
+                            const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                            if (selectedBuilding instanceof SubsidiaryFactory) {
+                                this.handleFoundryButtonPress(player, selectedBuilding, this.renderer.highlightedButtonIndex);
                             }
                         }
                     }

@@ -475,6 +475,9 @@ export class SubsidiaryFactory extends Building {
     productionQueue: string[] = []; // Queue of items to produce
     currentProduction: string | null = null; // Currently producing item
     productionProgress: number = 0; // Progress of current production (0-1)
+    level: number = 1; // Foundry level (1-3)
+    structureUpgradeTier: number = 0; // Structure upgrade tier (0-3)
+    starlingUpgradeTier: number = 0; // Starling upgrade tier (0-3)
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -545,5 +548,55 @@ export class SubsidiaryFactory extends Building {
             return Constants.BUILDING_BUILD_TIME;
         }
         return Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL;
+    }
+
+    /**
+     * Check if foundry can be upgraded
+     */
+    canUpgradeFoundry(): boolean {
+        return this.level < 3 && this.isComplete;
+    }
+
+    /**
+     * Upgrade foundry to next level
+     */
+    upgradeFoundry(): boolean {
+        if (!this.canUpgradeFoundry()) return false;
+        this.level++;
+        return true;
+    }
+
+    /**
+     * Check if structure upgrade is available
+     */
+    canUpgradeStructures(): boolean {
+        // Structure upgrade tier is limited by foundry level
+        return this.structureUpgradeTier < this.level && this.structureUpgradeTier < 3 && this.isComplete;
+    }
+
+    /**
+     * Upgrade structures
+     */
+    upgradeStructures(): boolean {
+        if (!this.canUpgradeStructures()) return false;
+        this.structureUpgradeTier++;
+        return true;
+    }
+
+    /**
+     * Check if starling upgrade is available
+     */
+    canUpgradeStarlings(): boolean {
+        // Starling upgrade tier is limited by foundry level
+        return this.starlingUpgradeTier < this.level && this.starlingUpgradeTier < 3 && this.isComplete;
+    }
+
+    /**
+     * Upgrade starlings
+     */
+    upgradeStarlings(): boolean {
+        if (!this.canUpgradeStarlings()) return false;
+        this.starlingUpgradeTier++;
+        return true;
     }
 }

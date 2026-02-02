@@ -406,8 +406,9 @@ export class GameRenderer {
 
     private getStarlingSpritePath(starling: Starling): string | null {
         if (starling.owner.faction === Faction.RADIANT) {
-            // Use level 1 starling sprite
-            return this.getGraphicAssetPath('starling');
+            // Use starling sprite based on upgrade level (1-4)
+            const level = Math.min(4, Math.max(1, starling.spriteLevel));
+            return `ASSETS/sprites/RADIANT/starlings/starlingLevel (${level}).png`;
         }
         return null;
     }
@@ -1181,6 +1182,74 @@ export class GameRenderer {
         this.ctx.lineTo(midX, midY);
         this.ctx.lineTo(endX, endY);
         this.ctx.stroke();
+    }
+
+    /**
+     * Draw foundry production buttons around selected foundry
+     */
+    private drawFoundryButtons(foundry: SubsidiaryFactory, screenPos: Vector2D): void {
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
+        
+        // Helper to convert roman numerals (for levels 1-3)
+        const toRoman = (num: number): string => {
+            const romanNumerals = ['', 'I', 'II', 'III'];
+            return romanNumerals[num] || '';
+        };
+
+        // Draw 4 buttons in cardinal directions
+        const buttonConfigs = [
+            { 
+                x: 0, y: -1, // Top - Upgrade foundry
+                label: foundry.canUpgradeFoundry() ? `Foundry ${toRoman(foundry.level + 1)}` : `Foundry ${toRoman(foundry.level)}`,
+                available: foundry.canUpgradeFoundry(),
+                index: 0
+            },
+            { 
+                x: 1, y: 0, // Right - Upgrade starlings
+                label: foundry.canUpgradeStarlings() ? `Starling ${toRoman(foundry.starlingUpgradeTier + 1)}` : `Starling ${toRoman(foundry.starlingUpgradeTier)}`,
+                available: foundry.canUpgradeStarlings(),
+                index: 1
+            },
+            { 
+                x: 0, y: 1, // Bottom - Create solar mirror
+                label: 'Mirror',
+                available: true,
+                index: 2
+            },
+            { 
+                x: -1, y: 0, // Left - Upgrade structures
+                label: foundry.canUpgradeStructures() ? `Structure ${toRoman(foundry.structureUpgradeTier + 1)}` : `Structure ${toRoman(foundry.structureUpgradeTier)}`,
+                available: foundry.canUpgradeStructures(),
+                index: 3
+            }
+        ];
+
+        for (const config of buttonConfigs) {
+            const buttonX = screenPos.x + config.x * buttonDistance;
+            const buttonY = screenPos.y + config.y * buttonDistance;
+            const isHighlighted = this.highlightedButtonIndex === config.index;
+
+            // Draw button background with highlight effect
+            this.ctx.fillStyle = isHighlighted 
+                ? 'rgba(255, 215, 0, 0.7)' 
+                : (config.available ? 'rgba(255, 215, 0, 0.3)' : 'rgba(128, 128, 128, 0.3)');
+            this.ctx.strokeStyle = isHighlighted 
+                ? '#FFD700' 
+                : (config.available ? '#FFD700' : '#888888');
+            this.ctx.lineWidth = isHighlighted ? 4 : 2;
+            this.ctx.beginPath();
+            this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            // Draw button label
+            this.ctx.fillStyle = config.available ? '#FFFFFF' : '#666666';
+            this.ctx.font = `${12 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(config.label, buttonX, buttonY);
+        }
     }
 
     /**
@@ -3954,6 +4023,8 @@ export class GameRenderer {
 
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
+                // Draw foundry production buttons when selected
+                this.drawFoundryButtons(building, screenPos);
             }
 
             drawLayer(middleSprite, 0);
