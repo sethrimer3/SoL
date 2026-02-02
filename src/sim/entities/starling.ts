@@ -23,6 +23,7 @@ export class Starling extends Unit {
     private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
+    public spriteLevel: number = 1; // Sprite level (1-4, changes based on starling upgrades)
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(

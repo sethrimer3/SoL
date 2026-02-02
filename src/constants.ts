@@ -221,6 +221,12 @@ export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
+// Foundry upgrade costs
+export const FOUNDRY_UPGRADE_COST = 500; // Cost to upgrade foundry from level 1->2 or 2->3
+export const STRUCTURE_UPGRADE_COST = 400; // Cost to upgrade structures
+export const STARLING_UPGRADE_COST = 350; // Cost to upgrade starlings
+export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
+
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
 export const AI_DEFENSE_COMMAND_INTERVAL_SEC = 1.0;
