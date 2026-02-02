@@ -838,6 +838,10 @@ class GameController {
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
                         }
+                    } else if ((this.selectedBase || this.selectedMirrors.size > 0) && this.selectedUnits.size === 0) {
+                        // Stellar forge or mirror selected - use building arrow mode even when dragging from empty space
+                        this.isDraggingBuildingArrow = true;
+                        this.cancelHold();
                     } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
                         // Check if drag started near selected units - if so, draw movement path
                         if (dragStartWorld && this.isDragStartNearSelectedUnits(dragStartWorld)) {
