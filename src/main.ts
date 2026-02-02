@@ -83,6 +83,20 @@ class GameController {
         return false;
     }
 
+    private isDragStartNearSelectedMirrors(worldPos: Vector2D): boolean {
+        if (this.selectedMirrors.size === 0) {
+            return false;
+        }
+
+        for (const mirror of this.selectedMirrors) {
+            if (mirror.containsPoint(worldPos)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
@@ -787,17 +801,34 @@ class GameController {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasHeroUnits = this.hasHeroUnitsSelected();
+                const dragStartWorld = this.selectionStartScreen
+                    ? this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y)
+                    : null;
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDraggingBuildingArrow && !this.isDrawingPath) {
-                    // Check if a building with production options is selected (stellar forge or solar mirrors)
-                    const player = this.getLocalPlayer();
-                    if (player && player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
-                        // Stellar forge is selected with hero buttons visible - use building arrow mode
-                        this.isDraggingBuildingArrow = true;
+                    const isDragStartOnSelectedBase = Boolean(
+                        this.selectedBase &&
+                        this.selectedBase.isSelected &&
+                        dragStartWorld &&
+                        this.selectedBase.containsPoint(dragStartWorld)
+                    );
+                    const isDragStartOnSelectedMirror = Boolean(
+                        dragStartWorld && this.isDragStartNearSelectedMirrors(dragStartWorld)
+                    );
+
+                    if (isDragStartOnSelectedBase) {
+                        // Drawing a path from the selected base
+                        this.isDrawingPath = true;
+                        this.pathPoints = [];
+                        this.renderer.pathPreviewForge = this.selectedBase;
+                        this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
-                    } else if (this.selectedMirrors.size > 0) {
-                        // Solar mirrors are selected - use building arrow mode
-                        this.isDraggingBuildingArrow = true;
+                    } else if (isDragStartOnSelectedMirror) {
+                        // Drawing a path from selected solar mirrors
+                        this.isDrawingPath = true;
+                        this.pathPoints = [];
+                        this.renderer.pathPreviewForge = null;
+                        this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
                     } else if (this.selectedBuildings.size === 1) {
                         // Check if a foundry is selected
@@ -807,17 +838,9 @@ class GameController {
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
                         }
-                    } else if (this.selectedBase && this.selectedBase.isSelected) {
-                        // Drawing a path from the selected base
-                        this.isDrawingPath = true;
-                        this.pathPoints = [];
-                        this.renderer.pathPreviewForge = this.selectedBase;
-                        this.renderer.pathPreviewPoints = this.pathPoints;
-                        this.cancelHold();
                     } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
                         // Check if drag started near selected units - if so, draw movement path
-                        const dragStartWorld = this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y);
-                        if (this.isDragStartNearSelectedUnits(dragStartWorld)) {
+                        if (dragStartWorld && this.isDragStartNearSelectedUnits(dragStartWorld)) {
                             // Drawing a movement path for selected units
                             this.isDrawingPath = true;
                             this.pathPoints = [];
@@ -1568,6 +1591,41 @@ class GameController {
                     this.sendNetworkCommand('set_rally_path', {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
                     });
+                } else if (this.selectedMirrors.size > 0) {
+                    const player = this.getLocalPlayer();
+                    const lastWaypoint = this.pathPoints[this.pathPoints.length - 1];
+
+                    if (player) {
+                        console.log(`Solar mirror movement path set to (${lastWaypoint.x.toFixed(0)}, ${lastWaypoint.y.toFixed(0)})`);
+                        this.moveOrderCounter++;
+                        const mirrorIndices: number[] = [];
+
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setTarget(lastWaypoint);
+                            mirror.moveOrder = this.moveOrderCounter;
+                            mirror.isSelected = false;
+                            const mirrorIndex = player.solarMirrors.indexOf(mirror);
+                            if (mirrorIndex >= 0) {
+                                mirrorIndices.push(mirrorIndex);
+                            }
+                        }
+
+                        this.sendNetworkCommand('mirror_move', {
+                            mirrorIndices,
+                            targetX: lastWaypoint.x,
+                            targetY: lastWaypoint.y,
+                            moveOrder: this.moveOrderCounter
+                        });
+                    }
+
+                    this.selectedMirrors.clear();
+                    const localPlayer = this.getLocalPlayer();
+                    if (localPlayer) {
+                        for (const building of localPlayer.buildings) {
+                            building.isSelected = false;
+                        }
+                        this.selectedBuildings.clear();
+                    }
                 } else if (this.selectedUnits.size > 0) {
                     // Path for selected units
                     console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
