@@ -132,6 +132,28 @@ class GameController {
         return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
     }
 
+    private getClosestSelectedMirror(player: Player, worldPos: Vector2D): { mirror: SolarMirror | null; mirrorIndex: number } {
+        let closestMirror: SolarMirror | null = null;
+        let closestMirrorIndex = -1;
+        let closestDistanceSq = Infinity;
+
+        for (let i = 0; i < player.solarMirrors.length; i++) {
+            const mirror = player.solarMirrors[i];
+            if (!mirror.isSelected) continue;
+
+            const dx = mirror.position.x - worldPos.x;
+            const dy = mirror.position.y - worldPos.y;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq < closestDistanceSq) {
+                closestDistanceSq = distanceSq;
+                closestMirror = mirror;
+                closestMirrorIndex = i;
+            }
+        }
+
+        return { mirror: closestMirror, mirrorIndex: closestMirrorIndex };
+    }
+
     /**
      * Handle foundry button press
      */
@@ -1496,12 +1518,11 @@ class GameController {
                 }
                 
                 // If a mirror is selected and clicked elsewhere, move it
-                const selectedMirror = player.solarMirrors.find(m => m.isSelected);
+                const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
                 if (selectedMirror) {
                     selectedMirror.setTarget(worldPos);
                     this.moveOrderCounter++;
                     selectedMirror.moveOrder = this.moveOrderCounter;
-                    const mirrorIndex = player.solarMirrors.indexOf(selectedMirror);
                     this.sendNetworkCommand('mirror_move', {
                         mirrorIndices: mirrorIndex >= 0 ? [mirrorIndex] : [],
                         targetX: worldPos.x,
@@ -1511,6 +1532,9 @@ class GameController {
                     selectedMirror.isSelected = false; // Auto-deselect after setting target
                     this.selectedBase = null;
                     this.selectedUnits.clear();
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.isSelected = false;
+                    }
                     this.selectedMirrors.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
                     // Deselect all buildings
@@ -1708,20 +1732,16 @@ class GameController {
                         moveOrder: this.moveOrderCounter
                     });
                     
-                    // Set target for all selected mirrors
-                    for (const mirror of this.selectedMirrors) {
-                        mirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                        mirror.moveOrder = this.moveOrderCounter;
-                        mirror.isSelected = false;
-                    }
+                    // Set target for the closest selected mirror
                     const player = this.getLocalPlayer();
                     if (player) {
-                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
-                            player.solarMirrors.indexOf(mirror)
-                        ).filter((index) => index >= 0);
-                        if (mirrorIndices.length > 0) {
+                        const { mirror: closestMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
+                        if (closestMirror && mirrorIndex >= 0) {
+                            closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                            closestMirror.moveOrder = this.moveOrderCounter;
+                            closestMirror.isSelected = false;
                             this.sendNetworkCommand('mirror_move', {
-                                mirrorIndices,
+                                mirrorIndices: [mirrorIndex],
                                 targetX: worldPos.x,
                                 targetY: worldPos.y,
                                 moveOrder: this.moveOrderCounter
@@ -1743,6 +1763,9 @@ class GameController {
                     
                     // Deselect all units immediately
                     this.selectedUnits.clear();
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.isSelected = false;
+                    }
                     this.selectedMirrors.clear();
                     this.selectedBase = null;
                     this.renderer.selectedUnits = this.selectedUnits;
