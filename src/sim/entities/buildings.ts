@@ -472,6 +472,7 @@ export class SpaceDustSwirler extends Building {
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
+    private completedProduction: string | null = null;
     productionQueue: string[] = []; // Queue of items to produce
     currentProduction: string | null = null; // Currently producing item
     productionProgress: number = 0; // Progress of current production (0-1)
@@ -510,13 +511,7 @@ export class SubsidiaryFactory extends Building {
         // Advance production
         if (this.currentProduction) {
             const productionTime = this.getProductionTime(this.currentProduction);
-            this.productionProgress += deltaTime / productionTime;
-            
-            if (this.productionProgress >= 1.0) {
-                // Production complete
-                this.productionProgress = 0;
-                this.currentProduction = null;
-            }
+            this.addProductionProgress(deltaTime / productionTime);
         }
     }
     
@@ -531,13 +526,25 @@ export class SubsidiaryFactory extends Building {
      * Get the completed item and clear it
      */
     getCompletedProduction(): string | null {
-        if (this.currentProduction && this.productionProgress >= 1.0) {
-            const completed = this.currentProduction;
-            this.currentProduction = null;
-            this.productionProgress = 0;
-            return completed;
+        const completed = this.completedProduction;
+        if (completed) {
+            this.completedProduction = null;
         }
-        return null;
+        return completed;
+    }
+
+    /**
+     * Add production progress (from time or mirror light)
+     */
+    addProductionProgress(amount: number): void {
+        if (!this.currentProduction) return;
+
+        this.productionProgress += amount;
+        if (this.productionProgress >= 1.0) {
+            this.productionProgress = 0;
+            this.completedProduction = this.currentProduction;
+            this.currentProduction = null;
+        }
     }
     
     /**

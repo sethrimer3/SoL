@@ -5458,6 +5458,36 @@ export class GameRenderer {
             
             y += boxHeight + 8;
         }
+
+        // Draw foundry production (solar mirrors)
+        const foundryInProduction = player.buildings.find(
+            (building) =>
+                building instanceof SubsidiaryFactory &&
+                ((building.currentProduction && building.currentProduction.length > 0) || building.productionQueue.length > 0)
+        ) as SubsidiaryFactory | undefined;
+        if (foundryInProduction) {
+            const productionType = foundryInProduction.currentProduction ?? foundryInProduction.productionQueue[0];
+            const progress = foundryInProduction.currentProduction ? foundryInProduction.productionProgress : 0;
+
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+
+            const productionName = productionType ? this.getProductionDisplayName(productionType) : 'Production';
+            this.ctx.fillText(`Foundry: ${productionName}`, x + 8, y + 8);
+
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
+
+            y += boxHeight + 8;
+        }
         
         // Draw building construction progress
         // Note: find() stops at first match, typically only one building under construction
@@ -5543,7 +5573,8 @@ export class GameRenderer {
             'turretdeployer': 'Turret Deployer',
             'driller': 'Driller',
             'dagger': 'Dagger',
-            'beam': 'Beam'
+            'beam': 'Beam',
+            'solar-mirror': 'Solar Mirror'
         };
         return nameMap[unitType.toLowerCase()] || unitType;
     }

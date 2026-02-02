@@ -173,10 +173,10 @@ export class GameState {
                         // Calculate number of starlings to spawn based on energy
                         const numStarlings = Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY);
                         
-                        // Spawn starlings at the wave edge during wave phase
+                        // Spawn starlings close to the forge
                         for (let i = 0; i < numStarlings; i++) {
                             const angle = (Math.PI * 2 * i) / numStarlings; // Evenly distribute around forge
-                            const spawnRadius = Constants.FORGE_CRUNCH_WAVE_RADIUS * 0.7; // Spawn at 70% of wave radius
+                            const spawnRadius = player.stellarForge.radius + Constants.STARLING_COLLISION_RADIUS_PX + 5;
                             const spawnPosition = new Vector2D(
                                 player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
                                 player.stellarForge.position.y + Math.sin(angle) * spawnRadius
@@ -202,11 +202,10 @@ export class GameState {
                 if (!this.isCountdownActive) {
                     const completedHeroType = player.stellarForge.advanceHeroProduction(deltaTime);
                     if (completedHeroType) {
-                        const spawnAngleRad = (player.unitsCreated % 8) * (Math.PI / 4);
                         const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
                         const spawnPosition = new Vector2D(
-                            player.stellarForge.position.x + Math.cos(spawnAngleRad) * spawnRadius,
-                            player.stellarForge.position.y + Math.sin(spawnAngleRad) * spawnRadius
+                            player.stellarForge.position.x,
+                            player.stellarForge.position.y + spawnRadius
                         );
                         const heroUnit = this.createHeroUnit(completedHeroType, spawnPosition, player);
                         if (heroUnit) {
@@ -557,14 +556,21 @@ export class GameState {
                 
                 // If building is a Foundry, check for completed production
                 if (building instanceof SubsidiaryFactory) {
+                    if (building.currentProduction) {
+                        const totalLight = this.getMirrorLightOnStructure(player, building);
+                        if (totalLight > 0) {
+                            const buildRate = (totalLight / 10.0) * (1.0 / Constants.BUILDING_BUILD_TIME);
+                            const buildProgress = buildRate * deltaTime;
+                            building.addProductionProgress(buildProgress);
+                        }
+                    }
                     const completed = building.getCompletedProduction();
                     if (completed === 'solar-mirror') {
-                        // Spawn solar mirror near the factory
-                        const spawnAngle = Math.random() * Math.PI * 2;
-                        const spawnDistance = 80; // Spawn 80 pixels away from factory
+                        // Spawn solar mirror from the bottom of the factory
+                        const spawnOffset = building.radius + 20;
                         const spawnPos = new Vector2D(
-                            building.position.x + Math.cos(spawnAngle) * spawnDistance,
-                            building.position.y + Math.sin(spawnAngle) * spawnDistance
+                            building.position.x,
+                            building.position.y + spawnOffset
                         );
                         const mirror = new SolarMirror(spawnPos, player);
                         player.solarMirrors.push(mirror);
@@ -593,48 +599,7 @@ export class GameState {
                     building.addBuildProgress(buildProgress);
                 } else {
                     // Building outside influence: powered by mirrors shining on it
-                    // Calculate total light from all mirrors pointing at this building
-                    let totalLight = 0;
-                    
-                    for (const mirror of player.solarMirrors) {
-                        const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
-                        if (linkedStructure !== building) continue;
-                        // Check if mirror has line of sight to light source
-                        if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
-                        
-                        // Check if mirror has line of sight to building
-                        const ray = new LightRay(
-                            mirror.position,
-                            new Vector2D(
-                                building.position.x - mirror.position.x,
-                                building.position.y - mirror.position.y
-                            ).normalize(),
-                            1.0
-                        );
-                        
-                        let hasLineOfSight = true;
-                        for (const asteroid of this.asteroids) {
-                            if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                                hasLineOfSight = false;
-                                break;
-                            }
-                        }
-                        
-                        if (hasLineOfSight) {
-                            // Mirror can shine on building - calculate efficiency based on distance from light
-                            const closestSun = this.suns.reduce((closest, sun) => {
-                                const distToSun = mirror.position.distanceTo(sun.position);
-                                const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
-                                return distToSun < distToClosest ? sun : closest;
-                            }, null as Sun | null);
-                            
-                            if (closestSun) {
-                                const distanceToSun = mirror.position.distanceTo(closestSun.position);
-                                const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE)));
-                                totalLight += distanceMultiplier;
-                            }
-                        }
-                    }
+                    const totalLight = this.getMirrorLightOnStructure(player, building);
                     
                     // Convert light to build progress
                     if (totalLight > 0) {
@@ -2956,6 +2921,52 @@ export class GameState {
         return false; // No collision
     }
 
+    private getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {
+        let totalLight = 0;
+
+        for (const mirror of player.solarMirrors) {
+            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            if (linkedStructure !== structure) continue;
+            if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
+
+            const ray = new LightRay(
+                mirror.position,
+                new Vector2D(
+                    structure.position.x - mirror.position.x,
+                    structure.position.y - mirror.position.y
+                ).normalize(),
+                1.0
+            );
+
+            let hasLineOfSight = true;
+            for (const asteroid of this.asteroids) {
+                if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
+                    hasLineOfSight = false;
+                    break;
+                }
+            }
+
+            if (hasLineOfSight) {
+                const closestSun = this.suns.reduce((closest, sun) => {
+                    const distToSun = mirror.position.distanceTo(sun.position);
+                    const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
+                    return distToSun < distToClosest ? sun : closest;
+                }, null as Sun | null);
+
+                if (closestSun) {
+                    const distanceToSun = mirror.position.distanceTo(closestSun.position);
+                    const distanceMultiplier = Math.max(
+                        1.0,
+                        Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE))
+                    );
+                    totalLight += distanceMultiplier;
+                }
+            }
+        }
+
+        return totalLight;
+    }
+
     private updateStateHash(): void {
         let hash = 2166136261;
 
@@ -3089,6 +3100,17 @@ export class GameState {
                 mix(building.position.y);
                 mix(building.health);
                 mix(building.isComplete ? 1 : 0);
+                if (building instanceof SubsidiaryFactory) {
+                    mix(building.productionProgress);
+                    mixString(building.currentProduction ?? '');
+                    mixInt(building.productionQueue.length);
+                    for (const itemType of building.productionQueue) {
+                        mixString(itemType);
+                    }
+                    mixInt(building.level);
+                    mixInt(building.structureUpgradeTier);
+                    mixInt(building.starlingUpgradeTier);
+                }
             }
         }
 
@@ -3369,6 +3391,9 @@ export class GameState {
             case 'mirror_link':
                 this.executeMirrorLinkCommand(player, cmd.data);
                 break;
+            case 'foundry_production':
+                this.executeFoundryProductionCommand(player, cmd.data);
+                break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
                 break;
@@ -3507,6 +3532,20 @@ export class GameState {
             if (mirror) {
                 mirror.setLinkedStructure(targetStructure);
             }
+        }
+    }
+
+    private executeFoundryProductionCommand(player: Player, data: any): void {
+        const { buildingId, itemType } = data;
+        const building = player.buildings[buildingId];
+        if (!(building instanceof SubsidiaryFactory)) {
+            return;
+        }
+        if (!building.isComplete) {
+            return;
+        }
+        if (itemType === 'solar-mirror' && player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
+            building.enqueueProduction('solar-mirror');
         }
     }
 
