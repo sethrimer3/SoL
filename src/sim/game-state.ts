@@ -182,6 +182,13 @@ export class GameState {
                                 player.stellarForge.position.y + Math.sin(angle) * spawnRadius
                             );
                             const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
+                            
+                            // Set starling sprite level based on foundry upgrade tier
+                            const foundry = player.buildings.find(b => b instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
+                            if (foundry) {
+                                starling.spriteLevel = foundry.starlingUpgradeTier + 1; // Tier 0->level 1, tier 1->level 2, etc.
+                            }
+                            
                             player.units.push(starling);
                             player.unitsCreated++;
                         }
