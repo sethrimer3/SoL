@@ -132,7 +132,7 @@ export class SolarMirror {
         const mirrorRadiusPx = 20;
 
         for (const player of players) {
-            // Solar mirrors don't block light from other mirrors - removed check
+            // Skip mirror-to-mirror blocking checks as mirrors are transparent to each other's light rays
 
             for (const building of player.buildings) {
                 if (building === structure) continue;

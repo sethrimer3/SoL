@@ -4034,6 +4034,7 @@ export class GameRenderer {
             // Smooth acceleration/deceleration based on production progress
             const baseSpinSpeedRad = 0.2; // Base slow spin speed
             const producingMultiplier = 2.5;
+            const ACCELERATION_PHASE_DURATION = 0.2; // Accelerate during first 20% of production
             
             // Calculate speed multiplier with smooth acceleration/deceleration
             // At start of production (progress=0): speed = 1.0
@@ -4042,8 +4043,8 @@ export class GameRenderer {
             let speedMultiplier = 1.0;
             if (isProducing) {
                 // Smooth acceleration in first 20% of production
-                if (building.productionProgress < 0.2) {
-                    const accelProgress = building.productionProgress / 0.2;
+                if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
+                    const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
                     const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
                     speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
                 } else {
