@@ -1,5 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
   entry: './src/main.ts',
@@ -25,6 +26,11 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './src/index.html',
       title: 'SoL - Speed of Light RTS',
+    }),
+    // Inject environment variables at build time
+    new webpack.DefinePlugin({
+      'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || ''),
+      'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || '')
     }),
   ],
 };

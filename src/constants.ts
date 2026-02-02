@@ -221,6 +221,12 @@ export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
+// Foundry upgrade costs
+export const FOUNDRY_UPGRADE_COST = 500; // Cost to upgrade foundry from level 1->2 or 2->3
+export const STRUCTURE_UPGRADE_COST = 400; // Cost to upgrade structures
+export const STARLING_UPGRADE_COST = 350; // Cost to upgrade starlings
+export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
+
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
 export const AI_DEFENSE_COMMAND_INTERVAL_SEC = 1.0;
@@ -293,6 +299,7 @@ export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for 
 export const CLICK_DRAG_THRESHOLD = 10; // Pixels of movement to distinguish click from drag (increased for better tap/drag distinction)
 export const SMALL_SELECTION_THRESHOLD = 50; // Maximum selection box size (pixels) to be considered a single-click for double-tap detection
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
+export const SOL_ICON_TEXT_SPACING = 2; // Spacing between SoL icon and text in zoom units
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
 
 // Visual effect constants

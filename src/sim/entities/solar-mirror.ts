@@ -132,12 +132,7 @@ export class SolarMirror {
         const mirrorRadiusPx = 20;
 
         for (const player of players) {
-            for (const mirror of player.solarMirrors) {
-                if (mirror === this) continue;
-                if (this.isCircleBlockingRay(direction, distanceToStructure, mirror.position, mirrorRadiusPx)) {
-                    return false;
-                }
-            }
+            // Skip mirror-to-mirror blocking checks as mirrors are transparent to each other's light rays
 
             for (const building of player.buildings) {
                 if (building === structure) continue;
@@ -436,6 +431,13 @@ export class SolarMirror {
         }
 
         return null;
+    }
+
+    /**
+     * Take damage
+     */
+    takeDamage(amount: number): void {
+        this.health -= amount;
     }
 
     /**

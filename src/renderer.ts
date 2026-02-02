@@ -24,6 +24,9 @@ export class GameRenderer {
     public selectionEnd: Vector2D | null = null;
     public abilityArrowStarts: Vector2D[] = []; // Arrow starts for hero ability casting
     public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
+    public buildingAbilityArrowStart: Vector2D | null = null; // Arrow start for building ability casting
+    public buildingAbilityArrowEnd: Vector2D | null = null; // Arrow end for building ability casting
+    public highlightedButtonIndex: number = -1; // Index of highlighted production button (-1 = none)
     public selectedUnits: Set<Unit> = new Set();
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
     public pathPreviewForge: StellarForge | null = null;
@@ -52,6 +55,7 @@ export class GameRenderer {
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private outlinedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
     private viewMinY: number = 0;
@@ -232,13 +236,15 @@ export class GameRenderer {
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
-        const factionColor = this.getFactionColor(player.faction);
-        if (!ladSun || !player.stellarForge) {
-            return factionColor;
+        // In LaD mode, use light/dark colors
+        if (ladSun && player.stellarForge) {
+            const ownerSide = game.getLadSide(player.stellarForge.position, ladSun);
+            return ownerSide === 'light' ? '#FFFFFF' : '#000000';
         }
-
-        const ownerSide = game.getLadSide(player.stellarForge.position, ladSun);
-        return ownerSide === 'light' ? '#FFFFFF' : '#000000';
+        
+        // In normal mode, use player/enemy colors based on viewing player
+        const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+        return isEnemy ? this.enemyColor : this.playerColor;
     }
 
     private getSpriteImage(path: string): HTMLImageElement {
@@ -251,6 +257,16 @@ export class GameRenderer {
         image.src = resolvedPath;
         this.spriteImageCache.set(resolvedPath, image);
         return image;
+    }
+
+    /**
+     * Get the cached SoL energy icon
+     */
+    private getSolEnergyIcon(): HTMLImageElement {
+        if (!this.solEnergyIcon) {
+            this.solEnergyIcon = this.getSpriteImage('ASSETS/sprites/interface/SoL_icon.png');
+        }
+        return this.solEnergyIcon;
     }
 
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
@@ -392,8 +408,9 @@ export class GameRenderer {
 
     private getStarlingSpritePath(starling: Starling): string | null {
         if (starling.owner.faction === Faction.RADIANT) {
-            // Use level 1 starling sprite
-            return this.getGraphicAssetPath('starling');
+            // Use starling sprite based on upgrade level (1-4)
+            const level = Math.min(4, Math.max(1, starling.spriteLevel));
+            return `ASSETS/sprites/RADIANT/starlings/starlingLevel (${level}).png`;
         }
         return null;
     }
@@ -1041,11 +1058,16 @@ export class GameRenderer {
             const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
             const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
             const isAvailable = heroUnitType ? !isHeroAlive && !isHeroProducing : false;
+            const isHighlighted = this.highlightedButtonIndex === i;
 
-            // Draw button background
-            this.ctx.fillStyle = isAvailable ? 'rgba(0, 255, 136, 0.3)' : 'rgba(128, 128, 128, 0.3)';
-            this.ctx.strokeStyle = isAvailable ? '#00FF88' : '#888888';
-            this.ctx.lineWidth = 2;
+            // Draw button background with highlight effect
+            this.ctx.fillStyle = isHighlighted 
+                ? 'rgba(0, 255, 136, 0.7)' 
+                : (isAvailable ? 'rgba(0, 255, 136, 0.3)' : 'rgba(128, 128, 128, 0.3)');
+            this.ctx.strokeStyle = isHighlighted 
+                ? '#00FF88' 
+                : (isAvailable ? '#00FF88' : '#888888');
+            this.ctx.lineWidth = isHighlighted ? 4 : 2;
             this.ctx.beginPath();
             this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
             this.ctx.fill();
@@ -1162,6 +1184,74 @@ export class GameRenderer {
         this.ctx.lineTo(midX, midY);
         this.ctx.lineTo(endX, endY);
         this.ctx.stroke();
+    }
+
+    /**
+     * Draw foundry production buttons around selected foundry
+     */
+    private drawFoundryButtons(foundry: SubsidiaryFactory, screenPos: Vector2D): void {
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
+        
+        // Helper to convert roman numerals (for levels 1-3)
+        const toRoman = (num: number): string => {
+            const romanNumerals = ['', 'I', 'II', 'III'];
+            return romanNumerals[num] || '';
+        };
+
+        // Draw 4 buttons in cardinal directions
+        const buttonConfigs = [
+            { 
+                x: 0, y: -1, // Top - Upgrade foundry
+                label: foundry.canUpgradeFoundry() ? `Foundry ${toRoman(foundry.level + 1)}` : `Foundry ${toRoman(foundry.level)}`,
+                available: foundry.canUpgradeFoundry(),
+                index: 0
+            },
+            { 
+                x: 1, y: 0, // Right - Upgrade starlings
+                label: foundry.canUpgradeStarlings() ? `Starling ${toRoman(foundry.starlingUpgradeTier + 1)}` : `Starling ${toRoman(foundry.starlingUpgradeTier)}`,
+                available: foundry.canUpgradeStarlings(),
+                index: 1
+            },
+            { 
+                x: 0, y: 1, // Bottom - Create solar mirror
+                label: 'Mirror',
+                available: true,
+                index: 2
+            },
+            { 
+                x: -1, y: 0, // Left - Upgrade structures
+                label: foundry.canUpgradeStructures() ? `Structure ${toRoman(foundry.structureUpgradeTier + 1)}` : `Structure ${toRoman(foundry.structureUpgradeTier)}`,
+                available: foundry.canUpgradeStructures(),
+                index: 3
+            }
+        ];
+
+        for (const config of buttonConfigs) {
+            const buttonX = screenPos.x + config.x * buttonDistance;
+            const buttonY = screenPos.y + config.y * buttonDistance;
+            const isHighlighted = this.highlightedButtonIndex === config.index;
+
+            // Draw button background with highlight effect
+            this.ctx.fillStyle = isHighlighted 
+                ? 'rgba(255, 215, 0, 0.7)' 
+                : (config.available ? 'rgba(255, 215, 0, 0.3)' : 'rgba(128, 128, 128, 0.3)');
+            this.ctx.strokeStyle = isHighlighted 
+                ? '#FFD700' 
+                : (config.available ? '#FFD700' : '#888888');
+            this.ctx.lineWidth = isHighlighted ? 4 : 2;
+            this.ctx.beginPath();
+            this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            // Draw button label
+            this.ctx.fillStyle = config.available ? '#FFFFFF' : '#666666';
+            this.ctx.font = `${12 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(config.label, buttonX, buttonY);
+        }
     }
 
     /**
@@ -1409,13 +1499,30 @@ export class GameRenderer {
             const energyRate = linkedStructure instanceof StellarForge && hasLoSToSun && hasLoSToTarget
                 ? mirror.getEnergyRatePerSec()
                 : 0;
+            
+            // Get cached SoL icon
+            const solIcon = this.getSolEnergyIcon();
+            const iconSize = 16 * this.zoom;
             const textY = screenPos.y + size + 16 * this.zoom;
-
-            this.ctx.fillStyle = '#FFFFAA';
+            
+            // Calculate text width to center icon and text together
             this.ctx.font = `${12 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
+            const energyText = `+${energyRate.toFixed(0)}/s`;
+            const textWidth = this.ctx.measureText(energyText).width;
+            const spacing = Constants.SOL_ICON_TEXT_SPACING * this.zoom;
+            const totalWidth = iconSize + spacing + textWidth; // icon + spacing + text
+            const startX = screenPos.x - totalWidth / 2;
+            
+            // Draw icon
+            if (solIcon.complete && solIcon.naturalWidth > 0) {
+                this.ctx.drawImage(solIcon, startX, textY - iconSize / 2, iconSize, iconSize);
+            }
+            
+            // Draw text
+            this.ctx.fillStyle = '#FFFFAA';
+            this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`+${energyRate.toFixed(0)}/s`, screenPos.x, textY);
+            this.ctx.fillText(energyText, startX + iconSize + spacing, textY);
         }
     }
 
@@ -1884,10 +1991,44 @@ export class GameRenderer {
         const firstMirror = Array.from(mirrors)[0];
         const screenPos = this.worldToScreen(firstMirror.position);
         
-        // Button layout: Two buttons above the mirror
+        // Check if all selected mirrors are already targeting the forge
+        const playerForge = firstMirror.owner.stellarForge;
+        const allTargetingForge = playerForge && Array.from(mirrors).every(
+            mirror => mirror.linkedStructure === playerForge
+        );
+        
+        // Button layout: Two buttons above the mirror (or just one if targeting forge)
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
         const buttonSpacing = 30 * this.zoom; // Space between buttons
+        
+        // If all mirrors are targeting forge, only show warp gate button (centered)
+        if (allTargetingForge) {
+            // Single button: "Create Warp Gate" (centered)
+            const warpGateButtonX = screenPos.x;
+            const warpGateButtonY = screenPos.y - buttonOffset;
+            
+            const isWarpGateHighlighted = this.highlightedButtonIndex === 0;
+            this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
+            this.ctx.beginPath();
+            this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${9 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
+            this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
+            
+            // Reset text alignment
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
+            return;
+        }
         
         // Button 1: "Create Warp Gate" (left)
         const warpGateButtonX = screenPos.x - buttonSpacing / 2;
@@ -1898,9 +2039,10 @@ export class GameRenderer {
         const forgeButtonY = screenPos.y - buttonOffset;
         
         // Draw "Warp Gate" button
-        this.ctx.fillStyle = '#444444';
+        const isWarpGateHighlighted = this.highlightedButtonIndex === 0;
+        this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
         this.ctx.strokeStyle = '#00FFFF';
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
         this.ctx.beginPath();
         this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -1914,9 +2056,10 @@ export class GameRenderer {
         this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
         
         // Draw "Forge" button
-        this.ctx.fillStyle = '#444444';
+        const isForgeHighlighted = this.highlightedButtonIndex === 1;
+        this.ctx.fillStyle = isForgeHighlighted ? 'rgba(255, 215, 0, 0.4)' : '#444444';
         this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = isForgeHighlighted ? 4 : 2;
         this.ctx.beginPath();
         this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -3886,12 +4029,33 @@ export class GameRenderer {
             const spriteScale = (radius * 2) / referenceSprite.width;
             const timeSec = game.gameTime;
             const isProducing = Boolean(building.currentProduction);
-            const productionEase = isProducing
-                ? 0.5 - 0.5 * Math.cos(Math.min(1, building.productionProgress) * Math.PI)
-                : 0;
-            const spinSpeedRad = 0.5;
-            const bottomRotationRad = timeSec * spinSpeedRad * productionEase;
-            const topRotationRad = -timeSec * spinSpeedRad * productionEase;
+            
+            // Always spin at base speed, increase 2.5x when producing
+            // Smooth acceleration/deceleration based on production progress
+            const baseSpinSpeedRad = 0.2; // Base slow spin speed
+            const producingMultiplier = 2.5;
+            const ACCELERATION_PHASE_DURATION = 0.2; // Accelerate during first 20% of production
+            
+            // Calculate speed multiplier with smooth acceleration/deceleration
+            // At start of production (progress=0): speed = 1.0
+            // At middle of production (progress=0.5): speed = 2.5
+            // At end of production (progress=1.0): speed = 2.5 (stays fast until production completes)
+            let speedMultiplier = 1.0;
+            if (isProducing) {
+                // Smooth acceleration in first 20% of production
+                if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
+                    const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
+                    const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
+                    speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
+                } else {
+                    // Stay at full speed during most of production
+                    speedMultiplier = producingMultiplier;
+                }
+            }
+            
+            const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
+            const bottomRotationRad = timeSec * spinSpeedRad;
+            const topRotationRad = -timeSec * spinSpeedRad;
 
             const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
                 if (!sprite) {
@@ -3916,6 +4080,8 @@ export class GameRenderer {
 
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
+                // Draw foundry production buttons when selected
+                this.drawFoundryButtons(building, screenPos);
             }
 
             drawLayer(middleSprite, 0);
@@ -4180,6 +4346,56 @@ export class GameRenderer {
     }
 
     /**
+     * Draw ability arrow for building production/abilities
+     */
+    private drawBuildingAbilityArrow(): void {
+        if (!this.buildingAbilityArrowEnd || !this.buildingAbilityArrowStart) return;
+
+        const dx = this.buildingAbilityArrowEnd.x - this.buildingAbilityArrowStart.x;
+        const dy = this.buildingAbilityArrowEnd.y - this.buildingAbilityArrowStart.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+
+        // Don't draw if arrow is too short
+        if (length < Constants.ABILITY_ARROW_MIN_LENGTH) {
+            return;
+        }
+
+        // Draw arrow shaft
+        this.ctx.strokeStyle = 'rgba(0, 255, 136, 0.9)'; // Green color for building abilities
+        this.ctx.lineWidth = 4;
+        this.ctx.setLineDash([]);
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y);
+        this.ctx.lineTo(this.buildingAbilityArrowEnd.x, this.buildingAbilityArrowEnd.y);
+        this.ctx.stroke();
+
+        // Draw arrowhead
+        const angle = Math.atan2(dy, dx);
+        const arrowHeadLength = 20;
+        const arrowHeadAngle = Math.PI / 6; // 30 degrees
+
+        this.ctx.beginPath();
+        this.ctx.moveTo(this.buildingAbilityArrowEnd.x, this.buildingAbilityArrowEnd.y);
+        this.ctx.lineTo(
+            this.buildingAbilityArrowEnd.x - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+            this.buildingAbilityArrowEnd.y - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+        );
+        this.ctx.lineTo(
+            this.buildingAbilityArrowEnd.x - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+            this.buildingAbilityArrowEnd.y - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+        );
+        this.ctx.closePath();
+        this.ctx.fillStyle = 'rgba(0, 255, 136, 0.9)';
+        this.ctx.fill();
+
+        // Draw a circle at the start point
+        this.ctx.beginPath();
+        this.ctx.arc(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y, 8, 0, Math.PI * 2);
+        this.ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
+        this.ctx.fill();
+    }
+
+    /**
      * Draw a path preview for selected units (not from base)
      */
     private drawUnitPathPreview(): void {
@@ -4190,10 +4406,18 @@ export class GameRenderer {
             let avgY = 0;
             let count = 0;
             
-            for (const unit of this.selectedUnits) {
-                avgX += unit.position.x;
-                avgY += unit.position.y;
-                count++;
+            if (this.selectedUnits.size > 0) {
+                for (const unit of this.selectedUnits) {
+                    avgX += unit.position.x;
+                    avgY += unit.position.y;
+                    count++;
+                }
+            } else if (this.selectedMirrors.size > 0) {
+                for (const mirror of this.selectedMirrors) {
+                    avgX += mirror.position.x;
+                    avgY += mirror.position.y;
+                    count++;
+                }
             }
             
             if (count > 0) {
@@ -4992,6 +5216,9 @@ export class GameRenderer {
 
         // Draw ability arrow for hero units
         this.drawAbilityArrow();
+        
+        // Draw building ability arrow
+        this.drawBuildingAbilityArrow();
 
         // Draw unit path preview
         this.drawUnitPathPreview();
@@ -5109,12 +5336,22 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
             
-            // Draw text
+            // Get cached SoL icon
+            const solIcon = this.getSolEnergyIcon();
+            const iconSize = compactBoxHeight - 8; // Slightly smaller than box height
+            const iconX = x + 4;
+            const iconY = y + 4;
+            
+            if (solIcon.complete && solIcon.naturalWidth > 0) {
+                this.ctx.drawImage(solIcon, iconX, iconY, iconSize, iconSize);
+            }
+            
+            // Draw text next to icon
             this.ctx.fillStyle = '#FFFFFF';
             this.ctx.font = 'bold 14px Doto';
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`Energy: ${energyRate.toFixed(1)}/s`, x + 8, y + compactBoxHeight / 2);
+            this.ctx.fillText(`${energyRate.toFixed(1)}/s`, x + 8 + iconSize + 4, y + compactBoxHeight / 2);
             
             y += compactBoxHeight + 5;
         }
@@ -5843,7 +6080,11 @@ export class GameRenderer {
      * Set camera zoom
      */
     setZoom(zoom: number): void {
-        this.zoom = Math.max(0.5, Math.min(2.0, zoom));
+        const minZoom = this.getMinZoomForBounds();
+        this.zoom = Math.max(minZoom, Math.min(2.0, zoom));
+        const clampedPos = this.clampCameraToLevelBounds(this.camera);
+        this.camera = new Vector2D(clampedPos.x, clampedPos.y);
+        this.parallaxCamera = new Vector2D(clampedPos.x, clampedPos.y);
     }
 
     /**
@@ -5886,6 +6127,15 @@ export class GameRenderer {
         const clampedY = Math.max(minY, Math.min(maxY, pos.y));
         
         return new Vector2D(clampedX, clampedY);
+    }
+
+    private getMinZoomForBounds(): number {
+        const dpr = window.devicePixelRatio || 1;
+        const viewWidth = this.canvas.width / dpr;
+        const viewHeight = this.canvas.height / dpr;
+        const minZoomWidth = viewWidth / Constants.MAP_SIZE;
+        const minZoomHeight = viewHeight / Constants.MAP_SIZE;
+        return Math.max(0.5, minZoomWidth, minZoomHeight);
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {

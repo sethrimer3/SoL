@@ -28,6 +28,7 @@ class GameController {
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
+    private isDraggingBuildingArrow: boolean = false; // Flag for building ability arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
     private moveOrderCounter: number = 0; // Counter for move order indicators
@@ -82,6 +83,20 @@ class GameController {
         return false;
     }
 
+    private isDragStartNearSelectedMirrors(worldPos: Vector2D): boolean {
+        if (this.selectedMirrors.size === 0) {
+            return false;
+        }
+
+        for (const mirror of this.selectedMirrors) {
+            if (mirror.containsPoint(worldPos)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
@@ -129,6 +144,107 @@ class GameController {
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
         return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+    }
+
+    private getClosestSelectedMirror(player: Player, worldPos: Vector2D): { mirror: SolarMirror | null; mirrorIndex: number } {
+        let closestMirror: SolarMirror | null = null;
+        let closestMirrorIndex = -1;
+        let closestDistanceSq = Infinity;
+
+        for (let i = 0; i < player.solarMirrors.length; i++) {
+            const mirror = player.solarMirrors[i];
+            if (!mirror.isSelected) continue;
+
+            const dx = mirror.position.x - worldPos.x;
+            const dy = mirror.position.y - worldPos.y;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq < closestDistanceSq) {
+                closestDistanceSq = distanceSq;
+                closestMirror = mirror;
+                closestMirrorIndex = i;
+            }
+        }
+
+        return { mirror: closestMirror, mirrorIndex: closestMirrorIndex };
+    }
+
+    /**
+     * Handle foundry button press
+     */
+    private handleFoundryButtonPress(player: Player, foundry: SubsidiaryFactory, buttonIndex: number): void {
+        if (!this.game) return;
+
+        // Get building index for network sync
+        const buildingId = player.buildings.indexOf(foundry);
+        if (buildingId < 0) {
+            console.error('Foundry not found in player buildings array');
+            return;
+        }
+
+        switch (buttonIndex) {
+            case 0: // Top button - Upgrade foundry
+                if (foundry.canUpgradeFoundry() && player.spendEnergy(Constants.FOUNDRY_UPGRADE_COST)) {
+                    foundry.upgradeFoundry();
+                    console.log(`Upgraded foundry to level ${foundry.level}`);
+                    this.sendNetworkCommand('foundry_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade foundry or not enough energy');
+                }
+                break;
+            case 1: // Right button - Upgrade starlings
+                if (foundry.canUpgradeStarlings() && player.spendEnergy(Constants.STARLING_UPGRADE_COST)) {
+                    foundry.upgradeStarlings();
+                    console.log(`Upgraded starlings to tier ${foundry.starlingUpgradeTier}`);
+                    // Update all existing starlings' sprite levels
+                    const newSpriteLevel = foundry.starlingUpgradeTier + 1; // Tier 0->level 1, tier 1->level 2, etc.
+                    for (const unit of player.units) {
+                        if (unit instanceof Starling) {
+                            unit.spriteLevel = newSpriteLevel;
+                        }
+                    }
+                    this.sendNetworkCommand('starling_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade starlings or not enough energy');
+                }
+                break;
+            case 2: // Bottom button - Create solar mirror
+                if (player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
+                    const newMirror = new SolarMirror(
+                        new Vector2D(foundry.position.x, foundry.position.y),
+                        player
+                    );
+                    player.solarMirrors.push(newMirror);
+                    console.log(`Created solar mirror at foundry (cost: ${Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST})`);
+                    this.sendNetworkCommand('mirror_create_at_foundry', {
+                        positionX: foundry.position.x,
+                        positionY: foundry.position.y
+                    });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Not enough energy to create solar mirror');
+                }
+                break;
+            case 3: // Left button - Upgrade structures
+                if (foundry.canUpgradeStructures() && player.spendEnergy(Constants.STRUCTURE_UPGRADE_COST)) {
+                    foundry.upgradeStructures();
+                    console.log(`Upgraded structures to tier ${foundry.structureUpgradeTier}`);
+                    this.sendNetworkCommand('structure_upgrade', { buildingId });
+                    // Deselect foundry
+                    foundry.isSelected = false;
+                    this.selectedBuildings.clear();
+                } else {
+                    console.log('Cannot upgrade structures or not enough energy');
+                }
+                break;
+        }
     }
 
     /**
@@ -279,6 +395,41 @@ class GameController {
             }
         }
         return null;
+    }
+
+    /**
+     * Get the nearest button index based on drag angle from building position
+     * For stellar forge: 4 buttons in cardinal directions (top=0, right=1, bottom=2, left=3)
+     * For solar mirrors: 2 buttons (left=0, right=1)
+     */
+    private getNearestButtonIndexFromAngle(
+        dragAngleRad: number,
+        numButtons: number
+    ): number {
+        if (numButtons === 4) {
+            // Stellar forge: 4 buttons in cardinal directions
+            // Top = 0 (-90°), Right = 1 (0°), Bottom = 2 (90°), Left = 3 (180°)
+            // Normalize angle to [0, 2π] using modulo for efficiency
+            let normalizedAngle = ((dragAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+            
+            // Adjust so that -90° (upward) is 0°
+            normalizedAngle += Math.PI / 2;
+            if (normalizedAngle >= Math.PI * 2) normalizedAngle -= Math.PI * 2;
+            
+            // Divide into 4 quadrants
+            const buttonIndex = Math.floor((normalizedAngle + Math.PI / 4) / (Math.PI / 2)) % 4;
+            return buttonIndex;
+        } else if (numButtons === 2) {
+            // Solar mirrors: 2 buttons (left and right)
+            // Left = 0 (pointing left), Right = 1 (pointing right)
+            // Normalize angle to [-π, π] using atan2 for efficiency
+            const normalizedAngle = Math.atan2(Math.sin(dragAngleRad), Math.cos(dragAngleRad));
+            
+            // Left hemisphere: [-π, -π/2) ∪ (π/2, π] → button 0
+            // Right hemisphere: [-π/2, π/2] → button 1
+            return normalizedAngle < -Math.PI / 2 || normalizedAngle > Math.PI / 2 ? 0 : 1;
+        }
+        return -1;
     }
 
     private clearPathPreview(): void {
@@ -650,19 +801,46 @@ class GameController {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
                 const hasHeroUnits = this.hasHeroUnitsSelected();
+                const dragStartWorld = this.selectionStartScreen
+                    ? this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y)
+                    : null;
                 
-                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDrawingPath) {
-                    if (this.selectedBase && this.selectedBase.isSelected) {
+                if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDraggingBuildingArrow && !this.isDrawingPath) {
+                    const isDragStartOnSelectedBase = Boolean(
+                        this.selectedBase &&
+                        this.selectedBase.isSelected &&
+                        dragStartWorld &&
+                        this.selectedBase.containsPoint(dragStartWorld)
+                    );
+                    const isDragStartOnSelectedMirror = Boolean(
+                        dragStartWorld && this.isDragStartNearSelectedMirrors(dragStartWorld)
+                    );
+
+                    if (isDragStartOnSelectedBase) {
                         // Drawing a path from the selected base
                         this.isDrawingPath = true;
                         this.pathPoints = [];
                         this.renderer.pathPreviewForge = this.selectedBase;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
+                    } else if (isDragStartOnSelectedMirror) {
+                        // Drawing a path from selected solar mirrors
+                        this.isDrawingPath = true;
+                        this.pathPoints = [];
+                        this.renderer.pathPreviewForge = null;
+                        this.renderer.pathPreviewPoints = this.pathPoints;
+                        this.cancelHold();
+                    } else if (this.selectedBuildings.size === 1) {
+                        // Check if a foundry is selected
+                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                            // Foundry is selected - use building arrow mode
+                            this.isDraggingBuildingArrow = true;
+                            this.cancelHold();
+                        }
                     } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
                         // Check if drag started near selected units - if so, draw movement path
-                        const dragStartWorld = this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y);
-                        if (this.isDragStartNearSelectedUnits(dragStartWorld)) {
+                        if (dragStartWorld && this.isDragStartNearSelectedUnits(dragStartWorld)) {
                             // Drawing a movement path for selected units
                             this.isDrawingPath = true;
                             this.pathPoints = [];
@@ -700,6 +878,33 @@ class GameController {
                 // Update arrow direction (for hero ability casting)
                 this.updateAbilityArrowStarts();
                 this.renderer.abilityArrowEnd = new Vector2D(x, y);
+            } else if (this.isDraggingBuildingArrow) {
+                // Update arrow direction for building abilities
+                const player = this.getLocalPlayer();
+                if (this.selectionStartScreen) {
+                    this.renderer.buildingAbilityArrowStart = this.selectionStartScreen;
+                    this.renderer.buildingAbilityArrowEnd = new Vector2D(x, y);
+                    
+                    // Calculate angle and determine which button is highlighted
+                    const dx = x - this.selectionStartScreen.x;
+                    const dy = y - this.selectionStartScreen.y;
+                    const angle = Math.atan2(dy, dx);
+                    
+                    // Determine number of buttons based on what's selected
+                    if (player && player.stellarForge && player.stellarForge.isSelected) {
+                        // Stellar forge has 4 buttons
+                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                    } else if (this.selectedMirrors.size > 0) {
+                        // Solar mirrors have 2 buttons
+                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 2);
+                    } else if (this.selectedBuildings.size === 1) {
+                        // Foundry building has 4 buttons
+                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        if (selectedBuilding instanceof SubsidiaryFactory) {
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                        }
+                    }
+                }
             } else if (this.isDrawingPath) {
                 // Collect path waypoints as we drag
                 const worldPos = this.renderer.screenToWorld(x, y);
@@ -1336,12 +1541,11 @@ class GameController {
                 }
                 
                 // If a mirror is selected and clicked elsewhere, move it
-                const selectedMirror = player.solarMirrors.find(m => m.isSelected);
+                const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
                 if (selectedMirror) {
                     selectedMirror.setTarget(worldPos);
                     this.moveOrderCounter++;
                     selectedMirror.moveOrder = this.moveOrderCounter;
-                    const mirrorIndex = player.solarMirrors.indexOf(selectedMirror);
                     this.sendNetworkCommand('mirror_move', {
                         mirrorIndices: mirrorIndex >= 0 ? [mirrorIndex] : [],
                         targetX: worldPos.x,
@@ -1351,6 +1555,9 @@ class GameController {
                     selectedMirror.isSelected = false; // Auto-deselect after setting target
                     this.selectedBase = null;
                     this.selectedUnits.clear();
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.isSelected = false;
+                    }
                     this.selectedMirrors.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
                     // Deselect all buildings
@@ -1384,6 +1591,41 @@ class GameController {
                     this.sendNetworkCommand('set_rally_path', {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
                     });
+                } else if (this.selectedMirrors.size > 0) {
+                    const player = this.getLocalPlayer();
+                    const lastWaypoint = this.pathPoints[this.pathPoints.length - 1];
+
+                    if (player) {
+                        console.log(`Solar mirror movement path set to (${lastWaypoint.x.toFixed(0)}, ${lastWaypoint.y.toFixed(0)})`);
+                        this.moveOrderCounter++;
+                        const mirrorIndices: number[] = [];
+
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.setTarget(lastWaypoint);
+                            mirror.moveOrder = this.moveOrderCounter;
+                            mirror.isSelected = false;
+                            const mirrorIndex = player.solarMirrors.indexOf(mirror);
+                            if (mirrorIndex >= 0) {
+                                mirrorIndices.push(mirrorIndex);
+                            }
+                        }
+
+                        this.sendNetworkCommand('mirror_move', {
+                            mirrorIndices,
+                            targetX: lastWaypoint.x,
+                            targetY: lastWaypoint.y,
+                            moveOrder: this.moveOrderCounter
+                        });
+                    }
+
+                    this.selectedMirrors.clear();
+                    const localPlayer = this.getLocalPlayer();
+                    if (localPlayer) {
+                        for (const building of localPlayer.buildings) {
+                            building.isSelected = false;
+                        }
+                        this.selectedBuildings.clear();
+                    }
                 } else if (this.selectedUnits.size > 0) {
                     // Path for selected units
                     console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
@@ -1471,6 +1713,54 @@ class GameController {
                     // Deselect all units after using ability
                     this.selectedUnits.clear();
                     this.renderer.selectedUnits = this.selectedUnits;
+                } else if (this.isDraggingBuildingArrow && totalMovement >= abilityDragThreshold) {
+                    // Building ability arrow was dragged - activate the highlighted button
+                    const player = this.getLocalPlayer();
+                    if (player && this.renderer.highlightedButtonIndex >= 0) {
+                        if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
+                            // Stellar forge button selected
+                            const heroNames = this.renderer.selectedHeroNames;
+                            if (this.renderer.highlightedButtonIndex < heroNames.length) {
+                                const selectedHeroName = heroNames[this.renderer.highlightedButtonIndex];
+                                const heroUnitType = this.getHeroUnitType(selectedHeroName);
+                                
+                                if (heroUnitType) {
+                                    const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
+                                    const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                                    
+                                    if (!isHeroAlive && !isHeroProducing && player.spendEnergy(Constants.HERO_UNIT_COST)) {
+                                        player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                        player.stellarForge.startHeroProductionIfIdle();
+                                        console.log(`Radial selection: Queued hero ${selectedHeroName} for forging`);
+                                        this.sendNetworkCommand('hero_purchase', {
+                                            heroType: heroUnitType
+                                        });
+                                        
+                                        // Deselect forge
+                                        player.stellarForge.isSelected = false;
+                                        this.selectedBase = null;
+                                    }
+                                }
+                            }
+                        } else if (this.selectedMirrors.size > 0) {
+                            // Solar mirror button selected
+                            if (this.renderer.highlightedButtonIndex === 0) {
+                                // Warp gate button
+                                this.mirrorCommandMode = 'warpgate';
+                                console.log('Radial selection: Mirror command mode set to warpgate');
+                            } else if (this.renderer.highlightedButtonIndex === 1) {
+                                // Forge button
+                                this.mirrorCommandMode = 'forge';
+                                console.log('Radial selection: Mirror command mode set to forge');
+                            }
+                        } else if (this.selectedBuildings.size === 1) {
+                            // Foundry building button selected
+                            const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                            if (selectedBuilding instanceof SubsidiaryFactory) {
+                                this.handleFoundryButtonPress(player, selectedBuilding, this.renderer.highlightedButtonIndex);
+                            }
+                        }
+                    }
                 } else if (this.isDraggingHeroArrow && hasHeroUnits) {
                     // Cancel ability casting if arrow was dragged back to nothing
                 } else {
@@ -1500,20 +1790,16 @@ class GameController {
                         moveOrder: this.moveOrderCounter
                     });
                     
-                    // Set target for all selected mirrors
-                    for (const mirror of this.selectedMirrors) {
-                        mirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                        mirror.moveOrder = this.moveOrderCounter;
-                        mirror.isSelected = false;
-                    }
+                    // Set target for the closest selected mirror
                     const player = this.getLocalPlayer();
                     if (player) {
-                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
-                            player.solarMirrors.indexOf(mirror)
-                        ).filter((index) => index >= 0);
-                        if (mirrorIndices.length > 0) {
+                        const { mirror: closestMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
+                        if (closestMirror && mirrorIndex >= 0) {
+                            closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                            closestMirror.moveOrder = this.moveOrderCounter;
+                            closestMirror.isSelected = false;
                             this.sendNetworkCommand('mirror_move', {
-                                mirrorIndices,
+                                mirrorIndices: [mirrorIndex],
                                 targetX: worldPos.x,
                                 targetY: worldPos.y,
                                 moveOrder: this.moveOrderCounter
@@ -1535,6 +1821,9 @@ class GameController {
                     
                     // Deselect all units immediately
                     this.selectedUnits.clear();
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.isSelected = false;
+                    }
                     this.selectedMirrors.clear();
                     this.selectedBase = null;
                     this.renderer.selectedUnits = this.selectedUnits;
@@ -1547,6 +1836,7 @@ class GameController {
             isMouseDown = false;
             this.isSelecting = false;
             this.isDraggingHeroArrow = false;
+            this.isDraggingBuildingArrow = false;
             this.isDrawingPath = false;
             this.pathPoints = [];
             this.selectionStartScreen = null;
@@ -1555,6 +1845,9 @@ class GameController {
             this.abilityArrowStarts.length = 0;
             this.renderer.abilityArrowStarts = this.abilityArrowStarts;
             this.renderer.abilityArrowEnd = null;
+            this.renderer.buildingAbilityArrowStart = null;
+            this.renderer.buildingAbilityArrowEnd = null;
+            this.renderer.highlightedButtonIndex = -1;
             this.endHold();
         };
 

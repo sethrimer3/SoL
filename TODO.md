@@ -54,13 +54,18 @@
 - [x] Integrate network manager with game core
 - [x] Add command queue and processing
 - [x] Implement command execution for player actions
+- [x] Add online play framework with Supabase
+- [x] Implement Supabase Realtime integration
+- [x] Create room-based matchmaking system
+- [x] Add bandwidth-optimized command encoding
+- [x] Implement host/client architecture for online
 - [ ] Capture and send local player commands from input handlers
 - [ ] Add real-time game state validation
 - [ ] Handle latency and prediction
 - [ ] Implement reconnection handling
 - [ ] Add state hash synchronization for desync detection
-- [ ] Add server-client architecture for online play
-- [ ] Implement matchmaking system
+- [ ] Implement advanced matchmaking system
+- [ ] Add player rankings and leaderboards
 
 ### Cross-Platform Support
 - [ ] Create desktop client (Windows, macOS, Linux)
