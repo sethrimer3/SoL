@@ -1191,9 +1191,9 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
         
-        // Helper to convert roman numerals
+        // Helper to convert roman numerals (for levels 1-3)
         const toRoman = (num: number): string => {
-            const romanNumerals = ['', 'I', 'II', 'III', 'IV', 'V'];
+            const romanNumerals = ['', 'I', 'II', 'III'];
             return romanNumerals[num] || '';
         };
 

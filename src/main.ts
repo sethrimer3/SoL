@@ -138,14 +138,19 @@ class GameController {
     private handleFoundryButtonPress(player: Player, foundry: SubsidiaryFactory, buttonIndex: number): void {
         if (!this.game) return;
 
+        // Get building index for network sync
+        const buildingId = player.buildings.indexOf(foundry);
+        if (buildingId < 0) {
+            console.error('Foundry not found in player buildings array');
+            return;
+        }
+
         switch (buttonIndex) {
             case 0: // Top button - Upgrade foundry
                 if (foundry.canUpgradeFoundry() && player.spendEnergy(Constants.FOUNDRY_UPGRADE_COST)) {
                     foundry.upgradeFoundry();
                     console.log(`Upgraded foundry to level ${foundry.level}`);
-                    this.sendNetworkCommand('foundry_upgrade', {
-                        buildingId: player.buildings.indexOf(foundry)
-                    });
+                    this.sendNetworkCommand('foundry_upgrade', { buildingId });
                     // Deselect foundry
                     foundry.isSelected = false;
                     this.selectedBuildings.clear();
@@ -164,9 +169,7 @@ class GameController {
                             unit.spriteLevel = newSpriteLevel;
                         }
                     }
-                    this.sendNetworkCommand('starling_upgrade', {
-                        buildingId: player.buildings.indexOf(foundry)
-                    });
+                    this.sendNetworkCommand('starling_upgrade', { buildingId });
                     // Deselect foundry
                     foundry.isSelected = false;
                     this.selectedBuildings.clear();
@@ -197,9 +200,7 @@ class GameController {
                 if (foundry.canUpgradeStructures() && player.spendEnergy(Constants.STRUCTURE_UPGRADE_COST)) {
                     foundry.upgradeStructures();
                     console.log(`Upgraded structures to tier ${foundry.structureUpgradeTier}`);
-                    this.sendNetworkCommand('structure_upgrade', {
-                        buildingId: player.buildings.indexOf(foundry)
-                    });
+                    this.sendNetworkCommand('structure_upgrade', { buildingId });
                     // Deselect foundry
                     foundry.isSelected = false;
                     this.selectedBuildings.clear();
