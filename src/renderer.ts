@@ -4406,10 +4406,18 @@ export class GameRenderer {
             let avgY = 0;
             let count = 0;
             
-            for (const unit of this.selectedUnits) {
-                avgX += unit.position.x;
-                avgY += unit.position.y;
-                count++;
+            if (this.selectedUnits.size > 0) {
+                for (const unit of this.selectedUnits) {
+                    avgX += unit.position.x;
+                    avgY += unit.position.y;
+                    count++;
+                }
+            } else if (this.selectedMirrors.size > 0) {
+                for (const mirror of this.selectedMirrors) {
+                    avgX += mirror.position.x;
+                    avgY += mirror.position.y;
+                    count++;
+                }
             }
             
             if (count > 0) {
