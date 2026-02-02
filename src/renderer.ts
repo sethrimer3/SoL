@@ -2273,12 +2273,6 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
-        // Draw order number
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 12px Doto';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(order.toString(), targetScreenPos.x, targetScreenPos.y);
     }
 
     private getMoveOrderFrameIndex(): number {
