@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit collision radii, unit move orders, minion path progress, AI command timers, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit collision radii, unit move orders, minion path progress, foundry production queues/progress, AI command timers, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -86,13 +86,14 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 5, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
   { "tick": 7, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
   { "tick": 8, "command": "linkMirrorToStructure", "playerIndex": 0, "mirrorIndex": 1, "structureType": "Foundry" },
+  { "tick": 9, "command": "queueFoundryProduction", "playerIndex": 0, "itemType": "solar-mirror" },
   { "tick": 10, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
   { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
   { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "GatlingTower", "targetWorld": { "x": 420, "y": 420 } }
 ]
 ```
 
-The command list above was revalidated after hashing cannon firing effects (muzzle flashes, bullet casings, bouncing bullets) and adding LAN command mirroring for mirror links, unit paths, and move-order synchronization to ensure `stateHash` stability.
+The command list above was revalidated after hashing foundry production queues/progress, cannon firing effects (muzzle flashes, bullet casings, bouncing bullets), and adding LAN command mirroring for mirror links, unit paths, and move-order synchronization to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

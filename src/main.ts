@@ -214,16 +214,16 @@ class GameController {
                 }
                 break;
             case 2: // Bottom button - Create solar mirror
+                if (!foundry.isComplete) {
+                    console.log('Foundry must be complete to produce solar mirrors');
+                    break;
+                }
                 if (player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
-                    const newMirror = new SolarMirror(
-                        new Vector2D(foundry.position.x, foundry.position.y),
-                        player
-                    );
-                    player.solarMirrors.push(newMirror);
-                    console.log(`Created solar mirror at foundry (cost: ${Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST})`);
-                    this.sendNetworkCommand('mirror_create_at_foundry', {
-                        positionX: foundry.position.x,
-                        positionY: foundry.position.y
+                    foundry.enqueueProduction('solar-mirror');
+                    console.log(`Queued solar mirror at foundry (cost: ${Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST})`);
+                    this.sendNetworkCommand('foundry_production', {
+                        buildingId,
+                        itemType: 'solar-mirror'
                     });
                     // Deselect foundry
                     foundry.isSelected = false;
