@@ -5427,7 +5427,6 @@ export class GameRenderer {
         // Draw the +X indicator in green to the right of the count
         if (nextCrunchStarlings > 0) {
             this.ctx.fillStyle = '#00FF00';
-            this.ctx.font = 'bold 14px Doto';
             const starlingTextWidth = this.ctx.measureText(starlingText).width;
             this.ctx.fillText(` +${nextCrunchStarlings}`, x + 8 + starlingTextWidth, y + compactBoxHeight / 2);
         }
