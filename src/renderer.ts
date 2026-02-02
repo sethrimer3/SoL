@@ -82,6 +82,8 @@ export class GameRenderer {
     
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 12;
+    private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
+    private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
     private readonly FORGE_MAX_HEALTH = 1000;
     private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
@@ -90,6 +92,7 @@ export class GameRenderer {
         stars: Array<{x: number, y: number, size: number, brightness: number}>,
         parallaxFactor: number
     }> = [];
+    private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -110,6 +113,12 @@ export class GameRenderer {
             const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
             const shouldPreferPng = defaultPngKeys.includes(option.key) && option.pngPath;
             this.graphicsVariantByKey.set(option.key, shouldPreferPng ? 'png' : defaultVariant);
+        }
+
+        for (let frameIndex = 1; frameIndex <= Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT; frameIndex++) {
+            this.movementPointFramePaths.push(
+                `ASSETS/sprites/interface/movementPointAnimation/movementPoint_frame${frameIndex}.png`
+            );
         }
     }
 
@@ -2251,15 +2260,18 @@ export class GameRenderer {
         this.ctx.setLineDash([]);
         this.ctx.globalAlpha = 1.0;
         
-        // Draw dot with order number at target
+        // Draw animated movement point marker at target
         const dotRadius = this.MOVE_ORDER_DOT_RADIUS;
-        this.ctx.fillStyle = color;
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(targetScreenPos.x, targetScreenPos.y, dotRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
+        const hasSprite = this.drawMovementPointMarker(targetScreenPos, dotRadius, color);
+        if (!hasSprite) {
+            this.ctx.fillStyle = color;
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(targetScreenPos.x, targetScreenPos.y, dotRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+        }
         
         // Draw order number
         this.ctx.fillStyle = '#FFFFFF';
@@ -2267,6 +2279,43 @@ export class GameRenderer {
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(order.toString(), targetScreenPos.x, targetScreenPos.y);
+    }
+
+    private getMoveOrderFrameIndex(): number {
+        const animationFrame = Math.floor(performance.now() / this.MOVE_ORDER_FRAME_DURATION_MS);
+        return animationFrame % Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT;
+    }
+
+    private drawMovementPointMarker(targetScreenPos: Vector2D, dotRadius: number, color: string): boolean {
+        const frameIndex = this.getMoveOrderFrameIndex();
+        const framePath = this.movementPointFramePaths[frameIndex];
+        const tintedFrameSprite = this.getTintedSprite(framePath, color);
+        if (tintedFrameSprite) {
+            this.drawMovementPointSprite(tintedFrameSprite, targetScreenPos, dotRadius);
+            return true;
+        }
+
+        const fallbackSprite = this.getTintedSprite(this.MOVE_ORDER_FALLBACK_SPRITE_PATH, color);
+        if (fallbackSprite) {
+            this.drawMovementPointSprite(fallbackSprite, targetScreenPos, dotRadius);
+            return true;
+        }
+
+        return false;
+    }
+
+    private drawMovementPointSprite(sprite: HTMLCanvasElement, targetScreenPos: Vector2D, dotRadius: number): void {
+        const maxSize = dotRadius * 2;
+        const scale = maxSize / Math.max(sprite.width, sprite.height);
+        const drawWidth = sprite.width * scale;
+        const drawHeight = sprite.height * scale;
+        this.ctx.drawImage(
+            sprite,
+            targetScreenPos.x - drawWidth / 2,
+            targetScreenPos.y - drawHeight / 2,
+            drawWidth,
+            drawHeight
+        );
     }
 
     /**
