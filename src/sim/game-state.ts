@@ -270,8 +270,13 @@ export class GameState {
                     } else if (linkedStructure instanceof WarpGate &&
                                mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
                         // Provide energy to warp gate
+                        const wasIncomplete = !linkedStructure.isComplete;
                         if (linkedStructure.isCharging && !linkedStructure.isComplete) {
                             linkedStructure.addEnergy(energyGenerated);
+                        }
+                        // If warp gate just completed, redirect mirror to main base
+                        if (wasIncomplete && linkedStructure.isComplete && player.stellarForge) {
+                            mirror.setLinkedStructure(player.stellarForge);
                         }
                     }
                 }

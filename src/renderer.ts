@@ -236,13 +236,15 @@ export class GameRenderer {
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
-        const factionColor = this.getFactionColor(player.faction);
-        if (!ladSun || !player.stellarForge) {
-            return factionColor;
+        // In LaD mode, use light/dark colors
+        if (ladSun && player.stellarForge) {
+            const ownerSide = game.getLadSide(player.stellarForge.position, ladSun);
+            return ownerSide === 'light' ? '#FFFFFF' : '#000000';
         }
-
-        const ownerSide = game.getLadSide(player.stellarForge.position, ladSun);
-        return ownerSide === 'light' ? '#FFFFFF' : '#000000';
+        
+        // In normal mode, use player/enemy colors based on viewing player
+        const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+        return isEnemy ? this.enemyColor : this.playerColor;
     }
 
     private getSpriteImage(path: string): HTMLImageElement {
@@ -1989,10 +1991,44 @@ export class GameRenderer {
         const firstMirror = Array.from(mirrors)[0];
         const screenPos = this.worldToScreen(firstMirror.position);
         
-        // Button layout: Two buttons above the mirror
+        // Check if all selected mirrors are already targeting the forge
+        const playerForge = firstMirror.owner.stellarForge;
+        const allTargetingForge = playerForge && Array.from(mirrors).every(
+            mirror => mirror.linkedStructure === playerForge
+        );
+        
+        // Button layout: Two buttons above the mirror (or just one if targeting forge)
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
         const buttonSpacing = 30 * this.zoom; // Space between buttons
+        
+        // If all mirrors are targeting forge, only show warp gate button (centered)
+        if (allTargetingForge) {
+            // Single button: "Create Warp Gate" (centered)
+            const warpGateButtonX = screenPos.x;
+            const warpGateButtonY = screenPos.y - buttonOffset;
+            
+            const isWarpGateHighlighted = this.highlightedButtonIndex === 0;
+            this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
+            this.ctx.strokeStyle = '#00FFFF';
+            this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
+            this.ctx.beginPath();
+            this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${9 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
+            this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
+            
+            // Reset text alignment
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'alphabetic';
+            return;
+        }
         
         // Button 1: "Create Warp Gate" (left)
         const warpGateButtonX = screenPos.x - buttonSpacing / 2;
@@ -3993,12 +4029,32 @@ export class GameRenderer {
             const spriteScale = (radius * 2) / referenceSprite.width;
             const timeSec = game.gameTime;
             const isProducing = Boolean(building.currentProduction);
-            const productionEase = isProducing
-                ? 0.5 - 0.5 * Math.cos(Math.min(1, building.productionProgress) * Math.PI)
-                : 0;
-            const spinSpeedRad = 0.5;
-            const bottomRotationRad = timeSec * spinSpeedRad * productionEase;
-            const topRotationRad = -timeSec * spinSpeedRad * productionEase;
+            
+            // Always spin at base speed, increase 2.5x when producing
+            // Smooth acceleration/deceleration based on production progress
+            const baseSpinSpeedRad = 0.2; // Base slow spin speed
+            const producingMultiplier = 2.5;
+            
+            // Calculate speed multiplier with smooth acceleration/deceleration
+            // At start of production (progress=0): speed = 1.0
+            // At middle of production (progress=0.5): speed = 2.5
+            // At end of production (progress=1.0): speed = 2.5 (stays fast until production completes)
+            let speedMultiplier = 1.0;
+            if (isProducing) {
+                // Smooth acceleration in first 20% of production
+                if (building.productionProgress < 0.2) {
+                    const accelProgress = building.productionProgress / 0.2;
+                    const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
+                    speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
+                } else {
+                    // Stay at full speed during most of production
+                    speedMultiplier = producingMultiplier;
+                }
+            }
+            
+            const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
+            const bottomRotationRad = timeSec * spinSpeedRad;
+            const topRotationRad = -timeSec * spinSpeedRad;
 
             const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
                 if (!sprite) {
