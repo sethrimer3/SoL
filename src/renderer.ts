@@ -6072,7 +6072,11 @@ export class GameRenderer {
      * Set camera zoom
      */
     setZoom(zoom: number): void {
-        this.zoom = Math.max(0.5, Math.min(2.0, zoom));
+        const minZoom = this.getMinZoomForBounds();
+        this.zoom = Math.max(minZoom, Math.min(2.0, zoom));
+        const clampedPos = this.clampCameraToLevelBounds(this.camera);
+        this.camera = new Vector2D(clampedPos.x, clampedPos.y);
+        this.parallaxCamera = new Vector2D(clampedPos.x, clampedPos.y);
     }
 
     /**
@@ -6115,6 +6119,15 @@ export class GameRenderer {
         const clampedY = Math.max(minY, Math.min(maxY, pos.y));
         
         return new Vector2D(clampedX, clampedY);
+    }
+
+    private getMinZoomForBounds(): number {
+        const dpr = window.devicePixelRatio || 1;
+        const viewWidth = this.canvas.width / dpr;
+        const viewHeight = this.canvas.height / dpr;
+        const minZoomWidth = viewWidth / Constants.MAP_SIZE;
+        const minZoomHeight = viewHeight / Constants.MAP_SIZE;
+        return Math.max(0.5, minZoomWidth, minZoomHeight);
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
