@@ -60,6 +60,17 @@ export class Starling extends Unit {
         this.hasReachedFinalWaypoint = false;
     }
 
+    setManualTarget(target: CombatTarget, rallyPoint: Vector2D | null): void {
+        this.manualTarget = target;
+        this.target = target;
+        this.clearMovementOrders();
+        this.hasManualOrder = true;
+        this.hasReachedFinalWaypoint = false;
+        if (rallyPoint) {
+            this.setManualRallyPoint(rallyPoint);
+        }
+    }
+
     setPath(path: Vector2D[]): void {
         this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
@@ -212,23 +223,6 @@ export class Starling extends Unit {
         }
 
         return null;
-    }
-
-    private getStructureStandoffPoint(targetPosition: Vector2D, targetRadiusPx: number): Vector2D {
-        const offsetX = this.position.x - targetPosition.x;
-        const offsetY = this.position.y - targetPosition.y;
-        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
-        const minDistance = targetRadiusPx + this.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
-
-        if (distance <= 0) {
-            return new Vector2D(targetPosition.x + minDistance, targetPosition.y);
-        }
-
-        const scale = minDistance / distance;
-        return new Vector2D(
-            targetPosition.x + offsetX * scale,
-            targetPosition.y + offsetY * scale
-        );
     }
 
     /**

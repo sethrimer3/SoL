@@ -19,6 +19,7 @@ export class Unit {
     attackCooldown: number = 0;
     abilityCooldown: number = 0; // Cooldown for special ability
     target: CombatTarget | null = null;
+    protected manualTarget: CombatTarget | null = null;
     rallyPoint: Vector2D | null = null;
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
@@ -43,6 +44,32 @@ export class Unit {
         this.health = maxHealth;
         this.maxHealth = maxHealth;
         this.collisionRadiusPx = collisionRadiusPx;
+    }
+
+    setManualTarget(target: CombatTarget, rallyPoint: Vector2D | null): void {
+        this.manualTarget = target;
+        this.target = target;
+        this.clearMovementOrders();
+        if (rallyPoint) {
+            this.rallyPoint = new Vector2D(rallyPoint.x, rallyPoint.y);
+        }
+    }
+
+    clearManualTarget(): void {
+        this.manualTarget = null;
+        this.target = null;
+    }
+
+    getManualTarget(): CombatTarget | null {
+        return this.manualTarget;
+    }
+
+    clearMovementOrders(): void {
+        this.rallyPoint = null;
+        this.waypoints = [];
+        this.currentWaypointIndex = 0;
+        this.velocity.x = 0;
+        this.velocity.y = 0;
     }
 
     /**
@@ -73,9 +100,19 @@ export class Unit {
 
         this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
 
+        if (this.manualTarget && this.isTargetDead(this.manualTarget)) {
+            this.manualTarget = null;
+            this.target = null;
+            this.clearMovementOrders();
+        }
+
         // Find target if don't have one or current target is dead
         if (!this.target || this.isTargetDead(this.target)) {
-            this.target = this.findNearestEnemy(enemies);
+            if (this.manualTarget) {
+                this.target = this.manualTarget;
+            } else {
+                this.target = this.findNearestEnemy(enemies);
+            }
         }
 
         // Attack if target in range and cooldown ready
@@ -118,6 +155,23 @@ export class Unit {
         if (this.waypoints.length > 0) {
             this.rallyPoint = this.waypoints[0];
         }
+    }
+
+    getStructureStandoffPoint(targetPosition: Vector2D, targetRadiusPx: number): Vector2D {
+        const offsetX = this.position.x - targetPosition.x;
+        const offsetY = this.position.y - targetPosition.y;
+        const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+        const minDistance = targetRadiusPx + this.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
+
+        if (distance <= 0) {
+            return new Vector2D(targetPosition.x + minDistance, targetPosition.y);
+        }
+
+        const scale = minDistance / distance;
+        return new Vector2D(
+            targetPosition.x + offsetX * scale,
+            targetPosition.y + offsetY * scale
+        );
     }
 
     protected moveTowardRallyPoint(

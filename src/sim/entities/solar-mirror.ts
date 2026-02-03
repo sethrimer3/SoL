@@ -445,6 +445,6 @@ export class SolarMirror {
      */
     containsPoint(point: Vector2D): boolean {
         const distance = this.position.distanceTo(point);
-        return distance < 20; // Match the rendering size
+        return distance < Constants.MIRROR_CLICK_RADIUS_PX; // Match the rendering size
     }
 }

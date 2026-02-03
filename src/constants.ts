@@ -285,6 +285,7 @@ export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
 
 // Solar mirror visual constants
 export const MIRROR_ACTIVE_GLOW_RADIUS = 15; // Radius of yellow glow when mirror is active
+export const MIRROR_CLICK_RADIUS_PX = 20; // Radius for mirror selection/targeting
 export const MIRROR_MAX_GLOW_DISTANCE = 1000; // Maximum distance for glow and efficiency calculations
 export const MIRROR_PROXIMITY_MULTIPLIER = 2.0; // Maximum energy generation multiplier at close range
 
