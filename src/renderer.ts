@@ -1203,32 +1203,14 @@ export class GameRenderer {
     private drawFoundryButtons(foundry: SubsidiaryFactory, screenPos: Vector2D): void {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
-        
-        // Helper to convert roman numerals (for levels 1-3)
-        const toRoman = (num: number): string => {
-            const romanNumerals = ['', 'I', 'II', 'III'];
-            return romanNumerals[num] || '';
-        };
 
-        // Draw 3 buttons in cardinal directions
+        // Draw 1 button for Strafe upgrade
         const buttonConfigs = [
             { 
-                x: 0, y: -1, // Top - Upgrade foundry
-                label: foundry.canUpgradeFoundry() ? `Foundry ${toRoman(foundry.level + 1)}` : `Foundry ${toRoman(foundry.level)}`,
-                available: foundry.canUpgradeFoundry(),
+                x: 0, y: -1, // Top - Strafe upgrade
+                label: 'Strafe',
+                available: foundry.canUpgradeStrafe(),
                 index: 0
-            },
-            { 
-                x: 1, y: 0, // Right - Upgrade starlings
-                label: foundry.canUpgradeStarlings() ? `Starling ${toRoman(foundry.starlingUpgradeTier + 1)}` : `Starling ${toRoman(foundry.starlingUpgradeTier)}`,
-                available: foundry.canUpgradeStarlings(),
-                index: 1
-            },
-            { 
-                x: -1, y: 0, // Left - Upgrade structures
-                label: foundry.canUpgradeStructures() ? `Structure ${toRoman(foundry.structureUpgradeTier + 1)}` : `Structure ${toRoman(foundry.structureUpgradeTier)}`,
-                available: foundry.canUpgradeStructures(),
-                index: 2
             }
         ];
 

@@ -152,6 +152,7 @@ export const STARLING_ATTACK_RANGE = 120;
 export const STARLING_ATTACK_DAMAGE = 5;
 export const STARLING_ATTACK_SPEED = 2; // Attacks per second
 export const STARLING_MOVE_SPEED = 50; // Pixels per second (slower than regular units)
+export const STARLING_MOVE_ACCELERATION_PX_PER_SEC = 120; // Pixels per second squared
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
 export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
@@ -228,9 +229,7 @@ export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
 // Foundry upgrade costs
-export const FOUNDRY_UPGRADE_COST = 500; // Cost to upgrade foundry from level 1->2 or 2->3
-export const STRUCTURE_UPGRADE_COST = 400; // Cost to upgrade structures
-export const STARLING_UPGRADE_COST = 350; // Cost to upgrade starlings
+export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror

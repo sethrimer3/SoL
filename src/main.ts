@@ -304,50 +304,17 @@ class GameController {
             return;
         }
 
-        switch (buttonIndex) {
-            case 0: // Top button - Upgrade foundry
-                if (foundry.canUpgradeFoundry() && player.spendEnergy(Constants.FOUNDRY_UPGRADE_COST)) {
-                    foundry.upgradeFoundry();
-                    console.log(`Upgraded foundry to level ${foundry.level}`);
-                    this.sendNetworkCommand('foundry_upgrade', { buildingId });
-                    // Deselect foundry
-                    foundry.isSelected = false;
-                    this.selectedBuildings.clear();
-                } else {
-                    console.log('Cannot upgrade foundry or not enough energy');
-                }
-                break;
-            case 1: // Right button - Upgrade starlings
-                if (foundry.canUpgradeStarlings() && player.spendEnergy(Constants.STARLING_UPGRADE_COST)) {
-                    foundry.upgradeStarlings();
-                    console.log(`Upgraded starlings to tier ${foundry.starlingUpgradeTier}`);
-                    // Update all existing starlings' sprite levels
-                    const newSpriteLevel = foundry.starlingUpgradeTier + 1; // Tier 0->level 1, tier 1->level 2, etc.
-                    for (const unit of player.units) {
-                        if (unit instanceof Starling) {
-                            unit.spriteLevel = newSpriteLevel;
-                        }
-                    }
-                    this.sendNetworkCommand('starling_upgrade', { buildingId });
-                    // Deselect foundry
-                    foundry.isSelected = false;
-                    this.selectedBuildings.clear();
-                } else {
-                    console.log('Cannot upgrade starlings or not enough energy');
-                }
-                break;
-            case 2: // Left button - Upgrade structures
-                if (foundry.canUpgradeStructures() && player.spendEnergy(Constants.STRUCTURE_UPGRADE_COST)) {
-                    foundry.upgradeStructures();
-                    console.log(`Upgraded structures to tier ${foundry.structureUpgradeTier}`);
-                    this.sendNetworkCommand('structure_upgrade', { buildingId });
-                    // Deselect foundry
-                    foundry.isSelected = false;
-                    this.selectedBuildings.clear();
-                } else {
-                    console.log('Cannot upgrade structures or not enough energy');
-                }
-                break;
+        if (buttonIndex === 0) {
+            if (foundry.canUpgradeStrafe() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+                foundry.upgradeStrafe();
+                console.log('Upgraded foundry with Strafe');
+                this.sendNetworkCommand('foundry_strafe_upgrade', { buildingId });
+                // Deselect foundry
+                foundry.isSelected = false;
+                this.selectedBuildings.clear();
+            } else {
+                console.log('Cannot upgrade Strafe or not enough energy');
+            }
         }
     }
 
@@ -552,6 +519,8 @@ class GameController {
             }
 
             return bestIndex;
+        } else if (numButtons === 1) {
+            return 0;
         }
         return -1;
     }
@@ -1027,10 +996,10 @@ class GameController {
                         const mirrorButtonCount = this.hasSeenFoundry ? 3 : 2;
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, mirrorButtonCount);
                     } else if (this.selectedBuildings.size === 1) {
-                        // Foundry building has 3 buttons
+                        // Foundry building has 1 button
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 3);
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 1);
                         }
                     }
                 }

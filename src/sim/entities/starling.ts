@@ -23,7 +23,8 @@ export class Starling extends Unit {
     private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
-    public spriteLevel: number = 1; // Sprite level (1-4, changes based on starling upgrades)
+    private currentMoveSpeedPxPerSec: number = Constants.STARLING_MOVE_SPEED;
+    public spriteLevel: number = 1; // Sprite level (1-4)
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
@@ -94,6 +95,10 @@ export class Starling extends Unit {
 
     getCurrentPathWaypointIndex(): number {
         return this.currentPathWaypointIndex;
+    }
+
+    getCurrentMoveSpeedPxPerSec(): number {
+        return this.currentMoveSpeedPxPerSec;
     }
 
     hasActiveManualOrder(): boolean {
@@ -305,7 +310,16 @@ export class Starling extends Unit {
         // Update exploration timer
         this.explorationTimer -= deltaTime;
 
-        this.moveTowardRallyPoint(deltaTime, Constants.STARLING_MOVE_SPEED, allUnits, asteroids);
+        if (this.owner.hasStrafeUpgrade) {
+            this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
+        } else if (this.currentMoveSpeedPxPerSec < Constants.STARLING_MOVE_SPEED) {
+            this.currentMoveSpeedPxPerSec = Math.min(
+                Constants.STARLING_MOVE_SPEED,
+                this.currentMoveSpeedPxPerSec + Constants.STARLING_MOVE_ACCELERATION_PX_PER_SEC * deltaTime
+            );
+        }
+
+        this.moveTowardRallyPoint(deltaTime, this.currentMoveSpeedPxPerSec, allUnits, asteroids);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -343,6 +357,10 @@ export class Starling extends Unit {
         // Deal instant damage to target
         if ('takeDamage' in target) {
             target.takeDamage(this.attackDamage);
+        }
+
+        if (!this.owner.hasStrafeUpgrade) {
+            this.currentMoveSpeedPxPerSec = 0;
         }
     }
 }
