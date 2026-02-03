@@ -315,6 +315,17 @@ class GameController {
             } else {
                 console.log('Cannot upgrade Strafe or not enough energy');
             }
+        } else if (buttonIndex === 1) {
+            if (foundry.canUpgradeRegen() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+                foundry.upgradeRegen();
+                console.log('Upgraded foundry with Regen');
+                this.sendNetworkCommand('foundry_regen_upgrade', { buildingId });
+                // Deselect foundry
+                foundry.isSelected = false;
+                this.selectedBuildings.clear();
+            } else {
+                console.log('Cannot upgrade Regen or not enough energy');
+            }
         }
     }
 
@@ -996,10 +1007,10 @@ class GameController {
                         const mirrorButtonCount = this.hasSeenFoundry ? 3 : 2;
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, mirrorButtonCount);
                     } else if (this.selectedBuildings.size === 1) {
-                        // Foundry building has 1 button
+                        // Foundry building has 2 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 1);
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 2);
                         }
                     }
                 }

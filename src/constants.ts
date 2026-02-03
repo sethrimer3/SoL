@@ -163,6 +163,7 @@ export const STARLING_LASER_IMPACT_PARTICLES = 3; // Number of particles spawned
 export const STARLING_LASER_PARTICLE_SPEED = 30; // Speed of impact particles in pixels per second
 export const STARLING_LASER_PARTICLE_LIFETIME = 0.3; // Lifetime of impact particles in seconds
 export const STARLING_LASER_WIDTH_PX = 2;
+export const STARLING_REGEN_RATE_PER_SEC = 2; // Health regenerated per second when in influence
 export const FORGE_FLAME_ALPHA = 0.75;
 export const FORGE_FLAME_SIZE_MULTIPLIER = 0.45;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
@@ -230,6 +231,7 @@ export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
+export const FOUNDRY_REGEN_UPGRADE_COST = 1000; // Cost to unlock Regen upgrade
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror

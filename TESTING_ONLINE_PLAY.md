@@ -183,6 +183,17 @@ console.log('Latency:', latency, 'ms');
 - Implement state hash verification
 - Use fixed-point math for positions
 
+### Deterministic Replay Snippet (Foundry Regen Upgrade)
+
+Use the following command sequence to validate that Regen upgrades stay deterministic across peers
+(state hashes should match on every `STATE_HASH_TICK_INTERVAL` step):
+
+```text
+Tick 120: building_purchase { buildingType: "Foundry", positionX: 200, positionY: 0 }
+Tick 600: foundry_regen_upgrade { buildingId: 0 }
+Tick 650: unit_move { unitIds: ["starling-0"], targetX: 0, targetY: 0 }
+```
+
 ### Automated Testing (Future)
 
 Create unit tests for:

@@ -310,6 +310,16 @@ export class Starling extends Unit {
         // Update exploration timer
         this.explorationTimer -= deltaTime;
 
+        if (this.owner.hasRegenUpgrade && this.owner.stellarForge && this.health < this.maxHealth) {
+            const distanceToForge = this.position.distanceTo(this.owner.stellarForge.position);
+            if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
+                this.health = Math.min(
+                    this.maxHealth,
+                    this.health + Constants.STARLING_REGEN_RATE_PER_SEC * deltaTime
+                );
+            }
+        }
+
         if (this.owner.hasStrafeUpgrade) {
             this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
         } else if (this.currentMoveSpeedPxPerSec < Constants.STARLING_MOVE_SPEED) {
