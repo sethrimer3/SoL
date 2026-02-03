@@ -8,6 +8,8 @@ export interface MenuOption {
     id: string;
     name: string;
     description: string;
+    subLabel?: string;
+    subLabelColor?: string;
     icon?: string;
 }
 

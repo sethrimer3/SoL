@@ -442,8 +442,24 @@ export class MainMenu {
     }
 
     private getDefaultHeroIdsForFaction(faction: Faction | null): string[] {
-        void faction;
-        return ['radiant-marine'];
+        if (!faction) {
+            return [];
+        }
+        const defaultHero = this.heroUnits.find((hero) => hero.faction === faction);
+        return defaultHero ? [defaultHero.id] : [];
+    }
+
+    private getFactionLabelAndColor(faction: Faction | null): { label: string; color: string } {
+        switch (faction) {
+            case Faction.RADIANT:
+                return { label: 'Radiant', color: '#00AAFF' };
+            case Faction.AURUM:
+                return { label: 'Aurum', color: '#FFD700' };
+            case Faction.SOLARI:
+                return { label: 'Solari', color: '#FF6600' };
+            default:
+                return { label: 'Unselected', color: '#999999' };
+        }
     }
 
     private ensureDefaultHeroSelection(): void {
@@ -783,11 +799,14 @@ export class MainMenu {
         container.appendChild(carouselContainer);
 
         // Create carousel menu with main menu options
+        const { label: factionLabel, color: factionColor } = this.getFactionLabelAndColor(this.settings.selectedFaction);
         const menuOptions: MenuOption[] = [
             {
                 id: 'loadout',
                 name: 'LOADOUT',
-                description: 'Select faction & heroes'
+                description: 'Select faction & heroes',
+                subLabel: factionLabel,
+                subLabelColor: factionColor
             },
             {
                 id: 'start',
@@ -821,9 +840,9 @@ export class MainMenu {
         this.carouselMenu.onSelect((option: MenuOption) => {
             switch (option.id) {
                 case 'loadout':
-                    this.currentScreen = 'faction-select';
+                    this.currentScreen = 'loadout-select';
                     this.startMenuTransition();
-                    this.renderFactionSelectionScreen(this.contentElement);
+                    this.renderLoadoutSelectionScreen(this.contentElement);
                     break;
                 case 'start':
                     this.currentScreen = 'game-mode-select';
@@ -2017,9 +2036,9 @@ export class MainMenu {
 
         // Back button
         const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'faction-select';
+            this.currentScreen = 'loadout-select';
             this.startMenuTransition();
-            this.renderFactionSelectionScreen(this.contentElement);
+            this.renderLoadoutSelectionScreen(this.contentElement);
         }, '#666666');
         buttonContainer.appendChild(backButton);
 
@@ -2110,17 +2129,84 @@ export class MainMenu {
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
 
-        if (!this.settings.selectedFaction) {
-            // Shouldn't happen, but handle gracefully
-            this.renderFactionSelectionScreen(container);
-            return;
+        container.style.justifyContent = 'flex-start';
+
+        // Header with back button
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'flex-start';
+        header.style.width = '100%';
+        header.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        header.style.padding = isCompactLayout ? '10px' : '10px 0';
+        header.style.alignSelf = 'center';
+
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'main';
+            this.startMenuTransition();
+            this.renderMainScreen(this.contentElement);
+        }, '#666666');
+        backButton.style.fontSize = '18px';
+        backButton.style.padding = '8px 18px';
+        header.appendChild(backButton);
+        container.appendChild(header);
+
+        // Faction carousel
+        const carouselContainer = document.createElement('div');
+        carouselContainer.style.width = '100%';
+        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
+        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
+        carouselContainer.style.marginBottom = isCompactLayout ? '10px' : '12px';
+        container.appendChild(carouselContainer);
+
+        const factions: FactionCarouselOption[] = [
+            { 
+                id: Faction.RADIANT, 
+                name: 'Radiant', 
+                description: 'Well-Balanced, Ranged-Focused',
+                color: '#00AAFF'
+            },
+            { 
+                id: Faction.AURUM, 
+                name: 'Aurum', 
+                description: 'Fast-Paced, Melee-Focused',
+                color: '#FFD700'
+            },
+            { 
+                id: Faction.SOLARI, 
+                name: 'Solari', 
+                description: 'Complex Strategy, Ability-Focused',
+                color: '#FF6600'
+            }
+        ];
+
+        const selectedIndex = factions.findIndex((faction) => faction.id === this.settings.selectedFaction);
+        const initialIndex = selectedIndex >= 0 ? selectedIndex : 0;
+        if (!this.settings.selectedFaction && factions.length > 0) {
+            this.settings.selectedFaction = factions[initialIndex].id;
+            this.settings.selectedHeroes = [];
+            this.ensureDefaultHeroSelection();
         }
 
-        // Title
+        this.factionCarousel = new FactionCarouselView(carouselContainer, factions, initialIndex);
+        this.factionCarousel.onSelectionChange((option) => {
+            if (this.settings.selectedFaction !== option.id) {
+                this.settings.selectedFaction = option.id;
+                this.settings.selectedHeroes = [];
+                this.ensureDefaultHeroSelection();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+                return;
+            }
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+        this.factionCarousel.onRender(() => {
+            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        });
+
+        // Hero selection title
         const title = document.createElement('h2');
-        title.textContent = `Select 4 Heroes - ${this.settings.selectedFaction}`;
-        title.style.fontSize = isCompactLayout ? '28px' : '42px';
-        title.style.marginBottom = isCompactLayout ? '15px' : '20px';
+        title.textContent = 'Select 4 Heroes';
+        title.style.fontSize = isCompactLayout ? '26px' : '36px';
+        title.style.marginBottom = isCompactLayout ? '8px' : '12px';
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
@@ -2128,6 +2214,8 @@ export class MainMenu {
         title.dataset.particleText = 'true';
         title.dataset.particleColor = '#FFD700';
         container.appendChild(title);
+
+        this.settings.selectedHeroNames = this.getSelectedHeroNames();
 
         // Selection counter
         const counter = document.createElement('div');
@@ -2193,6 +2281,7 @@ export class MainMenu {
                         // Select hero
                         this.settings.selectedHeroes.push(hero.id);
                     }
+                    this.settings.selectedHeroNames = this.getSelectedHeroNames();
                     this.renderLoadoutSelectionScreen(this.contentElement);
                 });
             }
@@ -2314,17 +2403,23 @@ export class MainMenu {
 
         container.appendChild(heroGrid);
 
-        // Action buttons
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '20px';
-        buttonContainer.style.marginTop = '20px';
-        buttonContainer.style.flexWrap = 'wrap';
-        buttonContainer.style.justifyContent = 'center';
+        const actionContainer = document.createElement('div');
+        actionContainer.style.display = 'flex';
+        actionContainer.style.gap = '20px';
+        actionContainer.style.marginTop = '20px';
+        actionContainer.style.flexWrap = 'wrap';
+        actionContainer.style.justifyContent = 'center';
         if (isCompactLayout) {
-            buttonContainer.style.flexDirection = 'column';
-            buttonContainer.style.alignItems = 'center';
+            actionContainer.style.flexDirection = 'column';
+            actionContainer.style.alignItems = 'center';
         }
+
+        const customizeButton = this.createButton('CUSTOMIZE LOADOUT', () => {
+            this.currentScreen = 'loadout-customization';
+            this.startMenuTransition();
+            this.renderLoadoutCustomizationScreen(this.contentElement);
+        }, '#00AAFF');
+        actionContainer.appendChild(customizeButton);
 
         // Confirm button (only enabled if 4 heroes selected)
         if (this.settings.selectedHeroes.length === 4) {
@@ -2333,18 +2428,9 @@ export class MainMenu {
                 this.startMenuTransition();
                 this.renderMainScreen(this.contentElement);
             }, '#00FF88');
-            buttonContainer.appendChild(confirmButton);
+            actionContainer.appendChild(confirmButton);
         }
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'loadout-customization';
-            this.startMenuTransition();
-            this.renderLoadoutCustomizationScreen(this.contentElement);
-        }, '#666666');
-        buttonContainer.appendChild(backButton);
-
-        container.appendChild(buttonContainer);
+        container.appendChild(actionContainer);
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
@@ -3402,12 +3488,24 @@ class CarouselMenuView {
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name;
             nameElement.style.fontSize = `${Math.max(14, 18 * scale) * textScale}px`;
-            nameElement.style.marginBottom = '15px';
+            nameElement.style.marginBottom = option.subLabel ? '6px' : '15px';
             nameElement.style.color = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             nameElement.style.fontWeight = '300';
             nameElement.dataset.particleText = 'true';
             nameElement.dataset.particleColor = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             optionElement.appendChild(nameElement);
+
+            if (option.subLabel) {
+                const subLabelElement = document.createElement('div');
+                subLabelElement.textContent = option.subLabel;
+                subLabelElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
+                subLabelElement.style.marginBottom = '10px';
+                subLabelElement.style.color = option.subLabelColor ?? '#D0D0D0';
+                subLabelElement.style.fontWeight = '300';
+                subLabelElement.dataset.particleText = 'true';
+                subLabelElement.dataset.particleColor = option.subLabelColor ?? '#D0D0D0';
+                optionElement.appendChild(subLabelElement);
+            }
             
             // Add option description (only for center item)
             if (distance === 0) {
