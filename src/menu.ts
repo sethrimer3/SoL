@@ -199,31 +199,19 @@ export class MainMenu {
     private baseLoadouts: BaseLoadout[] = [
         // Radiant faction bases
         { id: 'radiant-standard', name: 'Standard Forge', description: 'Balanced base with standard production', faction: Faction.RADIANT },
-        { id: 'radiant-fortified', name: 'Fortified Forge', description: 'Enhanced defensive capabilities with thicker armor', faction: Faction.RADIANT },
-        { id: 'radiant-rapid', name: 'Rapid Forge', description: 'Faster production speed at the cost of durability', faction: Faction.RADIANT },
         // Aurum faction bases
         { id: 'aurum-standard', name: 'Standard Vault', description: 'Balanced base with standard production', faction: Faction.AURUM },
-        { id: 'aurum-wealth', name: 'Wealth Vault', description: 'Increased resource generation capacity', faction: Faction.AURUM },
-        { id: 'aurum-compact', name: 'Compact Vault', description: 'Smaller footprint, easier to defend', faction: Faction.AURUM },
         // Solari faction bases
         { id: 'solari-standard', name: 'Standard Temple', description: 'Balanced base with standard production', faction: Faction.SOLARI },
-        { id: 'solari-solar', name: 'Solar Temple', description: 'Enhanced solar collection efficiency', faction: Faction.SOLARI },
-        { id: 'solari-titan', name: 'Titan Temple', description: 'Massive health pool, slower to build', faction: Faction.SOLARI },
     ];
 
     private spawnLoadouts: SpawnLoadout[] = [
         // Radiant faction spawns
         { id: 'radiant-standard', name: 'Standard Starlings', description: 'Balanced minions with standard stats', faction: Faction.RADIANT },
-        { id: 'radiant-swarm', name: 'Swarm Starlings', description: 'More units but weaker individually', faction: Faction.RADIANT },
-        { id: 'radiant-elite', name: 'Elite Starlings', description: 'Fewer units but stronger and more durable', faction: Faction.RADIANT },
         // Aurum faction spawns
         { id: 'aurum-standard', name: 'Standard Drones', description: 'Balanced minions with standard stats', faction: Faction.AURUM },
-        { id: 'aurum-harvester', name: 'Harvester Drones', description: 'Gather resources more efficiently', faction: Faction.AURUM },
-        { id: 'aurum-assault', name: 'Assault Drones', description: 'Higher damage output for aggressive play', faction: Faction.AURUM },
         // Solari faction spawns
         { id: 'solari-standard', name: 'Standard Zealots', description: 'Balanced minions with standard stats', faction: Faction.SOLARI },
-        { id: 'solari-guardian', name: 'Guardian Zealots', description: 'Tankier units focused on defense', faction: Faction.SOLARI },
-        { id: 'solari-blazing', name: 'Blazing Zealots', description: 'Fast-moving units with fire damage', faction: Faction.SOLARI },
     ];
 
     constructor() {
