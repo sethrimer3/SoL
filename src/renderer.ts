@@ -2119,15 +2119,7 @@ export class GameRenderer {
                 return; // Don't draw invisible enemy units
             }
             
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            // Don't dim in LaD mode as the visibility system is different
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(unit.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(unitColor, Constants.SHADE_OPACITY);
-                }
-            }
+            // Enemy units revealed in shadow should remain bright for readability.
         }
 
         // Draw attack range circle for selected hero units (only friendly units)
