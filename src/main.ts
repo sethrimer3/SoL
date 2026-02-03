@@ -1511,6 +1511,24 @@ class GameController {
                         return;
                     }
                 }
+
+                if (this.selectedBuildings.size > 0) {
+                    for (const building of this.selectedBuildings) {
+                        building.isSelected = false;
+                    }
+                    this.selectedBuildings.clear();
+                    this.clearPathPreview();
+                    console.log('Buildings deselected');
+
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
                 
                 // If forge is selected and clicked elsewhere, move it
                 if (player.stellarForge && player.stellarForge.isSelected) {
