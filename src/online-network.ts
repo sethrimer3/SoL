@@ -388,6 +388,7 @@ export class OnlineNetworkManager {
             'mirror_purchase': 'mp',
             'mirror_move': 'mm',
             'mirror_link': 'ml',
+            'starling_merge': 'sm',
             'forge_move': 'fm',
             'set_rally_path': 'sr'
         };
@@ -408,6 +409,7 @@ export class OnlineNetworkManager {
             'mp': 'mirror_purchase',
             'mm': 'mirror_move',
             'ml': 'mirror_link',
+            'sm': 'starling_merge',
             'fm': 'forge_move',
             'sr': 'set_rally_path'
         };
