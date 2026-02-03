@@ -10,6 +10,7 @@ import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
 import { ParticleMenuLayer } from './menu/particle-layer';
 import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
+import { BUILD_NUMBER } from './build-info';
 
 // Re-export types for backward compatibility
 export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
@@ -293,6 +294,7 @@ export class MainMenu {
         );
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
+        menu.appendChild(this.createBuildNumberLabel());
         this.testLevelButton = this.createTestLevelButton();
         menu.appendChild(this.testLevelButton);
         this.ladButton = this.createLadButton();
@@ -316,6 +318,27 @@ export class MainMenu {
         });
         
         return menu;
+    }
+
+    private createBuildNumberLabel(): HTMLDivElement {
+        const label = document.createElement('div');
+        label.textContent = `BUILD ${BUILD_NUMBER}`;
+        label.style.position = 'absolute';
+        label.style.top = '16px';
+        label.style.left = '16px';
+        label.style.padding = '6px 10px';
+        label.style.borderRadius = '6px';
+        label.style.border = '1px solid rgba(255, 255, 255, 0.4)';
+        label.style.backgroundColor = 'rgba(10, 10, 10, 0.6)';
+        label.style.color = '#FFFFFF';
+        label.style.fontFamily = '"Doto", Arial, sans-serif';
+        label.style.fontWeight = '500';
+        label.style.fontSize = '12px';
+        label.style.letterSpacing = '0.18em';
+        label.style.textTransform = 'uppercase';
+        label.style.zIndex = '2';
+        label.style.pointerEvents = 'none';
+        return label;
     }
 
     private createTestLevelButton(): HTMLButtonElement {
