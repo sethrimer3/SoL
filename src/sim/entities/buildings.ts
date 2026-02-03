@@ -468,7 +468,7 @@ export class SpaceDustSwirler extends Building {
 
 /**
  * Foundry Building - Production building
- * Can produce solar mirrors and special units. Only one can exist at a time.
+ * Handles upgrades for structures and starlings. Only one can exist at a time.
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;

@@ -13,6 +13,7 @@ import { StellarForge } from './entities/stellar-forge';
 import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, CombatTarget } from './entities/buildings';
 import { Unit } from './entities/unit';
 import { Starling } from './entities/starling';
+import { StarlingMergeGate } from './entities/starling-merge-gate';
 import { WarpGate } from './entities/warp-gate';
 import { DamageNumber } from './entities/damage-number';
 import {
@@ -56,6 +57,8 @@ export class GameState {
     suns: Sun[] = [];
     spaceDust: SpaceDustParticle[] = [];
     warpGates: WarpGate[] = [];
+    starlingMergeGates: StarlingMergeGate[] = [];
+    starlingMergeGateExplosions: Vector2D[] = [];
     asteroids: Asteroid[] = [];
     muzzleFlashes: MuzzleFlash[] = [];
     bulletCasings: BulletCasing[] = [];
@@ -97,6 +100,7 @@ export class GameState {
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+        this.starlingMergeGateExplosions.length = 0;
 
         // Process pending network commands from remote players
         if (this.networkManager) {
@@ -540,6 +544,10 @@ export class GameState {
             }
             } // End of countdown check
 
+            if (!this.isCountdownActive) {
+                this.updateStarlingMergeGatesForPlayer(player, deltaTime);
+            }
+
             // Remove dead units and track losses
             const deadUnits = player.units.filter(unit => unit.isDead());
             player.unitsLost += deadUnits.length;
@@ -574,17 +582,7 @@ export class GameState {
                             building.addProductionProgress(buildProgress);
                         }
                     }
-                    const completed = building.getCompletedProduction();
-                    if (completed === 'solar-mirror') {
-                        // Spawn solar mirror from the bottom of the factory
-                        const spawnOffset = building.radius + 20;
-                        const spawnPos = new Vector2D(
-                            building.position.x,
-                            building.position.y + spawnOffset
-                        );
-                        const mirror = new SolarMirror(spawnPos, player);
-                        player.solarMirrors.push(mirror);
-                    }
+                    building.getCompletedProduction();
                 }
             }
             } // End of countdown check for buildings
@@ -1425,6 +1423,47 @@ export class GameState {
         }
     }
 
+    private updateStarlingMergeGatesForPlayer(player: Player, deltaTime: number): void {
+        for (let gateIndex = this.starlingMergeGates.length - 1; gateIndex >= 0; gateIndex--) {
+            const gate = this.starlingMergeGates[gateIndex];
+            if (gate.owner !== player) {
+                continue;
+            }
+
+            gate.remainingSec = Math.max(0, gate.remainingSec - deltaTime);
+
+            const assignedStarlings = gate.assignedStarlings;
+            let writeIndex = 0;
+
+            for (let i = 0; i < assignedStarlings.length; i++) {
+                const starling = assignedStarlings[i];
+                if (starling.isDead()) {
+                    continue;
+                }
+
+                starling.clearManualTarget();
+                starling.setManualRallyPoint(gate.position);
+
+                if (starling.position.distanceTo(gate.position) <= Constants.STARLING_MERGE_GATE_RADIUS_PX) {
+                    starling.health = 0;
+                    gate.absorbedCount += 1;
+                    continue;
+                }
+
+                assignedStarlings[writeIndex] = starling;
+                writeIndex += 1;
+            }
+
+            assignedStarlings.length = writeIndex;
+
+            if (gate.remainingSec <= 0) {
+                this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
+                player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
+                this.starlingMergeGates.splice(gateIndex, 1);
+            }
+        }
+    }
+
     private getEnemiesForPlayer(player: Player): CombatTarget[] {
         const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
@@ -1482,71 +1521,7 @@ export class GameState {
     }
 
     private updateAiMirrorPurchaseForPlayer(player: Player): void {
-        if (this.gameTime < player.aiNextMirrorPurchaseCommandSec) {
-            return;
-        }
-        player.aiNextMirrorPurchaseCommandSec = this.gameTime + Constants.AI_MIRROR_PURCHASE_INTERVAL_SEC;
-
-        // Check if we should buy more mirrors based on strategy
-        if (!player.stellarForge) {
-            return;
-        }
-
-        const currentMirrorCount = player.solarMirrors.length;
-        
-        // Determine mirror count target based on AI strategy
-        let targetMirrorCount = 2; // Default minimum
-        switch (player.aiStrategy) {
-            case Constants.AIStrategy.ECONOMIC:
-                targetMirrorCount = Constants.AI_MAX_MIRRORS; // Max out mirrors
-                break;
-            case Constants.AIStrategy.DEFENSIVE:
-                targetMirrorCount = 4; // Moderate mirrors for balanced economy
-                break;
-            case Constants.AIStrategy.AGGRESSIVE:
-                targetMirrorCount = 3; // Fewer mirrors, spend on units
-                break;
-            case Constants.AIStrategy.WAVES:
-                targetMirrorCount = 4; // Need economy for wave production
-                break;
-        }
-
-        // Don't buy more mirrors than target
-        if (currentMirrorCount >= targetMirrorCount) {
-            return;
-        }
-
-        // Check if we can afford a mirror
-        if (player.energy < Constants.SOLAR_MIRROR_COST) {
-            return;
-        }
-
-        // Find a good position for the new mirror
-        const sun = this.getClosestSunToPoint(player.stellarForge.position);
-        if (!sun) {
-            return;
-        }
-
-        // Calculate position around the sun
-        const baseAngleRad = Math.atan2(
-            player.stellarForge.position.y - sun.position.y,
-            player.stellarForge.position.x - sun.position.x
-        );
-        const mirrorIndex = currentMirrorCount;
-        const startAngleRad = baseAngleRad - (Constants.AI_MIRROR_ARC_SPACING_RAD * targetMirrorCount) / 2;
-        const angleRad = startAngleRad + Constants.AI_MIRROR_ARC_SPACING_RAD * mirrorIndex;
-        const radiusPx = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
-        
-        const mirrorPosition = new Vector2D(
-            sun.position.x + Math.cos(angleRad) * radiusPx,
-            sun.position.y + Math.sin(angleRad) * radiusPx
-        );
-
-        // Purchase the mirror
-        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
-            const newMirror = new SolarMirror(mirrorPosition, player);
-            player.solarMirrors.push(newMirror);
-        }
+        return;
     }
 
     private updateAiDefenseForPlayer(
@@ -3143,6 +3118,16 @@ export class GameState {
             }
         }
 
+        mixInt(this.starlingMergeGates.length);
+        for (const gate of this.starlingMergeGates) {
+            mix(gate.position.x);
+            mix(gate.position.y);
+            mix(gate.remainingSec);
+            mixInt(gate.absorbedCount);
+            mixInt(gate.assignedStarlings.length);
+            mixInt(this.players.indexOf(gate.owner));
+        }
+
         mixInt(this.warpGates.length);
         for (const gate of this.warpGates) {
             mix(gate.position.x);
@@ -3438,6 +3423,9 @@ export class GameState {
             case 'mirror_link':
                 this.executeMirrorLinkCommand(player, cmd.data);
                 break;
+            case 'starling_merge':
+                this.executeStarlingMergeCommand(player, cmd.data);
+                break;
             case 'foundry_production':
                 this.executeFoundryProductionCommand(player, cmd.data);
                 break;
@@ -3590,12 +3578,7 @@ export class GameState {
     }
 
     private executeMirrorPurchaseCommand(player: Player, data: any): void {
-        const { positionX, positionY } = data;
-        const position = new Vector2D(positionX, positionY);
-        
-        if (player.spendEnergy(Constants.SOLAR_MIRROR_COST)) {
-            player.solarMirrors.push(new SolarMirror(position, player));
-        }
+        return;
     }
 
     private executeMirrorMoveCommand(player: Player, data: any): void {
@@ -3631,6 +3614,43 @@ export class GameState {
         }
     }
 
+    private executeStarlingMergeCommand(player: Player, data: any): void {
+        const { unitIds, targetX, targetY } = data;
+        if (!Array.isArray(unitIds)) {
+            return;
+        }
+        const targetPosition = new Vector2D(targetX, targetY);
+        this.applyStarlingMerge(player, unitIds, targetPosition);
+    }
+
+    applyStarlingMerge(player: Player, unitIds: string[], targetPosition: Vector2D): void {
+        if (!player.buildings.some((building) => building instanceof SubsidiaryFactory)) {
+            return;
+        }
+
+        const mergeStarlings: Starling[] = [];
+        for (const unitId of unitIds) {
+            if (mergeStarlings.length >= Constants.STARLING_MERGE_COUNT) {
+                break;
+            }
+            const unit = player.units.find((candidate) => this.getUnitNetworkId(candidate) === unitId);
+            if (unit instanceof Starling && !unit.isDead()) {
+                mergeStarlings.push(unit);
+            }
+        }
+
+        if (mergeStarlings.length < Constants.STARLING_MERGE_COUNT) {
+            return;
+        }
+
+        for (const starling of mergeStarlings) {
+            starling.clearManualTarget();
+            starling.setManualRallyPoint(targetPosition);
+        }
+
+        this.starlingMergeGates.push(new StarlingMergeGate(targetPosition, player, mergeStarlings));
+    }
+
     private executeFoundryProductionCommand(player: Player, data: any): void {
         const { buildingId, itemType } = data;
         const building = player.buildings[buildingId];
@@ -3640,8 +3660,8 @@ export class GameState {
         if (!building.isComplete) {
             return;
         }
-        if (itemType === 'solar-mirror' && player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
-            building.enqueueProduction('solar-mirror');
+        if (itemType === 'solar-mirror') {
+            return;
         }
     }
 

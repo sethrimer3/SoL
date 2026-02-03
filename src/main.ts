@@ -58,6 +58,63 @@ class GameController {
         return false;
     }
 
+    private getSelectedStarlings(player: Player): Starling[] {
+        const starlings: Starling[] = [];
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && unit.owner === player) {
+                starlings.push(unit);
+            }
+        }
+        return starlings;
+    }
+
+    private getStarlingMergeButtonWorldPosition(starlings: Starling[]): Vector2D | null {
+        if (starlings.length === 0) {
+            return null;
+        }
+        let totalX = 0;
+        let totalY = 0;
+        for (const starling of starlings) {
+            totalX += starling.position.x;
+            totalY += starling.position.y;
+        }
+        const centerX = totalX / starlings.length;
+        const centerY = totalY / starlings.length;
+        return new Vector2D(centerX, centerY - Constants.STARLING_MERGE_BUTTON_OFFSET_PX);
+    }
+
+    private tryStartStarlingMerge(player: Player, starlings: Starling[]): boolean {
+        if (!this.game) {
+            return false;
+        }
+        if (starlings.length < Constants.STARLING_MERGE_COUNT) {
+            return false;
+        }
+        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        if (!hasFoundry) {
+            return false;
+        }
+        const mergePosition = this.getStarlingMergeButtonWorldPosition(starlings);
+        if (!mergePosition) {
+            return false;
+        }
+        const mergeStarlings = starlings.slice(0, Constants.STARLING_MERGE_COUNT);
+        const unitIds = mergeStarlings.map((unit) => this.game!.getUnitNetworkId(unit));
+        this.game.applyStarlingMerge(player, unitIds, mergePosition);
+        this.sendNetworkCommand('starling_merge', {
+            unitIds,
+            targetX: mergePosition.x,
+            targetY: mergePosition.y
+        });
+
+        for (const unit of this.selectedUnits) {
+            unit.isSelected = false;
+        }
+        this.selectedUnits.clear();
+        this.renderer.selectedUnits = this.selectedUnits;
+        return true;
+    }
+
     private updateAbilityArrowStarts(): void {
         this.abilityArrowStarts.length = 0;
         if (this.selectionStartScreen) {
@@ -279,26 +336,7 @@ class GameController {
                     console.log('Cannot upgrade starlings or not enough energy');
                 }
                 break;
-            case 2: // Bottom button - Create solar mirror
-                if (!foundry.isComplete) {
-                    console.log('Foundry must be complete to produce solar mirrors');
-                    break;
-                }
-                if (player.spendEnergy(Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST)) {
-                    foundry.enqueueProduction('solar-mirror');
-                    console.log(`Queued solar mirror at foundry (cost: ${Constants.SOLAR_MIRROR_FROM_FOUNDRY_COST})`);
-                    this.sendNetworkCommand('foundry_production', {
-                        buildingId,
-                        itemType: 'solar-mirror'
-                    });
-                    // Deselect foundry
-                    foundry.isSelected = false;
-                    this.selectedBuildings.clear();
-                } else {
-                    console.log('Not enough energy to create solar mirror');
-                }
-                break;
-            case 3: // Left button - Upgrade structures
+            case 2: // Left button - Upgrade structures
                 if (foundry.canUpgradeStructures() && player.spendEnergy(Constants.STRUCTURE_UPGRADE_COST)) {
                     foundry.upgradeStructures();
                     console.log(`Upgraded structures to tier ${foundry.structureUpgradeTier}`);
@@ -989,10 +1027,10 @@ class GameController {
                         const mirrorButtonCount = this.hasSeenFoundry ? 3 : 2;
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, mirrorButtonCount);
                     } else if (this.selectedBuildings.size === 1) {
-                        // Foundry building has 4 buttons
+                        // Foundry building has 3 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 3);
                         }
                     }
                 }
@@ -1521,6 +1559,30 @@ class GameController {
                     return;
                 }
 
+                const selectedStarlings = this.getSelectedStarlings(player);
+                const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+                if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
+                    const mergeButtonWorldPos = this.getStarlingMergeButtonWorldPosition(selectedStarlings);
+                    if (mergeButtonWorldPos) {
+                        const mergeButtonScreenPos = this.renderer.worldToScreen(mergeButtonWorldPos);
+                        const mergeButtonRadius = Constants.STARLING_MERGE_BUTTON_RADIUS_PX * this.renderer.zoom;
+                        const mergeDx = lastX - mergeButtonScreenPos.x;
+                        const mergeDy = lastY - mergeButtonScreenPos.y;
+                        if (Math.sqrt(mergeDx * mergeDx + mergeDy * mergeDy) <= mergeButtonRadius) {
+                            if (this.tryStartStarlingMerge(player, selectedStarlings)) {
+                                isPanning = false;
+                                isMouseDown = false;
+                                this.isSelecting = false;
+                                this.selectionStartScreen = null;
+                                this.renderer.selectionStart = null;
+                                this.renderer.selectionEnd = null;
+                                this.endHold();
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 // Check if clicked on mirror command buttons
                 if (this.selectedMirrors.size > 0) {
                     // Get one of the selected mirrors to determine button positions
@@ -1890,29 +1952,42 @@ class GameController {
                     const dy = endPos.y - this.selectionStartScreen.y;
                     const distance = Math.sqrt(dx * dx + dy * dy);
                     const direction = new Vector2D(dx / distance, dy / distance);
-                    
-                    // Activate ability for all selected units
-                    let anyAbilityUsed = false;
-                    for (const unit of this.selectedUnits) {
-                        if (unit.useAbility(direction)) {
-                            anyAbilityUsed = true;
-                            if (this.game) {
-                                this.sendNetworkCommand('unit_ability', {
-                                    unitId: this.game.getUnitNetworkId(unit),
-                                    directionX: direction.x,
-                                    directionY: direction.y
-                                });
+
+                    let didMergeStarlings = false;
+                    if (!hasHeroUnits) {
+                        const player = this.getLocalPlayer();
+                        if (player && direction.y < -0.5) {
+                            const selectedStarlings = this.getSelectedStarlings(player);
+                            if (selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
+                                didMergeStarlings = this.tryStartStarlingMerge(player, selectedStarlings);
                             }
                         }
                     }
-                    
-                    if (anyAbilityUsed) {
-                        console.log(`Ability activated in direction (${direction.x.toFixed(2)}, ${direction.y.toFixed(2)})`);
+
+                    if (!didMergeStarlings) {
+                        // Activate ability for all selected units
+                        let anyAbilityUsed = false;
+                        for (const unit of this.selectedUnits) {
+                            if (unit.useAbility(direction)) {
+                                anyAbilityUsed = true;
+                                if (this.game) {
+                                    this.sendNetworkCommand('unit_ability', {
+                                        unitId: this.game.getUnitNetworkId(unit),
+                                        directionX: direction.x,
+                                        directionY: direction.y
+                                    });
+                                }
+                            }
+                        }
+
+                        if (anyAbilityUsed) {
+                            console.log(`Ability activated in direction (${direction.x.toFixed(2)}, ${direction.y.toFixed(2)})`);
+                        }
+
+                        // Deselect all units after using ability
+                        this.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectedUnits;
                     }
-                    
-                    // Deselect all units after using ability
-                    this.selectedUnits.clear();
-                    this.renderer.selectedUnits = this.selectedUnits;
                 } else if (this.isDraggingBuildingArrow && totalMovement >= abilityDragThreshold) {
                     // Building ability arrow was dragged - activate the highlighted button
                     const player = this.getLocalPlayer();
@@ -2625,6 +2700,11 @@ class GameController {
                 this.renderer.createWarpGateShockwave(gate.position);
                 this.game.warpGates.splice(i, 1);
             }
+        }
+
+        for (const explosion of this.game.starlingMergeGateExplosions) {
+            this.scatterParticles(explosion);
+            this.renderer.createWarpGateShockwave(explosion);
         }
     }
 

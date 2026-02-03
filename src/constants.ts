@@ -230,6 +230,11 @@ export const FOUNDRY_UPGRADE_COST = 500; // Cost to upgrade foundry from level 1
 export const STRUCTURE_UPGRADE_COST = 400; // Cost to upgrade structures
 export const STARLING_UPGRADE_COST = 350; // Cost to upgrade starlings
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
+export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
+export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror
+export const STARLING_MERGE_GATE_RADIUS_PX = 18; // Visual/absorption radius for merge gate
+export const STARLING_MERGE_BUTTON_RADIUS_PX = 26; // UI radius for merge button
+export const STARLING_MERGE_BUTTON_OFFSET_PX = 70; // UI offset for merge button above starlings
 
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;

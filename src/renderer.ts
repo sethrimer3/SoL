@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
 import { SparkleParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -1210,7 +1210,7 @@ export class GameRenderer {
             return romanNumerals[num] || '';
         };
 
-        // Draw 4 buttons in cardinal directions
+        // Draw 3 buttons in cardinal directions
         const buttonConfigs = [
             { 
                 x: 0, y: -1, // Top - Upgrade foundry
@@ -1225,16 +1225,10 @@ export class GameRenderer {
                 index: 1
             },
             { 
-                x: 0, y: 1, // Bottom - Create solar mirror
-                label: 'Mirror',
-                available: true,
-                index: 2
-            },
-            { 
                 x: -1, y: 0, // Left - Upgrade structures
                 label: foundry.canUpgradeStructures() ? `Structure ${toRoman(foundry.structureUpgradeTier + 1)}` : `Structure ${toRoman(foundry.structureUpgradeTier)}`,
                 available: foundry.canUpgradeStructures(),
-                index: 3
+                index: 2
             }
         ];
 
@@ -2009,6 +2003,36 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a starling merge gate
+     */
+    private drawStarlingMergeGate(gate: StarlingMergeGate): void {
+        const screenPos = this.worldToScreen(gate.position);
+        const radius = Constants.STARLING_MERGE_GATE_RADIUS_PX * this.zoom;
+        const totalDuration = Constants.STARLING_MERGE_DURATION_SEC;
+        const progress = totalDuration > 0 ? gate.remainingSec / totalDuration : 0;
+        const pulse = 0.7 + Math.sin((totalDuration - gate.remainingSec) * 4) * 0.2;
+
+        this.ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        const countdownRadius = radius + 8 * this.zoom;
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(
+            screenPos.x,
+            screenPos.y,
+            countdownRadius,
+            -Math.PI / 2,
+            -Math.PI / 2 + progress * Math.PI * 2
+        );
+        this.ctx.stroke();
+    }
+
+    /**
      * Draw command buttons for selected solar mirrors
      */
     private drawMirrorCommandButtons(mirrors: Set<SolarMirror>): void {
@@ -2091,6 +2115,53 @@ export class GameRenderer {
         }
 
         // Reset text alignment
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
+    }
+
+    private drawStarlingMergeButton(): void {
+        if (!this.viewingPlayer || !this.hasActiveFoundry) {
+            return;
+        }
+
+        const selectedStarlings: Starling[] = [];
+        for (const unit of this.selectedUnits) {
+            if (unit instanceof Starling && unit.owner === this.viewingPlayer) {
+                selectedStarlings.push(unit);
+            }
+        }
+
+        if (selectedStarlings.length < Constants.STARLING_MERGE_COUNT) {
+            return;
+        }
+
+        let totalX = 0;
+        let totalY = 0;
+        for (const starling of selectedStarlings) {
+            totalX += starling.position.x;
+            totalY += starling.position.y;
+        }
+
+        const centerX = totalX / selectedStarlings.length;
+        const centerY = totalY / selectedStarlings.length;
+        const buttonWorldPos = new Vector2D(centerX, centerY - Constants.STARLING_MERGE_BUTTON_OFFSET_PX);
+        const screenPos = this.worldToScreen(buttonWorldPos);
+        const radius = Constants.STARLING_MERGE_BUTTON_RADIUS_PX * this.zoom;
+
+        this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+        this.ctx.strokeStyle = '#00FFFF';
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${11 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Merge', screenPos.x, screenPos.y);
+
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'alphabetic';
     }
@@ -5081,6 +5152,13 @@ export class GameRenderer {
             }
         }
 
+        // Draw starling merge gates
+        for (const gate of game.starlingMergeGates) {
+            if (this.isWithinViewBounds(gate.position, Constants.STARLING_MERGE_GATE_RADIUS_PX * 4)) {
+                this.drawStarlingMergeGate(gate);
+            }
+        }
+
         // Draw warp gate shockwaves
         this.updateAndDrawWarpGateShockwaves();
 
@@ -5252,6 +5330,7 @@ export class GameRenderer {
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors);
+        this.drawStarlingMergeButton();
 
         // Draw UI
         this.drawUI(game);
@@ -5463,36 +5542,6 @@ export class GameRenderer {
             y += boxHeight + 8;
         }
 
-        // Draw foundry production (solar mirrors)
-        const foundryInProduction = player.buildings.find(
-            (building) =>
-                building instanceof SubsidiaryFactory &&
-                ((building.currentProduction && building.currentProduction.length > 0) || building.productionQueue.length > 0)
-        ) as SubsidiaryFactory | undefined;
-        if (foundryInProduction) {
-            const productionType = foundryInProduction.currentProduction ?? foundryInProduction.productionQueue[0];
-            const progress = foundryInProduction.currentProduction ? foundryInProduction.productionProgress : 0;
-
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(x, y, boxWidth, boxHeight);
-
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
-
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'top';
-
-            const productionName = productionType ? this.getProductionDisplayName(productionType) : 'Production';
-            this.ctx.fillText(`Foundry: ${productionName}`, x + 8, y + 8);
-
-            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
-
-            y += boxHeight + 8;
-        }
-        
         // Draw building construction progress
         // Note: find() stops at first match, typically only one building under construction
         const buildingInProgress = player.buildings.find((building) => !building.isComplete);

@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit manual targets, unit collision radii, unit move orders, minion path progress, foundry production queues/progress, AI command timers, warp gate charge/cancel/timeout state, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, warp gates, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit manual targets, unit collision radii, unit move orders, minion path progress, foundry production queues/progress, AI command timers, starling merge gate timers/absorption state, warp gate charge/cancel/timeout state, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, merge gates, warp gates, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -86,7 +86,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 5, "command": "moveForge", "playerIndex": 0, "targetWorld": { "x": 420, "y": 460 } },
   { "tick": 7, "command": "selectMirror", "playerIndex": 0, "mirrorIndex": 1 },
   { "tick": 8, "command": "linkMirrorToStructure", "playerIndex": 0, "mirrorIndex": 1, "structureType": "Foundry" },
-  { "tick": 9, "command": "queueFoundryProduction", "playerIndex": 0, "itemType": "solar-mirror" },
+  { "tick": 9, "command": "mergeStarlings", "playerIndex": 0, "unitIds": ["p0_s1", "p0_s2", "p0_s3", "p0_s4", "p0_s5", "p0_s6", "p0_s7", "p0_s8", "p0_s9", "p0_s10"], "targetWorld": { "x": 480, "y": 420 } },
   { "tick": 10, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
   { "tick": 11, "command": "targetStructure", "playerIndex": 0, "target": { "type": "StellarForge", "playerIndex": 1 } },
   { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
