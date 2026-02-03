@@ -170,6 +170,69 @@ class GameController {
         return { mirror: closestMirror, mirrorIndex: closestMirrorIndex };
     }
 
+    private getTargetableStructureAtPosition(
+        worldPos: Vector2D,
+        player: Player
+    ): {
+        target: StellarForge | Building | SolarMirror;
+        targetPlayerIndex: number;
+        structureType: 'forge' | 'building' | 'mirror';
+        structureIndex: number;
+    } | null {
+        if (!this.game) {
+            return null;
+        }
+
+        for (let playerIndex = 0; playerIndex < this.game.players.length; playerIndex++) {
+            const targetPlayer = this.game.players[playerIndex];
+            if (!targetPlayer || targetPlayer === player) {
+                continue;
+            }
+
+            if (targetPlayer.stellarForge && targetPlayer.stellarForge.containsPoint(worldPos)) {
+                return {
+                    target: targetPlayer.stellarForge,
+                    targetPlayerIndex: playerIndex,
+                    structureType: 'forge',
+                    structureIndex: -1
+                };
+            }
+
+            for (let mirrorIndex = 0; mirrorIndex < targetPlayer.solarMirrors.length; mirrorIndex++) {
+                const mirror = targetPlayer.solarMirrors[mirrorIndex];
+                if (mirror.containsPoint(worldPos)) {
+                    return {
+                        target: mirror,
+                        targetPlayerIndex: playerIndex,
+                        structureType: 'mirror',
+                        structureIndex: mirrorIndex
+                    };
+                }
+            }
+
+            for (let buildingIndex = 0; buildingIndex < targetPlayer.buildings.length; buildingIndex++) {
+                const building = targetPlayer.buildings[buildingIndex];
+                if (building.containsPoint(worldPos)) {
+                    return {
+                        target: building,
+                        targetPlayerIndex: playerIndex,
+                        structureType: 'building',
+                        structureIndex: buildingIndex
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private getTargetStructureRadiusPx(target: StellarForge | Building | SolarMirror): number {
+        if (target instanceof SolarMirror) {
+            return Constants.MIRROR_CLICK_RADIUS_PX;
+        }
+        return target.radius;
+    }
+
     /**
      * Handle foundry button press
      */
@@ -1063,6 +1126,46 @@ class GameController {
                 if (!player) {
                     return;
                 }
+
+                const targetableStructure = this.getTargetableStructureAtPosition(worldPos, player);
+                if (this.selectedUnits.size > 0 && targetableStructure) {
+                    this.moveOrderCounter++;
+                    const targetRadiusPx = this.getTargetStructureRadiusPx(targetableStructure.target);
+
+                    for (const unit of this.selectedUnits) {
+                        const rallyPoint = unit.getStructureStandoffPoint(
+                            targetableStructure.target.position,
+                            targetRadiusPx
+                        );
+                        unit.setManualTarget(targetableStructure.target, rallyPoint);
+                        unit.moveOrder = this.moveOrderCounter;
+                    }
+
+                    const unitIds = this.game
+                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                        : [];
+                    this.sendNetworkCommand('unit_target_structure', {
+                        unitIds,
+                        targetPlayerIndex: targetableStructure.targetPlayerIndex,
+                        structureType: targetableStructure.structureType,
+                        structureIndex: targetableStructure.structureIndex,
+                        moveOrder: this.moveOrderCounter
+                    });
+
+                    this.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
+                    this.clearPathPreview();
+                    console.log('Units targeting structure', targetableStructure.structureType);
+
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
                 
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
@@ -1718,6 +1821,7 @@ class GameController {
                     // Set path for all selected units
                     for (const unit of this.selectedUnits) {
                         // All units now support path following
+                        unit.clearManualTarget();
                         unit.setPath(this.pathPoints);
                         unit.moveOrder = this.moveOrderCounter;
                     }
@@ -1893,6 +1997,7 @@ class GameController {
                     // Set rally point for all selected units
                     for (const unit of this.selectedUnits) {
                         const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                        unit.clearManualTarget();
                         if (unit instanceof Starling) {
                             unit.setManualRallyPoint(rallyPoint);
                         } else {

@@ -3088,6 +3088,25 @@ export class GameState {
                     mix(-1);
                     mix(-1);
                 }
+                const manualTarget = unit.getManualTarget();
+                if (manualTarget) {
+                    mixInt(1);
+                    if (manualTarget instanceof StellarForge) {
+                        mixInt(1);
+                    } else if (manualTarget instanceof Building) {
+                        mixInt(2);
+                    } else if (manualTarget instanceof SolarMirror) {
+                        mixInt(3);
+                    } else {
+                        mixInt(4);
+                    }
+                    mix(manualTarget.position.x);
+                    mix(manualTarget.position.y);
+                } else {
+                    mixInt(0);
+                    mix(-1);
+                    mix(-1);
+                }
                 if (unit instanceof Starling) {
                     mixInt(unit.getAssignedPathLength());
                     mixInt(unit.getCurrentPathWaypointIndex());
@@ -3370,6 +3389,9 @@ export class GameState {
             case 'unit_move':
                 this.executeUnitMoveCommand(player, cmd.data);
                 break;
+            case 'unit_target_structure':
+                this.executeUnitTargetStructureCommand(player, cmd.data);
+                break;
             case 'unit_ability':
                 this.executeUnitAbilityCommand(player, cmd.data);
                 break;
@@ -3412,6 +3434,7 @@ export class GameState {
         for (const unitId of unitIds) {
             const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
             if (unit) {
+                unit.clearManualTarget();
                 if (unit instanceof Starling) {
                     unit.setManualRallyPoint(target);
                 } else {
@@ -3424,6 +3447,53 @@ export class GameState {
                 console.warn(`Unit not found for network command: ${unitId}`);
             }
         }
+    }
+
+    private executeUnitTargetStructureCommand(player: Player, data: any): void {
+        const { unitIds, targetPlayerIndex, structureType, structureIndex, moveOrder } = data;
+        const targetPlayer = this.players[targetPlayerIndex];
+        if (!targetPlayer) {
+            console.warn('Target player not found for unit target command.');
+            return;
+        }
+
+        let targetStructure: CombatTarget | null = null;
+        if (structureType === 'forge') {
+            targetStructure = targetPlayer.stellarForge ?? null;
+        } else if (structureType === 'building') {
+            targetStructure = targetPlayer.buildings[structureIndex] ?? null;
+        } else if (structureType === 'mirror') {
+            targetStructure = targetPlayer.solarMirrors[structureIndex] ?? null;
+        }
+
+        if (!targetStructure) {
+            console.warn('Target structure not found for unit target command.');
+            return;
+        }
+
+        for (const unitId of unitIds ?? []) {
+            const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
+            if (unit) {
+                const targetRadiusPx = this.getCombatTargetRadiusPx(targetStructure);
+                const rallyPoint = unit.getStructureStandoffPoint(targetStructure.position, targetRadiusPx);
+                unit.setManualTarget(targetStructure, rallyPoint);
+                if (typeof moveOrder === 'number') {
+                    unit.moveOrder = moveOrder;
+                }
+            } else {
+                console.warn(`Unit not found for network command: ${unitId}`);
+            }
+        }
+    }
+
+    private getCombatTargetRadiusPx(target: CombatTarget): number {
+        if (target instanceof SolarMirror) {
+            return Constants.MIRROR_CLICK_RADIUS_PX;
+        }
+        if ('radius' in target) {
+            return target.radius;
+        }
+        return 0;
     }
 
     private executeUnitAbilityCommand(player: Player, data: any): void {
@@ -3445,6 +3515,7 @@ export class GameState {
         for (const unitId of unitIds ?? []) {
             const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
             if (unit) {
+                unit.clearManualTarget();
                 unit.setPath(path);
                 if (typeof moveOrder === 'number') {
                     unit.moveOrder = moveOrder;
