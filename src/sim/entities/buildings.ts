@@ -655,7 +655,7 @@ export class SpaceDustSwirler extends Building {
 
 /**
  * Foundry Building - Production building
- * Handles upgrades for structures and starlings. Only one can exist at a time.
+ * Handles production and the Strafe upgrade. Only one can exist at a time.
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
@@ -663,9 +663,6 @@ export class SubsidiaryFactory extends Building {
     productionQueue: string[] = []; // Queue of items to produce
     currentProduction: string | null = null; // Currently producing item
     productionProgress: number = 0; // Progress of current production (0-1)
-    level: number = 1; // Foundry level (1-3)
-    structureUpgradeTier: number = 0; // Structure upgrade tier (0-3)
-    starlingUpgradeTier: number = 0; // Starling upgrade tier (0-3)
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -745,52 +742,18 @@ export class SubsidiaryFactory extends Building {
     }
 
     /**
-     * Check if foundry can be upgraded
+     * Check if Strafe upgrade is available
      */
-    canUpgradeFoundry(): boolean {
-        return this.level < 3 && this.isComplete;
+    canUpgradeStrafe(): boolean {
+        return this.isComplete && !this.owner.hasStrafeUpgrade;
     }
 
     /**
-     * Upgrade foundry to next level
+     * Upgrade starlings with Strafe
      */
-    upgradeFoundry(): boolean {
-        if (!this.canUpgradeFoundry()) return false;
-        this.level++;
-        return true;
-    }
-
-    /**
-     * Check if structure upgrade is available
-     */
-    canUpgradeStructures(): boolean {
-        // Structure upgrade tier is limited by foundry level
-        return this.structureUpgradeTier < this.level && this.structureUpgradeTier < 3 && this.isComplete;
-    }
-
-    /**
-     * Upgrade structures
-     */
-    upgradeStructures(): boolean {
-        if (!this.canUpgradeStructures()) return false;
-        this.structureUpgradeTier++;
-        return true;
-    }
-
-    /**
-     * Check if starling upgrade is available
-     */
-    canUpgradeStarlings(): boolean {
-        // Starling upgrade tier is limited by foundry level
-        return this.starlingUpgradeTier < this.level && this.starlingUpgradeTier < 3 && this.isComplete;
-    }
-
-    /**
-     * Upgrade starlings
-     */
-    upgradeStarlings(): boolean {
-        if (!this.canUpgradeStarlings()) return false;
-        this.starlingUpgradeTier++;
+    upgradeStrafe(): boolean {
+        if (!this.canUpgradeStrafe()) return false;
+        this.owner.hasStrafeUpgrade = true;
         return true;
     }
 }

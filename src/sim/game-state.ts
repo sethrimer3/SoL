@@ -190,13 +190,6 @@ export class GameState {
                                 player.stellarForge.position.y + Math.sin(angle) * spawnRadius
                             );
                             const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
-                            
-                            // Set starling sprite level based on foundry upgrade tier
-                            const foundry = player.buildings.find(b => b instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
-                            if (foundry) {
-                                starling.spriteLevel = foundry.starlingUpgradeTier + 1; // Tier 0->level 1, tier 1->level 2, etc.
-                            }
-                            
                             player.units.push(starling);
                             player.unitsCreated++;
                         }
@@ -3012,6 +3005,7 @@ export class GameState {
             mix(player.aiNextStructureCommandSec);
             mix(player.aiNextMirrorPurchaseCommandSec);
             mixString(player.aiStrategy);
+            mixInt(player.hasStrafeUpgrade ? 1 : 0);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -3109,6 +3103,7 @@ export class GameState {
                     mixInt(unit.getAssignedPathLength());
                     mixInt(unit.getCurrentPathWaypointIndex());
                     mixInt(unit.hasActiveManualOrder() ? 1 : 0);
+                    mix(unit.getCurrentMoveSpeedPxPerSec());
                 }
             }
 
@@ -3124,9 +3119,6 @@ export class GameState {
                     for (const itemType of building.productionQueue) {
                         mixString(itemType);
                     }
-                    mixInt(building.level);
-                    mixInt(building.structureUpgradeTier);
-                    mixInt(building.starlingUpgradeTier);
                 }
             }
         }

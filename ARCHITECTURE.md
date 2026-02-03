@@ -73,7 +73,7 @@
 
 ## Deterministic State Hash & Replay Snippet
 
-The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit manual targets, unit collision radii, unit move orders, minion path progress, foundry production queues/progress, AI command timers, starling merge gate timers/absorption state, warp gate charge/cancel/timeout state, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, merge gates, warp gates, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
+The simulation now computes a lightweight `stateHash` at a fixed cadence to detect desyncs. Every `STATE_HASH_TICK_INTERVAL` ticks, the game hashes key entity state (positions, velocities, rotations, health, completion flags, mirror reflection angles, mirror linked structure targets, unit rally points, unit manual targets, unit collision radii, unit move orders, minion path progress, starling move speed, foundry production queues/progress, player Strafe upgrade state, AI command timers, starling merge gate timers/absorption state, warp gate charge/cancel/timeout state, minion projectile state, and space dust positions/velocities/glow state/base colors/impact tint state) for players, mirrors, units, buildings, merge gates, warp gates, space dust, and active projectiles. This hash is used for quick determinism checks during replays or multiplayer validation.
 
 ### Sample Deterministic Replay Snippet (Command List)
 Use the following minimal command list to validate that the same `stateHash` is produced across runs:
@@ -94,7 +94,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after updating cannon laser behavior and gatling fire rate/range to ensure `stateHash` stability.
+The command list above was revalidated after adding the Strafe upgrade and starling movement slowdown on attack to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
