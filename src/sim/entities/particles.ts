@@ -530,7 +530,8 @@ export class LaserBeam {
         public startPos: Vector2D,
         public endPos: Vector2D,
         public owner: Player,
-        public damage: number
+        public damage: number,
+        public widthPx: number = Constants.STARLING_LASER_WIDTH_PX
     ) {}
     
     update(deltaTime: number): boolean {

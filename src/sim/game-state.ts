@@ -335,11 +335,17 @@ export class GameState {
 
         // Update units and collect enemies for targeting
         const allUnits: Unit[] = [];
-        const allStructures: StellarForge[] = [];
+        const allStructures: CombatTarget[] = [];
         
         for (const player of this.players) {
             if (!player.isDefeated()) {
                 allUnits.push(...player.units);
+                allStructures.push(...player.buildings);
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health > 0) {
+                        allStructures.push(mirror);
+                    }
+                }
                 if (player.stellarForge) {
                     allStructures.push(player.stellarForge);
                 }
@@ -556,7 +562,7 @@ export class GameState {
             // Update each building (only after countdown)
             if (!this.isCountdownActive) {
                 for (const building of player.buildings) {
-                    building.update(deltaTime, enemies, allUnits);
+                    building.update(deltaTime, enemies, allUnits, this.asteroids, allStructures, Constants.MAP_PLAYABLE_BOUNDARY);
 
                 // If building is a Cannon or Gatling Tower, collect its effects
                 if (building instanceof Minigun || building instanceof GatlingTower) {
@@ -569,6 +575,13 @@ export class GameState {
                     }
                     if (effects.bouncingBullet) {
                         this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                }
+
+                if (building instanceof Minigun) {
+                    const lasers = building.getAndClearLastShotLasers();
+                    if (lasers.length > 0) {
+                        this.laserBeams.push(...lasers);
                     }
                 }
                 

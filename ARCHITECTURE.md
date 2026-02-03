@@ -90,11 +90,11 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 10, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
   { "tick": 11, "command": "targetStructure", "playerIndex": 0, "target": { "type": "StellarForge", "playerIndex": 1 } },
   { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
-  { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "GatlingTower", "targetWorld": { "x": 420, "y": 420 } }
+  { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "Cannon", "targetWorld": { "x": 420, "y": 420 } }
 ]
 ```
 
-The command list above was revalidated after hashing warp gate charge/cancel/timeout state and manual unit target state to ensure `stateHash` stability.
+The command list above was revalidated after updating cannon laser behavior and gatling fire rate/range to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

@@ -2521,7 +2521,7 @@ export class GameRenderer {
         // Draw the main laser beam
         this.ctx.strokeStyle = color;
         this.ctx.globalAlpha = alpha * 0.8;
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = laser.widthPx;
         this.ctx.beginPath();
         this.ctx.moveTo(startScreen.x, startScreen.y);
         this.ctx.lineTo(endScreen.x, endScreen.y);
@@ -2529,7 +2529,7 @@ export class GameRenderer {
         
         // Draw a glowing outer beam
         this.ctx.globalAlpha = alpha * 0.3;
-        this.ctx.lineWidth = 4;
+        this.ctx.lineWidth = laser.widthPx * 2;
         this.ctx.beginPath();
         this.ctx.moveTo(startScreen.x, startScreen.y);
         this.ctx.lineTo(endScreen.x, endScreen.y);
