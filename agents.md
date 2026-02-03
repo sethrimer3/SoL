@@ -255,11 +255,12 @@ Maintain these documentation files:
 
 ### After Making Changes
 
-1. **Add or update state hash checks** for sim logic changes
-2. Include a deterministic replay snippet (command list) to validate no desync
-3. Update relevant documentation if architectural changes were made
-4. Test with performance overlay enabled
-5. Verify hundreds of entities render smoothly
+1. Increment `BUILD_NUMBER` in `src/build-info.ts` by 1 for every repository change
+2. **Add or update state hash checks** for sim logic changes
+3. Include a deterministic replay snippet (command list) to validate no desync
+4. Update relevant documentation if architectural changes were made
+5. Test with performance overlay enabled
+6. Verify hundreds of entities render smoothly
 
 ---
 
