@@ -20,6 +20,7 @@ class GameController {
     private currentWarpGate: WarpGate | null = null;
     private isUsingMirrorsForWarpGate: boolean = false;
     private mirrorCommandMode: 'warpgate' | null = null; // Track which command was selected
+    private shouldSkipMoveOrderThisTap: boolean = false;
     private hasSeenFoundry: boolean = false;
     private hasActiveFoundry: boolean = false;
     private menu: MainMenu;
@@ -1987,6 +1988,8 @@ class GameController {
                     }
                 } else if (this.isDraggingHeroArrow && hasHeroUnits) {
                     // Cancel ability casting if arrow was dragged back to nothing
+                } else if (this.shouldSkipMoveOrderThisTap) {
+                    this.shouldSkipMoveOrderThisTap = false;
                 } else {
                     // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
@@ -2386,6 +2389,7 @@ class GameController {
                 warpGate.startCharging();
                 this.game.warpGates.push(warpGate);
                 this.currentWarpGate = warpGate;
+                this.shouldSkipMoveOrderThisTap = true;
                 
                 // Link all selected mirrors to the warp gate
                 for (const mirror of this.selectedMirrors) {
@@ -2542,6 +2546,18 @@ class GameController {
         this.applyRadialForceToParticles(position, false);
     }
 
+    private unlinkMirrorsFromWarpGate(gate: WarpGate): void {
+        if (!this.game) return;
+
+        for (const player of this.game.players) {
+            for (const mirror of player.solarMirrors) {
+                if (mirror.linkedStructure === gate) {
+                    mirror.setLinkedStructure(null);
+                }
+            }
+        }
+    }
+
     private updateFoundryButtonState(): void {
         const player = this.getLocalPlayer();
         if (!player) {
@@ -2577,15 +2593,21 @@ class GameController {
         }
 
         // Update warp gates (energy is transferred via game-state.ts mirror update)
-        // Only update for completion checks and shockwave emissions
-        for (const gate of this.game.warpGates) {
-            if (!gate.isComplete && gate.isCharging) {
-                gate.update(deltaTime);
-                
-                if (gate.shouldEmitShockwave()) {
-                    this.scatterParticles(gate.position);
-                    this.renderer.createWarpGateShockwave(gate.position);
-                }
+        // Update for completion checks, cancellation, and shockwave emissions
+        for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
+            const gate = this.game.warpGates[i];
+            gate.update(deltaTime);
+            
+            if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
+                this.scatterParticles(gate.position);
+                this.renderer.createWarpGateShockwave(gate.position);
+            }
+
+            if (gate.hasDissipated) {
+                this.unlinkMirrorsFromWarpGate(gate);
+                this.scatterParticles(gate.position);
+                this.renderer.createWarpGateShockwave(gate.position);
+                this.game.warpGates.splice(i, 1);
             }
         }
     }
