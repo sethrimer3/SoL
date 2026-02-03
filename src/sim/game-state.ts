@@ -120,6 +120,10 @@ export class GameState {
             }
         }
 
+        for (const gate of this.warpGates) {
+            gate.resetEnergyReceipt();
+        }
+
         // Update asteroids
         for (const asteroid of this.asteroids) {
             asteroid.update(deltaTime);
@@ -313,6 +317,12 @@ export class GameState {
                         }
                     }
                 }
+            }
+        }
+
+        for (const gate of this.warpGates) {
+            if (gate.isCharging && !gate.isComplete && !gate.isCancelling && !gate.hasReceivedEnergyThisTick) {
+                gate.startCancellation();
             }
         }
 
@@ -3131,6 +3141,21 @@ export class GameState {
                     mixInt(building.starlingUpgradeTier);
                 }
             }
+        }
+
+        mixInt(this.warpGates.length);
+        for (const gate of this.warpGates) {
+            mix(gate.position.x);
+            mix(gate.position.y);
+            mix(gate.chargeTime);
+            mix(gate.accumulatedEnergy);
+            mixInt(gate.isCharging ? 1 : 0);
+            mixInt(gate.isComplete ? 1 : 0);
+            mixInt(gate.isCancelling ? 1 : 0);
+            mixInt(gate.hasDissipated ? 1 : 0);
+            mix(gate.completionRemainingSec);
+            mix(gate.health);
+            mixInt(this.players.indexOf(gate.owner));
         }
 
         mixInt(this.minionProjectiles.length);

@@ -1960,6 +1960,22 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2);
             this.ctx.stroke();
 
+            const completionProgress = gate.completionRemainingSec / Constants.WARP_GATE_COMPLETION_WINDOW_SEC;
+            if (completionProgress > 0) {
+                const countdownRadius = maxRadius + 12 * this.zoom;
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 4;
+                this.ctx.beginPath();
+                this.ctx.arc(
+                    screenPos.x,
+                    screenPos.y,
+                    countdownRadius,
+                    -Math.PI / 2,
+                    -Math.PI / 2 + completionProgress * Math.PI * 2
+                );
+                this.ctx.stroke();
+            }
+
             // Draw 4 build buttons around the gate
             const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
             const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
