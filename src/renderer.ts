@@ -5402,11 +5402,6 @@ export class GameRenderer {
         // Count starlings
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
         
-        // Calculate next crunch starling count
-        const nextCrunchStarlings = player.stellarForge 
-            ? Math.floor((player.stellarForge.pendingEnergy ?? 0) / Constants.STARLING_COST_PER_ENERGY)
-            : 0;
-        
         // Draw starlings count box
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
@@ -5416,20 +5411,12 @@ export class GameRenderer {
         this.ctx.lineWidth = 2;
         this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
         
-        // Draw text with increment indicator
+        // Draw text
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = 'bold 14px Doto';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        const starlingText = `Starlings: ${starlingCount}`;
-        this.ctx.fillText(starlingText, x + 8, y + compactBoxHeight / 2);
-        
-        // Draw the +X indicator in green to the right of the count
-        if (nextCrunchStarlings > 0) {
-            this.ctx.fillStyle = '#00FF00';
-            const starlingTextWidth = this.ctx.measureText(starlingText).width;
-            this.ctx.fillText(` +${nextCrunchStarlings}`, x + 8 + starlingTextWidth, y + compactBoxHeight / 2);
-        }
+        this.ctx.fillText(`Starlings: ${starlingCount}`, x + 8, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 8;
         
