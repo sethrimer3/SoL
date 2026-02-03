@@ -2021,16 +2021,17 @@ export class GameRenderer {
         const shouldShowFoundryButton = this.hasSeenFoundry;
         const hasFoundryAvailable = this.hasActiveFoundry;
         
-        // Button layout: Two buttons above the mirror (or three if foundry is visible)
+        // Button layout: Warp gate above, forge on left (and foundry on right if available)
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
-        const buttonSpacing = 30 * this.zoom; // Space between buttons
 
-        const buttonY = screenPos.y - buttonOffset;
         const useThreeButtons = shouldShowFoundryButton;
-        const forgeButtonX = screenPos.x - (useThreeButtons ? buttonSpacing : buttonSpacing / 2);
-        const warpGateButtonX = useThreeButtons ? screenPos.x : screenPos.x + buttonSpacing / 2;
-        const foundryButtonX = screenPos.x + buttonSpacing;
+        const warpGateButtonX = screenPos.x;
+        const warpGateButtonY = screenPos.y - buttonOffset;
+        const forgeButtonX = screenPos.x - buttonOffset;
+        const forgeButtonY = screenPos.y;
+        const foundryButtonX = screenPos.x + buttonOffset;
+        const foundryButtonY = screenPos.y;
 
         // Draw "Forge" button (left)
         const isForgeHighlighted = this.highlightedButtonIndex === 0;
@@ -2038,7 +2039,7 @@ export class GameRenderer {
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = isForgeHighlighted ? 4 : 2;
         this.ctx.beginPath();
-        this.ctx.arc(forgeButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
         
@@ -2046,7 +2047,7 @@ export class GameRenderer {
         this.ctx.font = `${11 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Forge', forgeButtonX, buttonY);
+        this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
 
         // Draw "Warp Gate" button (center or right)
         const isWarpGateHighlighted = this.highlightedButtonIndex === 1;
@@ -2054,7 +2055,7 @@ export class GameRenderer {
         this.ctx.strokeStyle = '#00FFFF';
         this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
         this.ctx.beginPath();
-        this.ctx.arc(warpGateButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
         
@@ -2062,8 +2063,8 @@ export class GameRenderer {
         this.ctx.font = `${9 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Warp', warpGateButtonX, buttonY - 6 * this.zoom);
-        this.ctx.fillText('Gate', warpGateButtonX, buttonY + 6 * this.zoom);
+        this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
+        this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
 
         if (useThreeButtons) {
             const isFoundryHighlighted = hasFoundryAvailable && this.highlightedButtonIndex === 2;
@@ -2077,7 +2078,7 @@ export class GameRenderer {
             this.ctx.strokeStyle = foundryStroke;
             this.ctx.lineWidth = isFoundryHighlighted ? 4 : 2;
             this.ctx.beginPath();
-            this.ctx.arc(foundryButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.arc(foundryButtonX, foundryButtonY, buttonRadius, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.stroke();
 
@@ -2085,8 +2086,8 @@ export class GameRenderer {
             this.ctx.font = `${9 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('Found', foundryButtonX, buttonY - 5 * this.zoom);
-            this.ctx.fillText('ry', foundryButtonX, buttonY + 6 * this.zoom);
+            this.ctx.fillText('Found', foundryButtonX, foundryButtonY - 5 * this.zoom);
+            this.ctx.fillText('ry', foundryButtonX, foundryButtonY + 6 * this.zoom);
         }
 
         // Reset text alignment
