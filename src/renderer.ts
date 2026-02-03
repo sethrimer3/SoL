@@ -5402,15 +5402,14 @@ export class GameRenderer {
         
         // Count starlings
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
-        
-<<<<<<< HEAD
-=======
-        // Calculate next crunch starling count
-        const nextCrunchStarlings = player.stellarForge 
-            ? Math.floor(player.stellarForge.pendingEnergy / Constants.STARLING_COST_PER_ENERGY)
-            : 0;
-        
->>>>>>> parent of a6a586c (Add defensive null check for pendingEnergy)
+
+        // Calculate next crunch starling count based on pending energy and current rate
+        const forge = player.stellarForge;
+        const pendingEnergy = forge?.pendingEnergy ?? 0;
+        const projectedEnergy = forge?.isReceivingLight
+            ? pendingEnergy + forge.incomingLightPerSec * Math.max(0, forge.crunchTimer)
+            : pendingEnergy;
+        const nextCrunchStarlings = Math.floor(projectedEnergy / Constants.STARLING_COST_PER_ENERGY);
         // Draw starlings count box
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
@@ -5425,7 +5424,8 @@ export class GameRenderer {
         this.ctx.font = 'bold 14px Doto';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`Starlings: ${starlingCount}`, x + 8, y + compactBoxHeight / 2);
+        const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
+        this.ctx.fillText(`Starlings: ${starlingCount}${starlingRateLabel}`, x + 8, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 8;
         
