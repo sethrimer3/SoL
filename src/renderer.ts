@@ -33,6 +33,8 @@ export class GameRenderer {
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
     public selectedHeroNames: string[] = [];
+    public hasSeenFoundry: boolean = false;
+    public hasActiveFoundry: boolean = false;
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -2000,77 +2002,27 @@ export class GameRenderer {
         const firstMirror = Array.from(mirrors)[0];
         const screenPos = this.worldToScreen(firstMirror.position);
         
-        // Check if all selected mirrors are already targeting the forge
-        const playerForge = firstMirror.owner.stellarForge;
-        const allTargetingForge = playerForge && Array.from(mirrors).every(
-            mirror => mirror.linkedStructure === playerForge
-        );
+        const shouldShowFoundryButton = this.hasSeenFoundry;
+        const hasFoundryAvailable = this.hasActiveFoundry;
         
-        // Button layout: Two buttons above the mirror (or just one if targeting forge)
+        // Button layout: Two buttons above the mirror (or three if foundry is visible)
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
         const buttonSpacing = 30 * this.zoom; // Space between buttons
-        
-        // If all mirrors are targeting forge, only show warp gate button (centered)
-        if (allTargetingForge) {
-            // Single button: "Create Warp Gate" (centered)
-            const warpGateButtonX = screenPos.x;
-            const warpGateButtonY = screenPos.y - buttonOffset;
-            
-            const isWarpGateHighlighted = this.highlightedButtonIndex === 0;
-            this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
-            this.ctx.beginPath();
-            this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${9 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
-            this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
-            
-            // Reset text alignment
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'alphabetic';
-            return;
-        }
-        
-        // Button 1: "Create Warp Gate" (left)
-        const warpGateButtonX = screenPos.x - buttonSpacing / 2;
-        const warpGateButtonY = screenPos.y - buttonOffset;
-        
-        // Button 2: "Forge" (right)
-        const forgeButtonX = screenPos.x + buttonSpacing / 2;
-        const forgeButtonY = screenPos.y - buttonOffset;
-        
-        // Draw "Warp Gate" button
-        const isWarpGateHighlighted = this.highlightedButtonIndex === 0;
-        this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
-        this.ctx.strokeStyle = '#00FFFF';
-        this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
-        this.ctx.beginPath();
-        this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-        
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `${9 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
-        this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
-        
-        // Draw "Forge" button
-        const isForgeHighlighted = this.highlightedButtonIndex === 1;
+
+        const buttonY = screenPos.y - buttonOffset;
+        const useThreeButtons = shouldShowFoundryButton;
+        const forgeButtonX = screenPos.x - (useThreeButtons ? buttonSpacing : buttonSpacing / 2);
+        const warpGateButtonX = useThreeButtons ? screenPos.x : screenPos.x + buttonSpacing / 2;
+        const foundryButtonX = screenPos.x + buttonSpacing;
+
+        // Draw "Forge" button (left)
+        const isForgeHighlighted = this.highlightedButtonIndex === 0;
         this.ctx.fillStyle = isForgeHighlighted ? 'rgba(255, 215, 0, 0.4)' : '#444444';
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = isForgeHighlighted ? 4 : 2;
         this.ctx.beginPath();
-        this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.arc(forgeButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
         this.ctx.stroke();
         
@@ -2078,8 +2030,49 @@ export class GameRenderer {
         this.ctx.font = `${11 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
+        this.ctx.fillText('Forge', forgeButtonX, buttonY);
+
+        // Draw "Warp Gate" button (center or right)
+        const isWarpGateHighlighted = this.highlightedButtonIndex === 1;
+        this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
+        this.ctx.strokeStyle = '#00FFFF';
+        this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
+        this.ctx.beginPath();
+        this.ctx.arc(warpGateButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
         
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${9 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Warp', warpGateButtonX, buttonY - 6 * this.zoom);
+        this.ctx.fillText('Gate', warpGateButtonX, buttonY + 6 * this.zoom);
+
+        if (useThreeButtons) {
+            const isFoundryHighlighted = hasFoundryAvailable && this.highlightedButtonIndex === 2;
+            const foundryFill = hasFoundryAvailable
+                ? (isFoundryHighlighted ? 'rgba(160, 160, 160, 0.4)' : '#444444')
+                : '#2C2C2C';
+            const foundryStroke = hasFoundryAvailable ? '#B0B0B0' : '#666666';
+            const foundryText = hasFoundryAvailable ? '#FFFFFF' : '#8A8A8A';
+
+            this.ctx.fillStyle = foundryFill;
+            this.ctx.strokeStyle = foundryStroke;
+            this.ctx.lineWidth = isFoundryHighlighted ? 4 : 2;
+            this.ctx.beginPath();
+            this.ctx.arc(foundryButtonX, buttonY, buttonRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+
+            this.ctx.fillStyle = foundryText;
+            this.ctx.font = `${9 * this.zoom}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('Found', foundryButtonX, buttonY - 5 * this.zoom);
+            this.ctx.fillText('ry', foundryButtonX, buttonY + 6 * this.zoom);
+        }
+
         // Reset text alignment
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'alphabetic';
