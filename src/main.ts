@@ -1515,20 +1515,21 @@ class GameController {
                     const firstMirror = Array.from(this.selectedMirrors)[0] as any;
                     const mirrorScreenPos = this.renderer.worldToScreen(firstMirror.position);
                     
-                    // Button layout: Two or three buttons above the mirror
+                    // Button layout: Warp gate above, forge on left (and foundry on right if available)
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonOffset = 50 * this.renderer.zoom; // Distance from mirror
-                    const buttonSpacing = 30 * this.renderer.zoom; // Space between buttons
                     const shouldShowFoundryButton = this.hasSeenFoundry;
                     
-                    const buttonY = mirrorScreenPos.y - buttonOffset;
-                    const forgeButtonX = mirrorScreenPos.x - (shouldShowFoundryButton ? buttonSpacing : buttonSpacing / 2);
-                    const warpGateButtonX = shouldShowFoundryButton ? mirrorScreenPos.x : mirrorScreenPos.x + buttonSpacing / 2;
-                    const foundryButtonX = mirrorScreenPos.x + buttonSpacing;
+                    const warpGateButtonX = mirrorScreenPos.x;
+                    const warpGateButtonY = mirrorScreenPos.y - buttonOffset;
+                    const forgeButtonX = mirrorScreenPos.x - buttonOffset;
+                    const forgeButtonY = mirrorScreenPos.y;
+                    const foundryButtonX = mirrorScreenPos.x + buttonOffset;
+                    const foundryButtonY = mirrorScreenPos.y;
                     
                     // Check if clicked on forge button
                     let dx = lastX - forgeButtonX;
-                    let dy = lastY - buttonY;
+                    let dy = lastY - forgeButtonY;
                     if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
                         console.log('Mirror command: Link to Forge');
                         // Link all selected mirrors to the forge
@@ -1562,7 +1563,7 @@ class GameController {
 
                     // Check if clicked on warp gate button
                     dx = lastX - warpGateButtonX;
-                    dy = lastY - buttonY;
+                    dy = lastY - warpGateButtonY;
                     if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
                         console.log('Mirror command: Create Warp Gate');
                         this.mirrorCommandMode = 'warpgate';
@@ -1578,7 +1579,7 @@ class GameController {
 
                     if (shouldShowFoundryButton) {
                         dx = lastX - foundryButtonX;
-                        dy = lastY - buttonY;
+                        dy = lastY - foundryButtonY;
                         if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
                             if (this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
@@ -1728,7 +1729,7 @@ class GameController {
                 
                 // If a mirror is selected and clicked elsewhere, move it
                 const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
-                if (selectedMirror) {
+                if (selectedMirror && this.mirrorCommandMode !== 'warpgate') {
                     selectedMirror.setTarget(worldPos);
                     this.moveOrderCounter++;
                     selectedMirror.moveOrder = this.moveOrderCounter;
