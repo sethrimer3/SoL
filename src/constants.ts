@@ -161,6 +161,7 @@ export const STARLING_COLLISION_RADIUS_PX = 3; // Collision radius for minion st
 export const STARLING_LASER_IMPACT_PARTICLES = 3; // Number of particles spawned at laser impact
 export const STARLING_LASER_PARTICLE_SPEED = 30; // Speed of impact particles in pixels per second
 export const STARLING_LASER_PARTICLE_LIFETIME = 0.3; // Lifetime of impact particles in seconds
+export const STARLING_LASER_WIDTH_PX = 2;
 export const FORGE_FLAME_ALPHA = 0.75;
 export const FORGE_FLAME_SIZE_MULTIPLIER = 0.45;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
@@ -185,11 +186,12 @@ export const MINIGUN_MAX_HEALTH = 200;
 export const MINIGUN_ATTACK_RANGE = 350;
 export const MINIGUN_ATTACK_DAMAGE = 12;
 export const MINIGUN_ATTACK_SPEED = 6; // Attacks per second (very fast)
+export const MINIGUN_LASER_WIDTH_PX = 12;
 export const MINIGUN_RADIUS = 30; // Building size
 export const GATLING_MAX_HEALTH = 200;
-export const GATLING_ATTACK_RANGE = 350;
+export const GATLING_ATTACK_RANGE = 175;
 export const GATLING_ATTACK_DAMAGE = 12;
-export const GATLING_ATTACK_SPEED = 6; // Attacks per second (very fast)
+export const GATLING_ATTACK_SPEED = 4; // Attacks per second (very fast)
 export const GATLING_RADIUS = 30; // Building size
 
 // Space Dust Swirler building constants (defensive building for Radiant faction)

@@ -10,7 +10,7 @@ import type { Unit } from './unit';
 import type { Asteroid } from './asteroid';
 import type { StellarForge } from './stellar-forge';
 import type { SolarMirror } from './solar-mirror';
-import { BulletCasing, BouncingBullet, MuzzleFlash } from './particles';
+import { BulletCasing, BouncingBullet, LaserBeam, MuzzleFlash } from './particles';
 import type { SpaceDustParticle } from './particles';
 
 export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
@@ -49,7 +49,9 @@ export class Building {
         deltaTime: number,
         enemies: CombatTarget[],
         allUnits: Unit[],
-        asteroids: Asteroid[] = []
+        asteroids: Asteroid[] = [],
+        structures: CombatTarget[] = [],
+        mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
     ): void {
         // Update attack cooldown
         if (this.attackCooldown > 0) {
@@ -70,7 +72,7 @@ export class Building {
         if (this.target && this.attackCooldown <= 0) {
             const distance = this.position.distanceTo(this.target.position);
             if (distance <= this.attackRange) {
-                this.attack(this.target);
+                this.attack(this.target, enemies, structures, asteroids, mapBoundaryPx);
                 this.attackCooldown = 1.0 / this.attackSpeed;
             }
         }
@@ -109,7 +111,13 @@ export class Building {
     /**
      * Attack target (to be overridden by subclasses)
      */
-    attack(target: CombatTarget): void {
+    attack(
+        target: CombatTarget,
+        _enemies: CombatTarget[] = [],
+        _structures: CombatTarget[] = [],
+        _asteroids: Asteroid[] = [],
+        _mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
+    ): void {
         // Base implementation
         if ('health' in target) {
             target.health -= this.attackDamage;
@@ -187,6 +195,7 @@ export class Minigun extends Building {
         casing?: BulletCasing, 
         bouncingBullet?: BouncingBullet 
     } = {};
+    private lastShotLasers: LaserBeam[] = [];
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -204,13 +213,109 @@ export class Minigun extends Building {
     /**
      * Attack with visual effects like Marine
      */
-    attack(target: CombatTarget): void {
-        // Apply damage
-        super.attack(target);
-
-        // Calculate angle to target
+    attack(
+        target: CombatTarget,
+        enemies: CombatTarget[] = [],
+        structures: CombatTarget[] = [],
+        asteroids: Asteroid[] = [],
+        mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
+    ): void {
         const dx = target.position.x - this.position.x;
         const dy = target.position.y - this.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= 0) {
+            return;
+        }
+
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+        const boundaryDistance = this.getRayBoundaryDistance(
+            this.position.x,
+            this.position.y,
+            dirX,
+            dirY,
+            mapBoundaryPx
+        );
+        let stopDistance = boundaryDistance;
+        let stopStructure: CombatTarget | null = null;
+
+        for (const structure of structures) {
+            const radius = this.getStructureRadius(structure);
+            const hitDistance = this.getRayCircleHitDistance(
+                this.position.x,
+                this.position.y,
+                dirX,
+                dirY,
+                structure.position.x,
+                structure.position.y,
+                radius
+            );
+            if (hitDistance !== null && hitDistance < stopDistance) {
+                stopDistance = hitDistance;
+                stopStructure = structure;
+            }
+        }
+
+        for (const asteroid of asteroids) {
+            const hitDistance = this.getRayCircleHitDistance(
+                this.position.x,
+                this.position.y,
+                dirX,
+                dirY,
+                asteroid.position.x,
+                asteroid.position.y,
+                asteroid.size
+            );
+            if (hitDistance !== null && hitDistance < stopDistance) {
+                stopDistance = hitDistance;
+                stopStructure = null;
+            }
+        }
+
+        const endPos = new Vector2D(
+            this.position.x + dirX * stopDistance,
+            this.position.y + dirY * stopDistance
+        );
+
+        const laserBeam = new LaserBeam(
+            new Vector2D(this.position.x, this.position.y),
+            new Vector2D(endPos.x, endPos.y),
+            this.owner,
+            this.attackDamage,
+            Constants.MINIGUN_LASER_WIDTH_PX
+        );
+        this.lastShotLasers.push(laserBeam);
+
+        const beamHalfWidth = Constants.MINIGUN_LASER_WIDTH_PX * 0.5;
+        const beamHalfWidthSq = beamHalfWidth * beamHalfWidth;
+        for (const enemy of enemies) {
+            if (!('collisionRadiusPx' in enemy)) {
+                continue;
+            }
+            const toUnitX = enemy.position.x - this.position.x;
+            const toUnitY = enemy.position.y - this.position.y;
+            const projection = toUnitX * dirX + toUnitY * dirY;
+            if (projection < 0 || projection > stopDistance) {
+                continue;
+            }
+            const closestX = this.position.x + dirX * projection;
+            const closestY = this.position.y + dirY * projection;
+            const offsetX = enemy.position.x - closestX;
+            const offsetY = enemy.position.y - closestY;
+            const distanceSq = offsetX * offsetX + offsetY * offsetY;
+            const effectiveRadius = beamHalfWidth + enemy.collisionRadiusPx;
+            if (distanceSq <= effectiveRadius * effectiveRadius) {
+                enemy.takeDamage(this.attackDamage);
+            }
+        }
+
+        if (stopStructure && 'owner' in stopStructure && stopStructure.owner !== this.owner) {
+            if ('health' in stopStructure) {
+                stopStructure.health -= this.attackDamage;
+            }
+        }
+
+        // Calculate angle to target
         const angle = Math.atan2(dy, dx);
 
         // Create muzzle flash
@@ -250,6 +355,82 @@ export class Minigun extends Building {
         this.lastShotEffects = {};
         return effects;
     }
+
+    getAndClearLastShotLasers(): LaserBeam[] {
+        const lasers = this.lastShotLasers;
+        this.lastShotLasers = [];
+        return lasers;
+    }
+
+    private getRayBoundaryDistance(
+        startX: number,
+        startY: number,
+        dirX: number,
+        dirY: number,
+        boundary: number
+    ): number {
+        let closestDistance = Infinity;
+
+        if (Math.abs(dirX) > 0.001) {
+            const tPos = (boundary - startX) / dirX;
+            if (tPos > 0 && tPos < closestDistance) {
+                closestDistance = tPos;
+            }
+            const tNeg = (-boundary - startX) / dirX;
+            if (tNeg > 0 && tNeg < closestDistance) {
+                closestDistance = tNeg;
+            }
+        }
+
+        if (Math.abs(dirY) > 0.001) {
+            const tPos = (boundary - startY) / dirY;
+            if (tPos > 0 && tPos < closestDistance) {
+                closestDistance = tPos;
+            }
+            const tNeg = (-boundary - startY) / dirY;
+            if (tNeg > 0 && tNeg < closestDistance) {
+                closestDistance = tNeg;
+            }
+        }
+
+        return closestDistance === Infinity ? 0 : closestDistance;
+    }
+
+    private getRayCircleHitDistance(
+        startX: number,
+        startY: number,
+        dirX: number,
+        dirY: number,
+        centerX: number,
+        centerY: number,
+        radius: number
+    ): number | null {
+        const toCenterX = centerX - startX;
+        const toCenterY = centerY - startY;
+        const projection = toCenterX * dirX + toCenterY * dirY;
+        if (projection < 0) {
+            return null;
+        }
+        const closestX = startX + dirX * projection;
+        const closestY = startY + dirY * projection;
+        const offsetX = centerX - closestX;
+        const offsetY = centerY - closestY;
+        const distanceSq = offsetX * offsetX + offsetY * offsetY;
+        const radiusSq = radius * radius;
+        if (distanceSq > radiusSq) {
+            return null;
+        }
+        const offset = Math.sqrt(radiusSq - distanceSq);
+        const hitDistance = projection - offset;
+        return hitDistance >= 0 ? hitDistance : projection + offset;
+    }
+
+    private getStructureRadius(structure: CombatTarget): number {
+        if ('radius' in structure) {
+            return structure.radius;
+        }
+        return Constants.MIRROR_CLICK_RADIUS_PX;
+    }
 }
 
 /**
@@ -279,7 +460,13 @@ export class GatlingTower extends Building {
     /**
      * Attack with visual effects like Marine
      */
-    attack(target: CombatTarget): void {
+    attack(
+        target: CombatTarget,
+        _enemies: CombatTarget[] = [],
+        _structures: CombatTarget[] = [],
+        _asteroids: Asteroid[] = [],
+        _mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
+    ): void {
         // Apply damage
         super.attack(target);
 
