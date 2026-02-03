@@ -35,6 +35,7 @@ export class Player {
     aiNextMirrorPurchaseCommandSec: number = 0;
     aiStrategy: Constants.AIStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy (randomly assigned in createStandardGame for AI players)
     hasStrafeUpgrade: boolean = false;
+    hasRegenUpgrade: boolean = false;
     
     // Statistics tracking
     unitsCreated: number = 0;

@@ -1204,13 +1204,19 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
 
-        // Draw 1 button for Strafe upgrade
+        // Draw 2 buttons for Foundry upgrades
         const buttonConfigs = [
             { 
-                x: 0, y: -1, // Top - Strafe upgrade
+                x: -1, y: 0, // Left - Strafe upgrade
                 label: 'Strafe',
                 available: foundry.canUpgradeStrafe(),
                 index: 0
+            },
+            {
+                x: 1, y: 0, // Right - Regen upgrade
+                label: 'Regen',
+                available: foundry.canUpgradeRegen(),
+                index: 1
             }
         ];
 

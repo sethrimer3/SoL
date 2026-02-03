@@ -3006,6 +3006,7 @@ export class GameState {
             mix(player.aiNextMirrorPurchaseCommandSec);
             mixString(player.aiStrategy);
             mixInt(player.hasStrafeUpgrade ? 1 : 0);
+            mixInt(player.hasRegenUpgrade ? 1 : 0);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -3434,6 +3435,12 @@ export class GameState {
             case 'foundry_production':
                 this.executeFoundryProductionCommand(player, cmd.data);
                 break;
+            case 'foundry_strafe_upgrade':
+                this.executeFoundryUpgradeCommand(player, cmd.data, 'strafe');
+                break;
+            case 'foundry_regen_upgrade':
+                this.executeFoundryUpgradeCommand(player, cmd.data, 'regen');
+                break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
                 break;
@@ -3667,6 +3674,26 @@ export class GameState {
         }
         if (itemType === 'solar-mirror') {
             return;
+        }
+    }
+
+    private executeFoundryUpgradeCommand(player: Player, data: any, upgradeType: 'strafe' | 'regen'): void {
+        const { buildingId } = data;
+        const building = player.buildings[buildingId];
+        if (!(building instanceof SubsidiaryFactory)) {
+            return;
+        }
+        if (!building.isComplete) {
+            return;
+        }
+        if (upgradeType === 'strafe') {
+            if (building.canUpgradeStrafe() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+                building.upgradeStrafe();
+            }
+            return;
+        }
+        if (building.canUpgradeRegen() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+            building.upgradeRegen();
         }
     }
 

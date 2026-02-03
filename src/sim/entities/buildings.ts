@@ -655,7 +655,7 @@ export class SpaceDustSwirler extends Building {
 
 /**
  * Foundry Building - Production building
- * Handles production and the Strafe upgrade. Only one can exist at a time.
+ * Handles production and upgrades. Only one can exist at a time.
  */
 export class SubsidiaryFactory extends Building {
     private productionTimer: number = 0;
@@ -749,11 +749,27 @@ export class SubsidiaryFactory extends Building {
     }
 
     /**
+     * Check if Regen upgrade is available
+     */
+    canUpgradeRegen(): boolean {
+        return this.isComplete && !this.owner.hasRegenUpgrade;
+    }
+
+    /**
      * Upgrade starlings with Strafe
      */
     upgradeStrafe(): boolean {
         if (!this.canUpgradeStrafe()) return false;
         this.owner.hasStrafeUpgrade = true;
+        return true;
+    }
+
+    /**
+     * Upgrade starlings with Regen
+     */
+    upgradeRegen(): boolean {
+        if (!this.canUpgradeRegen()) return false;
+        this.owner.hasRegenUpgrade = true;
         return true;
     }
 }
