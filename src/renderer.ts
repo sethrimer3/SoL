@@ -5402,6 +5402,14 @@ export class GameRenderer {
         // Count starlings
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
         
+<<<<<<< HEAD
+=======
+        // Calculate next crunch starling count
+        const nextCrunchStarlings = player.stellarForge 
+            ? Math.floor(player.stellarForge.pendingEnergy / Constants.STARLING_COST_PER_ENERGY)
+            : 0;
+        
+>>>>>>> parent of a6a586c (Add defensive null check for pendingEnergy)
         // Draw starlings count box
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
