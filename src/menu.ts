@@ -1827,7 +1827,7 @@ export class MainMenu {
         const title = document.createElement('h2');
         title.textContent = 'Select Your Faction';
         title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.marginBottom = isCompactLayout ? '8px' : '12px';
         title.style.color = '#FFD700';
         title.style.textAlign = 'center';
         title.style.maxWidth = '100%';
@@ -1841,7 +1841,7 @@ export class MainMenu {
         carouselContainer.style.width = '100%';
         carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
         carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = '30px';
+        carouselContainer.style.marginBottom = '12px';
         container.appendChild(carouselContainer);
 
         const factions: FactionCarouselOption[] = [
@@ -1887,7 +1887,7 @@ export class MainMenu {
         const buttonContainer = document.createElement('div');
         buttonContainer.style.display = 'flex';
         buttonContainer.style.gap = '20px';
-        buttonContainer.style.marginTop = '20px';
+        buttonContainer.style.marginTop = '8px';
         buttonContainer.style.flexWrap = 'wrap';
         buttonContainer.style.justifyContent = 'center';
         if (isCompactLayout) {
@@ -2753,8 +2753,8 @@ export class MainMenu {
  * Faction carousel view - displays factions in a horizontal carousel
  */
 class FactionCarouselView {
-    private static readonly ITEM_SPACING_PX = 200;
-    private static readonly BASE_SIZE_PX = 320;
+    private static readonly ITEM_SPACING_PX = 210;
+    private static readonly BASE_SIZE_PX = 224;
     private static readonly TEXT_SCALE = 2.4;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
     private static readonly VELOCITY_FACTOR = 0.001;
@@ -2955,7 +2955,7 @@ class FactionCarouselView {
 
     private updateLayoutMetrics(): void {
         this.isCompactLayout = window.innerWidth < 600;
-        const targetHeight = this.isCompactLayout ? '460px' : '600px';
+        const targetHeight = this.isCompactLayout ? '300px' : '380px';
         if (this.container.style.height !== targetHeight) {
             this.container.style.height = targetHeight;
         }
