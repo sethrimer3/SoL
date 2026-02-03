@@ -68,27 +68,6 @@ class GameController {
         this.renderer.abilityArrowStarts = this.abilityArrowStarts;
     }
 
-    private deselectSelectedStructures(): void {
-        const player = this.getLocalPlayer();
-
-        if (player?.stellarForge && player.stellarForge.isSelected) {
-            player.stellarForge.isSelected = false;
-        }
-        this.selectedBase = null;
-
-        for (const mirror of this.selectedMirrors) {
-            mirror.isSelected = false;
-        }
-        this.selectedMirrors.clear();
-
-        for (const building of this.selectedBuildings) {
-            building.isSelected = false;
-        }
-        this.selectedBuildings.clear();
-
-        this.clearPathPreview();
-    }
-
     /**
      * Check if a world position is near any selected unit
      */
@@ -1534,9 +1513,64 @@ class GameController {
                 }
                 
                 // If forge is selected and clicked elsewhere, move it
-                if (this.selectedBase || this.selectedMirrors.size > 0 || this.selectedBuildings.size > 0) {
-                    this.deselectSelectedStructures();
-
+                if (player.stellarForge && player.stellarForge.isSelected) {
+                    player.stellarForge.setTarget(worldPos);
+                    this.moveOrderCounter++;
+                    player.stellarForge.moveOrder = this.moveOrderCounter;
+                    this.sendNetworkCommand('forge_move', {
+                        targetX: worldPos.x,
+                        targetY: worldPos.y,
+                        moveOrder: this.moveOrderCounter
+                    });
+                    player.stellarForge.isSelected = false; // Auto-deselect after setting target
+                    this.selectedBase = null;
+                    this.selectedUnits.clear();
+                    this.selectedMirrors.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
+                    // Deselect all buildings
+                    for (const building of player.buildings) {
+                        building.isSelected = false;
+                    }
+                    this.selectedBuildings.clear();
+                    console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+                
+                // If a mirror is selected and clicked elsewhere, move it
+                const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
+                if (selectedMirror) {
+                    selectedMirror.setTarget(worldPos);
+                    this.moveOrderCounter++;
+                    selectedMirror.moveOrder = this.moveOrderCounter;
+                    this.sendNetworkCommand('mirror_move', {
+                        mirrorIndices: mirrorIndex >= 0 ? [mirrorIndex] : [],
+                        targetX: worldPos.x,
+                        targetY: worldPos.y,
+                        moveOrder: this.moveOrderCounter
+                    });
+                    selectedMirror.isSelected = false; // Auto-deselect after setting target
+                    this.selectedBase = null;
+                    this.selectedUnits.clear();
+                    for (const mirror of this.selectedMirrors) {
+                        mirror.isSelected = false;
+                    }
+                    this.selectedMirrors.clear();
+                    this.renderer.selectedUnits = this.selectedUnits;
+                    // Deselect all buildings
+                    for (const building of player.buildings) {
+                        building.isSelected = false;
+                    }
+                    this.selectedBuildings.clear();
+                    console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                    
                     isPanning = false;
                     isMouseDown = false;
                     this.isSelecting = false;
