@@ -24,6 +24,7 @@ export class Unit {
     protected lastAbilityEffects: AbilityBullet[] = [];
     isHero: boolean = false; // Flag to mark unit as hero
     moveOrder: number = 0; // Movement order indicator (0 = no order)
+    isSelected: boolean = false; // Selection state for UI
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
     velocity: Vector2D = new Vector2D(0, 0);
