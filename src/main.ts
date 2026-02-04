@@ -1092,6 +1092,9 @@ class GameController {
                             case 'healthDisplayMode':
                                 this.renderer.healthDisplayMode = menuAction.mode;
                                 break;
+                            case 'fancyGraphics':
+                                this.renderer.isFancyGraphicsEnabled = menuAction.isEnabled;
+                                break;
                             default:
                                 break;
                         }

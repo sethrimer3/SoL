@@ -13,7 +13,8 @@ export type InGameMenuAction =
     | { type: 'tab'; tab: InGameMenuTab }
     | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
     | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
-    | { type: 'healthDisplayMode'; mode: 'bar' | 'number' };
+    | { type: 'healthDisplayMode'; mode: 'bar' | 'number' }
+    | { type: 'fancyGraphics'; isEnabled: boolean };
 
 export type InGameMenuLayout = {
     screenWidth: number;

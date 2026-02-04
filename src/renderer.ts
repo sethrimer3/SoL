@@ -50,6 +50,7 @@ export class GameRenderer {
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
+    public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
@@ -616,6 +617,19 @@ export class GameRenderer {
         return this.darkenColor(Constants.LAD_GOLDEN_OUTLINE, dullingFactor);
     }
 
+    private drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void {
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+        this.ctx.globalAlpha = Math.max(0, Math.min(1, intensity));
+        this.ctx.shadowColor = color;
+        this.ctx.shadowBlur = radius * 0.9;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
+    }
+
     /**
      * Draw a selection indicator (green dashed circle) for selected buildings
      */
@@ -640,6 +654,11 @@ export class GameRenderer {
         if (sun.type === 'lad') {
             this.drawLadSun(sun, screenPos, screenRadius);
             return;
+        }
+
+        if (this.isFancyGraphicsEnabled) {
+            const bloomRadius = screenRadius * 1.35;
+            this.drawFancyBloom(screenPos, bloomRadius, this.colorScheme.sunGlow.outerGlow1, 0.7);
         }
         
         const sunSpritePath = this.getGraphicAssetPath('centralSun');
@@ -1299,6 +1318,12 @@ export class GameRenderer {
         // Calculate glow intensity based on distance to closest sun
         // Closer = brighter glow (inverse relationship)
         const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
+
+        if (this.isFancyGraphicsEnabled) {
+            const bloomColor = ladSun ? outlineColor : this.brightenAndPaleColor(displayColor);
+            const bloomIntensity = 0.25 + glowIntensity * 0.5;
+            this.drawFancyBloom(screenPos, size * 1.6, bloomColor, bloomIntensity);
+        }
         
         // Draw glow if close to a light source
         if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {
@@ -1592,6 +1617,12 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
+        if (this.isFancyGraphicsEnabled) {
+            const bloomSize = baseSize * (1.6 + glowLevel * 0.6);
+            const bloomIntensity = 0.25 + glowLevel * 0.2;
+            this.drawFancyBloom(screenPos, bloomSize, dustColor, bloomIntensity);
+        }
+
         this.ctx.fillStyle = dustColor;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
@@ -1687,6 +1718,21 @@ export class GameRenderer {
             
             this.ctx.fillStyle = gradient;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+            if (this.isFancyGraphicsEnabled) {
+                const bloomGradient = this.ctx.createRadialGradient(
+                    sunScreenPos.x, sunScreenPos.y, 0,
+                    sunScreenPos.x, sunScreenPos.y, maxRadius * 1.1
+                );
+                bloomGradient.addColorStop(0, 'rgba(255, 255, 220, 0.35)');
+                bloomGradient.addColorStop(0.4, 'rgba(255, 230, 160, 0.18)');
+                bloomGradient.addColorStop(1, 'rgba(255, 220, 120, 0)');
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'screen';
+                this.ctx.fillStyle = bloomGradient;
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.restore();
+            }
         }
 
         // Draw asteroid shadows cast by sunlight
@@ -2246,6 +2292,13 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.stroke();
+        }
+
+        if (this.isFancyGraphicsEnabled) {
+            const glowColor = shouldDim ? this.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor;
+            const glowRadius = size * (isSelected ? 1.9 : 1.5);
+            const glowIntensity = isSelected ? 0.45 : 0.3;
+            this.drawFancyBloom(screenPos, glowRadius, glowColor, glowIntensity);
         }
 
         this.drawHealthDisplay(screenPos, unit.health, unit.maxHealth, size, -size - 8);
@@ -5762,6 +5815,21 @@ export class GameRenderer {
                     return { type: 'healthDisplayMode', mode: 'number' };
                 }
             }
+
+            optionY += optionHeight + optionSpacing;
+
+            // Fancy Graphics toggle buttons
+            const fancyButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const fancyButton2X = optionX + optionWidth - buttonWidth;
+
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= fancyButton1X && screenX <= fancyButton1X + buttonWidth) {
+                    return { type: 'fancyGraphics', isEnabled: true };
+                }
+                if (screenX >= fancyButton2X && screenX <= fancyButton2X + buttonWidth) {
+                    return { type: 'fancyGraphics', isEnabled: false };
+                }
+            }
             
             return null;
         }
@@ -5975,6 +6043,42 @@ export class GameRenderer {
             this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.fillText('Number', healthButtons.button2X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            optionY += optionHeight + optionSpacing;
+
+            // Fancy Graphics option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Fancy Graphics:', optionX, optionY + (optionHeight * 0.4));
+
+            const fancyButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+
+            const isFancyOn = this.isFancyGraphicsEnabled;
+            this.ctx.fillStyle = isFancyOn ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(fancyButtons.button1X, optionY, fancyButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isFancyOn ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(fancyButtons.button1X, optionY, fancyButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('On', fancyButtons.button1X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            const isFancyOff = !this.isFancyGraphicsEnabled;
+            this.ctx.fillStyle = isFancyOff ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(fancyButtons.button2X, optionY, fancyButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isFancyOff ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(fancyButtons.button2X, optionY, fancyButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Off', fancyButtons.button2X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
         } else {
             const maxScroll = this.getGraphicsMenuMaxScroll(layout);
             if (this.graphicsMenuScrollOffset > maxScroll) {
