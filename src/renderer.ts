@@ -502,9 +502,9 @@ export class GameRenderer {
     }
 
     /**
-     * Brighten a color by a given factor (1.0 is original color, >1.0 is brighter)
+     * Adjust color brightness by a given factor (1.0 is original color, >1.0 is brighter, <1.0 is darker)
      */
-    private brightenColor(color: string, factor: number): string {
+    private adjustColorBrightness(color: string, factor: number): string {
         // Parse hex color (handle both #RGB and #RRGGBB formats)
         let hex = color.replace('#', '');
         if (hex.length === 3) {
@@ -583,7 +583,7 @@ export class GameRenderer {
             adjustedColor = this.darkenColor(baseColor, 0.7);
         } else {
             // Brighten for black units
-            adjustedColor = this.brightenColor(baseColor, 1.3);
+            adjustedColor = this.adjustColorBrightness(baseColor, 1.3);
         }
         
         // Draw the aura as a radial gradient that completely envelops the unit
@@ -591,9 +591,10 @@ export class GameRenderer {
             screenPos.x, screenPos.y, 0,
             screenPos.x, screenPos.y, radius * 1.8
         );
-        gradient.addColorStop(0, adjustedColor + '80'); // Semi-transparent center
-        gradient.addColorStop(0.5, adjustedColor + '60');
-        gradient.addColorStop(0.8, adjustedColor + '30');
+        // Opacity values: 50%, 37.5%, 18.75%, 0%
+        gradient.addColorStop(0, adjustedColor + '80'); // Semi-transparent center (50%)
+        gradient.addColorStop(0.5, adjustedColor + '60'); // 37.5% opacity
+        gradient.addColorStop(0.8, adjustedColor + '30'); // 18.75% opacity
         gradient.addColorStop(1, adjustedColor + '00'); // Fully transparent edge
         
         this.ctx.fillStyle = gradient;
