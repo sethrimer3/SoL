@@ -2069,15 +2069,27 @@ export class GameRenderer {
         const radius = Constants.STARLING_MERGE_GATE_RADIUS_PX * this.zoom;
         const totalDuration = Constants.STARLING_MERGE_DURATION_SEC;
         const progress = totalDuration > 0 ? gate.remainingSec / totalDuration : 0;
-        const pulse = 0.7 + Math.sin((totalDuration - gate.remainingSec) * 4) * 0.2;
+        const pulse = 0.18 + Math.sin((totalDuration - gate.remainingSec) * 4) * 0.06;
+        const glowAlpha = 0.35 + Math.sin((totalDuration - gate.remainingSec) * 5) * 0.1;
 
-        this.ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
-        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.fillStyle = `rgba(0, 255, 255, ${Math.max(0.1, pulse)})`;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.strokeStyle = `rgba(0, 255, 255, ${Math.max(0.2, glowAlpha)})`;
+        this.ctx.lineWidth = 2.5 * this.zoom;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
         this.ctx.stroke();
 
-        const countdownRadius = radius + 8 * this.zoom;
+        this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.3, glowAlpha)})`;
+        this.ctx.lineWidth = 1.5 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.65, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        const countdownRadius = radius + 7 * this.zoom;
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = 3 * this.zoom;
         this.ctx.beginPath();
@@ -2174,53 +2186,6 @@ export class GameRenderer {
         }
 
         // Reset text alignment
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'alphabetic';
-    }
-
-    private drawStarlingMergeButton(): void {
-        if (!this.viewingPlayer || !this.hasActiveFoundry) {
-            return;
-        }
-
-        const selectedStarlings: Starling[] = [];
-        for (const unit of this.selectedUnits) {
-            if (unit instanceof Starling && unit.owner === this.viewingPlayer) {
-                selectedStarlings.push(unit);
-            }
-        }
-
-        if (selectedStarlings.length < Constants.STARLING_MERGE_COUNT) {
-            return;
-        }
-
-        let totalX = 0;
-        let totalY = 0;
-        for (const starling of selectedStarlings) {
-            totalX += starling.position.x;
-            totalY += starling.position.y;
-        }
-
-        const centerX = totalX / selectedStarlings.length;
-        const centerY = totalY / selectedStarlings.length;
-        const buttonWorldPos = new Vector2D(centerX, centerY - Constants.STARLING_MERGE_BUTTON_OFFSET_PX);
-        const screenPos = this.worldToScreen(buttonWorldPos);
-        const radius = Constants.STARLING_MERGE_BUTTON_RADIUS_PX * this.zoom;
-
-        this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
-        this.ctx.strokeStyle = '#00FFFF';
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `${11 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Merge', screenPos.x, screenPos.y);
-
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'alphabetic';
     }
@@ -5455,7 +5420,6 @@ export class GameRenderer {
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors);
-        this.drawStarlingMergeButton();
 
         // Draw UI
         this.drawUI(game);

@@ -16,7 +16,7 @@ class GameController {
     private showInGameMenu: boolean = false;
     private showInfo: boolean = false;
     private holdStartTime: number | null = null;
-    private holdPosition: Vector2D | null = null;
+    private holdStarlingForMerge: Starling | null = null;
     private currentWarpGate: WarpGate | null = null;
     private isUsingMirrorsForWarpGate: boolean = false;
     private mirrorCommandMode: 'warpgate' | null = null; // Track which command was selected
@@ -68,22 +68,7 @@ class GameController {
         return starlings;
     }
 
-    private getStarlingMergeButtonWorldPosition(starlings: Starling[]): Vector2D | null {
-        if (starlings.length === 0) {
-            return null;
-        }
-        let totalX = 0;
-        let totalY = 0;
-        for (const starling of starlings) {
-            totalX += starling.position.x;
-            totalY += starling.position.y;
-        }
-        const centerX = totalX / starlings.length;
-        const centerY = totalY / starlings.length;
-        return new Vector2D(centerX, centerY - Constants.STARLING_MERGE_BUTTON_OFFSET_PX);
-    }
-
-    private tryStartStarlingMerge(player: Player, starlings: Starling[]): boolean {
+    private tryStartStarlingMerge(player: Player, starlings: Starling[], targetPosition: Vector2D): boolean {
         if (!this.game) {
             return false;
         }
@@ -94,17 +79,13 @@ class GameController {
         if (!hasFoundry) {
             return false;
         }
-        const mergePosition = this.getStarlingMergeButtonWorldPosition(starlings);
-        if (!mergePosition) {
-            return false;
-        }
         const mergeStarlings = starlings.slice(0, Constants.STARLING_MERGE_COUNT);
         const unitIds = mergeStarlings.map((unit) => this.game!.getUnitNetworkId(unit));
-        this.game.applyStarlingMerge(player, unitIds, mergePosition);
+        this.game.applyStarlingMerge(player, unitIds, targetPosition);
         this.sendNetworkCommand('starling_merge', {
             unitIds,
-            targetX: mergePosition.x,
-            targetY: mergePosition.y
+            targetX: targetPosition.x,
+            targetY: targetPosition.y
         });
 
         for (const unit of this.selectedUnits) {
@@ -113,6 +94,27 @@ class GameController {
         this.selectedUnits.clear();
         this.renderer.selectedUnits = this.selectedUnits;
         return true;
+    }
+
+    private getClosestSelectedStarling(worldPos: Vector2D): Starling | null {
+        let closestStarling: Starling | null = null;
+        let closestDistanceSq = Infinity;
+
+        for (const unit of this.selectedUnits) {
+            if (!(unit instanceof Starling)) {
+                continue;
+            }
+            const dx = unit.position.x - worldPos.x;
+            const dy = unit.position.y - worldPos.y;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq <= Constants.STARLING_MERGE_HOLD_RADIUS_PX * Constants.STARLING_MERGE_HOLD_RADIUS_PX
+                && distanceSq < closestDistanceSq) {
+                closestDistanceSq = distanceSq;
+                closestStarling = unit;
+            }
+        }
+
+        return closestStarling;
     }
 
     private updateAbilityArrowStarts(): void {
@@ -1561,30 +1563,6 @@ class GameController {
                     return;
                 }
 
-                const selectedStarlings = this.getSelectedStarlings(player);
-                const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-                if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
-                    const mergeButtonWorldPos = this.getStarlingMergeButtonWorldPosition(selectedStarlings);
-                    if (mergeButtonWorldPos) {
-                        const mergeButtonScreenPos = this.renderer.worldToScreen(mergeButtonWorldPos);
-                        const mergeButtonRadius = Constants.STARLING_MERGE_BUTTON_RADIUS_PX * this.renderer.zoom;
-                        const mergeDx = lastX - mergeButtonScreenPos.x;
-                        const mergeDy = lastY - mergeButtonScreenPos.y;
-                        if (Math.sqrt(mergeDx * mergeDx + mergeDy * mergeDy) <= mergeButtonRadius) {
-                            if (this.tryStartStarlingMerge(player, selectedStarlings)) {
-                                isPanning = false;
-                                isMouseDown = false;
-                                this.isSelecting = false;
-                                this.selectionStartScreen = null;
-                                this.renderer.selectionStart = null;
-                                this.renderer.selectionEnd = null;
-                                this.endHold();
-                                return;
-                            }
-                        }
-                    }
-                }
-
                 // Check if clicked on mirror command buttons
                 if (this.selectedMirrors.size > 0) {
                     // Get one of the selected mirrors to determine button positions
@@ -2412,6 +2390,9 @@ class GameController {
         }
         if (!player.stellarForge) return;
 
+        this.holdStartTime = null;
+        this.holdStarlingForMerge = null;
+
         // Check if any buildings with guns are selected
         const hasSelectedShootingBuildings = Array.from(this.selectedBuildings).some(
             (building: any) => building.canShoot()
@@ -2513,8 +2494,19 @@ class GameController {
                 // Clear command mode and selections
                 this.mirrorCommandMode = null;
             }
+            return;
         }
         // NOTE: Removed old influence-based warp gate creation - now only via mirrors
+
+        const selectedStarlings = this.getSelectedStarlings(player);
+        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
+            const closestStarling = this.getClosestSelectedStarling(worldPos);
+            if (closestStarling) {
+                this.holdStartTime = performance.now();
+                this.holdStarlingForMerge = closestStarling;
+            }
+        }
     }
 
     private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
@@ -2610,7 +2602,7 @@ class GameController {
         // Deprecated: Hold-based warp gate creation is no longer used
         // Warp gates are now created instantly via mirror commands
         this.holdStartTime = null;
-        this.holdPosition = null;
+        this.holdStarlingForMerge = null;
         this.currentWarpGate = null;
         this.isUsingMirrorsForWarpGate = false;
         this.mirrorCommandMode = null;
@@ -2619,9 +2611,57 @@ class GameController {
     private endHold(): void {
         // Deprecated: Hold-based warp gate creation is no longer used
         this.holdStartTime = null;
-        this.holdPosition = null;
+        this.holdStarlingForMerge = null;
         this.isUsingMirrorsForWarpGate = false;
         this.mirrorCommandMode = null;
+    }
+
+    private updateStarlingMergeHold(): void {
+        if (!this.game) {
+            return;
+        }
+        if (!this.holdStartTime || !this.holdStarlingForMerge) {
+            return;
+        }
+
+        const player = this.getLocalPlayer();
+        if (!player) {
+            this.cancelHold();
+            return;
+        }
+
+        if (!this.selectedUnits.has(this.holdStarlingForMerge)) {
+            this.cancelHold();
+            return;
+        }
+
+        const selectedStarlings = this.getSelectedStarlings(player);
+        if (selectedStarlings.length < Constants.STARLING_MERGE_COUNT) {
+            this.cancelHold();
+            return;
+        }
+
+        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        if (!hasFoundry) {
+            this.cancelHold();
+            return;
+        }
+
+        const elapsedMs = performance.now() - this.holdStartTime;
+        if (elapsedMs < Constants.STARLING_MERGE_HOLD_DURATION_MS) {
+            return;
+        }
+
+        const targetPosition = new Vector2D(
+            this.holdStarlingForMerge.position.x,
+            this.holdStarlingForMerge.position.y
+        );
+
+        if (this.tryStartStarlingMerge(player, selectedStarlings, targetPosition)) {
+            this.shouldSkipMoveOrderThisTap = true;
+        }
+
+        this.cancelHold();
     }
 
     /**
@@ -2693,6 +2733,8 @@ class GameController {
         
         // Don't update game logic if paused
         if (this.isPaused) return;
+
+        this.updateStarlingMergeHold();
         
         // Check if game has ended
         const winner = this.game.checkVictoryConditions();

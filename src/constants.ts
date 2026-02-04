@@ -242,8 +242,8 @@ export const FORGE_BLINK_UPGRADE_COST = 3000; // Cost to unlock Blink upgrade at
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror
 export const STARLING_MERGE_GATE_RADIUS_PX = 18; // Visual/absorption radius for merge gate
-export const STARLING_MERGE_BUTTON_RADIUS_PX = 26; // UI radius for merge button
-export const STARLING_MERGE_BUTTON_OFFSET_PX = 70; // UI offset for merge button above starlings
+export const STARLING_MERGE_HOLD_DURATION_MS = 2000; // Hold duration to trigger starling merge
+export const STARLING_MERGE_HOLD_RADIUS_PX = 30; // Max distance from a selected starling to start hold merge
 
 // AI control intervals and placement tuning
 export const AI_MIRROR_COMMAND_INTERVAL_SEC = 2.0;
