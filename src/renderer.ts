@@ -972,6 +972,10 @@ export class GameRenderer {
                 // Draw hero production buttons around the forge
                 this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
             }
+
+            if (!isEnemy) {
+                this.drawForgeUpgradeButtons(forge, screenPos);
+            }
         }
 
         // Draw aura in LaD mode
@@ -1104,6 +1108,38 @@ export class GameRenderer {
                 this.drawHeroCheckmark(buttonX, buttonY, buttonRadius);
             }
         }
+    }
+
+    private drawForgeUpgradeButtons(forge: StellarForge, screenPos: Vector2D): void {
+        if (forge.owner.hasBlinkUpgrade) {
+            return;
+        }
+        const buttonRadius = Constants.FORGE_UPGRADE_BUTTON_RADIUS_PX * this.zoom;
+        const buttonDistance = Constants.FORGE_UPGRADE_BUTTON_DISTANCE_PX * this.zoom;
+        const buttonX = screenPos.x;
+        const buttonY = screenPos.y + buttonDistance;
+        const isAffordable = forge.owner.energy >= Constants.FORGE_BLINK_UPGRADE_COST;
+
+        this.ctx.fillStyle = isAffordable ? 'rgba(0, 180, 255, 0.3)' : 'rgba(128, 128, 128, 0.3)';
+        this.ctx.strokeStyle = isAffordable ? '#00B4FF' : '#888888';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        this.ctx.fillStyle = isAffordable ? '#FFFFFF' : '#666666';
+        this.ctx.font = `${12 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('Blink', buttonX, buttonY - 5 * this.zoom);
+
+        this.ctx.font = `${10 * this.zoom}px Doto`;
+        this.ctx.fillText(
+            `${Constants.FORGE_BLINK_UPGRADE_COST}`,
+            buttonX,
+            buttonY + 8 * this.zoom
+        );
     }
 
     private getHeroUnitType(heroName: string): string | null {
@@ -3141,6 +3177,22 @@ export class GameRenderer {
         
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, starling.health, starling.maxHealth, size, -size * 6 - 10);
+
+        if (!isEnemy && starling.owner.hasBlinkUpgrade && starling.abilityCooldownTime > 0) {
+            const barWidth = size * 8;
+            const barHeight = Math.max(2, 3 * this.zoom);
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + size * 3.5;
+            const cooldownPercent = Math.max(
+                0,
+                Math.min(1, 1 - (starling.abilityCooldown / starling.abilityCooldownTime))
+            );
+
+            this.ctx.fillStyle = '#222';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            this.ctx.fillStyle = '#00B4FF';
+            this.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
+        }
         
         // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
         // to show only a single line from the closest starling when multiple are selected

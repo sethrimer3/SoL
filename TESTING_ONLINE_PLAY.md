@@ -194,6 +194,17 @@ Tick 600: foundry_regen_upgrade { buildingId: 0 }
 Tick 650: unit_move { unitIds: ["starling-0"], targetX: 0, targetY: 0 }
 ```
 
+### Deterministic Replay Snippet (Forge Blink Upgrade)
+
+Use the following command sequence to validate that Blink upgrades stay deterministic across peers
+(state hashes should match on every `STATE_HASH_TICK_INTERVAL` step):
+
+```text
+Tick 120: forge_blink_upgrade { }
+Tick 240: unit_move { unitIds: ["starling-0"], targetX: 120, targetY: 0 }
+Tick 480: unit_move { unitIds: ["starling-0"], targetX: 240, targetY: 0 }
+```
+
 ### Automated Testing (Future)
 
 Create unit tests for:

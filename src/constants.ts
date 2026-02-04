@@ -165,6 +165,8 @@ export const STARLING_LASER_PARTICLE_SPEED = 30; // Speed of impact particles in
 export const STARLING_LASER_PARTICLE_LIFETIME = 0.3; // Lifetime of impact particles in seconds
 export const STARLING_LASER_WIDTH_PX = 2;
 export const STARLING_REGEN_RATE_PER_SEC = 2; // Health regenerated per second when in influence
+export const STARLING_BLINK_DISTANCE_PX = 80; // Teleport distance for Blink upgrade
+export const STARLING_BLINK_COOLDOWN_SEC = 6; // Cooldown between Blink uses
 export const FORGE_FLAME_ALPHA = 0.75;
 export const FORGE_FLAME_SIZE_MULTIPLIER = 0.45;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
@@ -236,6 +238,7 @@ export const FOUNDRY_REGEN_UPGRADE_COST = 1000; // Cost to unlock Regen upgrade
 export const FOUNDRY_STRAFE_UPGRADE_ITEM = 'strafe-upgrade';
 export const FOUNDRY_REGEN_UPGRADE_ITEM = 'regen-upgrade';
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
+export const FORGE_BLINK_UPGRADE_COST = 3000; // Cost to unlock Blink upgrade at forge
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror
 export const STARLING_MERGE_GATE_RADIUS_PX = 18; // Visual/absorption radius for merge gate
@@ -262,6 +265,8 @@ export const AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD = Math.PI / 4;
 export const HERO_PRODUCTION_TIME_SEC = 8;
 export const HERO_BUTTON_RADIUS_PX = 28;
 export const HERO_BUTTON_DISTANCE_PX = 100;
+export const FORGE_UPGRADE_BUTTON_RADIUS_PX = 22;
+export const FORGE_UPGRADE_BUTTON_DISTANCE_PX = 140;
 export const BUILDING_BUILD_TIME = 5.0; // Base build time in seconds
 
 // Weapon effect constants
