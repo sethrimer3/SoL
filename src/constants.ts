@@ -9,7 +9,7 @@ export const PLAYER_2_COLOR = '#FF0000';
 
 // LaD (Light and Darkness) mode constants
 // Removed LAD_GOLDEN_OUTLINE - replaced with player/enemy color auras
-export const LAD_SUN_OUTLINE_COLOR = '#FFD700'; // Golden outline for LaD sun
+export const LAD_SUN_STROKE_COLOR = '#FFD700'; // Golden stroke for LaD sun circle
 
 // Warp gate constants
 export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete (deprecated, now energy-based)

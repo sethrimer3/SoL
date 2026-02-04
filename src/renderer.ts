@@ -724,7 +724,7 @@ export class GameRenderer {
         this.ctx.stroke();
 
         // Draw circle outline around the sun
-        this.ctx.strokeStyle = Constants.LAD_SUN_OUTLINE_COLOR;
+        this.ctx.strokeStyle = Constants.LAD_SUN_STROKE_COLOR;
         this.ctx.lineWidth = 4;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
