@@ -10,10 +10,11 @@ import type { Unit } from './unit';
 import type { Asteroid } from './asteroid';
 import type { StellarForge } from './stellar-forge';
 import type { SolarMirror } from './solar-mirror';
+import type { StarlingMergeGate } from './starling-merge-gate';
 import { BulletCasing, BouncingBullet, LaserBeam, MuzzleFlash } from './particles';
 import type { SpaceDustParticle } from './particles';
 
-export type CombatTarget = Unit | StellarForge | Building | SolarMirror;
+export type CombatTarget = Unit | StellarForge | Building | SolarMirror | StarlingMergeGate;
 
 /**
  * Base class for all buildings

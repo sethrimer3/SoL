@@ -339,6 +339,11 @@ export class GameState {
                         allStructures.push(mirror);
                     }
                 }
+                for (const gate of this.starlingMergeGates) {
+                    if (gate.owner === player && gate.health > 0) {
+                        allStructures.push(gate);
+                    }
+                }
                 if (player.stellarForge) {
                     allStructures.push(player.stellarForge);
                 }
@@ -358,6 +363,11 @@ export class GameState {
                     for (const mirror of otherPlayer.solarMirrors) {
                         if (mirror.health > 0) {
                             enemies.push(mirror);
+                        }
+                    }
+                    for (const gate of this.starlingMergeGates) {
+                        if (gate.owner === otherPlayer && gate.health > 0) {
+                            enemies.push(gate);
                         }
                     }
                     if (otherPlayer.stellarForge) {
@@ -795,6 +805,29 @@ export class GameState {
                     continue;
                 }
 
+                for (const gate of this.starlingMergeGates) {
+                    if (gate.owner !== player || gate.health <= 0) {
+                        continue;
+                    }
+                    if (bullet.checkHit(gate)) {
+                        gate.health -= bullet.damage;
+                        const gateKey = `merge_gate_${gate.position.x}_${gate.position.y}_${player.name}`;
+                        this.addDamageNumber(
+                            gate.position,
+                            bullet.damage,
+                            gate.maxHealth,
+                            gate.health,
+                            gateKey
+                        );
+                        bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                        break;
+                    }
+                }
+
+                if (bullet.shouldDespawn()) {
+                    continue;
+                }
+
                 // Check hits on Stellar Forge
                 if (player.stellarForge && bullet.checkHit(player.stellarForge)) {
                     let finalDamage = bullet.damage;
@@ -1018,6 +1051,29 @@ export class GameState {
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health,
                             mirrorKey
+                        );
+                        hasHit = true;
+                        break;
+                    }
+                }
+
+                if (hasHit) {
+                    break;
+                }
+
+                for (const gate of this.starlingMergeGates) {
+                    if (gate.owner !== player || gate.health <= 0) {
+                        continue;
+                    }
+                    if (projectile.checkHit(gate)) {
+                        gate.health -= projectile.damage;
+                        const gateKey = `merge_gate_${gate.position.x}_${gate.position.y}_${player.name}`;
+                        this.addDamageNumber(
+                            gate.position,
+                            projectile.damage,
+                            gate.maxHealth,
+                            gate.health,
+                            gateKey
                         );
                         hasHit = true;
                         break;
@@ -1441,6 +1497,13 @@ export class GameState {
                 continue;
             }
 
+            if (gate.health <= 0) {
+                this.releaseStarlingMergeGate(gate, player);
+                this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
+                this.starlingMergeGates.splice(gateIndex, 1);
+                continue;
+            }
+
             gate.remainingSec = Math.max(0, gate.remainingSec - deltaTime);
 
             const assignedStarlings = gate.assignedStarlings;
@@ -1468,11 +1531,40 @@ export class GameState {
             assignedStarlings.length = writeIndex;
 
             if (gate.remainingSec <= 0) {
-                this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
-                player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
+                if (gate.absorbedCount >= Constants.STARLING_MERGE_COUNT) {
+                    this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
+                    player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
+                } else {
+                    this.releaseStarlingMergeGate(gate, player);
+                    this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
+                }
                 this.starlingMergeGates.splice(gateIndex, 1);
             }
         }
+    }
+
+    private releaseStarlingMergeGate(gate: StarlingMergeGate, player: Player): void {
+        const releaseCount = gate.absorbedCount;
+        if (releaseCount > 0) {
+            const spawnRadius = Constants.STARLING_MERGE_GATE_RADIUS_PX + Constants.STARLING_COLLISION_RADIUS_PX + 4;
+            for (let i = 0; i < releaseCount; i++) {
+                const angle = (Math.PI * 2 * i) / releaseCount;
+                const spawnPosition = new Vector2D(
+                    gate.position.x + Math.cos(angle) * spawnRadius,
+                    gate.position.y + Math.sin(angle) * spawnRadius
+                );
+                const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
+                player.units.push(starling);
+                player.unitsCreated++;
+            }
+        }
+
+        for (const starling of gate.assignedStarlings) {
+            if (!starling.isDead()) {
+                starling.clearManualOrders();
+            }
+        }
+        gate.assignedStarlings.length = 0;
     }
 
     private getEnemiesForPlayer(player: Player): CombatTarget[] {
@@ -1484,6 +1576,11 @@ export class GameState {
                 for (const mirror of otherPlayer.solarMirrors) {
                     if (mirror.health > 0) {
                         enemies.push(mirror);
+                    }
+                }
+                for (const gate of this.starlingMergeGates) {
+                    if (gate.owner === otherPlayer && gate.health > 0) {
+                        enemies.push(gate);
                     }
                 }
                 if (otherPlayer.stellarForge) {
@@ -3136,6 +3233,7 @@ export class GameState {
             mix(gate.position.x);
             mix(gate.position.y);
             mix(gate.remainingSec);
+            mix(gate.health);
             mixInt(gate.absorbedCount);
             mixInt(gate.assignedStarlings.length);
             mixInt(this.players.indexOf(gate.owner));
