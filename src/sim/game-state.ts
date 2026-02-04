@@ -3012,6 +3012,7 @@ export class GameState {
             mixString(player.aiStrategy);
             mixInt(player.hasStrafeUpgrade ? 1 : 0);
             mixInt(player.hasRegenUpgrade ? 1 : 0);
+            mixInt(player.hasBlinkUpgrade ? 1 : 0);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -3110,6 +3111,7 @@ export class GameState {
                     mixInt(unit.getCurrentPathWaypointIndex());
                     mixInt(unit.hasActiveManualOrder() ? 1 : 0);
                     mix(unit.getCurrentMoveSpeedPxPerSec());
+                    mix(unit.abilityCooldown);
                 }
             }
 
@@ -3446,6 +3448,9 @@ export class GameState {
             case 'foundry_regen_upgrade':
                 this.executeFoundryUpgradeCommand(player, cmd.data, 'regen');
                 break;
+            case 'forge_blink_upgrade':
+                this.executeForgeBlinkUpgradeCommand(player);
+                break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
                 break;
@@ -3699,6 +3704,15 @@ export class GameState {
         }
         if (building.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
             building.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
+        }
+    }
+
+    private executeForgeBlinkUpgradeCommand(player: Player): void {
+        if (player.hasBlinkUpgrade) {
+            return;
+        }
+        if (player.spendEnergy(Constants.FORGE_BLINK_UPGRADE_COST)) {
+            player.hasBlinkUpgrade = true;
         }
     }
 

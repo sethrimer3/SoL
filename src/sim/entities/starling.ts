@@ -34,7 +34,7 @@ export class Starling extends Unit {
             Constants.STARLING_ATTACK_RANGE,
             Constants.STARLING_ATTACK_DAMAGE,
             Constants.STARLING_ATTACK_SPEED,
-            0, // No special ability
+            Constants.STARLING_BLINK_COOLDOWN_SEC,
             Constants.STARLING_COLLISION_RADIUS_PX
         );
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
@@ -55,6 +55,7 @@ export class Starling extends Unit {
     }
 
     setManualRallyPoint(target: Vector2D): void {
+        this.tryBlinkToward(target);
         this.rallyPoint = target;
         this.hasManualOrder = true;
         // Reset the final waypoint flag since we're now moving to a new destination
@@ -79,6 +80,26 @@ export class Starling extends Unit {
         this.hasManualOrder = true;
         this.hasReachedFinalWaypoint = false;
         this.rallyPoint = null; // Clear rally point when following a path
+    }
+
+    private tryBlinkToward(target: Vector2D): void {
+        if (!this.owner.hasBlinkUpgrade || this.abilityCooldown > 0) {
+            return;
+        }
+        const dx = target.x - this.position.x;
+        const dy = target.y - this.position.y;
+        const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
+        if (distanceToTarget <= 0) {
+            return;
+        }
+        const blinkDistance = Math.min(Constants.STARLING_BLINK_DISTANCE_PX, distanceToTarget);
+        const directionX = dx / distanceToTarget;
+        const directionY = dy / distanceToTarget;
+        this.position.x += directionX * blinkDistance;
+        this.position.y += directionY * blinkDistance;
+        this.velocity.x = 0;
+        this.velocity.y = 0;
+        this.abilityCooldown = this.abilityCooldownTime;
     }
 
     getAssignedPathLength(): number {

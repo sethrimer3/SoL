@@ -479,6 +479,25 @@ class GameController {
         return null;
     }
 
+    private getClickedBlinkUpgradeButton(
+        screenX: number,
+        screenY: number,
+        forge: StellarForge
+    ): Vector2D | null {
+        const forgeScreenPos = this.renderer.worldToScreen(forge.position);
+        const buttonRadius = Constants.FORGE_UPGRADE_BUTTON_RADIUS_PX * this.renderer.zoom;
+        const buttonDistance = Constants.FORGE_UPGRADE_BUTTON_DISTANCE_PX * this.renderer.zoom;
+        const buttonScreenX = forgeScreenPos.x;
+        const buttonScreenY = forgeScreenPos.y + buttonDistance;
+        const dx = screenX - buttonScreenX;
+        const dy = screenY - buttonScreenY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        if (distance <= buttonRadius) {
+            return this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+        }
+        return null;
+    }
+
     /**
      * Get the nearest button index based on drag angle from building position
      * For stellar forge: 4 buttons in cardinal directions (top=0, right=1, bottom=2, left=3)
@@ -1671,6 +1690,25 @@ class GameController {
                             this.renderer.selectionEnd = null;
                             return;
                         }
+                    }
+                }
+
+                if (player.stellarForge && player.stellarForge.isSelected) {
+                    const blinkButtonPos = this.getClickedBlinkUpgradeButton(
+                        lastX,
+                        lastY,
+                        player.stellarForge
+                    );
+                    if (blinkButtonPos) {
+                        if (!player.hasBlinkUpgrade && player.spendEnergy(Constants.FORGE_BLINK_UPGRADE_COST)) {
+                            player.hasBlinkUpgrade = true;
+                            this.renderer.createProductionButtonWave(blinkButtonPos);
+                            console.log('Purchased Blink upgrade at forge');
+                            this.sendNetworkCommand('forge_blink_upgrade', {});
+                        } else {
+                            console.log('Cannot purchase Blink upgrade or not enough energy');
+                        }
+                        return;
                     }
                 }
 
