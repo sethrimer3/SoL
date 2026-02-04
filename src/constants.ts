@@ -232,6 +232,8 @@ export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
 export const FOUNDRY_REGEN_UPGRADE_COST = 1000; // Cost to unlock Regen upgrade
+export const FOUNDRY_STRAFE_UPGRADE_ITEM = 'strafe-upgrade';
+export const FOUNDRY_REGEN_UPGRADE_ITEM = 'regen-upgrade';
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror

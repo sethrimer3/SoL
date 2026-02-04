@@ -305,26 +305,26 @@ class GameController {
         }
 
         if (buttonIndex === 0) {
-            if (foundry.canUpgradeStrafe() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
-                foundry.upgradeStrafe();
-                console.log('Upgraded foundry with Strafe');
+            if (foundry.canQueueStrafeUpgrade() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+                foundry.enqueueProduction(Constants.FOUNDRY_STRAFE_UPGRADE_ITEM);
+                console.log('Queued foundry Strafe upgrade');
                 this.sendNetworkCommand('foundry_strafe_upgrade', { buildingId });
                 // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot upgrade Strafe or not enough energy');
+                console.log('Cannot queue Strafe upgrade or not enough energy');
             }
         } else if (buttonIndex === 1) {
-            if (foundry.canUpgradeRegen() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
-                foundry.upgradeRegen();
-                console.log('Upgraded foundry with Regen');
+            if (foundry.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+                foundry.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
+                console.log('Queued foundry Regen upgrade');
                 this.sendNetworkCommand('foundry_regen_upgrade', { buildingId });
                 // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot upgrade Regen or not enough energy');
+                console.log('Cannot queue Regen upgrade or not enough energy');
             }
         }
     }

@@ -83,7 +83,7 @@ export class GameRenderer {
     ];
     
     // Movement order indicator constants
-    private readonly MOVE_ORDER_DOT_RADIUS = 12;
+    private readonly MOVE_ORDER_DOT_RADIUS = 6;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
     private readonly FORGE_MAX_HEALTH = 1000;
@@ -1209,13 +1209,13 @@ export class GameRenderer {
             { 
                 x: -1, y: 0, // Left - Strafe upgrade
                 label: 'Strafe',
-                available: foundry.canUpgradeStrafe(),
+                available: foundry.canQueueStrafeUpgrade(),
                 index: 0
             },
             {
                 x: 1, y: 0, // Right - Regen upgrade
                 label: 'Regen',
-                available: foundry.canUpgradeRegen(),
+                available: foundry.canQueueRegenUpgrade(),
                 index: 1
             }
         ];
@@ -4192,6 +4192,19 @@ export class GameRenderer {
             drawLayer(topSprite, topRotationRad);
         }
 
+        if (building.currentProduction) {
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#4CAF50';
+            this.ctx.fillRect(barX, barY, barWidth * building.productionProgress, barHeight);
+        }
+
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
@@ -5530,6 +5543,28 @@ export class GameRenderer {
             y += boxHeight + 8;
         }
 
+        const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
+        if (foundry?.currentProduction) {
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            
+            this.ctx.strokeStyle = '#FFD700';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'top';
+            
+            const productionName = this.getProductionDisplayName(foundry.currentProduction);
+            this.ctx.fillText(`Foundry ${productionName}`, x + 8, y + 8);
+            
+            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, foundry.productionProgress);
+            
+            y += boxHeight + 8;
+        }
+
         // Draw building construction progress
         // Note: find() stops at first match, typically only one building under construction
         const buildingInProgress = player.buildings.find((building) => !building.isComplete);
@@ -5615,7 +5650,9 @@ export class GameRenderer {
             'driller': 'Driller',
             'dagger': 'Dagger',
             'beam': 'Beam',
-            'solar-mirror': 'Solar Mirror'
+            'solar-mirror': 'Solar Mirror',
+            'strafe-upgrade': 'Strafe Upgrade',
+            'regen-upgrade': 'Regen Upgrade'
         };
         return nameMap[unitType.toLowerCase()] || unitType;
     }

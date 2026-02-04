@@ -588,7 +588,12 @@ export class GameState {
                             building.addProductionProgress(buildProgress);
                         }
                     }
-                    building.getCompletedProduction();
+                    const completedProduction = building.getCompletedProduction();
+                    if (completedProduction === Constants.FOUNDRY_STRAFE_UPGRADE_ITEM) {
+                        building.upgradeStrafe();
+                    } else if (completedProduction === Constants.FOUNDRY_REGEN_UPGRADE_ITEM) {
+                        building.upgradeRegen();
+                    }
                 }
             }
             } // End of countdown check for buildings
@@ -3687,13 +3692,13 @@ export class GameState {
             return;
         }
         if (upgradeType === 'strafe') {
-            if (building.canUpgradeStrafe() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
-                building.upgradeStrafe();
+            if (building.canQueueStrafeUpgrade() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+                building.enqueueProduction(Constants.FOUNDRY_STRAFE_UPGRADE_ITEM);
             }
             return;
         }
-        if (building.canUpgradeRegen() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
-            building.upgradeRegen();
+        if (building.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+            building.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
         }
     }
 
