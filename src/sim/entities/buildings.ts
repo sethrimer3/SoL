@@ -749,10 +749,31 @@ export class SubsidiaryFactory extends Building {
     }
 
     /**
+     * Check if Strafe upgrade can be queued for production
+     */
+    canQueueStrafeUpgrade(): boolean {
+        return this.canUpgradeStrafe() && !this.hasProductionItem(Constants.FOUNDRY_STRAFE_UPGRADE_ITEM);
+    }
+
+    /**
      * Check if Regen upgrade is available
      */
     canUpgradeRegen(): boolean {
         return this.isComplete && !this.owner.hasRegenUpgrade;
+    }
+
+    /**
+     * Check if Regen upgrade can be queued for production
+     */
+    canQueueRegenUpgrade(): boolean {
+        return this.canUpgradeRegen() && !this.hasProductionItem(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
+    }
+
+    /**
+     * Check if a production item is already queued or active
+     */
+    private hasProductionItem(itemType: string): boolean {
+        return this.currentProduction === itemType || this.productionQueue.includes(itemType);
     }
 
     /**

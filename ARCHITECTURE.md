@@ -90,11 +90,12 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 10, "command": "moveUnits", "playerIndex": 0, "unitType": "Starling", "targetWorld": { "x": 460, "y": 420 } },
   { "tick": 11, "command": "targetStructure", "playerIndex": 0, "target": { "type": "StellarForge", "playerIndex": 1 } },
   { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
-  { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "Cannon", "targetWorld": { "x": 420, "y": 420 } }
+  { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "Cannon", "targetWorld": { "x": 420, "y": 420 } },
+  { "tick": 16, "command": "queueFoundryUpgrade", "playerIndex": 0, "upgradeType": "strafe" }
 ]
 ```
 
-The command list above was revalidated after adding the Strafe upgrade and starling movement slowdown on attack to ensure `stateHash` stability.
+The command list above was revalidated after adding foundry upgrade production queuing and movement point scaling to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
