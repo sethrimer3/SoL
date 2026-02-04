@@ -13,11 +13,17 @@ export class StarlingMergeGate {
     remainingSec: number;
     absorbedCount: number = 0;
     assignedStarlings: Starling[] = [];
+    health: number;
+    maxHealth: number;
+    radius: number;
 
     constructor(position: Vector2D, owner: Player, assignedStarlings: Starling[]) {
         this.position = new Vector2D(position.x, position.y);
         this.owner = owner;
         this.remainingSec = Constants.STARLING_MERGE_DURATION_SEC;
         this.assignedStarlings = assignedStarlings;
+        this.maxHealth = Constants.STARLING_MERGE_GATE_MAX_HEALTH;
+        this.health = this.maxHealth;
+        this.radius = Constants.STARLING_MERGE_GATE_RADIUS_PX;
     }
 }

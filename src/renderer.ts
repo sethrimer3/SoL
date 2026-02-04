@@ -2101,6 +2101,19 @@ export class GameRenderer {
             -Math.PI / 2 + progress * Math.PI * 2
         );
         this.ctx.stroke();
+
+        const counterY = screenPos.y + radius + 10 * this.zoom;
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.font = `${12 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'top';
+        this.ctx.fillText(
+            `${gate.absorbedCount}/${Constants.STARLING_MERGE_COUNT}`,
+            screenPos.x,
+            counterY
+        );
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'alphabetic';
     }
 
     /**

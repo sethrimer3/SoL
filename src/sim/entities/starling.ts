@@ -126,6 +126,13 @@ export class Starling extends Unit {
         return this.hasManualOrder;
     }
 
+    clearManualOrders(): void {
+        this.hasManualOrder = false;
+        this.clearManualTarget();
+        this.clearMovementOrders();
+        this.hasReachedFinalWaypoint = false;
+    }
+
     getAndClearLastShotProjectiles(): MinionProjectile[] {
         // Legacy method - no longer used for lasers
         return [];
