@@ -72,6 +72,7 @@ export class MainMenu {
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private mainScreenRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
+    private visibilityHandler: (() => void) | null = null;
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -240,6 +241,15 @@ export class MainMenu {
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
+
+        this.visibilityHandler = () => {
+            if (document.hidden) {
+                this.pauseMenuAnimations();
+                return;
+            }
+            this.resumeMenuAnimations();
+        };
+        document.addEventListener('visibilitychange', this.visibilityHandler);
     }
 
     private createMenuElement(): HTMLElement {
@@ -306,6 +316,26 @@ export class MainMenu {
         });
         
         return menu;
+    }
+
+    private pauseMenuAnimations(): void {
+        this.backgroundParticleLayer?.stop();
+        this.atmosphereLayer?.stop();
+        this.menuParticleLayer?.stop();
+        this.carouselMenu?.pauseAnimation();
+        this.factionCarousel?.pauseAnimation();
+    }
+
+    private resumeMenuAnimations(): void {
+        if (this.menuElement.style.display === 'none') {
+            return;
+        }
+        this.backgroundParticleLayer?.start();
+        this.atmosphereLayer?.start();
+        this.menuParticleLayer?.start();
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        this.carouselMenu?.resumeAnimation();
+        this.factionCarousel?.resumeAnimation();
     }
 
     private createBuildNumberLabel(): HTMLDivElement {
@@ -2772,9 +2802,7 @@ export class MainMenu {
      */
     hide(): void {
         this.menuElement.style.display = 'none';
-        this.backgroundParticleLayer?.stop();
-        this.atmosphereLayer?.stop();
-        this.menuParticleLayer?.stop();
+        this.pauseMenuAnimations();
         
         // Show match loading screen
         this.showMatchLoadingScreen();
@@ -2787,9 +2815,7 @@ export class MainMenu {
         this.menuElement.style.display = 'block';
         this.currentScreen = 'main';
         this.renderMainScreen(this.contentElement);
-        this.backgroundParticleLayer?.start();
-        this.atmosphereLayer?.start();
-        this.menuParticleLayer?.start();
+        this.resumeMenuAnimations();
     }
 
     /**
@@ -2806,6 +2832,10 @@ export class MainMenu {
         }
         if (this.resizeHandler) {
             window.removeEventListener('resize', this.resizeHandler);
+        }
+        if (this.visibilityHandler) {
+            document.removeEventListener('visibilitychange', this.visibilityHandler);
+            this.visibilityHandler = null;
         }
         this.backgroundParticleLayer?.destroy();
         this.atmosphereLayer?.destroy();
@@ -2853,6 +2883,7 @@ class FactionCarouselView {
     private onSelectionChangeCallback: ((option: FactionCarouselOption) => void) | null = null;
     private onRenderCallback: (() => void) | null = null;
     private animationFrameId: number | null = null;
+    private isAnimationActive: boolean = false;
 
     constructor(container: HTMLElement, options: FactionCarouselOption[], initialIndex: number) {
         this.container = container;
@@ -3019,12 +3050,34 @@ class FactionCarouselView {
     }
 
     private startAnimation(): void {
+        if (this.isAnimationActive) {
+            return;
+        }
+        this.isAnimationActive = true;
         const animate = () => {
+            if (!this.isAnimationActive) {
+                return;
+            }
             this.update();
             this.render();
             this.animationFrameId = requestAnimationFrame(animate);
         };
-        animate();
+        this.animationFrameId = requestAnimationFrame(animate);
+    }
+
+    public pauseAnimation(): void {
+        if (!this.isAnimationActive) {
+            return;
+        }
+        this.isAnimationActive = false;
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+
+    public resumeAnimation(): void {
+        this.startAnimation();
     }
 
     private updateLayoutMetrics(): void {
@@ -3197,6 +3250,7 @@ class CarouselMenuView {
     private onRenderCallback: (() => void) | null = null;
     private onNavigateCallback: ((nextIndex: number) => void) | null = null;
     private animationFrameId: number | null = null;
+    private isAnimationActive: boolean = false;
     private hasDragged: boolean = false;
     private isCompactLayout: boolean = false;
     private resizeHandler: (() => void) | null = null;
@@ -3373,12 +3427,34 @@ class CarouselMenuView {
     }
 
     private startAnimation(): void {
+        if (this.isAnimationActive) {
+            return;
+        }
+        this.isAnimationActive = true;
         const animate = () => {
+            if (!this.isAnimationActive) {
+                return;
+            }
             this.update();
             this.render();
             this.animationFrameId = requestAnimationFrame(animate);
         };
-        animate();
+        this.animationFrameId = requestAnimationFrame(animate);
+    }
+
+    public pauseAnimation(): void {
+        if (!this.isAnimationActive) {
+            return;
+        }
+        this.isAnimationActive = false;
+        if (this.animationFrameId !== null) {
+            cancelAnimationFrame(this.animationFrameId);
+            this.animationFrameId = null;
+        }
+    }
+
+    public resumeAnimation(): void {
+        this.startAnimation();
     }
 
     private updateLayoutMetrics(): void {
