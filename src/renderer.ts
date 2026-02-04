@@ -591,10 +591,10 @@ export class GameRenderer {
             screenPos.x, screenPos.y, 0,
             screenPos.x, screenPos.y, radius * 1.8
         );
-        // Opacity values: 50%, 37.5%, 18.75%, 0%
-        gradient.addColorStop(0, adjustedColor + '80'); // Semi-transparent center (50%)
-        gradient.addColorStop(0.5, adjustedColor + '60'); // 37.5% opacity
-        gradient.addColorStop(0.8, adjustedColor + '30'); // 18.75% opacity
+        // Opacity values: ~50%, ~38%, ~19%, 0%
+        gradient.addColorStop(0, adjustedColor + '80'); // Semi-transparent center (~50% opacity)
+        gradient.addColorStop(0.5, adjustedColor + '60'); // ~38% opacity
+        gradient.addColorStop(0.8, adjustedColor + '30'); // ~19% opacity
         gradient.addColorStop(1, adjustedColor + '00'); // Fully transparent edge
         
         this.ctx.fillStyle = gradient;
@@ -725,7 +725,7 @@ export class GameRenderer {
         this.ctx.stroke();
 
         // Draw circle outline around the sun
-        this.ctx.strokeStyle = Constants.LAD_SUN_STROKE_COLOR;
+        this.ctx.strokeStyle = Constants.LAD_SUN_OUTLINE_COLOR;
         this.ctx.lineWidth = 4;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
