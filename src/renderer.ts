@@ -2932,13 +2932,13 @@ export class GameRenderer {
 
         const color = this.getFactionColor(this.viewingPlayer!.faction);
         
-        // For merged ranges, we draw the outline of all overlapping circles
-        // Using a simplified approach: draw arc segments that are on the outer boundary
+        // For merged ranges, draw only the outer boundary of overlapping circles
         this.ctx.strokeStyle = color;
         this.ctx.lineWidth = 1;
         this.ctx.globalAlpha = Constants.HERO_ATTACK_RANGE_ALPHA;
         this.ctx.beginPath();
 
+        const twoPi = Math.PI * 2;
         for (let i = 0; i < selectedStarlings.length; i++) {
             const starling = selectedStarlings[i];
             if (!this.isWithinViewBounds(starling.position, starling.attackRange)) {
@@ -2946,49 +2946,128 @@ export class GameRenderer {
             }
             const screenPos = this.worldToScreen(starling.position);
             const radius = starling.attackRange * this.zoom;
-            
-            // Draw arc segments that don't overlap with other starlings
-            const angleStep = Math.PI / 32; // Sample 64 points around circle
-            let pathStarted = false;
-            
-            for (let angle = 0; angle < Math.PI * 2; angle += angleStep) {
-                const px = starling.position.x + Math.cos(angle) * starling.attackRange;
-                const py = starling.position.y + Math.sin(angle) * starling.attackRange;
-                
-                // Check if this point is outside all other starling ranges
-                let isOuterPoint = true;
-                for (let j = 0; j < selectedStarlings.length; j++) {
-                    if (i === j) continue;
-                    const other = selectedStarlings[j];
-                    const dx = px - other.position.x;
-                    const dy = py - other.position.y;
-                    const distSq = dx * dx + dy * dy;
-                    const otherRadiusSq = other.attackRange * other.attackRange;
-                    
-                    if (distSq < otherRadiusSq) {
-                        isOuterPoint = false;
+            const blockedStarts: number[] = [];
+            const blockedEnds: number[] = [];
+            let isFullyCovered = false;
+
+            for (let j = 0; j < selectedStarlings.length; j++) {
+                if (i === j) continue;
+                const other = selectedStarlings[j];
+                const dx = other.position.x - starling.position.x;
+                const dy = other.position.y - starling.position.y;
+                const distanceSq = dx * dx + dy * dy;
+                const otherRadius = other.attackRange;
+
+                if (distanceSq <= 0.0001) {
+                    if (starling.attackRange <= otherRadius) {
+                        isFullyCovered = true;
                         break;
                     }
+                    continue;
                 }
-                
-                const screenX = this.worldToScreen({x: px, y: py} as Vector2D).x;
-                const screenY = this.worldToScreen({x: px, y: py} as Vector2D).y;
-                
-                if (isOuterPoint) {
-                    if (!pathStarted) {
-                        this.ctx.moveTo(screenX, screenY);
-                        pathStarted = true;
-                    } else {
-                        this.ctx.lineTo(screenX, screenY);
+
+                const distance = Math.sqrt(distanceSq);
+                if (distance + starling.attackRange <= otherRadius) {
+                    isFullyCovered = true;
+                    break;
+                }
+
+                if (distance >= starling.attackRange + otherRadius) {
+                    continue;
+                }
+
+                const angleCenter = Math.atan2(dy, dx);
+                const cosValue = (distanceSq + starling.attackRange * starling.attackRange - otherRadius * otherRadius)
+                    / (2 * distance * starling.attackRange);
+                const clampedCos = Math.max(-1, Math.min(1, cosValue));
+                const angleOffset = Math.acos(clampedCos);
+                let startAngle = angleCenter - angleOffset;
+                let endAngle = angleCenter + angleOffset;
+
+                if (startAngle < 0) {
+                    blockedStarts.push(startAngle + twoPi);
+                    blockedEnds.push(twoPi);
+                    startAngle = 0;
+                }
+                if (endAngle > twoPi) {
+                    blockedStarts.push(0);
+                    blockedEnds.push(endAngle - twoPi);
+                    endAngle = twoPi;
+                }
+
+                blockedStarts.push(startAngle);
+                blockedEnds.push(endAngle);
+            }
+
+            if (isFullyCovered) {
+                continue;
+            }
+
+            if (blockedStarts.length === 0) {
+                this.ctx.moveTo(screenPos.x + radius, screenPos.y);
+                this.ctx.arc(screenPos.x, screenPos.y, radius, 0, twoPi);
+                continue;
+            }
+
+            const intervalCount = blockedStarts.length;
+            const indices = new Array(intervalCount);
+            for (let idx = 0; idx < intervalCount; idx++) {
+                indices[idx] = idx;
+            }
+            indices.sort((a, b) => blockedStarts[a] - blockedStarts[b]);
+
+            let currentStart = blockedStarts[indices[0]];
+            const firstBlockedStart = currentStart;
+            let currentEnd = blockedEnds[indices[0]];
+            for (let idx = 1; idx < intervalCount; idx++) {
+                const startAngle = blockedStarts[indices[idx]];
+                const endAngle = blockedEnds[indices[idx]];
+                if (startAngle <= currentEnd) {
+                    if (endAngle > currentEnd) {
+                        currentEnd = endAngle;
                     }
                 } else {
-                    pathStarted = false;
+                    this.drawVisibleArcSegment(screenPos, radius, currentEnd, startAngle);
+                    currentStart = startAngle;
+                    currentEnd = endAngle;
                 }
             }
+            this.drawVisibleArcSegment(screenPos, radius, currentEnd, firstBlockedStart + twoPi);
         }
 
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
+    }
+
+    private drawVisibleArcSegment(screenPos: Vector2D, radius: number, startAngle: number, endAngle: number): void {
+        if (endAngle <= startAngle) {
+            return;
+        }
+        const twoPi = Math.PI * 2;
+        const wrappedStart = startAngle % twoPi;
+        const wrappedEnd = endAngle % twoPi;
+        if (endAngle - startAngle >= twoPi) {
+            this.ctx.moveTo(screenPos.x + radius, screenPos.y);
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, twoPi);
+            return;
+        }
+
+        if (wrappedEnd < wrappedStart) {
+            this.ctx.moveTo(
+                screenPos.x + Math.cos(wrappedStart) * radius,
+                screenPos.y + Math.sin(wrappedStart) * radius
+            );
+            this.ctx.arc(screenPos.x, screenPos.y, radius, wrappedStart, twoPi);
+            this.ctx.moveTo(screenPos.x + radius, screenPos.y);
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, wrappedEnd);
+            return;
+        }
+
+        this.ctx.moveTo(
+            screenPos.x + Math.cos(wrappedStart) * radius,
+            screenPos.y + Math.sin(wrappedStart) * radius
+        );
+        this.ctx.arc(screenPos.x, screenPos.y, radius, wrappedStart, wrappedEnd);
     }
 
     /**
