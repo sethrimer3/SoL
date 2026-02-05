@@ -1638,6 +1638,74 @@ export class GameRenderer {
             glowLevel = 0;
         }
 
+        const velocityX = particle.velocity.x;
+        const velocityY = particle.velocity.y;
+        const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+        if (speed > Constants.DUST_TRAIL_MIN_SPEED_PX_PER_SEC) {
+            const invSpeed = 1 / speed;
+            const dirX = velocityX * invSpeed;
+            const dirY = velocityY * invSpeed;
+            const perpX = -dirY;
+            const perpY = dirX;
+            const trailLengthPx = Math.min(
+                Constants.DUST_TRAIL_MAX_LENGTH_PX,
+                Math.max(Constants.DUST_TRAIL_MIN_LENGTH_PX, speed * Constants.DUST_TRAIL_LENGTH_PER_SPEED)
+            );
+            const trailLength = trailLengthPx * this.zoom;
+            const trailOffsetX = perpX * baseSize;
+            const trailOffsetY = perpY * baseSize;
+            const trailEndX = dirX * trailLength;
+            const trailEndY = dirY * trailLength;
+            const leftStartX = screenPos.x + trailOffsetX;
+            const leftStartY = screenPos.y + trailOffsetY;
+            const rightStartX = screenPos.x - trailOffsetX;
+            const rightStartY = screenPos.y - trailOffsetY;
+            const leftEndX = leftStartX - trailEndX;
+            const leftEndY = leftStartY - trailEndY;
+            const rightEndX = rightStartX - trailEndX;
+            const rightEndY = rightStartY - trailEndY;
+
+            this.ctx.lineWidth = Math.max(0.2, Constants.DUST_TRAIL_WIDTH_PX * this.zoom);
+            if (this.isFancyGraphicsEnabled && dustColor.startsWith('#')) {
+                let hex = dustColor.slice(1);
+                if (hex.length === 3) {
+                    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+                }
+                const colorInt = parseInt(hex, 16);
+                const trailR = (colorInt >> 16) & 0xff;
+                const trailG = (colorInt >> 8) & 0xff;
+                const trailB = colorInt & 0xff;
+                const trailAlpha = 0.6;
+                const leftGradient = this.ctx.createLinearGradient(leftStartX, leftStartY, leftEndX, leftEndY);
+                leftGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, ${trailAlpha})`);
+                leftGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
+                this.ctx.strokeStyle = leftGradient;
+                this.ctx.beginPath();
+                this.ctx.moveTo(leftStartX, leftStartY);
+                this.ctx.lineTo(leftEndX, leftEndY);
+                this.ctx.stroke();
+
+                const rightGradient = this.ctx.createLinearGradient(rightStartX, rightStartY, rightEndX, rightEndY);
+                rightGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, ${trailAlpha})`);
+                rightGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
+                this.ctx.strokeStyle = rightGradient;
+                this.ctx.beginPath();
+                this.ctx.moveTo(rightStartX, rightStartY);
+                this.ctx.lineTo(rightEndX, rightEndY);
+                this.ctx.stroke();
+            } else {
+                this.ctx.strokeStyle = dustColor;
+                this.ctx.globalAlpha = 0.45;
+                this.ctx.beginPath();
+                this.ctx.moveTo(leftStartX, leftStartY);
+                this.ctx.lineTo(leftEndX, leftEndY);
+                this.ctx.moveTo(rightStartX, rightStartY);
+                this.ctx.lineTo(rightEndX, rightEndY);
+                this.ctx.stroke();
+                this.ctx.globalAlpha = 1.0;
+            }
+        }
+
         if (glowLevel > 0) {
             const glowSize = baseSize * (1.2 + glowLevel * 0.35);
             this.ctx.fillStyle = dustColor;
