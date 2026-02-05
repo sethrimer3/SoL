@@ -29,6 +29,7 @@ export class GameRenderer {
     public highlightedButtonIndex: number = -1; // Index of highlighted production button (-1 = none)
     public selectedUnits: Set<Unit> = new Set();
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
+    public selectedWarpGate: WarpGate | null = null;
     public pathPreviewForge: StellarForge | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
@@ -2042,11 +2043,12 @@ export class GameRenderer {
     /**
      * Draw a warp gate
      */
-    private drawWarpGate(gate: WarpGate): void {
+    private drawWarpGate(gate: WarpGate, game: GameState, ladSun: Sun | undefined): void {
         const screenPos = this.worldToScreen(gate.position);
         const maxRadius = Constants.WARP_GATE_RADIUS * this.zoom;
         const chargeProgress = gate.chargeTime / Constants.WARP_GATE_CHARGE_TIME;
         const currentRadius = Math.min(maxRadius, chargeProgress * maxRadius);
+        const isSelected = this.selectedWarpGate === gate;
 
         if (!gate.isComplete) {
             // Draw charging effect
@@ -2075,17 +2077,11 @@ export class GameRenderer {
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
         } else {
-            // Draw completed warp gate
-            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
+            const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
+            this.drawWarpGateProductionEffect(screenPos, maxRadius, game, displayColor);
+            if (isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, maxRadius);
+            }
 
             const completionProgress = gate.completionRemainingSec / Constants.WARP_GATE_COMPLETION_WINDOW_SEC;
             if (completionProgress > 0) {
@@ -2103,32 +2099,41 @@ export class GameRenderer {
                 this.ctx.stroke();
             }
 
-            // Draw 4 build buttons around the gate
-            const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
-            const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
-            const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-            const labels = ['Cannon', 'Gatling', 'Cyclone', 'Foundry'];
-            
-            for (let i = 0; i < 4; i++) {
-                const angle = angles[i];
-                const btnX = screenPos.x + Math.cos(angle) * buttonDistance;
-                const btnY = screenPos.y + Math.sin(angle) * buttonDistance;
-                const labelOffset = buttonRadius + 14 * this.zoom;
+            if (isSelected) {
+                const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
+                const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
+                const positions = [
+                    { x: 0, y: -1, label: 'Foundry', index: 0 },
+                    { x: 1, y: 0, label: 'Cannon', index: 1 },
+                    { x: 0, y: 1, label: 'Gatling', index: 2 },
+                    { x: -1, y: 0, label: 'Cyclone', index: 3 }
+                ];
 
-                this.ctx.fillStyle = '#444444';
-                this.ctx.strokeStyle = '#00FFFF';
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.arc(btnX, btnY, buttonRadius, 0, Math.PI * 2);
-                this.ctx.fill();
-                this.ctx.stroke();
+                for (const config of positions) {
+                    const btnX = screenPos.x + config.x * buttonDistance;
+                    const btnY = screenPos.y + config.y * buttonDistance;
+                    const labelOffset = buttonRadius + 14 * this.zoom;
+                    const isHighlighted = this.highlightedButtonIndex === config.index;
 
-                // Draw button label
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${11 * this.zoom}px Doto`;
-                this.ctx.textAlign = 'center';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(labels[i], btnX + Math.cos(angle) * labelOffset, btnY + Math.sin(angle) * labelOffset);
+                    this.ctx.fillStyle = isHighlighted ? 'rgba(0, 255, 255, 0.6)' : '#444444';
+                    this.ctx.strokeStyle = '#00FFFF';
+                    this.ctx.lineWidth = isHighlighted ? 4 : 2;
+                    this.ctx.beginPath();
+                    this.ctx.arc(btnX, btnY, buttonRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    this.ctx.stroke();
+
+                    // Draw button label
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.font = `${11 * this.zoom}px Doto`;
+                    this.ctx.textAlign = 'center';
+                    this.ctx.textBaseline = 'middle';
+                    this.ctx.fillText(
+                        config.label,
+                        btnX + config.x * labelOffset,
+                        btnY + config.y * labelOffset
+                    );
+                }
             }
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
@@ -5445,7 +5450,7 @@ export class GameRenderer {
         // Draw warp gates
         for (const gate of game.warpGates) {
             if (this.isWithinViewBounds(gate.position, Constants.WARP_GATE_RADIUS * 2)) {
-                this.drawWarpGate(gate);
+                this.drawWarpGate(gate, game, ladSun);
             }
         }
 
