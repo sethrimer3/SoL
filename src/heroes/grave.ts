@@ -112,6 +112,11 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     this.trail.shift(); // Remove oldest trail point
                 }
                 this.lifetime += deltaTime;
+                
+                // Return to formation after a certain lifetime (for ability shots without target)
+                if (!this.targetEnemy && this.lifetime > 2.0) {
+                    this.returnToOrbit();
+                }
             }
 
             // Check if hit target
@@ -148,6 +153,20 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 this.velocity.x = dirX * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
                 this.velocity.y = dirY * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
             }
+        }
+
+        /**
+         * Launch projectile in a direction (for ability use)
+         */
+        launchInDirection(direction: Vector2D): void {
+            this.isAttacking = true;
+            this.targetEnemy = null; // No specific target
+            this.trail = [];
+            this.lifetime = 0;
+
+            // Set velocity in the given direction
+            this.velocity.x = direction.x * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
+            this.velocity.y = direction.y * Constants.GRAVE_PROJECTILE_LAUNCH_SPEED;
         }
 
         /**
@@ -319,21 +338,9 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 return false;
             }
 
-            // Calculate target position based on direction and range
-            const targetDistance = this.attackRange * 0.8; // Shoot 80% of max range
-            const targetX = this.position.x + direction.x * targetDistance;
-            const targetY = this.position.y + direction.y * targetDistance;
-            const targetPos = new Vector2D(targetX, targetY);
-
-            // Create a fake target for the ability
-            const abilityTarget = {
-                position: targetPos,
-                health: 1, // Won't actually be hit, projectiles will just fly there
-            } as CombatTarget;
-
-            // Launch all available projectiles toward the target direction
+            // Launch all available projectiles in the ability direction
             for (const projectile of availableProjectiles) {
-                projectile.launchAtTarget(abilityTarget);
+                projectile.launchInDirection(direction);
             }
 
             // Use all available small particles
