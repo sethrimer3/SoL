@@ -71,6 +71,11 @@ export class GameRenderer {
     private readonly VELARIS_FORGE_GRAPHEME_INNER_RADIUS = 0.55;
     private readonly VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD = Math.PI * 0.25;
     private readonly VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD = Math.PI * 1.75;
+    private readonly VELARIS_MIRROR_GLYPHS = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛋᛏᛒᛖᛗᛚᛜᛟ';
+    private readonly VELARIS_MIRROR_WORD = 'ᚹᛖᛚᚨᚱᛁᛋ';
+    private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
+    private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
+    private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
@@ -1472,6 +1477,11 @@ export class GameRenderer {
         }
     }
 
+    private getPseudoRandom(seed: number): number {
+        const value = Math.sin(seed) * 43758.5453;
+        return value - Math.floor(value);
+    }
+
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
@@ -1510,7 +1520,8 @@ export class GameRenderer {
         }
         
         const screenPos = this.worldToScreen(mirror.position);
-        const size = 14 * this.zoom;
+        const mirrorSizeWorld = 14;
+        const size = mirrorSizeWorld * this.zoom;
 
         // Save context state
         this.ctx.save();
@@ -1518,6 +1529,10 @@ export class GameRenderer {
         // Calculate glow intensity based on distance to closest sun
         // Closer = brighter glow (inverse relationship)
         const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
+        const isVelarisMirror = mirror.owner.faction === Faction.VELARIS;
+        const hasLight = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
+        const isMirrorActive = hasLight && glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity;
+        const velarisUnderlineOffsetWorld = mirrorSizeWorld * 0.45;
 
         if (this.isFancyGraphicsEnabled) {
             const bloomColor = this.brightenAndPaleColor(displayColor);
@@ -1564,15 +1579,22 @@ export class GameRenderer {
                 
                 // Draw reflected light beam (a few feet / ~100 units in front of mirror)
                 const beamLength = 100;
+                const beamStartWorld = isVelarisMirror && isMirrorActive
+                    ? new Vector2D(
+                        mirror.position.x - Math.sin(mirror.reflectionAngle) * velarisUnderlineOffsetWorld,
+                        mirror.position.y + Math.cos(mirror.reflectionAngle) * velarisUnderlineOffsetWorld
+                    )
+                    : mirror.position;
                 const beamEnd = new Vector2D(
-                    mirror.position.x + reflectDir.x * beamLength,
-                    mirror.position.y + reflectDir.y * beamLength
+                    beamStartWorld.x + reflectDir.x * beamLength,
+                    beamStartWorld.y + reflectDir.y * beamLength
                 );
+                const beamStartScreen = this.worldToScreen(beamStartWorld);
                 const beamEndScreen = this.worldToScreen(beamEnd);
                 
                 // Draw bright beam with doubled intensity
                 const beamGradient = this.ctx.createLinearGradient(
-                    screenPos.x, screenPos.y,
+                    beamStartScreen.x, beamStartScreen.y,
                     beamEndScreen.x, beamEndScreen.y
                 );
                 beamGradient.addColorStop(0, `rgba(255, 255, 200, ${glowIntensity * 1.0})`);
@@ -1583,7 +1605,7 @@ export class GameRenderer {
                 this.ctx.lineWidth = 15 * this.zoom * glowIntensity;
                 this.ctx.lineCap = 'round';
                 this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.moveTo(beamStartScreen.x, beamStartScreen.y);
                 this.ctx.lineTo(beamEndScreen.x, beamEndScreen.y);
                 this.ctx.stroke();
                 
@@ -1623,6 +1645,74 @@ export class GameRenderer {
         let selectionWidth = surfaceLength;
         let selectionHeight = surfaceThickness;
         let drewSprite = false;
+
+        if (isVelarisMirror) {
+            const glyphColor = this.brightenAndPaleColor(displayColor);
+            const glyphFontSize = size * 0.55;
+            const glyphSpacing = glyphFontSize * 0.7;
+            const glyphSeedBase = mirror.position.x * 0.17 + mirror.position.y * 0.23 + mirror.reflectionAngle * 3.1;
+            this.ctx.fillStyle = glyphColor;
+            this.ctx.font = `${glyphFontSize}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+
+            if (isMirrorActive) {
+                const word = this.VELARIS_MIRROR_WORD;
+                const wordLength = word.length;
+                const wordWidth = glyphSpacing * (wordLength - 1);
+                const wordY = -size * 0.1;
+                for (let i = 0; i < wordLength; i++) {
+                    const letterX = (i - (wordLength - 1) / 2) * glyphSpacing;
+                    this.ctx.fillText(word.charAt(i), letterX, wordY);
+                }
+
+                const underlineY = size * 0.45;
+                const underlineLength = wordWidth + glyphFontSize * 0.6;
+                const particleRadius = Math.max(1, size * 0.08);
+                this.ctx.fillStyle = `rgba(255, 255, 220, 0.85)`;
+                for (let i = 0; i < this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT; i++) {
+                    const t = this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT > 1
+                        ? i / (this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT - 1)
+                        : 0.5;
+                    const particleX = (t - 0.5) * underlineLength;
+                    this.ctx.beginPath();
+                    this.ctx.arc(particleX, underlineY, particleRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+
+                selectionWidth = underlineLength + glyphFontSize;
+                selectionHeight = size * 1.4;
+            } else {
+                const cloudRadius = size * 0.9;
+                for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT; i++) {
+                    const seed = glyphSeedBase + i * 12.7;
+                    const angle = this.getPseudoRandom(seed) * Math.PI * 2;
+                    const radius = this.getPseudoRandom(seed + 7.3) * cloudRadius;
+                    const offsetX = Math.cos(angle) * radius;
+                    const offsetY = Math.sin(angle) * radius;
+                    const glyph = this.VELARIS_MIRROR_GLYPHS.charAt(i % this.VELARIS_MIRROR_GLYPHS.length);
+                    this.ctx.fillText(glyph, offsetX, offsetY);
+                }
+
+                const particleRadius = Math.max(1, size * 0.07);
+                this.ctx.fillStyle = `rgba(255, 255, 210, 0.6)`;
+                for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT; i++) {
+                    const seed = glyphSeedBase + i * 9.4;
+                    const angle = this.getPseudoRandom(seed + 1.1) * Math.PI * 2;
+                    const radius = this.getPseudoRandom(seed + 4.7) * cloudRadius;
+                    const offsetX = Math.cos(angle) * radius;
+                    const offsetY = Math.sin(angle) * radius;
+                    this.ctx.beginPath();
+                    this.ctx.arc(offsetX, offsetY, particleRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+
+                selectionWidth = size * 2;
+                selectionHeight = size * 1.6;
+            }
+
+            drewSprite = true;
+        }
 
         const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
         if (mirrorSpritePath) {
