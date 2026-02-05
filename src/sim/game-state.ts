@@ -27,7 +27,8 @@ import {
     MinionProjectile,
     LaserBeam,
     ImpactParticle,
-    SparkleParticle
+    SparkleParticle,
+    DeathParticle
 } from './entities/particles';
 import {
     Marine,
@@ -75,6 +76,7 @@ export class GameState {
     damageNumbers: DamageNumber[] = [];
     crescentWaves: InstanceType<typeof CrescentWave>[] = [];
     sparkleParticles: SparkleParticle[] = [];
+    deathParticles: DeathParticle[] = [];
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -565,6 +567,11 @@ export class GameState {
 
             // Remove dead units and track losses
             const deadUnits = player.units.filter(unit => unit.isDead());
+            for (const deadUnit of deadUnits) {
+                // Create death particles for visual effect
+                const color = player === this.players[0] ? '#4A90E2' : '#E24A4A'; // Use default colors for now
+                this.createDeathParticles(deadUnit, color);
+            }
             player.unitsLost += deadUnits.length;
             player.units = player.units.filter(unit => !unit.isDead());
 
@@ -647,6 +654,12 @@ export class GameState {
             } // End of countdown check for building construction
 
             // Remove destroyed buildings
+            const destroyedBuildings = player.buildings.filter(building => building.isDestroyed());
+            for (const building of destroyedBuildings) {
+                // Create death particles for visual effect
+                const color = player === this.players[0] ? '#4A90E2' : '#E24A4A'; // Use default colors for now
+                this.createDeathParticles(building, color);
+            }
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
         }
 
@@ -1147,6 +1160,12 @@ export class GameState {
             sparkle.update(deltaTime);
         }
         this.sparkleParticles = this.sparkleParticles.filter(sparkle => !sparkle.shouldDespawn());
+        
+        // Update death particles (breaking apart effect)
+        for (const deathParticle of this.deathParticles) {
+            deathParticle.update(deltaTime);
+        }
+        this.deathParticles = this.deathParticles.filter(particle => !particle.shouldDespawn());
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -3789,6 +3808,66 @@ export class GameState {
             } else {
                 console.warn(`Unit not found for network command: ${unitId}`);
             }
+        }
+    }
+
+    /**
+     * Create death particles for a unit that has just died
+     * @param unit - The unit that died
+     * @param color - The player color to tint particles
+     */
+    private createDeathParticles(unit: Unit | Building, color: string): void {
+        // Determine number of particles based on unit type
+        let particleCount: number;
+        let baseSize: number;
+        
+        if (unit instanceof Building) {
+            // Structures: 10-20 pieces
+            particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
+            baseSize = 16;
+        } else if (unit.isHero) {
+            // Heroes: 10-20 pieces
+            particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
+            baseSize = 12;
+        } else {
+            // Starlings and other units: 4-8 pieces
+            particleCount = Math.floor(Math.random() * 5) + 4; // 4 to 8
+            baseSize = 8;
+        }
+        
+        // Random fade start time between 5-15 seconds
+        const fadeStartTime = Math.random() * 10 + 5; // 5 to 15 seconds
+        
+        // Create particles flying apart in different directions
+        for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+            const speed = 50 + Math.random() * 100; // 50-150 pixels per second
+            
+            const velocity = new Vector2D(
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed
+            );
+            
+            // Create a small fragment canvas (we'll just use colored rectangles for efficiency)
+            const fragment = document.createElement('canvas');
+            const size = baseSize + Math.random() * baseSize;
+            fragment.width = size;
+            fragment.height = size;
+            const ctx = fragment.getContext('2d');
+            if (ctx) {
+                ctx.fillStyle = color;
+                ctx.fillRect(0, 0, size, size);
+            }
+            
+            const particle = new DeathParticle(
+                new Vector2D(unit.position.x, unit.position.y),
+                velocity,
+                Math.random() * Math.PI * 2, // Random initial rotation
+                fragment,
+                fadeStartTime
+            );
+            
+            this.deathParticles.push(particle);
         }
     }
 
