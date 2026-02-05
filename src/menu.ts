@@ -1892,19 +1892,19 @@ export class MainMenu {
                 id: Faction.RADIANT, 
                 name: 'Radiant', 
                 description: 'Well-Balanced, Ranged-Focused',
-                color: '#00AAFF'
+                color: '#FF5722' // Deep yet bright reddish-orange (like glowing embers)
             },
             { 
                 id: Faction.AURUM, 
                 name: 'Aurum', 
                 description: 'Fast-Paced, Melee-Focused',
-                color: '#FFD700'
+                color: '#FFD700' // Bright gold
             },
             { 
-                id: Faction.SOLARI, 
-                name: 'Solari', 
-                description: 'Complex Strategy, Ability-Focused',
-                color: '#FF6600'
+                id: Faction.VELARIS, 
+                name: 'Velaris', 
+                description: 'Strategic, Ability-Heavy. Particles from Nebulae',
+                color: '#9C27B0' // Purple
             }
         ];
         const selectedIndex = factions.findIndex((faction) => faction.id === this.settings.selectedFaction);
