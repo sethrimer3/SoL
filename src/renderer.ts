@@ -3041,6 +3041,7 @@ export class GameRenderer {
         this.ctx.beginPath();
 
         const twoPi = Math.PI * 2;
+        const overlapEpsilonRad = 0.0005;
         for (let i = 0; i < selectedStarlings.length; i++) {
             const starling = selectedStarlings[i];
             if (!this.isWithinViewBounds(starling.position, starling.attackRange)) {
@@ -3048,6 +3049,7 @@ export class GameRenderer {
             }
             const screenPos = this.worldToScreen(starling.position);
             const radius = starling.attackRange * this.zoom;
+            const minArcLengthRad = Math.min(0.08, 2 / Math.max(radius, 1));
             const blockedStarts: number[] = [];
             const blockedEnds: number[] = [];
             let isFullyCovered = false;
@@ -3069,12 +3071,12 @@ export class GameRenderer {
                 }
 
                 const distance = Math.sqrt(distanceSq);
-                if (distance + starling.attackRange <= otherRadius) {
+                if (distance + starling.attackRange <= otherRadius + overlapEpsilonRad) {
                     isFullyCovered = true;
                     break;
                 }
 
-                if (distance >= starling.attackRange + otherRadius) {
+                if (distance >= starling.attackRange + otherRadius - overlapEpsilonRad) {
                     continue;
                 }
 
@@ -3083,6 +3085,9 @@ export class GameRenderer {
                     / (2 * distance * starling.attackRange);
                 const clampedCos = Math.max(-1, Math.min(1, cosValue));
                 const angleOffset = Math.acos(clampedCos);
+                if (angleOffset <= overlapEpsilonRad) {
+                    continue;
+                }
                 let startAngle = angleCenter - angleOffset;
                 let endAngle = angleCenter + angleOffset;
 
@@ -3118,34 +3123,41 @@ export class GameRenderer {
             }
             indices.sort((a, b) => blockedStarts[a] - blockedStarts[b]);
 
-            let currentStart = blockedStarts[indices[0]];
-            const firstBlockedStart = currentStart;
+            const firstBlockedStart = blockedStarts[indices[0]];
             let currentEnd = blockedEnds[indices[0]];
             for (let idx = 1; idx < intervalCount; idx++) {
                 const startAngle = blockedStarts[indices[idx]];
                 const endAngle = blockedEnds[indices[idx]];
-                if (startAngle <= currentEnd) {
+                if (startAngle <= currentEnd + overlapEpsilonRad) {
                     if (endAngle > currentEnd) {
                         currentEnd = endAngle;
                     }
                 } else {
-                    this.drawVisibleArcSegment(screenPos, radius, currentEnd, startAngle);
-                    currentStart = startAngle;
+                    this.drawVisibleArcSegment(screenPos, radius, currentEnd, startAngle, minArcLengthRad);
                     currentEnd = endAngle;
                 }
             }
-            this.drawVisibleArcSegment(screenPos, radius, currentEnd, firstBlockedStart + twoPi);
+            this.drawVisibleArcSegment(screenPos, radius, currentEnd, firstBlockedStart + twoPi, minArcLengthRad);
         }
 
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
     }
 
-    private drawVisibleArcSegment(screenPos: Vector2D, radius: number, startAngle: number, endAngle: number): void {
+    private drawVisibleArcSegment(
+        screenPos: Vector2D,
+        radius: number,
+        startAngle: number,
+        endAngle: number,
+        minArcLengthRad: number
+    ): void {
         if (endAngle <= startAngle) {
             return;
         }
         const twoPi = Math.PI * 2;
+        if (endAngle - startAngle <= minArcLengthRad) {
+            return;
+        }
         const wrappedStart = startAngle % twoPi;
         const wrappedEnd = endAngle % twoPi;
         if (endAngle - startAngle >= twoPi) {
