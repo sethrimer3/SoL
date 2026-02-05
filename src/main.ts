@@ -28,6 +28,7 @@ class GameController {
     private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
     private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
+    private selectedWarpGate: WarpGate | null = null;
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
@@ -367,6 +368,171 @@ class GameController {
         return false;
     }
 
+    private clearWarpGateSelection(): void {
+        this.selectedWarpGate = null;
+        this.renderer.selectedWarpGate = null;
+        this.renderer.highlightedButtonIndex = -1;
+    }
+
+    private getWarpGateAtPosition(worldPos: Vector2D, player: Player): WarpGate | null {
+        if (!this.game) {
+            return null;
+        }
+
+        for (const gate of this.game.warpGates) {
+            if (!gate.isComplete || gate.owner !== player) {
+                continue;
+            }
+            const distance = gate.position.distanceTo(worldPos);
+            if (distance <= Constants.WARP_GATE_RADIUS) {
+                return gate;
+            }
+        }
+        return null;
+    }
+
+    private getWarpGateButtonIndexFromClick(
+        gate: WarpGate,
+        screenX: number,
+        screenY: number
+    ): number {
+        const gateScreenPos = this.renderer.worldToScreen(gate.position);
+        const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
+        const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
+        const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
+        const positions = [
+            { x: 0, y: -1 },
+            { x: 1, y: 0 },
+            { x: 0, y: 1 },
+            { x: -1, y: 0 }
+        ];
+
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            const buttonScreenX = gateScreenPos.x + pos.x * buttonDistance;
+            const buttonScreenY = gateScreenPos.y + pos.y * buttonDistance;
+            const dx = screenX - buttonScreenX;
+            const dy = screenY - buttonScreenY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance <= buttonRadius) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private getWarpGateButtonDirection(buttonIndex: number): Vector2D | null {
+        const directions = [
+            new Vector2D(0, -1),
+            new Vector2D(1, 0),
+            new Vector2D(0, 1),
+            new Vector2D(-1, 0)
+        ];
+        return directions[buttonIndex] ?? null;
+    }
+
+    private getWarpGateButtonWorldPosition(gate: WarpGate, buttonIndex: number): Vector2D | null {
+        const direction = this.getWarpGateButtonDirection(buttonIndex);
+        if (!direction) {
+            return null;
+        }
+        const buttonDistanceWorld = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
+        return new Vector2D(
+            gate.position.x + direction.x * buttonDistanceWorld,
+            gate.position.y + direction.y * buttonDistanceWorld
+        );
+    }
+
+    private buildFromWarpGate(player: Player, gate: WarpGate, buttonIndex: number): void {
+        if (!gate.isComplete || gate.owner !== player) {
+            return;
+        }
+        const gatePosition = new Vector2D(gate.position.x, gate.position.y);
+        const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+
+        if (buttonIndex === 0) {
+            if (hasSubFactory) {
+                console.log('Only one Foundry can exist at a time');
+                return;
+            }
+            if (!player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
+                console.log('Not enough energy to build Foundry');
+                return;
+            }
+            const subFactory = new SubsidiaryFactory(gatePosition, player);
+            player.buildings.push(subFactory);
+            console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+            this.sendNetworkCommand('building_purchase', {
+                buildingType: 'SubsidiaryFactory',
+                positionX: gate.position.x,
+                positionY: gate.position.y
+            });
+        } else if (buttonIndex === 1) {
+            if (!player.spendEnergy(Constants.MINIGUN_COST)) {
+                console.log('Not enough energy to build Cannon');
+                return;
+            }
+            const minigun = new Minigun(gatePosition, player);
+            player.buildings.push(minigun);
+            console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+            this.sendNetworkCommand('building_purchase', {
+                buildingType: 'Minigun',
+                positionX: gate.position.x,
+                positionY: gate.position.y
+            });
+        } else if (buttonIndex === 2) {
+            if (!player.spendEnergy(Constants.GATLING_COST)) {
+                console.log('Not enough energy to build Gatling Tower');
+                return;
+            }
+            const gatling = new GatlingTower(gatePosition, player);
+            player.buildings.push(gatling);
+            console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+            this.sendNetworkCommand('building_purchase', {
+                buildingType: 'Gatling',
+                positionX: gate.position.x,
+                positionY: gate.position.y
+            });
+        } else if (buttonIndex === 3) {
+            if (!player.spendEnergy(Constants.SWIRLER_COST)) {
+                console.log('Not enough energy to build Cyclone');
+                return;
+            }
+            const swirler = new SpaceDustSwirler(gatePosition, player);
+            player.buildings.push(swirler);
+            console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+            this.sendNetworkCommand('building_purchase', {
+                buildingType: 'SpaceDustSwirler',
+                positionX: gate.position.x,
+                positionY: gate.position.y
+            });
+        } else {
+            return;
+        }
+
+        this.scatterParticles(gate.position);
+        this.removeWarpGate(gate);
+    }
+
+    private removeWarpGate(gate: WarpGate): void {
+        if (!this.game) {
+            return;
+        }
+
+        const gateIndex = this.game.warpGates.indexOf(gate);
+        if (gateIndex > -1) {
+            this.game.warpGates.splice(gateIndex, 1);
+        }
+        if (this.currentWarpGate === gate) {
+            this.currentWarpGate = null;
+        }
+        if (this.selectedWarpGate === gate) {
+            this.clearWarpGateSelection();
+        }
+        this.implodeParticles(gate.position);
+    }
+
     /**
      * Clear all selections and deselect all entities
      */
@@ -379,6 +545,7 @@ class GameController {
         this.selectedMirrors.clear();
         this.selectedBase = null;
         this.selectedBuildings.clear();
+        this.clearWarpGateSelection();
         
         // Deselect all entities
         if (player.stellarForge) {
@@ -392,6 +559,7 @@ class GameController {
         }
         
         this.renderer.selectedUnits = this.selectedUnits;
+        this.renderer.selectedMirrors = this.selectedMirrors;
     }
 
     /**
@@ -684,6 +852,7 @@ class GameController {
         this.selectedMirrors.clear();
         this.selectedBase = null;
         this.selectedBuildings.clear();
+        this.clearWarpGateSelection();
         this.renderer.selectedUnits = this.selectedUnits;
         this.renderer.selectedMirrors = this.selectedMirrors;
         
@@ -1002,6 +1171,11 @@ class GameController {
                     const isDragStartOnSelectedMirror = Boolean(
                         dragStartWorld && this.isDragStartNearSelectedMirrors(dragStartWorld)
                     );
+                    const isDragStartOnSelectedWarpGate = Boolean(
+                        this.selectedWarpGate &&
+                        dragStartWorld &&
+                        dragStartWorld.distanceTo(this.selectedWarpGate.position) <= Constants.WARP_GATE_RADIUS
+                    );
 
                     if (isDragStartOnSelectedBase) {
                         // Drawing a path from the selected base
@@ -1017,6 +1191,9 @@ class GameController {
                         this.renderer.pathPreviewForge = null;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
+                    } else if (isDragStartOnSelectedWarpGate) {
+                        this.isDraggingBuildingArrow = true;
+                        this.cancelHold();
                     } else if (this.selectedBuildings.size === 1) {
                         // Check if a foundry is selected
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
@@ -1025,7 +1202,7 @@ class GameController {
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
                         }
-                    } else if ((this.selectedBase || this.selectedMirrors.size > 0) && this.selectedUnits.size === 0) {
+                    } else if ((this.selectedBase || this.selectedMirrors.size > 0 || this.selectedWarpGate) && this.selectedUnits.size === 0) {
                         // Stellar forge or mirror selected - use building arrow mode even when dragging from empty space
                         this.isDraggingBuildingArrow = true;
                         this.cancelHold();
@@ -1092,6 +1269,8 @@ class GameController {
                             y,
                             this.hasSeenFoundry
                         );
+                    } else if (this.selectedWarpGate) {
+                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                     } else if (this.selectedBuildings.size === 1) {
                         // Foundry building has 2 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
@@ -1247,167 +1426,47 @@ class GameController {
                     return;
                 }
 
-                // Check if clicked on a warp gate button
-                for (const gate of this.game.warpGates) {
-                    if (!gate.isComplete) continue;
-                    
-                    // Check if player owns this gate
-                    if (gate.owner !== player) continue;
-                    
-                    // Convert gate position to screen space
-                    const gateScreenPos = this.renderer.worldToScreen(gate.position);
-                    
-                    // Calculate button positions in screen space (matching renderer)
-                    const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
-                    const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
-                    const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
-                    const angles = [0, Math.PI / 2, Math.PI, 3 * Math.PI / 2];
-                    const labels = ['Cannon', 'Gatling', 'Cyclone', 'Foundry'];
-                    
-                    for (let i = 0; i < 4; i++) {
-                        const angle = angles[i];
-                        // Calculate button position in screen space
-                        const buttonScreenX = gateScreenPos.x + Math.cos(angle) * buttonDistance;
-                        const buttonScreenY = gateScreenPos.y + Math.sin(angle) * buttonDistance;
-                        
-                        // Check distance in screen space
-                        const dx = lastX - buttonScreenX;
-                        const dy = lastY - buttonScreenY;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance <= buttonRadius) {
-                            // Convert button screen position to world position for the wave effect
-                            const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
+                if (this.selectedWarpGate) {
+                    const buttonIndex = this.getWarpGateButtonIndexFromClick(this.selectedWarpGate, lastX, lastY);
+                    if (buttonIndex >= 0) {
+                        const buttonWorldPos = this.getWarpGateButtonWorldPosition(this.selectedWarpGate, buttonIndex);
+                        if (buttonWorldPos) {
                             this.renderer.createProductionButtonWave(buttonWorldPos);
-                            console.log(
-                                `Warp gate button clicked: ${labels[i]} (index ${i}) | energy=${player.energy.toFixed(1)}`
-                            );
-                            // Button clicked!
-                            if (i === 0) {
-                                // First button - create Cannon building
-                                if (player.spendEnergy(Constants.MINIGUN_COST)) {
-                                    const minigun = new Minigun(new Vector2D(gate.position.x, gate.position.y), player);
-                                    player.buildings.push(minigun);
-                                    console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                                    this.sendNetworkCommand('building_purchase', {
-                                        buildingType: 'Minigun',
-                                        positionX: gate.position.x,
-                                        positionY: gate.position.y
-                                    });
-                                    
-                                    // Emit shockwave when building starts warping in
-                                    this.scatterParticles(gate.position);
-                                    
-                                    // Remove the warp gate (implode effect)
-                                    const gateIndex = this.game.warpGates.indexOf(gate);
-                                    if (gateIndex > -1) {
-                                        this.game.warpGates.splice(gateIndex, 1);
-                                    }
-                                    if (this.currentWarpGate === gate) {
-                                        this.currentWarpGate = null;
-                                    }
-                                    this.implodeParticles(gate.position);
-                                } else {
-                                    console.log('Not enough energy to build Cannon');
-                                }
-                            } else if (i === 1) {
-                                // Second button - create Gatling Tower building
-                                if (player.spendEnergy(Constants.GATLING_COST)) {
-                                    const gatling = new GatlingTower(new Vector2D(gate.position.x, gate.position.y), player);
-                                    player.buildings.push(gatling);
-                                    console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                                    this.sendNetworkCommand('building_purchase', {
-                                        buildingType: 'Gatling',
-                                        positionX: gate.position.x,
-                                        positionY: gate.position.y
-                                    });
-                                    
-                                    // Emit shockwave when building starts warping in
-                                    this.scatterParticles(gate.position);
-                                    
-                                    // Remove the warp gate (implode effect)
-                                    const gateIndex = this.game.warpGates.indexOf(gate);
-                                    if (gateIndex > -1) {
-                                        this.game.warpGates.splice(gateIndex, 1);
-                                    }
-                                    if (this.currentWarpGate === gate) {
-                                        this.currentWarpGate = null;
-                                    }
-                                    this.implodeParticles(gate.position);
-                                } else {
-                                    console.log('Not enough energy to build Gatling Tower');
-                                }
-                            } else if (i === 2) {
-                                // Third button - create Cyclone building
-                                if (player.spendEnergy(Constants.SWIRLER_COST)) {
-                                    const swirler = new SpaceDustSwirler(new Vector2D(gate.position.x, gate.position.y), player);
-                                    player.buildings.push(swirler);
-                                    console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                                    this.sendNetworkCommand('building_purchase', {
-                                        buildingType: 'SpaceDustSwirler',
-                                        positionX: gate.position.x,
-                                        positionY: gate.position.y
-                                    });
-                                    
-                                    // Emit shockwave when building starts warping in
-                                    this.scatterParticles(gate.position);
-                                    
-                                    // Remove the warp gate (implode effect)
-                                    const gateIndex = this.game.warpGates.indexOf(gate);
-                                    if (gateIndex > -1) {
-                                        this.game.warpGates.splice(gateIndex, 1);
-                                    }
-                                    if (this.currentWarpGate === gate) {
-                                        this.currentWarpGate = null;
-                                    }
-                                    this.implodeParticles(gate.position);
-                                } else {
-                                    console.log('Not enough energy to build Cyclone');
-                                }
-                            } else if (i === 3) {
-                                // Fourth button - create Foundry building
-                                // Check if player already has a Foundry
-                                const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-                                if (hasSubFactory) {
-                                    console.log('Only one Foundry can exist at a time');
-                                } else if (player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
-                                    const subFactory = new SubsidiaryFactory(new Vector2D(gate.position.x, gate.position.y), player);
-                                    player.buildings.push(subFactory);
-                                    console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                                    this.sendNetworkCommand('building_purchase', {
-                                        buildingType: 'SubsidiaryFactory',
-                                        positionX: gate.position.x,
-                                        positionY: gate.position.y
-                                    });
-                                    
-                                    // Emit shockwave when building starts warping in
-                                    this.scatterParticles(gate.position);
-                                    
-                                    // Remove the warp gate (implode effect)
-                                    const gateIndex = this.game.warpGates.indexOf(gate);
-                                    if (gateIndex > -1) {
-                                        this.game.warpGates.splice(gateIndex, 1);
-                                    }
-                                    if (this.currentWarpGate === gate) {
-                                        this.currentWarpGate = null;
-                                    }
-                                    this.implodeParticles(gate.position);
-                                } else {
-                                    console.log('Not enough energy to build Foundry');
-                                }
-                            }
-                            // Other buttons can be added later for different building types
-                            
-                            isPanning = false;
-                            isMouseDown = false;
-                            this.isSelecting = false;
-                            this.selectionStartScreen = null;
-                            this.renderer.selectionStart = null;
-                            this.renderer.selectionEnd = null;
-                            this.endHold();
-                            return;
                         }
+                        console.log(
+                            `Warp gate button clicked: index ${buttonIndex} | energy=${player.energy.toFixed(1)}`
+                        );
+                        this.buildFromWarpGate(player, this.selectedWarpGate, buttonIndex);
+
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
                     }
+                }
+
+                const clickedWarpGate = this.getWarpGateAtPosition(worldPos, player);
+                if (clickedWarpGate) {
+                    if (this.selectedWarpGate === clickedWarpGate) {
+                        this.clearWarpGateSelection();
+                    } else {
+                        this.clearAllSelections();
+                        this.selectedWarpGate = clickedWarpGate;
+                        this.renderer.selectedWarpGate = clickedWarpGate;
+                    }
+
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.renderer.selectionStart = null;
+                    this.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
                 }
 
                 const targetableStructure = this.getTargetableStructureAtPosition(worldPos, player);
@@ -1452,6 +1511,7 @@ class GameController {
                 
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
+                    this.clearWarpGateSelection();
                     if (this.selectedMirrors.size > 0) {
                         for (const mirror of this.selectedMirrors) {
                             mirror.setLinkedStructure(player.stellarForge);
@@ -1512,6 +1572,7 @@ class GameController {
                 }
                 
                 if (clickedMirror) {
+                    this.clearWarpGateSelection();
                     if (clickedMirror.isSelected) {
                         // Deselect mirror
                         clickedMirror.isSelected = false;
@@ -1564,6 +1625,7 @@ class GameController {
                 }
                 
                 if (clickedBuilding) {
+                    this.clearWarpGateSelection();
                     const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
                         clickedBuilding instanceof GatlingTower ||
                         clickedBuilding instanceof SpaceDustSwirler ||
@@ -1986,7 +2048,7 @@ class GameController {
                     }
                 }
                 this.clearPathPreview();
-            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase) && this.selectionStartScreen && this.game) {
+            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase || this.selectedWarpGate) && this.selectionStartScreen && this.game) {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
@@ -2134,6 +2196,8 @@ class GameController {
                                 }
                                 this.selectedMirrors.clear();
                             }
+                        } else if (this.selectedWarpGate) {
+                            this.buildFromWarpGate(player, this.selectedWarpGate, this.renderer.highlightedButtonIndex);
                         } else if (this.selectedBuildings.size === 1) {
                             // Foundry building button selected
                             const selectedBuilding = Array.from(this.selectedBuildings)[0];
@@ -2146,6 +2210,8 @@ class GameController {
                     // Cancel ability casting if arrow was dragged back to nothing
                 } else if (this.shouldSkipMoveOrderThisTap) {
                     this.shouldSkipMoveOrderThisTap = false;
+                } else if (this.selectedWarpGate && this.selectedUnits.size === 0 && this.selectedMirrors.size === 0 && !this.selectedBase) {
+                    // Warp gate selected without a drag - no movement action
                 } else {
                     // If movement was minimal or only mirrors/base selected, set movement targets
                     const worldPos = this.renderer.screenToWorld(lastX, lastY);
@@ -2622,6 +2688,7 @@ class GameController {
         this.selectedUnits.clear();
         this.selectedMirrors.clear();
         this.selectedBase = null;
+        this.clearWarpGateSelection();
 
         // Deselect all buildings
         for (const building of player.buildings) {
@@ -2830,6 +2897,9 @@ class GameController {
                 this.unlinkMirrorsFromWarpGate(gate);
                 this.scatterParticles(gate.position);
                 this.renderer.createWarpGateShockwave(gate.position);
+                if (this.selectedWarpGate === gate) {
+                    this.clearWarpGateSelection();
+                }
                 this.game.warpGates.splice(i, 1);
             }
         }
