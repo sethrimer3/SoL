@@ -144,13 +144,18 @@ export const GRAVE_ATTACK_RANGE = 400;
 export const GRAVE_HERO_ATTACK_RANGE_MULTIPLIER = 0.25; // Hero Grave units have 75% reduced attack range
 export const GRAVE_ATTACK_DAMAGE = 15;
 export const GRAVE_ATTACK_SPEED = 2; // Attacks per second (projectile launch rate)
-export const GRAVE_NUM_PROJECTILES = 5;
+export const GRAVE_NUM_PROJECTILES = 6; // Number of large particles
 export const GRAVE_PROJECTILE_ORBIT_RADIUS = 50;
 export const GRAVE_PROJECTILE_MIN_SPEED = 80; // Minimum speed to keep orbiting
 export const GRAVE_PROJECTILE_ATTRACTION_FORCE = 300;
 export const GRAVE_PROJECTILE_LAUNCH_SPEED = 400;
 export const GRAVE_PROJECTILE_TRAIL_LENGTH = 15; // Number of trail particles
 export const GRAVE_PROJECTILE_HIT_DISTANCE = 10; // Distance at which projectile hits target
+export const GRAVE_MAX_SMALL_PARTICLES = 30; // Maximum number of small particles
+export const GRAVE_SMALL_PARTICLE_REGEN_RATE = 2; // Small particles regenerated per second
+export const GRAVE_SMALL_PARTICLES_PER_ATTACK = 5; // Small particles consumed per attack
+export const GRAVE_SMALL_PARTICLE_SPEED = 120; // Speed of small particles zipping between large ones
+export const GRAVE_SMALL_PARTICLE_SIZE = 2; // Visual size of small particles
 
 // Starling unit constants (minions from stellar forge)
 export const STARLING_MAX_HEALTH = 50;

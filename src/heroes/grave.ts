@@ -10,7 +10,52 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
     const { Unit, Vector2D, Constants } = deps;
 
     /**
-     * Projectile that orbits a Grave unit with gravitational attraction
+     * Small particle that zips between large particles
+     */
+    class GraveSmallParticle {
+        currentTargetIndex: number;
+        nextTargetIndex: number;
+        progress: number = 0; // 0 to 1, progress from current to next target
+
+        constructor(
+            public position: Vector2D,
+            startIndex: number,
+            endIndex: number
+        ) {
+            this.currentTargetIndex = startIndex;
+            this.nextTargetIndex = endIndex;
+        }
+
+        /**
+         * Update small particle movement between large particles
+         */
+        update(deltaTime: number, largeParticlePositions: Vector2D[]): void {
+            if (largeParticlePositions.length < 2) return;
+
+            const currentPos = largeParticlePositions[this.currentTargetIndex % largeParticlePositions.length];
+            const nextPos = largeParticlePositions[this.nextTargetIndex % largeParticlePositions.length];
+
+            // Move toward next target
+            this.progress += (Constants.GRAVE_SMALL_PARTICLE_SPEED / currentPos.distanceTo(nextPos)) * deltaTime;
+
+            if (this.progress >= 1) {
+                // Reached target, pick new target
+                this.progress = 0;
+                this.currentTargetIndex = this.nextTargetIndex;
+                // Pick a random different target
+                do {
+                    this.nextTargetIndex = Math.floor(Math.random() * largeParticlePositions.length);
+                } while (this.nextTargetIndex === this.currentTargetIndex && largeParticlePositions.length > 1);
+            }
+
+            // Interpolate position
+            this.position.x = currentPos.x + (nextPos.x - currentPos.x) * this.progress;
+            this.position.y = currentPos.y + (nextPos.y - currentPos.y) * this.progress;
+        }
+    }
+
+    /**
+     * Large projectile that forms polygon corners when not attacking
      */
     class GraveProjectile {
         velocity: Vector2D;
@@ -18,48 +63,47 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         isAttacking: boolean = false;
         targetEnemy: CombatTarget | null = null;
         trail: Vector2D[] = []; // Trail of positions
+        targetAngle: number; // Target angle for polygon formation
 
         constructor(
             public position: Vector2D,
             velocity: Vector2D,
-            public owner: Player
+            public owner: Player,
+            public index: number
         ) {
             this.velocity = velocity;
+            this.targetAngle = (index / Constants.GRAVE_NUM_PROJECTILES) * Math.PI * 2;
         }
 
         /**
-         * Update projectile position with gravitational attraction to grave
+         * Update projectile position - form polygon when not attacking, seek target when attacking
          */
         update(deltaTime: number, gravePosition: Vector2D): void {
             if (!this.isAttacking) {
-                // Apply gravitational attraction to grave
-                const dx = gravePosition.x - this.position.x;
-                const dy = gravePosition.y - this.position.y;
+                // Form polygon shape - move toward target position on polygon
+                const targetX = gravePosition.x + Math.cos(this.targetAngle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
+                const targetY = gravePosition.y + Math.sin(this.targetAngle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
+                
+                const dx = targetX - this.position.x;
+                const dy = targetY - this.position.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
                 if (distance > 0) {
-                    // Normalize direction
-                    const dirX = dx / distance;
-                    const dirY = dy / distance;
-
-                    // Apply attraction force
-                    const force = Constants.GRAVE_PROJECTILE_ATTRACTION_FORCE;
-                    this.velocity.x += dirX * force * deltaTime;
-                    this.velocity.y += dirY * force * deltaTime;
-
-                    // Maintain minimum speed to keep orbiting
-                    const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
-                    if (speed < Constants.GRAVE_PROJECTILE_MIN_SPEED) {
-                        const scale = Constants.GRAVE_PROJECTILE_MIN_SPEED / speed;
-                        this.velocity.x *= scale;
-                        this.velocity.y *= scale;
-                    }
+                    // Smoothly move toward target position
+                    const speed = Constants.GRAVE_PROJECTILE_MIN_SPEED;
+                    const moveDistance = Math.min(speed * deltaTime, distance);
+                    this.position.x += (dx / distance) * moveDistance;
+                    this.position.y += (dy / distance) * moveDistance;
+                    
+                    // Update velocity for consistent movement
+                    this.velocity.x = (dx / distance) * speed;
+                    this.velocity.y = (dy / distance) * speed;
                 }
+            } else {
+                // Attacking - move toward target
+                this.position.x += this.velocity.x * deltaTime;
+                this.position.y += this.velocity.y * deltaTime;
             }
-
-            // Update position
-            this.position.x += this.velocity.x * deltaTime;
-            this.position.y += this.velocity.y * deltaTime;
 
             // Update trail when attacking
             if (this.isAttacking) {
@@ -78,10 +122,8 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     if ('health' in this.targetEnemy) {
                         this.targetEnemy.health -= Constants.GRAVE_ATTACK_DAMAGE;
                     }
-                    // Mark for removal by returning to grave
-                    this.isAttacking = false;
-                    this.trail = [];
-                    this.targetEnemy = null;
+                    // Return to polygon formation
+                    this.returnToOrbit();
                 }
             }
         }
@@ -120,11 +162,15 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
     }
 
     /**
-     * Grave unit - has orbiting projectiles that attack enemies
+     * Grave unit - has orbiting projectiles that attack enemies (Velaris faction hero)
      */
     class Grave extends Unit {
         projectiles: GraveProjectile[] = [];
+        smallParticles: GraveSmallParticle[] = [];
+        smallParticleCount: number = 30; // Start with full particles
         projectileLaunchCooldown: number = 0;
+        smallParticleRegenTimer: number = 0;
+        isUsingAbility: boolean = false; // True while ability arrow is being dragged
 
         constructor(position: Vector2D, owner: Player) {
             super(
@@ -136,23 +182,44 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 Constants.GRAVE_ATTACK_SPEED,
                 5.0 // Default ability cooldown
             );
-            this.isHero = true; // Grave is a hero unit for Aurum faction
+            this.isHero = true; // Grave is a hero unit for Velaris faction
 
-            // Initialize orbiting projectiles
+            // Initialize large projectiles in polygon formation
             for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {
                 const angle = (i / Constants.GRAVE_NUM_PROJECTILES) * Math.PI * 2;
                 const offsetX = Math.cos(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
                 const offsetY = Math.sin(angle) * Constants.GRAVE_PROJECTILE_ORBIT_RADIUS;
 
-                // Give initial tangential velocity for orbit
-                const tangentVelX = -Math.sin(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-                const tangentVelY = Math.cos(angle) * Constants.GRAVE_PROJECTILE_MIN_SPEED;
-
                 this.projectiles.push(
                     new GraveProjectile(
                         new Vector2D(position.x + offsetX, position.y + offsetY),
-                        new Vector2D(tangentVelX, tangentVelY),
-                        owner
+                        new Vector2D(0, 0),
+                        owner,
+                        i
+                    )
+                );
+            }
+
+            // Initialize small particles
+            this.initializeSmallParticles();
+        }
+
+        /**
+         * Initialize or reinitialize small particles
+         */
+        initializeSmallParticles(): void {
+            this.smallParticles = [];
+            const numSmallParticles = Math.floor(this.smallParticleCount);
+            for (let i = 0; i < numSmallParticles; i++) {
+                const startIndex = i % this.projectiles.length;
+                const endIndex = (i + 1) % this.projectiles.length;
+                const startPos = this.projectiles[startIndex].position;
+                
+                this.smallParticles.push(
+                    new GraveSmallParticle(
+                        new Vector2D(startPos.x, startPos.y),
+                        startIndex,
+                        endIndex
                     )
                 );
             }
@@ -165,18 +232,50 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
             // Update base unit logic
             super.update(deltaTime, enemies, allUnits, asteroids);
 
+            // Regenerate small particles over time
+            this.smallParticleRegenTimer += deltaTime;
+            const regenInterval = 1.0 / Constants.GRAVE_SMALL_PARTICLE_REGEN_RATE;
+            
+            while (this.smallParticleRegenTimer >= regenInterval && this.smallParticleCount < Constants.GRAVE_MAX_SMALL_PARTICLES) {
+                this.smallParticleCount++;
+                this.smallParticleRegenTimer -= regenInterval;
+                
+                // Add a new small particle if needed
+                if (this.smallParticles.length < Math.floor(this.smallParticleCount)) {
+                    const startIndex = this.smallParticles.length % this.projectiles.length;
+                    const endIndex = (this.smallParticles.length + 1) % this.projectiles.length;
+                    const startPos = this.projectiles[startIndex].position;
+                    
+                    this.smallParticles.push(
+                        new GraveSmallParticle(
+                            new Vector2D(startPos.x, startPos.y),
+                            startIndex,
+                            endIndex
+                        )
+                    );
+                }
+            }
+
             // Update projectile launch cooldown
             if (this.projectileLaunchCooldown > 0) {
                 this.projectileLaunchCooldown -= deltaTime;
             }
 
-            // Update all projectiles
+            // Get positions of large particles for small particle movement
+            const largeParticlePositions = this.projectiles.map(p => p.position);
+
+            // Update all large projectiles
             for (const projectile of this.projectiles) {
                 projectile.update(deltaTime, this.position);
             }
 
-            // Launch projectiles at enemies if in range
-            if (this.target && this.projectileLaunchCooldown <= 0) {
+            // Update all small particles
+            for (const smallParticle of this.smallParticles) {
+                smallParticle.update(deltaTime, largeParticlePositions);
+            }
+
+            // Launch projectiles at enemies if in range and not using ability
+            if (!this.isUsingAbility && this.target && this.projectileLaunchCooldown <= 0 && this.smallParticleCount >= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK) {
                 const distance = this.position.distanceTo(this.target.position);
                 if (distance <= this.attackRange) {
                     // Find an available projectile (not currently attacking)
@@ -184,6 +283,13 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     if (availableProjectile) {
                         availableProjectile.launchAtTarget(this.target);
                         this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
+                        
+                        // Consume small particles
+                        this.smallParticleCount -= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
+                        
+                        // Remove small particles from visual array
+                        const particlesToRemove = Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
+                        this.smallParticles.splice(0, Math.min(particlesToRemove, this.smallParticles.length));
                     }
                 }
             }
@@ -197,12 +303,84 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         }
 
         /**
+         * Use special ability - fling all large particles at once
+         */
+        useAbility(direction: Vector2D): boolean {
+            // Check if ability is ready
+            if (!super.useAbility(direction)) {
+                return false;
+            }
+
+            // Find all available (non-attacking) large projectiles
+            const availableProjectiles = this.projectiles.filter(p => !p.isAttacking);
+            
+            if (availableProjectiles.length === 0) {
+                // No projectiles available
+                return false;
+            }
+
+            // Calculate target position based on direction and range
+            const targetDistance = this.attackRange * 0.8; // Shoot 80% of max range
+            const targetX = this.position.x + direction.x * targetDistance;
+            const targetY = this.position.y + direction.y * targetDistance;
+            const targetPos = new Vector2D(targetX, targetY);
+
+            // Create a fake target for the ability
+            const abilityTarget = {
+                position: targetPos,
+                health: 1, // Won't actually be hit, projectiles will just fly there
+            } as CombatTarget;
+
+            // Launch all available projectiles toward the target direction
+            for (const projectile of availableProjectiles) {
+                projectile.launchAtTarget(abilityTarget);
+            }
+
+            // Use all available small particles
+            const particlesUsed = Math.min(this.smallParticleCount, Constants.GRAVE_MAX_SMALL_PARTICLES);
+            this.smallParticleCount -= particlesUsed;
+            this.smallParticles = [];
+
+            // Ability was used
+            this.isUsingAbility = false;
+            return true;
+        }
+
+        /**
+         * Called when ability arrow drag starts
+         */
+        startAbilityDrag(): void {
+            this.isUsingAbility = true;
+        }
+
+        /**
+         * Called when ability arrow drag ends
+         */
+        endAbilityDrag(): void {
+            this.isUsingAbility = false;
+        }
+
+        /**
          * Get all projectiles for rendering
          */
         getProjectiles(): GraveProjectile[] {
             return this.projectiles;
         }
+
+        /**
+         * Get all small particles for rendering
+         */
+        getSmallParticles(): GraveSmallParticle[] {
+            return this.smallParticles;
+        }
+
+        /**
+         * Get current small particle count
+         */
+        getSmallParticleCount(): number {
+            return this.smallParticleCount;
+        }
     }
 
-    return { Grave, GraveProjectile };
+    return { Grave, GraveProjectile, GraveSmallParticle };
 };
