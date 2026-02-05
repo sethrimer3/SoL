@@ -3082,6 +3082,7 @@ export class GameState {
         mix(this.gameTime);
         mix(this.suns.length);
         mix(this.asteroids.length);
+        mix(Constants.DUST_MIN_VELOCITY);
         mixInt(this.spaceDust.length);
         for (const particle of this.spaceDust) {
             mix(particle.position.x);
