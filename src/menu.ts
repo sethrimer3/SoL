@@ -84,11 +84,11 @@ export class MainMenu {
             abilityDescription: 'Bullet storm: fires a spread of shots toward a target direction'
         },
         { 
-            id: 'radiant-grave', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.RADIANT,
+            id: 'velaris-grave', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.VELARIS,
             maxHealth: Constants.GRAVE_MAX_HEALTH, attackDamage: Constants.GRAVE_ATTACK_DAMAGE, attackSpeed: Constants.GRAVE_ATTACK_SPEED,
             attackRange: Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER,
             attackIgnoresDefense: false, defense: 18, regen: 3,
-            abilityDescription: 'Orbits gravitic shards that launch at targets and return'
+            abilityDescription: 'Particle storm: flings all large particles at once using accumulated energy'
         },
         {
             id: 'radiant-ray', name: 'Ray', description: 'Bouncing beam marks targets', faction: Faction.RADIANT,

@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3267,23 +3267,24 @@ export class GameRenderer {
         // Draw the base unit
         this.drawUnit(grave, displayColor, game, isEnemy);
         
-        // Draw a distinctive grave symbol
+        // Draw letter "G" in the center
         const screenPos = this.worldToScreen(grave.position);
-        const size = 10 * this.zoom;
+        const fontSize = 16 * this.zoom;
         
-        // Draw cross symbol - darken if needed
-        this.ctx.strokeStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos.x, screenPos.y - size);
-        this.ctx.lineTo(screenPos.x, screenPos.y + size);
-        this.ctx.moveTo(screenPos.x - size * 0.7, screenPos.y - size * 0.3);
-        this.ctx.lineTo(screenPos.x + size * 0.7, screenPos.y - size * 0.3);
-        this.ctx.stroke();
+        this.ctx.font = `bold ${fontSize}px Arial`;
+        this.ctx.fillStyle = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText('G', screenPos.x, screenPos.y);
         
-        // Draw projectiles
+        // Draw large projectiles
         for (const projectile of grave.getProjectiles()) {
             this.drawGraveProjectile(projectile, displayColor);
+        }
+        
+        // Draw small particles
+        for (const smallParticle of grave.getSmallParticles()) {
+            this.drawGraveSmallParticle(smallParticle, displayColor);
         }
     }
 
@@ -4978,6 +4979,22 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
             this.ctx.fill();
         }
+    }
+
+    /**
+     * Draw a small particle for the Grave hero
+     */
+    private drawGraveSmallParticle(particle: InstanceType<typeof GraveSmallParticle>, color: string): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const size = Constants.GRAVE_SMALL_PARTICLE_SIZE * this.zoom;
+        
+        // Draw small particle as a tiny circle
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.7;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
     }
 
     /**

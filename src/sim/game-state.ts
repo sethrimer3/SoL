@@ -2020,9 +2020,9 @@ export class GameState {
             case Faction.RADIANT:
                 return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight'];
             case Faction.AURUM:
-                return ['Grave', 'Driller'];
+                return ['Driller'];
             case Faction.VELARIS:
-                return ['Ray', 'InfluenceBall', 'TurretDeployer'];
+                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer'];
             default:
                 return [];
         }
