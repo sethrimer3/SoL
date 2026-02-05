@@ -76,6 +76,13 @@ export class GameRenderer {
     private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
     private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
     private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
+    private readonly VELARIS_STARLING_CLOUD_PARTICLE_COUNT = 20;
+    private readonly VELARIS_STARLING_TRIANGLE_PARTICLE_COUNT = 24;
+    private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
+    private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
+    private readonly VELARIS_STARLING_TRIANGLE_RADIUS_SCALE = 2.5;
+    private readonly VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE = 0.08;
+    private readonly VELARIS_STARLING_CLOUD_SWIRL_SCALE = 0.45;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
@@ -3457,6 +3464,7 @@ export class GameRenderer {
         const size = 8 * this.zoom * 0.3; // Minion size (30% of normal unit)
         const isSelected = this.selectedUnits.has(starling);
         const ladSun = game.suns.find(s => s.type === 'lad');
+        const isVelarisStarling = starling.owner.faction === Faction.VELARIS;
         
         // Check visibility for enemy units
         let shouldDim = false;
@@ -3505,44 +3513,48 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
         
-        const starlingSprite = starlingSpritePath 
-            ? this.getTintedSprite(starlingSpritePath, tintColor)
-            : null;
-        
-        if (starlingSprite) {
-            const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
-            const rotationRad = this.getStarlingFacingRotationRad(starling);
-            if (rotationRad !== null) {
-                this.ctx.save();
-                this.ctx.translate(screenPos.x, screenPos.y);
-                this.ctx.rotate(rotationRad);
-                this.ctx.drawImage(
-                    starlingSprite,
-                    -spriteSize / 2,
-                    -spriteSize / 2,
-                    spriteSize,
-                    spriteSize
-                );
-                this.ctx.restore();
-            } else {
-                this.ctx.drawImage(
-                    starlingSprite,
-                    screenPos.x - spriteSize / 2,
-                    screenPos.y - spriteSize / 2,
-                    spriteSize,
-                    spriteSize
-                );
-            }
+        if (isVelarisStarling) {
+            this.drawVelarisStarlingParticles(screenPos, size, starling, displayColor, game.gameTime);
         } else {
-            // Fallback to circle rendering if sprite not loaded
-            this.ctx.fillStyle = displayColor;
-            const strokeColor = displayColor;
-            this.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
-            this.ctx.lineWidth = isSelected ? 3 : 1;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
+            const starlingSprite = starlingSpritePath 
+                ? this.getTintedSprite(starlingSpritePath, tintColor)
+                : null;
+            
+            if (starlingSprite) {
+                const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
+                const rotationRad = this.getStarlingFacingRotationRad(starling);
+                if (rotationRad !== null) {
+                    this.ctx.save();
+                    this.ctx.translate(screenPos.x, screenPos.y);
+                    this.ctx.rotate(rotationRad);
+                    this.ctx.drawImage(
+                        starlingSprite,
+                        -spriteSize / 2,
+                        -spriteSize / 2,
+                        spriteSize,
+                        spriteSize
+                    );
+                    this.ctx.restore();
+                } else {
+                    this.ctx.drawImage(
+                        starlingSprite,
+                        screenPos.x - spriteSize / 2,
+                        screenPos.y - spriteSize / 2,
+                        spriteSize,
+                        spriteSize
+                    );
+                }
+            } else {
+                // Fallback to circle rendering if sprite not loaded
+                this.ctx.fillStyle = displayColor;
+                const strokeColor = displayColor;
+                this.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
+                this.ctx.lineWidth = isSelected ? 3 : 1;
+                this.ctx.beginPath();
+                this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.stroke();
+            }
         }
         
         // Draw health bar/number if damaged
@@ -3566,6 +3578,142 @@ export class GameRenderer {
         
         // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
         // to show only a single line from the closest starling when multiple are selected
+    }
+
+    private drawVelarisStarlingParticles(
+        screenPos: Vector2D,
+        size: number,
+        starling: Starling,
+        displayColor: string,
+        timeSec: number
+    ): void {
+        const velocityX = starling.velocity.x;
+        const velocityY = starling.velocity.y;
+        const velocitySq = velocityX * velocityX + velocityY * velocityY;
+        const isMoving = velocitySq > 4;
+        let isFiring = false;
+        if (starling.target && 'position' in starling.target) {
+            if (!('health' in starling.target) || starling.target.health > 0) {
+                const targetPosition = starling.target.position;
+                const dx = targetPosition.x - starling.position.x;
+                const dy = targetPosition.y - starling.position.y;
+                const distanceSq = dx * dx + dy * dy;
+                if (distanceSq <= starling.attackRange * starling.attackRange) {
+                    isFiring = true;
+                }
+            }
+        }
+
+        const isTriangleMode = isMoving || isFiring;
+        const particleRadius = Math.max(1, this.VELARIS_STARLING_PARTICLE_RADIUS_PX * this.zoom);
+        const particleColor = this.brightenAndPaleColor(displayColor);
+        const seedBase = starling.position.x * 0.31 + starling.position.y * 0.47 + starling.spriteLevel * 9.1;
+        const twoPi = Math.PI * 2;
+
+        this.ctx.save();
+        this.ctx.fillStyle = particleColor;
+        this.ctx.globalAlpha = isTriangleMode ? 0.9 : 0.7;
+        this.ctx.beginPath();
+
+        if (isTriangleMode) {
+            const rotationRad = this.getStarlingFacingRotationRad(starling) ?? starling.rotation;
+            const cosRot = Math.cos(rotationRad);
+            const sinRot = Math.sin(rotationRad);
+            const triangleRadius = size * this.VELARIS_STARLING_TRIANGLE_RADIUS_SCALE;
+            const halfBase = triangleRadius * 0.8660254;
+            const baseOffsetY = triangleRadius * 0.5;
+
+            const v0x = triangleRadius * sinRot;
+            const v0y = -triangleRadius * cosRot;
+            const v1x = halfBase * cosRot - baseOffsetY * sinRot;
+            const v1y = halfBase * sinRot + baseOffsetY * cosRot;
+            const v2x = -halfBase * cosRot - baseOffsetY * sinRot;
+            const v2y = -halfBase * sinRot + baseOffsetY * cosRot;
+
+            const edge01x = v1x - v0x;
+            const edge01y = v1y - v0y;
+            const edge12x = v2x - v1x;
+            const edge12y = v2y - v1y;
+            const edge20x = v0x - v2x;
+            const edge20y = v0y - v2y;
+
+            const edge01Length = Math.sqrt(edge01x * edge01x + edge01y * edge01y) || 1;
+            const edge12Length = Math.sqrt(edge12x * edge12x + edge12y * edge12y) || 1;
+            const edge20Length = Math.sqrt(edge20x * edge20x + edge20y * edge20y) || 1;
+
+            const normal01x = -edge01y / edge01Length;
+            const normal01y = edge01x / edge01Length;
+            const normal12x = -edge12y / edge12Length;
+            const normal12y = edge12x / edge12Length;
+            const normal20x = -edge20y / edge20Length;
+            const normal20y = edge20x / edge20Length;
+
+            const particleCount = this.VELARIS_STARLING_TRIANGLE_PARTICLE_COUNT;
+            const wobbleScale = size * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE;
+            for (let i = 0; i < particleCount; i++) {
+                const seed = seedBase + i * 13.3;
+                const edgeProgress = ((i / particleCount) + timeSec * 0.12 + this.getPseudoRandom(seed + 5.9) * 0.2) % 1;
+                const edgeValue = edgeProgress * 3;
+                const edgeIndex = Math.floor(edgeValue);
+                const edgeT = edgeValue - edgeIndex;
+                let startX = v0x;
+                let startY = v0y;
+                let edgeX = edge01x;
+                let edgeY = edge01y;
+                let normalX = normal01x;
+                let normalY = normal01y;
+
+                if (edgeIndex === 1) {
+                    startX = v1x;
+                    startY = v1y;
+                    edgeX = edge12x;
+                    edgeY = edge12y;
+                    normalX = normal12x;
+                    normalY = normal12y;
+                } else if (edgeIndex === 2) {
+                    startX = v2x;
+                    startY = v2y;
+                    edgeX = edge20x;
+                    edgeY = edge20y;
+                    normalX = normal20x;
+                    normalY = normal20y;
+                }
+
+                const baseX = startX + edgeX * edgeT;
+                const baseY = startY + edgeY * edgeT;
+                const wobble = Math.sin(timeSec * 4 + seed) * wobbleScale;
+                const offsetX = baseX + normalX * wobble;
+                const offsetY = baseY + normalY * wobble;
+
+                const particleX = screenPos.x + offsetX;
+                const particleY = screenPos.y + offsetY;
+                this.ctx.moveTo(particleX + particleRadius, particleY);
+                this.ctx.arc(particleX, particleY, particleRadius, 0, twoPi);
+            }
+        } else {
+            const cloudRadius = size * this.VELARIS_STARLING_CLOUD_RADIUS_SCALE;
+            const swirlRadius = cloudRadius * this.VELARIS_STARLING_CLOUD_SWIRL_SCALE;
+            const particleCount = this.VELARIS_STARLING_CLOUD_PARTICLE_COUNT;
+            for (let i = 0; i < particleCount; i++) {
+                const seed = seedBase + i * 8.7;
+                const angle = this.getPseudoRandom(seed) * twoPi;
+                const baseRadius = this.getPseudoRandom(seed + 1.3) * cloudRadius;
+                const orbitSpeed = 0.6 + this.getPseudoRandom(seed + 2.1) * 1.0;
+                const orbitAngle = timeSec * orbitSpeed + this.getPseudoRandom(seed + 3.4) * twoPi;
+                const pull = 0.7 + 0.2 * Math.sin(timeSec * 1.2 + seed);
+
+                const offsetX = Math.cos(angle) * baseRadius * pull + Math.cos(orbitAngle) * swirlRadius * 0.3;
+                const offsetY = Math.sin(angle) * baseRadius * pull + Math.sin(orbitAngle) * swirlRadius * 0.3;
+
+                const particleX = screenPos.x + offsetX;
+                const particleY = screenPos.y + offsetY;
+                this.ctx.moveTo(particleX + particleRadius, particleY);
+                this.ctx.arc(particleX, particleY, particleRadius, 0, twoPi);
+            }
+        }
+
+        this.ctx.fill();
+        this.ctx.restore();
     }
 
     /**
