@@ -56,6 +56,8 @@ export class GameState {
     suns: Sun[] = [];
     spaceDust: SpaceDustParticle[] = [];
     warpGates: WarpGate[] = [];
+    warpGateShockwavePositions: Vector2D[] = [];
+    warpGateDissipationPositions: Vector2D[] = [];
     asteroids: Asteroid[] = [];
     muzzleFlashes: MuzzleFlash[] = [];
     bulletCasings: BulletCasing[] = [];
@@ -97,6 +99,8 @@ export class GameState {
      */
     update(deltaTime: number): void {
         this.gameTime += deltaTime;
+        this.warpGateShockwavePositions.length = 0;
+        this.warpGateDissipationPositions.length = 0;
 
         // Process pending network commands from remote players
         if (this.networkManager) {
@@ -323,6 +327,23 @@ export class GameState {
         for (const gate of this.warpGates) {
             if (gate.isCharging && !gate.isComplete && !gate.isCancelling && !gate.hasReceivedEnergyThisTick) {
                 gate.startCancellation();
+            }
+        }
+
+        for (let i = this.warpGates.length - 1; i >= 0; i--) {
+            const gate = this.warpGates[i];
+            gate.update(deltaTime);
+
+            if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
+                this.applyRadialForceToParticles(gate.position, true);
+                this.warpGateShockwavePositions.push(gate.position);
+            }
+
+            if (gate.hasDissipated) {
+                this.unlinkMirrorsFromWarpGate(gate);
+                this.applyRadialForceToParticles(gate.position, true);
+                this.warpGateDissipationPositions.push(gate.position);
+                this.warpGates.splice(i, 1);
             }
         }
 
@@ -1332,6 +1353,32 @@ export class GameState {
             for (const building of player.buildings) {
                 if (building instanceof SpaceDustSwirler) {
                     building.applyDustSwirl(this.spaceDust, deltaTime);
+                }
+            }
+        }
+    }
+
+    private applyRadialForceToParticles(position: Vector2D, outward: boolean): void {
+        for (const particle of this.spaceDust) {
+            const distance = particle.position.distanceTo(position);
+            if (distance < Constants.PARTICLE_SCATTER_RADIUS) {
+                const direction = new Vector2D(
+                    outward ? (particle.position.x - position.x) : (position.x - particle.position.x),
+                    outward ? (particle.position.y - position.y) : (position.y - particle.position.y)
+                ).normalize();
+                particle.applyForce(new Vector2D(
+                    direction.x * Constants.PARTICLE_SCATTER_FORCE,
+                    direction.y * Constants.PARTICLE_SCATTER_FORCE
+                ));
+            }
+        }
+    }
+
+    private unlinkMirrorsFromWarpGate(gate: WarpGate): void {
+        for (const player of this.players) {
+            for (const mirror of player.solarMirrors) {
+                if (mirror.linkedStructure === gate) {
+                    mirror.setLinkedStructure(null);
                 }
             }
         }

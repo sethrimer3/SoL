@@ -2546,18 +2546,6 @@ class GameController {
         this.applyRadialForceToParticles(position, false);
     }
 
-    private unlinkMirrorsFromWarpGate(gate: WarpGate): void {
-        if (!this.game) return;
-
-        for (const player of this.game.players) {
-            for (const mirror of player.solarMirrors) {
-                if (mirror.linkedStructure === gate) {
-                    mirror.setLinkedStructure(null);
-                }
-            }
-        }
-    }
-
     private updateFoundryButtonState(): void {
         const player = this.getLocalPlayer();
         if (!player) {
@@ -2592,22 +2580,15 @@ class GameController {
             this.game.update(deltaTime);
         }
 
-        // Update warp gates (energy is transferred via game-state.ts mirror update)
-        // Update for completion checks, cancellation, and shockwave emissions
-        for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
-            const gate = this.game.warpGates[i];
-            gate.update(deltaTime);
-            
-            if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
-                this.scatterParticles(gate.position);
-                this.renderer.createWarpGateShockwave(gate.position);
+        if (this.game.warpGateShockwavePositions.length > 0) {
+            for (const position of this.game.warpGateShockwavePositions) {
+                this.renderer.createWarpGateShockwave(position);
             }
+        }
 
-            if (gate.hasDissipated) {
-                this.unlinkMirrorsFromWarpGate(gate);
-                this.scatterParticles(gate.position);
-                this.renderer.createWarpGateShockwave(gate.position);
-                this.game.warpGates.splice(i, 1);
+        if (this.game.warpGateDissipationPositions.length > 0) {
+            for (const position of this.game.warpGateDissipationPositions) {
+                this.renderer.createWarpGateShockwave(position);
             }
         }
     }

@@ -94,7 +94,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after hashing warp gate charge/cancel/timeout state and manual unit target state to ensure `stateHash` stability.
+The command list above was revalidated after moving warp gate lifecycle updates into the deterministic sim tick and hashing warp gate charge/cancel/timeout state alongside manual unit target state to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
