@@ -503,7 +503,6 @@ class GameController {
     /**
      * Get the nearest button index based on drag angle from building position
      * For stellar forge: 4 buttons in cardinal directions (top=0, right=1, bottom=2, left=3)
-     * For solar mirrors: 2 buttons (left=0, right=1) or 3 buttons (left=0, center=1, right=2)
      */
     private getNearestButtonIndexFromAngle(
         dragAngleRad: number,
@@ -555,6 +554,69 @@ class GameController {
             return 0;
         }
         return -1;
+    }
+
+    private getNearestMirrorButtonIndexFromCursor(
+        cursorScreenX: number,
+        cursorScreenY: number,
+        shouldShowFoundryButton: boolean
+    ): number {
+        let mirror: SolarMirror | null = null;
+        for (const selectedMirror of this.selectedMirrors) {
+            mirror = selectedMirror;
+            break;
+        }
+
+        if (!mirror) {
+            return -1;
+        }
+
+        const mirrorScreenPos = this.renderer.worldToScreen(mirror.position);
+        const dragAngleRad = Math.atan2(
+            cursorScreenY - mirrorScreenPos.y,
+            cursorScreenX - mirrorScreenPos.x
+        );
+        const buttonOffsetPx = 50 * this.renderer.zoom;
+        const forgeAngleRad = Math.atan2(0, -buttonOffsetPx);
+        const warpGateAngleRad = Math.atan2(-buttonOffsetPx, 0);
+        const foundryAngleRad = Math.atan2(0, buttonOffsetPx);
+
+        let bestIndex = 0;
+        let bestDistance = Infinity;
+
+        const forgeDelta = Math.atan2(
+            Math.sin(dragAngleRad - forgeAngleRad),
+            Math.cos(dragAngleRad - forgeAngleRad)
+        );
+        const forgeDistance = Math.abs(forgeDelta);
+        if (forgeDistance < bestDistance) {
+            bestDistance = forgeDistance;
+            bestIndex = 0;
+        }
+
+        const warpDelta = Math.atan2(
+            Math.sin(dragAngleRad - warpGateAngleRad),
+            Math.cos(dragAngleRad - warpGateAngleRad)
+        );
+        const warpDistance = Math.abs(warpDelta);
+        if (warpDistance < bestDistance) {
+            bestDistance = warpDistance;
+            bestIndex = 1;
+        }
+
+        if (shouldShowFoundryButton) {
+            const foundryDelta = Math.atan2(
+                Math.sin(dragAngleRad - foundryAngleRad),
+                Math.cos(dragAngleRad - foundryAngleRad)
+            );
+            const foundryDistance = Math.abs(foundryDelta);
+            if (foundryDistance < bestDistance) {
+                bestDistance = foundryDistance;
+                bestIndex = 2;
+            }
+        }
+
+        return bestIndex;
     }
 
     private clearPathPreview(): void {
@@ -1025,8 +1087,11 @@ class GameController {
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                     } else if (this.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 or 3 buttons
-                        const mirrorButtonCount = this.hasSeenFoundry ? 3 : 2;
-                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, mirrorButtonCount);
+                        this.renderer.highlightedButtonIndex = this.getNearestMirrorButtonIndexFromCursor(
+                            x,
+                            y,
+                            this.hasSeenFoundry
+                        );
                     } else if (this.selectedBuildings.size === 1) {
                         // Foundry building has 2 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
