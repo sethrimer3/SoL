@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Tank, CrescentWave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave } from './game-core';
 import { SparkleParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -467,6 +467,9 @@ export class GameRenderer {
         }
         if (unit instanceof Tank) {
             return this.getGraphicAssetPath('heroTank');
+        }
+        if (unit instanceof Spotlight) {
+            return this.getGraphicAssetPath('heroBeam');
         }
         return null;
     }
@@ -1150,6 +1153,7 @@ export class GameRenderer {
             case 'Dagger':
             case 'Beam':
             case 'Driller':
+            case 'Spotlight':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -1178,6 +1182,8 @@ export class GameRenderer {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Spotlight':
+                return unit instanceof Spotlight;
             case 'Mortar':
                 return unit instanceof Mortar;
             case 'Preist':
@@ -2495,9 +2501,20 @@ export class GameRenderer {
         const color = this.getFactionColor(bullet.owner.faction);
         this.ctx.fillStyle = `${color}`;
         this.ctx.globalAlpha = opacity;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
+        if (bullet.isSpotlightBullet) {
+            const angle = Math.atan2(bullet.velocity.y, bullet.velocity.x);
+            const length = (bullet.renderLengthPx ?? 8) * this.zoom;
+            const width = (bullet.renderWidthPx ?? 2) * this.zoom;
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(angle);
+            this.ctx.fillRect(-length * 0.5, -width * 0.5, length, width);
+            this.ctx.restore();
+        } else {
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
         this.ctx.globalAlpha = 1.0;
     }
 
@@ -3556,8 +3573,92 @@ export class GameRenderer {
             this.ctx.lineWidth = 2;
             this.ctx.strokeText(multiplierText, screenPos.x, screenPos.y + yOffset);
             this.ctx.fillText(multiplierText, screenPos.x, screenPos.y + yOffset);
-            
-            this.ctx.globalAlpha = 1.0;
+        }
+
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a Spotlight hero unit (Radiant hero)
+     */
+    private drawSpotlight(spotlight: InstanceType<typeof Spotlight>, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(spotlight.position, this.viewingPlayer, spotlight);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(spotlight.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
+            }
+        }
+
+        // Draw base unit
+        this.drawUnit(spotlight, displayColor, game, isEnemy);
+
+        // Draw spotlight icon (thin cone outline)
+        const screenPos = this.worldToScreen(spotlight.position);
+        const iconSize = 10 * this.zoom;
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos.x, screenPos.y - iconSize * 0.6);
+        this.ctx.lineTo(screenPos.x + iconSize * 0.6, screenPos.y);
+        this.ctx.lineTo(screenPos.x, screenPos.y + iconSize * 0.6);
+        this.ctx.stroke();
+
+        // Draw active spotlight cone
+        if (spotlight.spotlightDirection && spotlight.spotlightLengthFactor > 0) {
+            const rangePx = spotlight.spotlightRangePx * spotlight.spotlightLengthFactor;
+            if (rangePx > 0) {
+                const baseAngle = Math.atan2(spotlight.spotlightDirection.y, spotlight.spotlightDirection.x);
+                const halfAngle = Constants.SPOTLIGHT_CONE_ANGLE_RAD / 2;
+                const leftAngle = baseAngle - halfAngle;
+                const rightAngle = baseAngle + halfAngle;
+
+                const leftEnd = new Vector2D(
+                    spotlight.position.x + Math.cos(leftAngle) * rangePx,
+                    spotlight.position.y + Math.sin(leftAngle) * rangePx
+                );
+                const rightEnd = new Vector2D(
+                    spotlight.position.x + Math.cos(rightAngle) * rangePx,
+                    spotlight.position.y + Math.sin(rightAngle) * rangePx
+                );
+
+                const originScreen = screenPos;
+                const leftScreen = this.worldToScreen(leftEnd);
+                const rightScreen = this.worldToScreen(rightEnd);
+
+                const coneOpacity = shouldDim ? 0.12 : 0.18;
+                this.ctx.fillStyle = displayColor;
+                this.ctx.globalAlpha = coneOpacity;
+                this.ctx.beginPath();
+                this.ctx.moveTo(originScreen.x, originScreen.y);
+                this.ctx.lineTo(leftScreen.x, leftScreen.y);
+                this.ctx.lineTo(rightScreen.x, rightScreen.y);
+                this.ctx.closePath();
+                this.ctx.fill();
+
+                this.ctx.globalAlpha = 0.6;
+                this.ctx.strokeStyle = displayColor;
+                this.ctx.lineWidth = 1.5 * this.zoom;
+                this.ctx.beginPath();
+                this.ctx.moveTo(originScreen.x, originScreen.y);
+                this.ctx.lineTo(leftScreen.x, leftScreen.y);
+                this.ctx.moveTo(originScreen.x, originScreen.y);
+                this.ctx.lineTo(rightScreen.x, rightScreen.y);
+                this.ctx.stroke();
+                this.ctx.globalAlpha = 1.0;
+            }
         }
     }
 
@@ -5296,6 +5397,8 @@ export class GameRenderer {
                     this.drawDagger(unit, color, game, isEnemy);
                 } else if (unit instanceof Beam) {
                     this.drawBeam(unit, color, game, isEnemy);
+                } else if (unit instanceof Spotlight) {
+                    this.drawSpotlight(unit, color, game, isEnemy);
                 } else if (unit instanceof Mortar) {
                     this.drawMortar(unit, color, game, isEnemy);
                 } else if (unit instanceof Preist) {
@@ -5751,6 +5854,7 @@ export class GameRenderer {
             'driller': 'Driller',
             'dagger': 'Dagger',
             'beam': 'Beam',
+            'spotlight': 'Spotlight',
             'solar-mirror': 'Solar Mirror',
             'strafe-upgrade': 'Strafe Upgrade',
             'regen-upgrade': 'Regen Upgrade'

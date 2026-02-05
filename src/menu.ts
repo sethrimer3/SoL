@@ -127,6 +127,12 @@ export class MainMenu {
             abilityDescription: 'Precision shot: long-range beam that does more damage at greater distances'
         },
         {
+            id: 'radiant-spotlight', name: 'Spotlight', description: 'Reveals enemies in a razor-thin cone', faction: Faction.RADIANT,
+            maxHealth: Constants.SPOTLIGHT_MAX_HEALTH, attackDamage: Constants.SPOTLIGHT_ATTACK_DAMAGE, attackSpeed: 0,
+            attackRange: Constants.SPOTLIGHT_ATTACK_RANGE, attackIgnoresDefense: false, defense: 8, regen: 4,
+            abilityDescription: 'Spotlight sweep: 5° cone reveals and rapidly fires at enemies (1s setup, 5s teardown)'
+        },
+        {
             id: 'radiant-mortar', name: 'Mortar', description: 'Siege unit with splash damage', faction: Faction.RADIANT,
             maxHealth: Constants.MORTAR_MAX_HEALTH, attackDamage: Constants.MORTAR_ATTACK_DAMAGE, attackSpeed: Constants.MORTAR_ATTACK_SPEED,
             attackRange: Constants.MORTAR_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 2,

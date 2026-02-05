@@ -431,10 +431,16 @@ export class AbilityBullet {
     // Optional properties for Beam sniper projectile
     isBeamProjectile?: boolean;
     beamOwner?: Beam;
-    
+
     // Optional properties for Preist healing bomb
     isHealingBomb?: boolean;
     healingBombOwner?: Preist;
+
+    // Optional properties for Spotlight ability
+    isSpotlightBullet?: boolean;
+    renderWidthPx?: number;
+    renderLengthPx?: number;
+    hitRadiusPx: number = 10;
     
     constructor(
         public position: Vector2D,
@@ -478,7 +484,7 @@ export class AbilityBullet {
      */
     checkHit(target: CombatTarget): boolean {
         const distance = this.position.distanceTo(target.position);
-        return distance < 10; // Hit radius
+        return distance < this.hitRadiusPx; // Hit radius
     }
 }
 
