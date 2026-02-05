@@ -91,6 +91,7 @@ CREATE POLICY "Players can view room members"
             SELECT room_id FROM room_players 
             WHERE player_id = current_setting('request.jwt.claims', true)::json->>'sub'
         )
+        OR current_setting('request.jwt.claims', true)::json->>'sub' IS NULL
     );
 
 -- Anyone can join a room (insert themselves)
@@ -98,17 +99,24 @@ CREATE POLICY "Anyone can join room"
     ON room_players FOR INSERT
     WITH CHECK (
         player_id = current_setting('request.jwt.claims', true)::json->>'sub'
+        OR current_setting('request.jwt.claims', true)::json->>'sub' IS NULL
     );
 
 -- Players can update their own record
 CREATE POLICY "Players can update self"
     ON room_players FOR UPDATE
-    USING (player_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (
+        player_id = current_setting('request.jwt.claims', true)::json->>'sub'
+        OR current_setting('request.jwt.claims', true)::json->>'sub' IS NULL
+    );
 
 -- Players can leave (delete themselves)
 CREATE POLICY "Players can leave"
     ON room_players FOR DELETE
-    USING (player_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (
+        player_id = current_setting('request.jwt.claims', true)::json->>'sub'
+        OR current_setting('request.jwt.claims', true)::json->>'sub' IS NULL
+    );
 
 -- RLS Policies for game_states
 -- Players in room can view game states

@@ -259,6 +259,14 @@ export class OnlineNetworkManager {
             this.handleGameCommand(payload.payload as CompactCommand);
         });
 
+        // Handle batched game commands
+        this.channel.on('broadcast', { event: 'game_command_batch' }, (payload) => {
+            const batch = payload.payload as CompactCommand[];
+            for (const compactCommand of batch) {
+                this.handleGameCommand(compactCommand);
+            }
+        });
+
         // Handle game state updates
         this.channel.on('broadcast', { event: 'game_state' }, (payload) => {
             this.emit(NetworkEvent.MESSAGE_RECEIVED, {
