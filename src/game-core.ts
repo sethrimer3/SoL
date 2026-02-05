@@ -22,6 +22,7 @@ import { createMarineHero } from './heroes/marine';
 import { createMortarHero } from './heroes/mortar';
 import { createPreistHero } from './heroes/preist';
 import { createRayHero } from './heroes/ray';
+import { createSpotlightHero } from './heroes/spotlight';
 import { createTankHero } from './heroes/tank';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 
@@ -103,6 +104,13 @@ const { Preist, HealingBombParticle } = createPreistHero({
     AbilityBullet
 });
 
+const { Spotlight } = createSpotlightHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
+
 const { Tank, CrescentWave } = createTankHero({
     Unit,
     Vector2D,
@@ -128,6 +136,7 @@ export {
     MortarProjectile,
     Preist,
     HealingBombParticle,
+    Spotlight,
     Tank,
     CrescentWave
 };

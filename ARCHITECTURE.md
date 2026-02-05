@@ -91,11 +91,13 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 11, "command": "targetStructure", "playerIndex": 0, "target": { "type": "StellarForge", "playerIndex": 1 } },
   { "tick": 12, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Ray" },
   { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "Cannon", "targetWorld": { "x": 420, "y": 420 } },
-  { "tick": 16, "command": "queueFoundryUpgrade", "playerIndex": 0, "upgradeType": "strafe" }
+  { "tick": 16, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Spotlight" },
+  { "tick": 18, "command": "unitAbility", "playerIndex": 0, "unitId": "p0_h0", "direction": { "x": 1, "y": 0 } },
+  { "tick": 20, "command": "queueFoundryUpgrade", "playerIndex": 0, "upgradeType": "strafe" }
 ]
 ```
 
-The command list above was revalidated after updating space dust minimum velocity handling to ensure `stateHash` stability.
+The command list above was revalidated after adding Spotlight ability state tracking to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

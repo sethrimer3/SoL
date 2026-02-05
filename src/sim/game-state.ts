@@ -47,6 +47,7 @@ import {
     MortarProjectile,
     Preist,
     HealingBombParticle,
+    Spotlight,
     Tank,
     CrescentWave,
 } from '../game-core';
@@ -510,6 +511,11 @@ export class GameState {
                     if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1) {
                         this.processTurretDeployment(unit);
                     }
+                }
+
+                // Handle Spotlight ability updates and firing
+                if (unit instanceof Spotlight) {
+                    this.updateSpotlightAbility(unit, enemies, deltaTime);
                 }
                 
                 // Handle Driller movement and collision
@@ -1990,7 +1996,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
             case Faction.SOLARI:
@@ -2024,6 +2030,8 @@ export class GameState {
                 return unit instanceof Preist;
             case 'Tank':
                 return unit instanceof Tank;
+            case 'Spotlight':
+                return unit instanceof Spotlight;
             default:
                 return false;
         }
@@ -2334,6 +2342,10 @@ export class GameState {
                 return true;
             }
         }
+
+        if (this.isObjectRevealedBySpotlight(objectPos, player)) {
+            return true;
+        }
         
         return false; // Not visible: in shadow and not within proximity or influence range
     }
@@ -2376,7 +2388,11 @@ export class GameState {
             }
             
             // Enemy units are only visible if they're on the player's side
-            return objectSide === playerSide;
+            if (objectSide === playerSide) {
+                return true;
+            }
+
+            return this.isObjectRevealedBySpotlight(objectPos, player);
         }
         
         // Non-owned objects (buildings, etc.) use default visibility
@@ -2508,6 +2524,146 @@ export class GameState {
         }
         
         ray.setBeamSegments(segments);
+    }
+
+    private updateSpotlightAbility(
+        spotlight: InstanceType<typeof Spotlight>,
+        enemies: CombatTarget[],
+        deltaTime: number
+    ): void {
+        spotlight.updateSpotlightState(deltaTime);
+
+        if (!spotlight.isSpotlightActive() || !spotlight.spotlightDirection) {
+            spotlight.setSpotlightRangePx(0);
+            return;
+        }
+
+        const maxRangePx = this.getSpotlightMaxRangePx(spotlight);
+        spotlight.setSpotlightRangePx(maxRangePx);
+        const effectiveRangePx = maxRangePx * spotlight.spotlightLengthFactor;
+
+        if (!spotlight.canFireSpotlight() || effectiveRangePx <= 0) {
+            return;
+        }
+
+        const targets = this.getSpotlightTargetsInCone(spotlight, enemies, effectiveRangePx);
+        if (targets.length > 0) {
+            const bullets = spotlight.fireSpotlightAtTargets(targets, effectiveRangePx);
+            if (bullets.length > 0) {
+                this.abilityBullets.push(...bullets);
+            }
+        }
+    }
+
+    private getSpotlightMaxRangePx(spotlight: InstanceType<typeof Spotlight>): number {
+        const direction = spotlight.spotlightDirection;
+        if (!direction) {
+            return 0;
+        }
+
+        let closestDistance = Infinity;
+        const edgeHit = this.rayIntersectsEdge(spotlight.position, direction);
+        if (edgeHit) {
+            closestDistance = spotlight.position.distanceTo(edgeHit);
+        }
+
+        for (const asteroid of this.asteroids) {
+            const hitPos = this.rayIntersectsAsteroid(spotlight.position, direction, asteroid);
+            if (hitPos) {
+                const distance = spotlight.position.distanceTo(hitPos);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                }
+            }
+        }
+
+        if (!Number.isFinite(closestDistance)) {
+            return 0;
+        }
+
+        return closestDistance;
+    }
+
+    private getSpotlightTargetsInCone(
+        spotlight: InstanceType<typeof Spotlight>,
+        enemies: CombatTarget[],
+        rangePx: number
+    ): CombatTarget[] {
+        const targets: CombatTarget[] = [];
+        const direction = spotlight.spotlightDirection;
+        if (!direction) {
+            return targets;
+        }
+
+        const facingAngle = Math.atan2(direction.y, direction.x);
+        const halfConeAngle = Constants.SPOTLIGHT_CONE_ANGLE_RAD / 2;
+        const rangeSq = rangePx * rangePx;
+
+        for (const enemy of enemies) {
+            const dx = enemy.position.x - spotlight.position.x;
+            const dy = enemy.position.y - spotlight.position.y;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq > rangeSq) {
+                continue;
+            }
+
+            const angleToEnemy = Math.atan2(dy, dx);
+            let angleDiff = angleToEnemy - facingAngle;
+            while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+            while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+            if (Math.abs(angleDiff) <= halfConeAngle) {
+                targets.push(enemy);
+            }
+        }
+
+        return targets;
+    }
+
+    private isPositionInSpotlightCone(
+        spotlight: InstanceType<typeof Spotlight>,
+        position: Vector2D,
+        rangePx: number
+    ): boolean {
+        const direction = spotlight.spotlightDirection;
+        if (!direction) {
+            return false;
+        }
+
+        const dx = position.x - spotlight.position.x;
+        const dy = position.y - spotlight.position.y;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq > rangePx * rangePx) {
+            return false;
+        }
+
+        const facingAngle = Math.atan2(direction.y, direction.x);
+        const angleToTarget = Math.atan2(dy, dx);
+        let angleDiff = angleToTarget - facingAngle;
+        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
+        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
+
+        return Math.abs(angleDiff) <= Constants.SPOTLIGHT_CONE_ANGLE_RAD / 2;
+    }
+
+    private isObjectRevealedBySpotlight(objectPos: Vector2D, player: Player): boolean {
+        for (const unit of player.units) {
+            if (!(unit instanceof Spotlight)) {
+                continue;
+            }
+            if (!unit.isSpotlightActive() || !unit.spotlightDirection) {
+                continue;
+            }
+            const effectiveRangePx = unit.spotlightRangePx * unit.spotlightLengthFactor;
+            if (effectiveRangePx <= 0) {
+                continue;
+            }
+            if (this.isPositionInSpotlightCone(unit, objectPos, effectiveRangePx)) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -2956,6 +3112,8 @@ export class GameState {
                 return new Preist(spawnPosition, owner);
             case 'Tank':
                 return new Tank(spawnPosition, owner);
+            case 'Spotlight':
+                return new Spotlight(spawnPosition, owner);
             default:
                 return null;
         }
@@ -3210,6 +3368,20 @@ export class GameState {
                     mixInt(unit.hasActiveManualOrder() ? 1 : 0);
                     mix(unit.getCurrentMoveSpeedPxPerSec());
                     mix(unit.abilityCooldown);
+                }
+                if (unit instanceof Spotlight) {
+                    mixInt(unit.getSpotlightStateCode());
+                    mix(unit.spotlightStateElapsedSec);
+                    mix(unit.spotlightFireCooldownSec);
+                    mix(unit.spotlightLengthFactor);
+                    mix(unit.spotlightRangePx);
+                    if (unit.spotlightDirection) {
+                        mix(unit.spotlightDirection.x);
+                        mix(unit.spotlightDirection.y);
+                    } else {
+                        mix(-1);
+                        mix(-1);
+                    }
                 }
             }
 

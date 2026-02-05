@@ -400,6 +400,23 @@ export const BEAM_ABILITY_BASE_DAMAGE = 30; // Base damage for ability
 export const BEAM_ABILITY_MAX_RANGE = 600; // Maximum beam range
 export const BEAM_ABILITY_DAMAGE_PER_DISTANCE = 0.1; // Damage multiplier per unit of distance
 
+export const SPOTLIGHT_MAX_HEALTH = 95;
+export const SPOTLIGHT_ATTACK_RANGE = 0;
+export const SPOTLIGHT_ATTACK_DAMAGE = 0;
+export const SPOTLIGHT_ATTACK_SPEED = 1.0; // Placeholder attack speed (no primary attack)
+export const SPOTLIGHT_ABILITY_COOLDOWN = 12.0; // Total cycle cooldown
+export const SPOTLIGHT_SETUP_TIME_SEC = 1.0;
+export const SPOTLIGHT_ACTIVE_TIME_SEC = 4.0;
+export const SPOTLIGHT_TEARDOWN_TIME_SEC = 5.0;
+export const SPOTLIGHT_CONE_ANGLE_RAD = (5 * Math.PI) / 180; // 5-degree total cone
+export const SPOTLIGHT_FIRE_RATE_PER_SEC = 8; // High fire rate
+export const SPOTLIGHT_BULLET_SPEED = 600; // Medium-fast projectile
+export const SPOTLIGHT_BULLET_DAMAGE = 4;
+export const SPOTLIGHT_BULLET_LIFETIME_SEC = 1.2;
+export const SPOTLIGHT_BULLET_WIDTH_PX = 1.5;
+export const SPOTLIGHT_BULLET_LENGTH_PX = 10;
+export const SPOTLIGHT_BULLET_HIT_RADIUS_PX = 6;
+
 // Mortar unit constants (Radiant hero - stationary artillery with cone detection)
 export const MORTAR_MAX_HEALTH = 120;
 export const MORTAR_ATTACK_RANGE = 450; // Long range artillery
