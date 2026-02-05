@@ -14,7 +14,7 @@ SoL is a cross-platform (mobile & desktop) RTS game where players battle for sup
 Three unique civilizations, each with distinct bonuses:
 - **Radiant** - Light-focused civilization with enhanced mirror efficiency
 - **Aurum** - Wealth-oriented faction with economic bonuses
-- **Solari** - Sun-worshipping empire with stronger structures
+- **Velaris** - Strategic, ability-heavy race with stronger structures. Particles from Nebulae
 
 ### Key Structures
 

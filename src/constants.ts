@@ -337,7 +337,7 @@ export const PRODUCTION_BUTTON_WAVE_MAX_RADIUS_PX = 48; // Max radius for hero/b
 export const PRODUCTION_BUTTON_WAVE_PROGRESS_PER_FRAME = 0.12; // Progress increment per frame for production button wave
 export const SWIPE_ARROW_SIZE = 15; // Size of the arrow head in swipe effect
 
-// Ray unit constants (Solari hero)
+// Ray unit constants (Velaris hero)
 export const RAY_MAX_HEALTH = 120;
 export const RAY_ATTACK_RANGE = 250;
 export const RAY_ATTACK_DAMAGE = 8;
@@ -347,7 +347,7 @@ export const RAY_BEAM_DAMAGE = 25; // Damage per beam hit
 export const RAY_BEAM_MAX_BOUNCES = 5; // Maximum number of bounces
 export const RAY_BEAM_WIDTH = 3; // Visual width of the beam
 
-// Influence Ball unit constants (Solari hero)
+// Influence Ball unit constants (Velaris hero)
 export const INFLUENCE_BALL_MAX_HEALTH = 100;
 export const INFLUENCE_BALL_ATTACK_RANGE = 200;
 export const INFLUENCE_BALL_ATTACK_DAMAGE = 5;
@@ -357,7 +357,7 @@ export const INFLUENCE_BALL_PROJECTILE_SPEED = 300;
 export const INFLUENCE_BALL_EXPLOSION_RADIUS = 150; // Radius of influence zone
 export const INFLUENCE_BALL_DURATION = 10.0; // 10 seconds influence duration
 
-// Turret Deployer unit constants (Solari hero)
+// Turret Deployer unit constants (Velaris hero)
 export const TURRET_DEPLOYER_MAX_HEALTH = 90;
 export const TURRET_DEPLOYER_ATTACK_RANGE = 180;
 export const TURRET_DEPLOYER_ATTACK_DAMAGE = 6;

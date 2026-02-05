@@ -15,7 +15,7 @@ import type { Building } from './buildings';
 export enum Faction {
     RADIANT = "Radiant",
     AURUM = "Aurum",
-    SOLARI = "Solari"
+    VELARIS = "Velaris"
 }
 
 /**

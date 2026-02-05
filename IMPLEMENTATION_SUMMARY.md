@@ -14,7 +14,7 @@ Successfully implemented the core mechanics for SoL (Speed of Light) RTS game ac
 Implemented all three races/factions as specified:
 1. **Radiant** - Light-focused civilization
 2. **Aurum** - Wealth-oriented faction  
-3. **Solari** - Sun-worshipping empire
+3. **Velaris** - Strategic, ability-heavy race. Particles from Nebulae
 
 Each faction has unique characteristics defined in `game_config.json`.
 

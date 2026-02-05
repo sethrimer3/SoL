@@ -10,7 +10,7 @@ Players engage in space battles around stars/suns, utilizing light mechanics and
 Three distinct races with unique characteristics:
 1. **Radiant** - Light-focused civilization
 2. **Aurum** - Gold/wealth-oriented faction
-3. **Solari** - Sun-worshipping empire
+3. **Velaris** - Strategic, ability-heavy race. Particles from Nebulae
 
 ## Core Gameplay Mechanics
 

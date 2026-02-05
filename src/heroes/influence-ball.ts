@@ -60,7 +60,7 @@ export const createInfluenceBallHero = (deps: InfluenceBallHeroDeps) => {
     }
 
     /**
-     * Influence Ball hero unit (Solari faction) - creates temporary influence zones
+     * Influence Ball hero unit (Velaris faction) - creates temporary influence zones
      */
     class InfluenceBall extends Unit {
         private projectileToCreate: InfluenceBallProjectile | null = null;
@@ -75,7 +75,7 @@ export const createInfluenceBallHero = (deps: InfluenceBallHeroDeps) => {
                 Constants.INFLUENCE_BALL_ATTACK_SPEED,
                 Constants.INFLUENCE_BALL_ABILITY_COOLDOWN
             );
-            this.isHero = true; // InfluenceBall is a hero unit for Solari faction
+            this.isHero = true; // InfluenceBall is a hero unit for Velaris faction
         }
 
         /**

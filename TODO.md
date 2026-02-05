@@ -27,7 +27,7 @@
 ### Faction-Specific Mechanics
 - [ ] Implement Radiant faction bonuses (mirror efficiency +10%, light detection +20%)
 - [ ] Implement Aurum faction bonuses (starting sol +50%, generation +10%)
-- [ ] Implement Solari faction bonuses (forge health +20%, production speed +10%)
+- [ ] Implement Velaris faction bonuses (forge health +20%, production speed +10%)
 - [ ] Add unique units for each faction
 - [ ] Add faction-specific abilities
 

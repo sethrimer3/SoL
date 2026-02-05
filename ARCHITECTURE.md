@@ -131,9 +131,9 @@ The command list above was revalidated after adding Spotlight ability state trac
 
 ```
 ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   RADIANT    │     │    AURUM     │     │   SOLARI     │
+│   RADIANT    │     │    AURUM     │     │   VELARIS    │
 │──────────────│     │──────────────│     │──────────────│
-│ Light-based  │     │ Wealth focus │     │ Sun worship  │
+│ Light-based  │     │ Wealth focus │     │ Ability-heavy│
 │──────────────│     │──────────────│     │──────────────│
 │ +10% Mirror  │     │ +50% Start   │     │ +20% Forge   │
 │ Efficiency   │     │   Energy   │     │   Health     │

@@ -208,8 +208,8 @@ export class MainMenu {
         { id: 'radiant-standard', name: 'Standard Forge', description: 'Balanced base with standard production', faction: Faction.RADIANT },
         // Aurum faction bases
         { id: 'aurum-standard', name: 'Standard Vault', description: 'Balanced base with standard production', faction: Faction.AURUM },
-        // Solari faction bases
-        { id: 'solari-standard', name: 'Standard Temple', description: 'Balanced base with standard production', faction: Faction.SOLARI },
+        // Velaris faction bases
+        { id: 'velaris-standard', name: 'Standard Temple', description: 'Balanced base with standard production', faction: Faction.VELARIS },
     ];
 
     private spawnLoadouts: SpawnLoadout[] = [
@@ -217,8 +217,8 @@ export class MainMenu {
         { id: 'radiant-standard', name: 'Standard Starlings', description: 'Balanced minions with standard stats', faction: Faction.RADIANT },
         // Aurum faction spawns
         { id: 'aurum-standard', name: 'Standard Drones', description: 'Balanced minions with standard stats', faction: Faction.AURUM },
-        // Solari faction spawns
-        { id: 'solari-standard', name: 'Standard Zealots', description: 'Balanced minions with standard stats', faction: Faction.SOLARI },
+        // Velaris faction spawns
+        { id: 'velaris-standard', name: 'Standard Zealots', description: 'Balanced minions with standard stats', faction: Faction.VELARIS },
     ];
 
     constructor() {
@@ -488,11 +488,11 @@ export class MainMenu {
     private getFactionLabelAndColor(faction: Faction | null): { label: string; color: string } {
         switch (faction) {
             case Faction.RADIANT:
-                return { label: 'Radiant', color: '#00AAFF' };
+                return { label: 'Radiant', color: '#FF5722' }; // Deep yet bright reddish-orange (like glowing embers)
             case Faction.AURUM:
-                return { label: 'Aurum', color: '#FFD700' };
-            case Faction.SOLARI:
-                return { label: 'Solari', color: '#FF6600' };
+                return { label: 'Aurum', color: '#FFD700' }; // Bright gold
+            case Faction.VELARIS:
+                return { label: 'Velaris', color: '#9C27B0' }; // Purple
             default:
                 return { label: 'Unselected', color: '#999999' };
         }
@@ -2199,19 +2199,19 @@ export class MainMenu {
                 id: Faction.RADIANT, 
                 name: 'Radiant', 
                 description: 'Well-Balanced, Ranged-Focused',
-                color: '#00AAFF'
+                color: '#FF5722' // Deep yet bright reddish-orange (like glowing embers)
             },
             { 
                 id: Faction.AURUM, 
                 name: 'Aurum', 
                 description: 'Fast-Paced, Melee-Focused',
-                color: '#FFD700'
+                color: '#FFD700' // Bright gold
             },
             { 
-                id: Faction.SOLARI, 
-                name: 'Solari', 
-                description: 'Complex Strategy, Ability-Focused',
-                color: '#FF6600'
+                id: Faction.VELARIS, 
+                name: 'Velaris', 
+                description: 'Strategic, Ability-Heavy. Particles from Nebulae',
+                color: '#9C27B0' // Purple
             }
         ];
 
