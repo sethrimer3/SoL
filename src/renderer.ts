@@ -14,6 +14,14 @@ type ForgeFlameState = {
     lastGameTime: number;
 };
 
+type ForgeScriptState = {
+    positionsX: Float32Array;
+    positionsY: Float32Array;
+    velocitiesX: Float32Array;
+    velocitiesY: Float32Array;
+    lastGameTime: number;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -55,9 +63,18 @@ export class GameRenderer {
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
+    private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
+    private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
+    private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
+    private readonly VELARIS_FORGE_SCRIPT_SCALE = 1.15;
+    private readonly VELARIS_FORGE_GRAPHEME_OUTER_RADIUS = 1.0;
+    private readonly VELARIS_FORGE_GRAPHEME_INNER_RADIUS = 0.55;
+    private readonly VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD = Math.PI * 0.25;
+    private readonly VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD = Math.PI * 1.75;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
+    private velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
@@ -430,6 +447,154 @@ export class GameRenderer {
         }
 
         return state;
+    }
+
+    private isPointInsideGraphemeC(x: number, y: number): boolean {
+        const radius = Math.sqrt(x * x + y * y);
+        if (radius < this.VELARIS_FORGE_GRAPHEME_INNER_RADIUS || radius > this.VELARIS_FORGE_GRAPHEME_OUTER_RADIUS) {
+            return false;
+        }
+
+        let angleRad = Math.atan2(y, x);
+        if (angleRad < 0) {
+            angleRad += Math.PI * 2;
+        }
+
+        return angleRad >= this.VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD
+            && angleRad <= this.VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD;
+    }
+
+    private getVelarisForgeScriptState(forge: StellarForge, gameTime: number): ForgeScriptState {
+        let state = this.velarisForgeScriptStates.get(forge);
+        if (state) {
+            return state;
+        }
+
+        const count = this.VELARIS_FORGE_PARTICLE_COUNT;
+        const positionsX = new Float32Array(count);
+        const positionsY = new Float32Array(count);
+        const velocitiesX = new Float32Array(count);
+        const velocitiesY = new Float32Array(count);
+
+        for (let i = 0; i < count; i++) {
+            let attempts = 0;
+            let sampleX = 0;
+            let sampleY = 0;
+            while (attempts < 40) {
+                sampleX = (Math.random() * 2 - 1) * this.VELARIS_FORGE_GRAPHEME_OUTER_RADIUS;
+                sampleY = (Math.random() * 2 - 1) * this.VELARIS_FORGE_GRAPHEME_OUTER_RADIUS;
+                if (this.isPointInsideGraphemeC(sampleX, sampleY)) {
+                    break;
+                }
+                attempts++;
+            }
+            positionsX[i] = sampleX;
+            positionsY[i] = sampleY;
+
+            const angleRad = Math.random() * Math.PI * 2;
+            const speed = this.VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC
+                * (0.6 + Math.random() * 0.8);
+            velocitiesX[i] = Math.cos(angleRad) * speed;
+            velocitiesY[i] = Math.sin(angleRad) * speed;
+        }
+
+        state = {
+            positionsX,
+            positionsY,
+            velocitiesX,
+            velocitiesY,
+            lastGameTime: gameTime
+        };
+        this.velarisForgeScriptStates.set(forge, state);
+        return state;
+    }
+
+    private updateVelarisForgeParticles(state: ForgeScriptState, deltaTimeSec: number): void {
+        if (deltaTimeSec <= 0) {
+            return;
+        }
+
+        const count = state.positionsX.length;
+        for (let i = 0; i < count; i++) {
+            const oldX = state.positionsX[i];
+            const oldY = state.positionsY[i];
+            let newX = oldX + state.velocitiesX[i] * deltaTimeSec;
+            let newY = oldY + state.velocitiesY[i] * deltaTimeSec;
+
+            if (!this.isPointInsideGraphemeC(newX, newY)) {
+                state.velocitiesX[i] = -state.velocitiesX[i];
+                state.velocitiesY[i] = -state.velocitiesY[i];
+                newX = oldX + state.velocitiesX[i] * deltaTimeSec;
+                newY = oldY + state.velocitiesY[i] * deltaTimeSec;
+
+                if (!this.isPointInsideGraphemeC(newX, newY)) {
+                    newX = oldX;
+                    newY = oldY;
+                }
+            }
+
+            state.positionsX[i] = newX;
+            state.positionsY[i] = newY;
+        }
+    }
+
+    private drawVelarisForgeScript(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        size: number,
+        displayColor: string,
+        gameTime: number,
+        shouldDim: boolean
+    ): void {
+        const scriptScale = size * this.VELARIS_FORGE_SCRIPT_SCALE;
+        const state = this.getVelarisForgeScriptState(forge, gameTime);
+        const deltaTimeSec = Math.min(0.05, Math.max(0, gameTime - state.lastGameTime));
+        state.lastGameTime = gameTime;
+        this.updateVelarisForgeParticles(state, deltaTimeSec);
+
+        const particleRadius = Math.max(1, this.VELARIS_FORGE_PARTICLE_RADIUS_PX * this.zoom);
+        const baseAlpha = shouldDim ? 0.45 : 0.75;
+        const outlineAlpha = shouldDim ? 0.5 : 0.8;
+
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.beginPath();
+        this.ctx.arc(
+            0,
+            0,
+            scriptScale * this.VELARIS_FORGE_GRAPHEME_OUTER_RADIUS,
+            this.VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD,
+            this.VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD,
+            true
+        );
+        this.ctx.arc(
+            0,
+            0,
+            scriptScale * this.VELARIS_FORGE_GRAPHEME_INNER_RADIUS,
+            this.VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD,
+            this.VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD,
+            false
+        );
+        this.ctx.closePath();
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.globalAlpha = outlineAlpha;
+        this.ctx.lineWidth = Math.max(1.5, this.zoom * 2);
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        this.ctx.save();
+        this.ctx.globalAlpha = baseAlpha;
+        this.ctx.fillStyle = displayColor;
+        this.ctx.beginPath();
+        const count = state.positionsX.length;
+        for (let i = 0; i < count; i++) {
+            const x = screenPos.x + state.positionsX[i] * scriptScale;
+            const y = screenPos.y + state.positionsY[i] * scriptScale;
+            this.ctx.moveTo(x + particleRadius, y);
+            this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+        }
+        this.ctx.fill();
+        this.ctx.restore();
     }
 
     private getHeroSpritePath(unit: Unit): string | null {
@@ -992,11 +1157,21 @@ export class GameRenderer {
         const tintColor = shouldDim
             ? this.darkenColor(forgeColor, Constants.SHADE_OPACITY)
             : forgeColor;
+        const isVelarisForge = forge.owner.faction === Faction.VELARIS;
         const forgeSpritePath = this.getForgeSpritePath(forge);
         const forgeSprite = forgeSpritePath
             ? this.getTintedSprite(forgeSpritePath, tintColor)
             : null;
-        if (forgeSprite) {
+        if (isVelarisForge) {
+            this.drawVelarisForgeScript(
+                forge,
+                screenPos,
+                size,
+                displayColor,
+                game.gameTime,
+                shouldDim
+            );
+        } else if (forgeSprite) {
             const spriteSize = size * this.FORGE_SPRITE_SCALE;
             this.ctx.drawImage(
                 forgeSprite,
