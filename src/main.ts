@@ -2023,7 +2023,11 @@ class GameController {
                         if (player && direction.y < -0.5) {
                             const selectedStarlings = this.getSelectedStarlings(player);
                             if (selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
-                                didMergeStarlings = this.tryStartStarlingMerge(player, selectedStarlings);
+                                // Calculate average position of selected starlings as merge target
+                                const avgX = selectedStarlings.reduce((sum, s) => sum + s.position.x, 0) / selectedStarlings.length;
+                                const avgY = selectedStarlings.reduce((sum, s) => sum + s.position.y, 0) / selectedStarlings.length;
+                                const targetPos = new Vector2D(avgX, avgY);
+                                didMergeStarlings = this.tryStartStarlingMerge(player, selectedStarlings, targetPos);
                             }
                         }
                     }

@@ -3,7 +3,7 @@
  */
 
 import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave } from './game-core';
-import { SparkleParticle } from './sim/entities/particles';
+import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
@@ -2654,6 +2654,31 @@ export class GameRenderer {
         this.ctx.fill();
         
         this.ctx.restore();
+    }
+    
+    /**
+     * Draw a death particle (breaking apart effect)
+     */
+    private drawDeathParticle(particle: DeathParticle): void {
+        const screenPos = this.worldToScreen(particle.position);
+        
+        if (particle.spriteFragment) {
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
+            this.ctx.rotate(particle.rotation);
+            this.ctx.globalAlpha = particle.opacity;
+            
+            const size = particle.spriteFragment.width * this.zoom;
+            this.ctx.drawImage(
+                particle.spriteFragment,
+                -size / 2,
+                -size / 2,
+                size,
+                size
+            );
+            
+            this.ctx.restore();
+        }
     }
     
     /**
@@ -5497,6 +5522,13 @@ export class GameRenderer {
         for (const sparkle of game.sparkleParticles) {
             if (this.isWithinViewBounds(sparkle.position, 50)) {
                 this.drawSparkleParticle(sparkle);
+            }
+        }
+        
+        // Draw death particles (breaking apart effect)
+        for (const particle of game.deathParticles) {
+            if (this.isWithinViewBounds(particle.position, 100)) {
+                this.drawDeathParticle(particle);
             }
         }
         
