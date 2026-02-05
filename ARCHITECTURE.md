@@ -95,7 +95,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after adding merge gate timeout/damage handling to ensure `stateHash` stability.
+The command list above was revalidated after updating space dust minimum velocity handling to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 
