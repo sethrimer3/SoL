@@ -608,6 +608,12 @@ export class SparkleParticle {
  * Flies apart from the death location and fades over time
  */
 export class DeathParticle {
+    private static readonly VELOCITY_DAMPING = 0.98; // Particles slow down to 98% of velocity each frame
+    private static readonly INITIAL_FADE_DURATION = 0.5; // Fade from 100% to 30% over 0.5 seconds
+    private static readonly OPACITY_DROP = 0.7; // Drop from 100% to 30% (70% reduction)
+    private static readonly STABLE_OPACITY = 0.3; // Hold at 30% opacity during stable phase
+    private static readonly FINAL_FADE_DURATION = 1.0; // Fade from 30% to 0% over 1 second
+    
     position: Vector2D;
     velocity: Vector2D;
     rotation: number;
@@ -643,24 +649,24 @@ export class DeathParticle {
         this.rotation += this.rotationSpeed * deltaTime;
         
         // Apply velocity damping (particles slow down over time)
-        this.velocity.x *= 0.98;
-        this.velocity.y *= 0.98;
+        this.velocity.x *= DeathParticle.VELOCITY_DAMPING;
+        this.velocity.y *= DeathParticle.VELOCITY_DAMPING;
         
         // Calculate opacity based on lifetime
-        if (this.lifetime < 0.5) {
+        if (this.lifetime < DeathParticle.INITIAL_FADE_DURATION) {
             // Initial fade to 30% over first 0.5 seconds
-            this.opacity = 1.0 - (0.7 * (this.lifetime / 0.5));
+            this.opacity = 1.0 - (DeathParticle.OPACITY_DROP * (this.lifetime / DeathParticle.INITIAL_FADE_DURATION));
         } else if (this.lifetime < this.fadeStartTime) {
             // Stay at 30% opacity
-            this.opacity = 0.3;
+            this.opacity = DeathParticle.STABLE_OPACITY;
         } else {
             // Fade from 30% to 0% over 1 second
-            const fadeProgress = (this.lifetime - this.fadeStartTime) / 1.0;
-            this.opacity = Math.max(0, 0.3 * (1 - fadeProgress));
+            const fadeProgress = (this.lifetime - this.fadeStartTime) / DeathParticle.FINAL_FADE_DURATION;
+            this.opacity = Math.max(0, DeathParticle.STABLE_OPACITY * (1 - fadeProgress));
         }
     }
     
     shouldDespawn(): boolean {
-        return this.lifetime >= this.fadeStartTime + 1.0;
+        return this.lifetime >= this.fadeStartTime + DeathParticle.FINAL_FADE_DURATION;
     }
 }

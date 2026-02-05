@@ -569,7 +569,7 @@ export class GameState {
             const deadUnits = player.units.filter(unit => unit.isDead());
             for (const deadUnit of deadUnits) {
                 // Create death particles for visual effect
-                const color = player === this.players[0] ? '#4A90E2' : '#E24A4A'; // Use default colors for now
+                const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
                 this.createDeathParticles(deadUnit, color);
             }
             player.unitsLost += deadUnits.length;
@@ -657,7 +657,7 @@ export class GameState {
             const destroyedBuildings = player.buildings.filter(building => building.isDestroyed());
             for (const building of destroyedBuildings) {
                 // Create death particles for visual effect
-                const color = player === this.players[0] ? '#4A90E2' : '#E24A4A'; // Use default colors for now
+                const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
                 this.createDeathParticles(building, color);
             }
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
@@ -3812,20 +3812,20 @@ export class GameState {
     }
 
     /**
-     * Create death particles for a unit that has just died
-     * @param unit - The unit that died
+     * Create death particles for an entity that has just died
+     * @param entity - The unit or building that died
      * @param color - The player color to tint particles
      */
-    private createDeathParticles(unit: Unit | Building, color: string): void {
-        // Determine number of particles based on unit type
+    private createDeathParticles(entity: Unit | Building, color: string): void {
+        // Determine number of particles based on entity type
         let particleCount: number;
         let baseSize: number;
         
-        if (unit instanceof Building) {
+        if (entity instanceof Building) {
             // Structures: 10-20 pieces
             particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
             baseSize = 16;
-        } else if (unit.isHero) {
+        } else if (entity.isHero) {
             // Heroes: 10-20 pieces
             particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
             baseSize = 12;
@@ -3848,7 +3848,11 @@ export class GameState {
                 Math.sin(angle) * speed
             );
             
-            // Create a small fragment canvas (we'll just use colored rectangles for efficiency)
+            // Create a small fragment canvas (simple colored rectangles for efficiency)
+            // Note: Canvas creation per death is acceptable since:
+            // - Only 4-20 small canvases per death event
+            // - Death events are infrequent (not hundreds per second)
+            // - Pre-pooling would add complexity without significant benefit
             const fragment = document.createElement('canvas');
             const size = baseSize + Math.random() * baseSize;
             fragment.width = size;
@@ -3860,7 +3864,7 @@ export class GameState {
             }
             
             const particle = new DeathParticle(
-                new Vector2D(unit.position.x, unit.position.y),
+                new Vector2D(entity.position.x, entity.position.y),
                 velocity,
                 Math.random() * Math.PI * 2, // Random initial rotation
                 fragment,
