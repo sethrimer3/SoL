@@ -240,8 +240,8 @@ export class GameRenderer {
                 return '#FFD700'; // Gold
             case Faction.AURUM:
                 return '#DAA520'; // Goldenrod
-            case Faction.SOLARI:
-                return '#FF8C00'; // Dark orange
+            case Faction.VELARIS:
+                return '#9C27B0'; // Purple
             default:
                 return '#FFFFFF';
         }
@@ -3349,7 +3349,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Ray unit (Solari hero)
+     * Draw a Ray unit (Velaris hero)
      */
     private drawRay(ray: InstanceType<typeof Ray>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
@@ -3408,7 +3408,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw an InfluenceBall unit (Solari hero)
+     * Draw an InfluenceBall unit (Velaris hero)
      */
     private drawInfluenceBall(ball: InstanceType<typeof InfluenceBall>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
@@ -3450,7 +3450,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a TurretDeployer unit (Solari hero)
+     * Draw a TurretDeployer unit (Velaris hero)
      */
     private drawTurretDeployer(deployer: InstanceType<typeof TurretDeployer>, color: string, game: GameState, isEnemy: boolean): void {
         const ladSun = game.suns.find(s => s.type === 'lad');

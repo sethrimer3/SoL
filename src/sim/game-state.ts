@@ -1834,27 +1834,30 @@ export class GameState {
         let buildType: 'minigun' | 'swirler' | 'subsidiaryFactory' | null = null;
         
         // Strategy-based building priorities
+        // Note: Radiant-specific buildings (minigun, swirler) are only available to Radiant faction
+        const canBuildRadiantStructures = player.faction === Faction.RADIANT;
+        
         switch (player.aiStrategy) {
             case Constants.AIStrategy.ECONOMIC:
                 // Economic: Build factory first, then minimal defenses
                 if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
+                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 }
                 break;
                 
             case Constants.AIStrategy.DEFENSIVE:
                 // Defensive: Prioritize defenses heavily
-                if (swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
+                if (canBuildRadiantStructures && swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 } else if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 5 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 5 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
@@ -1863,7 +1866,7 @@ export class GameState {
                 // Aggressive: Build factory early, skip most defenses
                 if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
@@ -1872,11 +1875,11 @@ export class GameState {
                 // Waves: Balanced approach with factory priority
                 if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
-                } else if (minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
+                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
-                } else if (minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
+                } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
                 }
                 break;
@@ -2018,7 +2021,7 @@ export class GameState {
                 return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight'];
             case Faction.AURUM:
                 return ['Grave', 'Driller'];
-            case Faction.SOLARI:
+            case Faction.VELARIS:
                 return ['Ray', 'InfluenceBall', 'TurretDeployer'];
             default:
                 return [];
@@ -3926,6 +3929,13 @@ export class GameState {
     private executeBuildingPurchaseCommand(player: Player, data: any): void {
         const { buildingType, positionX, positionY } = data;
         const position = new Vector2D(positionX, positionY);
+        
+        // Check faction restrictions for Radiant-specific buildings
+        const radiantOnlyBuildings = ['Minigun', 'Cannon', 'Gatling', 'GatlingTower', 'SpaceDustSwirler'];
+        if (radiantOnlyBuildings.includes(buildingType) && player.faction !== Faction.RADIANT) {
+            // Aurum and Velaris cannot build Radiant-specific buildings
+            return;
+        }
         
         // Check if player can afford the building
         let cost = 0;

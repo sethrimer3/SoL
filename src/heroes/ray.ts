@@ -29,7 +29,7 @@ export const createRayHero = (deps: RayHeroDeps) => {
     }
 
     /**
-     * Ray hero unit (Solari faction) - shoots bouncing beam
+     * Ray hero unit (Velaris faction) - shoots bouncing beam
      */
     class Ray extends Unit {
         private beamSegments: RayBeamSegment[] = [];
@@ -45,7 +45,7 @@ export const createRayHero = (deps: RayHeroDeps) => {
                 Constants.RAY_ATTACK_SPEED,
                 Constants.RAY_ABILITY_COOLDOWN
             );
-            this.isHero = true; // Ray is a hero unit for Solari faction
+            this.isHero = true; // Ray is a hero unit for Velaris faction
         }
 
         /**

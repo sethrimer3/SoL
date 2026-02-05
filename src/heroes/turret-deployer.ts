@@ -101,7 +101,7 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
     }
 
     /**
-     * Turret Deployer hero unit (Solari faction) - deploys turrets on asteroids
+     * Turret Deployer hero unit (Velaris faction) - deploys turrets on asteroids
      */
     class TurretDeployer extends Unit {
         constructor(position: Vector2D, owner: Player) {
@@ -114,7 +114,7 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
                 Constants.TURRET_DEPLOYER_ATTACK_SPEED,
                 Constants.TURRET_DEPLOYER_ABILITY_COOLDOWN
             );
-            this.isHero = true; // TurretDeployer is a hero unit for Solari faction
+            this.isHero = true; // TurretDeployer is a hero unit for Velaris faction
         }
 
         /**

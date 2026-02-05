@@ -330,6 +330,75 @@ under `src/heroes/` using the established factory pattern.
 
 ---
 
+## 12. Faction System Guidelines
+
+The game has three playable factions: **Radiant**, **Aurum**, and **Velaris**. Each faction has shared components and unique components.
+
+### Shared Components (Apply to All Factions)
+
+The following components are **identical across all three factions**. Any changes to these must be applied to all factions:
+
+1. **Solar Mirrors**
+   - Mechanics, stats, and behavior are the same for all factions
+   - When updating solar mirrors, ensure changes apply to all three factions
+
+2. **Starlings (Minion Units)**
+   - Base stats, behavior, and abilities are the same
+   - Foundry production of starlings is identical
+   - When updating starlings, ensure changes apply to all three factions
+
+3. **Foundry Upgrades**
+   - All factions have access to: Strafe upgrade, Regen upgrade, Blink upgrade
+   - Same costs and effects across factions
+   - When updating foundry upgrades, ensure changes apply to all three factions
+
+4. **Base Structure (Stellar Forge)**
+   - Same health and core mechanics
+   - Visual theme may differ but functionality is identical
+   - When updating forge mechanics, ensure changes apply to all three factions
+
+### Faction-Specific Components
+
+The following components are **faction-exclusive** and should NOT be shared:
+
+#### Radiant Faction
+- **Buildings**: Minigun/Cannon, Gatling Tower, SpaceDustSwirler/Cyclone
+- **Heroes**: Marine, Grave, Dagger, Beam, Spotlight, Mortar, Preist, Tank
+
+#### Aurum Faction
+- **Heroes**: Driller (others to be added)
+- **Buildings**: (To be defined - NOT Radiant buildings)
+
+#### Velaris Faction
+- **Heroes**: Ray, InfluenceBall, TurretDeployer (others to be added)
+- **Buildings**: (To be defined - NOT Radiant buildings)
+- **Special**: Velaris ancient script for ability effects and upgrade completions
+
+### Guidelines for AI Agents
+
+1. **When updating shared components** (solar mirrors, starlings, foundry upgrades):
+   - Verify changes apply to all three factions
+   - Test with all three factions selected
+   - Check that no faction-specific logic has been introduced
+
+2. **When adding faction-specific features**:
+   - Clearly identify which faction the feature belongs to
+   - Do NOT give Radiant-specific buildings/heroes to Aurum or Velaris
+   - Do NOT give faction-specific features to other factions without explicit requirements
+
+3. **Faction Colors** (defined in FACTION_STYLE_GUIDE.md):
+   - Radiant: `#FF5722` (reddish-orange, like glowing embers)
+   - Aurum: `#FFD700` (bright gold)
+   - Velaris: `#9C27B0` (purple)
+
+4. **Building Restrictions**:
+   - Aurum and Velaris should NOT have access to Radiant's buildings (Minigun, Gatling, SpaceDustSwirler)
+   - Each faction will eventually have their own unique buildings (3 per faction)
+
+5. **Refer to FACTION_STYLE_GUIDE.md** for complete faction design specifications
+
+---
+
 ## Summary
 
 This codebase prioritizes **determinism**, **performance**, and **clarity** above all else. Every line of code should support these goals. When in doubt:
