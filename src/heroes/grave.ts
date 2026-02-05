@@ -36,7 +36,12 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
             const nextPos = largeParticlePositions[this.nextTargetIndex % largeParticlePositions.length];
 
             // Move toward next target
-            this.progress += (Constants.GRAVE_SMALL_PARTICLE_SPEED / currentPos.distanceTo(nextPos)) * deltaTime;
+            const distance = currentPos.distanceTo(nextPos);
+            if (distance > 0.1) { // Avoid division by zero
+                this.progress += (Constants.GRAVE_SMALL_PARTICLE_SPEED / distance) * deltaTime;
+            } else {
+                this.progress = 1; // Skip to next target if too close
+            }
 
             if (this.progress >= 1) {
                 // Reached target, pick new target
@@ -186,7 +191,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
     class Grave extends Unit {
         projectiles: GraveProjectile[] = [];
         smallParticles: GraveSmallParticle[] = [];
-        smallParticleCount: number = 30; // Start with full particles
+        smallParticleCount: number = Constants.GRAVE_MAX_SMALL_PARTICLES; // Start with full particles
         projectileLaunchCooldown: number = 0;
         smallParticleRegenTimer: number = 0;
         isUsingAbility: boolean = false; // True while ability arrow is being dragged
@@ -293,14 +298,14 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 smallParticle.update(deltaTime, largeParticlePositions);
             }
 
-            // Launch projectiles at enemies if in range and not using ability
-            if (!this.isUsingAbility && this.target && this.projectileLaunchCooldown <= 0 && this.smallParticleCount >= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK) {
-                const distance = this.position.distanceTo(this.target.position);
+            // Launch projectiles at enemies if conditions are met
+            if (this.canLaunchProjectile()) {
+                const distance = this.position.distanceTo(this.target!.position);
                 if (distance <= this.attackRange) {
                     // Find an available projectile (not currently attacking)
                     const availableProjectile = this.projectiles.find((projectile) => !projectile.isAttacking);
                     if (availableProjectile) {
-                        availableProjectile.launchAtTarget(this.target);
+                        availableProjectile.launchAtTarget(this.target!);
                         this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
                         
                         // Consume small particles
@@ -312,6 +317,16 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     }
                 }
             }
+        }
+
+        /**
+         * Check if the Grave can launch a projectile
+         */
+        private canLaunchProjectile(): boolean {
+            return !this.isUsingAbility 
+                && this.target !== null
+                && this.projectileLaunchCooldown <= 0 
+                && this.smallParticleCount >= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
         }
 
         /**
