@@ -106,6 +106,8 @@ export class GameRenderer {
     private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
     private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
     private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
+    private readonly VELARIS_MIRROR_PARTICLE_TIME_SCALE = 0.35;
+    private readonly VELARIS_MIRROR_PARTICLE_DRIFT_SPEED = 0.7;
     private readonly VELARIS_STARLING_CLOUD_PARTICLE_COUNT = 20;
     private readonly VELARIS_STARLING_TRIANGLE_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
@@ -113,6 +115,14 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_TRIANGLE_RADIUS_SCALE = 2.5;
     private readonly VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE = 0.08;
     private readonly VELARIS_STARLING_CLOUD_SWIRL_SCALE = 0.45;
+    private readonly VELARIS_STARLING_TRIANGLE_FLOW_SPEED = 0.08;
+    private readonly VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED = 2.2;
+    private readonly VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE = 0.35;
+    private readonly VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE = 0.55;
+    private readonly VELARIS_STARLING_CLOUD_PULL_SPEED = 0.6;
+    private readonly VELARIS_STARLING_CLOUD_TIME_SCALE = 0.28;
+    private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE = 0.35;
+    private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE = 0.25;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
@@ -1542,7 +1552,13 @@ export class GameRenderer {
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
-    private drawSolarMirror(mirror: SolarMirror, color: string, game: GameState, isEnemy: boolean): void {
+    private drawSolarMirror(
+        mirror: SolarMirror,
+        color: string,
+        game: GameState,
+        isEnemy: boolean,
+        timeSec: number
+    ): void {
         const ladSun = game.suns.find(s => s.type === 'lad');
         let mirrorColor = color;
         let ownerSide: 'light' | 'dark' | undefined = undefined;
@@ -1708,6 +1724,7 @@ export class GameRenderer {
             const glyphFontSize = size * 0.55;
             const glyphSpacing = glyphFontSize * 0.7;
             const glyphSeedBase = mirror.position.x * 0.17 + mirror.position.y * 0.23 + mirror.reflectionAngle * 3.1;
+            const mirrorTimeSec = timeSec * this.VELARIS_MIRROR_PARTICLE_TIME_SCALE;
             this.ctx.fillStyle = glyphColor;
             this.ctx.font = `${glyphFontSize}px Doto`;
             this.ctx.textAlign = 'center';
@@ -1731,9 +1748,15 @@ export class GameRenderer {
                     const t = this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT > 1
                         ? i / (this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT - 1)
                         : 0.5;
-                    const particleX = (t - 0.5) * underlineLength;
+                    const driftSeed = glyphSeedBase + i * 2.7;
+                    const driftX = Math.sin(mirrorTimeSec * this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED + driftSeed)
+                        * particleRadius * 0.6;
+                    const driftY = Math.cos(mirrorTimeSec * (this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED * 0.8) + driftSeed)
+                        * particleRadius * 0.4;
+                    const particleX = (t - 0.5) * underlineLength + driftX;
+                    const particleY = underlineY + driftY;
                     this.ctx.beginPath();
-                    this.ctx.arc(particleX, underlineY, particleRadius, 0, Math.PI * 2);
+                    this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
                     this.ctx.fill();
                 }
 
@@ -1741,12 +1764,15 @@ export class GameRenderer {
                 selectionHeight = size * 1.4;
             } else {
                 const cloudRadius = size * 0.9;
+                const cloudDriftRadius = Math.max(1, size * 0.12);
+                const twoPi = Math.PI * 2;
                 for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT; i++) {
                     const seed = glyphSeedBase + i * 12.7;
-                    const angle = this.getPseudoRandom(seed) * Math.PI * 2;
+                    const angle = this.getPseudoRandom(seed) * twoPi;
                     const radius = this.getPseudoRandom(seed + 7.3) * cloudRadius;
-                    const offsetX = Math.cos(angle) * radius;
-                    const offsetY = Math.sin(angle) * radius;
+                    const driftAngle = mirrorTimeSec * 0.2 + this.getPseudoRandom(seed + 5.1) * twoPi;
+                    const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * cloudDriftRadius;
+                    const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * cloudDriftRadius;
                     const glyph = this.VELARIS_MIRROR_GLYPHS.charAt(i % this.VELARIS_MIRROR_GLYPHS.length);
                     this.ctx.fillText(glyph, offsetX, offsetY);
                 }
@@ -1755,10 +1781,12 @@ export class GameRenderer {
                 this.ctx.fillStyle = `rgba(255, 255, 210, 0.6)`;
                 for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT; i++) {
                     const seed = glyphSeedBase + i * 9.4;
-                    const angle = this.getPseudoRandom(seed + 1.1) * Math.PI * 2;
+                    const angle = this.getPseudoRandom(seed + 1.1) * twoPi;
                     const radius = this.getPseudoRandom(seed + 4.7) * cloudRadius;
-                    const offsetX = Math.cos(angle) * radius;
-                    const offsetY = Math.sin(angle) * radius;
+                    const driftAngle = mirrorTimeSec * 0.25 + this.getPseudoRandom(seed + 6.4) * twoPi;
+                    const driftRadius = cloudDriftRadius * 0.75;
+                    const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * driftRadius;
+                    const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * driftRadius;
                     this.ctx.beginPath();
                     this.ctx.arc(offsetX, offsetY, particleRadius, 0, Math.PI * 2);
                     this.ctx.fill();
@@ -3681,6 +3709,12 @@ export class GameRenderer {
         const particleColor = this.brightenAndPaleColor(displayColor);
         const seedBase = starling.position.x * 0.31 + starling.position.y * 0.47 + starling.spriteLevel * 9.1;
         const twoPi = Math.PI * 2;
+        const speed = Math.sqrt(velocitySq);
+        const formationSpeedScale = isTriangleMode ? Math.min(1, speed / 80) : 0;
+        const triangleTimeScale = this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE
+            + formationSpeedScale * this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE;
+        const timeScale = isTriangleMode ? triangleTimeScale : this.VELARIS_STARLING_CLOUD_TIME_SCALE;
+        const scaledTimeSec = timeSec * timeScale;
 
         this.ctx.save();
         this.ctx.fillStyle = particleColor;
@@ -3724,7 +3758,9 @@ export class GameRenderer {
             const wobbleScale = size * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE;
             for (let i = 0; i < particleCount; i++) {
                 const seed = seedBase + i * 13.3;
-                const edgeProgress = ((i / particleCount) + timeSec * 0.12 + this.getPseudoRandom(seed + 5.9) * 0.2) % 1;
+                const edgeProgress = ((i / particleCount)
+                    + scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_FLOW_SPEED
+                    + this.getPseudoRandom(seed + 5.9) * 0.2) % 1;
                 const edgeValue = edgeProgress * 3;
                 const edgeIndex = Math.floor(edgeValue);
                 const edgeT = edgeValue - edgeIndex;
@@ -3753,7 +3789,7 @@ export class GameRenderer {
 
                 const baseX = startX + edgeX * edgeT;
                 const baseY = startY + edgeY * edgeT;
-                const wobble = Math.sin(timeSec * 4 + seed) * wobbleScale;
+                const wobble = Math.sin(scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED + seed) * wobbleScale;
                 const offsetX = baseX + normalX * wobble;
                 const offsetY = baseY + normalY * wobble;
 
@@ -3770,9 +3806,10 @@ export class GameRenderer {
                 const seed = seedBase + i * 8.7;
                 const angle = this.getPseudoRandom(seed) * twoPi;
                 const baseRadius = this.getPseudoRandom(seed + 1.3) * cloudRadius;
-                const orbitSpeed = 0.6 + this.getPseudoRandom(seed + 2.1) * 1.0;
-                const orbitAngle = timeSec * orbitSpeed + this.getPseudoRandom(seed + 3.4) * twoPi;
-                const pull = 0.7 + 0.2 * Math.sin(timeSec * 1.2 + seed);
+                const orbitSpeed = this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE
+                    + this.getPseudoRandom(seed + 2.1) * this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE;
+                const orbitAngle = scaledTimeSec * orbitSpeed + this.getPseudoRandom(seed + 3.4) * twoPi;
+                const pull = 0.7 + 0.2 * Math.sin(scaledTimeSec * this.VELARIS_STARLING_CLOUD_PULL_SPEED + seed);
 
                 const offsetX = Math.cos(angle) * baseRadius * pull + Math.cos(orbitAngle) * swirlRadius * 0.3;
                 const offsetY = Math.sin(angle) * baseRadius * pull + Math.sin(orbitAngle) * swirlRadius * 0.3;
@@ -5948,7 +5985,7 @@ export class GameRenderer {
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
             for (const mirror of player.solarMirrors) {
                 if (this.isWithinViewBounds(mirror.position, 120)) {
-                    this.drawSolarMirror(mirror, color, game, isEnemy);
+                    this.drawSolarMirror(mirror, color, game, isEnemy, game.gameTime);
                 }
             }
 
