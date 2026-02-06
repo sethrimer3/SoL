@@ -103,11 +103,11 @@ export class GameRenderer {
     private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
     private readonly VELARIS_MIRROR_PARTICLE_TIME_SCALE = 0.35;
     private readonly VELARIS_MIRROR_PARTICLE_DRIFT_SPEED = 0.7;
-    private readonly VELARIS_STARLING_CLOUD_PARTICLE_COUNT = 20;
-    private readonly VELARIS_STARLING_TRIANGLE_PARTICLE_COUNT = 24;
+    private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
     private readonly VELARIS_STARLING_TRIANGLE_RADIUS_SCALE = 2.5;
+    private readonly VELARIS_STARLING_PENTAGON_RADIUS_SCALE = 2.7;
     private readonly VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE = 0.08;
     private readonly VELARIS_STARLING_CLOUD_SWIRL_SCALE = 0.45;
     private readonly VELARIS_STARLING_TRIANGLE_FLOW_SPEED = 0.08;
@@ -118,11 +118,13 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_CLOUD_TIME_SCALE = 0.28;
     private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE = 0.35;
     private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE = 0.25;
+    private readonly VELARIS_STARLING_SHAPE_BLEND_SPEED = 1.4;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private graphemeMaskCache = new Map<string, ImageData>();
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
     private velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
+    private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
@@ -4043,121 +4045,120 @@ export class GameRenderer {
             }
         }
 
-        const isTriangleMode = isMoving || isFiring;
+        const isTriangleTarget = isMoving && !isFiring;
+        const isPentagonTarget = isFiring;
+        const hasShapeTarget = isTriangleTarget || isPentagonTarget;
+        let state = this.starlingParticleStates.get(starling);
+        if (!state) {
+            state = {
+                shapeBlend: hasShapeTarget ? 1 : 0,
+                polygonBlend: isPentagonTarget ? 1 : 0,
+                lastTimeSec: timeSec
+            };
+            this.starlingParticleStates.set(starling, state);
+        }
+
+        const deltaSec = Math.max(0, timeSec - state.lastTimeSec);
+        state.lastTimeSec = timeSec;
+        const blendStep = Math.min(1, deltaSec * this.VELARIS_STARLING_SHAPE_BLEND_SPEED);
+        const targetShapeBlend = hasShapeTarget ? 1 : 0;
+        const targetPolygonBlend = isPentagonTarget ? 1 : 0;
+        state.shapeBlend += (targetShapeBlend - state.shapeBlend) * blendStep;
+        state.polygonBlend += (targetPolygonBlend - state.polygonBlend) * blendStep;
+
         const particleRadius = Math.max(1, this.VELARIS_STARLING_PARTICLE_RADIUS_PX * this.zoom);
         const particleColor = this.brightenAndPaleColor(displayColor);
         const seedBase = starling.position.x * 0.31 + starling.position.y * 0.47 + starling.spriteLevel * 9.1;
         const twoPi = Math.PI * 2;
         const speed = Math.sqrt(velocitySq);
-        const formationSpeedScale = isTriangleMode ? Math.min(1, speed / 80) : 0;
-        const triangleTimeScale = this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE
+        const formationSpeedScale = hasShapeTarget ? Math.min(1, speed / 80) : 0;
+        const polygonTimeScale = this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE
             + formationSpeedScale * this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE;
-        const timeScale = isTriangleMode ? triangleTimeScale : this.VELARIS_STARLING_CLOUD_TIME_SCALE;
+        const timeScale = this.VELARIS_STARLING_CLOUD_TIME_SCALE
+            + (polygonTimeScale - this.VELARIS_STARLING_CLOUD_TIME_SCALE) * state.shapeBlend;
         const scaledTimeSec = timeSec * timeScale;
+        const particleCount = this.VELARIS_STARLING_PARTICLE_COUNT;
 
         this.ctx.save();
         this.ctx.fillStyle = particleColor;
-        this.ctx.globalAlpha = isTriangleMode ? 0.9 : 0.7;
+        this.ctx.globalAlpha = 0.7 + 0.2 * state.shapeBlend;
         this.ctx.beginPath();
 
-        if (isTriangleMode) {
-            const rotationRad = this.getStarlingFacingRotationRad(starling) ?? starling.rotation;
-            const cosRot = Math.cos(rotationRad);
-            const sinRot = Math.sin(rotationRad);
-            const triangleRadius = size * this.VELARIS_STARLING_TRIANGLE_RADIUS_SCALE;
-            const halfBase = triangleRadius * 0.8660254;
-            const baseOffsetY = triangleRadius * 0.5;
+        const rotationRad = this.getStarlingFacingRotationRad(starling) ?? starling.rotation;
+        const rotationOffsetRad = rotationRad - Math.PI / 2;
+        const triangleRadius = size * this.VELARIS_STARLING_TRIANGLE_RADIUS_SCALE;
+        const pentagonRadius = size * this.VELARIS_STARLING_PENTAGON_RADIUS_SCALE;
+        const cloudRadius = size * this.VELARIS_STARLING_CLOUD_RADIUS_SCALE;
+        const swirlRadius = cloudRadius * this.VELARIS_STARLING_CLOUD_SWIRL_SCALE;
+        const wobbleScale = size * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE;
+        const triangleStep = twoPi / 3;
+        const pentagonStep = twoPi / 5;
 
-            const v0x = triangleRadius * sinRot;
-            const v0y = -triangleRadius * cosRot;
-            const v1x = halfBase * cosRot - baseOffsetY * sinRot;
-            const v1y = halfBase * sinRot + baseOffsetY * cosRot;
-            const v2x = -halfBase * cosRot - baseOffsetY * sinRot;
-            const v2y = -halfBase * sinRot + baseOffsetY * cosRot;
+        for (let i = 0; i < particleCount; i++) {
+            const seed = seedBase + i * 13.3;
+            const edgeProgress = ((i / particleCount)
+                + scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_FLOW_SPEED
+                + this.getPseudoRandom(seed + 5.9) * 0.2) % 1;
+            const wobble = Math.sin(scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED + seed) * wobbleScale;
 
-            const edge01x = v1x - v0x;
-            const edge01y = v1y - v0y;
-            const edge12x = v2x - v1x;
-            const edge12y = v2y - v1y;
-            const edge20x = v0x - v2x;
-            const edge20y = v0y - v2y;
+            const triangleEdgeValue = edgeProgress * 3;
+            const triangleEdgeIndex = Math.floor(triangleEdgeValue);
+            const triangleEdgeT = triangleEdgeValue - triangleEdgeIndex;
+            const triangleAngle0 = rotationOffsetRad + triangleEdgeIndex * triangleStep;
+            const triangleAngle1 = rotationOffsetRad + (triangleEdgeIndex + 1) * triangleStep;
+            const triangleStartX = Math.cos(triangleAngle0) * triangleRadius;
+            const triangleStartY = Math.sin(triangleAngle0) * triangleRadius;
+            const triangleEndX = Math.cos(triangleAngle1) * triangleRadius;
+            const triangleEndY = Math.sin(triangleAngle1) * triangleRadius;
+            const triangleEdgeX = triangleEndX - triangleStartX;
+            const triangleEdgeY = triangleEndY - triangleStartY;
+            const triangleEdgeLength = Math.sqrt(triangleEdgeX * triangleEdgeX + triangleEdgeY * triangleEdgeY) || 1;
+            const triangleNormalX = -triangleEdgeY / triangleEdgeLength;
+            const triangleNormalY = triangleEdgeX / triangleEdgeLength;
+            const triangleBaseX = triangleStartX + triangleEdgeX * triangleEdgeT;
+            const triangleBaseY = triangleStartY + triangleEdgeY * triangleEdgeT;
+            const triangleOffsetX = triangleBaseX + triangleNormalX * wobble;
+            const triangleOffsetY = triangleBaseY + triangleNormalY * wobble;
 
-            const edge01Length = Math.sqrt(edge01x * edge01x + edge01y * edge01y) || 1;
-            const edge12Length = Math.sqrt(edge12x * edge12x + edge12y * edge12y) || 1;
-            const edge20Length = Math.sqrt(edge20x * edge20x + edge20y * edge20y) || 1;
+            const pentagonEdgeValue = edgeProgress * 5;
+            const pentagonEdgeIndex = Math.floor(pentagonEdgeValue);
+            const pentagonEdgeT = pentagonEdgeValue - pentagonEdgeIndex;
+            const pentagonAngle0 = rotationOffsetRad + pentagonEdgeIndex * pentagonStep;
+            const pentagonAngle1 = rotationOffsetRad + (pentagonEdgeIndex + 1) * pentagonStep;
+            const pentagonStartX = Math.cos(pentagonAngle0) * pentagonRadius;
+            const pentagonStartY = Math.sin(pentagonAngle0) * pentagonRadius;
+            const pentagonEndX = Math.cos(pentagonAngle1) * pentagonRadius;
+            const pentagonEndY = Math.sin(pentagonAngle1) * pentagonRadius;
+            const pentagonEdgeX = pentagonEndX - pentagonStartX;
+            const pentagonEdgeY = pentagonEndY - pentagonStartY;
+            const pentagonEdgeLength = Math.sqrt(pentagonEdgeX * pentagonEdgeX + pentagonEdgeY * pentagonEdgeY) || 1;
+            const pentagonNormalX = -pentagonEdgeY / pentagonEdgeLength;
+            const pentagonNormalY = pentagonEdgeX / pentagonEdgeLength;
+            const pentagonBaseX = pentagonStartX + pentagonEdgeX * pentagonEdgeT;
+            const pentagonBaseY = pentagonStartY + pentagonEdgeY * pentagonEdgeT;
+            const pentagonOffsetX = pentagonBaseX + pentagonNormalX * wobble;
+            const pentagonOffsetY = pentagonBaseY + pentagonNormalY * wobble;
 
-            const normal01x = -edge01y / edge01Length;
-            const normal01y = edge01x / edge01Length;
-            const normal12x = -edge12y / edge12Length;
-            const normal12y = edge12x / edge12Length;
-            const normal20x = -edge20y / edge20Length;
-            const normal20y = edge20x / edge20Length;
+            const polygonOffsetX = triangleOffsetX + (pentagonOffsetX - triangleOffsetX) * state.polygonBlend;
+            const polygonOffsetY = triangleOffsetY + (pentagonOffsetY - triangleOffsetY) * state.polygonBlend;
 
-            const particleCount = this.VELARIS_STARLING_TRIANGLE_PARTICLE_COUNT;
-            const wobbleScale = size * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE;
-            for (let i = 0; i < particleCount; i++) {
-                const seed = seedBase + i * 13.3;
-                const edgeProgress = ((i / particleCount)
-                    + scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_FLOW_SPEED
-                    + this.getPseudoRandom(seed + 5.9) * 0.2) % 1;
-                const edgeValue = edgeProgress * 3;
-                const edgeIndex = Math.floor(edgeValue);
-                const edgeT = edgeValue - edgeIndex;
-                let startX = v0x;
-                let startY = v0y;
-                let edgeX = edge01x;
-                let edgeY = edge01y;
-                let normalX = normal01x;
-                let normalY = normal01y;
+            const angle = this.getPseudoRandom(seed) * twoPi;
+            const baseRadius = this.getPseudoRandom(seed + 1.3) * cloudRadius;
+            const orbitSpeed = this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE
+                + this.getPseudoRandom(seed + 2.1) * this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE;
+            const orbitAngle = scaledTimeSec * orbitSpeed + this.getPseudoRandom(seed + 3.4) * twoPi;
+            const pull = 0.7 + 0.2 * Math.sin(scaledTimeSec * this.VELARIS_STARLING_CLOUD_PULL_SPEED + seed);
 
-                if (edgeIndex === 1) {
-                    startX = v1x;
-                    startY = v1y;
-                    edgeX = edge12x;
-                    edgeY = edge12y;
-                    normalX = normal12x;
-                    normalY = normal12y;
-                } else if (edgeIndex === 2) {
-                    startX = v2x;
-                    startY = v2y;
-                    edgeX = edge20x;
-                    edgeY = edge20y;
-                    normalX = normal20x;
-                    normalY = normal20y;
-                }
+            const cloudOffsetX = Math.cos(angle) * baseRadius * pull + Math.cos(orbitAngle) * swirlRadius * 0.3;
+            const cloudOffsetY = Math.sin(angle) * baseRadius * pull + Math.sin(orbitAngle) * swirlRadius * 0.3;
 
-                const baseX = startX + edgeX * edgeT;
-                const baseY = startY + edgeY * edgeT;
-                const wobble = Math.sin(scaledTimeSec * this.VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED + seed) * wobbleScale;
-                const offsetX = baseX + normalX * wobble;
-                const offsetY = baseY + normalY * wobble;
+            const offsetX = cloudOffsetX + (polygonOffsetX - cloudOffsetX) * state.shapeBlend;
+            const offsetY = cloudOffsetY + (polygonOffsetY - cloudOffsetY) * state.shapeBlend;
 
-                const particleX = screenPos.x + offsetX;
-                const particleY = screenPos.y + offsetY;
-                this.ctx.moveTo(particleX + particleRadius, particleY);
-                this.ctx.arc(particleX, particleY, particleRadius, 0, twoPi);
-            }
-        } else {
-            const cloudRadius = size * this.VELARIS_STARLING_CLOUD_RADIUS_SCALE;
-            const swirlRadius = cloudRadius * this.VELARIS_STARLING_CLOUD_SWIRL_SCALE;
-            const particleCount = this.VELARIS_STARLING_CLOUD_PARTICLE_COUNT;
-            for (let i = 0; i < particleCount; i++) {
-                const seed = seedBase + i * 8.7;
-                const angle = this.getPseudoRandom(seed) * twoPi;
-                const baseRadius = this.getPseudoRandom(seed + 1.3) * cloudRadius;
-                const orbitSpeed = this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE
-                    + this.getPseudoRandom(seed + 2.1) * this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE;
-                const orbitAngle = scaledTimeSec * orbitSpeed + this.getPseudoRandom(seed + 3.4) * twoPi;
-                const pull = 0.7 + 0.2 * Math.sin(scaledTimeSec * this.VELARIS_STARLING_CLOUD_PULL_SPEED + seed);
-
-                const offsetX = Math.cos(angle) * baseRadius * pull + Math.cos(orbitAngle) * swirlRadius * 0.3;
-                const offsetY = Math.sin(angle) * baseRadius * pull + Math.sin(orbitAngle) * swirlRadius * 0.3;
-
-                const particleX = screenPos.x + offsetX;
-                const particleY = screenPos.y + offsetY;
-                this.ctx.moveTo(particleX + particleRadius, particleY);
-                this.ctx.arc(particleX, particleY, particleRadius, 0, twoPi);
-            }
+            const particleX = screenPos.x + offsetX;
+            const particleY = screenPos.y + offsetY;
+            this.ctx.moveTo(particleX + particleRadius, particleY);
+            this.ctx.arc(particleX, particleY, particleRadius, 0, twoPi);
         }
 
         this.ctx.fill();
