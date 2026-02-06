@@ -1,4 +1,4 @@
-import type { Asteroid, CombatTarget, Player, Structure, Unit, Vector2D } from '../game-core';
+import type { Asteroid, Building, CombatTarget, Player, SolarMirror, StellarForge, Unit, Vector2D } from '../game-core';
 
 type VelarisHeroDeps = {
     Unit: typeof Unit;
@@ -125,7 +125,7 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
         velocity: Vector2D;
         lifetime: number = 0;
         isStuck: boolean = false;
-        stuckTo: Asteroid | Structure | null = null;
+        stuckTo: Asteroid | Building | SolarMirror | StellarForge | null = null;
         stuckSurface: 'asteroid' | 'structure' | 'edge' | null = null;
         surfaceNormal: Vector2D | null = null; // Direction outward from surface
         isArmed: boolean = false;
@@ -182,7 +182,7 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
         stickToSurface(
             surfaceType: 'asteroid' | 'structure' | 'edge',
             normal: Vector2D,
-            attachedTo: Asteroid | Structure | null = null
+            attachedTo: Asteroid | Building | SolarMirror | StellarForge | null = null
         ): void {
             this.isStuck = true;
             this.stuckSurface = surfaceType;

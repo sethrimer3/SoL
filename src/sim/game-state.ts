@@ -1571,7 +1571,6 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             unit.position,
                             laser.damage,
-                            this.getPlayerImpactColor(laser.owner),
                             this.gameTime
                         ));
                     }
@@ -1584,7 +1583,6 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             building.position,
                             laser.damage,
-                            this.getPlayerImpactColor(laser.owner),
                             this.gameTime
                         ));
                     }
@@ -1597,7 +1595,6 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             mirror.position,
                             laser.damage,
-                            this.getPlayerImpactColor(laser.owner),
                             this.gameTime
                         ));
                     }
@@ -1609,7 +1606,6 @@ export class GameState {
                     this.damageNumbers.push(new DamageNumber(
                         player.stellarForge.position,
                         laser.damage,
-                        this.getPlayerImpactColor(laser.owner),
                         this.gameTime
                     ));
                 }
@@ -3491,6 +3487,8 @@ export class GameState {
                 return new Spotlight(spawnPosition, owner);
             case 'Nova':
                 return new Nova(spawnPosition, owner);
+            case 'Velaris':
+                return new Velaris(spawnPosition, owner);
             default:
                 return null;
         }
