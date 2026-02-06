@@ -3743,29 +3743,36 @@ export class GameRenderer {
         this.ctx.beginPath();
 
         const twoPi = Math.PI * 2;
-        const overlapEpsilonRad = 0.0005;
+        const coverageEpsilonWorld = 0.5;
+        const coverageEpsilonSq = coverageEpsilonWorld * coverageEpsilonWorld;
+        const dpr = window.devicePixelRatio || 1;
+        const centerX = (this.canvas.width / dpr) / 2;
+        const centerY = (this.canvas.height / dpr) / 2;
+        const cameraX = this.camera.x;
+        const cameraY = this.camera.y;
+        const zoom = this.zoom;
+        const targetStepPx = 6;
+
         for (let i = 0; i < selectedStarlings.length; i++) {
             const starling = selectedStarlings[i];
             if (!this.isWithinViewBounds(starling.position, starling.attackRange)) {
                 continue;
             }
-            const screenPos = this.worldToScreen(starling.position);
-            const radius = starling.attackRange * this.zoom;
-            const minArcLengthRad = Math.min(0.08, 2 / Math.max(radius, 1));
-            const blockedStarts: number[] = [];
-            const blockedEnds: number[] = [];
-            let isFullyCovered = false;
 
+            const originX = starling.position.x;
+            const originY = starling.position.y;
+            const radiusWorld = starling.attackRange;
+            let isFullyCovered = false;
+            let needsSampling = false;
             for (let j = 0; j < selectedStarlings.length; j++) {
                 if (i === j) continue;
                 const other = selectedStarlings[j];
-                const dx = other.position.x - starling.position.x;
-                const dy = other.position.y - starling.position.y;
+                const dx = other.position.x - originX;
+                const dy = other.position.y - originY;
                 const distanceSq = dx * dx + dy * dy;
                 const otherRadius = other.attackRange;
-
                 if (distanceSq <= 0.0001) {
-                    if (starling.attackRange <= otherRadius) {
+                    if (radiusWorld <= otherRadius) {
                         isFullyCovered = true;
                         break;
                     }
@@ -3773,94 +3780,74 @@ export class GameRenderer {
                 }
 
                 const distance = Math.sqrt(distanceSq);
-                if (distance + starling.attackRange <= otherRadius + overlapEpsilonRad) {
+                if (distance + radiusWorld <= otherRadius - coverageEpsilonWorld) {
                     isFullyCovered = true;
                     break;
                 }
 
-                if (distance >= starling.attackRange + otherRadius - overlapEpsilonRad) {
-                    continue;
+                const radiusDiff = Math.abs(radiusWorld - otherRadius);
+                if (distance < radiusWorld + otherRadius - coverageEpsilonWorld &&
+                    distance > radiusDiff + coverageEpsilonWorld) {
+                    needsSampling = true;
                 }
-
-                const angleCenter = Math.atan2(dy, dx);
-                const cosValue = (distanceSq + starling.attackRange * starling.attackRange - otherRadius * otherRadius)
-                    / (2 * distance * starling.attackRange);
-                const clampedCos = Math.max(-1, Math.min(1, cosValue));
-                const angleOffset = Math.acos(clampedCos);
-                if (angleOffset <= overlapEpsilonRad) {
-                    continue;
-                }
-                let startAngle = angleCenter - angleOffset;
-                let endAngle = angleCenter + angleOffset;
-
-                if (startAngle < 0) {
-                    blockedStarts.push(startAngle + twoPi);
-                    blockedEnds.push(twoPi);
-                    startAngle = 0;
-                }
-                if (endAngle > twoPi) {
-                    blockedStarts.push(0);
-                    blockedEnds.push(endAngle - twoPi);
-                    endAngle = twoPi;
-                }
-
-                blockedStarts.push(startAngle);
-                blockedEnds.push(endAngle);
             }
 
             if (isFullyCovered) {
                 continue;
             }
 
-            if (blockedStarts.length === 0) {
-                this.ctx.moveTo(screenPos.x + radius, screenPos.y);
-                this.ctx.arc(screenPos.x, screenPos.y, radius, 0, twoPi);
+            const screenCenterX = centerX + (originX - cameraX) * zoom;
+            const screenCenterY = centerY + (originY - cameraY) * zoom;
+            const radiusScreen = radiusWorld * zoom;
+
+            if (!needsSampling) {
+                this.ctx.moveTo(screenCenterX + radiusScreen, screenCenterY);
+                this.ctx.arc(screenCenterX, screenCenterY, radiusScreen, 0, twoPi);
                 continue;
             }
 
-            const intervalCount = blockedStarts.length;
-            const indices = new Array(intervalCount);
-            for (let idx = 0; idx < intervalCount; idx++) {
-                indices[idx] = idx;
-            }
-            indices.sort((a, b) => blockedStarts[a] - blockedStarts[b]);
+            const stepRad = Math.min(0.25, Math.max(0.02, targetStepPx / Math.max(radiusScreen, 1)));
+            let isDrawing = false;
 
-            const mergedStarts: number[] = [];
-            const mergedEnds: number[] = [];
-            let currentStart = blockedStarts[indices[0]];
-            let currentEnd = blockedEnds[indices[0]];
-            for (let idx = 1; idx < intervalCount; idx++) {
-                const startAngle = blockedStarts[indices[idx]];
-                const endAngle = blockedEnds[indices[idx]];
-                if (startAngle <= currentEnd + overlapEpsilonRad) {
-                    if (endAngle > currentEnd) {
-                        currentEnd = endAngle;
+            for (let angle = 0; angle <= twoPi + stepRad; angle += stepRad) {
+                const clampedAngle = angle > twoPi ? twoPi : angle;
+                const cosAngle = Math.cos(clampedAngle);
+                const sinAngle = Math.sin(clampedAngle);
+                const worldX = originX + cosAngle * radiusWorld;
+                const worldY = originY + sinAngle * radiusWorld;
+
+                let isCovered = false;
+                for (let j = 0; j < selectedStarlings.length; j++) {
+                    if (i === j) continue;
+                    const other = selectedStarlings[j];
+                    const dx = worldX - other.position.x;
+                    const dy = worldY - other.position.y;
+                    const distanceSq = dx * dx + dy * dy;
+                    const otherRadius = other.attackRange;
+                    const otherRadiusSq = otherRadius * otherRadius;
+                    if (distanceSq <= otherRadiusSq - coverageEpsilonSq) {
+                        isCovered = true;
+                        break;
                     }
+                }
+
+                if (isCovered) {
+                    if (isDrawing) {
+                        isDrawing = false;
+                    }
+                    continue;
+                }
+
+                const screenX = centerX + (worldX - cameraX) * zoom;
+                const screenY = centerY + (worldY - cameraY) * zoom;
+                if (!isDrawing) {
+                    this.ctx.moveTo(screenX, screenY);
+                    isDrawing = true;
                 } else {
-                    mergedStarts.push(currentStart);
-                    mergedEnds.push(currentEnd);
-                    currentStart = startAngle;
-                    currentEnd = endAngle;
+                    this.ctx.lineTo(screenX, screenY);
                 }
             }
-            mergedStarts.push(currentStart);
-            mergedEnds.push(currentEnd);
 
-            let totalBlockedRad = 0;
-            for (let idx = 0; idx < mergedStarts.length; idx++) {
-                totalBlockedRad += mergedEnds[idx] - mergedStarts[idx];
-            }
-            if (totalBlockedRad >= twoPi - minArcLengthRad) {
-                continue;
-            }
-
-            for (let idx = 0; idx < mergedStarts.length; idx++) {
-                const startAngle = mergedEnds[idx];
-                const endAngle = idx + 1 < mergedStarts.length
-                    ? mergedStarts[idx + 1]
-                    : mergedStarts[0] + twoPi;
-                this.drawVisibleArcSegment(screenPos, radius, startAngle, endAngle, minArcLengthRad);
-            }
         }
 
         this.ctx.stroke();
