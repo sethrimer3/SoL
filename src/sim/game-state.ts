@@ -3783,6 +3783,32 @@ export class GameState {
                         mix(-1);
                     }
                 }
+                if (unit instanceof Grave) {
+                    mix(unit.getSmallParticleCount());
+                    mix(unit.projectileLaunchCooldown);
+                    mix(unit.smallParticleRegenTimer);
+                    mixInt(unit.isUsingAbility ? 1 : 0);
+                    const graveProjectiles = unit.getProjectiles();
+                    mixInt(graveProjectiles.length);
+                    for (const graveProjectile of graveProjectiles) {
+                        mix(graveProjectile.position.x);
+                        mix(graveProjectile.position.y);
+                        mix(graveProjectile.velocity.x);
+                        mix(graveProjectile.velocity.y);
+                        mix(graveProjectile.lifetime);
+                        mix(graveProjectile.targetAngle);
+                        mixInt(graveProjectile.isAttacking ? 1 : 0);
+                        if (graveProjectile.targetEnemy) {
+                            mixInt(1);
+                            mix(graveProjectile.targetEnemy.position.x);
+                            mix(graveProjectile.targetEnemy.position.y);
+                        } else {
+                            mixInt(0);
+                            mix(-1);
+                            mix(-1);
+                        }
+                    }
+                }
             }
 
             for (const building of player.buildings) {
