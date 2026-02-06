@@ -1391,15 +1391,8 @@ export class GameState {
                     }
                     
                     // Clear bomb reference from Nova hero
-                    for (const player of this.players) {
-                        for (const unit of player.units) {
-                            if (unit instanceof Nova) {
-                                const activeBomb = unit.getActiveBomb();
-                                if (activeBomb === bomb) {
-                                    unit.clearActiveBomb();
-                                }
-                            }
-                        }
+                    if (bomb.novaUnit && bomb.novaUnit.getActiveBomb() === bomb) {
+                        bomb.novaUnit.clearActiveBomb();
                     }
                 }
             }

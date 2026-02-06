@@ -52,13 +52,16 @@ export const createNovaHero = (deps: NovaHeroDeps) => {
         bounceCount: number = 0;
         isArmed: boolean = false;
         scatterDirection: Vector2D | null = null;
+        novaUnit: any; // Reference to the Nova unit that created this bomb
 
         constructor(
             public position: Vector2D,
             velocity: Vector2D,
-            public owner: Player
+            public owner: Player,
+            novaUnit: any
         ) {
             this.velocity = velocity;
+            this.novaUnit = novaUnit;
         }
 
         /**
@@ -210,7 +213,8 @@ export const createNovaHero = (deps: NovaHeroDeps) => {
             this.bombToCreate = new NovaBomb(
                 new Vector2D(this.position.x, this.position.y),
                 velocity,
-                this.owner
+                this.owner,
+                this
             );
 
             return true;
