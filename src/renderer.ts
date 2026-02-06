@@ -3695,7 +3695,7 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(grave.position);
         const glyphSize = 18 * this.zoom;
         const glyphColor = shouldDim ? this.darkenColor('#FFFFFF', Constants.SHADE_OPACITY) : '#FFFFFF';
-        const graveGraphemePath = this.getVelarisGraphemeSpritePath('G');
+        const graveGraphemePath = this.getVelarisGraphemeSpritePath('g');
         if (graveGraphemePath) {
             this.drawVelarisGraphemeSprite(
                 graveGraphemePath,

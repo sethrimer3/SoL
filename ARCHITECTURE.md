@@ -93,11 +93,13 @@ Use the following minimal command list to validate that the same `stateHash` is 
   { "tick": 14, "command": "buildStructure", "playerIndex": 0, "structureType": "Cannon", "targetWorld": { "x": 420, "y": 420 } },
   { "tick": 16, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Spotlight" },
   { "tick": 18, "command": "unitAbility", "playerIndex": 0, "unitId": "p0_h0", "direction": { "x": 1, "y": 0 } },
-  { "tick": 20, "command": "queueFoundryUpgrade", "playerIndex": 0, "upgradeType": "strafe" }
+  { "tick": 20, "command": "queueFoundryUpgrade", "playerIndex": 0, "upgradeType": "strafe" },
+  { "tick": 22, "command": "queueHeroProduction", "playerIndex": 0, "heroType": "Grave" },
+  { "tick": 40, "command": "unitAbility", "playerIndex": 0, "unitId": "p0_h1", "direction": { "x": 0, "y": 1 } }
 ]
 ```
 
-The command list above was revalidated after updating starling cap handling and foundry blink upgrades to ensure `stateHash` stability.
+The command list above was revalidated after updating Grave particle spending and regeneration behavior to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

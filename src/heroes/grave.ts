@@ -47,10 +47,10 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 // Reached target, pick new target
                 this.progress = 0;
                 this.currentTargetIndex = this.nextTargetIndex;
-                // Pick a random different target
-                do {
-                    this.nextTargetIndex = Math.floor(Math.random() * largeParticlePositions.length);
-                } while (this.nextTargetIndex === this.currentTargetIndex && largeParticlePositions.length > 1);
+                // Deterministically pick the next target
+                if (largeParticlePositions.length > 1) {
+                    this.nextTargetIndex = (this.currentTargetIndex + 1) % largeParticlePositions.length;
+                }
             }
 
             // Interpolate position
@@ -258,7 +258,16 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
 
             // Regenerate small particles over time
             this.smallParticleRegenTimer += deltaTime;
-            const regenInterval = 1.0 / Constants.GRAVE_SMALL_PARTICLE_REGEN_RATE;
+            let dockedProjectileCount = 0;
+            for (const projectile of this.projectiles) {
+                if (!projectile.isAttacking) {
+                    dockedProjectileCount += 1;
+                }
+            }
+            const dockedRatio = dockedProjectileCount / Constants.GRAVE_NUM_PROJECTILES;
+            const regenMultiplier = 0.5 + dockedRatio;
+            const regenRate = Constants.GRAVE_SMALL_PARTICLE_REGEN_RATE * regenMultiplier;
+            const regenInterval = regenRate > 0 ? 1.0 / regenRate : Number.POSITIVE_INFINITY;
             
             while (this.smallParticleRegenTimer >= regenInterval && this.smallParticleCount < Constants.GRAVE_MAX_SMALL_PARTICLES) {
                 this.smallParticleCount++;
@@ -309,7 +318,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                         this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
                         
                         // Consume small particles
-                        this.smallParticleCount -= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
+                        this.smallParticleCount = Math.max(0, this.smallParticleCount - Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK);
                         
                         // Remove small particles from visual array
                         const particlesToRemove = Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
