@@ -125,6 +125,8 @@ export class GameRenderer {
     private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
     private velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
+    private starlingParticleSeeds = new WeakMap<Starling, number>();
+    private velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
@@ -1577,6 +1579,24 @@ export class GameRenderer {
         return value - Math.floor(value);
     }
 
+    private getStarlingParticleSeed(starling: Starling): number {
+        let seed = this.starlingParticleSeeds.get(starling);
+        if (seed === undefined) {
+            seed = Math.random() * 10000;
+            this.starlingParticleSeeds.set(starling, seed);
+        }
+        return seed;
+    }
+
+    private getVelarisMirrorSeed(mirror: SolarMirror): number {
+        let seed = this.velarisMirrorSeeds.get(mirror);
+        if (seed === undefined) {
+            seed = Math.random() * 10000;
+            this.velarisMirrorSeeds.set(mirror, seed);
+        }
+        return seed;
+    }
+
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
@@ -1751,7 +1771,7 @@ export class GameRenderer {
             const glyphColor = this.brightenAndPaleColor(displayColor);
             const glyphTargetSize = size * 0.6;
             const glyphSpacing = glyphTargetSize * 0.75;
-            const glyphSeedBase = mirror.position.x * 0.17 + mirror.position.y * 0.23 + mirror.reflectionAngle * 3.1;
+            const glyphSeedBase = this.getVelarisMirrorSeed(mirror) + mirror.reflectionAngle * 0.15;
             const mirrorTimeSec = timeSec * this.VELARIS_MIRROR_PARTICLE_TIME_SCALE;
 
             if (isMirrorActive) {
@@ -4042,7 +4062,7 @@ export class GameRenderer {
 
         const particleRadius = Math.max(1, this.VELARIS_STARLING_PARTICLE_RADIUS_PX * this.zoom);
         const particleColor = this.brightenAndPaleColor(displayColor);
-        const seedBase = starling.position.x * 0.31 + starling.position.y * 0.47 + starling.spriteLevel * 9.1;
+        const seedBase = this.getStarlingParticleSeed(starling) + starling.spriteLevel * 9.1;
         const twoPi = Math.PI * 2;
         const speed = Math.sqrt(velocitySq);
         const formationSpeedScale = hasShapeTarget ? Math.min(1, speed / 80) : 0;
