@@ -1364,14 +1364,9 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = (Constants.HERO_BUTTON_DISTANCE_PX * this.zoom);
         
-        // Draw 4 buttons in cardinal directions
-        const positions = [
-            { x: 0, y: -1 },  // Top
-            { x: 1, y: 0 },   // Right
-            { x: 0, y: 1 },   // Bottom
-            { x: -1, y: 0 }   // Left
-        ];
-        const displayHeroes = heroNames.slice(0, positions.length);
+        const maxButtons = 4;
+        const displayHeroes = heroNames.slice(0, maxButtons);
+        const positions = this.getRadialButtonOffsets(displayHeroes.length);
 
         for (let i = 0; i < displayHeroes.length; i++) {
             const heroName = displayHeroes[i];
@@ -1410,6 +1405,21 @@ export class GameRenderer {
                 this.drawHeroCheckmark(buttonX, buttonY, buttonRadius);
             }
         }
+    }
+
+    private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
+        if (buttonCount <= 0) {
+            return [];
+        }
+        const positions: Array<{ x: number; y: number }> = [];
+        const startAngleRad = -Math.PI / 2;
+        const stepAngleRad = (Math.PI * 2) / buttonCount;
+
+        for (let i = 0; i < buttonCount; i++) {
+            const angleRad = startAngleRad + stepAngleRad * i;
+            positions.push({ x: Math.cos(angleRad), y: Math.sin(angleRad) });
+        }
+        return positions;
     }
 
     private getHeroUnitType(heroName: string): string | null {
@@ -1525,31 +1535,30 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
 
-        // Draw 3 buttons for Foundry upgrades
         const buttonConfigs = [
             { 
-                x: -1, y: 0, // Left - Strafe upgrade
                 label: 'Strafe',
                 available: foundry.canQueueStrafeUpgrade(),
                 index: 0
             },
             {
-                x: 0, y: -1, // Top - Blink upgrade
                 label: 'Blink',
                 available: foundry.canQueueBlinkUpgrade(),
                 index: 1
             },
             {
-                x: 1, y: 0, // Right - Regen upgrade
                 label: 'Regen',
                 available: foundry.canQueueRegenUpgrade(),
                 index: 2
             }
         ];
+        const positions = this.getRadialButtonOffsets(buttonConfigs.length);
 
-        for (const config of buttonConfigs) {
-            const buttonX = screenPos.x + config.x * buttonDistance;
-            const buttonY = screenPos.y + config.y * buttonDistance;
+        for (let i = 0; i < buttonConfigs.length; i++) {
+            const config = buttonConfigs[i];
+            const pos = positions[i];
+            const buttonX = screenPos.x + pos.x * buttonDistance;
+            const buttonY = screenPos.y + pos.y * buttonDistance;
             const isHighlighted = this.highlightedButtonIndex === config.index;
 
             // Draw button background with highlight effect
@@ -2525,16 +2534,19 @@ export class GameRenderer {
             if (isSelected) {
                 const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
                 const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
-                const positions = [
-                    { x: 0, y: -1, label: 'Foundry', index: 0 },
-                    { x: 1, y: 0, label: 'Cannon', index: 1 },
-                    { x: 0, y: 1, label: 'Gatling', index: 2 },
-                    { x: -1, y: 0, label: 'Cyclone', index: 3 }
+                const buttonConfigs = [
+                    { label: 'Foundry', index: 0 },
+                    { label: 'Cannon', index: 1 },
+                    { label: 'Gatling', index: 2 },
+                    { label: 'Cyclone', index: 3 }
                 ];
+                const positions = this.getRadialButtonOffsets(buttonConfigs.length);
 
-                for (const config of positions) {
-                    const btnX = screenPos.x + config.x * buttonDistance;
-                    const btnY = screenPos.y + config.y * buttonDistance;
+                for (let i = 0; i < buttonConfigs.length; i++) {
+                    const config = buttonConfigs[i];
+                    const pos = positions[i];
+                    const btnX = screenPos.x + pos.x * buttonDistance;
+                    const btnY = screenPos.y + pos.y * buttonDistance;
                     const labelOffset = buttonRadius + 14 * this.zoom;
                     const isHighlighted = this.highlightedButtonIndex === config.index;
 
@@ -2553,8 +2565,8 @@ export class GameRenderer {
                     this.ctx.textBaseline = 'middle';
                     this.ctx.fillText(
                         config.label,
-                        btnX + config.x * labelOffset,
-                        btnY + config.y * labelOffset
+                        btnX + pos.x * labelOffset,
+                        btnY + pos.y * labelOffset
                     );
                 }
             }
@@ -2631,17 +2643,21 @@ export class GameRenderer {
         const shouldShowFoundryButton = this.hasSeenFoundry;
         const hasFoundryAvailable = this.hasActiveFoundry;
         
-        // Button layout: Warp gate above, forge on left (and foundry on right if available)
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
 
         const useThreeButtons = shouldShowFoundryButton;
-        const warpGateButtonX = screenPos.x;
-        const warpGateButtonY = screenPos.y - buttonOffset;
-        const forgeButtonX = screenPos.x - buttonOffset;
-        const forgeButtonY = screenPos.y;
-        const foundryButtonX = screenPos.x + buttonOffset;
-        const foundryButtonY = screenPos.y;
+        const buttonCount = useThreeButtons ? 3 : 2;
+        const positions = this.getRadialButtonOffsets(buttonCount);
+        const forgePos = positions[0];
+        const warpGatePos = positions[1];
+        const foundryPos = useThreeButtons ? positions[2] : null;
+        const forgeButtonX = screenPos.x + forgePos.x * buttonOffset;
+        const forgeButtonY = screenPos.y + forgePos.y * buttonOffset;
+        const warpGateButtonX = screenPos.x + warpGatePos.x * buttonOffset;
+        const warpGateButtonY = screenPos.y + warpGatePos.y * buttonOffset;
+        const foundryButtonX = foundryPos ? screenPos.x + foundryPos.x * buttonOffset : screenPos.x;
+        const foundryButtonY = foundryPos ? screenPos.y + foundryPos.y * buttonOffset : screenPos.y;
 
         // Draw "Forge" button (left)
         const isForgeHighlighted = this.highlightedButtonIndex === 0;
