@@ -417,12 +417,7 @@ class GameController {
         const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
         const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
-        const positions = [
-            { x: 0, y: -1 },
-            { x: 1, y: 0 },
-            { x: 0, y: 1 },
-            { x: -1, y: 0 }
-        ];
+        const positions = this.getRadialButtonOffsets(4);
 
         for (let i = 0; i < positions.length; i++) {
             const pos = positions[i];
@@ -440,13 +435,12 @@ class GameController {
     }
 
     private getWarpGateButtonDirection(buttonIndex: number): Vector2D | null {
-        const directions = [
-            new Vector2D(0, -1),
-            new Vector2D(1, 0),
-            new Vector2D(0, 1),
-            new Vector2D(-1, 0)
-        ];
-        return directions[buttonIndex] ?? null;
+        const directions = this.getRadialButtonOffsets(4);
+        const direction = directions[buttonIndex];
+        if (!direction) {
+            return null;
+        }
+        return new Vector2D(direction.x, direction.y);
     }
 
     private getWarpGateButtonWorldPosition(gate: WarpGate, buttonIndex: number): Vector2D | null {
@@ -639,13 +633,9 @@ class GameController {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
         
-        const positions = [
-            { x: 0, y: -1 },
-            { x: 1, y: 0 },
-            { x: 0, y: 1 },
-            { x: -1, y: 0 }
-        ];
-        const displayHeroes = heroNames.slice(0, positions.length);
+        const maxButtons = 4;
+        const displayHeroes = heroNames.slice(0, maxButtons);
+        const positions = this.getRadialButtonOffsets(displayHeroes.length);
         for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
             // Calculate button position in screen space
@@ -674,52 +664,22 @@ class GameController {
         dragAngleRad: number,
         numButtons: number
     ): number {
-        if (numButtons === 4) {
-            // Stellar forge: 4 buttons in cardinal directions
-            // Top = 0 (-90°), Right = 1 (0°), Bottom = 2 (90°), Left = 3 (180°)
-            // Normalize angle to [0, 2π] using modulo for efficiency
-            let normalizedAngle = ((dragAngleRad % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-            
-            // Adjust so that -90° (upward) is 0°
-            normalizedAngle += Math.PI / 2;
-            if (normalizedAngle >= Math.PI * 2) normalizedAngle -= Math.PI * 2;
-            
-            // Divide into 4 quadrants
-            const buttonIndex = Math.floor((normalizedAngle + Math.PI / 4) / (Math.PI / 2)) % 4;
-            return buttonIndex;
-        } else if (numButtons === 2) {
-            // Solar mirrors: 2 buttons (left and right)
-            // Left = 0 (pointing left), Right = 1 (pointing right)
-            // Normalize angle to [-π, π] using atan2 for efficiency
-            const normalizedAngle = Math.atan2(Math.sin(dragAngleRad), Math.cos(dragAngleRad));
-            
-            // Left hemisphere: [-π, -π/2) ∪ (π/2, π] → button 0
-            // Right hemisphere: [-π/2, π/2] → button 1
-            return normalizedAngle < -Math.PI / 2 || normalizedAngle > Math.PI / 2 ? 0 : 1;
-        } else if (numButtons === 3) {
-            // Solar mirrors: 3 buttons (left=0, center=1, right=2)
-            const normalizedAngle = Math.atan2(Math.sin(dragAngleRad), Math.cos(dragAngleRad));
-            const targetAngles = [Math.PI, -Math.PI / 2, 0];
-            let bestIndex = 0;
-            let bestDistance = Infinity;
-
-            for (let i = 0; i < targetAngles.length; i++) {
-                const delta = Math.atan2(
-                    Math.sin(normalizedAngle - targetAngles[i]),
-                    Math.cos(normalizedAngle - targetAngles[i])
-                );
-                const distance = Math.abs(delta);
-                if (distance < bestDistance) {
-                    bestDistance = distance;
-                    bestIndex = i;
-                }
-            }
-
-            return bestIndex;
-        } else if (numButtons === 1) {
+        if (numButtons <= 0) {
+            return -1;
+        }
+        if (numButtons === 1) {
             return 0;
         }
-        return -1;
+
+        const fullRotationRad = Math.PI * 2;
+        const normalizedAngleRad = ((dragAngleRad % fullRotationRad) + fullRotationRad) % fullRotationRad;
+        const startAngleRad = -Math.PI / 2;
+        let offsetAngleRad = normalizedAngleRad - startAngleRad;
+        offsetAngleRad = ((offsetAngleRad % fullRotationRad) + fullRotationRad) % fullRotationRad;
+
+        const stepAngleRad = fullRotationRad / numButtons;
+        const nearestIndex = Math.round(offsetAngleRad / stepAngleRad) % numButtons;
+        return nearestIndex;
     }
 
     private getNearestMirrorButtonIndexFromCursor(
@@ -742,47 +702,23 @@ class GameController {
             cursorScreenY - mirrorScreenPos.y,
             cursorScreenX - mirrorScreenPos.x
         );
-        const buttonOffsetPx = 50 * this.renderer.zoom;
-        const forgeAngleRad = Math.atan2(0, -buttonOffsetPx);
-        const warpGateAngleRad = Math.atan2(-buttonOffsetPx, 0);
-        const foundryAngleRad = Math.atan2(0, buttonOffsetPx);
+        const buttonCount = shouldShowFoundryButton ? 3 : 2;
+        return this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount);
+    }
 
-        let bestIndex = 0;
-        let bestDistance = Infinity;
-
-        const forgeDelta = Math.atan2(
-            Math.sin(dragAngleRad - forgeAngleRad),
-            Math.cos(dragAngleRad - forgeAngleRad)
-        );
-        const forgeDistance = Math.abs(forgeDelta);
-        if (forgeDistance < bestDistance) {
-            bestDistance = forgeDistance;
-            bestIndex = 0;
+    private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
+        if (buttonCount <= 0) {
+            return [];
         }
+        const positions: Array<{ x: number; y: number }> = [];
+        const startAngleRad = -Math.PI / 2;
+        const stepAngleRad = (Math.PI * 2) / buttonCount;
 
-        const warpDelta = Math.atan2(
-            Math.sin(dragAngleRad - warpGateAngleRad),
-            Math.cos(dragAngleRad - warpGateAngleRad)
-        );
-        const warpDistance = Math.abs(warpDelta);
-        if (warpDistance < bestDistance) {
-            bestDistance = warpDistance;
-            bestIndex = 1;
+        for (let i = 0; i < buttonCount; i++) {
+            const angleRad = startAngleRad + stepAngleRad * i;
+            positions.push({ x: Math.cos(angleRad), y: Math.sin(angleRad) });
         }
-
-        if (shouldShowFoundryButton) {
-            const foundryDelta = Math.atan2(
-                Math.sin(dragAngleRad - foundryAngleRad),
-                Math.cos(dragAngleRad - foundryAngleRad)
-            );
-            const foundryDistance = Math.abs(foundryDelta);
-            if (foundryDistance < bestDistance) {
-                bestDistance = foundryDistance;
-                bestIndex = 2;
-            }
-        }
-
-        return bestIndex;
+        return positions;
     }
 
     private clearPathPreview(): void {
