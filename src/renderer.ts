@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Velaris } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3080,6 +3080,173 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size * 0.4, 0, Math.PI * 2);
         this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a Sticky Bomb (Velaris projectile)
+     */
+    private drawStickyBomb(bomb: any): void {
+        const screenPos = this.worldToScreen(bomb.position);
+        const size = Constants.STICKY_BOMB_RADIUS * this.zoom;
+        const color = this.getFactionColor(bomb.owner.faction);
+        
+        // Draw pulsing effect if armed and stuck
+        if (bomb.isArmed && bomb.isStuck) {
+            const pulseIntensity = 0.5 + 0.5 * Math.sin(bomb.lifetime * 10);
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = 0.3 * pulseIntensity;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 2.5, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = bomb.isStuck ? 0.5 : 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main bomb body
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw sticky substance (darker ring around bomb)
+        if (bomb.isStuck) {
+            this.ctx.fillStyle = '#000000';
+            this.ctx.globalAlpha = 0.4;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.6, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Draw highlight
+        if (bomb.isArmed && bomb.isStuck) {
+            // Spinning highlight for armed state
+            const angle = bomb.lifetime * 6;
+            const highlightX = screenPos.x + Math.cos(angle) * size * 0.4;
+            const highlightY = screenPos.y + Math.sin(angle) * size * 0.4;
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = 0.9;
+            this.ctx.beginPath();
+            this.ctx.arc(highlightX, highlightY, size * 0.3, 0, Math.PI * 2);
+            this.ctx.fill();
+        } else {
+            // Static highlight
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = 0.4;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x - size * 0.3, screenPos.y - size * 0.3, size * 0.3, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Draw surface normal indicator if stuck
+        if (bomb.isStuck && bomb.surfaceNormal) {
+            this.ctx.strokeStyle = color;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.lineWidth = 2 * this.zoom;
+            const normalLength = size * 1.5;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(
+                screenPos.x + bomb.surfaceNormal.x * normalLength,
+                screenPos.y + bomb.surfaceNormal.y * normalLength
+            );
+            this.ctx.stroke();
+        }
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a Sticky Laser (fired from sticky bomb)
+     */
+    private drawStickyLaser(laser: any): void {
+        const startScreen = this.worldToScreen(laser.startPosition);
+        const endPos = laser.getEndPosition();
+        const endScreen = this.worldToScreen(endPos);
+        const color = this.getFactionColor(laser.owner.faction);
+        
+        // Calculate fade based on lifetime
+        const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
+        
+        // Draw outer glow
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = alpha * 0.2;
+        this.ctx.lineWidth = laser.width * this.zoom * 2.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        // Draw middle glow
+        this.ctx.globalAlpha = alpha * 0.5;
+        this.ctx.lineWidth = laser.width * this.zoom * 1.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        // Draw core beam
+        this.ctx.globalAlpha = alpha * 0.9;
+        this.ctx.lineWidth = laser.width * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        // Draw bright center line
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.globalAlpha = alpha * 0.7;
+        this.ctx.lineWidth = laser.width * this.zoom * 0.3;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a disintegration particle (from expired sticky bomb)
+     */
+    private drawDisintegrationParticle(particle: any): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const size = 3 * this.zoom;
+        const color = this.getFactionColor(particle.owner.faction);
+        
+        // Calculate fade based on lifetime
+        const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
+        
+        // Draw glow trail
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = alpha * 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.8, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main particle
+        this.ctx.globalAlpha = alpha * 0.8;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Add erratic flicker
+        const flicker = Math.random();
+        if (flicker > 0.7) {
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = alpha * 0.5;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 0.5, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
         
         this.ctx.globalAlpha = 1.0;
     }
@@ -6201,6 +6368,8 @@ export class GameRenderer {
                     this.drawPreist(unit, color, game, isEnemy);
                 } else if (unit instanceof Tank) {
                     this.drawTank(unit, color, game, isEnemy);
+                } else if (unit instanceof Velaris) {
+                    this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Velaris
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -6335,6 +6504,27 @@ export class GameRenderer {
         for (const bullet of game.novaScatterBullets) {
             if (this.isWithinViewBounds(bullet.position, 100)) {
                 this.drawNovaScatterBullet(bullet);
+            }
+        }
+        
+        // Draw Sticky Bombs
+        for (const bomb of game.stickyBombs) {
+            if (this.isWithinViewBounds(bomb.position, 100)) {
+                this.drawStickyBomb(bomb);
+            }
+        }
+        
+        // Draw Sticky Lasers
+        for (const laser of game.stickyLasers) {
+            if (this.isWithinViewBounds(laser.startPosition, 600)) {
+                this.drawStickyLaser(laser);
+            }
+        }
+        
+        // Draw Disintegration Particles
+        for (const particle of game.disintegrationParticles) {
+            if (this.isWithinViewBounds(particle.position, 50)) {
+                this.drawDisintegrationParticle(particle);
             }
         }
         

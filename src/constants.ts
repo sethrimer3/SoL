@@ -492,6 +492,30 @@ export const NOVA_BOMB_SCATTER_BULLET_DAMAGE = 8; // Damage per scatter bullet
 export const NOVA_BOMB_SCATTER_BULLET_LIFETIME = 1.0; // Lifetime of scatter bullets in seconds
 export const NOVA_BOMB_RADIUS = 15; // Visual/collision radius of bomb
 
+// Velaris hero constants (sticky laser bomb specialist)
+export const VELARIS_MAX_HEALTH = 90;
+export const VELARIS_ATTACK_RANGE = 200;
+export const VELARIS_ATTACK_DAMAGE = 15;
+export const VELARIS_ATTACK_SPEED = 1.5; // Attacks per second
+export const VELARIS_ABILITY_COOLDOWN = 0; // No cooldown - first activation throws bomb, second activation triggers lasers from stuck bomb
+export const STICKY_BOMB_INITIAL_SPEED = 500; // Very fast throw speed
+export const STICKY_BOMB_DECELERATION = 200; // Deceleration rate (units/s²)
+export const STICKY_BOMB_MIN_SPEED = 20; // Minimum speed after deceleration
+export const STICKY_BOMB_STICK_DISTANCE = 25; // How close before sticking to surface
+export const STICKY_BOMB_ARM_TIME = 0.5; // 0.5 seconds before bomb can be triggered (can activate immediately after sticking)
+export const STICKY_BOMB_MAX_LIFETIME = 5.0; // 5 seconds before disintegrating if not stuck
+export const STICKY_BOMB_RADIUS = 12; // Visual/collision radius of bomb
+export const STICKY_BOMB_DISINTEGRATE_PARTICLE_COUNT = 20; // Number of erratic particles when disintegrating
+export const STICKY_BOMB_DISINTEGRATE_PARTICLE_SPEED = 150; // Speed of disintegration particles
+export const STICKY_BOMB_DISINTEGRATE_PARTICLE_LIFETIME = 1.0; // Lifetime of disintegration particles
+export const STICKY_BOMB_WIDE_LASER_DAMAGE = 40; // Main wide laser damage
+export const STICKY_BOMB_WIDE_LASER_WIDTH = 20; // Width of main laser
+export const STICKY_BOMB_DIAGONAL_LASER_DAMAGE = 25; // Diagonal lasers damage
+export const STICKY_BOMB_DIAGONAL_LASER_WIDTH = 12; // Width of diagonal lasers
+export const STICKY_BOMB_LASER_ANGLE = (45 * Math.PI) / 180; // 45 degree angle for diagonal lasers
+export const STICKY_BOMB_LASER_RANGE = 500; // Maximum range for lasers
+export const STICKY_BOMB_LASER_DURATION = 0.15; // How long lasers stay visible (seconds)
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy
