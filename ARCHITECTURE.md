@@ -97,7 +97,7 @@ Use the following minimal command list to validate that the same `stateHash` is 
 ]
 ```
 
-The command list above was revalidated after adding Spotlight ability state tracking to ensure `stateHash` stability.
+The command list above was revalidated after updating starling cap handling and foundry blink upgrades to ensure `stateHash` stability.
 
 ## Light & Resource Flow
 

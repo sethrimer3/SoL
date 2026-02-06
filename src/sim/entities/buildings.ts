@@ -764,10 +764,24 @@ export class SubsidiaryFactory extends Building {
     }
 
     /**
+     * Check if Blink upgrade is available
+     */
+    canUpgradeBlink(): boolean {
+        return this.isComplete && !this.owner.hasBlinkUpgrade;
+    }
+
+    /**
      * Check if Regen upgrade can be queued for production
      */
     canQueueRegenUpgrade(): boolean {
         return this.canUpgradeRegen() && !this.hasProductionItem(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
+    }
+
+    /**
+     * Check if Blink upgrade can be queued for production
+     */
+    canQueueBlinkUpgrade(): boolean {
+        return this.canUpgradeBlink() && !this.hasProductionItem(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
     }
 
     /**
@@ -792,6 +806,15 @@ export class SubsidiaryFactory extends Building {
     upgradeRegen(): boolean {
         if (!this.canUpgradeRegen()) return false;
         this.owner.hasRegenUpgrade = true;
+        return true;
+    }
+
+    /**
+     * Upgrade starlings with Blink
+     */
+    upgradeBlink(): boolean {
+        if (!this.canUpgradeBlink()) return false;
+        this.owner.hasBlinkUpgrade = true;
         return true;
     }
 }

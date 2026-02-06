@@ -1,12 +1,12 @@
 import type { Asteroid, Building, CombatTarget, Player, SolarMirror, StellarForge, Unit, Vector2D } from '../game-core';
 
-type VelarisHeroDeps = {
+type SlyHeroDeps = {
     Unit: typeof Unit;
     Vector2D: typeof Vector2D;
     Constants: typeof import('../constants');
 };
 
-export const createVelarisHero = (deps: VelarisHeroDeps) => {
+export const createSlyHero = (deps: SlyHeroDeps) => {
     const { Unit, Vector2D, Constants } = deps;
 
     /**
@@ -137,7 +137,7 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
             public position: Vector2D,
             velocity: Vector2D,
             public owner: Player,
-            public velarisOwner: Velaris
+            public slyOwner: Sly
         ) {
             this.velocity = velocity;
         }
@@ -292,10 +292,10 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
     }
 
     /**
-     * Velaris hero unit - sticky laser bomb specialist
+     * Sly hero unit - sticky laser bomb specialist
      * Throws sticky bombs that attach to surfaces and fire lasers
      */
-    class Velaris extends Unit {
+    class Sly extends Unit {
         activeBomb: StickyBomb | null = null; // Currently active bomb
         bombToCreate: StickyBomb | null = null; // Bomb to create on next game update
         lasersToCreate: StickyLaser[] = []; // Lasers to create on next game update
@@ -305,17 +305,17 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
             super(
                 position,
                 owner,
-                Constants.VELARIS_MAX_HEALTH,
-                Constants.VELARIS_ATTACK_RANGE,
-                Constants.VELARIS_ATTACK_DAMAGE,
-                Constants.VELARIS_ATTACK_SPEED,
-                Constants.VELARIS_ABILITY_COOLDOWN
+                Constants.SLY_MAX_HEALTH,
+                Constants.SLY_ATTACK_RANGE,
+                Constants.SLY_ATTACK_DAMAGE,
+                Constants.SLY_ATTACK_SPEED,
+                Constants.SLY_ABILITY_COOLDOWN
             );
-            this.isHero = true; // Velaris is a hero unit
+            this.isHero = true; // Sly is a hero unit
         }
 
         /**
-         * Use Velaris's ability: throw sticky bomb or trigger existing one
+         * Use Sly's ability: throw sticky bomb or trigger existing one
          */
         useAbility(direction: Vector2D): boolean {
             // If there's an active bomb that's armed and stuck, trigger it
@@ -392,5 +392,5 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
         }
     }
 
-    return { Velaris, StickyBomb, StickyLaser, DisintegrationParticle };
+    return { Sly, StickyBomb, StickyLaser, DisintegrationParticle };
 };

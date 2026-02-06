@@ -177,6 +177,7 @@ export const STARLING_LASER_WIDTH_PX = 2;
 export const STARLING_REGEN_RATE_PER_SEC = 2; // Health regenerated per second when in influence
 export const STARLING_BLINK_DISTANCE_PX = 80; // Teleport distance for Blink upgrade
 export const STARLING_BLINK_COOLDOWN_SEC = 6; // Cooldown between Blink uses
+export const STARLING_MAX_COUNT = 100; // Maximum number of starlings per player
 export const FORGE_FLAME_ALPHA = 0.75;
 export const FORGE_FLAME_SIZE_MULTIPLIER = 0.45;
 export const FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC = Math.PI;
@@ -248,7 +249,8 @@ export const FOUNDRY_REGEN_UPGRADE_COST = 1000; // Cost to unlock Regen upgrade
 export const FOUNDRY_STRAFE_UPGRADE_ITEM = 'strafe-upgrade';
 export const FOUNDRY_REGEN_UPGRADE_ITEM = 'regen-upgrade';
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
-export const FORGE_BLINK_UPGRADE_COST = 3000; // Cost to unlock Blink upgrade at forge
+export const FOUNDRY_BLINK_UPGRADE_COST = 3000; // Cost to unlock Blink upgrade at foundry
+export const FOUNDRY_BLINK_UPGRADE_ITEM = 'blink-upgrade';
 export const STARLING_MERGE_COUNT = 10; // Number of starlings required to merge into a solar mirror
 export const STARLING_MERGE_DURATION_SEC = 10.0; // Seconds before merge gate converts to a solar mirror
 export const STARLING_MERGE_GATE_RADIUS_PX = 18; // Visual/absorption radius for merge gate
@@ -492,12 +494,12 @@ export const NOVA_BOMB_SCATTER_BULLET_DAMAGE = 8; // Damage per scatter bullet
 export const NOVA_BOMB_SCATTER_BULLET_LIFETIME = 1.0; // Lifetime of scatter bullets in seconds
 export const NOVA_BOMB_RADIUS = 15; // Visual/collision radius of bomb
 
-// Velaris hero constants (sticky laser bomb specialist)
-export const VELARIS_MAX_HEALTH = 90;
-export const VELARIS_ATTACK_RANGE = 200;
-export const VELARIS_ATTACK_DAMAGE = 15;
-export const VELARIS_ATTACK_SPEED = 1.5; // Attacks per second
-export const VELARIS_ABILITY_COOLDOWN = 0; // No cooldown - first activation throws bomb, second activation triggers lasers from stuck bomb
+// Sly hero constants (sticky laser bomb specialist)
+export const SLY_MAX_HEALTH = 90;
+export const SLY_ATTACK_RANGE = 200;
+export const SLY_ATTACK_DAMAGE = 15;
+export const SLY_ATTACK_SPEED = 1.5; // Attacks per second
+export const SLY_ABILITY_COOLDOWN = 0; // No cooldown - first activation throws bomb, second activation triggers lasers from stuck bomb
 export const STICKY_BOMB_INITIAL_SPEED = 500; // Very fast throw speed
 export const STICKY_BOMB_DECELERATION = 200; // Deceleration rate (units/s²)
 export const STICKY_BOMB_MIN_SPEED = 20; // Minimum speed after deceleration

@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -169,6 +169,7 @@ class GameController {
             case 'Beam':
             case 'Driller':
             case 'Nova':
+            case 'Sly':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -199,6 +200,8 @@ class GameController {
                 return unit instanceof Beam;
             case 'Nova':
                 return unit instanceof Nova;
+            case 'Sly':
+                return unit instanceof Sly;
             default:
                 return false;
         }
@@ -322,6 +325,17 @@ class GameController {
                 console.log('Cannot queue Strafe upgrade or not enough energy');
             }
         } else if (buttonIndex === 1) {
+            if (foundry.canQueueBlinkUpgrade() && player.spendEnergy(Constants.FOUNDRY_BLINK_UPGRADE_COST)) {
+                foundry.enqueueProduction(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
+                console.log('Queued foundry Blink upgrade');
+                this.sendNetworkCommand('foundry_blink_upgrade', { buildingId });
+                // Deselect foundry
+                foundry.isSelected = false;
+                this.selectedBuildings.clear();
+            } else {
+                console.log('Cannot queue Blink upgrade or not enough energy');
+            }
+        } else if (buttonIndex === 2) {
             if (foundry.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
                 foundry.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
                 console.log('Queued foundry Regen upgrade');
@@ -648,25 +662,6 @@ class GameController {
                 const buttonWorldPos = this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
                 return { heroName: displayHeroes[i], buttonPos: buttonWorldPos };
             }
-        }
-        return null;
-    }
-
-    private getClickedBlinkUpgradeButton(
-        screenX: number,
-        screenY: number,
-        forge: StellarForge
-    ): Vector2D | null {
-        const forgeScreenPos = this.renderer.worldToScreen(forge.position);
-        const buttonRadius = Constants.FORGE_UPGRADE_BUTTON_RADIUS_PX * this.renderer.zoom;
-        const buttonDistance = Constants.FORGE_UPGRADE_BUTTON_DISTANCE_PX * this.renderer.zoom;
-        const buttonScreenX = forgeScreenPos.x;
-        const buttonScreenY = forgeScreenPos.y + buttonDistance;
-        const dx = screenX - buttonScreenX;
-        const dy = screenY - buttonScreenY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        if (distance <= buttonRadius) {
-            return this.renderer.screenToWorld(buttonScreenX, buttonScreenY);
         }
         return null;
     }
@@ -1275,10 +1270,10 @@ class GameController {
                     } else if (this.selectedWarpGate) {
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                     } else if (this.selectedBuildings.size === 1) {
-                        // Foundry building has 2 buttons
+                        // Foundry building has 3 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 2);
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 3);
                         }
                     }
                 }
@@ -1798,25 +1793,6 @@ class GameController {
                             this.renderer.selectionEnd = null;
                             return;
                         }
-                    }
-                }
-
-                if (player.stellarForge && player.stellarForge.isSelected) {
-                    const blinkButtonPos = this.getClickedBlinkUpgradeButton(
-                        lastX,
-                        lastY,
-                        player.stellarForge
-                    );
-                    if (blinkButtonPos) {
-                        if (!player.hasBlinkUpgrade && player.spendEnergy(Constants.FORGE_BLINK_UPGRADE_COST)) {
-                            player.hasBlinkUpgrade = true;
-                            this.renderer.createProductionButtonWave(blinkButtonPos);
-                            console.log('Purchased Blink upgrade at forge');
-                            this.sendNetworkCommand('forge_blink_upgrade', {});
-                        } else {
-                            console.log('Cannot purchase Blink upgrade or not enough energy');
-                        }
-                        return;
                     }
                 }
 

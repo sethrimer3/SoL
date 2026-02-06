@@ -54,7 +54,7 @@ import {
     Nova,
     NovaBomb,
     NovaScatterBullet,
-    Velaris,
+    Sly,
     StickyBomb,
     StickyLaser,
     DisintegrationParticle
@@ -193,23 +193,32 @@ export class GameState {
                 if (!this.isCountdownActive) {
                     const energyForMinions = player.stellarForge.shouldCrunch();
                     if (energyForMinions > 0) {
+                        const currentStarlingCount = this.getStarlingCountForPlayer(player);
+                        const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
                         // Calculate number of starlings to spawn based on energy
-                        const numStarlings = Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY);
-                        
-                        // Spawn starlings close to the forge
-                        for (let i = 0; i < numStarlings; i++) {
-                            const angle = (Math.PI * 2 * i) / numStarlings; // Evenly distribute around forge
-                            const spawnRadius = player.stellarForge.radius + Constants.STARLING_COLLISION_RADIUS_PX + 5;
-                            const spawnPosition = new Vector2D(
-                                player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
-                                player.stellarForge.position.y + Math.sin(angle) * spawnRadius
-                            );
-                            const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
-                            player.units.push(starling);
-                            player.unitsCreated++;
+                        const numStarlings = Math.min(
+                            Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY),
+                            availableStarlingSlots
+                        );
+                        const unusedEnergy = energyForMinions - numStarlings * Constants.STARLING_COST_PER_ENERGY;
+                        if (unusedEnergy > 0) {
+                            player.stellarForge.addPendingEnergy(unusedEnergy);
                         }
                         
+                        // Spawn starlings close to the forge
                         if (numStarlings > 0) {
+                            for (let i = 0; i < numStarlings; i++) {
+                                const angle = (Math.PI * 2 * i) / numStarlings; // Evenly distribute around forge
+                                const spawnRadius = player.stellarForge.radius + Constants.STARLING_COLLISION_RADIUS_PX + 5;
+                                const spawnPosition = new Vector2D(
+                                    player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
+                                    player.stellarForge.position.y + Math.sin(angle) * spawnRadius
+                                );
+                                const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
+                                player.units.push(starling);
+                                player.unitsCreated++;
+                            }
+                            
                             console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${energyForMinions.toFixed(0)} energy`);
                         }
                     }
@@ -504,8 +513,8 @@ export class GameState {
                     }
                 }
                 
-                // Handle Velaris sticky bomb and lasers
-                if (unit instanceof Velaris) {
+                // Handle Sly sticky bomb and lasers
+                if (unit instanceof Sly) {
                     const bomb = unit.getAndClearBombToCreate();
                     if (bomb) {
                         this.stickyBombs.push(bomb);
@@ -652,6 +661,8 @@ export class GameState {
                         building.upgradeStrafe();
                     } else if (completedProduction === Constants.FOUNDRY_REGEN_UPGRADE_ITEM) {
                         building.upgradeRegen();
+                    } else if (completedProduction === Constants.FOUNDRY_BLINK_UPGRADE_ITEM) {
+                        building.upgradeBlink();
                     }
                 }
             }
@@ -1551,7 +1562,7 @@ export class GameState {
             // Check if bomb should disintegrate
             if (bomb.shouldDisintegrate()) {
                 // Notify owner and create particles
-                bomb.velarisOwner.onBombDestroyed(bomb);
+                bomb.slyOwner.onBombDestroyed(bomb);
             }
         }
         this.stickyBombs = this.stickyBombs.filter(bomb => !bomb.shouldDespawn());
@@ -1920,9 +1931,12 @@ export class GameState {
     private releaseStarlingMergeGate(gate: StarlingMergeGate, player: Player): void {
         const releaseCount = gate.absorbedCount;
         if (releaseCount > 0) {
+            const currentStarlingCount = this.getStarlingCountForPlayer(player);
+            const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
+            const starlingSpawnCount = Math.min(releaseCount, availableStarlingSlots);
             const spawnRadius = Constants.STARLING_MERGE_GATE_RADIUS_PX + Constants.STARLING_COLLISION_RADIUS_PX + 4;
-            for (let i = 0; i < releaseCount; i++) {
-                const angle = (Math.PI * 2 * i) / releaseCount;
+            for (let i = 0; i < starlingSpawnCount; i++) {
+                const angle = (Math.PI * 2 * i) / starlingSpawnCount;
                 const spawnPosition = new Vector2D(
                     gate.position.x + Math.cos(angle) * spawnRadius,
                     gate.position.y + Math.sin(angle) * spawnRadius
@@ -1963,6 +1977,16 @@ export class GameState {
             }
         }
         return enemies;
+    }
+
+    private getStarlingCountForPlayer(player: Player): number {
+        let count = 0;
+        for (const unit of player.units) {
+            if (unit instanceof Starling) {
+                count += 1;
+            }
+        }
+        return count;
     }
 
     private updateAiMirrorsForPlayer(player: Player): void {
@@ -3487,8 +3511,8 @@ export class GameState {
                 return new Spotlight(spawnPosition, owner);
             case 'Nova':
                 return new Nova(spawnPosition, owner);
-            case 'Velaris':
-                return new Velaris(spawnPosition, owner);
+            case 'Sly':
+                return new Sly(spawnPosition, owner);
             default:
                 return null;
         }
@@ -3644,6 +3668,7 @@ export class GameState {
             mixInt(player.hasStrafeUpgrade ? 1 : 0);
             mixInt(player.hasRegenUpgrade ? 1 : 0);
             mixInt(player.hasBlinkUpgrade ? 1 : 0);
+            mixInt(player.units.length);
 
             if (player.stellarForge) {
                 mix(player.stellarForge.position.x);
@@ -4094,8 +4119,8 @@ export class GameState {
             case 'foundry_regen_upgrade':
                 this.executeFoundryUpgradeCommand(player, cmd.data, 'regen');
                 break;
-            case 'forge_blink_upgrade':
-                this.executeForgeBlinkUpgradeCommand(player);
+            case 'foundry_blink_upgrade':
+                this.executeFoundryUpgradeCommand(player, cmd.data, 'blink');
                 break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
@@ -4404,7 +4429,7 @@ export class GameState {
         }
     }
 
-    private executeFoundryUpgradeCommand(player: Player, data: any, upgradeType: 'strafe' | 'regen'): void {
+    private executeFoundryUpgradeCommand(player: Player, data: any, upgradeType: 'strafe' | 'regen' | 'blink'): void {
         const { buildingId } = data;
         const building = player.buildings[buildingId];
         if (!(building instanceof SubsidiaryFactory)) {
@@ -4419,17 +4444,14 @@ export class GameState {
             }
             return;
         }
-        if (building.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
-            building.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
-        }
-    }
-
-    private executeForgeBlinkUpgradeCommand(player: Player): void {
-        if (player.hasBlinkUpgrade) {
+        if (upgradeType === 'blink') {
+            if (building.canQueueBlinkUpgrade() && player.spendEnergy(Constants.FOUNDRY_BLINK_UPGRADE_COST)) {
+                building.enqueueProduction(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
+            }
             return;
         }
-        if (player.spendEnergy(Constants.FORGE_BLINK_UPGRADE_COST)) {
-            player.hasBlinkUpgrade = true;
+        if (building.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+            building.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
         }
     }
 
