@@ -91,6 +91,12 @@ export class MainMenu {
             abilityDescription: 'Particle storm: flings all large particles at once using accumulated energy'
         },
         {
+            id: 'velaris-nova', name: 'Nova', description: 'Remote bomb specialist with bouncing projectile', faction: Faction.VELARIS,
+            maxHealth: Constants.NOVA_MAX_HEALTH, attackDamage: Constants.NOVA_ATTACK_DAMAGE, attackSpeed: Constants.NOVA_ATTACK_SPEED,
+            attackRange: Constants.NOVA_ATTACK_RANGE, attackIgnoresDefense: false, defense: 10, regen: 5,
+            abilityDescription: 'Remote bomb: throws a bouncing bomb that explodes in a directional scatter when triggered'
+        },
+        {
             id: 'radiant-ray', name: 'Ray', description: 'Bouncing beam marks targets', faction: Faction.RADIANT,
             maxHealth: Constants.RAY_MAX_HEALTH, attackDamage: Constants.RAY_ATTACK_DAMAGE, attackSpeed: Constants.RAY_ATTACK_SPEED,
             attackRange: Constants.RAY_ATTACK_RANGE, attackIgnoresDefense: true, defense: 8, regen: 5,

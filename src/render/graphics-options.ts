@@ -16,6 +16,7 @@ export type GraphicKey =
     | 'heroBeam'
     | 'heroMortar'
     | 'heroRay'
+    | 'heroNova'
     | 'heroInfluenceBall'
     | 'heroTurretDeployer'
     | 'heroDriller'
@@ -81,6 +82,12 @@ export const graphicsOptions: GraphicOption[] = [
         label: 'Hero: Ray',
         svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
+    },
+    {
+        key: 'heroNova',
+        label: 'Hero: Nova',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Nova.svg',
+        pngPath: 'ASSETS/sprites/VELARIS/heroUnits/Nova.png'
     },
     {
         key: 'heroInfluenceBall',

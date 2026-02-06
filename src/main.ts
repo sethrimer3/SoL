@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -168,6 +168,7 @@ class GameController {
             case 'Dagger':
             case 'Beam':
             case 'Driller':
+            case 'Nova':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -196,6 +197,8 @@ class GameController {
                 return unit instanceof Dagger;
             case 'Beam':
                 return unit instanceof Beam;
+            case 'Nova':
+                return unit instanceof Nova;
             default:
                 return false;
         }

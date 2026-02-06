@@ -20,6 +20,7 @@ import { createGraveHero } from './heroes/grave';
 import { createInfluenceBallHero } from './heroes/influence-ball';
 import { createMarineHero } from './heroes/marine';
 import { createMortarHero } from './heroes/mortar';
+import { createNovaHero } from './heroes/nova';
 import { createPreistHero } from './heroes/preist';
 import { createRayHero } from './heroes/ray';
 import { createSpotlightHero } from './heroes/spotlight';
@@ -117,6 +118,13 @@ const { Tank, CrescentWave } = createTankHero({
     Constants
 });
 
+const { Nova, NovaBomb, NovaScatterBullet } = createNovaHero({
+    Unit,
+    Vector2D,
+    Constants,
+    AbilityBullet
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -139,5 +147,8 @@ export {
     HealingBombParticle,
     Spotlight,
     Tank,
-    CrescentWave
+    CrescentWave,
+    Nova,
+    NovaBomb,
+    NovaScatterBullet
 };

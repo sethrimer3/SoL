@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -690,6 +690,9 @@ export class GameRenderer {
         }
         if (unit instanceof Ray) {
             return this.getGraphicAssetPath('heroRay');
+        }
+        if (unit instanceof Nova) {
+            return this.getGraphicAssetPath('heroNova');
         }
         if (unit instanceof InfluenceBall) {
             return this.getGraphicAssetPath('heroInfluenceBall');
@@ -1420,6 +1423,8 @@ export class GameRenderer {
                 return unit instanceof Grave;
             case 'Ray':
                 return unit instanceof Ray;
+            case 'Nova':
+                return unit instanceof Nova;
             case 'InfluenceBall':
                 return unit instanceof InfluenceBall;
             case 'TurretDeployer':
@@ -2990,6 +2995,96 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a Nova bomb (remote detonation bomb)
+     */
+    private drawNovaBomb(bomb: any): void {
+        const screenPos = this.worldToScreen(bomb.position);
+        const size = Constants.NOVA_BOMB_RADIUS * this.zoom;
+        const color = this.getFactionColor(bomb.owner.faction);
+        
+        // Draw pulsing effect if armed
+        if (bomb.isArmed) {
+            const pulseIntensity = 0.5 + 0.5 * Math.sin(bomb.lifetime * 8);
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = 0.2 * pulseIntensity;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, size * 2, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.4;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.4, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main bomb body
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw spinning highlight for armed state
+        if (bomb.isArmed) {
+            const angle = bomb.lifetime * 5; // Rotate faster
+            const highlightX = screenPos.x + Math.cos(angle) * size * 0.6;
+            const highlightY = screenPos.y + Math.sin(angle) * size * 0.6;
+            
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = 0.8;
+            this.ctx.beginPath();
+            this.ctx.arc(highlightX, highlightY, size * 0.3, 0, Math.PI * 2);
+            this.ctx.fill();
+        } else {
+            // Static highlight for unarmed state
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x - size * 0.3, screenPos.y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a Nova scatter bullet (from bomb explosion)
+     */
+    private drawNovaScatterBullet(bullet: any): void {
+        const screenPos = this.worldToScreen(bullet.position);
+        const size = 4 * this.zoom;
+        const color = this.getFactionColor(bullet.owner.faction);
+        
+        // Calculate fade based on lifetime
+        const alpha = 1.0 - (bullet.lifetime / bullet.maxLifetime);
+        
+        // Draw glow trail
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = alpha * 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw main bullet
+        this.ctx.globalAlpha = alpha;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw bright center
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.globalAlpha = alpha * 0.6;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 0.4, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
      * Draw a laser beam
      */
     private drawLaserBeam(laser: LaserBeam): void {
@@ -3923,6 +4018,57 @@ export class GameRenderer {
             this.ctx.beginPath();
             this.ctx.moveTo(startScreen.x, startScreen.y);
             this.ctx.lineTo(endScreen.x, endScreen.y);
+            this.ctx.stroke();
+        }
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a Nova unit (Velaris hero)
+     */
+    private drawNova(nova: InstanceType<typeof Nova>, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(nova.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(nova.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                }
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(nova, displayColor, game, isEnemy);
+        
+        // Draw Nova symbol (explosion star)
+        const screenPos = this.worldToScreen(nova.position);
+        const size = 10 * this.zoom;
+        
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.lineWidth = 2 * this.zoom;
+        
+        // Draw 4 diagonal lines forming a star/explosion shape
+        for (let i = 0; i < 4; i++) {
+            const angle = (Math.PI / 4) + (i * Math.PI / 2);
+            const x1 = screenPos.x + Math.cos(angle) * size * 0.3;
+            const y1 = screenPos.y + Math.sin(angle) * size * 0.3;
+            const x2 = screenPos.x + Math.cos(angle) * size;
+            const y2 = screenPos.y + Math.sin(angle) * size;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(x1, y1);
+            this.ctx.lineTo(x2, y2);
             this.ctx.stroke();
         }
         
@@ -6035,6 +6181,8 @@ export class GameRenderer {
                     this.drawStarling(unit, color, game, isEnemy);
                 } else if (unit instanceof Ray) {
                     this.drawRay(unit, color, game, isEnemy);
+                } else if (unit instanceof Nova) {
+                    this.drawNova(unit, color, game, isEnemy);
                 } else if (unit instanceof InfluenceBall) {
                     this.drawInfluenceBall(unit, color, game, isEnemy);
                 } else if (unit instanceof TurretDeployer) {
@@ -6173,6 +6321,20 @@ export class GameRenderer {
         for (const wave of game.crescentWaves) {
             if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
                 this.drawCrescentWave(wave);
+            }
+        }
+        
+        // Draw Nova bombs
+        for (const bomb of game.novaBombs) {
+            if (this.isWithinViewBounds(bomb.position, 100)) {
+                this.drawNovaBomb(bomb);
+            }
+        }
+        
+        // Draw Nova scatter bullets
+        for (const bullet of game.novaScatterBullets) {
+            if (this.isWithinViewBounds(bullet.position, 100)) {
+                this.drawNovaScatterBullet(bullet);
             }
         }
         

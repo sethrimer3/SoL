@@ -51,6 +51,9 @@ import {
     Spotlight,
     Tank,
     CrescentWave,
+    Nova,
+    NovaBomb,
+    NovaScatterBullet
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -75,6 +78,8 @@ export class GameState {
     deployedTurrets: InstanceType<typeof DeployedTurret>[] = [];
     damageNumbers: DamageNumber[] = [];
     crescentWaves: InstanceType<typeof CrescentWave>[] = [];
+    novaBombs: InstanceType<typeof NovaBomb>[] = [];
+    novaScatterBullets: InstanceType<typeof NovaScatterBullet>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     gameTime: number = 0.0;
@@ -481,6 +486,14 @@ export class GameState {
                     const wave = unit.getCrescentWave();
                     if (wave && !this.crescentWaves.includes(wave)) {
                         this.crescentWaves.push(wave);
+                    }
+                }
+                
+                // Handle Nova bomb
+                if (unit instanceof Nova) {
+                    const bomb = unit.getAndClearBomb();
+                    if (bomb) {
+                        this.novaBombs.push(bomb);
                     }
                 }
                 
@@ -1269,6 +1282,141 @@ export class GameState {
             });
         }
         this.crescentWaves = this.crescentWaves.filter(wave => !wave.shouldDespawn());
+        
+        // Update Nova bombs
+        for (const bomb of this.novaBombs) {
+            bomb.update(deltaTime);
+            
+            // Check for bounces off asteroids
+            for (const asteroid of this.asteroids) {
+                const distance = bomb.position.distanceTo(asteroid.position);
+                if (distance < asteroid.size + Constants.NOVA_BOMB_RADIUS) {
+                    // Calculate normal vector from asteroid center to bomb
+                    const dx = bomb.position.x - asteroid.position.x;
+                    const dy = bomb.position.y - asteroid.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 0) {
+                        const normalX = dx / dist;
+                        const normalY = dy / dist;
+                        bomb.bounce(normalX, normalY);
+                        
+                        // Push bomb outside asteroid
+                        bomb.position.x = asteroid.position.x + normalX * (asteroid.size + Constants.NOVA_BOMB_RADIUS);
+                        bomb.position.y = asteroid.position.y + normalY * (asteroid.size + Constants.NOVA_BOMB_RADIUS);
+                    }
+                }
+            }
+            
+            // Check for bounces off map edges
+            const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+            if (bomb.position.x <= -boundary) {
+                bomb.bounce(1, 0); // Bounce off left edge
+                bomb.position.x = -boundary;
+            } else if (bomb.position.x >= boundary) {
+                bomb.bounce(-1, 0); // Bounce off right edge
+                bomb.position.x = boundary;
+            }
+            if (bomb.position.y <= -boundary) {
+                bomb.bounce(0, 1); // Bounce off top edge
+                bomb.position.y = -boundary;
+            } else if (bomb.position.y >= boundary) {
+                bomb.bounce(0, -1); // Bounce off bottom edge
+                bomb.position.y = boundary;
+            }
+            
+            // Check if bomb is hit by enemy abilities (ability bullets, mortar projectiles, etc.)
+            for (const bullet of this.abilityBullets) {
+                if (bullet.owner !== bomb.owner) {
+                    const distance = bomb.position.distanceTo(bullet.position);
+                    if (distance < Constants.NOVA_BOMB_RADIUS) {
+                        bomb.takeDamage(); // Premature explosion
+                        break;
+                    }
+                }
+            }
+            
+            for (const projectile of this.mortarProjectiles) {
+                if (projectile.owner !== bomb.owner) {
+                    const distance = bomb.position.distanceTo(projectile.position);
+                    if (distance < Constants.NOVA_BOMB_RADIUS) {
+                        bomb.takeDamage(); // Premature explosion
+                        break;
+                    }
+                }
+            }
+            
+            // Check if bomb should explode
+            if (bomb.shouldExplode()) {
+                const scatterDir = bomb.getScatterDirection();
+                if (scatterDir) {
+                    // Create scatter bullets in a 30-degree arc
+                    const baseAngle = Math.atan2(scatterDir.y, scatterDir.x);
+                    const halfArc = Constants.NOVA_BOMB_SCATTER_ARC / 2;
+                    
+                    for (let i = 0; i < Constants.NOVA_BOMB_SCATTER_BULLET_COUNT; i++) {
+                        const t = i / (Constants.NOVA_BOMB_SCATTER_BULLET_COUNT - 1);
+                        const angle = baseAngle - halfArc + t * Constants.NOVA_BOMB_SCATTER_ARC;
+                        
+                        const velocity = new Vector2D(
+                            Math.cos(angle) * Constants.NOVA_BOMB_SCATTER_BULLET_SPEED,
+                            Math.sin(angle) * Constants.NOVA_BOMB_SCATTER_BULLET_SPEED
+                        );
+                        
+                        this.novaScatterBullets.push(
+                            new NovaScatterBullet(
+                                new Vector2D(bomb.position.x, bomb.position.y),
+                                velocity,
+                                bomb.owner
+                            )
+                        );
+                    }
+                    
+                    // Apply explosion damage to nearby enemies
+                    for (const player of this.players) {
+                        if (player === bomb.owner) continue;
+                        
+                        for (const unit of player.units) {
+                            const distance = bomb.position.distanceTo(unit.position);
+                            if (distance <= Constants.NOVA_BOMB_EXPLOSION_RADIUS) {
+                                unit.health -= Constants.NOVA_BOMB_EXPLOSION_DAMAGE;
+                            }
+                        }
+                        
+                        for (const building of player.buildings) {
+                            const distance = bomb.position.distanceTo(building.position);
+                            if (distance <= Constants.NOVA_BOMB_EXPLOSION_RADIUS) {
+                                building.health -= Constants.NOVA_BOMB_EXPLOSION_DAMAGE;
+                            }
+                        }
+                    }
+                    
+                    // Clear bomb reference from Nova hero
+                    if (bomb.novaUnit && bomb.novaUnit.getActiveBomb() === bomb) {
+                        bomb.novaUnit.clearActiveBomb();
+                    }
+                }
+            }
+        }
+        this.novaBombs = this.novaBombs.filter(bomb => !bomb.shouldExplode());
+        
+        // Update Nova scatter bullets
+        for (const bullet of this.novaScatterBullets) {
+            bullet.update(deltaTime);
+            
+            // Check for hits on enemy units
+            for (const player of this.players) {
+                if (player === bullet.owner) continue;
+                
+                for (const unit of player.units) {
+                    if (bullet.checkHit(unit)) {
+                        unit.health -= bullet.damage;
+                        bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                        break;
+                    }
+                }
+            }
+        }
+        this.novaScatterBullets = this.novaScatterBullets.filter(bullet => !bullet.shouldDespawn());
         
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];
@@ -3136,6 +3284,8 @@ export class GameState {
                 return new Tank(spawnPosition, owner);
             case 'Spotlight':
                 return new Spotlight(spawnPosition, owner);
+            case 'Nova':
+                return new Nova(spawnPosition, owner);
             default:
                 return null;
         }

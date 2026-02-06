@@ -471,6 +471,27 @@ export const TANK_WAVE_WIDTH = 40; // Width of the wave
 export const TANK_STUN_DURATION = 2.0; // Stuns for 2 seconds
 export const TANK_COLLISION_RADIUS_PX = 20; // Slightly larger collision radius
 
+// Nova unit constants (Velaris hero - remote bomb specialist)
+export const NOVA_MAX_HEALTH = 105;
+export const NOVA_ATTACK_RANGE = 250;
+export const NOVA_ATTACK_DAMAGE = 6;
+export const NOVA_ATTACK_SPEED = 2; // Attacks per second
+export const NOVA_ABILITY_COOLDOWN = 0; // No cooldown - triggers existing bomb
+export const NOVA_BOMB_INITIAL_SPEED = 400; // Initial speed when thrown
+export const NOVA_BOMB_DECELERATION = 150; // Deceleration rate (units/s²)
+export const NOVA_BOMB_MIN_SPEED = 50; // Minimum speed after deceleration
+export const NOVA_BOMB_ARMING_TIME = 2.0; // 2 seconds before bomb can be triggered
+export const NOVA_BOMB_BOUNCE_DAMPING = 0.7; // Speed retention after bounce (70%)
+export const NOVA_BOMB_MAX_BOUNCES = 10; // Maximum number of bounces
+export const NOVA_BOMB_EXPLOSION_DAMAGE = 50; // Damage from explosion
+export const NOVA_BOMB_EXPLOSION_RADIUS = 100; // Radius of explosion
+export const NOVA_BOMB_SCATTER_ARC = (30 * Math.PI) / 180; // 30 degree arc for scatter bullets
+export const NOVA_BOMB_SCATTER_BULLET_COUNT = 12; // Number of scatter bullets
+export const NOVA_BOMB_SCATTER_BULLET_SPEED = 350; // Speed of scatter bullets
+export const NOVA_BOMB_SCATTER_BULLET_DAMAGE = 8; // Damage per scatter bullet
+export const NOVA_BOMB_SCATTER_BULLET_LIFETIME = 1.0; // Lifetime of scatter bullets in seconds
+export const NOVA_BOMB_RADIUS = 15; // Visual/collision radius of bomb
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy
