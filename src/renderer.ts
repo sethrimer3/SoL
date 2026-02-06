@@ -3396,7 +3396,9 @@ export class GameRenderer {
             }
             indices.sort((a, b) => blockedStarts[a] - blockedStarts[b]);
 
-            const firstBlockedStart = blockedStarts[indices[0]];
+            const mergedStarts: number[] = [];
+            const mergedEnds: number[] = [];
+            let currentStart = blockedStarts[indices[0]];
             let currentEnd = blockedEnds[indices[0]];
             for (let idx = 1; idx < intervalCount; idx++) {
                 const startAngle = blockedStarts[indices[idx]];
@@ -3406,11 +3408,30 @@ export class GameRenderer {
                         currentEnd = endAngle;
                     }
                 } else {
-                    this.drawVisibleArcSegment(screenPos, radius, currentEnd, startAngle, minArcLengthRad);
+                    mergedStarts.push(currentStart);
+                    mergedEnds.push(currentEnd);
+                    currentStart = startAngle;
                     currentEnd = endAngle;
                 }
             }
-            this.drawVisibleArcSegment(screenPos, radius, currentEnd, firstBlockedStart + twoPi, minArcLengthRad);
+            mergedStarts.push(currentStart);
+            mergedEnds.push(currentEnd);
+
+            let totalBlockedRad = 0;
+            for (let idx = 0; idx < mergedStarts.length; idx++) {
+                totalBlockedRad += mergedEnds[idx] - mergedStarts[idx];
+            }
+            if (totalBlockedRad >= twoPi - minArcLengthRad) {
+                continue;
+            }
+
+            for (let idx = 0; idx < mergedStarts.length; idx++) {
+                const startAngle = mergedEnds[idx];
+                const endAngle = idx + 1 < mergedStarts.length
+                    ? mergedStarts[idx + 1]
+                    : mergedStarts[0] + twoPi;
+                this.drawVisibleArcSegment(screenPos, radius, startAngle, endAngle, minArcLengthRad);
+            }
         }
 
         this.ctx.stroke();
