@@ -19,6 +19,7 @@ type ForgeScriptState = {
     positionsY: Float32Array;
     velocitiesX: Float32Array;
     velocitiesY: Float32Array;
+    glyphIndices: Uint8Array;
     lastGameTime: number;
 };
 
@@ -67,10 +68,39 @@ export class GameRenderer {
     private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
     private readonly VELARIS_FORGE_SCRIPT_SCALE = 1.15;
+    private readonly VELARIS_FORGE_GRAPHEME_SPRITE_SCALE = 0.35;
     private readonly VELARIS_FORGE_GRAPHEME_OUTER_RADIUS = 1.0;
     private readonly VELARIS_FORGE_GRAPHEME_INNER_RADIUS = 0.55;
     private readonly VELARIS_FORGE_GRAPHEME_START_ANGLE_RAD = Math.PI * 0.25;
     private readonly VELARIS_FORGE_GRAPHEME_END_ANGLE_RAD = Math.PI * 1.75;
+    private readonly VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-A.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-B.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-C.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-D.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-E.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-F.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-G.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-H.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-I.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-J.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-K.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-L.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-M.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-N.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-O.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-P.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Q.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-R.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-S.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-T.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-U.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-V.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-W.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-X.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Y.png',
+        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Z.png'
+    ];
     private readonly VELARIS_MIRROR_GLYPHS = 'ᚠᚢᚦᚨᚱᚲᚷᚹᚺᚾᛁᛃᛇᛈᛉᛋᛏᛒᛖᛗᛚᛜᛟ';
     private readonly VELARIS_MIRROR_WORD = 'ᚹᛖᛚᚨᚱᛁᛋ';
     private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
@@ -487,6 +517,7 @@ export class GameRenderer {
         const positionsY = new Float32Array(count);
         const velocitiesX = new Float32Array(count);
         const velocitiesY = new Float32Array(count);
+        const glyphIndices = new Uint8Array(count);
 
         for (let i = 0; i < count; i++) {
             let attempts = 0;
@@ -508,6 +539,7 @@ export class GameRenderer {
                 * (0.6 + Math.random() * 0.8);
             velocitiesX[i] = Math.cos(angleRad) * speed;
             velocitiesY[i] = Math.sin(angleRad) * speed;
+            glyphIndices[i] = Math.floor(Math.random() * this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length);
         }
 
         state = {
@@ -515,6 +547,7 @@ export class GameRenderer {
             positionsY,
             velocitiesX,
             velocitiesY,
+            glyphIndices,
             lastGameTime: gameTime
         };
         this.velarisForgeScriptStates.set(forge, state);
@@ -567,6 +600,8 @@ export class GameRenderer {
         const particleRadius = Math.max(1, this.VELARIS_FORGE_PARTICLE_RADIUS_PX * this.zoom);
         const baseAlpha = shouldDim ? 0.45 : 0.75;
         const outlineAlpha = shouldDim ? 0.5 : 0.8;
+        const glyphTargetSize = scriptScale * this.VELARIS_FORGE_GRAPHEME_SPRITE_SCALE;
+        const glyphCount = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length;
 
         this.ctx.save();
         this.ctx.translate(screenPos.x, screenPos.y);
@@ -597,15 +632,30 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.globalAlpha = baseAlpha;
         this.ctx.fillStyle = displayColor;
-        this.ctx.beginPath();
         const count = state.positionsX.length;
         for (let i = 0; i < count; i++) {
             const x = screenPos.x + state.positionsX[i] * scriptScale;
             const y = screenPos.y + state.positionsY[i] * scriptScale;
-            this.ctx.moveTo(x + particleRadius, y);
-            this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+            const glyphIndex = state.glyphIndices[i] % glyphCount;
+            const spritePath = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[glyphIndex];
+            const tintedSprite = this.getTintedSprite(spritePath, displayColor);
+            if (tintedSprite) {
+                const spriteScale = glyphTargetSize / Math.max(tintedSprite.width, tintedSprite.height);
+                const drawWidth = tintedSprite.width * spriteScale;
+                const drawHeight = tintedSprite.height * spriteScale;
+                this.ctx.drawImage(
+                    tintedSprite,
+                    x - drawWidth / 2,
+                    y - drawHeight / 2,
+                    drawWidth,
+                    drawHeight
+                );
+            } else {
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
         }
-        this.ctx.fill();
         this.ctx.restore();
     }
 
