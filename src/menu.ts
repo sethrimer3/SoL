@@ -97,9 +97,9 @@ export class MainMenu {
             abilityDescription: 'Remote bomb: throws a bouncing bomb that explodes in a directional scatter when triggered'
         },
         {
-            id: 'velaris-velaris', name: 'Velaris', description: 'Sticky laser bomb specialist', faction: Faction.VELARIS,
-            maxHealth: Constants.VELARIS_MAX_HEALTH, attackDamage: Constants.VELARIS_ATTACK_DAMAGE, attackSpeed: Constants.VELARIS_ATTACK_SPEED,
-            attackRange: Constants.VELARIS_ATTACK_RANGE, attackIgnoresDefense: false, defense: 8, regen: 4,
+            id: 'velaris-sly', name: 'Sly', description: 'Sticky laser bomb specialist', faction: Faction.VELARIS,
+            maxHealth: Constants.SLY_MAX_HEALTH, attackDamage: Constants.SLY_ATTACK_DAMAGE, attackSpeed: Constants.SLY_ATTACK_SPEED,
+            attackRange: Constants.SLY_ATTACK_RANGE, attackIgnoresDefense: false, defense: 8, regen: 4,
             abilityDescription: 'Sticky bomb: throws a bomb that sticks to surfaces and fires 3 lasers (1 wide center, 2 diagonal)'
         },
         {

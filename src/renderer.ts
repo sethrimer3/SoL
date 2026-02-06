@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Velaris } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -1266,9 +1266,6 @@ export class GameRenderer {
                 this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
             }
 
-            if (!isEnemy) {
-                this.drawForgeUpgradeButtons(forge, screenPos);
-            }
         }
 
         // Draw aura in LaD mode
@@ -1413,38 +1410,6 @@ export class GameRenderer {
         }
     }
 
-    private drawForgeUpgradeButtons(forge: StellarForge, screenPos: Vector2D): void {
-        if (forge.owner.hasBlinkUpgrade) {
-            return;
-        }
-        const buttonRadius = Constants.FORGE_UPGRADE_BUTTON_RADIUS_PX * this.zoom;
-        const buttonDistance = Constants.FORGE_UPGRADE_BUTTON_DISTANCE_PX * this.zoom;
-        const buttonX = screenPos.x;
-        const buttonY = screenPos.y + buttonDistance;
-        const isAffordable = forge.owner.energy >= Constants.FORGE_BLINK_UPGRADE_COST;
-
-        this.ctx.fillStyle = isAffordable ? 'rgba(0, 180, 255, 0.3)' : 'rgba(128, 128, 128, 0.3)';
-        this.ctx.strokeStyle = isAffordable ? '#00B4FF' : '#888888';
-        this.ctx.lineWidth = 2;
-        this.ctx.beginPath();
-        this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        this.ctx.fillStyle = isAffordable ? '#FFFFFF' : '#666666';
-        this.ctx.font = `${12 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Blink', buttonX, buttonY - 5 * this.zoom);
-
-        this.ctx.font = `${10 * this.zoom}px Doto`;
-        this.ctx.fillText(
-            `${Constants.FORGE_BLINK_UPGRADE_COST}`,
-            buttonX,
-            buttonY + 8 * this.zoom
-        );
-    }
-
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
@@ -1454,6 +1419,7 @@ export class GameRenderer {
             case 'Beam':
             case 'Driller':
             case 'Spotlight':
+            case 'Sly':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -1490,6 +1456,8 @@ export class GameRenderer {
                 return unit instanceof Mortar;
             case 'Preist':
                 return unit instanceof Preist;
+            case 'Sly':
+                return unit instanceof Sly;
             default:
                 return false;
         }
@@ -1555,7 +1523,7 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
 
-        // Draw 2 buttons for Foundry upgrades
+        // Draw 3 buttons for Foundry upgrades
         const buttonConfigs = [
             { 
                 x: -1, y: 0, // Left - Strafe upgrade
@@ -1564,10 +1532,16 @@ export class GameRenderer {
                 index: 0
             },
             {
+                x: 0, y: -1, // Top - Blink upgrade
+                label: 'Blink',
+                available: foundry.canQueueBlinkUpgrade(),
+                index: 1
+            },
+            {
                 x: 1, y: 0, // Right - Regen upgrade
                 label: 'Regen',
                 available: foundry.canQueueRegenUpgrade(),
-                index: 1
+                index: 2
             }
         ];
 
@@ -3159,7 +3133,7 @@ export class GameRenderer {
     }
     
     /**
-     * Draw a Sticky Bomb (Velaris projectile)
+     * Draw a Sticky Bomb (Sly projectile)
      */
     private drawStickyBomb(bomb: any): void {
         const screenPos = this.worldToScreen(bomb.position);
@@ -6446,8 +6420,8 @@ export class GameRenderer {
                     this.drawPreist(unit, color, game, isEnemy);
                 } else if (unit instanceof Tank) {
                     this.drawTank(unit, color, game, isEnemy);
-                } else if (unit instanceof Velaris) {
-                    this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Velaris
+                } else if (unit instanceof Sly) {
+                    this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Sly
                 } else {
                     this.drawUnit(unit, color, game, isEnemy);
                 }
@@ -6772,6 +6746,7 @@ export class GameRenderer {
         
         // Count starlings
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
+        const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - starlingCount);
 
         // Calculate next crunch starling count based on pending energy and current rate
         const forge = player.stellarForge;
@@ -6779,7 +6754,10 @@ export class GameRenderer {
         const projectedEnergy = forge?.isReceivingLight
             ? pendingEnergy + forge.incomingLightPerSec * Math.max(0, forge.crunchTimer)
             : pendingEnergy;
-        const nextCrunchStarlings = Math.floor(projectedEnergy / Constants.STARLING_COST_PER_ENERGY);
+        const nextCrunchStarlings = Math.min(
+            Math.floor(projectedEnergy / Constants.STARLING_COST_PER_ENERGY),
+            availableStarlingSlots
+        );
         // Draw starlings count box
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
@@ -6796,6 +6774,21 @@ export class GameRenderer {
         this.ctx.textBaseline = 'middle';
         const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
         this.ctx.fillText(`Starlings: ${starlingCount}${starlingRateLabel}`, x + 8, y + compactBoxHeight / 2);
+        
+        y += compactBoxHeight + 5;
+
+        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+        this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+
+        this.ctx.strokeStyle = '#FFD700';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = 'bold 14px Doto';
+        this.ctx.textAlign = 'left';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(`Starling Cap: ${starlingCount}/${Constants.STARLING_MAX_COUNT}`, x + 8, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 8;
         
@@ -6942,7 +6935,8 @@ export class GameRenderer {
             'spotlight': 'Spotlight',
             'solar-mirror': 'Solar Mirror',
             'strafe-upgrade': 'Strafe Upgrade',
-            'regen-upgrade': 'Regen Upgrade'
+            'regen-upgrade': 'Regen Upgrade',
+            'blink-upgrade': 'Blink Upgrade'
         };
         return nameMap[unitType.toLowerCase()] || unitType;
     }

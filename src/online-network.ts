@@ -389,7 +389,7 @@ export class OnlineNetworkManager {
             'mirror_move': 'mm',
             'mirror_link': 'ml',
             'starling_merge': 'sm',
-            'forge_blink_upgrade': 'fb',
+            'foundry_blink_upgrade': 'fbu',
             'forge_move': 'fm',
             'set_rally_path': 'sr'
         };
@@ -411,7 +411,7 @@ export class OnlineNetworkManager {
             'mm': 'mirror_move',
             'ml': 'mirror_link',
             'sm': 'starling_merge',
-            'fb': 'forge_blink_upgrade',
+            'fbu': 'foundry_blink_upgrade',
             'fm': 'forge_move',
             'sr': 'set_rally_path'
         };
