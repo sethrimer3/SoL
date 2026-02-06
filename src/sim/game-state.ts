@@ -3768,6 +3768,8 @@ export class GameState {
                     mixInt(unit.hasActiveManualOrder() ? 1 : 0);
                     mix(unit.getCurrentMoveSpeedPxPerSec());
                     mix(unit.abilityCooldown);
+                    mixInt(unit.getHasReachedFinalWaypoint() ? 1 : 0);
+                    mixString(unit.getPathHash());
                 }
                 if (unit instanceof Spotlight) {
                     mixInt(unit.getSpotlightStateCode());

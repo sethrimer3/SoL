@@ -1,7 +1,7 @@
 /**
  * Test to verify starling group stop behavior
- * When one starling from a group reaches the final waypoint and stops,
- * other starlings from the same group should stop when they touch it.
+ * When starlings from a group reach the final waypoint and stop,
+ * other starlings from the same group should stop within a growing arrival radius.
  */
 import { Starling, Player, Vector2D, Faction, GameState } from './src/game-core';
 import * as Constants from './src/constants';
@@ -70,30 +70,47 @@ console.log(`  hasReachedFinalWaypoint: ${starling4.getHasReachedFinalWaypoint()
 console.log('✓ Final waypoint detection OK\n');
 
 // Test 3: Group stop behavior (conceptual test)
-console.log('Test 3: Group Stop Behavior (Conceptual)');
+console.log('Test 3: Group Stop Behavior (Growing Radius)');
 console.log('Creating scenario:');
-console.log('  - Starling A: at final waypoint, stopped (hasReachedFinalWaypoint = true)');
-console.log('  - Starling B: approaching final waypoint, same path hash');
-console.log('  - Starling C: approaching final waypoint, different path hash');
+console.log('  - 4 starlings at final waypoint, stopped (hasReachedFinalWaypoint = true)');
+console.log('  - Starling A: approaching final waypoint, same path hash');
+console.log('  - Starling B: approaching final waypoint, different path hash');
 
-const stoppedStarling = new Starling(new Vector2D(300, 300), testPlayer, path1);
-(stoppedStarling as any).hasReachedFinalWaypoint = true;
-(stoppedStarling as any).currentPathWaypointIndex = path1.length - 1;
-(stoppedStarling as any).rallyPoint = null; // Already stopped
+const stoppedStarlings: Starling[] = [];
+for (let i = 0; i < 4; i++) {
+    const stoppedStarling = new Starling(new Vector2D(300, 300), testPlayer, path1);
+    (stoppedStarling as any).hasReachedFinalWaypoint = true;
+    (stoppedStarling as any).currentPathWaypointIndex = path1.length - 1;
+    (stoppedStarling as any).rallyPoint = null; // Already stopped
+    stoppedStarlings.push(stoppedStarling);
+}
 
-const approachingStarlingA = new Starling(new Vector2D(280, 280), testPlayer, path1); // Same path
+const expectedStopRadiusPx =
+    Constants.STARLING_GROUP_STOP_BASE_RADIUS_PX +
+    Constants.STARLING_GROUP_STOP_SPACING_PX * Math.sqrt(stoppedStarlings.length);
+
+const approachingStarlingA = new Starling(
+    new Vector2D(300 + expectedStopRadiusPx - 1, 300),
+    testPlayer,
+    path1
+); // Same path, within expanded radius
 (approachingStarlingA as any).currentPathWaypointIndex = path1.length - 1;
 (approachingStarlingA as any).rallyPoint = path1[path1.length - 1];
 
-const approachingStarlingB = new Starling(new Vector2D(280, 280), testPlayer, path3); // Different path
+const approachingStarlingB = new Starling(
+    new Vector2D(300 + expectedStopRadiusPx + 5, 300),
+    testPlayer,
+    path3
+); // Different path, beyond base radius
 (approachingStarlingB as any).currentPathWaypointIndex = path3.length - 1;
 (approachingStarlingB as any).rallyPoint = path3[path3.length - 1];
 
-console.log(`Stopped starling hash: ${stoppedStarling.getPathHash()}`);
+console.log(`Stopped starling hash: ${stoppedStarlings[0].getPathHash()}`);
 console.log(`Approaching A hash: ${approachingStarlingA.getPathHash()} (same group)`);
 console.log(`Approaching B hash: ${approachingStarlingB.getPathHash()} (different group)`);
+console.log(`Expected stop radius: ${expectedStopRadiusPx.toFixed(2)}px`);
 
-const allUnits = [stoppedStarling, approachingStarlingA, approachingStarlingB];
+const allUnits = [...stoppedStarlings, approachingStarlingA, approachingStarlingB];
 
 // Test moveTowardRallyPoint for starling A (should stop when touching stopped starling)
 console.log('\nBefore movement:');
@@ -102,7 +119,7 @@ console.log(`  Approaching A rallyPoint: ${(approachingStarlingA as any).rallyPo
 
 (approachingStarlingA as any).moveTowardRallyPoint(0.016, Constants.STARLING_MOVE_SPEED, allUnits, []);
 
-console.log('After movement (close to stopped starling from same group):');
+console.log('After movement (inside expanded stop radius from same group):');
 console.log(`  Approaching A hasReachedFinalWaypoint: ${approachingStarlingA.getHasReachedFinalWaypoint()}`);
 console.log(`  Approaching A rallyPoint: ${(approachingStarlingA as any).rallyPoint ? 'set' : 'null'}`);
 console.log(`  Expected: hasReachedFinalWaypoint = true, rallyPoint = null (stopped)`);
@@ -114,7 +131,7 @@ console.log(`  Approaching B rallyPoint: ${(approachingStarlingB as any).rallyPo
 
 (approachingStarlingB as any).moveTowardRallyPoint(0.016, Constants.STARLING_MOVE_SPEED, allUnits, []);
 
-console.log('After movement (close to stopped starling from different group):');
+console.log('After movement (outside base radius for different group):');
 console.log(`  Approaching B hasReachedFinalWaypoint: ${approachingStarlingB.getHasReachedFinalWaypoint()}`);
 console.log(`  Approaching B rallyPoint: ${(approachingStarlingB as any).rallyPoint ? 'set' : 'null'}`);
 console.log(`  Expected: hasReachedFinalWaypoint = false, rallyPoint = still set (continuing)`);

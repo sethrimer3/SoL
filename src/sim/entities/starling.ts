@@ -258,9 +258,29 @@ export class Starling extends Unit {
         return null;
     }
 
+    private getGroupStopRadiusPx(allUnits: Unit[]): number {
+        let stoppedCount = 0;
+
+        for (let i = 0; i < allUnits.length; i++) {
+            const otherUnit = allUnits[i];
+            if (!(otherUnit instanceof Starling) || otherUnit.owner !== this.owner || otherUnit.isDead()) {
+                continue;
+            }
+
+            if (otherUnit.pathHash !== this.pathHash || !otherUnit.hasReachedFinalWaypoint) {
+                continue;
+            }
+
+            stoppedCount += 1;
+        }
+
+        return Constants.STARLING_GROUP_STOP_BASE_RADIUS_PX +
+            Constants.STARLING_GROUP_STOP_SPACING_PX * Math.sqrt(stoppedCount);
+    }
+
     /**
      * Override moveTowardRallyPoint to implement group stopping behavior
-     * Starlings at their final waypoint will stop when touching other stopped starlings from the same group
+     * Starlings at their final waypoint stop within an expanding radius based on how many groupmates have arrived
      */
     protected moveTowardRallyPoint(
         deltaTime: number,
@@ -268,47 +288,21 @@ export class Starling extends Unit {
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
-        // Check if we should stop due to touching a stopped starling from our group
+        // Check if we should stop based on group arrival radius at the final waypoint
         // This only applies when we're heading to the final waypoint (not intermediate waypoints)
-        if (this.assignedPath.length > 0 && 
+        if (this.assignedPath.length > 0 &&
             this.currentPathWaypointIndex === this.assignedPath.length - 1 &&
             !this.hasReachedFinalWaypoint &&
             this.rallyPoint !== null) {
-            
-            // Check for collision with other stopped starlings from the same group
-            const stopDistance = Constants.UNIT_AVOIDANCE_RANGE_PX; // Use avoidance range as collision detection range
-            
-            for (let i = 0; i < allUnits.length; i++) {
-                const otherUnit = allUnits[i];
-                
-                // Skip if not a starling, is self, is dead, or is not from the same team
-                if (!(otherUnit instanceof Starling) || otherUnit === this || otherUnit.isDead() || otherUnit.owner !== this.owner) {
-                    continue;
-                }
-                
-                // Check if other starling is from the same group (same path hash)
-                if (otherUnit.pathHash !== this.pathHash) {
-                    continue;
-                }
-                
-                // Check if other starling has reached its final waypoint and stopped
-                if (!otherUnit.hasReachedFinalWaypoint) {
-                    continue;
-                }
-                
-                // Check if we're close enough to the stopped starling
-                const offsetX = this.position.x - otherUnit.position.x;
-                const offsetY = this.position.y - otherUnit.position.y;
-                const distanceSq = offsetX * offsetX + offsetY * offsetY;
-                
-                if (distanceSq < stopDistance * stopDistance) {
-                    // Stop this starling - we've touched a stopped starling from our group
-                    this.rallyPoint = null;
-                    this.velocity.x = 0;
-                    this.velocity.y = 0;
-                    this.hasReachedFinalWaypoint = true;
-                    return;
-                }
+            const stopRadiusPx = this.getGroupStopRadiusPx(allUnits);
+            const distanceToRally = this.position.distanceTo(this.rallyPoint);
+
+            if (distanceToRally <= stopRadiusPx) {
+                this.rallyPoint = null;
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+                this.hasReachedFinalWaypoint = true;
+                return;
             }
         }
         
