@@ -53,7 +53,11 @@ import {
     CrescentWave,
     Nova,
     NovaBomb,
-    NovaScatterBullet
+    NovaScatterBullet,
+    Velaris,
+    StickyBomb,
+    StickyLaser,
+    DisintegrationParticle
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -80,6 +84,9 @@ export class GameState {
     crescentWaves: InstanceType<typeof CrescentWave>[] = [];
     novaBombs: InstanceType<typeof NovaBomb>[] = [];
     novaScatterBullets: InstanceType<typeof NovaScatterBullet>[] = [];
+    stickyBombs: InstanceType<typeof StickyBomb>[] = [];
+    stickyLasers: InstanceType<typeof StickyLaser>[] = [];
+    disintegrationParticles: InstanceType<typeof DisintegrationParticle>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     gameTime: number = 0.0;
@@ -494,6 +501,22 @@ export class GameState {
                     const bomb = unit.getAndClearBomb();
                     if (bomb) {
                         this.novaBombs.push(bomb);
+                    }
+                }
+                
+                // Handle Velaris sticky bomb and lasers
+                if (unit instanceof Velaris) {
+                    const bomb = unit.getAndClearBombToCreate();
+                    if (bomb) {
+                        this.stickyBombs.push(bomb);
+                    }
+                    const lasers = unit.getAndClearLasersToCreate();
+                    if (lasers.length > 0) {
+                        this.stickyLasers.push(...lasers);
+                    }
+                    const particles = unit.getAndClearParticlesToCreate();
+                    if (particles.length > 0) {
+                        this.disintegrationParticles.push(...particles);
                     }
                 }
                 
@@ -1417,6 +1440,188 @@ export class GameState {
             }
         }
         this.novaScatterBullets = this.novaScatterBullets.filter(bullet => !bullet.shouldDespawn());
+        
+        // Update Sticky Bombs
+        for (const bomb of this.stickyBombs) {
+            bomb.update(deltaTime);
+            
+            // If not stuck, check for sticking to surfaces
+            if (!bomb.isStuck) {
+                // Check for sticking to asteroids
+                for (const asteroid of this.asteroids) {
+                    const distance = bomb.position.distanceTo(asteroid.position);
+                    if (distance < asteroid.size + Constants.STICKY_BOMB_STICK_DISTANCE) {
+                        // Calculate normal vector from asteroid center to bomb (outward direction)
+                        const dx = bomb.position.x - asteroid.position.x;
+                        const dy = bomb.position.y - asteroid.position.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist > 0) {
+                            const normal = new Vector2D(dx / dist, dy / dist);
+                            bomb.stickToSurface('asteroid', normal, asteroid);
+                            // Position bomb on surface
+                            bomb.position.x = asteroid.position.x + normal.x * (asteroid.size + Constants.STICKY_BOMB_RADIUS);
+                            bomb.position.y = asteroid.position.y + normal.y * (asteroid.size + Constants.STICKY_BOMB_RADIUS);
+                        }
+                        break;
+                    }
+                }
+                
+                // Check for sticking to structures (buildings, mirrors, forge)
+                if (!bomb.isStuck) {
+                    for (const player of this.players) {
+                        // Check buildings
+                        for (const building of player.buildings) {
+                            const distance = bomb.position.distanceTo(building.position);
+                            if (distance < Constants.STICKY_BOMB_STICK_DISTANCE) {
+                                // Calculate normal vector from building to bomb
+                                const dx = bomb.position.x - building.position.x;
+                                const dy = bomb.position.y - building.position.y;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                if (dist > 0) {
+                                    const normal = new Vector2D(dx / dist, dy / dist);
+                                    bomb.stickToSurface('structure', normal, building);
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if (bomb.isStuck) break;
+                        
+                        // Check solar mirrors
+                        for (const mirror of player.solarMirrors) {
+                            const distance = bomb.position.distanceTo(mirror.position);
+                            if (distance < Constants.STICKY_BOMB_STICK_DISTANCE) {
+                                const dx = bomb.position.x - mirror.position.x;
+                                const dy = bomb.position.y - mirror.position.y;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                if (dist > 0) {
+                                    const normal = new Vector2D(dx / dist, dy / dist);
+                                    bomb.stickToSurface('structure', normal, mirror);
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if (bomb.isStuck) break;
+                        
+                        // Check stellar forge
+                        if (player.stellarForge) {
+                            const distance = bomb.position.distanceTo(player.stellarForge.position);
+                            if (distance < Constants.STICKY_BOMB_STICK_DISTANCE) {
+                                const dx = bomb.position.x - player.stellarForge.position.x;
+                                const dy = bomb.position.y - player.stellarForge.position.y;
+                                const dist = Math.sqrt(dx * dx + dy * dy);
+                                if (dist > 0) {
+                                    const normal = new Vector2D(dx / dist, dy / dist);
+                                    bomb.stickToSurface('structure', normal, player.stellarForge);
+                                }
+                                break;
+                            }
+                        }
+                        
+                        if (bomb.isStuck) break;
+                    }
+                }
+                
+                // Check for sticking to map edges (playing field boundary)
+                if (!bomb.isStuck) {
+                    const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+                    const edgeThreshold = Constants.STICKY_BOMB_STICK_DISTANCE;
+                    
+                    if (bomb.position.x <= -boundary + edgeThreshold) {
+                        // Stick to left edge
+                        bomb.stickToSurface('edge', new Vector2D(1, 0));
+                        bomb.position.x = -boundary + Constants.STICKY_BOMB_RADIUS;
+                    } else if (bomb.position.x >= boundary - edgeThreshold) {
+                        // Stick to right edge
+                        bomb.stickToSurface('edge', new Vector2D(-1, 0));
+                        bomb.position.x = boundary - Constants.STICKY_BOMB_RADIUS;
+                    } else if (bomb.position.y <= -boundary + edgeThreshold) {
+                        // Stick to top edge
+                        bomb.stickToSurface('edge', new Vector2D(0, 1));
+                        bomb.position.y = -boundary + Constants.STICKY_BOMB_RADIUS;
+                    } else if (bomb.position.y >= boundary - edgeThreshold) {
+                        // Stick to bottom edge
+                        bomb.stickToSurface('edge', new Vector2D(0, -1));
+                        bomb.position.y = boundary - Constants.STICKY_BOMB_RADIUS;
+                    }
+                }
+            }
+            
+            // Check if bomb should disintegrate
+            if (bomb.shouldDisintegrate()) {
+                // Notify owner and create particles
+                bomb.velarisOwner.onBombDestroyed(bomb);
+            }
+        }
+        this.stickyBombs = this.stickyBombs.filter(bomb => !bomb.shouldDespawn());
+        
+        // Update Sticky Lasers
+        for (const laser of this.stickyLasers) {
+            laser.update(deltaTime);
+            
+            // Check for hits on enemy units and structures
+            for (const player of this.players) {
+                if (player === laser.owner) continue;
+                
+                // Check units
+                for (const unit of player.units) {
+                    if (laser.checkHit(unit)) {
+                        unit.health -= laser.damage;
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            laser.damage,
+                            this.getPlayerImpactColor(laser.owner),
+                            this.gameTime
+                        ));
+                    }
+                }
+                
+                // Check buildings
+                for (const building of player.buildings) {
+                    if (laser.checkHit(building)) {
+                        building.health -= laser.damage;
+                        this.damageNumbers.push(new DamageNumber(
+                            building.position,
+                            laser.damage,
+                            this.getPlayerImpactColor(laser.owner),
+                            this.gameTime
+                        ));
+                    }
+                }
+                
+                // Check solar mirrors
+                for (const mirror of player.solarMirrors) {
+                    if (laser.checkHit(mirror)) {
+                        mirror.health -= laser.damage;
+                        this.damageNumbers.push(new DamageNumber(
+                            mirror.position,
+                            laser.damage,
+                            this.getPlayerImpactColor(laser.owner),
+                            this.gameTime
+                        ));
+                    }
+                }
+                
+                // Check stellar forge
+                if (player.stellarForge && laser.checkHit(player.stellarForge)) {
+                    player.stellarForge.health -= laser.damage;
+                    this.damageNumbers.push(new DamageNumber(
+                        player.stellarForge.position,
+                        laser.damage,
+                        this.getPlayerImpactColor(laser.owner),
+                        this.gameTime
+                    ));
+                }
+            }
+        }
+        this.stickyLasers = this.stickyLasers.filter(laser => !laser.shouldDespawn());
+        
+        // Update disintegration particles
+        for (const particle of this.disintegrationParticles) {
+            particle.update(deltaTime);
+        }
+        this.disintegrationParticles = this.disintegrationParticles.filter(particle => !particle.shouldDespawn());
         
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];

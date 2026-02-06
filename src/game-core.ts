@@ -26,6 +26,7 @@ import { createRayHero } from './heroes/ray';
 import { createSpotlightHero } from './heroes/spotlight';
 import { createTankHero } from './heroes/tank';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
+import { createVelarisHero } from './heroes/velaris';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -125,6 +126,12 @@ const { Nova, NovaBomb, NovaScatterBullet } = createNovaHero({
     AbilityBullet
 });
 
+const { Velaris, StickyBomb, StickyLaser, DisintegrationParticle } = createVelarisHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -150,5 +157,9 @@ export {
     CrescentWave,
     Nova,
     NovaBomb,
-    NovaScatterBullet
+    NovaScatterBullet,
+    Velaris,
+    StickyBomb,
+    StickyLaser,
+    DisintegrationParticle
 };
