@@ -1290,7 +1290,7 @@ export class GameState {
             // Check for bounces off asteroids
             for (const asteroid of this.asteroids) {
                 const distance = bomb.position.distanceTo(asteroid.position);
-                if (distance < asteroid.radius + Constants.NOVA_BOMB_RADIUS) {
+                if (distance < asteroid.size + Constants.NOVA_BOMB_RADIUS) {
                     // Calculate normal vector from asteroid center to bomb
                     const dx = bomb.position.x - asteroid.position.x;
                     const dy = bomb.position.y - asteroid.position.y;
@@ -1301,8 +1301,8 @@ export class GameState {
                         bomb.bounce(normalX, normalY);
                         
                         // Push bomb outside asteroid
-                        bomb.position.x = asteroid.position.x + normalX * (asteroid.radius + Constants.NOVA_BOMB_RADIUS);
-                        bomb.position.y = asteroid.position.y + normalY * (asteroid.radius + Constants.NOVA_BOMB_RADIUS);
+                        bomb.position.x = asteroid.position.x + normalX * (asteroid.size + Constants.NOVA_BOMB_RADIUS);
+                        bomb.position.y = asteroid.position.y + normalY * (asteroid.size + Constants.NOVA_BOMB_RADIUS);
                     }
                 }
             }
