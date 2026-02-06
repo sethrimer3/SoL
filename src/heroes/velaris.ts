@@ -187,7 +187,14 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
             this.isStuck = true;
             this.stuckSurface = surfaceType;
             this.stuckTo = attachedTo;
-            this.surfaceNormal = normal.normalize();
+            // Ensure normal is not a zero vector before normalizing
+            const length = Math.sqrt(normal.x * normal.x + normal.y * normal.y);
+            if (length > 0.001) {
+                this.surfaceNormal = new Vector2D(normal.x / length, normal.y / length);
+            } else {
+                // Fallback to upward direction if normal is zero
+                this.surfaceNormal = new Vector2D(0, -1);
+            }
             this.velocity = new Vector2D(0, 0);
         }
 
