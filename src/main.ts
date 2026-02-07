@@ -667,6 +667,30 @@ class GameController {
         return null;
     }
 
+    private getClickedFoundryButtonIndex(
+        screenX: number,
+        screenY: number,
+        foundry: SubsidiaryFactory
+    ): number {
+        const foundryScreenPos = this.renderer.worldToScreen(foundry.position);
+        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
+        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
+        const positions = this.getRadialButtonOffsets(4);
+
+        for (let i = 0; i < positions.length; i++) {
+            const pos = positions[i];
+            const buttonScreenX = foundryScreenPos.x + pos.x * buttonDistance;
+            const buttonScreenY = foundryScreenPos.y + pos.y * buttonDistance;
+            const dx = screenX - buttonScreenX;
+            const dy = screenY - buttonScreenY;
+            if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     /**
      * Get the nearest button index based on drag angle from building position
      * For stellar forge: 4 buttons in cardinal directions (top=0, right=1, bottom=2, left=3)
@@ -1800,6 +1824,21 @@ class GameController {
                         this.renderer.selectionEnd = null;
                         this.endHold();
                         return;
+                    }
+                }
+
+                if (this.selectedBuildings.size === 1) {
+                    const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                    if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                        const clickedFoundryButtonIndex = this.getClickedFoundryButtonIndex(
+                            lastX,
+                            lastY,
+                            selectedBuilding
+                        );
+                        if (clickedFoundryButtonIndex >= 0) {
+                            this.handleFoundryButtonPress(player, selectedBuilding, clickedFoundryButtonIndex);
+                            return;
+                        }
                     }
                 }
 
