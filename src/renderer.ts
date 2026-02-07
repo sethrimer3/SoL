@@ -1550,6 +1550,11 @@ export class GameRenderer {
                 label: 'Regen',
                 available: foundry.canQueueRegenUpgrade(),
                 index: 2
+            },
+            {
+                label: '+1 ATK',
+                available: foundry.canQueueAttackUpgrade(),
+                index: 3
             }
         ];
         const positions = this.getRadialButtonOffsets(buttonConfigs.length);
@@ -6959,6 +6964,7 @@ export class GameRenderer {
             'solar-mirror': 'Solar Mirror',
             'strafe-upgrade': 'Strafe Upgrade',
             'regen-upgrade': 'Regen Upgrade',
+            'attack-upgrade': '+1 ATK',
             'blink-upgrade': 'Blink Upgrade'
         };
         return nameMap[unitType.toLowerCase()] || unitType;

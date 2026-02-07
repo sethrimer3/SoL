@@ -369,12 +369,22 @@ export class Starling extends Unit {
         }
     }
 
+    private getAttackDamage(): number {
+        return this.attackDamage + (this.owner.hasAttackUpgrade ? Constants.STARLING_ATTACK_UPGRADE_BONUS : 0);
+    }
+
     attack(target: CombatTarget): void {
+        const attackDamage = this.getAttackDamage();
         const dx = target.position.x - this.position.x;
         const dy = target.position.y - this.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
         if (distance <= 0) {
             return;
+        }
+
+        let finalDamage = attackDamage;
+        if (target instanceof StellarForge) {
+            finalDamage = Math.max(0, attackDamage - Constants.STELLAR_FORGE_STARLING_DEFENSE);
         }
         
         // Create laser beam for visual effect
@@ -382,13 +392,15 @@ export class Starling extends Unit {
             new Vector2D(this.position.x, this.position.y),
             new Vector2D(target.position.x, target.position.y),
             this.owner,
-            this.attackDamage
+            finalDamage
         );
         this.lastShotLasers.push(laserBeam);
         
         // Deal instant damage to target
-        if ('takeDamage' in target) {
-            target.takeDamage(this.attackDamage);
+        if (target instanceof StellarForge) {
+            target.health -= finalDamage;
+        } else if ('takeDamage' in target) {
+            target.takeDamage(finalDamage);
         }
 
         if (!this.owner.hasStrafeUpgrade) {

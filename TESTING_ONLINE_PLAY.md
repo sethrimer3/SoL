@@ -194,6 +194,17 @@ Tick 600: foundry_regen_upgrade { buildingId: 0 }
 Tick 650: unit_move { unitIds: ["starling-0"], targetX: 0, targetY: 0 }
 ```
 
+### Deterministic Replay Snippet (Foundry +1 ATK Upgrade)
+
+Use the following command sequence to validate that +1 ATK upgrades stay deterministic across peers
+(state hashes should match on every `STATE_HASH_TICK_INTERVAL` step):
+
+```text
+Tick 120: building_purchase { buildingType: "Foundry", positionX: 200, positionY: 0 }
+Tick 600: foundry_attack_upgrade { buildingId: 0 }
+Tick 650: unit_target_structure { unitIds: ["starling-0"], targetPlayerIndex: 1, structureType: "forge", structureIndex: 0 }
+```
+
 ### Deterministic Replay Snippet (Forge Blink Upgrade)
 
 Use the following command sequence to validate that Blink upgrades stay deterministic across peers

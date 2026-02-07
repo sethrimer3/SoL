@@ -161,6 +161,7 @@ export const GRAVE_SMALL_PARTICLE_SIZE = 2; // Visual size of small particles
 export const STARLING_MAX_HEALTH = 50;
 export const STARLING_ATTACK_RANGE = 120;
 export const STARLING_ATTACK_DAMAGE = 5;
+export const STARLING_ATTACK_UPGRADE_BONUS = 1; // Bonus damage from foundry +1 ATK upgrade
 export const STARLING_ATTACK_SPEED = 2; // Attacks per second
 export const STARLING_MOVE_SPEED = 50; // Pixels per second (slower than regular units)
 export const STARLING_MOVE_ACCELERATION_PX_PER_SEC = 120; // Pixels per second squared
@@ -188,6 +189,7 @@ export const FORGE_FLAME_OFFSET_MULTIPLIER = 0.35;
 
 // Stellar Forge constants (main base structure)
 export const STELLAR_FORGE_MAX_HEALTH = 1000;
+export const STELLAR_FORGE_STARLING_DEFENSE = 5; // Flat damage reduction against starling attacks
 
 // Forge crunch constants (periodic event that spawns minions)
 export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
@@ -248,8 +250,10 @@ export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
 export const FOUNDRY_REGEN_UPGRADE_COST = 1000; // Cost to unlock Regen upgrade
+export const FOUNDRY_ATTACK_UPGRADE_COST = 1000; // Cost to unlock +1 ATK upgrade
 export const FOUNDRY_STRAFE_UPGRADE_ITEM = 'strafe-upgrade';
 export const FOUNDRY_REGEN_UPGRADE_ITEM = 'regen-upgrade';
+export const FOUNDRY_ATTACK_UPGRADE_ITEM = 'attack-upgrade';
 export const SOLAR_MIRROR_FROM_FOUNDRY_COST = 300; // Cost to create solar mirror from foundry
 export const FOUNDRY_BLINK_UPGRADE_COST = 3000; // Cost to unlock Blink upgrade at foundry
 export const FOUNDRY_BLINK_UPGRADE_ITEM = 'blink-upgrade';

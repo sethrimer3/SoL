@@ -346,6 +346,17 @@ class GameController {
             } else {
                 console.log('Cannot queue Regen upgrade or not enough energy');
             }
+        } else if (buttonIndex === 3) {
+            if (foundry.canQueueAttackUpgrade() && player.spendEnergy(Constants.FOUNDRY_ATTACK_UPGRADE_COST)) {
+                foundry.enqueueProduction(Constants.FOUNDRY_ATTACK_UPGRADE_ITEM);
+                console.log('Queued foundry +1 ATK upgrade');
+                this.sendNetworkCommand('foundry_attack_upgrade', { buildingId });
+                // Deselect foundry
+                foundry.isSelected = false;
+                this.selectedBuildings.clear();
+            } else {
+                console.log('Cannot queue +1 ATK upgrade or not enough energy');
+            }
         }
     }
 
@@ -1206,10 +1217,10 @@ class GameController {
                     } else if (this.selectedWarpGate) {
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                     } else if (this.selectedBuildings.size === 1) {
-                        // Foundry building has 3 buttons
+                        // Foundry building has 4 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 3);
+                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                         }
                     }
                 }
