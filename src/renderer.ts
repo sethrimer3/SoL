@@ -31,9 +31,11 @@ export class GameRenderer {
     public selectionStart: Vector2D | null = null;
     public selectionEnd: Vector2D | null = null;
     public abilityArrowStarts: Vector2D[] = []; // Arrow starts for hero ability casting
-    public abilityArrowEnd: Vector2D | null = null; // Arrow end for hero ability casting
+    public abilityArrowDirection: Vector2D | null = null; // Arrow direction for hero ability casting
+    public abilityArrowLengthPx: number = 0; // Arrow length for hero ability casting
     public buildingAbilityArrowStart: Vector2D | null = null; // Arrow start for building ability casting
-    public buildingAbilityArrowEnd: Vector2D | null = null; // Arrow end for building ability casting
+    public buildingAbilityArrowDirection: Vector2D | null = null; // Arrow direction for building ability casting
+    public buildingAbilityArrowLengthPx: number = 0; // Arrow length for building ability casting
     public highlightedButtonIndex: number = -1; // Index of highlighted production button (-1 = none)
     public selectedUnits: Set<Unit> = new Set();
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
@@ -5850,41 +5852,43 @@ export class GameRenderer {
      * Draw ability arrow for hero units
      */
     private drawAbilityArrow(): void {
-        if (!this.abilityArrowEnd || this.abilityArrowStarts.length === 0) return;
+        if (!this.abilityArrowDirection || this.abilityArrowStarts.length === 0) return;
 
         this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; // Gold color for hero abilities
         this.ctx.lineWidth = 4;
         this.ctx.setLineDash([]);
+        const arrowLengthPx = this.abilityArrowLengthPx;
         for (const abilityArrowStart of this.abilityArrowStarts) {
-            const dx = this.abilityArrowEnd.x - abilityArrowStart.x;
-            const dy = this.abilityArrowEnd.y - abilityArrowStart.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
+            const length = arrowLengthPx;
 
             // Don't draw if arrow is too short
             if (length < Constants.ABILITY_ARROW_MIN_LENGTH) {
                 continue;
             }
 
+            const arrowEndX = abilityArrowStart.x + this.abilityArrowDirection.x * length;
+            const arrowEndY = abilityArrowStart.y + this.abilityArrowDirection.y * length;
+
             // Draw arrow shaft
             this.ctx.beginPath();
             this.ctx.moveTo(abilityArrowStart.x, abilityArrowStart.y);
-            this.ctx.lineTo(this.abilityArrowEnd.x, this.abilityArrowEnd.y);
+            this.ctx.lineTo(arrowEndX, arrowEndY);
             this.ctx.stroke();
 
             // Draw arrowhead
-            const angle = Math.atan2(dy, dx);
+            const angle = Math.atan2(this.abilityArrowDirection.y, this.abilityArrowDirection.x);
             const arrowHeadLength = 20;
             const arrowHeadAngle = Math.PI / 6; // 30 degrees
 
             this.ctx.beginPath();
-            this.ctx.moveTo(this.abilityArrowEnd.x, this.abilityArrowEnd.y);
+            this.ctx.moveTo(arrowEndX, arrowEndY);
             this.ctx.lineTo(
-                this.abilityArrowEnd.x - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
-                this.abilityArrowEnd.y - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+                arrowEndX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+                arrowEndY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
             );
             this.ctx.lineTo(
-                this.abilityArrowEnd.x - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
-                this.abilityArrowEnd.y - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+                arrowEndX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+                arrowEndY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
             );
             this.ctx.closePath();
             this.ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
@@ -5902,16 +5906,17 @@ export class GameRenderer {
      * Draw ability arrow for building production/abilities
      */
     private drawBuildingAbilityArrow(): void {
-        if (!this.buildingAbilityArrowEnd || !this.buildingAbilityArrowStart) return;
+        if (!this.buildingAbilityArrowDirection || !this.buildingAbilityArrowStart) return;
 
-        const dx = this.buildingAbilityArrowEnd.x - this.buildingAbilityArrowStart.x;
-        const dy = this.buildingAbilityArrowEnd.y - this.buildingAbilityArrowStart.y;
-        const length = Math.sqrt(dx * dx + dy * dy);
+        const length = this.buildingAbilityArrowLengthPx;
 
         // Don't draw if arrow is too short
         if (length < Constants.ABILITY_ARROW_MIN_LENGTH) {
             return;
         }
+
+        const arrowEndX = this.buildingAbilityArrowStart.x + this.buildingAbilityArrowDirection.x * length;
+        const arrowEndY = this.buildingAbilityArrowStart.y + this.buildingAbilityArrowDirection.y * length;
 
         // Draw arrow shaft
         this.ctx.strokeStyle = 'rgba(0, 255, 136, 0.9)'; // Green color for building abilities
@@ -5919,23 +5924,23 @@ export class GameRenderer {
         this.ctx.setLineDash([]);
         this.ctx.beginPath();
         this.ctx.moveTo(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y);
-        this.ctx.lineTo(this.buildingAbilityArrowEnd.x, this.buildingAbilityArrowEnd.y);
+        this.ctx.lineTo(arrowEndX, arrowEndY);
         this.ctx.stroke();
 
         // Draw arrowhead
-        const angle = Math.atan2(dy, dx);
+        const angle = Math.atan2(this.buildingAbilityArrowDirection.y, this.buildingAbilityArrowDirection.x);
         const arrowHeadLength = 20;
         const arrowHeadAngle = Math.PI / 6; // 30 degrees
 
         this.ctx.beginPath();
-        this.ctx.moveTo(this.buildingAbilityArrowEnd.x, this.buildingAbilityArrowEnd.y);
+        this.ctx.moveTo(arrowEndX, arrowEndY);
         this.ctx.lineTo(
-            this.buildingAbilityArrowEnd.x - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
-            this.buildingAbilityArrowEnd.y - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
+            arrowEndX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
+            arrowEndY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
         );
         this.ctx.lineTo(
-            this.buildingAbilityArrowEnd.x - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
-            this.buildingAbilityArrowEnd.y - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
+            arrowEndX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
+            arrowEndY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
         );
         this.ctx.closePath();
         this.ctx.fillStyle = 'rgba(0, 255, 136, 0.9)';
