@@ -846,26 +846,10 @@ class GameController {
         return nearestIndex;
     }
 
-    private getNearestMirrorButtonIndexFromCursor(
-        cursorScreenX: number,
-        cursorScreenY: number,
+    private getNearestMirrorButtonIndexFromAngle(
+        dragAngleRad: number,
         shouldShowFoundryButton: boolean
     ): number {
-        let mirror: SolarMirror | null = null;
-        for (const selectedMirror of this.selectedMirrors) {
-            mirror = selectedMirror;
-            break;
-        }
-
-        if (!mirror) {
-            return -1;
-        }
-
-        const mirrorScreenPos = this.renderer.worldToScreen(mirror.position);
-        const dragAngleRad = Math.atan2(
-            cursorScreenY - mirrorScreenPos.y,
-            cursorScreenX - mirrorScreenPos.x
-        );
         const buttonCount = shouldShowFoundryButton ? 3 : 2;
         return this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount);
     }
@@ -1368,7 +1352,23 @@ class GameController {
             } else if (this.isDraggingHeroArrow) {
                 // Update arrow direction (for hero ability casting)
                 this.updateAbilityArrowStarts();
-                this.renderer.abilityArrowEnd = new Vector2D(x, y);
+                if (this.selectionStartScreen) {
+                    const dragDeltaX = x - this.selectionStartScreen.x;
+                    const dragDeltaY = y - this.selectionStartScreen.y;
+                    const dragLengthPx = Math.sqrt(dragDeltaX * dragDeltaX + dragDeltaY * dragDeltaY);
+                    if (dragLengthPx > 0) {
+                        this.renderer.abilityArrowDirection = new Vector2D(
+                            dragDeltaX / dragLengthPx,
+                            dragDeltaY / dragLengthPx
+                        );
+                    } else {
+                        this.renderer.abilityArrowDirection = null;
+                    }
+                    this.renderer.abilityArrowLengthPx = dragLengthPx;
+                } else {
+                    this.renderer.abilityArrowDirection = null;
+                    this.renderer.abilityArrowLengthPx = 0;
+                }
             } else if (this.isDraggingBuildingArrow) {
                 // Update arrow direction for building abilities
                 const player = this.getLocalPlayer();
@@ -1376,34 +1376,53 @@ class GameController {
                 const buildingAbilityStart = buildingAbilityAnchor ?? this.selectionStartScreen;
                 if (buildingAbilityStart) {
                     this.renderer.buildingAbilityArrowStart = buildingAbilityStart;
-                    this.renderer.buildingAbilityArrowEnd = new Vector2D(x, y);
+                    if (this.selectionStartScreen) {
+                        const dragDeltaX = x - this.selectionStartScreen.x;
+                        const dragDeltaY = y - this.selectionStartScreen.y;
+                        const dragLengthPx = Math.sqrt(dragDeltaX * dragDeltaX + dragDeltaY * dragDeltaY);
+                        if (dragLengthPx > 0) {
+                            this.renderer.buildingAbilityArrowDirection = new Vector2D(
+                                dragDeltaX / dragLengthPx,
+                                dragDeltaY / dragLengthPx
+                            );
+                        } else {
+                            this.renderer.buildingAbilityArrowDirection = null;
+                        }
+                        this.renderer.buildingAbilityArrowLengthPx = dragLengthPx;
+                    } else {
+                        this.renderer.buildingAbilityArrowDirection = null;
+                        this.renderer.buildingAbilityArrowLengthPx = 0;
+                    }
                     
                     // Calculate angle and determine which button is highlighted
-                    const dx = x - buildingAbilityStart.x;
-                    const dy = y - buildingAbilityStart.y;
-                    const angle = Math.atan2(dy, dx);
+                    const dragDirection = this.renderer.buildingAbilityArrowDirection;
+                    const angle = dragDirection ? Math.atan2(dragDirection.y, dragDirection.x) : 0;
                     
                     // Determine number of buttons based on what's selected
                     if (player && player.stellarForge && player.stellarForge.isSelected) {
                         // Stellar forge has 4 buttons
-                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                        this.renderer.highlightedButtonIndex = dragDirection
+                            ? this.getNearestButtonIndexFromAngle(angle, 4)
+                            : -1;
                     } else if (this.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 or 3 buttons
-                        this.renderer.highlightedButtonIndex = this.getNearestMirrorButtonIndexFromCursor(
-                            x,
-                            y,
-                            this.hasSeenFoundry
-                        );
+                        this.renderer.highlightedButtonIndex = dragDirection
+                            ? this.getNearestMirrorButtonIndexFromAngle(angle, this.hasSeenFoundry)
+                            : -1;
                         if (this.renderer.highlightedButtonIndex === 1 && !this.canCreateWarpGateFromSelectedMirrors()) {
                             this.renderer.highlightedButtonIndex = -1;
                         }
                     } else if (this.selectedWarpGate) {
-                        this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                        this.renderer.highlightedButtonIndex = dragDirection
+                            ? this.getNearestButtonIndexFromAngle(angle, 4)
+                            : -1;
                     } else if (this.selectedBuildings.size === 1) {
                         // Foundry building has 4 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
-                            this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                            this.renderer.highlightedButtonIndex = dragDirection
+                                ? this.getNearestButtonIndexFromAngle(angle, 4)
+                                : -1;
                         }
                     }
                 }
@@ -2197,10 +2216,7 @@ class GameController {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
-                const buildingAbilityAnchor = this.getBuildingAbilityAnchorScreen();
-                const buildingAbilityMovement = buildingAbilityAnchor
-                    ? buildingAbilityAnchor.distanceTo(endPos)
-                    : totalMovement;
+                const buildingAbilityMovement = totalMovement;
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
                 const hasHeroUnits = this.hasHeroUnitsSelected();
@@ -2445,9 +2461,11 @@ class GameController {
             this.renderer.selectionEnd = null;
             this.abilityArrowStarts.length = 0;
             this.renderer.abilityArrowStarts = this.abilityArrowStarts;
-            this.renderer.abilityArrowEnd = null;
+            this.renderer.abilityArrowDirection = null;
+            this.renderer.abilityArrowLengthPx = 0;
             this.renderer.buildingAbilityArrowStart = null;
-            this.renderer.buildingAbilityArrowEnd = null;
+            this.renderer.buildingAbilityArrowDirection = null;
+            this.renderer.buildingAbilityArrowLengthPx = 0;
             this.renderer.highlightedButtonIndex = -1;
             this.endHold();
         };
