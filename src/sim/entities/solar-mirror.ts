@@ -296,6 +296,16 @@ export class SolarMirror {
      */
     update(deltaTime: number, gameState: GameState | null = null): void {
         if (!this.targetPosition) return;
+
+        if (gameState) {
+            for (const asteroid of gameState.asteroids) {
+                if (asteroid.containsPoint(this.targetPosition)) {
+                    this.targetPosition = null;
+                    this.velocity = new Vector2D(0, 0);
+                    return;
+                }
+            }
+        }
         
         const dx = this.targetPosition.x - this.position.x;
         const dy = this.targetPosition.y - this.position.y;
@@ -376,6 +386,20 @@ export class SolarMirror {
         let avoidY = 0;
         let avoidCount = 0;
         const avoidanceRange = 60; // Look ahead distance
+
+        // Check asteroids (approximate with radius)
+        for (const asteroid of gameState.asteroids) {
+            const dx = this.position.x - asteroid.position.x;
+            const dy = this.position.y - asteroid.position.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const minDist = asteroid.size + 20;
+            if (dist > 0 && dist < minDist + avoidanceRange) {
+                const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                avoidX += (dx / dist) * avoidStrength;
+                avoidY += (dy / dist) * avoidStrength;
+                avoidCount++;
+            }
+        }
 
         // Check nearby obstacles
         for (const sun of gameState.suns) {
