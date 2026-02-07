@@ -44,6 +44,7 @@ export class GameRenderer {
     public selectedHeroNames: string[] = [];
     public hasSeenFoundry: boolean = false;
     public hasActiveFoundry: boolean = false;
+    public isWarpGatePlacementMode: boolean = false;
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -2072,6 +2073,39 @@ export class GameRenderer {
         // Restore context state
         this.ctx.restore();
 
+        if (this.isWarpGatePlacementMode && mirror.isSelected) {
+            const particleCount = 8;
+            const particleRadius = Math.max(1.2, size * 0.08);
+            const orbitRadius = size * 1.25;
+            const timeOffset = timeSec * 1.8;
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+            for (let i = 0; i < particleCount; i++) {
+                const angle = timeOffset + (i * Math.PI * 2) / particleCount;
+                const wobble = Math.sin(timeOffset * 1.4 + i * 1.9) * size * 0.25;
+                const radius = orbitRadius + wobble;
+                const particleX = screenPos.x + Math.cos(angle) * radius;
+                const particleY = screenPos.y + Math.sin(angle) * radius;
+                const alpha = 0.35 + 0.35 * Math.sin(timeOffset + i);
+                const gradient = this.ctx.createRadialGradient(
+                    particleX, particleY, 0,
+                    particleX, particleY, particleRadius * 3
+                );
+                gradient.addColorStop(0, `rgba(180, 255, 255, ${alpha})`);
+                gradient.addColorStop(1, 'rgba(120, 200, 255, 0)');
+                this.ctx.fillStyle = gradient;
+                this.ctx.beginPath();
+                this.ctx.arc(particleX, particleY, particleRadius * 3, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.fillStyle = `rgba(220, 255, 255, ${Math.min(0.9, alpha + 0.3)})`;
+                this.ctx.beginPath();
+                this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+            this.ctx.restore();
+        }
+
         // Draw efficiency indicator (in world space, not rotated)
         if (mirror.efficiency < 1.0) {
             this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
@@ -2769,7 +2803,7 @@ export class GameRenderer {
     /**
      * Draw command buttons for selected solar mirrors
      */
-    private drawMirrorCommandButtons(mirrors: Set<SolarMirror>): void {
+    private drawMirrorCommandButtons(mirrors: Set<SolarMirror>, timeSec: number): void {
         if (mirrors.size === 0) return;
         
         // Get one of the selected mirrors to determine button positions
@@ -2813,9 +2847,24 @@ export class GameRenderer {
 
         // Draw "Warp Gate" button (center or right)
         const isWarpGateHighlighted = this.highlightedButtonIndex === 1;
-        this.ctx.fillStyle = isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444';
-        this.ctx.strokeStyle = '#00FFFF';
-        this.ctx.lineWidth = isWarpGateHighlighted ? 4 : 2;
+        const isWarpGateArmed = this.isWarpGatePlacementMode;
+        const warpGatePulse = 0.35 + 0.25 * Math.sin(timeSec * 4);
+        const warpGateFill = isWarpGateArmed
+            ? `rgba(0, 255, 255, ${0.35 + warpGatePulse})`
+            : (isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444');
+        this.ctx.fillStyle = warpGateFill;
+        this.ctx.strokeStyle = isWarpGateArmed ? '#B8FFFF' : '#00FFFF';
+        this.ctx.lineWidth = isWarpGateHighlighted || isWarpGateArmed ? 4 : 2;
+        if (isWarpGateArmed) {
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'lighter';
+            this.ctx.strokeStyle = `rgba(120, 255, 255, ${0.35 + warpGatePulse})`;
+            this.ctx.lineWidth = 6 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius + 5 * this.zoom, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.restore();
+        }
         this.ctx.beginPath();
         this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
         this.ctx.fill();
@@ -6763,7 +6812,7 @@ export class GameRenderer {
         this.drawBorderFade(game.mapSize);
         
         // Draw mirror command buttons if mirrors are selected
-        this.drawMirrorCommandButtons(this.selectedMirrors);
+        this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);
 
         // Draw UI
         this.drawUI(game);
