@@ -62,9 +62,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(255, 100, 0, 0)'      // #FF6400 (fade)
         },
         sunLightRays: {
-            nearCenter: 'rgba(255, 245, 215, 0.35)', // #FFF5D7 soft warm cream
-            mid: 'rgba(255, 220, 170, 0.18)',        // #FFDCAA warm peach
-            edge: 'rgba(255, 200, 140, 0)'           // #FFC88C fades to transparent
+            nearCenter: 'rgba(255, 245, 215, 0.2)',  // #FFF5D7 soft warm cream
+            mid: 'rgba(255, 220, 170, 0.45)',        // #FFDCAA warm peach
+            edge: 'rgba(255, 200, 140, 0.7)'         // #FFC88C fades to transparent
         },
         lensFlareHalo: 'rgba(255, 240, 200, 0.15)'   // #FFF0C8
     },
@@ -94,9 +94,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(80, 170, 255, 0)'
         },
         sunLightRays: {
-            nearCenter: 'rgba(220, 240, 255, 0.35)',
-            mid: 'rgba(170, 215, 255, 0.18)',
-            edge: 'rgba(130, 190, 255, 0)'
+            nearCenter: 'rgba(220, 240, 255, 0.2)',
+            mid: 'rgba(170, 215, 255, 0.45)',
+            edge: 'rgba(130, 190, 255, 0.7)'
         },
         lensFlareHalo: 'rgba(210, 235, 255, 0.18)'
     },
@@ -126,9 +126,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(80, 50, 140, 0)'
         },
         sunLightRays: {
-            nearCenter: 'rgba(200, 180, 240, 0.35)',
-            mid: 'rgba(160, 130, 210, 0.18)',
-            edge: 'rgba(120, 90, 180, 0)'
+            nearCenter: 'rgba(200, 180, 240, 0.2)',
+            mid: 'rgba(160, 130, 210, 0.45)',
+            edge: 'rgba(120, 90, 180, 0.7)'
         },
         lensFlareHalo: 'rgba(190, 170, 230, 0.18)'
     },
@@ -158,9 +158,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(200, 40, 20, 0)'
         },
         sunLightRays: {
-            nearCenter: 'rgba(255, 200, 150, 0.35)',
-            mid: 'rgba(255, 140, 90, 0.18)',
-            edge: 'rgba(240, 100, 60, 0)'
+            nearCenter: 'rgba(255, 200, 150, 0.2)',
+            mid: 'rgba(255, 140, 90, 0.45)',
+            edge: 'rgba(240, 100, 60, 0.7)'
         },
         lensFlareHalo: 'rgba(255, 180, 120, 0.18)'
     },
@@ -190,9 +190,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(140, 50, 120, 0)'
         },
         sunLightRays: {
-            nearCenter: 'rgba(240, 180, 230, 0.35)',
-            mid: 'rgba(210, 130, 190, 0.18)',
-            edge: 'rgba(180, 90, 160, 0)'
+            nearCenter: 'rgba(240, 180, 230, 0.2)',
+            mid: 'rgba(210, 130, 190, 0.45)',
+            edge: 'rgba(180, 90, 160, 0.7)'
         },
         lensFlareHalo: 'rgba(230, 160, 210, 0.18)'
     },
@@ -222,9 +222,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             outerGlow4: 'rgba(50, 140, 80, 0)'
         },
         sunLightRays: {
-            nearCenter: 'rgba(180, 240, 210, 0.35)',
-            mid: 'rgba(130, 210, 170, 0.18)',
-            edge: 'rgba(90, 180, 130, 0)'
+            nearCenter: 'rgba(180, 240, 210, 0.2)',
+            mid: 'rgba(130, 210, 170, 0.45)',
+            edge: 'rgba(90, 180, 130, 0.7)'
         },
         lensFlareHalo: 'rgba(160, 230, 190, 0.18)'
     }

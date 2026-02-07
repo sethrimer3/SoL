@@ -164,7 +164,7 @@ export class GameRenderer {
     ];
     
     // Movement order indicator constants
-    private readonly MOVE_ORDER_DOT_RADIUS = 6;
+    private readonly MOVE_ORDER_DOT_RADIUS = 8.4;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
     private readonly FORGE_MAX_HEALTH = 1000;
