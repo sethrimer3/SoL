@@ -293,6 +293,57 @@ class GameController {
         return null;
     }
 
+    private getFriendlySacrificeTargetAtPosition(
+        worldPos: Vector2D,
+        player: Player
+    ): {
+        target: SubsidiaryFactory;
+        targetPlayerIndex: number;
+        structureType: 'building';
+        structureIndex: number;
+    } | null {
+        if (!this.game) {
+            return null;
+        }
+
+        const playerIndex = this.game.players.indexOf(player);
+        if (playerIndex < 0) {
+            return null;
+        }
+
+        for (let buildingIndex = 0; buildingIndex < player.buildings.length; buildingIndex++) {
+            const building = player.buildings[buildingIndex];
+            if (!(building instanceof SubsidiaryFactory)) {
+                continue;
+            }
+            if (!building.currentProduction) {
+                continue;
+            }
+            if (building.containsPoint(worldPos)) {
+                return {
+                    target: building,
+                    targetPlayerIndex: playerIndex,
+                    structureType: 'building',
+                    structureIndex: buildingIndex
+                };
+            }
+        }
+
+        return null;
+    }
+
+    private hasSelectedStarlingsOnly(): boolean {
+        if (this.selectedUnits.size === 0) {
+            return false;
+        }
+        for (const unit of this.selectedUnits) {
+            if (!(unit instanceof Starling)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private getTargetStructureRadiusPx(target: StellarForge | Building | SolarMirror): number {
         if (target instanceof SolarMirror) {
             return Constants.MIRROR_CLICK_RADIUS_PX;
@@ -1438,16 +1489,23 @@ class GameController {
                     return;
                 }
 
-                const targetableStructure = this.getTargetableStructureAtPosition(worldPos, player);
+                const friendlySacrificeTarget = this.hasSelectedStarlingsOnly()
+                    ? this.getFriendlySacrificeTargetAtPosition(worldPos, player)
+                    : null;
+                const targetableStructure = friendlySacrificeTarget ?? this.getTargetableStructureAtPosition(worldPos, player);
                 if (this.selectedUnits.size > 0 && targetableStructure) {
                     this.moveOrderCounter++;
+                    const isFriendlySacrificeTarget = targetableStructure.target instanceof SubsidiaryFactory &&
+                        targetableStructure.target.owner === player;
                     const targetRadiusPx = this.getTargetStructureRadiusPx(targetableStructure.target);
 
                     for (const unit of this.selectedUnits) {
-                        const rallyPoint = unit.getStructureStandoffPoint(
-                            targetableStructure.target.position,
-                            targetRadiusPx
-                        );
+                        const rallyPoint = isFriendlySacrificeTarget && unit instanceof Starling
+                            ? targetableStructure.target.position
+                            : unit.getStructureStandoffPoint(
+                                targetableStructure.target.position,
+                                targetRadiusPx
+                            );
                         unit.setManualTarget(targetableStructure.target, rallyPoint);
                         unit.moveOrder = this.moveOrderCounter;
                     }

@@ -610,6 +610,10 @@ export class GameState {
                 this.updateStarlingMergeGatesForPlayer(player, deltaTime);
             }
 
+            if (!this.isCountdownActive) {
+                this.processStarlingSacrificesForPlayer(player);
+            }
+
             // Remove dead units and track losses
             const deadUnits = player.units.filter(unit => unit.isDead());
             for (const deadUnit of deadUnits) {
@@ -1926,6 +1930,42 @@ export class GameState {
                     this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
                 }
                 this.starlingMergeGates.splice(gateIndex, 1);
+            }
+        }
+    }
+
+    private processStarlingSacrificesForPlayer(player: Player): void {
+        const energyBoost = Constants.STARLING_COST_PER_ENERGY * Constants.STARLING_SACRIFICE_ENERGY_MULTIPLIER;
+        if (energyBoost <= 0) {
+            return;
+        }
+
+        for (const building of player.buildings) {
+            if (!(building instanceof SubsidiaryFactory)) {
+                continue;
+            }
+            if (!building.isComplete || !building.currentProduction) {
+                continue;
+            }
+
+            for (const unit of player.units) {
+                if (!(unit instanceof Starling) || unit.isDead()) {
+                    continue;
+                }
+                if (unit.getManualTarget() !== building) {
+                    continue;
+                }
+                if (!building.currentProduction) {
+                    break;
+                }
+
+                const distance = unit.position.distanceTo(building.position);
+                if (distance > building.radius + unit.collisionRadiusPx) {
+                    continue;
+                }
+
+                building.addProductionEnergyBoost(energyBoost);
+                unit.health = 0;
             }
         }
     }
@@ -3760,10 +3800,16 @@ export class GameState {
                     }
                     mix(manualTarget.position.x);
                     mix(manualTarget.position.y);
+                    if ('owner' in manualTarget && manualTarget.owner) {
+                        mixInt(this.players.indexOf(manualTarget.owner));
+                    } else {
+                        mixInt(-1);
+                    }
                 } else {
                     mixInt(0);
                     mix(-1);
                     mix(-1);
+                    mixInt(-1);
                 }
                 if (unit instanceof Starling) {
                     mixInt(unit.getAssignedPathLength());
@@ -4214,9 +4260,13 @@ export class GameState {
         for (const unitId of unitIds ?? []) {
             const unit = player.units.find(u => this.getUnitNetworkId(u) === unitId);
             if (unit) {
-                const targetRadiusPx = this.getCombatTargetRadiusPx(targetStructure);
-                const rallyPoint = unit.getStructureStandoffPoint(targetStructure.position, targetRadiusPx);
-                unit.setManualTarget(targetStructure, rallyPoint);
+                if (unit instanceof Starling && targetStructure instanceof SubsidiaryFactory && targetStructure.owner === player) {
+                    unit.setManualTarget(targetStructure, targetStructure.position);
+                } else {
+                    const targetRadiusPx = this.getCombatTargetRadiusPx(targetStructure);
+                    const rallyPoint = unit.getStructureStandoffPoint(targetStructure.position, targetRadiusPx);
+                    unit.setManualTarget(targetStructure, rallyPoint);
+                }
                 if (typeof moveOrder === 'number') {
                     unit.moveOrder = moveOrder;
                 }

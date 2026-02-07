@@ -731,6 +731,18 @@ export class SubsidiaryFactory extends Building {
             this.currentProduction = null;
         }
     }
+
+    /**
+     * Add production progress based on an energy boost (e.g., sacrificed starlings).
+     */
+    addProductionEnergyBoost(energyAmount: number): void {
+        if (!this.currentProduction) return;
+        const energyRequired = this.getProductionEnergyCost(this.currentProduction);
+        if (energyRequired <= 0) {
+            return;
+        }
+        this.addProductionProgress(energyAmount / energyRequired);
+    }
     
     /**
      * Get production time for an item type
@@ -740,6 +752,22 @@ export class SubsidiaryFactory extends Building {
             return Constants.BUILDING_BUILD_TIME;
         }
         return Constants.SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL;
+    }
+
+    private getProductionEnergyCost(itemType: string): number {
+        if (itemType === Constants.FOUNDRY_STRAFE_UPGRADE_ITEM) {
+            return Constants.FOUNDRY_STRAFE_UPGRADE_COST;
+        }
+        if (itemType === Constants.FOUNDRY_REGEN_UPGRADE_ITEM) {
+            return Constants.FOUNDRY_REGEN_UPGRADE_COST;
+        }
+        if (itemType === Constants.FOUNDRY_ATTACK_UPGRADE_ITEM) {
+            return Constants.FOUNDRY_ATTACK_UPGRADE_COST;
+        }
+        if (itemType === Constants.FOUNDRY_BLINK_UPGRADE_ITEM) {
+            return Constants.FOUNDRY_BLINK_UPGRADE_COST;
+        }
+        return Constants.SUBSIDIARY_FACTORY_COST;
     }
 
     /**

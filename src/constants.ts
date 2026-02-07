@@ -200,6 +200,7 @@ export const FORGE_CRUNCH_WAVE_RADIUS = 300; // Radius of wave push effect
 export const FORGE_CRUNCH_SUCK_FORCE = 150; // Force magnitude pulling dust in
 export const FORGE_CRUNCH_WAVE_FORCE = 100; // Force magnitude pushing dust out
 export const STARLING_COST_PER_ENERGY = 50; // Energy needed per starling spawned
+export const STARLING_SACRIFICE_ENERGY_MULTIPLIER = 0.5; // Fraction of starling energy cost applied to production boosts
 
 // Cannon/Gatling building constants (offensive building for Radiant faction)
 export const MINIGUN_MAX_HEALTH = 200;
