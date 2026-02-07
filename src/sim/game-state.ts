@@ -252,7 +252,6 @@ export class GameState {
                 if (this.checkCollision(mirror.position, 20, mirror)) {
                     // Revert to old position and stop movement
                     mirror.position = oldMirrorPos;
-                    mirror.targetPosition = null;
                     mirror.velocity = new Vector2D(0, 0);
                 }
 
