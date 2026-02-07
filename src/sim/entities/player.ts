@@ -37,6 +37,7 @@ export class Player {
     hasStrafeUpgrade: boolean = false;
     hasRegenUpgrade: boolean = false;
     hasBlinkUpgrade: boolean = false;
+    hasAttackUpgrade: boolean = false;
     
     // Statistics tracking
     unitsCreated: number = 0;

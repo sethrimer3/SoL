@@ -661,6 +661,8 @@ export class GameState {
                         building.upgradeStrafe();
                     } else if (completedProduction === Constants.FOUNDRY_REGEN_UPGRADE_ITEM) {
                         building.upgradeRegen();
+                    } else if (completedProduction === Constants.FOUNDRY_ATTACK_UPGRADE_ITEM) {
+                        building.upgradeAttack();
                     } else if (completedProduction === Constants.FOUNDRY_BLINK_UPGRADE_ITEM) {
                         building.upgradeBlink();
                     }
@@ -3668,6 +3670,7 @@ export class GameState {
             mixInt(player.hasStrafeUpgrade ? 1 : 0);
             mixInt(player.hasRegenUpgrade ? 1 : 0);
             mixInt(player.hasBlinkUpgrade ? 1 : 0);
+            mixInt(player.hasAttackUpgrade ? 1 : 0);
             mixInt(player.units.length);
 
             if (player.stellarForge) {
@@ -4147,6 +4150,9 @@ export class GameState {
             case 'foundry_regen_upgrade':
                 this.executeFoundryUpgradeCommand(player, cmd.data, 'regen');
                 break;
+            case 'foundry_attack_upgrade':
+                this.executeFoundryUpgradeCommand(player, cmd.data, 'attack');
+                break;
             case 'foundry_blink_upgrade':
                 this.executeFoundryUpgradeCommand(player, cmd.data, 'blink');
                 break;
@@ -4457,7 +4463,11 @@ export class GameState {
         }
     }
 
-    private executeFoundryUpgradeCommand(player: Player, data: any, upgradeType: 'strafe' | 'regen' | 'blink'): void {
+    private executeFoundryUpgradeCommand(
+        player: Player,
+        data: any,
+        upgradeType: 'strafe' | 'regen' | 'blink' | 'attack'
+    ): void {
         const { buildingId } = data;
         const building = player.buildings[buildingId];
         if (!(building instanceof SubsidiaryFactory)) {
@@ -4475,6 +4485,12 @@ export class GameState {
         if (upgradeType === 'blink') {
             if (building.canQueueBlinkUpgrade() && player.spendEnergy(Constants.FOUNDRY_BLINK_UPGRADE_COST)) {
                 building.enqueueProduction(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
+            }
+            return;
+        }
+        if (upgradeType === 'attack') {
+            if (building.canQueueAttackUpgrade() && player.spendEnergy(Constants.FOUNDRY_ATTACK_UPGRADE_COST)) {
+                building.enqueueProduction(Constants.FOUNDRY_ATTACK_UPGRADE_ITEM);
             }
             return;
         }

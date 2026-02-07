@@ -771,6 +771,13 @@ export class SubsidiaryFactory extends Building {
     }
 
     /**
+     * Check if +1 ATK upgrade is available
+     */
+    canUpgradeAttack(): boolean {
+        return this.isComplete && !this.owner.hasAttackUpgrade;
+    }
+
+    /**
      * Check if Regen upgrade can be queued for production
      */
     canQueueRegenUpgrade(): boolean {
@@ -782,6 +789,13 @@ export class SubsidiaryFactory extends Building {
      */
     canQueueBlinkUpgrade(): boolean {
         return this.canUpgradeBlink() && !this.hasProductionItem(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
+    }
+
+    /**
+     * Check if +1 ATK upgrade can be queued for production
+     */
+    canQueueAttackUpgrade(): boolean {
+        return this.canUpgradeAttack() && !this.hasProductionItem(Constants.FOUNDRY_ATTACK_UPGRADE_ITEM);
     }
 
     /**
@@ -815,6 +829,15 @@ export class SubsidiaryFactory extends Building {
     upgradeBlink(): boolean {
         if (!this.canUpgradeBlink()) return false;
         this.owner.hasBlinkUpgrade = true;
+        return true;
+    }
+
+    /**
+     * Upgrade starlings with +1 ATK
+     */
+    upgradeAttack(): boolean {
+        if (!this.canUpgradeAttack()) return false;
+        this.owner.hasAttackUpgrade = true;
         return true;
     }
 }
