@@ -617,36 +617,7 @@ class GameController {
             return false;
         }
 
-        let canCreateWarpGate = false;
-        for (const mirror of this.selectedMirrors) {
-            if (!mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) {
-                continue;
-            }
-
-            const ray = new LightRay(
-                mirror.position,
-                new Vector2D(
-                    worldPos.x - mirror.position.x,
-                    worldPos.y - mirror.position.y
-                ).normalize(),
-                1.0
-            );
-
-            let hasLineOfSight = true;
-            for (const asteroid of this.game.asteroids) {
-                if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                    hasLineOfSight = false;
-                    break;
-                }
-            }
-
-            if (hasLineOfSight) {
-                canCreateWarpGate = true;
-                break;
-            }
-        }
-
-        if (!canCreateWarpGate) {
+        if (!this.canCreateWarpGateFromSelectedMirrors(worldPos)) {
             return false;
         }
 
@@ -669,6 +640,45 @@ class GameController {
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
         return true;
+    }
+
+    private canCreateWarpGateFromSelectedMirrors(targetPos?: Vector2D): boolean {
+        if (!this.game) {
+            return false;
+        }
+
+        for (const mirror of this.selectedMirrors) {
+            if (!mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) {
+                continue;
+            }
+
+            if (!targetPos) {
+                return true;
+            }
+
+            const ray = new LightRay(
+                mirror.position,
+                new Vector2D(
+                    targetPos.x - mirror.position.x,
+                    targetPos.y - mirror.position.y
+                ).normalize(),
+                1.0
+            );
+
+            let hasLineOfSight = true;
+            for (const asteroid of this.game.asteroids) {
+                if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
+                    hasLineOfSight = false;
+                    break;
+                }
+            }
+
+            if (hasLineOfSight) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1384,6 +1394,9 @@ class GameController {
                             y,
                             this.hasSeenFoundry
                         );
+                        if (this.renderer.highlightedButtonIndex === 1 && !this.canCreateWarpGateFromSelectedMirrors()) {
+                            this.renderer.highlightedButtonIndex = -1;
+                        }
                     } else if (this.selectedWarpGate) {
                         this.renderer.highlightedButtonIndex = this.getNearestButtonIndexFromAngle(angle, 4);
                     } else if (this.selectedBuildings.size === 1) {
@@ -1881,7 +1894,9 @@ class GameController {
                     dy = lastY - warpGateButtonY;
                     if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
                         console.log('Mirror command: Create Warp Gate');
-                        this.mirrorCommandMode = 'warpgate';
+                        if (this.canCreateWarpGateFromSelectedMirrors()) {
+                            this.mirrorCommandMode = 'warpgate';
+                        }
                         // User will now tap a location to create the warp gate
                         isPanning = false;
                         isMouseDown = false;
@@ -2304,8 +2319,10 @@ class GameController {
                                 this.selectedMirrors.clear();
                             } else if (this.renderer.highlightedButtonIndex === 1) {
                                 // Warp gate button
-                                this.mirrorCommandMode = 'warpgate';
-                                console.log('Radial selection: Mirror command mode set to warpgate');
+                                if (this.canCreateWarpGateFromSelectedMirrors()) {
+                                    this.mirrorCommandMode = 'warpgate';
+                                    console.log('Radial selection: Mirror command mode set to warpgate');
+                                }
                             } else if (this.renderer.highlightedButtonIndex === 2 && this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
                                 if (foundry) {
@@ -2983,7 +3000,7 @@ class GameController {
         this.updateStarlingMergeHold();
         this.updateMirrorWarpGateHold();
 
-        if (this.mirrorCommandMode === 'warpgate' && this.selectedMirrors.size === 0) {
+        if (this.mirrorCommandMode === 'warpgate' && !this.canCreateWarpGateFromSelectedMirrors()) {
             this.mirrorCommandMode = null;
         }
         
@@ -3028,8 +3045,11 @@ class GameController {
     private render(): void {
         if (this.game) {
             this.updateFoundryButtonState();
+            const canCreateWarpGate = this.selectedMirrors.size > 0
+                && this.canCreateWarpGateFromSelectedMirrors();
+            this.renderer.canCreateWarpGateFromMirrors = canCreateWarpGate;
             this.renderer.isWarpGatePlacementMode = this.mirrorCommandMode === 'warpgate'
-                && this.selectedMirrors.size > 0;
+                && canCreateWarpGate;
             this.renderer.render(this.game);
         }
     }

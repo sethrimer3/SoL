@@ -45,6 +45,7 @@ export class GameRenderer {
     public hasSeenFoundry: boolean = false;
     public hasActiveFoundry: boolean = false;
     public isWarpGatePlacementMode: boolean = false;
+    public canCreateWarpGateFromMirrors: boolean = false;
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -2846,14 +2847,15 @@ export class GameRenderer {
         this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
 
         // Draw "Warp Gate" button (center or right)
-        const isWarpGateHighlighted = this.highlightedButtonIndex === 1;
-        const isWarpGateArmed = this.isWarpGatePlacementMode;
+        const isWarpGateAvailable = this.canCreateWarpGateFromMirrors;
+        const isWarpGateHighlighted = this.highlightedButtonIndex === 1 && isWarpGateAvailable;
+        const isWarpGateArmed = this.isWarpGatePlacementMode && isWarpGateAvailable;
         const warpGatePulse = 0.35 + 0.25 * Math.sin(timeSec * 4);
         const warpGateFill = isWarpGateArmed
             ? `rgba(0, 255, 255, ${0.35 + warpGatePulse})`
-            : (isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : '#444444');
+            : (isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : (isWarpGateAvailable ? '#444444' : '#2C2C2C'));
         this.ctx.fillStyle = warpGateFill;
-        this.ctx.strokeStyle = isWarpGateArmed ? '#B8FFFF' : '#00FFFF';
+        this.ctx.strokeStyle = isWarpGateAvailable ? (isWarpGateArmed ? '#B8FFFF' : '#00FFFF') : '#666666';
         this.ctx.lineWidth = isWarpGateHighlighted || isWarpGateArmed ? 4 : 2;
         if (isWarpGateArmed) {
             this.ctx.save();
@@ -2870,7 +2872,7 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.stroke();
         
-        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillStyle = isWarpGateAvailable ? '#FFFFFF' : '#8A8A8A';
         this.ctx.font = `${9 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
