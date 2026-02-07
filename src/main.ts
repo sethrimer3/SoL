@@ -792,6 +792,31 @@ class GameController {
         return this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount);
     }
 
+    private getBuildingAbilityAnchorScreen(): Vector2D | null {
+        if (this.selectedBase) {
+            return this.renderer.worldToScreen(this.selectedBase.position);
+        }
+
+        if (this.selectedMirrors.size > 0) {
+            for (const mirror of this.selectedMirrors) {
+                return this.renderer.worldToScreen(mirror.position);
+            }
+        }
+
+        if (this.selectedWarpGate) {
+            return this.renderer.worldToScreen(this.selectedWarpGate.position);
+        }
+
+        if (this.selectedBuildings.size === 1) {
+            const selectedBuilding = Array.from(this.selectedBuildings)[0];
+            if (selectedBuilding instanceof SubsidiaryFactory) {
+                return this.renderer.worldToScreen(selectedBuilding.position);
+            }
+        }
+
+        return null;
+    }
+
     private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
         if (buttonCount <= 0) {
             return [];
@@ -1269,13 +1294,15 @@ class GameController {
             } else if (this.isDraggingBuildingArrow) {
                 // Update arrow direction for building abilities
                 const player = this.getLocalPlayer();
-                if (this.selectionStartScreen) {
-                    this.renderer.buildingAbilityArrowStart = this.selectionStartScreen;
+                const buildingAbilityAnchor = this.getBuildingAbilityAnchorScreen();
+                const buildingAbilityStart = buildingAbilityAnchor ?? this.selectionStartScreen;
+                if (buildingAbilityStart) {
+                    this.renderer.buildingAbilityArrowStart = buildingAbilityStart;
                     this.renderer.buildingAbilityArrowEnd = new Vector2D(x, y);
                     
                     // Calculate angle and determine which button is highlighted
-                    const dx = x - this.selectionStartScreen.x;
-                    const dy = y - this.selectionStartScreen.y;
+                    const dx = x - buildingAbilityStart.x;
+                    const dy = y - buildingAbilityStart.y;
                     const angle = Math.atan2(dy, dx);
                     
                     // Determine number of buttons based on what's selected
@@ -2075,6 +2102,10 @@ class GameController {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
+                const buildingAbilityAnchor = this.getBuildingAbilityAnchorScreen();
+                const buildingAbilityMovement = buildingAbilityAnchor
+                    ? buildingAbilityAnchor.distanceTo(endPos)
+                    : totalMovement;
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
                 const hasHeroUnits = this.hasHeroUnitsSelected();
@@ -2141,7 +2172,7 @@ class GameController {
                         this.selectedUnits.clear();
                         this.renderer.selectedUnits = this.selectedUnits;
                     }
-                } else if (this.isDraggingBuildingArrow && totalMovement >= abilityDragThreshold) {
+                } else if (this.isDraggingBuildingArrow && buildingAbilityMovement >= abilityDragThreshold) {
                     // Building ability arrow was dragged - activate the highlighted button
                     const player = this.getLocalPlayer();
                     if (player && this.renderer.highlightedButtonIndex >= 0) {
