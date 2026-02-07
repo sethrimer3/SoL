@@ -240,7 +240,7 @@ export class GameRenderer {
                     x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
                     y: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
                     size: layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]),
-                    brightness: 0.3 + seededRandom() * 0.7  // Vary brightness
+                    brightness: 0.15 + seededRandom() * 0.55  // Vary brightness (darker sky)
                 });
             }
             
