@@ -69,6 +69,14 @@ export class GameRenderer {
     private readonly VELARIS_FORGE_SCRIPT_SCALE = 1.15;
     private readonly VELARIS_FORGE_MAIN_GRAPHEME_LETTER = 'V';
     private readonly VELARIS_FORGE_MAIN_GRAPHEME_SCALE = 2.05;
+    private readonly VELARIS_FOUNDRY_GRAPHEME_LETTER = 'F';
+    private readonly VELARIS_FOUNDRY_PARTICLE_COUNT = 26;
+    private readonly VELARIS_FOUNDRY_PARTICLE_RADIUS_PX = 1.2;
+    private readonly VELARIS_FOUNDRY_PARTICLE_ORBIT_SPEED_RAD_PER_SEC = 0.8;
+    private readonly VELARIS_WARP_GATE_PARTICLE_COUNT = 120;
+    private readonly VELARIS_WARP_GATE_PARTICLE_BASE_SPEED = 0.55;
+    private readonly VELARIS_WARP_GATE_PARTICLE_SWIRL_TIGHTNESS = 2.4;
+    private readonly VELARIS_WARP_GATE_PARTICLE_CENTER_FADE = 0.18;
     private readonly VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-A.png',
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-B.png',
@@ -127,6 +135,8 @@ export class GameRenderer {
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
     private velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
+    private velarisFoundrySeeds = new WeakMap<SubsidiaryFactory, number>();
+    private velarisWarpGateSeeds = new WeakMap<WarpGate, number>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
@@ -715,6 +725,100 @@ export class GameRenderer {
             const y = screenPos.y + state.positionsY[i] * graphemeSize;
             this.ctx.beginPath();
             this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        this.ctx.restore();
+    }
+
+    private drawVelarisFoundrySigil(
+        foundry: SubsidiaryFactory,
+        screenPos: Vector2D,
+        size: number,
+        displayColor: string,
+        gameTime: number,
+        shouldDim: boolean
+    ): void {
+        const graphemePath = this.getVelarisGraphemeSpritePath(this.VELARIS_FOUNDRY_GRAPHEME_LETTER);
+        const graphemeSize = size * 1.55;
+        const particleRadius = Math.max(1, this.VELARIS_FOUNDRY_PARTICLE_RADIUS_PX * this.zoom);
+        const isProducing = Boolean(foundry.currentProduction);
+        const speedMultiplier = isProducing ? 2.6 : 1;
+        const orbitSpeed = this.VELARIS_FOUNDRY_PARTICLE_ORBIT_SPEED_RAD_PER_SEC * speedMultiplier;
+        const seed = this.getVelarisFoundrySeed(foundry);
+        const twoPi = Math.PI * 2;
+        const orbitRadiusBase = graphemeSize * 0.62;
+        const glyphAlpha = shouldDim ? 0.5 : 0.85;
+        const particleAlpha = shouldDim ? 0.35 : 0.7;
+
+        if (graphemePath) {
+            this.ctx.save();
+            this.ctx.globalAlpha = glyphAlpha;
+            this.drawVelarisGraphemeSprite(graphemePath, screenPos.x, screenPos.y, graphemeSize, displayColor);
+            this.ctx.restore();
+        }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = particleAlpha;
+        this.ctx.fillStyle = displayColor;
+        for (let i = 0; i < this.VELARIS_FOUNDRY_PARTICLE_COUNT; i++) {
+            const baseAngle = this.getPseudoRandom(seed + i * 1.37) * twoPi;
+            const orbitRadius = orbitRadiusBase * (0.75 + this.getPseudoRandom(seed + i * 2.11) * 0.4);
+            const angle = baseAngle + gameTime * orbitSpeed + this.getPseudoRandom(seed + i * 3.07) * 0.5;
+            const x = screenPos.x + Math.cos(angle) * orbitRadius;
+            const y = screenPos.y + Math.sin(angle) * orbitRadius;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        this.ctx.restore();
+    }
+
+    private drawVelarisWarpGateVortex(
+        gate: WarpGate,
+        screenPos: Vector2D,
+        radiusPx: number,
+        gameTime: number,
+        displayColor: string
+    ): void {
+        const twoPi = Math.PI * 2;
+        const seed = this.getVelarisWarpGateSeed(gate);
+        const particleRadius = Math.max(1, 1.35 * this.zoom);
+        const ringAlpha = 0.65;
+
+        this.ctx.save();
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.lineWidth = 3;
+        this.ctx.globalAlpha = ringAlpha;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radiusPx, 0, twoPi);
+        this.ctx.stroke();
+        this.ctx.restore();
+
+        this.ctx.save();
+        this.ctx.fillStyle = displayColor;
+        for (let i = 0; i < this.VELARIS_WARP_GATE_PARTICLE_COUNT; i++) {
+            const seedOffset = seed + i * 0.83;
+            const progress = (gameTime * this.VELARIS_WARP_GATE_PARTICLE_BASE_SPEED
+                + this.getPseudoRandom(seedOffset)) % 1;
+            const radiusFactor = 1 - progress;
+            const alphaFactor = Math.max(
+                0,
+                (radiusFactor - this.VELARIS_WARP_GATE_PARTICLE_CENTER_FADE)
+                    / (1 - this.VELARIS_WARP_GATE_PARTICLE_CENTER_FADE)
+            );
+            if (alphaFactor <= 0) {
+                continue;
+            }
+            const baseAngle = this.getPseudoRandom(seedOffset + 2.4) * twoPi;
+            const swirlAngle = baseAngle
+                + gameTime * 0.9
+                + progress * this.VELARIS_WARP_GATE_PARTICLE_SWIRL_TIGHTNESS * twoPi;
+            const particleRadiusPx = radiusPx * radiusFactor;
+            const x = screenPos.x + Math.cos(swirlAngle) * particleRadiusPx;
+            const y = screenPos.y + Math.sin(swirlAngle) * particleRadiusPx;
+            this.ctx.globalAlpha = alphaFactor * 0.9;
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, particleRadius, 0, twoPi);
             this.ctx.fill();
         }
         this.ctx.restore();
@@ -1611,6 +1715,24 @@ export class GameRenderer {
         return seed;
     }
 
+    private getVelarisFoundrySeed(foundry: SubsidiaryFactory): number {
+        let seed = this.velarisFoundrySeeds.get(foundry);
+        if (seed === undefined) {
+            seed = Math.random() * 10000;
+            this.velarisFoundrySeeds.set(foundry, seed);
+        }
+        return seed;
+    }
+
+    private getVelarisWarpGateSeed(gate: WarpGate): number {
+        let seed = this.velarisWarpGateSeeds.get(gate);
+        if (seed === undefined) {
+            seed = Math.random() * 10000;
+            this.velarisWarpGateSeeds.set(gate, seed);
+        }
+        return seed;
+    }
+
     /**
      * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
      */
@@ -2486,16 +2608,22 @@ export class GameRenderer {
         const chargeProgress = gate.chargeTime / Constants.WARP_GATE_CHARGE_TIME;
         const currentRadius = Math.min(maxRadius, chargeProgress * maxRadius);
         const isSelected = this.selectedWarpGate === gate;
+        const isVelarisGate = gate.owner.faction === Faction.VELARIS;
+        const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
 
         if (!gate.isComplete) {
-            // Draw charging effect
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = 3;
-            this.ctx.globalAlpha = 0.5 + Math.sin(gate.chargeTime * 5) * 0.2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
+            if (isVelarisGate) {
+                this.drawVelarisWarpGateVortex(gate, screenPos, currentRadius, game.gameTime, displayColor);
+            } else {
+                // Draw charging effect
+                this.ctx.strokeStyle = '#00FFFF';
+                this.ctx.lineWidth = 3;
+                this.ctx.globalAlpha = 0.5 + Math.sin(gate.chargeTime * 5) * 0.2;
+                this.ctx.beginPath();
+                this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.globalAlpha = 1.0;
+            }
 
             // Draw charge progress
             this.ctx.strokeStyle = '#FFFFFF';
@@ -2514,8 +2642,11 @@ export class GameRenderer {
             this.ctx.textAlign = 'left';
             this.ctx.textBaseline = 'alphabetic';
         } else {
-            const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
-            this.drawWarpGateProductionEffect(screenPos, maxRadius, game, displayColor);
+            if (isVelarisGate) {
+                this.drawVelarisWarpGateVortex(gate, screenPos, maxRadius, game.gameTime, displayColor);
+            } else {
+                this.drawWarpGateProductionEffect(screenPos, maxRadius, game, displayColor);
+            }
             if (isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, maxRadius);
             }
@@ -4969,6 +5100,7 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
         const ladSun = game.suns.find(s => s.type === 'lad');
+        const isVelarisFoundry = building.owner.faction === Faction.VELARIS;
         let buildingColor = color;
         let ownerSide: 'light' | 'dark' | undefined = undefined;
         if (ladSun && building.owner) {
@@ -5278,6 +5410,7 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
         const ladSun = game.suns.find(s => s.type === 'lad');
+        const isVelarisFoundry = building.owner.faction === Faction.VELARIS;
         let buildingColor = color;
         let ownerSide: 'light' | 'dark' | undefined = undefined;
         if (ladSun && building.owner) {
@@ -5348,76 +5481,84 @@ export class GameRenderer {
             this.drawLadAura(screenPos, radius, auraColor, ownerSide);
         }
 
-        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
-        const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
-        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
-
-        const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
-        const middleSprite = this.getTintedSprite(middleSpritePath, displayColor);
-        const topSprite = this.getTintedSprite(topSpritePath, displayColor);
-
-        const referenceSprite = bottomSprite || middleSprite || topSprite;
-        if (referenceSprite) {
-            const spriteScale = (radius * 2) / referenceSprite.width;
-            const timeSec = game.gameTime;
-            const isProducing = Boolean(building.currentProduction);
-            
-            // Always spin at base speed, increase 2.5x when producing
-            // Smooth acceleration/deceleration based on production progress
-            const baseSpinSpeedRad = 0.2; // Base slow spin speed
-            const producingMultiplier = 2.5;
-            const ACCELERATION_PHASE_DURATION = 0.2; // Accelerate during first 20% of production
-            
-            // Calculate speed multiplier with smooth acceleration/deceleration
-            // At start of production (progress=0): speed = 1.0
-            // At middle of production (progress=0.5): speed = 2.5
-            // At end of production (progress=1.0): speed = 2.5 (stays fast until production completes)
-            let speedMultiplier = 1.0;
-            if (isProducing) {
-                // Smooth acceleration in first 20% of production
-                if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
-                    const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
-                    const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
-                    speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
-                } else {
-                    // Stay at full speed during most of production
-                    speedMultiplier = producingMultiplier;
-                }
-            }
-            
-            const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
-            const bottomRotationRad = timeSec * spinSpeedRad;
-            const topRotationRad = -timeSec * spinSpeedRad;
-
-            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
-                if (!sprite) {
-                    return;
-                }
-                const spriteWidth = sprite.width * spriteScale;
-                const spriteHeight = sprite.height * spriteScale;
-                this.ctx.save();
-                this.ctx.translate(screenPos.x, screenPos.y);
-                this.ctx.rotate(rotationRad);
-                this.ctx.drawImage(
-                    sprite,
-                    -spriteWidth / 2,
-                    -spriteHeight / 2,
-                    spriteWidth,
-                    spriteHeight
-                );
-                this.ctx.restore();
-            };
-
-            drawLayer(bottomSprite, bottomRotationRad);
-
+        if (isVelarisFoundry) {
+            this.drawVelarisFoundrySigil(building, screenPos, radius, displayColor, game.gameTime, shouldDim);
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
-                // Draw foundry production buttons when selected
                 this.drawFoundryButtons(building, screenPos);
             }
+        } else {
+            const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
+            const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
+            const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
 
-            drawLayer(middleSprite, 0);
-            drawLayer(topSprite, topRotationRad);
+            const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
+            const middleSprite = this.getTintedSprite(middleSpritePath, displayColor);
+            const topSprite = this.getTintedSprite(topSpritePath, displayColor);
+
+            const referenceSprite = bottomSprite || middleSprite || topSprite;
+            if (referenceSprite) {
+                const spriteScale = (radius * 2) / referenceSprite.width;
+                const timeSec = game.gameTime;
+                const isProducing = Boolean(building.currentProduction);
+                
+                // Always spin at base speed, increase 2.5x when producing
+                // Smooth acceleration/deceleration based on production progress
+                const baseSpinSpeedRad = 0.2; // Base slow spin speed
+                const producingMultiplier = 2.5;
+                const ACCELERATION_PHASE_DURATION = 0.2; // Accelerate during first 20% of production
+                
+                // Calculate speed multiplier with smooth acceleration/deceleration
+                // At start of production (progress=0): speed = 1.0
+                // At middle of production (progress=0.5): speed = 2.5
+                // At end of production (progress=1.0): speed = 2.5 (stays fast until production completes)
+                let speedMultiplier = 1.0;
+                if (isProducing) {
+                    // Smooth acceleration in first 20% of production
+                    if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
+                        const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
+                        const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
+                        speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
+                    } else {
+                        // Stay at full speed during most of production
+                        speedMultiplier = producingMultiplier;
+                    }
+                }
+                
+                const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
+                const bottomRotationRad = timeSec * spinSpeedRad;
+                const topRotationRad = -timeSec * spinSpeedRad;
+
+                const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+                    if (!sprite) {
+                        return;
+                    }
+                    const spriteWidth = sprite.width * spriteScale;
+                    const spriteHeight = sprite.height * spriteScale;
+                    this.ctx.save();
+                    this.ctx.translate(screenPos.x, screenPos.y);
+                    this.ctx.rotate(rotationRad);
+                    this.ctx.drawImage(
+                        sprite,
+                        -spriteWidth / 2,
+                        -spriteHeight / 2,
+                        spriteWidth,
+                        spriteHeight
+                    );
+                    this.ctx.restore();
+                };
+
+                drawLayer(bottomSprite, bottomRotationRad);
+
+                if (building.isSelected) {
+                    this.drawBuildingSelectionIndicator(screenPos, radius);
+                    // Draw foundry production buttons when selected
+                    this.drawFoundryButtons(building, screenPos);
+                }
+
+                drawLayer(middleSprite, 0);
+                drawLayer(topSprite, topRotationRad);
+            }
         }
 
         if (building.currentProduction) {
