@@ -15,6 +15,7 @@ export const LAD_SUN_OUTLINE_COLOR = '#FFD700'; // Golden outline color for LaD 
 export const WARP_GATE_CHARGE_TIME = 6.0; // Total seconds to complete (deprecated, now energy-based)
 export const WARP_GATE_ENERGY_REQUIRED = 100; // Total energy needed to mature a warp gate
 export const WARP_GATE_INITIAL_DELAY = 1.0; // Seconds before warp gate starts
+export const MIRROR_WARP_GATE_HOLD_DURATION_MS = 1000;
 export const WARP_GATE_SPIRAL_RADIUS = 200;
 export const WARP_GATE_SPIRAL_MIN_DISTANCE = 5;
 export const WARP_GATE_SPIRAL_FORCE_RADIAL = 50;
