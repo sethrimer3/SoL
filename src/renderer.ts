@@ -131,6 +131,9 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE = 0.35;
     private readonly VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE = 0.25;
     private readonly VELARIS_STARLING_SHAPE_BLEND_SPEED = 1.4;
+    private readonly VELARIS_STARLING_GRAPHEME_ALPHA_MAX = 0.3;
+    private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
+    private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private graphemeMaskCache = new Map<string, ImageData>();
@@ -4230,6 +4233,7 @@ export class GameRenderer {
                 }
             }
         }
+        const isInactive = !isMoving && !isFiring;
 
         const isTriangleTarget = isMoving && !isFiring;
         const isPentagonTarget = isFiring;
@@ -4264,6 +4268,22 @@ export class GameRenderer {
             + (polygonTimeScale - this.VELARIS_STARLING_CLOUD_TIME_SCALE) * state.shapeBlend;
         const scaledTimeSec = timeSec * timeScale;
         const particleCount = this.VELARIS_STARLING_PARTICLE_COUNT;
+
+        if (isInactive) {
+            const graphemeIndex = Math.floor(
+                this.getPseudoRandom(seedBase + 7.7) * this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length
+            );
+            const graphemePath = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[graphemeIndex];
+            const pulse = (Math.sin(timeSec * this.VELARIS_STARLING_GRAPHEME_PULSE_SPEED + seedBase) + 1) * 0.5;
+            const graphemeAlpha = pulse * this.VELARIS_STARLING_GRAPHEME_ALPHA_MAX;
+            const graphemeSize = size * this.VELARIS_STARLING_GRAPHEME_SIZE_SCALE;
+            if (graphemePath && graphemeAlpha > 0) {
+                this.ctx.save();
+                this.ctx.globalAlpha = graphemeAlpha;
+                this.drawVelarisGraphemeSprite(graphemePath, screenPos.x, screenPos.y, graphemeSize, displayColor);
+                this.ctx.restore();
+            }
+        }
 
         this.ctx.save();
         this.ctx.fillStyle = particleColor;
