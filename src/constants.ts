@@ -239,6 +239,27 @@ export const SUBSIDIARY_FACTORY_ATTACK_SPEED = 0; // No direct attack
 export const SUBSIDIARY_FACTORY_RADIUS = 40; // Building size
 export const SUBSIDIARY_FACTORY_PRODUCTION_INTERVAL = 15.0; // Seconds between unit productions
 
+// Striker Tower building constants (Velaris faction - manual missile launch)
+export const STRIKER_TOWER_MAX_HEALTH = 300;
+export const STRIKER_TOWER_ATTACK_RANGE = 400; // Range for missile targeting
+export const STRIKER_TOWER_ATTACK_DAMAGE = 100; // Missile explosion damage
+export const STRIKER_TOWER_ATTACK_SPEED = 0; // Manual fire only, no auto attack
+export const STRIKER_TOWER_RADIUS = 32; // Building size
+export const STRIKER_TOWER_RELOAD_TIME = 10.0; // Seconds to reload missile
+export const STRIKER_TOWER_EXPLOSION_RADIUS = 60; // Explosion radius
+
+// Lock-on Laser Tower building constants (Velaris faction - laser beam)
+export const LOCKON_TOWER_MAX_HEALTH = 250;
+export const LOCKON_TOWER_ATTACK_RANGE = 300; // Range for locking onto enemies
+export const LOCKON_TOWER_ATTACK_DAMAGE = 200; // Massive laser damage
+export const LOCKON_TOWER_ATTACK_SPEED = 0; // Charged attack, not rate-based
+export const LOCKON_TOWER_RADIUS = 30; // Building size
+export const LOCKON_TOWER_LOCKON_TIME = 2.0; // Seconds to lock on before firing
+export const LOCKON_TOWER_LASER_WIDTH_PX = 20; // Laser beam width
+
+// Unit visibility constants
+export const UNIT_VISIBILITY_RADIUS = 200; // Distance in pixels that units can see around them
+
 // Building costs (energy-based construction)
 // Note: Internal names are different from display names
 // MINIGUN = Cannon, GATLING = Gatling Tower, SWIRLER = Cyclone, SUBSIDIARY_FACTORY = Workshop/Foundry
@@ -246,6 +267,8 @@ export const MINIGUN_COST = 500; // Cannon
 export const GATLING_COST = 250; // Gatling
 export const SWIRLER_COST = 750; // Cyclone
 export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
+export const STRIKER_TOWER_COST = 400; // Striker Tower (Velaris)
+export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
