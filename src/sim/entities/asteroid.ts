@@ -3,6 +3,7 @@
  */
 
 import { Vector2D } from '../math';
+import { getGameRNG } from '../../seeded-random';
 
 /**
  * Asteroid - Polygon obstacle that blocks light and casts shadows
@@ -18,7 +19,8 @@ export class Asteroid {
         public size: number
     ) {
         this.generateVertices();
-        this.rotationSpeed = (Math.random() - 0.5) * 0.5; // Random rotation speed
+        const rng = getGameRNG();
+        this.rotationSpeed = rng.nextFloat(-0.25, 0.25); // Random rotation speed
     }
 
     /**
@@ -26,10 +28,11 @@ export class Asteroid {
      */
     private generateVertices(): void {
         this.vertices = [];
+        const rng = getGameRNG();
         for (let i = 0; i < this.sides; i++) {
             const angle = (Math.PI * 2 * i) / this.sides;
             // Add some randomness to make asteroids less uniform
-            const radiusVariation = 0.8 + Math.random() * 0.4;
+            const radiusVariation = rng.nextFloat(0.8, 1.2);
             const radius = this.size * radiusVariation;
             this.vertices.push(new Vector2D(
                 Math.cos(angle) * radius,

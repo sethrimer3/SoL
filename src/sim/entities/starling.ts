@@ -13,6 +13,7 @@ import type { Player } from './player';
 import type { CombatTarget } from './buildings';
 import type { Asteroid } from './asteroid';
 import type { GameState } from '../game-state';
+import { getGameRNG } from '../../seeded-random';
 
 export class Starling extends Unit {
     private explorationTarget: Vector2D | null = null;
@@ -216,8 +217,9 @@ export class Starling extends Unit {
                 if (this.explorationTimer <= 0 || !this.explorationTarget ||
                     this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
                     // Pick a random position in shadow
-                    const angle = Math.random() * Math.PI * 2;
-                    const distance = 300 + Math.random() * 500;
+                    const rng = getGameRNG();
+                    const angle = rng.nextAngle();
+                    const distance = rng.nextFloat(300, 800);
                     this.explorationTarget = new Vector2D(
                         this.position.x + Math.cos(angle) * distance,
                         this.position.y + Math.sin(angle) * distance

@@ -6,6 +6,7 @@ import type { Asteroid } from './asteroid';
 import type { SolarMirror } from './solar-mirror';
 import type { Sun } from './sun';
 import type { GameState } from '../game-state';
+import { getGameRNG } from '../../seeded-random';
 
 export class StellarForge {
     health: number = Constants.STELLAR_FORGE_MAX_HEALTH;
@@ -37,7 +38,8 @@ export class StellarForge {
         public owner: Player
     ) {
         // Initialize crunch timer with random offset to stagger crunches
-        this.crunchTimer = Math.random() * Constants.FORGE_CRUNCH_INTERVAL;
+        const rng = getGameRNG();
+        this.crunchTimer = rng.nextFloat(0, Constants.FORGE_CRUNCH_INTERVAL);
     }
     
     /**

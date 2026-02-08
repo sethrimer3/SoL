@@ -1,4 +1,5 @@
 import type { Asteroid, Building, CombatTarget, Player, SolarMirror, StellarForge, Unit, Vector2D } from '../game-core';
+import { getGameRNG } from '../seeded-random';
 
 type SlyHeroDeps = {
     Unit: typeof Unit;
@@ -269,11 +270,12 @@ export const createSlyHero = (deps: SlyHeroDeps) => {
         createDisintegrationParticles(): DisintegrationParticle[] {
             const particles: DisintegrationParticle[] = [];
             const count = Constants.STICKY_BOMB_DISINTEGRATE_PARTICLE_COUNT;
+            const rng = getGameRNG();
 
             for (let i = 0; i < count; i++) {
                 // Random erratic direction
-                const angle = Math.random() * 2 * Math.PI;
-                const speed = Constants.STICKY_BOMB_DISINTEGRATE_PARTICLE_SPEED * (0.5 + Math.random() * 0.5);
+                const angle = rng.nextAngle();
+                const speed = Constants.STICKY_BOMB_DISINTEGRATE_PARTICLE_SPEED * rng.nextFloat(0.5, 1.0);
                 
                 const velocity = new Vector2D(
                     Math.cos(angle) * speed,
