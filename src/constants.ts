@@ -257,6 +257,16 @@ export const LOCKON_TOWER_RADIUS = 30; // Building size
 export const LOCKON_TOWER_LOCKON_TIME = 2.0; // Seconds to lock on before firing
 export const LOCKON_TOWER_LASER_WIDTH_PX = 20; // Laser beam width
 
+// Shield Tower constants (Radiant)
+export const SHIELD_TOWER_MAX_HEALTH = 300;
+export const SHIELD_TOWER_ATTACK_RANGE = 0; // No direct attack
+export const SHIELD_TOWER_ATTACK_DAMAGE = 0; // Defensive building
+export const SHIELD_TOWER_ATTACK_SPEED = 0; // No direct attack
+export const SHIELD_TOWER_RADIUS = 35; // Building size
+export const SHIELD_TOWER_SHIELD_RADIUS = 200; // Shield projection radius
+export const SHIELD_TOWER_SHIELD_HEALTH = 500; // Damage needed to disable shield
+export const SHIELD_TOWER_REGENERATION_TIME = 10.0; // Seconds before shield can reactivate
+
 // Unit visibility constants
 export const UNIT_VISIBILITY_RADIUS = 200; // Distance in pixels that units can see around them
 
@@ -269,6 +279,7 @@ export const SWIRLER_COST = 750; // Cyclone
 export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const STRIKER_TOWER_COST = 400; // Striker Tower (Velaris)
 export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
+export const SHIELD_TOWER_COST = 650; // Shield Tower (Radiant)
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 

@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -2710,12 +2710,30 @@ export class GameRenderer {
             if (isSelected) {
                 const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
                 const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
-                const buttonConfigs = [
-                    { label: 'Foundry', index: 0 },
-                    { label: 'Cannon', index: 1 },
-                    { label: 'Gatling', index: 2 },
-                    { label: 'Cyclone', index: 3 }
-                ];
+                
+                // Faction-specific building buttons
+                let buttonConfigs: Array<{ label: string; index: number }>;
+                if (gate.owner.faction === Faction.RADIANT) {
+                    buttonConfigs = [
+                        { label: 'Foundry', index: 0 },
+                        { label: 'Cannon', index: 1 },
+                        { label: 'Gatling', index: 2 },
+                        { label: 'Shield', index: 3 }
+                    ];
+                } else if (gate.owner.faction === Faction.VELARIS) {
+                    buttonConfigs = [
+                        { label: 'Foundry', index: 0 },
+                        { label: 'Striker', index: 1 },
+                        { label: 'Lock-on', index: 2 },
+                        { label: 'Cyclone', index: 3 }
+                    ];
+                } else {
+                    // Aurum or default
+                    buttonConfigs = [
+                        { label: 'Foundry', index: 0 }
+                    ];
+                }
+                
                 const positions = this.getRadialButtonOffsets(buttonConfigs.length);
 
                 for (let i = 0; i < buttonConfigs.length; i++) {
@@ -5933,6 +5951,108 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Shield Tower building
+     */
+    private drawShieldTower(building: ShieldTower, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        const displayColor = building.isComplete ? color : '#666666';
+
+        // Draw shield radius if active
+        if (building.shieldActive && building.isComplete) {
+            const shieldRadius = building.shieldRadius * this.zoom;
+            const shieldHealthPercent = building.getShieldHealthPercent();
+            
+            // Draw shield bubble
+            this.ctx.strokeStyle = displayColor;
+            this.ctx.globalAlpha = 0.2 + (shieldHealthPercent * 0.3);
+            this.ctx.lineWidth = 3 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            
+            // Draw shield fill
+            this.ctx.fillStyle = displayColor;
+            this.ctx.globalAlpha = 0.05 + (shieldHealthPercent * 0.1);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
+        } else if (!building.shieldActive && building.isComplete) {
+            // Draw disabled shield indicator (faint)
+            const shieldRadius = building.shieldRadius * this.zoom;
+            this.ctx.strokeStyle = '#444444';
+            this.ctx.globalAlpha = 0.1;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.setLineDash([5 * this.zoom, 5 * this.zoom]);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.setLineDash([]);
+            this.ctx.globalAlpha = 1.0;
+        }
+
+        // Draw the tower base
+        this.ctx.fillStyle = displayColor;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Draw outer ring
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
+        this.ctx.stroke();
+
+        // Draw center indicator
+        const centerColor = building.shieldActive ? displayColor : '#666666';
+        this.ctx.fillStyle = centerColor;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.4, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        if (building.isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, radius);
+            
+            // Draw shield radius indicator
+            if (building.isComplete) {
+                this.ctx.strokeStyle = displayColor;
+                this.ctx.globalAlpha = 0.3;
+                this.ctx.lineWidth = 2;
+                this.ctx.beginPath();
+                this.ctx.arc(screenPos.x, screenPos.y, building.shieldRadius * this.zoom, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.globalAlpha = 1.0;
+            }
+        }
+
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
+        
+        // Draw shield health bar below building health
+        if (building.isComplete) {
+            const barWidth = radius * 2.5;
+            const barHeight = 4 * this.zoom;
+            const x = screenPos.x - barWidth / 2;
+            const y = screenPos.y - radius - 20 - barHeight;
+            
+            // Background
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            this.ctx.fillRect(x, y, barWidth, barHeight);
+            
+            // Shield health fill
+            const shieldPercent = building.shieldActive ? building.getShieldHealthPercent() : 0;
+            const shieldColor = building.shieldActive ? '#00AAFF' : '#444444';
+            this.ctx.fillStyle = shieldColor;
+            this.ctx.fillRect(x, y, barWidth * shieldPercent, barHeight);
+            
+            // Border
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            this.ctx.lineWidth = 1;
+            this.ctx.strokeRect(x, y, barWidth, barHeight);
+        }
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: InstanceType<typeof GraveProjectile>, color: string): void {
@@ -6978,6 +7098,8 @@ export class GameRenderer {
                     this.drawStrikerTower(building, color, game, isEnemy);
                 } else if (building instanceof LockOnLaserTower) {
                     this.drawLockOnLaserTower(building, color, game, isEnemy);
+                } else if (building instanceof ShieldTower) {
+                    this.drawShieldTower(building, color, game, isEnemy);
                 }
             }
         }
@@ -7449,6 +7571,8 @@ export class GameRenderer {
             return 'Striker Tower';
         } else if (building instanceof LockOnLaserTower) {
             return 'Lock-on Tower';
+        } else if (building instanceof ShieldTower) {
+            return 'Shield Tower';
         }
         return 'Building';
     }
