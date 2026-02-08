@@ -20,7 +20,7 @@ import { Vector2D } from './src/sim/math';
 // Test configuration
 const TEST_SEED = 12345;
 const TEST_DURATION_TICKS = 100; // Run simulation for 100 ticks
-const TICK_DURATION = 1/30; // 30 ticks per second
+const TICK_DURATION = 0.033333; // 30 ticks per second (1/30)
 
 /**
  * Test 1: Seeded RNG Determinism

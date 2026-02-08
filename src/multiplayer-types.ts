@@ -103,7 +103,7 @@ export interface BuildBuildingPayload extends BaseCommandPayload {
     
     /** Optional building configuration */
     config?: {
-        [key: string]: any;
+        [key: string]: boolean | number | string;
     };
 }
 
@@ -273,7 +273,7 @@ export interface MatchEndedEventData {
 export interface ErrorEventData {
     code: string;
     message: string;
-    details?: any;
+    details?: unknown;
 }
 
 /**
