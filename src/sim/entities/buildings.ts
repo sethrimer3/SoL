@@ -879,9 +879,9 @@ export class StrikerTower extends Building {
     private reloadTimer: number = 0;
     private missileReady: boolean = true;
     isAwaitingTarget: boolean = false; // True when player has clicked tower and is selecting target
-    countdownTimer: number = 0; // Countdown timer when target is selected (5 seconds)
+    countdownTimer: number = 0; // Countdown timer when target is selected (see COUNTDOWN_DURATION)
     targetPosition: Vector2D | null = null; // Target position for missile strike
-    private readonly COUNTDOWN_DURATION = 5.0; // 5 seconds countdown
+    private readonly COUNTDOWN_DURATION = 5.0; // Countdown duration in seconds
 
     constructor(position: Vector2D, owner: Player) {
         super(

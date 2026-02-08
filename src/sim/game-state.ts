@@ -94,7 +94,7 @@ export class GameState {
     disintegrationParticles: InstanceType<typeof DisintegrationParticle>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
-    strikerTowerExplosions: { position: Vector2D; timestamp: number; shakeTriggered?: boolean }[] = []; // Track striker tower explosions for rendering
+    strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -667,7 +667,7 @@ export class GameState {
                     building.update(deltaTime, enemies, allUnits, this.asteroids, allStructures, Constants.MAP_PLAYABLE_BOUNDARY);
 
                     // Check if StrikerTower countdown completed
-                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0 && building.isMissileReady()) {
+                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0 && building.countdownTimer > -0.1 && building.isMissileReady()) {
                         // Countdown complete, fire the missile!
                         const targetPos = building.targetPosition;
                         const fired = building.fireMissile(

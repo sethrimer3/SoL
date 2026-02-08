@@ -77,6 +77,7 @@ export class GameRenderer {
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
     private screenShakeIntensity: number = 0; // Current screen shake intensity
     private screenShakeTimer: number = 0; // Screen shake timer
+    private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
@@ -6621,7 +6622,7 @@ export class GameRenderer {
      * Draw striker tower missile explosion effect
      * Shows a large, dramatic explosion with expanding rings
      */
-    private drawStrikerTowerExplosion(explosion: { position: Vector2D; timestamp: number; shakeTriggered?: boolean }, age: number): void {
+    private drawStrikerTowerExplosion(explosion: { position: Vector2D; timestamp: number }, age: number): void {
         const screenPos = this.worldToScreen(explosion.position);
         const maxRadius = Constants.STRIKER_TOWER_EXPLOSION_RADIUS * this.zoom;
         
@@ -6663,10 +6664,10 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
         
-        // Trigger screen shake only once per explosion
-        if (!explosion.shakeTriggered) {
+        // Trigger screen shake only once per explosion using WeakSet to avoid mutating game state
+        if (!this.shakenExplosions.has(explosion)) {
             this.triggerScreenShake(15); // Stronger shake than normal
-            explosion.shakeTriggered = true;
+            this.shakenExplosions.add(explosion);
         }
     }
 
