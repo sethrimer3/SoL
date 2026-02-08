@@ -4496,7 +4496,7 @@ export class GameState {
     /**
      * Get a unique network ID for a building
      */
-    private getBuildingNetworkId(building: Building): string {
+    getBuildingNetworkId(building: Building): string {
         const playerIndex = this.players.findIndex(p => p === building.owner);
         const buildingIndex = building.owner.buildings.indexOf(building);
         return `p${playerIndex}_b${buildingIndex}`;

@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -1795,7 +1795,9 @@ class GameController {
                     const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
                         clickedBuilding instanceof GatlingTower ||
                         clickedBuilding instanceof SpaceDustSwirler ||
-                        clickedBuilding instanceof SubsidiaryFactory;
+                        clickedBuilding instanceof SubsidiaryFactory ||
+                        clickedBuilding instanceof StrikerTower ||
+                        clickedBuilding instanceof LockOnLaserTower;
                     if (isCompatibleMirrorTarget && this.selectedMirrors.size > 0) {
                         for (const mirror of this.selectedMirrors) {
                             mirror.setLinkedStructure(clickedBuilding);
@@ -1822,10 +1824,16 @@ class GameController {
                         // Double-tap: select all buildings of this type
                         this.selectAllBuildingsOfType(clickedBuilding);
                     } else if (clickedBuilding.isSelected) {
-                        // Deselect building
-                        clickedBuilding.isSelected = false;
-                        this.selectedBuildings.delete(clickedBuilding);
-                        console.log('Building deselected');
+                        // If Striker Tower is selected and missile is ready, activate targeting mode
+                        if (clickedBuilding instanceof StrikerTower && clickedBuilding.isMissileReady()) {
+                            clickedBuilding.isAwaitingTarget = true;
+                            console.log('Striker Tower: Select target location');
+                        } else {
+                            // Deselect building
+                            clickedBuilding.isSelected = false;
+                            this.selectedBuildings.delete(clickedBuilding);
+                            console.log('Building deselected');
+                        }
                     } else {
                         // Select building, deselect forge, units, and mirrors
                         clickedBuilding.isSelected = true;
@@ -2380,72 +2388,93 @@ class GameController {
                 } else if (this.selectedWarpGate && this.selectedUnits.size === 0 && this.selectedMirrors.size === 0 && !this.selectedBase) {
                     // Warp gate selected without a drag - no movement action
                 } else {
-                    // If movement was minimal or only mirrors/base selected, set movement targets
-                    const worldPos = this.renderer.screenToWorld(lastX, lastY);
-                    
-                    // Increment move order counter
-                    this.moveOrderCounter++;
-                    
-                    // Set rally point for all selected units
-                    for (const unit of this.selectedUnits) {
-                        const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
-                        unit.clearManualTarget();
-                        if (unit instanceof Starling) {
-                            unit.setManualRallyPoint(rallyPoint);
-                        } else {
-                            unit.rallyPoint = rallyPoint;
-                        }
-                        unit.moveOrder = this.moveOrderCounter;
-                    }
-                    const unitIds = this.game
-                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
-                        : [];
-                    this.sendNetworkCommand('unit_move', {
-                        unitIds,
-                        targetX: worldPos.x,
-                        targetY: worldPos.y,
-                        moveOrder: this.moveOrderCounter
-                    });
-                    
-                    // Set target for the closest selected mirror
+                    // Check if any selected Striker Tower is awaiting target
                     const player = this.getLocalPlayer();
-                    if (player) {
-                        const { mirror: closestMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
-                        if (closestMirror && mirrorIndex >= 0) {
-                            closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                            closestMirror.moveOrder = this.moveOrderCounter;
-                            closestMirror.isSelected = false;
-                            this.sendNetworkCommand('mirror_move', {
-                                mirrorIndices: [mirrorIndex],
+                    const awaitingStrikerTower = player && this.selectedBuildings.size === 1 ? 
+                        Array.from(this.selectedBuildings)[0] : null;
+                    
+                    if (awaitingStrikerTower instanceof StrikerTower && awaitingStrikerTower.isAwaitingTarget) {
+                        // Fire striker tower missile
+                        const worldPos = this.renderer.screenToWorld(lastX, lastY);
+                        const buildingIndex = player!.buildings.indexOf(awaitingStrikerTower);
+                        if (buildingIndex >= 0) {
+                            const buildingId = this.game!.getBuildingNetworkId(awaitingStrikerTower);
+                            this.sendNetworkCommand('striker_tower_fire', {
+                                buildingId,
+                                targetX: worldPos.x,
+                                targetY: worldPos.y
+                            });
+                            awaitingStrikerTower.isAwaitingTarget = false;
+                            console.log(`Striker Tower fired at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                        }
+                    } else {
+                        // If movement was minimal or only mirrors/base selected, set movement targets
+                        const worldPos = this.renderer.screenToWorld(lastX, lastY);
+                        
+                        // Increment move order counter
+                        this.moveOrderCounter++;
+                        
+                        // Set rally point for all selected units
+                        for (const unit of this.selectedUnits) {
+                            const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                            unit.clearManualTarget();
+                            if (unit instanceof Starling) {
+                                unit.setManualRallyPoint(rallyPoint);
+                            } else {
+                                unit.rallyPoint = rallyPoint;
+                            }
+                            unit.moveOrder = this.moveOrderCounter;
+                        }
+                        const unitIds = this.game
+                            ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                            : [];
+                        this.sendNetworkCommand('unit_move', {
+                            unitIds,
+                            targetX: worldPos.x,
+                            targetY: worldPos.y,
+                            moveOrder: this.moveOrderCounter
+                        });
+                        
+                        // Set target for the closest selected mirror
+                        const player = this.getLocalPlayer();
+                        if (player) {
+                            const { mirror: closestMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
+                            if (closestMirror && mirrorIndex >= 0) {
+                                closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                                closestMirror.moveOrder = this.moveOrderCounter;
+                                closestMirror.isSelected = false;
+                                this.sendNetworkCommand('mirror_move', {
+                                    mirrorIndices: [mirrorIndex],
+                                    targetX: worldPos.x,
+                                    targetY: worldPos.y,
+                                    moveOrder: this.moveOrderCounter
+                                });
+                            }
+                        }
+                        
+                        // Set target for selected base
+                        if (this.selectedBase) {
+                            this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                            this.selectedBase.moveOrder = this.moveOrderCounter;
+                            this.selectedBase.isSelected = false;
+                            this.sendNetworkCommand('forge_move', {
                                 targetX: worldPos.x,
                                 targetY: worldPos.y,
                                 moveOrder: this.moveOrderCounter
                             });
                         }
+                        
+                        // Deselect all units immediately
+                        this.selectedUnits.clear();
+                        for (const mirror of this.selectedMirrors) {
+                            mirror.isSelected = false;
+                        }
+                        this.selectedMirrors.clear();
+                        this.selectedBase = null;
+                        this.renderer.selectedUnits = this.selectedUnits;
+                        
+                        console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - Move order #${this.moveOrderCounter}`);
                     }
-                    
-                    // Set target for selected base
-                    if (this.selectedBase) {
-                        this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                        this.selectedBase.moveOrder = this.moveOrderCounter;
-                        this.selectedBase.isSelected = false;
-                        this.sendNetworkCommand('forge_move', {
-                            targetX: worldPos.x,
-                            targetY: worldPos.y,
-                            moveOrder: this.moveOrderCounter
-                        });
-                    }
-                    
-                    // Deselect all units immediately
-                    this.selectedUnits.clear();
-                    for (const mirror of this.selectedMirrors) {
-                        mirror.isSelected = false;
-                    }
-                    this.selectedMirrors.clear();
-                    this.selectedBase = null;
-                    this.renderer.selectedUnits = this.selectedUnits;
-                    
-                    console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - Move order #${this.moveOrderCounter}`);
                 }
             }
             
