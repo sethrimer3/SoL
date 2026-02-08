@@ -6122,11 +6122,13 @@ export class GameRenderer {
             
             // Draw countdown number
             const countdown = Math.ceil(building.getRemainingCountdown());
-            this.ctx.fillStyle = '#FF0000';
-            this.ctx.font = `bold ${Math.floor(24 * this.zoom)}px Arial`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(countdown.toString(), screenPos.x, screenPos.y - radius - 20 * this.zoom);
+            if (countdown > 0) { // Only display when countdown is positive
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.font = `bold ${Math.floor(24 * this.zoom)}px Arial`;
+                this.ctx.textAlign = 'center';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(countdown.toString(), screenPos.x, screenPos.y - radius - 20 * this.zoom);
+            }
             
             // Draw line to target position if available
             if (building.targetPosition) {
@@ -6664,7 +6666,9 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
         
-        // Trigger screen shake only once per explosion using WeakSet to avoid mutating game state
+        // Trigger screen shake only once per explosion
+        // Using WeakSet to track without mutating game state objects
+        // This is a rendering concern and belongs in the renderer
         if (!this.shakenExplosions.has(explosion)) {
             this.triggerScreenShake(15); // Stronger shake than normal
             this.shakenExplosions.add(explosion);

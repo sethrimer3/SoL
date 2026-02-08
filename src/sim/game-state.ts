@@ -667,7 +667,7 @@ export class GameState {
                     building.update(deltaTime, enemies, allUnits, this.asteroids, allStructures, Constants.MAP_PLAYABLE_BOUNDARY);
 
                     // Check if StrikerTower countdown completed
-                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0 && building.countdownTimer > -0.1 && building.isMissileReady()) {
+                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0.001 && building.isMissileReady()) {
                         // Countdown complete, fire the missile!
                         const targetPos = building.targetPosition;
                         const fired = building.fireMissile(
@@ -678,10 +678,10 @@ export class GameState {
                             player.units
                         );
                         
-                        // Track explosion for visual effect
+                        // Track explosion for visual effect and trigger screen shake
                         if (fired) {
                             this.strikerTowerExplosions.push({
-                                position: new Vector2D(targetPos.x, targetPos.y),
+                                position: targetPos, // Use existing Vector2D directly
                                 timestamp: this.gameTime
                             });
                         }
