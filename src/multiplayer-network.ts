@@ -425,8 +425,10 @@ export class MultiplayerNetworkManager {
             this.connectionTimeout = setTimeout(() => {
                 if (!this.isTransportReady) {
                     console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
+                    const userMessage = 'Connection timeout. Unable to establish P2P connections. Please check your network and try again.';
                     this.emit(NetworkEvent.ERROR, { 
-                        error: new Error('Connection timeout - failed to establish P2P connections')
+                        error: new Error('Connection timeout - failed to establish P2P connections'),
+                        message: userMessage
                     });
                     this.endMatch('connection_timeout');
                 }
@@ -457,7 +459,8 @@ export class MultiplayerNetworkManager {
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error starting match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'Failed to start match. Please try again.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return false;
         }
     }

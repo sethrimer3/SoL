@@ -33,6 +33,45 @@ These improvements provide better visibility into network health and enable earl
 - [x] Integration examples
 - [x] **Latency measurement (PING/PONG)**
 - [x] **State hash verification system**
+- [x] **Memory leak fixes**
+- [x] **Connection timeout handling**
+- [x] **Command queuing before transport ready**
+- [x] **User-friendly error messages**
+
+## 🛡️ Stability Improvements (2026-02-08)
+
+### Critical Bug Fixes
+
+**Memory Leak Prevention**:
+- Fixed Supabase channel subscription not being cleaned up in `multiplayer-network.ts`
+- Added `stopListeningForPlayers()` method to properly unsubscribe channels
+- Added network manager cleanup in `Menu.destroy()` method
+- Prevents memory leaks when matches end or menu is destroyed
+
+**Connection Reliability**:
+- Added 30-second connection timeout to prevent indefinite waiting
+- Automatic cleanup and error emission on timeout
+- State transition guards prevent duplicate MATCH_STARTED events
+- Command queuing for commands sent before transport is ready
+- Queued commands automatically flushed when connection establishes
+
+**Error Handling**:
+- Added try-catch blocks for all async operations in P2PTransport
+- Individual peer connection failures no longer crash initialization
+- Proper error propagation throughout the connection flow
+
+**User Experience**:
+- User-friendly error messages for common scenarios:
+  - "Match not found. The match code may be incorrect or expired."
+  - "Match is full (X/X players)."
+  - "Match is not accepting new players. It may have already started."
+  - "Connection timeout. Unable to establish P2P connections."
+- Improved error message display in menu UI
+
+**Testing**:
+- All determinism tests passing (6/6)
+- Build verification successful
+- No regressions introduced
 
 ## 🚧 TODO: Core Integration
 
