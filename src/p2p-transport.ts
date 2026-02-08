@@ -36,6 +36,11 @@ class PeerConnection {
         packetsSent: 0,
         packetsReceived: 0
     };
+    
+    // Latency measurement
+    private latencyMs: number = 0;
+    private pendingPings: Map<number, number> = new Map(); // pingId -> timestamp
+    private nextPingId: number = 0;
 
     constructor(peerId: string) {
         this.peerId = peerId;
@@ -203,6 +208,22 @@ class PeerConnection {
                 this.stats.packetsReceived++;
                 
                 const data = JSON.parse(event.data);
+                
+                // Handle PING/PONG for latency measurement
+                if (data.type === 'ping') {
+                    // Respond with PONG
+                    this.send({ type: 'pong', pingId: data.pingId });
+                    return;
+                } else if (data.type === 'pong') {
+                    // Calculate RTT from PONG response
+                    const sendTime = this.pendingPings.get(data.pingId);
+                    if (sendTime) {
+                        this.latencyMs = Date.now() - sendTime;
+                        this.pendingPings.delete(data.pingId);
+                    }
+                    return;
+                }
+                
                 if (this.onMessageCallback) {
                     this.onMessageCallback(data);
                 }
@@ -270,7 +291,28 @@ class PeerConnection {
      * Get connection statistics
      */
     getStats() {
-        return { ...this.stats };
+        return { 
+            ...this.stats,
+            latencyMs: this.latencyMs
+        };
+    }
+    
+    /**
+     * Send a ping to measure latency
+     */
+    sendPing(): void {
+        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+            return;
+        }
+        
+        const pingId = this.nextPingId++;
+        this.pendingPings.set(pingId, Date.now());
+        this.send({ type: 'ping', pingId });
+        
+        // Clean up old pending pings (after 5 seconds)
+        setTimeout(() => {
+            this.pendingPings.delete(pingId);
+        }, 5000);
     }
 
     getPeerId(): string {
@@ -300,6 +342,10 @@ export class P2PTransport implements ITransport {
     // State
     private ready: boolean = false;
     private expectedPeerIds: string[] = [];
+    
+    // Latency measurement
+    private pingInterval: NodeJS.Timeout | null = null;
+    private readonly PING_INTERVAL_MS = 2000; // Ping every 2 seconds
 
     constructor(
         supabase: SupabaseClient,
@@ -514,10 +560,25 @@ export class P2PTransport implements ITransport {
         if (allReady && !this.ready) {
             this.ready = true;
             console.log('[P2PTransport] All peers connected! Transport ready.');
+            
+            // Start periodic latency measurement
+            this.startLatencyMeasurement();
+            
             if (this.onReadyCallback) {
                 this.onReadyCallback();
             }
         }
+    }
+    
+    /**
+     * Start periodic latency measurement via PING/PONG
+     */
+    private startLatencyMeasurement(): void {
+        this.pingInterval = setInterval(() => {
+            this.peers.forEach(peer => {
+                peer.sendPing();
+            });
+        }, this.PING_INTERVAL_MS);
     }
 
     /**
@@ -567,6 +628,12 @@ export class P2PTransport implements ITransport {
     disconnect(): void {
         console.log('[P2PTransport] Disconnecting...');
         
+        // Stop latency measurement
+        if (this.pingInterval) {
+            clearInterval(this.pingInterval);
+            this.pingInterval = null;
+        }
+        
         // Close all peer connections
         this.peers.forEach(peer => peer.close());
         this.peers.clear();
@@ -588,6 +655,7 @@ export class P2PTransport implements ITransport {
         let totalBytesReceived = 0;
         let totalPacketsSent = 0;
         let totalPacketsReceived = 0;
+        let maxLatency = 0;
 
         this.peers.forEach(peer => {
             const stats = peer.getStats();
@@ -595,11 +663,15 @@ export class P2PTransport implements ITransport {
             totalBytesReceived += stats.bytesReceived;
             totalPacketsSent += stats.packetsSent;
             totalPacketsReceived += stats.packetsReceived;
+            // Track the worst latency among all peers
+            if (stats.latencyMs > maxLatency) {
+                maxLatency = stats.latencyMs;
+            }
         });
 
         return {
             connected: this.ready,
-            latencyMs: 0, // TODO Phase 2: Implement RTT measurement (PING/PONG)
+            latencyMs: maxLatency, // Report worst-case latency
             packetsSent: totalPacketsSent,
             packetsReceived: totalPacketsReceived,
             bytesOut: totalBytesSent,

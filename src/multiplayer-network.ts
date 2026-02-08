@@ -32,6 +32,11 @@ import {
     setGameRNG, 
     generateMatchSeed 
 } from './seeded-random';
+import { 
+    StateVerifier, 
+    StateVerificationEvent, 
+    DesyncEvent 
+} from './state-verification';
 
 /**
  * Match metadata stored in Supabase
@@ -88,6 +93,7 @@ export enum NetworkEvent {
     MATCH_STARTED = 'match_started',
     MATCH_ENDED = 'match_ended',
     COMMAND_RECEIVED = 'command_received',
+    DESYNC_DETECTED = 'desync_detected',
     ERROR = 'error'
 }
 
@@ -108,6 +114,9 @@ export class MultiplayerNetworkManager {
     // Command management
     private commandQueue: CommandQueue | null = null;
     private commandValidator: CommandValidator = new CommandValidator();
+    
+    // State verification
+    private stateVerifier: StateVerifier | null = null;
     
     // RNG for determinism
     private gameRNG: SeededRandom | null = null;
@@ -384,6 +393,23 @@ export class MultiplayerNetworkManager {
             (this.transport as P2PTransport).onReady(() => {
                 this.onTransportReady();
             });
+            
+            // Initialize state verifier if lockstep is enabled
+            if (this.currentMatch.lockstep_enabled) {
+                this.stateVerifier = new StateVerifier(
+                    this.transport,
+                    this.localPlayerId,
+                    allPlayerIds
+                );
+                
+                // Listen for desync events
+                this.stateVerifier.on(StateVerificationEvent.DESYNC, (event: DesyncEvent) => {
+                    console.error('[MultiplayerNetworkManager] Desync detected!', event);
+                    this.emit(NetworkEvent.DESYNC_DETECTED, event);
+                });
+                
+                console.log('[MultiplayerNetworkManager] State verification enabled');
+            }
 
             return true;
         } catch (error) {
@@ -419,6 +445,13 @@ export class MultiplayerNetworkManager {
      * Handle received command from network
      */
     private handleReceivedCommand(command: GameCommand): void {
+        // Check if this is a state hash message
+        if (command.commandType === '__state_hash__' && this.stateVerifier) {
+            const message = command.payload as any;
+            this.stateVerifier.receiveHash(message.tick, message.playerId, message.hash);
+            return; // Don't add to command queue
+        }
+        
         // Validate command
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Invalid command received:', command);
@@ -481,26 +514,23 @@ export class MultiplayerNetworkManager {
      */
     advanceTick(): void {
         this.currentTick++;
-        
-        // TODO Phase 2: Generate state hash every N ticks for verification
-        // if (this.currentTick % STATE_HASH_INTERVAL === 0) {
-        //     const hash = generateStateHash(gameState);
-        //     this.verifyStateHash(hash);
-        // }
     }
-
+    
     /**
-     * TODO Phase 2: Verify state hash with other players
-     * 
-     * @deprecated Not implemented in Phase 1. Marked for Phase 2 development.
-     * 
-     * Future implementation:
-     * 1. Send hash to server or exchange with peers
-     * 2. Compare hashes
-     * 3. If mismatch, trigger desync recovery or cheat detection
+     * Submit state hash for verification (call periodically from game loop)
+     * @param stateHash - The current game state hash
      */
-    private verifyStateHash(hash: string): void {
-        console.log('[MultiplayerNetworkManager] TODO Phase 2: Verify state hash:', hash);
+    submitStateHash(stateHash: number): void {
+        if (this.stateVerifier) {
+            this.stateVerifier.submitHash(this.currentTick, stateHash);
+        }
+    }
+    
+    /**
+     * Get state verification statistics
+     */
+    getStateVerificationStats() {
+        return this.stateVerifier?.getStats() || null;
     }
 
     /**
@@ -530,6 +560,9 @@ export class MultiplayerNetworkManager {
             this.commandQueue.clear();
             this.commandQueue = null;
         }
+        
+        // Clear state verifier
+        this.stateVerifier = null;
 
         this.emit(NetworkEvent.MATCH_ENDED, { reason });
     }
