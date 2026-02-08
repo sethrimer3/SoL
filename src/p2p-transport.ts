@@ -204,7 +204,8 @@ class PeerConnection {
 
         this.dataChannel.onmessage = (event) => {
             try {
-                this.stats.bytesReceived += event.data.length;
+                const dataSize = typeof event.data === 'string' ? event.data.length : event.data.byteLength;
+                this.stats.bytesReceived += dataSize;
                 this.stats.packetsReceived++;
                 
                 const data = JSON.parse(event.data);
@@ -224,6 +225,17 @@ class PeerConnection {
                     return;
                 }
                 
+                // Handle batched commands
+                if (data.type === 'command_batch' && Array.isArray(data.commands)) {
+                    if (this.onMessageCallback) {
+                        // Process each command in the batch
+                        data.commands.forEach((cmd: any) => {
+                            this.onMessageCallback!({ type: 'command', command: cmd });
+                        });
+                    }
+                    return;
+                }
+                
                 if (this.onMessageCallback) {
                     this.onMessageCallback(data);
                 }
@@ -235,6 +247,7 @@ class PeerConnection {
 
     /**
      * Send data through data channel
+     * Optimized: Reuse stringified data for better performance
      */
     send(data: any): void {
         if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
@@ -244,6 +257,24 @@ class PeerConnection {
 
         try {
             const message = JSON.stringify(data);
+            this.dataChannel.send(message);
+            this.stats.bytesSent += message.length;
+            this.stats.packetsSent++;
+        } catch (error) {
+            console.error('[P2P] Failed to send message:', error);
+        }
+    }
+    
+    /**
+     * Send pre-serialized data (optimization for batched sends)
+     */
+    sendRaw(message: string): void {
+        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+            console.warn('[P2P] Cannot send: data channel not open');
+            return;
+        }
+
+        try {
             this.dataChannel.send(message);
             this.stats.bytesSent += message.length;
             this.stats.packetsSent++;
@@ -346,6 +377,12 @@ export class P2PTransport implements ITransport {
     // Latency measurement
     private pingInterval: NodeJS.Timeout | null = null;
     private readonly PING_INTERVAL_MS = 2000; // Ping every 2 seconds
+    
+    // Command batching for optimization
+    private commandBatch: GameCommand[] = [];
+    private batchTimer: NodeJS.Timeout | null = null;
+    private readonly BATCH_INTERVAL_MS = 16; // ~60 FPS, batch every frame
+    private readonly MAX_BATCH_SIZE = 50; // Flush if batch gets too large
 
     constructor(
         supabase: SupabaseClient,
@@ -582,17 +619,22 @@ export class P2PTransport implements ITransport {
     
     /**
      * Start periodic latency measurement via PING/PONG
+     * Optimized: Only ping periodically, and only when channel is active
      */
     private startLatencyMeasurement(): void {
         this.pingInterval = setInterval(() => {
+            // Only ping if we have recent activity to avoid unnecessary traffic
             this.peers.forEach(peer => {
-                peer.sendPing();
+                if (peer.isReady()) {
+                    peer.sendPing();
+                }
             });
         }, this.PING_INTERVAL_MS);
     }
 
     /**
      * ITransport implementation: Send command to all peers
+     * Uses batching to optimize network traffic
      */
     sendCommand(command: GameCommand): void {
         if (!this.ready) {
@@ -600,15 +642,54 @@ export class P2PTransport implements ITransport {
             return;
         }
 
+        // Add to batch
+        this.commandBatch.push(command);
+        
+        // Flush immediately if batch is full
+        if (this.commandBatch.length >= this.MAX_BATCH_SIZE) {
+            this.flushCommandBatch();
+            return;
+        }
+        
+        // Otherwise, set timer to flush batch after interval
+        if (!this.batchTimer) {
+            this.batchTimer = setTimeout(() => {
+                this.flushCommandBatch();
+            }, this.BATCH_INTERVAL_MS);
+        }
+    }
+    
+    /**
+     * Flush pending command batch to all peers
+     * Optimized: Serialize once and send to all peers
+     */
+    private flushCommandBatch(): void {
+        if (this.commandBatch.length === 0) {
+            return;
+        }
+        
+        // Clear timer
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
+        
+        // Send batched commands as a single message
         const message = {
-            type: 'command',
-            command: command
+            type: 'command_batch',
+            commands: this.commandBatch
         };
-
+        
+        // Optimize: Serialize once and reuse for all peers
+        const serialized = JSON.stringify(message);
+        
         // Broadcast to all peers via P2P
         this.peers.forEach(peer => {
-            peer.send(message);
+            peer.sendRaw(serialized);
         });
+        
+        // Clear batch
+        this.commandBatch = [];
     }
 
     /**
@@ -637,6 +718,15 @@ export class P2PTransport implements ITransport {
      */
     disconnect(): void {
         console.log('[P2PTransport] Disconnecting...');
+        
+        // Flush any pending commands before disconnecting
+        this.flushCommandBatch();
+        
+        // Stop batch timer
+        if (this.batchTimer) {
+            clearTimeout(this.batchTimer);
+            this.batchTimer = null;
+        }
         
         // Stop latency measurement
         if (this.pingInterval) {

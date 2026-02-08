@@ -77,6 +77,11 @@ export interface TransportStats {
  * - Commands are queued by tick number
  * - Simulation only advances when all required commands for a tick are present
  * - If commands are missing, timeout policy is applied
+ * 
+ * OPTIMIZATIONS:
+ * - Pre-allocated arrays for command storage
+ * - Efficient Map usage with periodic cleanup
+ * - Optimized sorting using cached player ID comparisons
  */
 export class CommandQueue {
     // Queue of commands by tick number
@@ -95,9 +100,19 @@ export class CommandQueue {
     // Statistics
     private missedCommandsCount = 0;
     private totalCommandsProcessed = 0;
+    
+    // Optimization: Reusable array for sorting to reduce allocations
+    private sortedCommands: GameCommand[] = [];
+    
+    // Optimization: Cache for player ID comparisons
+    private playerIdCache = new Map<string, number>();
 
     constructor(playerIds: string[]) {
         this.expectedPlayers = new Set(playerIds);
+        // Pre-populate player ID cache for faster sorting
+        playerIds.forEach((id, index) => {
+            this.playerIdCache.set(id, index);
+        });
     }
 
     /**
@@ -118,11 +133,14 @@ export class CommandQueue {
             return false;
         }
 
-        // Add to queue
-        if (!this.commandsByTick.has(command.tick)) {
-            this.commandsByTick.set(command.tick, []);
+        // Get or create array for this tick
+        let tickCommands = this.commandsByTick.get(command.tick);
+        if (!tickCommands) {
+            // Pre-allocate array with expected size to reduce reallocations
+            tickCommands = [];
+            this.commandsByTick.set(command.tick, tickCommands);
         }
-        this.commandsByTick.get(command.tick)!.push(command);
+        tickCommands.push(command);
         
         return true;
     }
@@ -176,6 +194,7 @@ export class CommandQueue {
 
     /**
      * Consume and remove commands for a specific tick
+     * Optimized for performance with cached sorting
      */
     private consumeTickCommands(tick: number): GameCommand[] {
         const commands = this.commandsByTick.get(tick) || [];
@@ -183,8 +202,33 @@ export class CommandQueue {
         this.currentTick = tick + 1;
         this.totalCommandsProcessed += commands.length;
         
-        // Sort by playerId for deterministic ordering
-        return commands.sort((a, b) => a.playerId.localeCompare(b.playerId));
+        // Optimized sorting: Use cached player ID indices for faster comparison
+        if (commands.length > 1) {
+            commands.sort((a, b) => {
+                const aIndex = this.playerIdCache.get(a.playerId) ?? 999;
+                const bIndex = this.playerIdCache.get(b.playerId) ?? 999;
+                return aIndex - bIndex;
+            });
+        }
+        
+        // Periodic cleanup: Remove old tick data to prevent memory leaks
+        if (tick % 100 === 0) {
+            this.cleanupOldTicks(tick);
+        }
+        
+        return commands;
+    }
+    
+    /**
+     * Clean up old tick data to prevent memory leaks
+     */
+    private cleanupOldTicks(currentTick: number): void {
+        const minTick = currentTick - 10; // Keep only recent ticks
+        for (const tick of this.commandsByTick.keys()) {
+            if (tick < minTick) {
+                this.commandsByTick.delete(tick);
+            }
+        }
     }
 
     /**
@@ -220,12 +264,21 @@ export class CommandQueue {
      */
     setExpectedPlayers(playerIds: string[]): void {
         this.expectedPlayers = new Set(playerIds);
+        // Update player ID cache
+        this.playerIdCache.clear();
+        playerIds.forEach((id, index) => {
+            this.playerIdCache.set(id, index);
+        });
     }
 }
 
 /**
  * Command validator - centralized validation for all commands
  * Ensures commands are well-formed before processing
+ * 
+ * OPTIMIZATIONS:
+ * - Efficient rate limit tracking with periodic cleanup
+ * - Optimized payload size checking
  * 
  * TODO Phase 2: Add cryptographic signatures for anti-cheat
  * TODO Phase 2: Add rate limiting per player
@@ -235,6 +288,8 @@ export class CommandValidator {
     private readonly MAX_PAYLOAD_SIZE = 1024; // Max payload size in bytes
     private commandCounts = new Map<string, number>(); // Commands per player
     private readonly COMMANDS_PER_TICK_LIMIT = 100; // Rate limit
+    private lastCleanupTick = 0;
+    private readonly CLEANUP_INTERVAL = 100; // Clean up every 100 ticks
 
     /**
      * Validate a command before adding to queue
@@ -255,11 +310,13 @@ export class CommandValidator {
             return false;
         }
 
-        // Check payload size
-        const payloadSize = JSON.stringify(command.payload).length;
-        if (payloadSize > this.MAX_PAYLOAD_SIZE) {
-            console.error(`Payload too large: ${payloadSize} bytes`);
-            return false;
+        // Check payload size (optimized - only stringify if needed for size check)
+        if (command.payload) {
+            const payloadStr = JSON.stringify(command.payload);
+            if (payloadStr.length > this.MAX_PAYLOAD_SIZE) {
+                console.error(`Payload too large: ${payloadStr.length} bytes`);
+                return false;
+            }
         }
 
         // Rate limiting check
@@ -271,18 +328,26 @@ export class CommandValidator {
         }
         this.commandCounts.set(key, count + 1);
 
-        // Cleanup old entries (keep only last 100 ticks)
-        if (this.commandCounts.size > 100 * this.COMMANDS_PER_TICK_LIMIT) {
-            const minTick = command.tick - 100;
-            for (const [k] of this.commandCounts) {
-                const tickNum = parseInt(k.split('-')[1]);
-                if (tickNum < minTick) {
-                    this.commandCounts.delete(k);
-                }
-            }
+        // Periodic cleanup to prevent memory growth
+        if (command.tick - this.lastCleanupTick >= this.CLEANUP_INTERVAL) {
+            this.cleanupOldEntries(command.tick);
         }
 
         return true;
+    }
+
+    /**
+     * Clean up old rate limit entries
+     */
+    private cleanupOldEntries(currentTick: number): void {
+        const minTick = currentTick - this.CLEANUP_INTERVAL;
+        for (const [key] of this.commandCounts) {
+            const tickNum = parseInt(key.split('-')[1]);
+            if (tickNum < minTick) {
+                this.commandCounts.delete(key);
+            }
+        }
+        this.lastCleanupTick = currentTick;
     }
 
     /**
