@@ -1119,8 +1119,9 @@ class GameController {
 
     private startNewGame(settings: GameSettings): void {
         // Initialize RNG for single-player games
-        // For multiplayer, RNG is initialized by the network manager
-        if (settings.gameMode !== 'lan' && settings.gameMode !== 'p2p') {
+        // For multiplayer modes (lan, p2p, online), RNG is initialized by the network manager
+        const isSinglePlayer = settings.gameMode !== 'lan' && settings.gameMode !== 'p2p' && settings.gameMode !== 'online';
+        if (isSinglePlayer) {
             const matchSeed = generateMatchSeed();
             setGameRNG(new SeededRandom(matchSeed));
             console.log(`[GameController] Initialized RNG with seed: ${matchSeed}`);
