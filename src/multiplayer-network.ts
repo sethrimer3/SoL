@@ -127,6 +127,17 @@ export class MultiplayerNetworkManager {
     // State
     private isActive: boolean = false;
     private currentTick: number = 0;
+    private isTransportReady: boolean = false;
+    
+    // Supabase channel for cleanup
+    private playerListenerChannel: any = null;
+    
+    // Connection timeout
+    private connectionTimeout: NodeJS.Timeout | null = null;
+    private readonly CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
+    
+    // Pending commands queue (before transport ready)
+    private pendingCommands: GameCommand[] = [];
 
     constructor(supabaseUrl: string, supabaseAnonKey: string, playerId: string) {
         this.supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -165,7 +176,8 @@ export class MultiplayerNetworkManager {
 
             if (matchError) {
                 console.error('[MultiplayerNetworkManager] Failed to create match:', matchError);
-                this.emit(NetworkEvent.ERROR, { error: matchError });
+                const userMessage = 'Failed to create match. Please check your connection and try again.';
+                this.emit(NetworkEvent.ERROR, { error: matchError, message: userMessage });
                 return null;
             }
 
@@ -184,7 +196,8 @@ export class MultiplayerNetworkManager {
 
             if (playerError) {
                 console.error('[MultiplayerNetworkManager] Failed to add host player:', playerError);
-                this.emit(NetworkEvent.ERROR, { error: playerError });
+                const userMessage = 'Failed to join match as host. Please try again.';
+                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
                 return null;
             }
 
@@ -201,7 +214,8 @@ export class MultiplayerNetworkManager {
             return match;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error creating match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'An unexpected error occurred while creating the match.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return null;
         }
     }
@@ -241,14 +255,16 @@ export class MultiplayerNetworkManager {
 
             if (matchError || !match) {
                 console.error('[MultiplayerNetworkManager] Match not found:', matchError);
-                this.emit(NetworkEvent.ERROR, { error: 'Match not found' });
+                const userMessage = 'Match not found. The match code may be incorrect or expired.';
+                this.emit(NetworkEvent.ERROR, { error: 'Match not found', message: userMessage });
                 return false;
             }
 
             // Check if match is joinable
             if (match.status !== 'open') {
                 console.error('[MultiplayerNetworkManager] Match not open for joining');
-                this.emit(NetworkEvent.ERROR, { error: 'Match not open' });
+                const userMessage = 'Match is not accepting new players. It may have already started.';
+                this.emit(NetworkEvent.ERROR, { error: 'Match not open', message: userMessage });
                 return false;
             }
 
@@ -265,7 +281,8 @@ export class MultiplayerNetworkManager {
 
             if (players.length >= match.max_players) {
                 console.error('[MultiplayerNetworkManager] Match is full');
-                this.emit(NetworkEvent.ERROR, { error: 'Match is full' });
+                const userMessage = `Match is full (${match.max_players}/${match.max_players} players).`;
+                this.emit(NetworkEvent.ERROR, { error: 'Match is full', message: userMessage });
                 return false;
             }
 
@@ -285,7 +302,8 @@ export class MultiplayerNetworkManager {
 
             if (playerError) {
                 console.error('[MultiplayerNetworkManager] Failed to join match:', playerError);
-                this.emit(NetworkEvent.ERROR, { error: playerError });
+                const userMessage = 'Failed to join match. Please try again.';
+                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
                 return false;
             }
 
@@ -299,7 +317,8 @@ export class MultiplayerNetworkManager {
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error joining match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'An unexpected error occurred while joining the match.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return false;
         }
     }
@@ -310,8 +329,11 @@ export class MultiplayerNetworkManager {
     private startListeningForPlayers(): void {
         if (!this.isHost || !this.currentMatch) return;
 
+        // Cleanup existing channel if any
+        this.stopListeningForPlayers();
+
         // Subscribe to match_players changes
-        const channel = this.supabase
+        this.playerListenerChannel = this.supabase
             .channel(`match:${this.currentMatch.id}`)
             .on(
                 'postgres_changes',
@@ -327,6 +349,16 @@ export class MultiplayerNetworkManager {
                 }
             )
             .subscribe();
+    }
+
+    /**
+     * Stop listening for players joining
+     */
+    private stopListeningForPlayers(): void {
+        if (this.playerListenerChannel) {
+            this.supabase.removeChannel(this.playerListenerChannel);
+            this.playerListenerChannel = null;
+        }
     }
 
     /**
@@ -389,6 +421,19 @@ export class MultiplayerNetworkManager {
             // Initialize P2P connections
             await (this.transport as P2PTransport).initialize();
 
+            // Set connection timeout
+            this.connectionTimeout = setTimeout(() => {
+                if (!this.isTransportReady) {
+                    console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
+                    const userMessage = 'Connection timeout. Unable to establish P2P connections. Please check your network and try again.';
+                    this.emit(NetworkEvent.ERROR, { 
+                        error: new Error('Connection timeout - failed to establish P2P connections'),
+                        message: userMessage
+                    });
+                    this.endMatch('connection_timeout');
+                }
+            }, this.CONNECTION_TIMEOUT_MS);
+
             // Wait for connections to establish
             (this.transport as P2PTransport).onReady(() => {
                 this.onTransportReady();
@@ -414,7 +459,8 @@ export class MultiplayerNetworkManager {
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error starting match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'Failed to start match. Please try again.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return false;
         }
     }
@@ -423,7 +469,20 @@ export class MultiplayerNetworkManager {
      * Called when transport is ready (all P2P connections established)
      */
     private async onTransportReady(): Promise<void> {
+        // Guard against duplicate calls
+        if (this.isTransportReady) {
+            console.warn('[MultiplayerNetworkManager] Transport already ready, ignoring duplicate call');
+            return;
+        }
+        
         console.log('[MultiplayerNetworkManager] Transport ready!');
+        this.isTransportReady = true;
+        
+        // Clear connection timeout
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
         
         if (this.isHost && this.currentMatch) {
             // Host updates match status to active
@@ -431,6 +490,20 @@ export class MultiplayerNetworkManager {
                 .from('matches')
                 .update({ status: 'active' })
                 .eq('id', this.currentMatch.id);
+        }
+
+        // Flush any pending commands
+        if (this.pendingCommands.length > 0) {
+            console.log(`[MultiplayerNetworkManager] Flushing ${this.pendingCommands.length} pending commands`);
+            for (const command of this.pendingCommands) {
+                if (this.commandQueue) {
+                    this.commandQueue.addCommand(command);
+                }
+                if (this.transport) {
+                    this.transport.sendCommand(command);
+                }
+            }
+            this.pendingCommands = [];
         }
 
         this.isActive = true;
@@ -470,11 +543,6 @@ export class MultiplayerNetworkManager {
      * Send a game command to all players
      */
     sendCommand(commandType: string, payload: any): void {
-        if (!this.transport || !this.transport.isReady()) {
-            console.warn('[MultiplayerNetworkManager] Cannot send command: transport not ready');
-            return;
-        }
-
         const command: GameCommand = {
             tick: this.currentTick,
             playerId: this.localPlayerId,
@@ -485,6 +553,13 @@ export class MultiplayerNetworkManager {
         // Validate before sending
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Cannot send invalid command:', command);
+            return;
+        }
+
+        // If transport is not ready, queue the command
+        if (!this.transport || !this.transport.isReady()) {
+            console.warn('[MultiplayerNetworkManager] Transport not ready, queuing command');
+            this.pendingCommands.push(command);
             return;
         }
 
@@ -540,6 +615,19 @@ export class MultiplayerNetworkManager {
         console.log('[MultiplayerNetworkManager] Ending match...', reason);
         
         this.isActive = false;
+        this.isTransportReady = false;
+
+        // Clear connection timeout if still pending
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
+
+        // Clear pending commands
+        this.pendingCommands = [];
+
+        // Stop listening for players (cleanup Supabase channel)
+        this.stopListeningForPlayers();
 
         // Update match status
         if (this.currentMatch && this.isHost) {

@@ -374,14 +374,19 @@ export class P2PTransport implements ITransport {
     async initialize(): Promise<void> {
         console.log('[P2PTransport] Initializing...');
         
-        // Subscribe to signaling messages
-        await this.setupSignaling();
-        
-        if (this.isHost) {
-            // Host initiates connections to all clients
-            await this.initiateConnections();
+        try {
+            // Subscribe to signaling messages
+            await this.setupSignaling();
+            
+            if (this.isHost) {
+                // Host initiates connections to all clients
+                await this.initiateConnections();
+            }
+            // Clients wait for host to initiate
+        } catch (error) {
+            console.error('[P2PTransport] Failed to initialize:', error);
+            throw error;
         }
-        // Clients wait for host to initiate
     }
 
     /**
@@ -407,7 +412,12 @@ export class P2PTransport implements ITransport {
         console.log('[P2PTransport] Host initiating connections to:', this.expectedPeerIds);
         
         for (const peerId of this.expectedPeerIds) {
-            await this.createOfferForPeer(peerId);
+            try {
+                await this.createOfferForPeer(peerId);
+            } catch (error) {
+                console.error(`[P2PTransport] Failed to create offer for peer ${peerId}:`, error);
+                // Continue with other peers even if one fails
+            }
         }
     }
 
