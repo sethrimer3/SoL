@@ -2728,7 +2728,8 @@ export class GameRenderer {
                         { label: 'Cyclone', index: 3 }
                     ];
                 } else {
-                    // Aurum or default
+                    // Aurum or default - currently only Foundry is available
+                    // TODO: Add Aurum-specific buildings in future updates
                     buttonConfigs = [
                         { label: 'Foundry', index: 0 }
                     ];
@@ -6033,7 +6034,7 @@ export class GameRenderer {
             const barWidth = radius * 2.5;
             const barHeight = 4 * this.zoom;
             const x = screenPos.x - barWidth / 2;
-            const y = screenPos.y - radius - 20 - barHeight;
+            const y = screenPos.y - radius - Constants.SHIELD_HEALTH_BAR_VERTICAL_OFFSET - barHeight;
             
             // Background
             this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';

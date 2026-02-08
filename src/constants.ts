@@ -38,6 +38,7 @@ export const ABILITY_BULLET_EFFECT_RADIUS = 30;
 export const ABILITY_BULLET_FORCE_MULTIPLIER = 0.5;
 export const MINION_PROJECTILE_EFFECT_RADIUS = 25;
 export const MINION_PROJECTILE_FORCE_MULTIPLIER = 0.4;
+export const DEFAULT_PROJECTILE_DAMAGE = 5; // Default damage for projectiles with unknown damage values
 export const GRAVE_PROJECTILE_EFFECT_RADIUS = 20;
 export const GRAVE_PROJECTILE_FORCE_MULTIPLIER = 0.4;
 export const INFLUENCE_BALL_EFFECT_RADIUS = 35;
@@ -49,6 +50,7 @@ export const FLUID_RADIAL_COMPONENT = 0.4;  // Radial displacement component for
 export const BEAM_ALONG_COMPONENT = 0.7;     // Along beam direction component
 export const BEAM_PERPENDICULAR_COMPONENT = 0.3; // Perpendicular push component for beams
 export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by zero in fluid calculations
+export const SHIELD_CENTER_COLLISION_THRESHOLD = 0.1; // Minimum distance from shield tower center to calculate push direction
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 1;
@@ -377,6 +379,7 @@ export const SMALL_SELECTION_THRESHOLD = 50; // Maximum selection box size (pixe
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const SOL_ICON_TEXT_SPACING = 2; // Spacing between SoL icon and text in zoom units
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
+export const SHIELD_HEALTH_BAR_VERTICAL_OFFSET = 20; // Vertical offset for shield health bar below main health bar
 
 // Visual effect constants
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect

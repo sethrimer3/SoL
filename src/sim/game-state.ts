@@ -421,10 +421,16 @@ export class GameState {
                                     // If unit is inside shield radius, push it back out
                                     if (distance < building.shieldRadius) {
                                         const pushDistance = building.shieldRadius - distance;
-                                        const dirX = dx / distance;
-                                        const dirY = dy / distance;
-                                        unit.position.x += dirX * pushDistance;
-                                        unit.position.y += dirY * pushDistance;
+                                        // Avoid division by zero when unit is exactly at tower center
+                                        if (distance > Constants.SHIELD_CENTER_COLLISION_THRESHOLD) {
+                                            const dirX = dx / distance;
+                                            const dirY = dy / distance;
+                                            unit.position.x += dirX * pushDistance;
+                                            unit.position.y += dirY * pushDistance;
+                                        } else {
+                                            // Push in arbitrary direction when at center
+                                            unit.position.x += pushDistance;
+                                        }
                                         // Stop unit's velocity when hitting shield
                                         unit.velocity.x = 0;
                                         unit.velocity.y = 0;
@@ -1102,7 +1108,7 @@ export class GameState {
                         // Shield blocks enemy projectiles but not friendly fire
                         if (projectile.owner !== player && building.isEnemyBlocked(projectile.position)) {
                             // Damage the shield instead of letting projectile through
-                            const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : 5;
+                            const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : Constants.DEFAULT_PROJECTILE_DAMAGE;
                             building.damageShield(projectileDamage);
                             projectile.distanceTraveledPx = projectile.maxRangePx; // Mark for removal
                             blockedByShield = true;
