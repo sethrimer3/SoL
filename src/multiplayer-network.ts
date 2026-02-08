@@ -127,6 +127,14 @@ export class MultiplayerNetworkManager {
     // State
     private isActive: boolean = false;
     private currentTick: number = 0;
+    private isTransportReady: boolean = false;
+    
+    // Supabase channel for cleanup
+    private playerListenerChannel: any = null;
+    
+    // Connection timeout
+    private connectionTimeout: NodeJS.Timeout | null = null;
+    private readonly CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
 
     constructor(supabaseUrl: string, supabaseAnonKey: string, playerId: string) {
         this.supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -310,8 +318,11 @@ export class MultiplayerNetworkManager {
     private startListeningForPlayers(): void {
         if (!this.isHost || !this.currentMatch) return;
 
+        // Cleanup existing channel if any
+        this.stopListeningForPlayers();
+
         // Subscribe to match_players changes
-        const channel = this.supabase
+        this.playerListenerChannel = this.supabase
             .channel(`match:${this.currentMatch.id}`)
             .on(
                 'postgres_changes',
@@ -327,6 +338,16 @@ export class MultiplayerNetworkManager {
                 }
             )
             .subscribe();
+    }
+
+    /**
+     * Stop listening for players joining
+     */
+    private stopListeningForPlayers(): void {
+        if (this.playerListenerChannel) {
+            this.supabase.removeChannel(this.playerListenerChannel);
+            this.playerListenerChannel = null;
+        }
     }
 
     /**
@@ -389,6 +410,17 @@ export class MultiplayerNetworkManager {
             // Initialize P2P connections
             await (this.transport as P2PTransport).initialize();
 
+            // Set connection timeout
+            this.connectionTimeout = setTimeout(() => {
+                if (!this.isTransportReady) {
+                    console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
+                    this.emit(NetworkEvent.ERROR, { 
+                        error: new Error('Connection timeout - failed to establish P2P connections')
+                    });
+                    this.endMatch('connection_timeout');
+                }
+            }, this.CONNECTION_TIMEOUT_MS);
+
             // Wait for connections to establish
             (this.transport as P2PTransport).onReady(() => {
                 this.onTransportReady();
@@ -423,7 +455,20 @@ export class MultiplayerNetworkManager {
      * Called when transport is ready (all P2P connections established)
      */
     private async onTransportReady(): Promise<void> {
+        // Guard against duplicate calls
+        if (this.isTransportReady) {
+            console.warn('[MultiplayerNetworkManager] Transport already ready, ignoring duplicate call');
+            return;
+        }
+        
         console.log('[MultiplayerNetworkManager] Transport ready!');
+        this.isTransportReady = true;
+        
+        // Clear connection timeout
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
         
         if (this.isHost && this.currentMatch) {
             // Host updates match status to active
@@ -540,6 +585,16 @@ export class MultiplayerNetworkManager {
         console.log('[MultiplayerNetworkManager] Ending match...', reason);
         
         this.isActive = false;
+        this.isTransportReady = false;
+
+        // Clear connection timeout if still pending
+        if (this.connectionTimeout) {
+            clearTimeout(this.connectionTimeout);
+            this.connectionTimeout = null;
+        }
+
+        // Stop listening for players (cleanup Supabase channel)
+        this.stopListeningForPlayers();
 
         // Update match status
         if (this.currentMatch && this.isHost) {
