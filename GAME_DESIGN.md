@@ -101,18 +101,82 @@ Smaller automated units that form the backbone of your army:
 - 2D graphics with ray-traced lighting
 - Cross-platform (Mobile & Desktop)
 - Real-time multiplayer with crossplay
+  - P2P WebRTC for low-latency gameplay
+  - Deterministic lockstep synchronization
+  - 2-8 players supported
+  - LAN and online play via Supabase matchmaking
 - AI opponents
+
+## Multiplayer Features
+
+### Game Modes
+1. **Single Player** - Play against AI or practice (traditional mode)
+2. **LAN Multiplayer** - Direct network play on local area network
+3. **P2P Online Multiplayer** - WebRTC peer-to-peer with matchmaking
+
+### Multiplayer Match Flow
+1. **Host Creates Match**
+   - Choose match name and max players (2-8)
+   - System generates 6-character match code
+   - Host waits in lobby for players to join
+
+2. **Players Join Match**
+   - Enter match code from host
+   - Connect via P2P WebRTC
+   - Appear in lobby with all other players
+
+3. **Match Start**
+   - Host starts match when ready
+   - All players synchronized with same random seed
+   - Game begins simultaneously for all clients
+
+4. **Synchronized Gameplay**
+   - Player actions transmitted as commands (not game state)
+   - All clients execute commands in lockstep
+   - Deterministic simulation ensures identical game state
+   - 30 ticks per second for smooth gameplay
+
+5. **Victory**
+   - First player to destroy enemy Stellar Forge wins
+   - All players see results simultaneously
+
+### Multiplayer Technical Details
+
+**Deterministic Simulation**:
+- All randomness uses seeded RNG (same seed for all players)
+- Player commands executed in identical order on all clients
+- Game state computed independently by each client
+- State hash verification detects any desyncs
+
+**Network Efficiency**:
+- Only commands transmitted (not full game state)
+- Low bandwidth: ~10-15 KB/s for 4 players
+- Direct P2P: minimal latency (<100ms on good connections)
+- Supabase used only for matchmaking/signaling
+
+**Command Types**:
+- Unit movement and targeting
+- Building construction
+- Hero abilities and production
+- Strategic commands (mirror positioning, forge movement)
+
+### Fair Play
+- Deterministic simulation prevents most cheating
+- All players run identical game logic
+- State verification can detect tampering (Phase 2)
+- Client-side validation ensures commands are legal
 
 ## Game Flow
 1. Pre-game: Select faction and 4-hero loadout
-2. Game start: Players begin with Stellar Forge and initial Solar Mirrors
-3. Position mirrors to maximize light collection
-4. Stellar Forge begins "crunching" - producing minions automatically
-5. Use accumulated energy to produce hero units from loadout
-6. Command hero units and minion swarms
-7. Attack enemy positions, mirrors, and heroes
-8. Protect own resource infrastructure and Stellar Forge
-9. Destroy enemy Stellar Forge to win
+2. (Multiplayer) Select game mode and create/join match
+3. Game start: Players begin with Stellar Forge and initial Solar Mirrors
+4. Position mirrors to maximize light collection
+5. Stellar Forge begins "crunching" - producing minions automatically
+6. Use accumulated energy to produce hero units from loadout
+7. Command hero units and minion swarms
+8. Attack enemy positions, mirrors, and heroes
+9. Protect own resource infrastructure and Stellar Forge
+10. Destroy enemy Stellar Forge to win
 
 ## Current Implementation Status
 
@@ -123,6 +187,15 @@ Smaller automated units that form the backbone of your army:
 ✅ Light-based mechanics with ray tracing
 ✅ Line-of-sight system for solar mirrors
 ✅ Cross-platform support (Mobile & Desktop)
+✅ P2P Multiplayer System
+  - Deterministic lockstep simulation
+  - WebRTC P2P connections
+  - Supabase matchmaking and signaling
+  - Command queue and synchronization
+  - Match lobby and player management
+  - Seeded RNG for determinism
+  - State hash verification
+  - Comprehensive test suite
 
 ### In Progress / To Be Implemented
 🚧 Hero Units (Apotheoi) system
@@ -132,6 +205,14 @@ Smaller automated units that form the backbone of your army:
 🚧 New energy economy (crunch-based production)
 🚧 Minion unit auto-production
 🚧 Hero/Minion differentiation and balance
+🚧 AI opponents for single-player
+
+### Multiplayer Phase 2 (Future)
+🔮 Server relay transport (for >8 players)
+🔮 Advanced anti-cheat system
+🔮 Automatic reconnection handling
+🔮 Spectator mode
+🔮 Replay system and match recording
 
 ### Design Decisions Pending
 ❓ Minion unit variety (one type vs. multiple per faction)
