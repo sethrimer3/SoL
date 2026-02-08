@@ -49,7 +49,7 @@ class GameController {
     private network: MultiplayerNetworkManager | null = null;
     private isMultiplayer: boolean = false;
     private tickAccumulator: number = 0;
-    private readonly TICK_INTERVAL_MS: number = 33.33; // 30 ticks/second
+    private readonly TICK_INTERVAL_MS: number = 1000 / 30; // 30 ticks/second (33.333... ms)
 
     private abilityArrowStarts: Vector2D[] = [];
 
@@ -3278,10 +3278,10 @@ class GameController {
         }
 
         // Update warp gates
-        const actualDeltaTime = this.TICK_INTERVAL_MS / 1000;
+        const tickDeltaTime = this.TICK_INTERVAL_MS / 1000;
         for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
             const gate = this.game.warpGates[i];
-            gate.update(actualDeltaTime);
+            gate.update(tickDeltaTime);
             
             if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
                 this.scatterParticles(gate.position);
