@@ -78,6 +78,7 @@ export class GameRenderer {
     private screenShakeIntensity: number = 0; // Current screen shake intensity
     private screenShakeTimer: number = 0; // Screen shake timer
     private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
+    public colorblindMode: boolean = false; // Colorblind mode - shows enemies as diamonds instead of circles
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
@@ -7391,6 +7392,262 @@ export class GameRenderer {
     }
 
     /**
+     * Check if a world position is off-screen
+     */
+    private isOffScreen(worldPos: Vector2D): boolean {
+        const screenPos = this.worldToScreen(worldPos);
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        
+        return screenPos.x < 0 || screenPos.x > screenWidth || 
+               screenPos.y < 0 || screenPos.y > screenHeight;
+    }
+
+    /**
+     * Calculate edge position for off-screen indicator
+     * Returns screen coordinates clamped to screen edges
+     */
+    private getEdgePosition(worldPos: Vector2D, indicatorSize: number): { x: number; y: number; angle: number } {
+        const screenPos = this.worldToScreen(worldPos);
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        const centerX = screenWidth / 2;
+        const centerY = screenHeight / 2;
+        
+        // Calculate angle from screen center to object
+        const dx = screenPos.x - centerX;
+        const dy = screenPos.y - centerY;
+        const angle = Math.atan2(dy, dx);
+        
+        // Calculate intersection with screen edges
+        // We want the indicator to be half off-screen, so we need to push it to the edge
+        const margin = indicatorSize / 2; // Half the indicator will be visible
+        
+        let edgeX = screenPos.x;
+        let edgeY = screenPos.y;
+        
+        // Clamp to screen bounds
+        if (screenPos.x < margin) {
+            edgeX = margin;
+        } else if (screenPos.x > screenWidth - margin) {
+            edgeX = screenWidth - margin;
+        }
+        
+        if (screenPos.y < margin) {
+            edgeY = margin;
+        } else if (screenPos.y > screenHeight - margin) {
+            edgeY = screenHeight - margin;
+        }
+        
+        return { x: edgeX, y: edgeY, angle };
+    }
+
+    /**
+     * Draw off-screen unit indicators
+     */
+    private drawOffScreenUnitIndicators(game: GameState): void {
+        if (!this.viewingPlayer) return;
+        
+        const dpr = window.devicePixelRatio || 1;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        
+        // Define size hierarchy
+        const STARLING_SIZE = 12;
+        const HERO_SIZE = 20;
+        const MIRROR_SIZE = 24;
+        const BUILDING_SIZE = 28;
+        const FORGE_SIZE = 36;
+        
+        // Process player units (always visible)
+        for (const unit of this.viewingPlayer.units) {
+            if (!this.isOffScreen(unit.position)) continue;
+            
+            const isStarling = unit instanceof Starling;
+            const size = isStarling ? STARLING_SIZE : HERO_SIZE;
+            const edgePos = this.getEdgePosition(unit.position, size);
+            
+            // Draw circle (no fill for units)
+            this.ctx.strokeStyle = this.playerColor;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+        
+        // Process player solar mirrors (always visible)
+        for (const mirror of this.viewingPlayer.solarMirrors) {
+            if (!this.isOffScreen(mirror.position)) continue;
+            
+            const edgePos = this.getEdgePosition(mirror.position, MIRROR_SIZE);
+            
+            // Draw filled circle for mirrors
+            this.ctx.fillStyle = this.playerColor;
+            this.ctx.beginPath();
+            this.ctx.arc(edgePos.x, edgePos.y, MIRROR_SIZE / 2, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Process player buildings (always visible)
+        for (const building of this.viewingPlayer.buildings) {
+            if (!this.isOffScreen(building.position)) continue;
+            
+            const isFoundry = building instanceof SubsidiaryFactory;
+            const size = isFoundry ? FORGE_SIZE : BUILDING_SIZE;
+            const edgePos = this.getEdgePosition(building.position, size);
+            
+            // Draw filled circle for buildings
+            this.ctx.fillStyle = this.playerColor;
+            this.ctx.beginPath();
+            this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        // Process player stellar forge (always visible)
+        if (this.viewingPlayer.stellarForge && !this.viewingPlayer.isDefeated()) {
+            const forge = this.viewingPlayer.stellarForge;
+            if (this.isOffScreen(forge.position)) {
+                const edgePos = this.getEdgePosition(forge.position, FORGE_SIZE);
+                
+                // Draw filled circle for forge
+                this.ctx.fillStyle = this.playerColor;
+                this.ctx.beginPath();
+                this.ctx.arc(edgePos.x, edgePos.y, FORGE_SIZE / 2, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+        
+        // Process enemy units and structures (only if visible)
+        for (const player of game.players) {
+            if (player === this.viewingPlayer || player.isDefeated()) continue;
+            
+            const color = this.getLadPlayerColor(player, ladSun, game);
+            
+            // Enemy units
+            for (const unit of player.units) {
+                if (!this.isOffScreen(unit.position)) continue;
+                
+                // Check visibility
+                if (!game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit)) {
+                    continue;
+                }
+                
+                const isStarling = unit instanceof Starling;
+                const unitSize = isStarling ? STARLING_SIZE : HERO_SIZE;
+                const edgePos = this.getEdgePosition(unit.position, unitSize);
+                
+                // Draw based on colorblind mode
+                if (this.colorblindMode) {
+                    // Draw diamond (45° rotated square)
+                    this.ctx.save();
+                    this.ctx.translate(edgePos.x, edgePos.y);
+                    this.ctx.rotate(Math.PI / 4);
+                    this.ctx.strokeStyle = color;
+                    this.ctx.lineWidth = 2;
+                    this.ctx.strokeRect(-unitSize / 2, -unitSize / 2, unitSize, unitSize);
+                    this.ctx.restore();
+                } else {
+                    // Draw circle (no fill for units)
+                    this.ctx.strokeStyle = color;
+                    this.ctx.lineWidth = 2;
+                    this.ctx.beginPath();
+                    this.ctx.arc(edgePos.x, edgePos.y, unitSize / 2, 0, Math.PI * 2);
+                    this.ctx.stroke();
+                }
+            }
+            
+            // Enemy solar mirrors
+            for (const mirror of player.solarMirrors) {
+                if (!this.isOffScreen(mirror.position)) continue;
+                
+                // Check visibility
+                if (!game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer, mirror)) {
+                    continue;
+                }
+                
+                const edgePos = this.getEdgePosition(mirror.position, MIRROR_SIZE);
+                
+                // Draw based on colorblind mode
+                if (this.colorblindMode) {
+                    // Draw filled diamond
+                    this.ctx.save();
+                    this.ctx.translate(edgePos.x, edgePos.y);
+                    this.ctx.rotate(Math.PI / 4);
+                    this.ctx.fillStyle = color;
+                    this.ctx.fillRect(-MIRROR_SIZE / 2, -MIRROR_SIZE / 2, MIRROR_SIZE, MIRROR_SIZE);
+                    this.ctx.restore();
+                } else {
+                    // Draw filled circle
+                    this.ctx.fillStyle = color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(edgePos.x, edgePos.y, MIRROR_SIZE / 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+            }
+            
+            // Enemy buildings
+            for (const building of player.buildings) {
+                if (!this.isOffScreen(building.position)) continue;
+                
+                // Check visibility
+                if (!game.isObjectVisibleToPlayer(building.position, this.viewingPlayer, building)) {
+                    continue;
+                }
+                
+                const isFoundry = building instanceof SubsidiaryFactory;
+                const size = isFoundry ? FORGE_SIZE : BUILDING_SIZE;
+                const edgePos = this.getEdgePosition(building.position, size);
+                
+                // Draw based on colorblind mode
+                if (this.colorblindMode) {
+                    // Draw filled diamond
+                    this.ctx.save();
+                    this.ctx.translate(edgePos.x, edgePos.y);
+                    this.ctx.rotate(Math.PI / 4);
+                    this.ctx.fillStyle = color;
+                    this.ctx.fillRect(-size / 2, -size / 2, size, size);
+                    this.ctx.restore();
+                } else {
+                    // Draw filled circle
+                    this.ctx.fillStyle = color;
+                    this.ctx.beginPath();
+                    this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
+                    this.ctx.fill();
+                }
+            }
+            
+            // Enemy stellar forge
+            if (player.stellarForge) {
+                const forge = player.stellarForge;
+                if (this.isOffScreen(forge.position)) {
+                    // Check visibility
+                    if (game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer, forge)) {
+                        const edgePos = this.getEdgePosition(forge.position, FORGE_SIZE);
+                        
+                        // Draw based on colorblind mode
+                        if (this.colorblindMode) {
+                            // Draw filled diamond
+                            this.ctx.save();
+                            this.ctx.translate(edgePos.x, edgePos.y);
+                            this.ctx.rotate(Math.PI / 4);
+                            this.ctx.fillStyle = color;
+                            this.ctx.fillRect(-FORGE_SIZE / 2, -FORGE_SIZE / 2, FORGE_SIZE, FORGE_SIZE);
+                            this.ctx.restore();
+                        } else {
+                            // Draw filled circle
+                            this.ctx.fillStyle = color;
+                            this.ctx.beginPath();
+                            this.ctx.arc(edgePos.x, edgePos.y, FORGE_SIZE / 2, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Render the entire game state
      */
     render(game: GameState): void {
@@ -7813,6 +8070,9 @@ export class GameRenderer {
 
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
+        
+        // Draw off-screen unit indicators
+        this.drawOffScreenUnitIndicators(game);
         
         // Draw striker tower target highlighting
         this.drawStrikerTowerTargetHighlighting(game);
@@ -8293,6 +8553,21 @@ export class GameRenderer {
                 }
             }
             
+            optionY += optionHeight + optionSpacing;
+
+            // Colorblind Mode toggle buttons
+            const colorblindButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const colorblindButton2X = optionX + optionWidth - buttonWidth;
+
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= colorblindButton1X && screenX <= colorblindButton1X + buttonWidth) {
+                    return { type: 'colorblindMode', isEnabled: true };
+                }
+                if (screenX >= colorblindButton2X && screenX <= colorblindButton2X + buttonWidth) {
+                    return { type: 'colorblindMode', isEnabled: false };
+                }
+            }
+            
             return null;
         }
 
@@ -8541,6 +8816,42 @@ export class GameRenderer {
             this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.fillText('Off', fancyButtons.button2X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            optionY += optionHeight + optionSpacing;
+
+            // Colorblind Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Colorblind Mode:', optionX, optionY + (optionHeight * 0.4));
+
+            const colorblindButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+
+            const isColorblindOn = this.colorblindMode;
+            this.ctx.fillStyle = isColorblindOn ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isColorblindOn ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('On', colorblindButtons.button1X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            const isColorblindOff = !this.colorblindMode;
+            this.ctx.fillStyle = isColorblindOff ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isColorblindOff ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Off', colorblindButtons.button2X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
         } else {
             const maxScroll = this.getGraphicsMenuMaxScroll(layout);
             if (this.graphicsMenuScrollOffset > maxScroll) {
