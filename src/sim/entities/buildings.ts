@@ -430,6 +430,7 @@ export class Minigun extends Building {
         if ('radius' in structure) {
             return structure.radius;
         }
+        // Fallback for SolarMirror and other structures without explicit radius property
         return Constants.MIRROR_CLICK_RADIUS_PX;
     }
 }
@@ -1247,6 +1248,7 @@ export class LockOnLaserTower extends Building {
         if ('radius' in structure) {
             return structure.radius;
         }
+        // Fallback for SolarMirror and other structures without explicit radius property
         return Constants.MIRROR_CLICK_RADIUS_PX;
     }
 }

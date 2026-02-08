@@ -257,6 +257,9 @@ export const LOCKON_TOWER_RADIUS = 30; // Building size
 export const LOCKON_TOWER_LOCKON_TIME = 2.0; // Seconds to lock on before firing
 export const LOCKON_TOWER_LASER_WIDTH_PX = 20; // Laser beam width
 
+// Unit visibility constants
+export const UNIT_VISIBILITY_RADIUS = 200; // Distance in pixels that units can see around them
+
 // Building costs (energy-based construction)
 // Note: Internal names are different from display names
 // MINIGUN = Cannon, GATLING = Gatling Tower, SWIRLER = Cyclone, SUBSIDIARY_FACTORY = Workshop/Foundry

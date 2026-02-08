@@ -4442,7 +4442,9 @@ export class GameState {
         }
     }
 
+    // Mirror purchase is handled differently (not through commands)
     private executeMirrorPurchaseCommand(player: Player, data: any): void {
+        // No-op: Mirror purchases are handled through direct game state modification
         return;
     }
 
@@ -4485,8 +4487,7 @@ export class GameState {
     private isPositionVisibleByPlayerUnits(position: Vector2D, playerUnits: Unit[]): boolean {
         for (const unit of playerUnits) {
             const distance = unit.position.distanceTo(position);
-            // Use a simple distance check for visibility - units can see ~200px around them
-            if (distance <= 200) {
+            if (distance <= Constants.UNIT_VISIBILITY_RADIUS) {
                 return true;
             }
         }
