@@ -19,7 +19,9 @@ export interface GameCommand {
     tick: number;           // Which game tick this command applies to
     playerId: string;       // Who issued this command
     commandType: string;    // Type of command (e.g., 'move_unit', 'build', 'attack')
-    payload: any;          // Command-specific data
+    payload: any;          // Command-specific data (use discriminated union in game code)
+    // NOTE: payload is 'any' for flexibility. Game code should use proper types:
+    // type MoveCommand = GameCommand & { commandType: 'move_unit', payload: { unitId: number, x: number, y: number } };
 }
 
 /**
@@ -156,14 +158,16 @@ export class CommandQueue {
         }
 
         // Check if we should timeout and proceed anyway
-        const oldestAvailableTick = Math.min(...Array.from(this.commandsByTick.keys()));
-        if (oldestAvailableTick !== Infinity && 
-            targetTick - oldestAvailableTick >= this.COMMAND_TIMEOUT_TICKS) {
+        const queuedTicks = Array.from(this.commandsByTick.keys());
+        if (queuedTicks.length > 0) {
+            const oldestAvailableTick = Math.min(...queuedTicks);
+            if (targetTick - oldestAvailableTick >= this.COMMAND_TIMEOUT_TICKS) {
             
-            // Timeout - proceed with partial commands
-            console.warn(`Command timeout at tick ${targetTick}, proceeding with partial commands`);
-            this.missedCommandsCount++;
-            return this.consumeTickCommands(targetTick);
+                // Timeout - proceed with partial commands
+                console.warn(`Command timeout at tick ${targetTick}, proceeding with partial commands`);
+                this.missedCommandsCount++;
+                return this.consumeTickCommands(targetTick);
+            }
         }
 
         // Not ready yet
@@ -291,8 +295,10 @@ export class CommandValidator {
 
     /**
      * TODO Phase 2: Verify command is legal in current game state
+     * @param command - Command to verify
+     * @param gameState - Current game state (use proper GameState interface in implementation)
      */
-    verifyLegality?(command: GameCommand, gameState: any): boolean {
+    verifyLegality?(command: GameCommand, gameState: unknown): boolean {
         // Future implementation
         return true;
     }

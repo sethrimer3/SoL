@@ -491,13 +491,16 @@ export class MultiplayerNetworkManager {
 
     /**
      * TODO Phase 2: Verify state hash with other players
+     * 
+     * @deprecated Not implemented in Phase 1. Marked for Phase 2 development.
+     * 
+     * Future implementation:
+     * 1. Send hash to server or exchange with peers
+     * 2. Compare hashes
+     * 3. If mismatch, trigger desync recovery or cheat detection
      */
     private verifyStateHash(hash: string): void {
-        // Future implementation:
-        // 1. Send hash to server or exchange with peers
-        // 2. Compare hashes
-        // 3. If mismatch, trigger desync recovery or cheat detection
-        console.log('[MultiplayerNetworkManager] TODO: Verify state hash:', hash);
+        console.log('[MultiplayerNetworkManager] TODO Phase 2: Verify state hash:', hash);
     }
 
     /**

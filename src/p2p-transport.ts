@@ -599,7 +599,7 @@ export class P2PTransport implements ITransport {
 
         return {
             connected: this.ready,
-            latencyMs: 0, // TODO: Implement RTT measurement
+            latencyMs: 0, // TODO Phase 2: Implement RTT measurement (PING/PONG)
             packetsSent: totalPacketsSent,
             packetsReceived: totalPacketsReceived,
             bytesOut: totalBytesSent,

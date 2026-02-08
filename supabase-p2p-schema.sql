@@ -156,7 +156,20 @@ CREATE POLICY "Players can send signaling messages"
 -- ============================================================================
 -- CLEANUP FUNCTIONS
 -- ============================================================================
--- Function to clean up old finished matches (call periodically)
+-- ============================================================================
+-- CLEANUP FUNCTION
+-- ============================================================================
+-- Function to clean up old finished matches and signaling messages
+-- 
+-- USAGE: Should be called periodically via:
+-- 1. Supabase Dashboard > Database > Cron Jobs (requires pg_cron extension)
+-- 2. External cron job: `SELECT cleanup_old_matches();`
+-- 3. Scheduled function (Supabase Edge Functions)
+-- 
+-- RECOMMENDED SCHEDULE: Every 1 hour
+--
+-- Example cron job (if pg_cron extension is enabled):
+-- SELECT cron.schedule('cleanup-matches', '0 * * * *', 'SELECT cleanup_old_matches();');
 CREATE OR REPLACE FUNCTION cleanup_old_matches()
 RETURNS void AS $$
 BEGIN

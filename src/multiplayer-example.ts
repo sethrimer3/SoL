@@ -441,6 +441,11 @@ function initializeGame() {
 
 /**
  * Utility: Generate UUID
+ * 
+ * NOTE: Uses Math.random() which is acceptable here because:
+ * - This is for generating player IDs, not gameplay logic
+ * - Player IDs don't need to be deterministic
+ * - This code doesn't affect game state simulation
  */
 function generateUUID(): string {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
