@@ -1896,7 +1896,8 @@ export class MainMenu {
             });
 
             this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
-                statusMessage.textContent = `Error: ${data.error}`;
+                const errorMsg = data.message || data.error?.message || data.error || 'Unknown error';
+                statusMessage.textContent = `Error: ${errorMsg}`;
                 statusMessage.style.display = 'block';
                 createButton.disabled = false;
                 createButton.textContent = 'CREATE MATCH';
@@ -2095,7 +2096,8 @@ export class MainMenu {
             });
 
             this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
-                statusMessage.textContent = `Error: ${data.error || 'Failed to join match'}`;
+                const errorMsg = data.message || data.error?.message || data.error || 'Failed to join match';
+                statusMessage.textContent = `Error: ${errorMsg}`;
                 statusMessage.style.color = '#FF6666';
                 statusMessage.style.display = 'block';
                 joinButton.disabled = false;
@@ -3444,6 +3446,16 @@ export class MainMenu {
      * Remove the menu from DOM
      */
     destroy(): void {
+        // Cleanup network managers
+        if (this.settings.networkManager) {
+            this.settings.networkManager.disconnect();
+            this.settings.networkManager = undefined;
+        }
+        if (this.multiplayerNetworkManager) {
+            void this.multiplayerNetworkManager.disconnect();
+            this.multiplayerNetworkManager = null;
+        }
+        
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
             this.carouselMenu = null;

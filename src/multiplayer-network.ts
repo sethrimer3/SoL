@@ -176,7 +176,8 @@ export class MultiplayerNetworkManager {
 
             if (matchError) {
                 console.error('[MultiplayerNetworkManager] Failed to create match:', matchError);
-                this.emit(NetworkEvent.ERROR, { error: matchError });
+                const userMessage = 'Failed to create match. Please check your connection and try again.';
+                this.emit(NetworkEvent.ERROR, { error: matchError, message: userMessage });
                 return null;
             }
 
@@ -195,7 +196,8 @@ export class MultiplayerNetworkManager {
 
             if (playerError) {
                 console.error('[MultiplayerNetworkManager] Failed to add host player:', playerError);
-                this.emit(NetworkEvent.ERROR, { error: playerError });
+                const userMessage = 'Failed to join match as host. Please try again.';
+                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
                 return null;
             }
 
@@ -212,7 +214,8 @@ export class MultiplayerNetworkManager {
             return match;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error creating match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'An unexpected error occurred while creating the match.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return null;
         }
     }
@@ -252,14 +255,16 @@ export class MultiplayerNetworkManager {
 
             if (matchError || !match) {
                 console.error('[MultiplayerNetworkManager] Match not found:', matchError);
-                this.emit(NetworkEvent.ERROR, { error: 'Match not found' });
+                const userMessage = 'Match not found. The match code may be incorrect or expired.';
+                this.emit(NetworkEvent.ERROR, { error: 'Match not found', message: userMessage });
                 return false;
             }
 
             // Check if match is joinable
             if (match.status !== 'open') {
                 console.error('[MultiplayerNetworkManager] Match not open for joining');
-                this.emit(NetworkEvent.ERROR, { error: 'Match not open' });
+                const userMessage = 'Match is not accepting new players. It may have already started.';
+                this.emit(NetworkEvent.ERROR, { error: 'Match not open', message: userMessage });
                 return false;
             }
 
@@ -276,7 +281,8 @@ export class MultiplayerNetworkManager {
 
             if (players.length >= match.max_players) {
                 console.error('[MultiplayerNetworkManager] Match is full');
-                this.emit(NetworkEvent.ERROR, { error: 'Match is full' });
+                const userMessage = `Match is full (${match.max_players}/${match.max_players} players).`;
+                this.emit(NetworkEvent.ERROR, { error: 'Match is full', message: userMessage });
                 return false;
             }
 
@@ -296,7 +302,8 @@ export class MultiplayerNetworkManager {
 
             if (playerError) {
                 console.error('[MultiplayerNetworkManager] Failed to join match:', playerError);
-                this.emit(NetworkEvent.ERROR, { error: playerError });
+                const userMessage = 'Failed to join match. Please try again.';
+                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
                 return false;
             }
 
@@ -310,7 +317,8 @@ export class MultiplayerNetworkManager {
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error joining match:', error);
-            this.emit(NetworkEvent.ERROR, { error });
+            const userMessage = 'An unexpected error occurred while joining the match.';
+            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return false;
         }
     }
