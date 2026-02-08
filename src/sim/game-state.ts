@@ -94,7 +94,7 @@ export class GameState {
     disintegrationParticles: InstanceType<typeof DisintegrationParticle>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
-    strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
+    strikerTowerExplosions: { position: Vector2D; timestamp: number; shakeTriggered?: boolean }[] = []; // Track striker tower explosions for rendering
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;

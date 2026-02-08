@@ -6621,8 +6621,8 @@ export class GameRenderer {
      * Draw striker tower missile explosion effect
      * Shows a large, dramatic explosion with expanding rings
      */
-    private drawStrikerTowerExplosion(position: Vector2D, age: number): void {
-        const screenPos = this.worldToScreen(position);
+    private drawStrikerTowerExplosion(explosion: { position: Vector2D; timestamp: number; shakeTriggered?: boolean }, age: number): void {
+        const screenPos = this.worldToScreen(explosion.position);
         const maxRadius = Constants.STRIKER_TOWER_EXPLOSION_RADIUS * this.zoom;
         
         // Explosion expands quickly at first, then fades
@@ -6663,9 +6663,10 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
         
-        // Trigger screen shake on first frame
-        if (age < 0.016) { // First frame (assuming 60fps)
+        // Trigger screen shake only once per explosion
+        if (!explosion.shakeTriggered) {
             this.triggerScreenShake(15); // Stronger shake than normal
+            explosion.shakeTriggered = true;
         }
     }
 
@@ -7735,7 +7736,7 @@ export class GameRenderer {
         // Draw striker tower explosions
         for (const explosion of game.strikerTowerExplosions) {
             if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
-                this.drawStrikerTowerExplosion(explosion.position, game.gameTime - explosion.timestamp);
+                this.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp);
             }
         }
         

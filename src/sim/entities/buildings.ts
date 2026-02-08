@@ -915,11 +915,7 @@ export class StrikerTower extends Building {
         // Update countdown if target is selected
         if (this.targetPosition !== null && this.countdownTimer > 0) {
             this.countdownTimer -= deltaTime;
-            if (this.countdownTimer <= 0) {
-                // Countdown complete, fire missile!
-                // This will be handled by game-state.ts which has access to visibility functions
-                this.countdownTimer = 0;
-            }
+            // Countdown will be handled by game-state.ts when it reaches <= 0
         }
 
         // Update reload timer if missile not ready
