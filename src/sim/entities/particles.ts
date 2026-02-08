@@ -6,6 +6,7 @@ import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import type { Player, Faction } from './player';
 import type { CombatTarget } from './buildings';
+import { getGameRNG } from '../../seeded-random';
 
 /**
  * Space dust particle that gets affected by influences and forces
@@ -39,9 +40,10 @@ export class SpaceDustParticle {
         if (velocity) {
             this.velocity = velocity;
         } else {
+            const rng = getGameRNG();
             this.velocity = new Vector2D(
-                (Math.random() - 0.5) * 2,  // -1 to 1
-                (Math.random() - 0.5) * 2
+                rng.nextFloat(-1, 1),
+                rng.nextFloat(-1, 1)
             );
         }
     }
@@ -205,19 +207,20 @@ export class SpaceDustParticle {
     }
 
     private static generateBaseColor(palette?: SpaceDustPalette): string {
+        const rng = getGameRNG();
         if (palette && palette.neutral.length > 0) {
-            const paletteRoll = Math.random();
+            const paletteRoll = rng.next();
             const useAccent = paletteRoll > 0.7 && palette.accent.length > 0;
             const selection = useAccent ? palette.accent : palette.neutral;
-            const colorIndex = Math.floor(Math.random() * selection.length);
+            const colorIndex = rng.nextInt(0, selection.length - 1);
             return selection[colorIndex];
         }
 
-        const baseShade = 85 + Math.random() * 110;
+        const baseShade = rng.nextFloat(85, 195);
         let r = baseShade;
         let g = baseShade;
         let b = baseShade;
-        const tintRoll = Math.random();
+        const tintRoll = rng.next();
 
         if (tintRoll < 0.18) {
             r = baseShade - 8;
@@ -313,7 +316,8 @@ export class BulletCasing {
         velocity: Vector2D
     ) {
         this.velocity = velocity;
-        this.rotationSpeed = (Math.random() - 0.5) * 10; // Random spin
+        const rng = getGameRNG();
+        this.rotationSpeed = rng.nextFloat(-5, 5); // Random spin
     }
 
     /**
@@ -633,7 +637,8 @@ export class DeathParticle {
         this.position = new Vector2D(position.x, position.y);
         this.velocity = velocity;
         this.rotation = rotation;
-        this.rotationSpeed = (Math.random() - 0.5) * 4; // Random rotation speed
+        const rng = getGameRNG();
+        this.rotationSpeed = rng.nextFloat(-2, 2); // Random rotation speed
         this.spriteFragment = spriteFragment;
         this.fadeStartTime = fadeStartTime;
     }

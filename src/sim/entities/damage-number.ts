@@ -3,6 +3,7 @@
  */
 
 import { Vector2D } from '../math';
+import { getGameRNG } from '../../seeded-random';
 
 /**
  * Floating damage/health number
@@ -31,8 +32,9 @@ export class DamageNumber {
         this.maxHealth = maxHealth;
         this.unitId = unitId;
         // Random horizontal drift
+        const rng = getGameRNG();
         this.velocity = new Vector2D(
-            (Math.random() - 0.5) * 20,
+            rng.nextFloat(-10, 10),
             -50 // Upward velocity
         );
     }

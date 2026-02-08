@@ -5,6 +5,7 @@
 import { Vector2D, LightRay } from './math';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
+import { getGameRNG } from '../seeded-random';
 import { Player } from './entities/player';
 import { Sun } from './entities/sun';
 import { Asteroid } from './entities/asteroid';
@@ -316,16 +317,17 @@ export class GameState {
                         
                         // Spawn sparkle particles for regeneration visual effect
                         // Spawn ~2-3 particles per second
-                        if (Math.random() < deltaTime * 2.5) {
-                            const angle = Math.random() * Math.PI * 2;
-                            const distance = Math.random() * 25;
+                        const rng = getGameRNG();
+                        if (rng.next() < deltaTime * 2.5) {
+                            const angle = rng.nextAngle();
+                            const distance = rng.nextFloat(0, 25);
                             const sparklePos = new Vector2D(
                                 mirror.position.x + Math.cos(angle) * distance,
                                 mirror.position.y + Math.sin(angle) * distance
                             );
                             const velocity = new Vector2D(
-                                (Math.random() - 0.5) * 30,
-                                (Math.random() - 0.5) * 30 - 20 // Slight upward bias
+                                rng.nextFloat(-15, 15),
+                                rng.nextFloat(-15, 15) - 20 // Slight upward bias
                             );
                             // Use player's color for sparkles
                             const playerColor = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
@@ -334,7 +336,7 @@ export class GameState {
                                 velocity,
                                 0.8, // lifetime in seconds
                                 playerColor,
-                                2 + Math.random() * 2 // size 2-4
+                                rng.nextFloat(2, 4) // size 2-4
                             ));
                         }
                     }
@@ -4030,28 +4032,29 @@ export class GameState {
         const clusterRadiusPx = Constants.DUST_CLUSTER_RADIUS_PX;
         const clusterSpawnRatio = Constants.DUST_CLUSTER_SPAWN_RATIO;
         const clusterCenters: Vector2D[] = [];
+        const rng = getGameRNG();
 
         for (let i = 0; i < clusterCount; i++) {
-            const centerX = (Math.random() - 0.5) * width;
-            const centerY = (Math.random() - 0.5) * height;
+            const centerX = rng.nextFloat(-width/2, width/2);
+            const centerY = rng.nextFloat(-height/2, height/2);
             clusterCenters.push(new Vector2D(centerX, centerY));
         }
 
         for (let i = 0; i < count; i++) {
-            const useCluster = Math.random() < clusterSpawnRatio;
+            const useCluster = rng.next() < clusterSpawnRatio;
             let x = 0;
             let y = 0;
 
             if (useCluster && clusterCenters.length > 0) {
-                const centerIndex = Math.floor(Math.random() * clusterCenters.length);
+                const centerIndex = rng.nextInt(0, clusterCenters.length - 1);
                 const center = clusterCenters[centerIndex];
-                const angle = Math.random() * Math.PI * 2;
-                const distance = Math.sqrt(Math.random()) * clusterRadiusPx;
+                const angle = rng.nextAngle();
+                const distance = Math.sqrt(rng.next()) * clusterRadiusPx;
                 x = center.x + Math.cos(angle) * distance;
                 y = center.y + Math.sin(angle) * distance;
             } else {
-                x = (Math.random() - 0.5) * width;
-                y = (Math.random() - 0.5) * height;
+                x = rng.nextFloat(-width/2, width/2);
+                y = rng.nextFloat(-height/2, height/2);
             }
             this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y), undefined, palette));
         }
@@ -4063,6 +4066,7 @@ export class GameState {
     initializeAsteroids(count: number, width: number, height: number): void {
         this.asteroids = [];
         const maxAttempts = 50; // Maximum attempts to find a valid position
+        const rng = getGameRNG();
         
         for (let i = 0; i < count; i++) {
             let validPosition = false;
@@ -4071,13 +4075,13 @@ export class GameState {
             
             while (!validPosition && attempts < maxAttempts) {
                 // Random position avoiding the center (where players start)
-                const angle = Math.random() * Math.PI * 2;
-                const distance = 200 + Math.random() * (Math.min(width, height) / 2 - 300);
+                const angle = rng.nextAngle();
+                const distance = rng.nextFloat(200, Math.min(width, height) / 2 - 100);
                 x = Math.cos(angle) * distance;
                 y = Math.sin(angle) * distance;
                 
                 // Random size (30-80)
-                size = Constants.ASTEROID_MIN_SIZE + Math.random() * (80 - Constants.ASTEROID_MIN_SIZE);
+                size = rng.nextFloat(Constants.ASTEROID_MIN_SIZE, 80);
                 
                 // Check if this position has enough gap from existing asteroids
                 // Gap must be at least the sum of both asteroid radii
@@ -4100,7 +4104,7 @@ export class GameState {
             // If we found a valid position, add the asteroid
             if (validPosition) {
                 // Random polygon sides (3-9)
-                const sides = 3 + Math.floor(Math.random() * 7);
+                const sides = rng.nextInt(3, 9);
                 this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
             }
         }
@@ -4359,28 +4363,29 @@ export class GameState {
         // Determine number of particles based on entity type
         let particleCount: number;
         let baseSize: number;
+        const rng = getGameRNG();
         
         if (entity instanceof Building) {
             // Structures: 10-20 pieces
-            particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
+            particleCount = rng.nextInt(10, 20);
             baseSize = 16;
         } else if (entity.isHero) {
             // Heroes: 10-20 pieces
-            particleCount = Math.floor(Math.random() * 11) + 10; // 10 to 20
+            particleCount = rng.nextInt(10, 20);
             baseSize = 12;
         } else {
             // Starlings and other units: 4-8 pieces
-            particleCount = Math.floor(Math.random() * 5) + 4; // 4 to 8
+            particleCount = rng.nextInt(4, 8);
             baseSize = 8;
         }
         
         // Random fade start time between 5-15 seconds
-        const fadeStartTime = Math.random() * 10 + 5; // 5 to 15 seconds
+        const fadeStartTime = rng.nextFloat(5, 15);
         
         // Create particles flying apart in different directions
         for (let i = 0; i < particleCount; i++) {
-            const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
-            const speed = 50 + Math.random() * 100; // 50-150 pixels per second
+            const angle = (Math.PI * 2 * i) / particleCount + rng.nextFloat(-0.25, 0.25);
+            const speed = rng.nextFloat(50, 150); // 50-150 pixels per second
             
             const velocity = new Vector2D(
                 Math.cos(angle) * speed,
@@ -4393,7 +4398,7 @@ export class GameState {
             // - Death events are infrequent (not hundreds per second)
             // - Pre-pooling would add complexity without significant benefit
             const fragment = document.createElement('canvas');
-            const size = baseSize + Math.random() * baseSize;
+            const size = rng.nextFloat(baseSize, baseSize * 2);
             fragment.width = size;
             fragment.height = size;
             const ctx = fragment.getContext('2d');
@@ -4405,7 +4410,7 @@ export class GameState {
             const particle = new DeathParticle(
                 new Vector2D(entity.position.x, entity.position.y),
                 velocity,
-                Math.random() * Math.PI * 2, // Random initial rotation
+                rng.nextAngle(), // Random initial rotation
                 fragment,
                 fadeStartTime
             );
@@ -4745,9 +4750,10 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
     // Randomly assign which player gets which position
     const bottomLeft = new Vector2D(-700, 700);
     const topRight = new Vector2D(700, -700);
+    const rng = getGameRNG();
     
     // Randomly decide player assignment
-    const randomizePositions = Math.random() < 0.5;
+    const randomizePositions = rng.next() < 0.5;
     const positions = randomizePositions 
         ? [bottomLeft, topRight]
         : [topRight, bottomLeft];
@@ -4768,7 +4774,7 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
                 Constants.AIStrategy.AGGRESSIVE,
                 Constants.AIStrategy.WAVES
             ];
-            player.aiStrategy = strategies[Math.floor(Math.random() * strategies.length)];
+            player.aiStrategy = rng.choice(strategies)!;
         }
         
         const forgePos = positions[i];
