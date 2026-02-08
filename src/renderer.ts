@@ -7523,7 +7523,6 @@ export class GameRenderer {
             if (player === this.viewingPlayer || player.isDefeated()) continue;
             
             const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = true;
             
             // Enemy units
             for (const unit of player.units) {
@@ -7535,8 +7534,8 @@ export class GameRenderer {
                 }
                 
                 const isStarling = unit instanceof Starling;
-                const size = isStarling ? STARLING_SIZE : HERO_SIZE;
-                const edgePos = this.getEdgePosition(unit.position, size);
+                const unitSize = isStarling ? STARLING_SIZE : HERO_SIZE;
+                const edgePos = this.getEdgePosition(unit.position, unitSize);
                 
                 // Draw based on colorblind mode
                 if (this.colorblindMode) {
@@ -7546,14 +7545,14 @@ export class GameRenderer {
                     this.ctx.rotate(Math.PI / 4);
                     this.ctx.strokeStyle = color;
                     this.ctx.lineWidth = 2;
-                    this.ctx.strokeRect(-size / 2, -size / 2, size, size);
+                    this.ctx.strokeRect(-unitSize / 2, -unitSize / 2, unitSize, unitSize);
                     this.ctx.restore();
                 } else {
                     // Draw circle (no fill for units)
                     this.ctx.strokeStyle = color;
                     this.ctx.lineWidth = 2;
                     this.ctx.beginPath();
-                    this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
+                    this.ctx.arc(edgePos.x, edgePos.y, unitSize / 2, 0, Math.PI * 2);
                     this.ctx.stroke();
                 }
             }
