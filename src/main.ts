@@ -1631,6 +1631,9 @@ class GameController {
                             case 'fancyGraphics':
                                 this.renderer.isFancyGraphicsEnabled = menuAction.isEnabled;
                                 break;
+                            case 'colorblindMode':
+                                this.renderer.colorblindMode = menuAction.isEnabled;
+                                break;
                             default:
                                 break;
                         }

@@ -8554,6 +8554,21 @@ export class GameRenderer {
                 }
             }
             
+            optionY += optionHeight + optionSpacing;
+
+            // Colorblind Mode toggle buttons
+            const colorblindButton1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
+            const colorblindButton2X = optionX + optionWidth - buttonWidth;
+
+            if (screenY >= optionY && screenY <= optionY + optionHeight) {
+                if (screenX >= colorblindButton1X && screenX <= colorblindButton1X + buttonWidth) {
+                    return { type: 'colorblindMode', isEnabled: true };
+                }
+                if (screenX >= colorblindButton2X && screenX <= colorblindButton2X + buttonWidth) {
+                    return { type: 'colorblindMode', isEnabled: false };
+                }
+            }
+            
             return null;
         }
 
@@ -8802,6 +8817,42 @@ export class GameRenderer {
             this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.fillText('Off', fancyButtons.button2X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            optionY += optionHeight + optionSpacing;
+
+            // Colorblind Mode option
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.fillText('Colorblind Mode:', optionX, optionY + (optionHeight * 0.4));
+
+            const colorblindButtons = {
+                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
+                button2X: optionX + optionWidth - optionWidth * 0.35,
+                buttonWidth: optionWidth * 0.35
+            };
+
+            const isColorblindOn = this.colorblindMode;
+            this.ctx.fillStyle = isColorblindOn ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isColorblindOn ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('On', colorblindButtons.button1X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            const isColorblindOff = !this.colorblindMode;
+            this.ctx.fillStyle = isColorblindOff ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+            this.ctx.fillRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.strokeStyle = isColorblindOff ? '#FFD700' : '#FFFFFF';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText('Off', colorblindButtons.button2X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
         } else {
             const maxScroll = this.getGraphicsMenuMaxScroll(layout);
             if (this.graphicsMenuScrollOffset > maxScroll) {
