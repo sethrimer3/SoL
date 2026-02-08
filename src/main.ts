@@ -1069,6 +1069,9 @@ class GameController {
         this.renderer.healthDisplayMode = settings.healthDisplayMode;
         this.game.damageDisplayMode = settings.damageDisplayMode;
         
+        // Set screen shake from settings
+        this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
+        
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
         
@@ -3098,6 +3101,9 @@ class GameController {
         
         // Don't update game logic if paused
         if (this.isPaused) return;
+
+        // Update screen shake
+        this.renderer.updateScreenShake(deltaTime);
 
         this.updateStarlingMergeHold();
         this.updateMirrorWarpGateHold();

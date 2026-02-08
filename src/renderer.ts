@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -74,6 +74,9 @@ export class GameRenderer {
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
+    public screenShakeEnabled: boolean = true; // Screen shake for explosions
+    private screenShakeIntensity: number = 0; // Current screen shake intensity
+    private screenShakeTimer: number = 0; // Screen shake timer
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
@@ -283,9 +286,20 @@ export class GameRenderer {
         const dpr = window.devicePixelRatio || 1;
         const centerX = (this.canvas.width / dpr) / 2;
         const centerY = (this.canvas.height / dpr) / 2;
+        
+        // Apply screen shake offset if enabled
+        let shakeOffsetX = 0;
+        let shakeOffsetY = 0;
+        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+            // Random shake direction
+            const angle = Math.random() * Math.PI * 2;
+            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
+            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+        }
+        
         return new Vector2D(
-            centerX + (worldPos.x - this.camera.x) * this.zoom,
-            centerY + (worldPos.y - this.camera.y) * this.zoom
+            centerX + (worldPos.x - this.camera.x) * this.zoom + shakeOffsetX,
+            centerY + (worldPos.y - this.camera.y) * this.zoom + shakeOffsetY
         );
     }
 
@@ -4201,6 +4215,24 @@ export class GameRenderer {
         for (const smallParticle of grave.getSmallParticles()) {
             this.drawGraveSmallParticle(smallParticle, displayColor);
         }
+
+        // Draw black hole if active
+        const blackHole = grave.getBlackHole();
+        if (blackHole) {
+            this.drawGraveBlackHole(blackHole, displayColor);
+        }
+
+        // Check for explosions and trigger screen shake
+        const explosionPositions = grave.getExplosionPositions();
+        if (explosionPositions.length > 0) {
+            // Trigger screen shake for each explosion
+            for (const explosionPos of explosionPositions) {
+                this.triggerScreenShake();
+                
+                // Optionally: draw explosion effect
+                this.drawExplosionEffect(explosionPos);
+            }
+        }
     }
 
     /**
@@ -6398,6 +6430,74 @@ export class GameRenderer {
     }
 
     /**
+     * Draw Grave Black Hole (vortex particle)
+     */
+    private drawGraveBlackHole(blackHole: InstanceType<typeof GraveBlackHole>, color: string): void {
+        const screenPos = this.worldToScreen(blackHole.position);
+        const size = Constants.GRAVE_BLACK_HOLE_SIZE * this.zoom;
+
+        // Draw swirling vortex effect
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, size
+        );
+        gradient.addColorStop(0, '#000000');
+        gradient.addColorStop(0.4, color);
+        gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fillStyle = gradient;
+        this.ctx.fill();
+
+        // Add rotation effect (swirling lines)
+        const numLines = 8;
+        const rotation = blackHole.lifetime * 2; // Rotate based on lifetime
+        for (let i = 0; i < numLines; i++) {
+            const angle = (i / numLines) * Math.PI * 2 + rotation;
+            const innerRadius = size * 0.2;
+            const outerRadius = size * 0.9;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(
+                screenPos.x + Math.cos(angle) * innerRadius,
+                screenPos.y + Math.sin(angle) * innerRadius
+            );
+            this.ctx.lineTo(
+                screenPos.x + Math.cos(angle) * outerRadius,
+                screenPos.y + Math.sin(angle) * outerRadius
+            );
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 1 * this.zoom;
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+    }
+
+    /**
+     * Draw explosion effect
+     */
+    private drawExplosionEffect(position: Vector2D): void {
+        const screenPos = this.worldToScreen(position);
+        const radius = Constants.GRAVE_SMALL_PARTICLE_SPLASH_RADIUS * this.zoom;
+
+        // Draw expanding circle for explosion
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, radius
+        );
+        gradient.addColorStop(0, 'rgba(255, 150, 50, 0.6)');
+        gradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+        gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fillStyle = gradient;
+        this.ctx.fill();
+    }
+
+    /**
      * Draw connection lines with visual indicators for line of sight
      */
     private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[], players: Player[]): void {
@@ -8537,6 +8637,35 @@ export class GameRenderer {
         // Clamp camera position to level boundaries
         const clampedPos = this.clampCameraToLevelBounds(pos);
         this.camera = new Vector2D(clampedPos.x, clampedPos.y);
+    }
+
+    /**
+     * Trigger screen shake effect
+     */
+    triggerScreenShake(intensity: number = Constants.SCREEN_SHAKE_INTENSITY): void {
+        if (!this.screenShakeEnabled) return;
+        
+        // Set shake intensity (don't override if already shaking with higher intensity)
+        this.screenShakeIntensity = Math.max(this.screenShakeIntensity, intensity);
+        this.screenShakeTimer = Constants.SCREEN_SHAKE_DURATION;
+    }
+
+    /**
+     * Update screen shake effect
+     */
+    updateScreenShake(deltaTime: number): void {
+        if (this.screenShakeTimer > 0) {
+            this.screenShakeTimer -= deltaTime;
+            
+            // Apply decay to shake intensity
+            this.screenShakeIntensity *= Constants.SCREEN_SHAKE_DECAY;
+            
+            // Stop shaking when timer runs out or intensity is too low
+            if (this.screenShakeTimer <= 0 || this.screenShakeIntensity < 0.1) {
+                this.screenShakeIntensity = 0;
+                this.screenShakeTimer = 0;
+            }
+        }
     }
 
     /**
