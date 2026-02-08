@@ -77,6 +77,7 @@ export class GameRenderer {
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
+    private readonly AURUM_EDGE_DETECTION_FILL_COLOR = 'white'; // Color used for edge detection in Aurum outline rendering
     private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
     private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
@@ -153,8 +154,9 @@ export class GameRenderer {
     private starlingParticleSeeds = new WeakMap<Starling, number>();
     private velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
     private velarisFoundrySeeds = new WeakMap<SubsidiaryFactory, number>();
-    private aurumForgeShapeStates = new Map<StellarForge, AurumShapeState>();
+    private aurumForgeShapeStates = new WeakMap<StellarForge, AurumShapeState>();
     private aurumFoundryShapeStates = new WeakMap<SubsidiaryFactory, AurumShapeState>();
+    private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
     private velarisWarpGateSeeds = new WeakMap<WarpGate, number>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
@@ -871,14 +873,20 @@ export class GameRenderer {
         const cropWidth = maxX - minX;
         const cropHeight = maxY - minY;
 
-        // Create a smaller offscreen canvas for better performance
-        const tempCanvas = document.createElement('canvas');
+        // Reuse or create offscreen canvas for better performance
+        if (!this.aurumOffscreenCanvas) {
+            this.aurumOffscreenCanvas = document.createElement('canvas');
+        }
+        const tempCanvas = this.aurumOffscreenCanvas;
         tempCanvas.width = cropWidth;
         tempCanvas.height = cropHeight;
         const tempCtx = tempCanvas.getContext('2d')!;
+        
+        // Clear canvas
+        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
 
         // Draw all squares filled on the temp canvas
-        tempCtx.fillStyle = 'white';
+        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
         state.shapes.forEach(shape => {
             const size = baseSize * shape.size;
             const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
@@ -958,14 +966,20 @@ export class GameRenderer {
         const cropWidth = maxX - minX;
         const cropHeight = maxY - minY;
 
-        // Create a smaller offscreen canvas for better performance
-        const tempCanvas = document.createElement('canvas');
+        // Reuse or create offscreen canvas for better performance
+        if (!this.aurumOffscreenCanvas) {
+            this.aurumOffscreenCanvas = document.createElement('canvas');
+        }
+        const tempCanvas = this.aurumOffscreenCanvas;
         tempCanvas.width = cropWidth;
         tempCanvas.height = cropHeight;
         const tempCtx = tempCanvas.getContext('2d')!;
+        
+        // Clear canvas
+        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
 
         // Draw all triangles filled on the temp canvas
-        tempCtx.fillStyle = 'white';
+        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
         state.shapes.forEach(shape => {
             const size = baseSize * shape.size;
             const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
