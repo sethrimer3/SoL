@@ -49,7 +49,7 @@ const { Marine } = createMarineHero({
     AbilityBullet
 });
 
-const { Grave, GraveProjectile, GraveSmallParticle } = createGraveHero({
+const { Grave, GraveProjectile, GraveSmallParticle, GraveBlackHole } = createGraveHero({
     Unit,
     Vector2D,
     Constants
@@ -138,6 +138,7 @@ export {
     Grave,
     GraveProjectile,
     GraveSmallParticle,
+    GraveBlackHole,
     Ray,
     RayBeamSegment,
     InfluenceBall,

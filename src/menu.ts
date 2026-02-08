@@ -21,6 +21,7 @@ export interface GameSettings {
     soundEnabled: boolean;
     musicEnabled: boolean;
     isBattleStatsInfoEnabled: boolean;
+    screenShakeEnabled: boolean; // Screen shake for explosions and splash damage
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
     selectedHeroNames: string[];
@@ -88,7 +89,7 @@ export class MainMenu {
             maxHealth: Constants.GRAVE_MAX_HEALTH, attackDamage: Constants.GRAVE_ATTACK_DAMAGE, attackSpeed: Constants.GRAVE_ATTACK_SPEED,
             attackRange: Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER,
             attackIgnoresDefense: false, defense: 18, regen: 3,
-            abilityDescription: 'Particle storm: flings all large particles at once using accumulated energy'
+            abilityDescription: 'Black Hole: launches a vortex that attracts all small particles for 5 seconds'
         },
         {
             id: 'velaris-nova', name: 'Nova', description: 'Remote bomb specialist with bouncing projectile', faction: Faction.VELARIS,
@@ -241,6 +242,7 @@ export class MainMenu {
             soundEnabled: true,
             musicEnabled: true,
             isBattleStatsInfoEnabled: false,
+            screenShakeEnabled: true, // Default to enabled
             selectedFaction: Faction.RADIANT,
             selectedHeroes: ['radiant-marine'],
             selectedHeroNames: [],
@@ -1698,6 +1700,18 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(battleStatsSection);
+
+        // Screen shake setting
+        const screenShakeSection = this.createSettingSection(
+            'Screen Shake',
+            this.createToggle(
+                this.settings.screenShakeEnabled,
+                (value) => {
+                    this.settings.screenShakeEnabled = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(screenShakeSection);
 
         // Player Color setting
         const playerColorSection = this.createSettingSection(
