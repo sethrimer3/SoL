@@ -879,6 +879,9 @@ export class StrikerTower extends Building {
     private reloadTimer: number = 0;
     private missileReady: boolean = true;
     isAwaitingTarget: boolean = false; // True when player has clicked tower and is selecting target
+    countdownTimer: number = 0; // Countdown timer when target is selected (see COUNTDOWN_DURATION)
+    targetPosition: Vector2D | null = null; // Target position for missile strike
+    private readonly COUNTDOWN_DURATION = 5.0; // Countdown duration in seconds
 
     constructor(position: Vector2D, owner: Player) {
         super(
@@ -894,7 +897,7 @@ export class StrikerTower extends Building {
     }
 
     /**
-     * Update reload timer
+     * Update reload timer and countdown
      */
     update(
         deltaTime: number,
@@ -908,6 +911,12 @@ export class StrikerTower extends Building {
         
         // Only reload when complete
         if (!this.isComplete) return;
+
+        // Update countdown if target is selected
+        if (this.targetPosition !== null && this.countdownTimer > 0) {
+            this.countdownTimer -= deltaTime;
+            // Countdown will be handled by game-state.ts when it reaches <= 0
+        }
 
         // Update reload timer if missile not ready
         if (!this.missileReady) {
@@ -927,6 +936,60 @@ export class StrikerTower extends Building {
     }
 
     /**
+     * Check if tower is in countdown mode
+     */
+    isInCountdown(): boolean {
+        return this.countdownTimer > 0 && this.targetPosition !== null;
+    }
+
+    /**
+     * Get remaining countdown time
+     */
+    getRemainingCountdown(): number {
+        return Math.max(0, this.countdownTimer);
+    }
+
+    /**
+     * Start countdown for missile strike at target position
+     */
+    startCountdown(targetPosition: Vector2D): void {
+        this.targetPosition = targetPosition;
+        this.countdownTimer = this.COUNTDOWN_DURATION;
+        this.isAwaitingTarget = false;
+    }
+
+    /**
+     * Cancel countdown
+     */
+    cancelCountdown(): void {
+        this.targetPosition = null;
+        this.countdownTimer = 0;
+        this.isAwaitingTarget = false;
+    }
+
+    /**
+     * Check if a position is a valid target (in range, in shade, not visible by player units)
+     */
+    isValidTarget(
+        targetPosition: Vector2D,
+        isPositionInShade: (pos: Vector2D) => boolean,
+        isPositionVisibleByPlayerUnits: (pos: Vector2D, playerUnits: Unit[]) => boolean,
+        playerUnits: Unit[]
+    ): boolean {
+        // Check if target is in range
+        const distance = this.position.distanceTo(targetPosition);
+        if (distance > this.attackRange) return false;
+
+        // Check if target is in shade (not visible)
+        if (!isPositionInShade(targetPosition)) return false;
+
+        // Check if target is not visible by player units
+        if (isPositionVisibleByPlayerUnits(targetPosition, playerUnits)) return false;
+
+        return true;
+    }
+
+    /**
      * Fire missile at target position
      * Returns true if missile was fired, false if not ready or conditions not met
      */
@@ -939,15 +1002,10 @@ export class StrikerTower extends Building {
     ): boolean {
         if (!this.isMissileReady()) return false;
 
-        // Check if target is in range
-        const distance = this.position.distanceTo(targetPosition);
-        if (distance > this.attackRange) return false;
-
-        // Check if target is in shade (not visible)
-        if (!isPositionInShade(targetPosition)) return false;
-
-        // Check if target is not visible by player units
-        if (isPositionVisibleByPlayerUnits(targetPosition, playerUnits)) return false;
+        // Validate target (this should already be validated, but double check)
+        if (!this.isValidTarget(targetPosition, isPositionInShade, isPositionVisibleByPlayerUnits, playerUnits)) {
+            return false;
+        }
 
         // Fire missile - damage all enemies in explosion radius
         for (const enemy of enemies) {
@@ -959,9 +1017,11 @@ export class StrikerTower extends Building {
             }
         }
 
-        // Missile fired, start reload
+        // Missile fired, start reload and clear countdown state
         this.missileReady = false;
         this.reloadTimer = 0;
+        this.targetPosition = null;
+        this.countdownTimer = 0;
         this.isAwaitingTarget = false;
 
         return true;

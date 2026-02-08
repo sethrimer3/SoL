@@ -94,6 +94,7 @@ export class GameState {
     disintegrationParticles: InstanceType<typeof DisintegrationParticle>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
+    strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -664,6 +665,27 @@ export class GameState {
             if (!this.isCountdownActive) {
                 for (const building of player.buildings) {
                     building.update(deltaTime, enemies, allUnits, this.asteroids, allStructures, Constants.MAP_PLAYABLE_BOUNDARY);
+
+                    // Check if StrikerTower countdown completed
+                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0.001 && building.isMissileReady()) {
+                        // Countdown complete, fire the missile!
+                        const targetPos = building.targetPosition;
+                        const fired = building.fireMissile(
+                            targetPos,
+                            enemies,
+                            (pos) => this.isPointInShadow(pos),
+                            (pos, playerUnits) => this.isPositionVisibleByPlayerUnits(pos, playerUnits),
+                            player.units
+                        );
+                        
+                        // Track explosion for visual effect and trigger screen shake
+                        if (fired) {
+                            this.strikerTowerExplosions.push({
+                                position: targetPos, // Use existing Vector2D directly
+                                timestamp: this.gameTime
+                            });
+                        }
+                    }
 
                 // If building is a Cannon or Gatling Tower, collect its effects
                 if (building instanceof Minigun || building instanceof GatlingTower) {
@@ -1294,6 +1316,11 @@ export class GameState {
             deathParticle.update(deltaTime);
         }
         this.deathParticles = this.deathParticles.filter(particle => !particle.shouldDespawn());
+        
+        // Clean up old striker tower explosions (keep for 1 second)
+        this.strikerTowerExplosions = this.strikerTowerExplosions.filter(
+            explosion => this.gameTime - explosion.timestamp < 1.0
+        );
         
         // Update influence zones
         this.influenceZones = this.influenceZones.filter(zone => !zone.update(deltaTime));
@@ -4304,6 +4331,9 @@ export class GameState {
             case 'striker_tower_fire':
                 this.executeStrikerTowerFireCommand(player, payload);
                 break;
+            case 'striker_tower_start_countdown':
+                this.executeStrikerTowerStartCountdownCommand(player, payload);
+                break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, payload);
                 break;
@@ -4585,6 +4615,31 @@ export class GameState {
         return;
     }
 
+    private executeStrikerTowerStartCountdownCommand(player: Player, data: any): void {
+        const { buildingId, targetX, targetY } = data;
+        const targetPosition = new Vector2D(targetX, targetY);
+        
+        // Find the striker tower
+        const building = player.buildings.find(b => 
+            b instanceof StrikerTower && this.getBuildingNetworkId(b) === buildingId
+        );
+        
+        if (building instanceof StrikerTower) {
+            // Validate target position
+            const isValid = building.isValidTarget(
+                targetPosition,
+                (pos) => this.isPointInShadow(pos),
+                (pos, playerUnits) => this.isPositionVisibleByPlayerUnits(pos, playerUnits),
+                player.units
+            );
+            
+            if (isValid) {
+                // Start countdown
+                building.startCountdown(targetPosition);
+            }
+        }
+    }
+
     private executeStrikerTowerFireCommand(player: Player, data: any): void {
         const { buildingId, targetX, targetY } = data;
         const targetPosition = new Vector2D(targetX, targetY);
@@ -4621,7 +4676,7 @@ export class GameState {
     /**
      * Check if a position is visible by any of the player's units
      */
-    private isPositionVisibleByPlayerUnits(position: Vector2D, playerUnits: Unit[]): boolean {
+    isPositionVisibleByPlayerUnits(position: Vector2D, playerUnits: Unit[]): boolean {
         for (const unit of playerUnits) {
             const distance = unit.position.distanceTo(position);
             if (distance <= Constants.UNIT_VISIBILITY_RADIUS) {
