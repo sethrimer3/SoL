@@ -13,6 +13,7 @@ import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Re-export types for backward compatibility
 export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
@@ -1787,9 +1788,16 @@ export class MainMenu {
         const copyButton = this.createButton('COPY CODE', async () => {
             try {
                 await navigator.clipboard.writeText(matchIdText.textContent || '');
-                alert('Match ID copied to clipboard!');
+                matchIdLabel.textContent = 'CODE COPIED!';
+                setTimeout(() => {
+                    matchIdLabel.textContent = 'SHARE THIS CODE:';
+                }, 2000);
             } catch (err) {
                 console.error('Failed to copy match ID:', err);
+                matchIdLabel.textContent = 'Failed to copy. Please copy manually.';
+                setTimeout(() => {
+                    matchIdLabel.textContent = 'SHARE THIS CODE:';
+                }, 2000);
             }
         }, '#00FF88');
         copyButton.style.padding = '10px 30px';
@@ -1822,11 +1830,21 @@ export class MainMenu {
         playersList.style.gap = '10px';
         playersContainer.appendChild(playersList);
 
+        // Status message container
+        const statusMessage = document.createElement('div');
+        statusMessage.style.fontSize = '18px';
+        statusMessage.style.color = '#FF6666';
+        statusMessage.style.marginBottom = '20px';
+        statusMessage.style.textAlign = 'center';
+        statusMessage.style.display = 'none';
+        container.appendChild(statusMessage);
+
         // Create match button
         const createButton = this.createButton('CREATE MATCH', async () => {
             const config = getSupabaseConfig();
             if (!config.url || !config.anonKey) {
-                alert('Supabase not configured. Cannot create P2P match.');
+                statusMessage.textContent = 'Supabase not configured. Cannot create P2P match.';
+                statusMessage.style.display = 'block';
                 return;
             }
 
@@ -1878,7 +1896,8 @@ export class MainMenu {
             });
 
             this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
-                alert(`Error: ${data.error}`);
+                statusMessage.textContent = `Error: ${data.error}`;
+                statusMessage.style.display = 'block';
                 createButton.disabled = false;
                 createButton.textContent = 'CREATE MATCH';
             });
@@ -2033,19 +2052,24 @@ export class MainMenu {
         const joinButton = this.createButton('JOIN MATCH', async () => {
             const config = getSupabaseConfig();
             if (!config.url || !config.anonKey) {
-                alert('Supabase not configured. Cannot join P2P match.');
+                statusMessage.textContent = 'Supabase not configured. Cannot join P2P match.';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
                 return;
             }
 
             const matchIdShort = matchIdInput.value.trim().toUpperCase();
             if (!matchIdShort || matchIdShort.length < 6) {
-                alert('Please enter a valid match ID (at least 6 characters).');
+                statusMessage.textContent = 'Please enter a valid match ID (at least 6 characters).';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
                 return;
             }
 
             joinButton.disabled = true;
             joinButton.textContent = 'JOINING...';
             statusMessage.textContent = 'Connecting...';
+            statusMessage.style.color = '#FFD700';
             statusMessage.style.display = 'block';
 
             const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
@@ -2054,6 +2078,7 @@ export class MainMenu {
             // Set up event listeners
             this.multiplayerNetworkManager.on(P2PNetworkEvent.PLAYER_JOINED, () => {
                 statusMessage.textContent = 'Joined successfully!';
+                statusMessage.style.color = '#00FF88';
                 inputContainer.style.display = 'none';
                 joinButton.style.display = 'none';
                 lobbyContainer.style.display = 'block';
@@ -2070,10 +2095,11 @@ export class MainMenu {
             });
 
             this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
-                alert(`Error: ${data.error || 'Failed to join match'}`);
+                statusMessage.textContent = `Error: ${data.error || 'Failed to join match'}`;
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
                 joinButton.disabled = false;
                 joinButton.textContent = 'JOIN MATCH';
-                statusMessage.style.display = 'none';
             });
 
             // Find match by short ID prefix
@@ -2081,10 +2107,11 @@ export class MainMenu {
             const match = matches.find(m => m.id.toUpperCase().startsWith(matchIdShort));
 
             if (!match) {
-                alert('Match not found. Please check the match ID.');
+                statusMessage.textContent = 'Match not found. Please check the match ID.';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
                 joinButton.disabled = false;
                 joinButton.textContent = 'JOIN MATCH';
-                statusMessage.style.display = 'none';
                 return;
             }
 
@@ -2093,7 +2120,6 @@ export class MainMenu {
             if (!success) {
                 joinButton.disabled = false;
                 joinButton.textContent = 'JOIN MATCH';
-                statusMessage.style.display = 'none';
             } else {
                 // Start match connection
                 await this.multiplayerNetworkManager.startMatch();
@@ -2155,7 +2181,6 @@ export class MainMenu {
 
         // Fetch players from Supabase
         const config = getSupabaseConfig();
-        const { createClient: createSupabaseClient } = require('@supabase/supabase-js');
         const supabase = createSupabaseClient(config.url, config.anonKey);
         
         const { data, error } = await supabase
