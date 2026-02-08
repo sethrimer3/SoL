@@ -21,6 +21,7 @@ export interface GameSettings {
     soundEnabled: boolean;
     musicEnabled: boolean;
     isBattleStatsInfoEnabled: boolean;
+    screenShakeEnabled: boolean; // Screen shake for explosions and splash damage
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
     selectedHeroNames: string[];
@@ -241,6 +242,7 @@ export class MainMenu {
             soundEnabled: true,
             musicEnabled: true,
             isBattleStatsInfoEnabled: false,
+            screenShakeEnabled: true, // Default to enabled
             selectedFaction: Faction.RADIANT,
             selectedHeroes: ['radiant-marine'],
             selectedHeroNames: [],
@@ -1698,6 +1700,18 @@ export class MainMenu {
             )
         );
         settingsContainer.appendChild(battleStatsSection);
+
+        // Screen shake setting
+        const screenShakeSection = this.createSettingSection(
+            'Screen Shake',
+            this.createToggle(
+                this.settings.screenShakeEnabled,
+                (value) => {
+                    this.settings.screenShakeEnabled = value;
+                }
+            )
+        );
+        settingsContainer.appendChild(screenShakeSection);
 
         // Player Color setting
         const playerColorSection = this.createSettingSection(

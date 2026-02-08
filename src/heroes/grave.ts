@@ -10,52 +10,119 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
     const { Unit, Vector2D, Constants } = deps;
 
     /**
-     * Small particle that zips between large particles
+     * Small particle that follows a target (Grave or BlackHole) by gravity
      */
     class GraveSmallParticle {
-        currentTargetIndex: number;
-        nextTargetIndex: number;
-        progress: number = 0; // 0 to 1, progress from current to next target
+        velocity: Vector2D;
+        hasExploded: boolean = false;
 
         constructor(
             public position: Vector2D,
-            startIndex: number,
-            endIndex: number
+            public owner: Player
         ) {
-            this.currentTargetIndex = startIndex;
-            this.nextTargetIndex = endIndex;
+            // Random initial velocity for natural spawning
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 20 + Math.random() * 30;
+            this.velocity = new Vector2D(
+                Math.cos(angle) * speed,
+                Math.sin(angle) * speed
+            );
         }
 
         /**
-         * Update small particle movement between large particles
+         * Update small particle movement - attracted to target by gravity
          */
-        update(deltaTime: number, largeParticlePositions: Vector2D[]): void {
-            if (largeParticlePositions.length < 2) return;
+        update(deltaTime: number, attractorPosition: Vector2D): void {
+            // Calculate direction to attractor
+            const dx = attractorPosition.x - this.position.x;
+            const dy = attractorPosition.y - this.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
 
-            const currentPos = largeParticlePositions[this.currentTargetIndex % largeParticlePositions.length];
-            const nextPos = largeParticlePositions[this.nextTargetIndex % largeParticlePositions.length];
-
-            // Move toward next target
-            const distance = currentPos.distanceTo(nextPos);
-            if (distance > 0.1) { // Avoid division by zero
-                this.progress += (Constants.GRAVE_SMALL_PARTICLE_SPEED / distance) * deltaTime;
-            } else {
-                this.progress = 1; // Skip to next target if too close
+            if (distance > 0.1) {
+                // Apply gravity-like attraction force
+                const force = Constants.GRAVE_SMALL_PARTICLE_ATTRACTION_FORCE / Math.max(distance, 10);
+                this.velocity.x += (dx / distance) * force * deltaTime;
+                this.velocity.y += (dy / distance) * force * deltaTime;
             }
 
-            if (this.progress >= 1) {
-                // Reached target, pick new target
-                this.progress = 0;
-                this.currentTargetIndex = this.nextTargetIndex;
-                // Deterministically pick the next target
-                if (largeParticlePositions.length > 1) {
-                    this.nextTargetIndex = (this.currentTargetIndex + 1) % largeParticlePositions.length;
+            // Apply drag to prevent infinite acceleration
+            this.velocity.x *= Constants.GRAVE_SMALL_PARTICLE_DRAG;
+            this.velocity.y *= Constants.GRAVE_SMALL_PARTICLE_DRAG;
+
+            // Update position
+            this.position.x += this.velocity.x * deltaTime;
+            this.position.y += this.velocity.y * deltaTime;
+        }
+
+        /**
+         * Check if particle collides with a target
+         */
+        checkCollision(target: CombatTarget): boolean {
+            const distance = this.position.distanceTo(target.position);
+            const hitRadius = 10; // Collision detection radius
+            return distance < hitRadius;
+        }
+
+        /**
+         * Apply splash damage to all targets within splash radius
+         * Returns array of targets that took damage
+         */
+        applySplashDamage(targets: CombatTarget[]): CombatTarget[] {
+            const damagedTargets: CombatTarget[] = [];
+            
+            for (const target of targets) {
+                const distance = this.position.distanceTo(target.position);
+                
+                if (distance <= Constants.GRAVE_SMALL_PARTICLE_SPLASH_RADIUS) {
+                    // Calculate damage falloff based on distance
+                    const damageMultiplier = 1.0 - (distance / Constants.GRAVE_SMALL_PARTICLE_SPLASH_RADIUS) * (1.0 - Constants.GRAVE_SMALL_PARTICLE_SPLASH_FALLOFF);
+                    const finalDamage = Constants.GRAVE_SMALL_PARTICLE_DAMAGE * damageMultiplier;
+                    
+                    // Apply damage
+                    if ('health' in target) {
+                        target.health -= finalDamage;
+                        damagedTargets.push(target);
+                    }
                 }
             }
+            
+            return damagedTargets;
+        }
+    }
 
-            // Interpolate position
-            this.position.x = currentPos.x + (nextPos.x - currentPos.x) * this.progress;
-            this.position.y = currentPos.y + (nextPos.y - currentPos.y) * this.progress;
+    /**
+     * Black Hole vortex particle - attracts all small particles
+     */
+    class GraveBlackHole {
+        lifetime: number = 0;
+        velocity: Vector2D;
+
+        constructor(
+            public position: Vector2D,
+            direction: Vector2D,
+            public owner: Player
+        ) {
+            // Launch in the ability direction
+            this.velocity = new Vector2D(
+                direction.x * Constants.GRAVE_BLACK_HOLE_SPEED,
+                direction.y * Constants.GRAVE_BLACK_HOLE_SPEED
+            );
+        }
+
+        /**
+         * Update black hole position
+         */
+        update(deltaTime: number): void {
+            this.position.x += this.velocity.x * deltaTime;
+            this.position.y += this.velocity.y * deltaTime;
+            this.lifetime += deltaTime;
+        }
+
+        /**
+         * Check if black hole should despawn
+         */
+        shouldDespawn(): boolean {
+            return this.lifetime >= Constants.GRAVE_BLACK_HOLE_DURATION;
         }
     }
 
@@ -186,15 +253,17 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
     }
 
     /**
-     * Grave unit - has orbiting projectiles that attack enemies (Velaris faction hero)
+     * Grave unit - has orbiting projectiles and small particles (Velaris faction hero)
      */
     class Grave extends Unit {
         projectiles: GraveProjectile[] = [];
         smallParticles: GraveSmallParticle[] = [];
-        smallParticleCount: number = Constants.GRAVE_MAX_SMALL_PARTICLES; // Start with full particles
+        smallParticleCount: number = 0; // Start with no particles
         projectileLaunchCooldown: number = 0;
         smallParticleRegenTimer: number = 0;
         isUsingAbility: boolean = false; // True while ability arrow is being dragged
+        blackHole: GraveBlackHole | null = null; // Active black hole
+        explosionPositions: Vector2D[] = []; // Track explosions for rendering/screen shake
 
         constructor(position: Vector2D, owner: Player) {
             super(
@@ -223,30 +292,22 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     )
                 );
             }
-
-            // Initialize small particles
-            this.initializeSmallParticles();
         }
 
         /**
-         * Initialize or reinitialize small particles
+         * Spawn a new small particle
          */
-        initializeSmallParticles(): void {
-            this.smallParticles = [];
-            const numSmallParticles = Math.floor(this.smallParticleCount);
-            for (let i = 0; i < numSmallParticles; i++) {
-                const startIndex = i % this.projectiles.length;
-                const endIndex = (i + 1) % this.projectiles.length;
-                const startPos = this.projectiles[startIndex].position;
-                
-                this.smallParticles.push(
-                    new GraveSmallParticle(
-                        new Vector2D(startPos.x, startPos.y),
-                        startIndex,
-                        endIndex
-                    )
-                );
-            }
+        spawnSmallParticle(): void {
+            // Spawn near the Grave unit
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 20 + Math.random() * 30;
+            const position = new Vector2D(
+                this.position.x + Math.cos(angle) * distance,
+                this.position.y + Math.sin(angle) * distance
+            );
+            
+            this.smallParticles.push(new GraveSmallParticle(position, this.owner));
+            this.smallParticleCount++;
         }
 
         /**
@@ -256,36 +317,17 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
             // Update base unit logic
             super.update(deltaTime, enemies, allUnits, asteroids);
 
-            // Regenerate small particles over time
-            this.smallParticleRegenTimer += deltaTime;
-            let dockedProjectileCount = 0;
-            for (const projectile of this.projectiles) {
-                if (!projectile.isAttacking) {
-                    dockedProjectileCount += 1;
-                }
-            }
-            const dockedRatio = dockedProjectileCount / Constants.GRAVE_NUM_PROJECTILES;
-            const regenMultiplier = 0.5 + dockedRatio;
-            const regenRate = Constants.GRAVE_SMALL_PARTICLE_REGEN_RATE * regenMultiplier;
-            const regenInterval = regenRate > 0 ? 1.0 / regenRate : Number.POSITIVE_INFINITY;
-            
-            while (this.smallParticleRegenTimer >= regenInterval && this.smallParticleCount < Constants.GRAVE_MAX_SMALL_PARTICLES) {
-                this.smallParticleCount++;
-                this.smallParticleRegenTimer -= regenInterval;
+            // Clear explosion positions from previous frame
+            this.explosionPositions = [];
+
+            // Regenerate small particles over time (1 per second)
+            if (this.smallParticleCount < Constants.GRAVE_MAX_SMALL_PARTICLES) {
+                this.smallParticleRegenTimer += deltaTime;
+                const regenInterval = 1.0 / Constants.GRAVE_SMALL_PARTICLE_REGEN_RATE;
                 
-                // Add a new small particle if needed
-                if (this.smallParticles.length < Math.floor(this.smallParticleCount)) {
-                    const startIndex = this.smallParticles.length % this.projectiles.length;
-                    const endIndex = (this.smallParticles.length + 1) % this.projectiles.length;
-                    const startPos = this.projectiles[startIndex].position;
-                    
-                    this.smallParticles.push(
-                        new GraveSmallParticle(
-                            new Vector2D(startPos.x, startPos.y),
-                            startIndex,
-                            endIndex
-                        )
-                    );
+                while (this.smallParticleRegenTimer >= regenInterval && this.smallParticleCount < Constants.GRAVE_MAX_SMALL_PARTICLES) {
+                    this.spawnSmallParticle();
+                    this.smallParticleRegenTimer -= regenInterval;
                 }
             }
 
@@ -294,8 +336,18 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 this.projectileLaunchCooldown -= deltaTime;
             }
 
-            // Get positions of large particles for small particle movement
-            const largeParticlePositions = this.projectiles.map(p => p.position);
+            // Update black hole if active
+            if (this.blackHole) {
+                this.blackHole.update(deltaTime);
+                
+                // Check if black hole should despawn
+                if (this.blackHole.shouldDespawn()) {
+                    this.blackHole = null;
+                }
+            }
+
+            // Determine attractor position (black hole or Grave)
+            const attractorPosition = this.blackHole ? this.blackHole.position : this.position;
 
             // Update all large projectiles
             for (const projectile of this.projectiles) {
@@ -304,7 +356,38 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
 
             // Update all small particles
             for (const smallParticle of this.smallParticles) {
-                smallParticle.update(deltaTime, largeParticlePositions);
+                smallParticle.update(deltaTime, attractorPosition);
+            }
+
+            // Check for small particle collisions with enemies
+            const particlesToRemove: number[] = [];
+            for (let i = 0; i < this.smallParticles.length; i++) {
+                const particle = this.smallParticles[i];
+                
+                // Check collision with each enemy
+                for (const enemy of enemies) {
+                    if ('health' in enemy && enemy.health > 0) {
+                        if (particle.checkCollision(enemy)) {
+                            // Apply splash damage
+                            particle.applySplashDamage(enemies);
+                            
+                            // Mark particle for removal
+                            particlesToRemove.push(i);
+                            
+                            // Record explosion position for screen shake
+                            this.explosionPositions.push(new Vector2D(particle.position.x, particle.position.y));
+                            
+                            break; // Particle exploded, stop checking
+                        }
+                    }
+                }
+            }
+
+            // Remove exploded particles (reverse order to maintain indices)
+            for (let i = particlesToRemove.length - 1; i >= 0; i--) {
+                const index = particlesToRemove[i];
+                this.smallParticles.splice(index, 1);
+                this.smallParticleCount--;
             }
 
             // Launch projectiles at enemies if conditions are met
@@ -316,13 +399,6 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                     if (availableProjectile) {
                         availableProjectile.launchAtTarget(this.target!);
                         this.projectileLaunchCooldown = 1.0 / this.attackSpeed;
-                        
-                        // Consume small particles
-                        this.smallParticleCount = Math.max(0, this.smallParticleCount - Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK);
-                        
-                        // Remove small particles from visual array
-                        const particlesToRemove = Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
-                        this.smallParticles.splice(0, Math.min(particlesToRemove, this.smallParticles.length));
                     }
                 }
             }
@@ -334,8 +410,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         private canLaunchProjectile(): boolean {
             return !this.isUsingAbility 
                 && this.target !== null
-                && this.projectileLaunchCooldown <= 0 
-                && this.smallParticleCount >= Constants.GRAVE_SMALL_PARTICLES_PER_ATTACK;
+                && this.projectileLaunchCooldown <= 0;
         }
 
         /**
@@ -346,7 +421,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         }
 
         /**
-         * Use special ability - fling all large particles at once
+         * Use special ability - launch black hole vortex
          */
         useAbility(direction: Vector2D): boolean {
             // Check if ability is ready
@@ -354,23 +429,12 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 return false;
             }
 
-            // Find all available (non-attacking) large projectiles
-            const availableProjectiles = this.projectiles.filter(p => !p.isAttacking);
-            
-            if (availableProjectiles.length === 0) {
-                // No projectiles available
-                return false;
-            }
-
-            // Launch all available projectiles in the ability direction
-            for (const projectile of availableProjectiles) {
-                projectile.launchInDirection(direction);
-            }
-
-            // Use all available small particles
-            const particlesUsed = Math.min(this.smallParticleCount, Constants.GRAVE_MAX_SMALL_PARTICLES);
-            this.smallParticleCount -= particlesUsed;
-            this.smallParticles = [];
+            // Create black hole
+            this.blackHole = new GraveBlackHole(
+                new Vector2D(this.position.x, this.position.y),
+                direction,
+                this.owner
+            );
 
             // Ability was used
             this.isUsingAbility = false;
@@ -411,7 +475,21 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         getSmallParticleCount(): number {
             return this.smallParticleCount;
         }
+
+        /**
+         * Get active black hole
+         */
+        getBlackHole(): GraveBlackHole | null {
+            return this.blackHole;
+        }
+
+        /**
+         * Get explosion positions for this frame (for screen shake)
+         */
+        getExplosionPositions(): Vector2D[] {
+            return this.explosionPositions;
+        }
     }
 
-    return { Grave, GraveProjectile, GraveSmallParticle };
+    return { Grave, GraveProjectile, GraveSmallParticle, GraveBlackHole };
 };

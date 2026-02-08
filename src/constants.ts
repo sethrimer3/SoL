@@ -84,6 +84,11 @@ export const DUST_TRAIL_MAX_LENGTH_PX = 8;
 export const DUST_TRAIL_LENGTH_PER_SPEED = 0.08;
 export const DUST_TRAIL_WIDTH_PX = 0.6;
 
+// Screen shake constants
+export const SCREEN_SHAKE_DURATION = 0.3; // Duration of screen shake in seconds
+export const SCREEN_SHAKE_INTENSITY = 8; // Maximum shake offset in pixels
+export const SCREEN_SHAKE_DECAY = 0.9; // Decay rate for shake intensity per frame
+
 // Sprite scaling constants
 export const DUST_SPRITE_SCALE_FACTOR = 3;
 export const STARLING_SPRITE_SCALE_FACTOR = 6;
@@ -155,10 +160,18 @@ export const GRAVE_PROJECTILE_LAUNCH_SPEED = 400;
 export const GRAVE_PROJECTILE_TRAIL_LENGTH = 15; // Number of trail particles
 export const GRAVE_PROJECTILE_HIT_DISTANCE = 10; // Distance at which projectile hits target
 export const GRAVE_MAX_SMALL_PARTICLES = 30; // Maximum number of small particles
-export const GRAVE_SMALL_PARTICLE_REGEN_RATE = 2; // Small particles regenerated per second
+export const GRAVE_SMALL_PARTICLE_REGEN_RATE = 1; // Small particles regenerated per second (1 per second)
 export const GRAVE_SMALL_PARTICLES_PER_ATTACK = 5; // Small particles consumed per attack
-export const GRAVE_SMALL_PARTICLE_SPEED = 120; // Speed of small particles zipping between large ones
+export const GRAVE_SMALL_PARTICLE_SPEED = 120; // Speed of small particles following as if by gravity
 export const GRAVE_SMALL_PARTICLE_SIZE = 2; // Visual size of small particles
+export const GRAVE_SMALL_PARTICLE_DAMAGE = 5; // Damage per small particle (same as starling)
+export const GRAVE_SMALL_PARTICLE_SPLASH_RADIUS = 30; // Splash damage radius for small particle explosion
+export const GRAVE_SMALL_PARTICLE_SPLASH_FALLOFF = 0.5; // 50% damage at edge of splash
+export const GRAVE_SMALL_PARTICLE_ATTRACTION_FORCE = 200; // Gravity-like attraction force
+export const GRAVE_SMALL_PARTICLE_DRAG = 0.95; // Drag coefficient for particle movement
+export const GRAVE_BLACK_HOLE_DURATION = 5.0; // Duration of black hole in seconds
+export const GRAVE_BLACK_HOLE_SIZE = 15; // Visual size of black hole
+export const GRAVE_BLACK_HOLE_SPEED = 300; // Speed of black hole projectile
 
 // Starling unit constants (minions from stellar forge)
 export const STARLING_MAX_HEALTH = 50;
