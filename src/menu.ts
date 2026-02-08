@@ -3617,6 +3617,7 @@ class FactionCarouselView {
         this.hasDragged = false;
         this.lastDragDeltaX = 0;
         this.container.style.cursor = 'grabbing';
+        this.startAnimation();
     }
 
     private updateDrag(x: number): void {
@@ -3630,6 +3631,7 @@ class FactionCarouselView {
         if (Math.abs(deltaX) > Constants.CLICK_DRAG_THRESHOLD) {
             this.hasDragged = true;
         }
+        this.startAnimation();
     }
 
     private endDrag(x: number): void {
@@ -3681,6 +3683,7 @@ class FactionCarouselView {
         if (this.onSelectionChangeCallback) {
             this.onSelectionChangeCallback(this.options[this.currentIndex]);
         }
+        this.startAnimation();
     }
 
     private startAnimation(): void {
@@ -3692,8 +3695,13 @@ class FactionCarouselView {
             if (!this.isAnimationActive) {
                 return;
             }
-            this.update();
+            const shouldContinue = this.update();
             this.render();
+            if (!shouldContinue) {
+                this.isAnimationActive = false;
+                this.animationFrameId = null;
+                return;
+            }
             this.animationFrameId = requestAnimationFrame(animate);
         };
         this.animationFrameId = requestAnimationFrame(animate);
@@ -3730,7 +3738,7 @@ class FactionCarouselView {
         return FactionCarouselView.ITEM_SPACING_PX * this.getLayoutScale();
     }
 
-    private update(): void {
+    private update(): boolean {
         this.updateLayoutMetrics();
         const targetScrollOffset = -this.currentIndex * this.getItemSpacingPx();
         const diff = targetScrollOffset - this.scrollOffset;
@@ -3742,6 +3750,13 @@ class FactionCarouselView {
         } else {
             this.velocity = 0;
         }
+        const hasSettled = !this.isDragging
+            && Math.abs(this.velocity) <= 0.1
+            && Math.abs(diff) < 0.5;
+        if (hasSettled) {
+            this.scrollOffset = targetScrollOffset;
+        }
+        return !hasSettled;
     }
 
     private render(): void {
@@ -3980,6 +3995,7 @@ class CarouselMenuView {
         this.hasDragged = false;
         this.lastDragDeltaX = 0;
         this.container.style.cursor = 'grabbing';
+        this.startAnimation();
     }
 
     private updateDrag(x: number): void {
@@ -3994,6 +4010,7 @@ class CarouselMenuView {
         if (Math.abs(deltaX) > Constants.CLICK_DRAG_THRESHOLD) {
             this.hasDragged = true;
         }
+        this.startAnimation();
     }
 
     private endDrag(x: number): void {
@@ -4058,6 +4075,7 @@ class CarouselMenuView {
         if (this.onNavigateCallback) {
             this.onNavigateCallback(nextIndex);
         }
+        this.startAnimation();
     }
 
     private startAnimation(): void {
@@ -4069,8 +4087,13 @@ class CarouselMenuView {
             if (!this.isAnimationActive) {
                 return;
             }
-            this.update();
+            const shouldContinue = this.update();
             this.render();
+            if (!shouldContinue) {
+                this.isAnimationActive = false;
+                this.animationFrameId = null;
+                return;
+            }
             this.animationFrameId = requestAnimationFrame(animate);
         };
         this.animationFrameId = requestAnimationFrame(animate);
@@ -4111,7 +4134,7 @@ class CarouselMenuView {
         return CarouselMenuView.ITEM_WIDTH * this.getLayoutScale();
     }
 
-    private update(): void {
+    private update(): boolean {
         this.updateLayoutMetrics();
         // Smooth scrolling towards target
         const targetScrollOffset = -this.currentIndex * this.getItemWidthPx();
@@ -4125,6 +4148,13 @@ class CarouselMenuView {
         } else {
             this.velocity = 0;
         }
+        const hasSettled = !this.isDragging
+            && Math.abs(this.velocity) <= 0.1
+            && Math.abs(diff) < 0.5;
+        if (hasSettled) {
+            this.scrollOffset = targetScrollOffset;
+        }
+        return !hasSettled;
     }
 
     private render(): void {
