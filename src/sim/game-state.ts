@@ -10,7 +10,7 @@ import { Sun } from './entities/sun';
 import { Asteroid } from './entities/asteroid';
 import { SolarMirror } from './entities/solar-mirror';
 import { StellarForge } from './entities/stellar-forge';
-import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, CombatTarget } from './entities/buildings';
+import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, CombatTarget } from './entities/buildings';
 import { Unit } from './entities/unit';
 import { Starling } from './entities/starling';
 import { StarlingMergeGate } from './entities/starling-merge-gate';
@@ -642,7 +642,7 @@ export class GameState {
                     }
                 }
 
-                if (building instanceof Minigun) {
+                if (building instanceof Minigun || building instanceof LockOnLaserTower) {
                     const lasers = building.getAndClearLastShotLasers();
                     if (lasers.length > 0) {
                         this.laserBeams.push(...lasers);
@@ -4201,6 +4201,9 @@ export class GameState {
             case 'foundry_blink_upgrade':
                 this.executeFoundryUpgradeCommand(player, cmd.data, 'blink');
                 break;
+            case 'striker_tower_fire':
+                this.executeStrikerTowerFireCommand(player, cmd.data);
+                break;
             case 'forge_move':
                 this.executeForgeMoveCommand(player, cmd.data);
                 break;
@@ -4398,6 +4401,13 @@ export class GameState {
             return;
         }
         
+        // Check faction restrictions for Velaris-specific buildings
+        const velarisOnlyBuildings = ['StrikerTower', 'LockOnLaserTower'];
+        if (velarisOnlyBuildings.includes(buildingType) && player.faction !== Faction.VELARIS) {
+            // Radiant and Aurum cannot build Velaris-specific buildings
+            return;
+        }
+        
         // Check if player can afford the building
         let cost = 0;
         if (buildingType === 'Minigun' || buildingType === 'Cannon') {
@@ -4408,6 +4418,10 @@ export class GameState {
             cost = Constants.SWIRLER_COST;
         } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
             cost = Constants.SUBSIDIARY_FACTORY_COST;
+        } else if (buildingType === 'StrikerTower') {
+            cost = Constants.STRIKER_TOWER_COST;
+        } else if (buildingType === 'LockOnLaserTower') {
+            cost = Constants.LOCKON_TOWER_COST;
         }
         
         if (player.spendEnergy(cost)) {
@@ -4420,12 +4434,72 @@ export class GameState {
                 player.buildings.push(new SpaceDustSwirler(position, player));
             } else if (buildingType === 'SubsidiaryFactory' || buildingType === 'Foundry') {
                 player.buildings.push(new SubsidiaryFactory(position, player));
+            } else if (buildingType === 'StrikerTower') {
+                player.buildings.push(new StrikerTower(position, player));
+            } else if (buildingType === 'LockOnLaserTower') {
+                player.buildings.push(new LockOnLaserTower(position, player));
             }
         }
     }
 
     private executeMirrorPurchaseCommand(player: Player, data: any): void {
         return;
+    }
+
+    private executeStrikerTowerFireCommand(player: Player, data: any): void {
+        const { buildingId, targetX, targetY } = data;
+        const targetPosition = new Vector2D(targetX, targetY);
+        
+        // Find the striker tower
+        const building = player.buildings.find(b => 
+            b instanceof StrikerTower && this.getBuildingNetworkId(b) === buildingId
+        );
+        
+        if (building instanceof StrikerTower) {
+            // Get all enemy units and structures
+            const enemies: CombatTarget[] = [];
+            for (const otherPlayer of this.players) {
+                if (otherPlayer !== player) {
+                    enemies.push(...otherPlayer.units);
+                    if (otherPlayer.stellarForge) {
+                        enemies.push(otherPlayer.stellarForge);
+                    }
+                    enemies.push(...otherPlayer.buildings);
+                }
+            }
+            
+            // Fire missile with visibility checks
+            building.fireMissile(
+                targetPosition,
+                enemies,
+                (pos) => this.isPointInShadow(pos),
+                (pos, playerUnits) => this.isPositionVisibleByPlayerUnits(pos, playerUnits),
+                player.units
+            );
+        }
+    }
+
+    /**
+     * Check if a position is visible by any of the player's units
+     */
+    private isPositionVisibleByPlayerUnits(position: Vector2D, playerUnits: Unit[]): boolean {
+        for (const unit of playerUnits) {
+            const distance = unit.position.distanceTo(position);
+            // Use a simple distance check for visibility - units can see ~200px around them
+            if (distance <= 200) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Get a unique network ID for a building
+     */
+    private getBuildingNetworkId(building: Building): string {
+        const playerIndex = this.players.findIndex(p => p === building.owner);
+        const buildingIndex = building.owner.buildings.indexOf(building);
+        return `p${playerIndex}_b${buildingIndex}`;
     }
 
     private executeMirrorMoveCommand(player: Player, data: any): void {

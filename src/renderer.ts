@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3124,7 +3124,14 @@ export class GameRenderer {
     }
 
     private drawMovementPointSprite(sprite: HTMLCanvasElement, targetScreenPos: Vector2D, dotRadius: number): void {
-        const maxSize = dotRadius * 2;
+        // Scale down movement points to 50% when zoomed all the way out
+        const minZoom = this.getMinZoomForBounds();
+        let sizeMultiplier = 1.0;
+        if (this.zoom <= minZoom) {
+            sizeMultiplier = 0.5;
+        }
+        
+        const maxSize = dotRadius * 2 * sizeMultiplier;
         const scale = maxSize / Math.max(sprite.width, sprite.height);
         const drawWidth = sprite.width * scale;
         const drawHeight = sprite.height * scale;
@@ -5652,6 +5659,280 @@ export class GameRenderer {
     }
 
     /**
+     * Draw a Striker Tower
+     */
+    private drawStrikerTower(building: StrikerTower, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let buildingColor = color;
+        let ownerSide: 'light' | 'dark' | undefined = undefined;
+        
+        if (ladSun && building.owner) {
+            ownerSide = building.owner.stellarForge
+                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                buildingColor = '#FFFFFF';
+            } else {
+                buildingColor = '#000000';
+            }
+        }
+        
+        // Check visibility for enemy buildings
+        let shouldDim = false;
+        let displayColor = buildingColor;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy buildings
+            }
+            
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(building.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+                }
+            }
+        }
+
+        // Draw build progress indicator if not complete
+        if (!building.isComplete) {
+            this.ctx.fillStyle = displayColor;
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
+
+            // Draw progress bar
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
+            return;
+        }
+
+        // Draw aura in LaD mode
+        if (ladSun && ownerSide) {
+            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
+            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
+        }
+
+        // Draw tower body - hexagon shape
+        this.ctx.fillStyle = displayColor;
+        this.ctx.strokeStyle = '#666666';
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const angle = (Math.PI / 3) * i;
+            const x = screenPos.x + radius * Math.cos(angle);
+            const y = screenPos.y + radius * Math.sin(angle);
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw missile indicator in center
+        if (building.isMissileReady()) {
+            this.ctx.fillStyle = '#FF4444';
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius * 0.4, 0, Math.PI * 2);
+            this.ctx.fill();
+        } else {
+            // Draw reload progress
+            const reloadProgress = building.getReloadProgress();
+            this.ctx.strokeStyle = '#FF4444';
+            this.ctx.lineWidth = 3 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.arc(
+                screenPos.x,
+                screenPos.y,
+                radius * 0.4,
+                -Math.PI / 2,
+                -Math.PI / 2 + (Math.PI * 2 * reloadProgress)
+            );
+            this.ctx.stroke();
+        }
+
+        if (building.isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, radius);
+            
+            // Draw range indicator
+            this.ctx.strokeStyle = displayColor;
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, building.attackRange * this.zoom, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
+    }
+
+    /**
+     * Draw a Lock-on Laser Tower
+     */
+    private drawLockOnLaserTower(building: LockOnLaserTower, color: string, game: GameState, isEnemy: boolean): void {
+        const screenPos = this.worldToScreen(building.position);
+        const radius = building.radius * this.zoom;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        let buildingColor = color;
+        let ownerSide: 'light' | 'dark' | undefined = undefined;
+        
+        if (ladSun && building.owner) {
+            ownerSide = building.owner.stellarForge
+                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
+                : 'light';
+            if (ownerSide === 'light') {
+                buildingColor = '#FFFFFF';
+            } else {
+                buildingColor = '#000000';
+            }
+        }
+        
+        // Check visibility for enemy buildings
+        let shouldDim = false;
+        let displayColor = buildingColor;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy buildings
+            }
+            
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(building.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
+                }
+            }
+        }
+
+        // Draw build progress indicator if not complete
+        if (!building.isComplete) {
+            this.ctx.fillStyle = displayColor;
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1.0;
+
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+            }
+
+            // Draw progress bar
+            const barWidth = radius * 2;
+            const barHeight = 4;
+            const barX = screenPos.x - barWidth / 2;
+            const barY = screenPos.y + radius + 5;
+            
+            this.ctx.fillStyle = '#333333';
+            this.ctx.fillRect(barX, barY, barWidth, barHeight);
+            
+            this.ctx.fillStyle = '#FFD700';
+            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
+            return;
+        }
+
+        // Draw aura in LaD mode
+        if (ladSun && ownerSide) {
+            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
+            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
+        }
+
+        // Draw tower body - octagon shape
+        this.ctx.fillStyle = displayColor;
+        this.ctx.strokeStyle = '#666666';
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        for (let i = 0; i < 8; i++) {
+            const angle = (Math.PI / 4) * i;
+            const x = screenPos.x + radius * Math.cos(angle);
+            const y = screenPos.y + radius * Math.sin(angle);
+            if (i === 0) {
+                this.ctx.moveTo(x, y);
+            } else {
+                this.ctx.lineTo(x, y);
+            }
+        }
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw lock-on indicator if targeting
+        const lockedTarget = building.getLockedTarget();
+        if (lockedTarget) {
+            const lockProgress = building.getLockOnProgress();
+            const targetScreenPos = this.worldToScreen(lockedTarget.position);
+            
+            // Draw line to target
+            this.ctx.strokeStyle = displayColor;
+            this.ctx.globalAlpha = 0.5;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
+            this.ctx.stroke();
+            
+            // Draw lock-on progress arc around target
+            this.ctx.strokeStyle = '#FF0000';
+            this.ctx.lineWidth = 3 * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.arc(
+                targetScreenPos.x,
+                targetScreenPos.y,
+                20 * this.zoom,
+                -Math.PI / 2,
+                -Math.PI / 2 + (Math.PI * 2 * lockProgress)
+            );
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+
+        // Draw inner circle indicator
+        this.ctx.fillStyle = lockedTarget ? '#FF0000' : '#444444';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.3, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        if (building.isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, radius);
+            
+            // Draw range indicator
+            this.ctx.strokeStyle = displayColor;
+            this.ctx.globalAlpha = 0.3;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, building.attackRange * this.zoom, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+        }
+
+        // Draw health bar/number if damaged
+        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
+    }
+
+    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: InstanceType<typeof GraveProjectile>, color: string): void {
@@ -6693,6 +6974,10 @@ export class GameRenderer {
                     this.drawSpaceDustSwirler(building, color, game, isEnemy);
                 } else if (building instanceof SubsidiaryFactory) {
                     this.drawSubsidiaryFactory(building, color, game, isEnemy);
+                } else if (building instanceof StrikerTower) {
+                    this.drawStrikerTower(building, color, game, isEnemy);
+                } else if (building instanceof LockOnLaserTower) {
+                    this.drawLockOnLaserTower(building, color, game, isEnemy);
                 }
             }
         }
@@ -7160,6 +7445,10 @@ export class GameRenderer {
             return 'Cyclone';
         } else if (building instanceof SubsidiaryFactory) {
             return 'Foundry';
+        } else if (building instanceof StrikerTower) {
+            return 'Striker Tower';
+        } else if (building instanceof LockOnLaserTower) {
+            return 'Lock-on Tower';
         }
         return 'Building';
     }
