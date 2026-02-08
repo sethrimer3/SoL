@@ -135,6 +135,9 @@ export class MultiplayerNetworkManager {
     // Connection timeout
     private connectionTimeout: NodeJS.Timeout | null = null;
     private readonly CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
+    
+    // Pending commands queue (before transport ready)
+    private pendingCommands: GameCommand[] = [];
 
     constructor(supabaseUrl: string, supabaseAnonKey: string, playerId: string) {
         this.supabase = createClient(supabaseUrl, supabaseAnonKey);
@@ -478,6 +481,20 @@ export class MultiplayerNetworkManager {
                 .eq('id', this.currentMatch.id);
         }
 
+        // Flush any pending commands
+        if (this.pendingCommands.length > 0) {
+            console.log(`[MultiplayerNetworkManager] Flushing ${this.pendingCommands.length} pending commands`);
+            for (const command of this.pendingCommands) {
+                if (this.commandQueue) {
+                    this.commandQueue.addCommand(command);
+                }
+                if (this.transport) {
+                    this.transport.sendCommand(command);
+                }
+            }
+            this.pendingCommands = [];
+        }
+
         this.isActive = true;
         this.emit(NetworkEvent.CONNECTED);
         this.emit(NetworkEvent.MATCH_STARTED, { 
@@ -515,11 +532,6 @@ export class MultiplayerNetworkManager {
      * Send a game command to all players
      */
     sendCommand(commandType: string, payload: any): void {
-        if (!this.transport || !this.transport.isReady()) {
-            console.warn('[MultiplayerNetworkManager] Cannot send command: transport not ready');
-            return;
-        }
-
         const command: GameCommand = {
             tick: this.currentTick,
             playerId: this.localPlayerId,
@@ -530,6 +542,13 @@ export class MultiplayerNetworkManager {
         // Validate before sending
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Cannot send invalid command:', command);
+            return;
+        }
+
+        // If transport is not ready, queue the command
+        if (!this.transport || !this.transport.isReady()) {
+            console.warn('[MultiplayerNetworkManager] Transport not ready, queuing command');
+            this.pendingCommands.push(command);
             return;
         }
 
@@ -592,6 +611,9 @@ export class MultiplayerNetworkManager {
             clearTimeout(this.connectionTimeout);
             this.connectionTimeout = null;
         }
+
+        // Clear pending commands
+        this.pendingCommands = [];
 
         // Stop listening for players (cleanup Supabase channel)
         this.stopListeningForPlayers();

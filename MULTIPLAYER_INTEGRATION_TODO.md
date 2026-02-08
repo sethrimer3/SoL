@@ -4,6 +4,13 @@ This document outlines the remaining work needed to fully integrate the P2P mult
 
 ## 🎉 Recent Updates
 
+**2026-02-08 (Latest)**: Critical bug fixes and stability improvements:
+- ✅ **Memory Leak Fix**: Fixed Supabase channel subscription cleanup in multiplayer-network.ts
+- ✅ **Connection Timeout**: Added 30-second timeout for P2P connection establishment
+- ✅ **State Transition Guards**: Prevented duplicate MATCH_STARTED events
+- ✅ **Command Queuing**: Commands sent before transport is ready are now queued and flushed
+- ✅ **Error Handling**: Enhanced error handling for async operations in P2PTransport
+
 **2026-02-08**: Enhanced Phase 2 features implemented:
 - ✅ **Latency Measurement**: Added PING/PONG protocol for real-time RTT tracking in P2P connections
 - ✅ **State Hash Verification**: Implemented comprehensive desync detection system with automatic hash exchange
