@@ -79,6 +79,7 @@ export class GameRenderer {
     private readonly FORGE_SPRITE_SCALE = 2.64;
     private readonly AURUM_EDGE_DETECTION_FILL_COLOR = 'white'; // Color used for edge detection in Aurum outline rendering
     private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
+    private readonly AURUM_SEED_BASE_MULTIPLIER = 1000; // Base multiplier for generating pseudo-random seeds from position
     private readonly AURUM_FORGE_SEED_MULTIPLIER = 137.5; // Prime-like multiplier for pseudo-random shape distribution
     private readonly AURUM_FOUNDRY_SEED_MULTIPLIER = 157.3; // Prime-like multiplier for pseudo-random shape distribution
     private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
@@ -1958,7 +1959,7 @@ export class GameRenderer {
             // Initialize with multiple squares of different sizes and speeds
             const shapeCount = 12;
             const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
-            const seed = forge.position.x * 1000 + forge.position.y;
+            const seed = forge.position.x * this.AURUM_SEED_BASE_MULTIPLIER + forge.position.y;
             
             for (let i = 0; i < shapeCount; i++) {
                 const random = (seed + i * this.AURUM_FORGE_SEED_MULTIPLIER) % 1000 / 1000;
@@ -1987,7 +1988,7 @@ export class GameRenderer {
             // Initialize with multiple triangles of different sizes and speeds
             const shapeCount = 10;
             const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
-            const seed = foundry.position.x * 1000 + foundry.position.y;
+            const seed = foundry.position.x * this.AURUM_SEED_BASE_MULTIPLIER + foundry.position.y;
             
             for (let i = 0; i < shapeCount; i++) {
                 const random = (seed + i * this.AURUM_FOUNDRY_SEED_MULTIPLIER) % 1000 / 1000;
