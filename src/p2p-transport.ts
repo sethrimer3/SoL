@@ -226,10 +226,12 @@ class PeerConnection {
                 }
                 
                 // Handle batched commands
+                // Note: Synchronous processing is acceptable here due to MAX_BATCH_SIZE=50 limit
+                // Each command is lightweight and processing 50 commands takes <1ms
                 if (data.type === 'command_batch' && Array.isArray(data.commands)) {
                     if (this.onMessageCallback) {
                         // Process each command in the batch
-                        data.commands.forEach((cmd: any) => {
+                        data.commands.forEach((cmd: GameCommand) => {
                             this.onMessageCallback!({ type: 'command', command: cmd });
                         });
                     }

@@ -101,11 +101,14 @@ export class CommandQueue {
     private missedCommandsCount = 0;
     private totalCommandsProcessed = 0;
     
-    // Optimization: Reusable array for sorting to reduce allocations
-    private sortedCommands: GameCommand[] = [];
-    
     // Optimization: Cache for player ID comparisons
     private playerIdCache = new Map<string, number>();
+    
+    // Fallback index for unknown players (sorts them to the end)
+    private readonly UNKNOWN_PLAYER_INDEX = 999;
+    
+    // Memory management constants
+    private readonly TICK_RETENTION_WINDOW = 10; // Keep only recent 10 ticks
 
     constructor(playerIds: string[]) {
         this.expectedPlayers = new Set(playerIds);
@@ -205,8 +208,8 @@ export class CommandQueue {
         // Optimized sorting: Use cached player ID indices for faster comparison
         if (commands.length > 1) {
             commands.sort((a, b) => {
-                const aIndex = this.playerIdCache.get(a.playerId) ?? 999;
-                const bIndex = this.playerIdCache.get(b.playerId) ?? 999;
+                const aIndex = this.playerIdCache.get(a.playerId) ?? this.UNKNOWN_PLAYER_INDEX;
+                const bIndex = this.playerIdCache.get(b.playerId) ?? this.UNKNOWN_PLAYER_INDEX;
                 return aIndex - bIndex;
             });
         }
@@ -223,7 +226,7 @@ export class CommandQueue {
      * Clean up old tick data to prevent memory leaks
      */
     private cleanupOldTicks(currentTick: number): void {
-        const minTick = currentTick - 10; // Keep only recent ticks
+        const minTick = currentTick - this.TICK_RETENTION_WINDOW;
         for (const tick of this.commandsByTick.keys()) {
             if (tick < minTick) {
                 this.commandsByTick.delete(tick);
