@@ -78,6 +78,9 @@ export class GameRenderer {
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
     private readonly AURUM_EDGE_DETECTION_FILL_COLOR = 'white'; // Color used for edge detection in Aurum outline rendering
+    private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
+    private readonly AURUM_FORGE_SEED_MULTIPLIER = 137.5; // Prime-like multiplier for pseudo-random shape distribution
+    private readonly AURUM_FOUNDRY_SEED_MULTIPLIER = 157.3; // Prime-like multiplier for pseudo-random shape distribution
     private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
     private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
@@ -846,6 +849,53 @@ export class GameRenderer {
     }
 
     /**
+     * Detect and draw edges from an offscreen canvas with filled shapes
+     * Used for Aurum outline rendering effect
+     */
+    private detectAndDrawEdges(
+        imageData: ImageData,
+        cropWidth: number,
+        cropHeight: number,
+        minX: number,
+        minY: number,
+        displayColor: string
+    ): void {
+        const data = imageData.data;
+
+        // Draw glowing outline where filled areas border empty areas
+        this.ctx.save();
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.shadowColor = displayColor;
+        this.ctx.shadowBlur = 10;
+        this.ctx.lineWidth = 2;
+        this.ctx.fillStyle = displayColor;
+
+        // Edge detection: draw pixels at the boundary of filled regions
+        for (let y = 1; y < cropHeight - 1; y++) {
+            for (let x = 1; x < cropWidth - 1; x++) {
+                const idx = (y * cropWidth + x) * 4;
+                const alpha = data[idx + 3];
+                
+                // Check if this pixel is filled
+                if (alpha > this.AURUM_EDGE_ALPHA_THRESHOLD) {
+                    // Check if any neighbor is empty
+                    const hasEmptyNeighbor = 
+                        data[((y - 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // top
+                        data[((y + 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // bottom
+                        data[(y * cropWidth + (x - 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // left
+                        data[(y * cropWidth + (x + 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD;    // right
+                    
+                    if (hasEmptyNeighbor) {
+                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
+                    }
+                }
+            }
+        }
+        
+        this.ctx.restore();
+    }
+
+    /**
      * Draw Aurum stellar forge with moving squares and outline-only rendering
      */
     private drawAurumForgeOutline(
@@ -901,41 +951,9 @@ export class GameRenderer {
             tempCtx.restore();
         });
 
-        // Get the image data to detect edges
+        // Get the image data and detect/draw edges
         const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
-        const data = imageData.data;
-
-        // Draw glowing outline where filled areas border empty areas
-        this.ctx.save();
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 10;
-        this.ctx.lineWidth = 2;
-        this.ctx.fillStyle = displayColor;
-
-        // Edge detection: draw pixels at the boundary of filled regions
-        for (let y = 1; y < cropHeight - 1; y++) {
-            for (let x = 1; x < cropWidth - 1; x++) {
-                const idx = (y * cropWidth + x) * 4;
-                const alpha = data[idx + 3];
-                
-                // Check if this pixel is filled
-                if (alpha > 128) {
-                    // Check if any neighbor is empty
-                    const hasEmptyNeighbor = 
-                        data[((y - 1) * cropWidth + x) * 4 + 3] < 128 ||  // top
-                        data[((y + 1) * cropWidth + x) * 4 + 3] < 128 ||  // bottom
-                        data[(y * cropWidth + (x - 1)) * 4 + 3] < 128 ||  // left
-                        data[(y * cropWidth + (x + 1)) * 4 + 3] < 128;    // right
-                    
-                    if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
-                    }
-                }
-            }
-        }
-        
-        this.ctx.restore();
+        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
     }
 
     /**
@@ -1007,41 +1025,9 @@ export class GameRenderer {
             tempCtx.restore();
         });
 
-        // Get the image data to detect edges
+        // Get the image data and detect/draw edges
         const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
-        const data = imageData.data;
-
-        // Draw glowing outline where filled areas border empty areas
-        this.ctx.save();
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 10;
-        this.ctx.lineWidth = 2;
-        this.ctx.fillStyle = displayColor;
-
-        // Edge detection: draw pixels at the boundary of filled regions
-        for (let y = 1; y < cropHeight - 1; y++) {
-            for (let x = 1; x < cropWidth - 1; x++) {
-                const idx = (y * cropWidth + x) * 4;
-                const alpha = data[idx + 3];
-                
-                // Check if this pixel is filled
-                if (alpha > 128) {
-                    // Check if any neighbor is empty
-                    const hasEmptyNeighbor = 
-                        data[((y - 1) * cropWidth + x) * 4 + 3] < 128 ||  // top
-                        data[((y + 1) * cropWidth + x) * 4 + 3] < 128 ||  // bottom
-                        data[(y * cropWidth + (x - 1)) * 4 + 3] < 128 ||  // left
-                        data[(y * cropWidth + (x + 1)) * 4 + 3] < 128;    // right
-                    
-                    if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
-                    }
-                }
-            }
-        }
-        
-        this.ctx.restore();
+        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
     }
 
     private getHeroSpritePath(unit: Unit): string | null {
@@ -1975,7 +1961,7 @@ export class GameRenderer {
             const seed = forge.position.x * 1000 + forge.position.y;
             
             for (let i = 0; i < shapeCount; i++) {
-                const random = (seed + i * 137.5) % 1000 / 1000;
+                const random = (seed + i * this.AURUM_FORGE_SEED_MULTIPLIER) % 1000 / 1000;
                 const size = 0.3 + random * 1.2; // Sizes from 0.3 to 1.5
                 const speed = 0.15 + (random * 0.5); // Speeds from 0.15 to 0.65 rad/sec
                 const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
@@ -2004,7 +1990,7 @@ export class GameRenderer {
             const seed = foundry.position.x * 1000 + foundry.position.y;
             
             for (let i = 0; i < shapeCount; i++) {
-                const random = (seed + i * 157.3) % 1000 / 1000;
+                const random = (seed + i * this.AURUM_FOUNDRY_SEED_MULTIPLIER) % 1000 / 1000;
                 const size = 0.25 + random * 1.0; // Sizes from 0.25 to 1.25
                 const speed = 0.2 + (random * 0.6); // Speeds from 0.2 to 0.8 rad/sec
                 const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
