@@ -4848,8 +4848,10 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
         // They must be obtained through other game mechanics
         
         game.players.push(player);
-        game.updatePlayerNameMap(); // Update player name lookup map
     }
+    
+    // Update player name map after all players have been added
+    game.updatePlayerNameMap();
     
     // Initialize default minion paths (each forge targets the enemy's spawn location)
     if (game.players.length >= 2) {
