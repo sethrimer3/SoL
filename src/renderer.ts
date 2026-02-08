@@ -75,6 +75,8 @@ export class GameRenderer {
     public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
+    public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
+    public infoBoxOpacity: number = 0.5; // Opacity for top-right info boxes
     private screenShakeIntensity: number = 0; // Current screen shake intensity
     private screenShakeTimer: number = 0; // Screen shake timer
     private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
@@ -7445,7 +7447,9 @@ export class GameRenderer {
      */
     private drawOffScreenUnitIndicators(game: GameState): void {
         if (!this.viewingPlayer) return;
-        
+        this.ctx.save();
+        this.ctx.globalAlpha = this.offscreenIndicatorOpacity;
+
         const dpr = window.devicePixelRatio || 1;
         const ladSun = game.suns.find(s => s.type === 'lad');
         
@@ -7641,6 +7645,8 @@ export class GameRenderer {
                 }
             }
         }
+
+        this.ctx.restore();
     }
 
     /**
@@ -8180,12 +8186,17 @@ export class GameRenderer {
         const boxHeight = 60;
         const x = screenWidth - boxWidth - margin;
         let y = margin;
+
+        const starlingSymbol = '✦';
         
         // Check for player's production
         const player = game.players.find((p) => !p.isAi);
         if (!player) {
             return;
         }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = this.infoBoxOpacity;
         
         // Draw incoming SoL energy and starlings count
         const compactBoxHeight = 30;
@@ -8253,7 +8264,7 @@ export class GameRenderer {
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
         const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
-        this.ctx.fillText(`Starlings: ${starlingCount}${starlingRateLabel}`, x + 8, y + compactBoxHeight / 2);
+        this.ctx.fillText(`${starlingSymbol} ${starlingCount}${starlingRateLabel}`, x + 8, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 5;
 
@@ -8268,7 +8279,7 @@ export class GameRenderer {
         this.ctx.font = 'bold 14px Doto';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`Starling Cap: ${starlingCount}/${Constants.STARLING_MAX_COUNT}`, x + 8, y + compactBoxHeight / 2);
+        this.ctx.fillText(`${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`, x + 8, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 8;
         
@@ -8356,6 +8367,7 @@ export class GameRenderer {
         // Reset text alignment
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'alphabetic';
+        this.ctx.restore();
     }
     
     /**
@@ -8565,6 +8577,33 @@ export class GameRenderer {
             }
             
             return null;
+        }
+
+        if (this.inGameMenuTab === 'graphics') {
+            const sliderTrackX = layout.graphicsSliderX + layout.graphicsSliderLabelWidth;
+            const sliderTrackWidth = layout.graphicsSliderWidth - layout.graphicsSliderLabelWidth;
+            const sliderRowHeight = layout.graphicsSliderRowHeight;
+            const sliderGap = layout.graphicsSliderGap;
+            const sliderActionTypes: Array<InGameMenuAction['type']> = [
+                'offscreenIndicatorOpacity',
+                'infoBoxOpacity'
+            ];
+            for (let i = 0; i < sliderActionTypes.length; i += 1) {
+                const rowY = layout.graphicsSliderY + i * (sliderRowHeight + sliderGap);
+                const isWithinRow = screenY >= rowY && screenY <= rowY + sliderRowHeight;
+                if (!isWithinRow) {
+                    continue;
+                }
+                if (screenX >= sliderTrackX && screenX <= sliderTrackX + sliderTrackWidth) {
+                    const rawPercent = ((screenX - sliderTrackX) / sliderTrackWidth) * 100;
+                    const snappedPercent = Math.max(0, Math.min(100, Math.round(rawPercent / 5) * 5));
+                    const actionType = sliderActionTypes[i];
+                    if (actionType === 'offscreenIndicatorOpacity') {
+                        return { type: 'offscreenIndicatorOpacity', opacityPercent: snappedPercent };
+                    }
+                    return { type: 'infoBoxOpacity', opacityPercent: snappedPercent };
+                }
+            }
         }
 
         const isWithinList =
@@ -8853,6 +8892,52 @@ export class GameRenderer {
             if (this.graphicsMenuScrollOffset > maxScroll) {
                 this.graphicsMenuScrollOffset = maxScroll;
             }
+            const sliderTrackX = layout.graphicsSliderX + layout.graphicsSliderLabelWidth;
+            const sliderTrackWidth = layout.graphicsSliderWidth - layout.graphicsSliderLabelWidth;
+            const sliderRowHeight = layout.graphicsSliderRowHeight;
+            const sliderGap = layout.graphicsSliderGap;
+            const sliderTrackHeight = layout.graphicsSliderTrackHeight;
+            const sliderRows = [
+                { label: 'Offscreen Indicators', valuePercent: Math.round(this.offscreenIndicatorOpacity * 100) },
+                { label: 'Info Box Opacity', valuePercent: Math.round(this.infoBoxOpacity * 100) }
+            ];
+
+            for (let i = 0; i < sliderRows.length; i += 1) {
+                const row = sliderRows[i];
+                const rowY = layout.graphicsSliderY + i * (sliderRowHeight + sliderGap);
+                const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
+                const trackY = rowY + (sliderRowHeight - sliderTrackHeight) / 2;
+                const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;
+                const knobRadius = sliderTrackHeight * 1.1;
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `bold ${isCompactLayout ? 13 : 15}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.textBaseline = 'middle';
+                this.ctx.fillText(row.label, layout.graphicsSliderX, rowY + sliderRowHeight * 0.5);
+
+                this.ctx.fillStyle = 'rgba(60, 60, 60, 0.9)';
+                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
+                this.ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
+                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * (clampedPercent / 100), sliderTrackHeight);
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.strokeRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
+
+                this.ctx.beginPath();
+                this.ctx.arc(knobX, trackY + sliderTrackHeight / 2, knobRadius, 0, Math.PI * 2);
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.fill();
+                this.ctx.strokeStyle = '#FFFFFF';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `bold ${isCompactLayout ? 12 : 13}px Doto`;
+                this.ctx.textAlign = 'right';
+                this.ctx.fillText(`${clampedPercent}%`, layout.graphicsSliderX + layout.graphicsSliderWidth, rowY + sliderRowHeight * 0.5);
+            }
+
             this.ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
             this.ctx.fillRect(
                 layout.graphicsListX,

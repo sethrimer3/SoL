@@ -12,6 +12,8 @@ export type InGameMenuAction =
     | { type: 'surrender' }
     | { type: 'tab'; tab: InGameMenuTab }
     | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
+    | { type: 'offscreenIndicatorOpacity'; opacityPercent: number }
+    | { type: 'infoBoxOpacity'; opacityPercent: number }
     | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
     | { type: 'healthDisplayMode'; mode: 'bar' | 'number' }
     | { type: 'fancyGraphics'; isEnabled: boolean }
@@ -43,6 +45,13 @@ export type InGameMenuLayout = {
     graphicsListY: number;
     graphicsListWidth: number;
     graphicsListHeight: number;
+    graphicsSliderX: number;
+    graphicsSliderY: number;
+    graphicsSliderWidth: number;
+    graphicsSliderRowHeight: number;
+    graphicsSliderGap: number;
+    graphicsSliderLabelWidth: number;
+    graphicsSliderTrackHeight: number;
     graphicsRowHeight: number;
     graphicsButtonWidth: number;
     graphicsButtonHeight: number;
@@ -78,9 +87,17 @@ export function getInGameMenuLayout(canvasWidth: number, canvasHeight: number): 
     const buttonX = panelX + (panelWidth - buttonWidth) / 2;
     const buttonSpacing = isCompactLayout ? 14 : 20;
     const graphicsListX = panelX + panelPaddingX;
-    const graphicsListY = contentTopY;
+    const graphicsSliderX = graphicsListX;
+    const graphicsSliderY = contentTopY;
+    const graphicsSliderWidth = panelWidth - panelPaddingX * 2;
+    const graphicsSliderRowHeight = isCompactLayout ? 34 : 38;
+    const graphicsSliderGap = isCompactLayout ? 10 : 12;
+    const graphicsSliderLabelWidth = isCompactLayout ? 150 : 190;
+    const graphicsSliderTrackHeight = isCompactLayout ? 8 : 10;
+    const graphicsSliderAreaHeight = graphicsSliderRowHeight * 2 + graphicsSliderGap;
+    const graphicsListY = graphicsSliderY + graphicsSliderAreaHeight + (isCompactLayout ? 12 : 14);
     const graphicsListWidth = panelWidth - panelPaddingX * 2;
-    const graphicsListHeight = Math.max(0, contentBottomY - contentTopY);
+    const graphicsListHeight = Math.max(0, contentBottomY - graphicsListY);
     const graphicsRowHeight = isCompactLayout ? 44 : 48;
     const graphicsButtonWidth = isCompactLayout ? 54 : 60;
     const graphicsButtonHeight = isCompactLayout ? 26 : 30;
@@ -106,6 +123,13 @@ export function getInGameMenuLayout(canvasWidth: number, canvasHeight: number): 
         graphicsListY,
         graphicsListWidth,
         graphicsListHeight,
+        graphicsSliderX,
+        graphicsSliderY,
+        graphicsSliderWidth,
+        graphicsSliderRowHeight,
+        graphicsSliderGap,
+        graphicsSliderLabelWidth,
+        graphicsSliderTrackHeight,
         graphicsRowHeight,
         graphicsButtonWidth,
         graphicsButtonHeight,

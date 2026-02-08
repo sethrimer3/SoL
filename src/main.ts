@@ -1644,6 +1644,12 @@ class GameController {
                             case 'colorblindMode':
                                 this.renderer.colorblindMode = menuAction.isEnabled;
                                 break;
+                            case 'offscreenIndicatorOpacity':
+                                this.renderer.offscreenIndicatorOpacity = menuAction.opacityPercent / 100;
+                                break;
+                            case 'infoBoxOpacity':
+                                this.renderer.infoBoxOpacity = menuAction.opacityPercent / 100;
+                                break;
                             default:
                                 break;
                         }
