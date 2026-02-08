@@ -1,4 +1,5 @@
 import type { Player, Unit, Vector2D, CombatTarget } from '../game-core';
+import { getGameRNG } from '../seeded-random';
 
 type NovaHeroDeps = {
     Unit: typeof Unit;
@@ -140,9 +141,10 @@ export const createNovaHero = (deps: NovaHeroDeps) => {
          * Force premature explosion (from taking damage)
          */
         takeDamage(): void {
+            const rng = getGameRNG();
             // Explode in random direction if not armed yet
             if (!this.isArmed) {
-                const randomAngle = Math.random() * Math.PI * 2;
+                const randomAngle = rng.nextAngle();
                 this.scatterDirection = new Vector2D(
                     Math.cos(randomAngle),
                     Math.sin(randomAngle)
@@ -160,7 +162,7 @@ export const createNovaHero = (deps: NovaHeroDeps) => {
                     );
                 } else {
                     // Bomb is stationary, explode in random direction
-                    const randomAngle = Math.random() * Math.PI * 2;
+                    const randomAngle = rng.nextAngle();
                     this.scatterDirection = new Vector2D(
                         Math.cos(randomAngle),
                         Math.sin(randomAngle)

@@ -1,4 +1,5 @@
 import type { AbilityBullet, Unit, Vector2D, Player, CombatTarget } from '../game-core';
+import { getGameRNG } from '../seeded-random';
 
 type PreistHeroDeps = {
     Unit: typeof Unit;
@@ -254,12 +255,13 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
          */
         explodeHealingBomb(position: Vector2D): void {
             // Create 50 wild particles in random directions within a constrained circular area
+            const rng = getGameRNG();
             for (let i = 0; i < Constants.PREIST_HEALING_BOMB_PARTICLE_COUNT; i++) {
                 // Random angle
-                const angle = Math.random() * Math.PI * 2;
+                const angle = rng.nextAngle();
                 
                 // Random speed (with some variation for visual effect)
-                const speedVariation = 0.5 + Math.random() * 0.5; // 0.5x to 1.0x speed
+                const speedVariation = rng.nextFloat(0.5, 1.0); // 0.5x to 1.0x speed
                 const speed = Constants.PREIST_HEALING_BOMB_PARTICLE_SPEED * speedVariation;
                 
                 const velocity = new Vector2D(

@@ -1,4 +1,5 @@
 import type { Asteroid, CombatTarget, Player, Unit, Vector2D } from '../game-core';
+import { getGameRNG } from '../seeded-random';
 
 type GraveHeroDeps = {
     Unit: typeof Unit;
@@ -21,8 +22,9 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
             public owner: Player
         ) {
             // Random initial velocity for natural spawning
-            const angle = Math.random() * Math.PI * 2;
-            const speed = 20 + Math.random() * 30;
+            const rng = getGameRNG();
+            const angle = rng.nextAngle();
+            const speed = rng.nextFloat(20, 50);
             this.velocity = new Vector2D(
                 Math.cos(angle) * speed,
                 Math.sin(angle) * speed
@@ -299,8 +301,9 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
          */
         spawnSmallParticle(): void {
             // Spawn near the Grave unit
-            const angle = Math.random() * Math.PI * 2;
-            const distance = 20 + Math.random() * 30;
+            const rng = getGameRNG();
+            const angle = rng.nextAngle();
+            const distance = rng.nextFloat(20, 50);
             const position = new Vector2D(
                 this.position.x + Math.cos(angle) * distance,
                 this.position.y + Math.sin(angle) * distance

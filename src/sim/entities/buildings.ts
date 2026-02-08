@@ -327,18 +327,17 @@ export class Minigun extends Building {
         );
 
         // Create bullet casing with slight angle deviation
-        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
-                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
+        const rng = getGameRNG();
+        const casingAngle = angle + Math.PI / 2 + rng.nextFloat(-0.25, 0.25);
+        const casingSpeed = rng.nextFloat(Constants.BULLET_CASING_SPEED_MIN, Constants.BULLET_CASING_SPEED_MAX);
         this.lastShotEffects.casing = new BulletCasing(
             new Vector2D(this.position.x, this.position.y),
             new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
         );
 
         // Create bouncing bullet at target position
-        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
-        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
-                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
+        const bounceAngle = angle + Math.PI + rng.nextFloat(-0.5, 0.5);
+        const bounceSpeed = rng.nextFloat(Constants.BOUNCING_BULLET_SPEED_MIN, Constants.BOUNCING_BULLET_SPEED_MAX);
         this.lastShotEffects.bouncingBullet = new BouncingBullet(
             new Vector2D(target.position.x, target.position.y),
             new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
@@ -485,18 +484,17 @@ export class GatlingTower extends Building {
         );
 
         // Create bullet casing with slight angle deviation
-        const casingAngle = angle + Math.PI / 2 + (Math.random() - 0.5) * 0.5;
-        const casingSpeed = Constants.BULLET_CASING_SPEED_MIN + 
-                           Math.random() * (Constants.BULLET_CASING_SPEED_MAX - Constants.BULLET_CASING_SPEED_MIN);
+        const rng = getGameRNG();
+        const casingAngle = angle + Math.PI / 2 + rng.nextFloat(-0.25, 0.25);
+        const casingSpeed = rng.nextFloat(Constants.BULLET_CASING_SPEED_MIN, Constants.BULLET_CASING_SPEED_MAX);
         this.lastShotEffects.casing = new BulletCasing(
             new Vector2D(this.position.x, this.position.y),
             new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed)
         );
 
         // Create bouncing bullet at target position
-        const bounceAngle = angle + Math.PI + (Math.random() - 0.5) * 1.0;
-        const bounceSpeed = Constants.BOUNCING_BULLET_SPEED_MIN + 
-                           Math.random() * (Constants.BOUNCING_BULLET_SPEED_MAX - Constants.BOUNCING_BULLET_SPEED_MIN);
+        const bounceAngle = angle + Math.PI + rng.nextFloat(-0.5, 0.5);
+        const bounceSpeed = rng.nextFloat(Constants.BOUNCING_BULLET_SPEED_MIN, Constants.BOUNCING_BULLET_SPEED_MAX);
         this.lastShotEffects.bouncingBullet = new BouncingBullet(
             new Vector2D(target.position.x, target.position.y),
             new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed)
