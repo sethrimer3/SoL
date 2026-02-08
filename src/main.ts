@@ -994,6 +994,8 @@ class GameController {
             this.network.sendCommand(command, data);
             return;
         }
+        
+        // Single-player: No-op (game state already updated locally before calling this)
     }
 
     private surrender(): void {
@@ -3277,7 +3279,7 @@ class GameController {
             }
         }
 
-        // Update warp gates
+        // Update warp gates with fixed timestep (multiplayer uses fixed ticks for determinism)
         const tickDeltaTime = this.TICK_INTERVAL_MS / 1000;
         for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
             const gate = this.game.warpGates[i];
