@@ -4319,9 +4319,13 @@ export class GameState {
      * Execute a P2P transport command (deterministic)
      * This method accepts commands from the P2P multiplayer system
      * @param cmd - Command from P2P transport system
+     * 
+     * NOTE: In the P2P system, cmd.playerId contains the player's name (not an ID).
+     * This is because SoL uses player names as identifiers throughout the game state.
      */
     executeCommand(cmd: P2PGameCommand): void {
         // Find the player by name using efficient map lookup
+        // cmd.playerId is the player's name in SoL's system
         const player = this.playersByName.get(cmd.playerId);
         if (!player) {
             console.warn('Player not found for P2P command:', cmd.playerId);
