@@ -7,6 +7,7 @@ import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
+import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
 
 class GameController {
     public game: GameState | null = null;
@@ -1117,6 +1118,15 @@ class GameController {
     }
 
     private startNewGame(settings: GameSettings): void {
+        // Initialize RNG for single-player games
+        // For multiplayer modes (lan, p2p, online), RNG is initialized by the network manager
+        const isSinglePlayer = settings.gameMode !== 'lan' && settings.gameMode !== 'p2p' && settings.gameMode !== 'online';
+        if (isSinglePlayer) {
+            const matchSeed = generateMatchSeed();
+            setGameRNG(new SeededRandom(matchSeed));
+            console.log(`[GameController] Initialized RNG with seed: ${matchSeed}`);
+        }
+        
         // Create game based on selected map
         this.game = this.createGameFromSettings(settings);
         this.renderer.selectedHeroNames = settings.selectedHeroNames;

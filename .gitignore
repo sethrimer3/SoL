@@ -32,6 +32,11 @@ yarn-error.log
 package-lock.json
 dist/
 
+# Compiled JavaScript (TypeScript output)
+*.js
+!webpack.config.js
+!test-rng-determinism-simple.js
+
 # Environment variables
 .env
 .env.local
