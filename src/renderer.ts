@@ -78,7 +78,7 @@ export class GameRenderer {
     private screenShakeIntensity: number = 0; // Current screen shake intensity
     private screenShakeTimer: number = 0; // Screen shake timer
     private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
-    public colorblindMode: boolean = false; // Colorblind mode - shows enemies as diamonds instead of circles
+    public colorblindMode: boolean = true; // Colorblind mode - shows enemies as diamonds instead of circles
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
@@ -7421,24 +7421,20 @@ export class GameRenderer {
         const dy = screenPos.y - centerY;
         const angle = Math.atan2(dy, dx);
         
-        // Calculate intersection with screen edges
-        // We want the indicator to be half off-screen, so we need to push it to the edge
-        const margin = indicatorSize / 2; // Half the indicator will be visible
-        
         let edgeX = screenPos.x;
         let edgeY = screenPos.y;
         
         // Clamp to screen bounds
-        if (screenPos.x < margin) {
-            edgeX = margin;
-        } else if (screenPos.x > screenWidth - margin) {
-            edgeX = screenWidth - margin;
+        if (screenPos.x < 0) {
+            edgeX = 0;
+        } else if (screenPos.x > screenWidth) {
+            edgeX = screenWidth;
         }
         
-        if (screenPos.y < margin) {
-            edgeY = margin;
-        } else if (screenPos.y > screenHeight - margin) {
-            edgeY = screenHeight - margin;
+        if (screenPos.y < 0) {
+            edgeY = 0;
+        } else if (screenPos.y > screenHeight) {
+            edgeY = screenHeight;
         }
         
         return { x: edgeX, y: edgeY, angle };
