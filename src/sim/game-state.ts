@@ -34,6 +34,8 @@ import {
     Marine,
     Grave,
     GraveProjectile,
+    GraveBlackHole,
+    GraveSmallParticle,
     Ray,
     RayBeamSegment,
     InfluenceBall,
