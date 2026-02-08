@@ -6105,6 +6105,57 @@ export class GameRenderer {
             this.ctx.stroke();
         }
 
+        // Draw countdown visual if in countdown mode
+        if (building.isInCountdown()) {
+            // Pulsing glow effect
+            const time = performance.now() / 1000;
+            const pulseIntensity = 0.5 + 0.5 * Math.sin(time * 8); // Fast pulse
+            
+            this.ctx.strokeStyle = '#FF0000';
+            this.ctx.lineWidth = (4 + pulseIntensity * 4) * this.zoom;
+            this.ctx.globalAlpha = 0.6 + pulseIntensity * 0.4;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius * 1.3, 0, Math.PI * 2);
+            this.ctx.stroke();
+            this.ctx.globalAlpha = 1.0;
+            
+            // Draw countdown number
+            const countdown = Math.ceil(building.getRemainingCountdown());
+            this.ctx.fillStyle = '#FF0000';
+            this.ctx.font = `bold ${Math.floor(24 * this.zoom)}px Arial`;
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(countdown.toString(), screenPos.x, screenPos.y - radius - 20 * this.zoom);
+            
+            // Draw line to target position if available
+            if (building.targetPosition) {
+                const targetScreenPos = this.worldToScreen(building.targetPosition);
+                this.ctx.strokeStyle = '#FF0000';
+                this.ctx.lineWidth = 2 * this.zoom;
+                this.ctx.globalAlpha = 0.5;
+                this.ctx.setLineDash([5 * this.zoom, 5 * this.zoom]);
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
+                this.ctx.stroke();
+                this.ctx.setLineDash([]);
+                this.ctx.globalAlpha = 1.0;
+                
+                // Draw target indicator
+                this.ctx.strokeStyle = '#FF0000';
+                this.ctx.lineWidth = 3 * this.zoom;
+                this.ctx.beginPath();
+                this.ctx.arc(targetScreenPos.x, targetScreenPos.y, 15 * this.zoom, 0, Math.PI * 2);
+                this.ctx.stroke();
+                this.ctx.beginPath();
+                this.ctx.moveTo(targetScreenPos.x - 20 * this.zoom, targetScreenPos.y);
+                this.ctx.lineTo(targetScreenPos.x + 20 * this.zoom, targetScreenPos.y);
+                this.ctx.moveTo(targetScreenPos.x, targetScreenPos.y - 20 * this.zoom);
+                this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y + 20 * this.zoom);
+                this.ctx.stroke();
+            }
+        }
+
         if (building.isSelected) {
             this.drawBuildingSelectionIndicator(screenPos, radius);
             
@@ -6120,6 +6171,75 @@ export class GameRenderer {
 
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
+    }
+
+    /**
+     * Draw striker tower target highlighting overlay
+     * Shows available target spots when isAwaitingTarget is true
+     */
+    private drawStrikerTowerTargetHighlighting(game: GameState): void {
+        if (!this.viewingPlayer) return;
+        
+        // Find if any selected striker tower is awaiting target
+        let awaitingTower: StrikerTower | null = null;
+        for (const building of this.viewingPlayer.buildings) {
+            if (building instanceof StrikerTower && building.isAwaitingTarget && building.isMissileReady()) {
+                awaitingTower = building;
+                break;
+            }
+        }
+        
+        if (!awaitingTower) return;
+        
+        // Draw grid of highlights for valid target positions
+        const towerPos = awaitingTower.position;
+        const range = awaitingTower.attackRange;
+        const gridSpacing = 40; // Grid spacing in world units
+        
+        // Calculate bounds
+        const minX = Math.floor((towerPos.x - range) / gridSpacing) * gridSpacing;
+        const maxX = Math.ceil((towerPos.x + range) / gridSpacing) * gridSpacing;
+        const minY = Math.floor((towerPos.y - range) / gridSpacing) * gridSpacing;
+        const maxY = Math.ceil((towerPos.y + range) / gridSpacing) * gridSpacing;
+        
+        // Draw highlights
+        for (let x = minX; x <= maxX; x += gridSpacing) {
+            for (let y = minY; y <= maxY; y += gridSpacing) {
+                const testPos = new Vector2D(x, y);
+                
+                // Check if position is valid target
+                const distance = towerPos.distanceTo(testPos);
+                if (distance > range) continue;
+                
+                const inShadow = game.isPointInShadow(testPos);
+                const visibleByUnits = game.isPositionVisibleByPlayerUnits(testPos, this.viewingPlayer.units);
+                
+                if (inShadow && !visibleByUnits) {
+                    // Valid target - draw highlight
+                    const screenPos = this.worldToScreen(testPos);
+                    
+                    // Pulsing animation
+                    const time = performance.now() / 1000;
+                    const pulse = 0.3 + 0.2 * Math.sin(time * 3);
+                    
+                    this.ctx.fillStyle = `rgba(255, 0, 0, ${pulse})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(screenPos.x, screenPos.y, 8 * this.zoom, 0, Math.PI * 2);
+                    this.ctx.fill();
+                    
+                    // Draw small crosshair
+                    this.ctx.strokeStyle = `rgba(255, 0, 0, ${pulse + 0.3})`;
+                    this.ctx.lineWidth = 1.5 * this.zoom;
+                    this.ctx.beginPath();
+                    const crossSize = 6 * this.zoom;
+                    this.ctx.moveTo(screenPos.x - crossSize, screenPos.y);
+                    this.ctx.lineTo(screenPos.x + crossSize, screenPos.y);
+                    this.ctx.moveTo(screenPos.x, screenPos.y - crossSize);
+                    this.ctx.lineTo(screenPos.x, screenPos.y + crossSize);
+                    this.ctx.stroke();
+                }
+            }
+        }
     }
 
     /**
@@ -6495,6 +6615,58 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
+    }
+
+    /**
+     * Draw striker tower missile explosion effect
+     * Shows a large, dramatic explosion with expanding rings
+     */
+    private drawStrikerTowerExplosion(position: Vector2D, age: number): void {
+        const screenPos = this.worldToScreen(position);
+        const maxRadius = Constants.STRIKER_TOWER_EXPLOSION_RADIUS * this.zoom;
+        
+        // Explosion expands quickly at first, then fades
+        const expansionProgress = Math.min(1.0, age * 3); // Expand over 0.33 seconds
+        const fadeProgress = Math.max(0, 1.0 - age); // Fade over 1 second
+        const currentRadius = maxRadius * expansionProgress;
+        
+        // Draw multiple expanding rings for dramatic effect
+        for (let i = 0; i < 3; i++) {
+            const ringDelay = i * 0.1; // Stagger rings
+            const ringAge = age - ringDelay;
+            if (ringAge < 0) continue;
+            
+            const ringProgress = Math.min(1.0, ringAge * 3);
+            const ringRadius = maxRadius * ringProgress;
+            const ringAlpha = Math.max(0, 1.0 - ringAge) * 0.6;
+            
+            // Outer ring (shockwave)
+            this.ctx.strokeStyle = `rgba(255, 200, 100, ${ringAlpha})`;
+            this.ctx.lineWidth = (6 - i * 2) * this.zoom;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, ringRadius, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+        
+        // Draw main explosion fireball
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, currentRadius
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 200, ${fadeProgress * 0.9})`); // White hot center
+        gradient.addColorStop(0.3, `rgba(255, 150, 50, ${fadeProgress * 0.7})`); // Orange
+        gradient.addColorStop(0.6, `rgba(255, 50, 0, ${fadeProgress * 0.5})`); // Red
+        gradient.addColorStop(1, `rgba(100, 0, 0, 0)`); // Fade to transparent
+        
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
+        this.ctx.fillStyle = gradient;
+        this.ctx.fill();
+        
+        // Trigger screen shake on first frame
+        if (age < 0.016) { // First frame (assuming 60fps)
+            this.triggerScreenShake(15); // Stronger shake than normal
+        }
     }
 
     /**
@@ -7560,6 +7732,13 @@ export class GameRenderer {
             }
         }
         
+        // Draw striker tower explosions
+        for (const explosion of game.strikerTowerExplosions) {
+            if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
+                this.drawStrikerTowerExplosion(explosion.position, game.gameTime - explosion.timestamp);
+            }
+        }
+        
         // Draw influence zones
         for (const zone of game.influenceZones) {
             if (this.isWithinViewBounds(zone.position, zone.radius)) {
@@ -7628,6 +7807,9 @@ export class GameRenderer {
 
         // Draw border fade to black effect
         this.drawBorderFade(game.mapSize);
+        
+        // Draw striker tower target highlighting
+        this.drawStrikerTowerTargetHighlighting(game);
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);

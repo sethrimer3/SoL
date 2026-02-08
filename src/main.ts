@@ -2519,18 +2519,28 @@ class GameController {
                         Array.from(this.selectedBuildings)[0] : null;
                     
                     if (awaitingStrikerTower instanceof StrikerTower && awaitingStrikerTower.isAwaitingTarget) {
-                        // Fire striker tower missile
+                        // Start countdown for striker tower missile
                         const worldPos = this.renderer.screenToWorld(lastX, lastY);
-                        const buildingIndex = player!.buildings.indexOf(awaitingStrikerTower);
-                        if (buildingIndex >= 0) {
-                            const buildingId = this.game!.getBuildingNetworkId(awaitingStrikerTower);
-                            this.sendNetworkCommand('striker_tower_fire', {
-                                buildingId,
-                                targetX: worldPos.x,
-                                targetY: worldPos.y
-                            });
+                        
+                        // Validate target position
+                        const isValidTarget = this.game!.isPointInShadow(worldPos) && 
+                            !this.game!.isPositionVisibleByPlayerUnits(worldPos, player!.units) &&
+                            awaitingStrikerTower.position.distanceTo(worldPos) <= awaitingStrikerTower.attackRange;
+                        
+                        if (isValidTarget) {
+                            const buildingIndex = player!.buildings.indexOf(awaitingStrikerTower);
+                            if (buildingIndex >= 0) {
+                                const buildingId = this.game!.getBuildingNetworkId(awaitingStrikerTower);
+                                this.sendNetworkCommand('striker_tower_start_countdown', {
+                                    buildingId,
+                                    targetX: worldPos.x,
+                                    targetY: worldPos.y
+                                });
+                                console.log(`Striker Tower countdown started at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
+                            }
+                        } else {
+                            console.log('Invalid target position for Striker Tower');
                             awaitingStrikerTower.isAwaitingTarget = false;
-                            console.log(`Striker Tower fired at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                         }
                     } else {
                         // If movement was minimal or only mirrors/base selected, set movement targets
