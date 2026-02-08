@@ -38,6 +38,7 @@ export const ABILITY_BULLET_EFFECT_RADIUS = 30;
 export const ABILITY_BULLET_FORCE_MULTIPLIER = 0.5;
 export const MINION_PROJECTILE_EFFECT_RADIUS = 25;
 export const MINION_PROJECTILE_FORCE_MULTIPLIER = 0.4;
+export const DEFAULT_PROJECTILE_DAMAGE = 5; // Default damage for projectiles with unknown damage values
 export const GRAVE_PROJECTILE_EFFECT_RADIUS = 20;
 export const GRAVE_PROJECTILE_FORCE_MULTIPLIER = 0.4;
 export const INFLUENCE_BALL_EFFECT_RADIUS = 35;
@@ -49,6 +50,7 @@ export const FLUID_RADIAL_COMPONENT = 0.4;  // Radial displacement component for
 export const BEAM_ALONG_COMPONENT = 0.7;     // Along beam direction component
 export const BEAM_PERPENDICULAR_COMPONENT = 0.3; // Perpendicular push component for beams
 export const FLUID_MIN_DISTANCE = 0.1; // Minimum distance to avoid division by zero in fluid calculations
+export const SHIELD_CENTER_COLLISION_THRESHOLD = 0.1; // Minimum distance from shield tower center to calculate push direction
 
 // Rendering constants
 export const DUST_PARTICLE_SIZE = 1;
@@ -257,6 +259,16 @@ export const LOCKON_TOWER_RADIUS = 30; // Building size
 export const LOCKON_TOWER_LOCKON_TIME = 2.0; // Seconds to lock on before firing
 export const LOCKON_TOWER_LASER_WIDTH_PX = 20; // Laser beam width
 
+// Shield Tower constants (Radiant)
+export const SHIELD_TOWER_MAX_HEALTH = 300;
+export const SHIELD_TOWER_ATTACK_RANGE = 0; // No direct attack
+export const SHIELD_TOWER_ATTACK_DAMAGE = 0; // Defensive building
+export const SHIELD_TOWER_ATTACK_SPEED = 0; // No direct attack
+export const SHIELD_TOWER_RADIUS = 35; // Building size
+export const SHIELD_TOWER_SHIELD_RADIUS = 200; // Shield projection radius
+export const SHIELD_TOWER_SHIELD_HEALTH = 500; // Damage needed to disable shield
+export const SHIELD_TOWER_REGENERATION_TIME = 10.0; // Seconds before shield can reactivate
+
 // Unit visibility constants
 export const UNIT_VISIBILITY_RADIUS = 200; // Distance in pixels that units can see around them
 
@@ -269,6 +281,7 @@ export const SWIRLER_COST = 750; // Cyclone
 export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const STRIKER_TOWER_COST = 400; // Striker Tower (Velaris)
 export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
+export const SHIELD_TOWER_COST = 650; // Shield Tower (Radiant)
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 
@@ -366,6 +379,7 @@ export const SMALL_SELECTION_THRESHOLD = 50; // Maximum selection box size (pixe
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const SOL_ICON_TEXT_SPACING = 2; // Spacing between SoL icon and text in zoom units
 export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
+export const SHIELD_HEALTH_BAR_VERTICAL_OFFSET = 20; // Vertical offset for shield health bar below main health bar
 
 // Visual effect constants
 export const TAP_EFFECT_SPEED = 0.05; // Progress increment per frame for tap effect

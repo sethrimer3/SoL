@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
@@ -29,7 +29,7 @@ class GameController {
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
-    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry)
+    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry, StrikerTower, LockOnLaserTower, ShieldTower)
     private selectedWarpGate: WarpGate | null = null;
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
@@ -544,44 +544,98 @@ class GameController {
                 positionY: gate.position.y
             });
         } else if (buttonIndex === 1) {
-            if (!player.spendEnergy(Constants.MINIGUN_COST)) {
-                console.log('Not enough energy to build Cannon');
-                return;
+            // Faction-specific button 1
+            if (player.faction === Faction.RADIANT) {
+                // Radiant: Cannon
+                if (!player.spendEnergy(Constants.MINIGUN_COST)) {
+                    console.log('Not enough energy to build Cannon');
+                    return;
+                }
+                const minigun = new Minigun(gatePosition, player);
+                player.buildings.push(minigun);
+                console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'Minigun',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
+            } else if (player.faction === Faction.VELARIS) {
+                // Velaris: Striker Tower
+                if (!player.spendEnergy(Constants.STRIKER_TOWER_COST)) {
+                    console.log('Not enough energy to build Striker Tower');
+                    return;
+                }
+                const striker = new StrikerTower(gatePosition, player);
+                player.buildings.push(striker);
+                console.log(`Striker Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'StrikerTower',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
             }
-            const minigun = new Minigun(gatePosition, player);
-            player.buildings.push(minigun);
-            console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-            this.sendNetworkCommand('building_purchase', {
-                buildingType: 'Minigun',
-                positionX: gate.position.x,
-                positionY: gate.position.y
-            });
         } else if (buttonIndex === 2) {
-            if (!player.spendEnergy(Constants.GATLING_COST)) {
-                console.log('Not enough energy to build Gatling Tower');
-                return;
+            // Faction-specific button 2
+            if (player.faction === Faction.RADIANT) {
+                // Radiant: Gatling Tower
+                if (!player.spendEnergy(Constants.GATLING_COST)) {
+                    console.log('Not enough energy to build Gatling Tower');
+                    return;
+                }
+                const gatling = new GatlingTower(gatePosition, player);
+                player.buildings.push(gatling);
+                console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'Gatling',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
+            } else if (player.faction === Faction.VELARIS) {
+                // Velaris: Lock-on Laser Tower
+                if (!player.spendEnergy(Constants.LOCKON_TOWER_COST)) {
+                    console.log('Not enough energy to build Lock-on Laser Tower');
+                    return;
+                }
+                const lockon = new LockOnLaserTower(gatePosition, player);
+                player.buildings.push(lockon);
+                console.log(`Lock-on Laser Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'LockOnLaserTower',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
             }
-            const gatling = new GatlingTower(gatePosition, player);
-            player.buildings.push(gatling);
-            console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-            this.sendNetworkCommand('building_purchase', {
-                buildingType: 'Gatling',
-                positionX: gate.position.x,
-                positionY: gate.position.y
-            });
         } else if (buttonIndex === 3) {
-            if (!player.spendEnergy(Constants.SWIRLER_COST)) {
-                console.log('Not enough energy to build Cyclone');
-                return;
+            // Faction-specific button 3
+            if (player.faction === Faction.RADIANT) {
+                // Radiant: Shield Tower
+                if (!player.spendEnergy(Constants.SHIELD_TOWER_COST)) {
+                    console.log('Not enough energy to build Shield Tower');
+                    return;
+                }
+                const shield = new ShieldTower(gatePosition, player);
+                player.buildings.push(shield);
+                console.log(`Shield Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'ShieldTower',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
+            } else if (player.faction === Faction.VELARIS) {
+                // Velaris: Cyclone (SpaceDustSwirler)
+                if (!player.spendEnergy(Constants.SWIRLER_COST)) {
+                    console.log('Not enough energy to build Cyclone');
+                    return;
+                }
+                const swirler = new SpaceDustSwirler(gatePosition, player);
+                player.buildings.push(swirler);
+                console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
+                this.sendNetworkCommand('building_purchase', {
+                    buildingType: 'SpaceDustSwirler',
+                    positionX: gate.position.x,
+                    positionY: gate.position.y
+                });
             }
-            const swirler = new SpaceDustSwirler(gatePosition, player);
-            player.buildings.push(swirler);
-            console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-            this.sendNetworkCommand('building_purchase', {
-                buildingType: 'SpaceDustSwirler',
-                positionX: gate.position.x,
-                positionY: gate.position.y
-            });
         } else {
             return;
         }
@@ -1797,7 +1851,8 @@ class GameController {
                         clickedBuilding instanceof SpaceDustSwirler ||
                         clickedBuilding instanceof SubsidiaryFactory ||
                         clickedBuilding instanceof StrikerTower ||
-                        clickedBuilding instanceof LockOnLaserTower;
+                        clickedBuilding instanceof LockOnLaserTower ||
+                        clickedBuilding instanceof ShieldTower;
                     if (isCompatibleMirrorTarget && this.selectedMirrors.size > 0) {
                         for (const mirror of this.selectedMirrors) {
                             mirror.setLinkedStructure(clickedBuilding);

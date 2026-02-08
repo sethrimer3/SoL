@@ -1252,3 +1252,109 @@ export class LockOnLaserTower extends Building {
         return Constants.MIRROR_CLICK_RADIUS_PX;
     }
 }
+
+/**
+ * Shield Tower Building - Defensive building for Radiant faction
+ * Projects a shield that blocks enemies but allows friendly units to pass through
+ */
+export class ShieldTower extends Building {
+    shieldHealth: number; // Current shield health
+    maxShieldHealth: number; // Maximum shield health
+    shieldActive: boolean; // Whether shield is currently active
+    regenerationTimer: number; // Timer for shield regeneration cooldown
+    shieldRadius: number; // Radius of shield projection
+
+    constructor(position: Vector2D, owner: Player) {
+        super(
+            position,
+            owner,
+            Constants.SHIELD_TOWER_MAX_HEALTH,
+            Constants.SHIELD_TOWER_RADIUS,
+            Constants.SHIELD_TOWER_ATTACK_RANGE,
+            Constants.SHIELD_TOWER_ATTACK_DAMAGE,
+            Constants.SHIELD_TOWER_ATTACK_SPEED
+        );
+        
+        this.energyRequired = Constants.SHIELD_TOWER_COST;
+        this.maxShieldHealth = Constants.SHIELD_TOWER_SHIELD_HEALTH;
+        this.shieldHealth = this.maxShieldHealth;
+        this.shieldActive = true;
+        this.regenerationTimer = 0;
+        this.shieldRadius = Constants.SHIELD_TOWER_SHIELD_RADIUS;
+    }
+
+    /**
+     * Update shield tower state (called each frame)
+     */
+    update(
+        deltaTime: number,
+        enemies: CombatTarget[],
+        allUnits: Unit[],
+        asteroids: Asteroid[] = []
+    ): void {
+        super.update(deltaTime, enemies, allUnits, asteroids);
+
+        // Only process shield logic when building is complete
+        if (!this.isComplete) return;
+
+        // If shield is down, handle regeneration timer
+        if (!this.shieldActive) {
+            this.regenerationTimer += deltaTime;
+            
+            // Check if we can reactivate the shield
+            if (this.regenerationTimer >= Constants.SHIELD_TOWER_REGENERATION_TIME) {
+                // Check if there are any enemies within shield radius
+                const hasEnemiesInRadius = enemies.some(enemy => {
+                    const dx = enemy.position.x - this.position.x;
+                    const dy = enemy.position.y - this.position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    return distance <= this.shieldRadius;
+                });
+                
+                // Only reactivate if no enemies are present
+                if (!hasEnemiesInRadius) {
+                    this.shieldActive = true;
+                    this.shieldHealth = this.maxShieldHealth;
+                    this.regenerationTimer = 0;
+                }
+            }
+        }
+    }
+
+    /**
+     * Damage the shield. Returns true if shield absorbed the damage, false if shield is down.
+     */
+    damageShield(damage: number): boolean {
+        if (!this.shieldActive || !this.isComplete) return false;
+
+        this.shieldHealth -= damage;
+        
+        if (this.shieldHealth <= 0) {
+            this.shieldHealth = 0;
+            this.shieldActive = false;
+            this.regenerationTimer = 0;
+        }
+        
+        return true;
+    }
+
+    /**
+     * Check if an enemy is blocked by the shield
+     */
+    isEnemyBlocked(enemyPosition: Vector2D): boolean {
+        if (!this.shieldActive || !this.isComplete) return false;
+        
+        const dx = enemyPosition.x - this.position.x;
+        const dy = enemyPosition.y - this.position.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        return distance <= this.shieldRadius;
+    }
+
+    /**
+     * Get shield health percentage (0-1)
+     */
+    getShieldHealthPercent(): number {
+        return this.shieldHealth / this.maxShieldHealth;
+    }
+}

@@ -85,7 +85,7 @@ The following buildings and heroes are exclusive to the Radiant faction:
 **Buildings:**
 - Minigun/Cannon
 - Gatling Tower
-- SpaceDustSwirler/Cyclone
+- Shield Tower
 
 **Heroes:**
 - Marine
@@ -117,7 +117,9 @@ The following heroes are exclusive to the Velaris faction:
 - (Additional Velaris heroes to be defined)
 
 **Buildings:**
-- (Velaris-specific buildings to be defined)
+- Striker Tower
+- Lock-on Laser Tower
+- SpaceDustSwirler/Cyclone
 
 ## Implementation Notes for AI Agents
 

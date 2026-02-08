@@ -10,7 +10,7 @@ import { Sun } from './entities/sun';
 import { Asteroid } from './entities/asteroid';
 import { SolarMirror } from './entities/solar-mirror';
 import { StellarForge } from './entities/stellar-forge';
-import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, CombatTarget } from './entities/buildings';
+import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, CombatTarget } from './entities/buildings';
 import { Unit } from './entities/unit';
 import { Starling } from './entities/starling';
 import { StarlingMergeGate } from './entities/starling-merge-gate';
@@ -409,6 +409,37 @@ export class GameState {
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
 
+                    // Apply shield blocking from enemy ShieldTowers
+                    for (const enemyPlayer of this.players) {
+                        if (enemyPlayer !== unit.owner) {
+                            for (const building of enemyPlayer.buildings) {
+                                if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
+                                    const dx = unit.position.x - building.position.x;
+                                    const dy = unit.position.y - building.position.y;
+                                    const distance = Math.sqrt(dx * dx + dy * dy);
+                                    
+                                    // If unit is inside shield radius, push it back out
+                                    if (distance < building.shieldRadius) {
+                                        const pushDistance = building.shieldRadius - distance;
+                                        // Avoid division by zero when unit is exactly at tower center
+                                        if (distance > Constants.SHIELD_CENTER_COLLISION_THRESHOLD) {
+                                            const dirX = dx / distance;
+                                            const dirY = dy / distance;
+                                            unit.position.x += dirX * pushDistance;
+                                            unit.position.y += dirY * pushDistance;
+                                        } else {
+                                            // Push in arbitrary direction when at center
+                                            unit.position.x += pushDistance;
+                                        }
+                                        // Stop unit's velocity when hitting shield
+                                        unit.velocity.x = 0;
+                                        unit.velocity.y = 0;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     if (unit instanceof Starling) {
                         this.applyDustPushFromMovingEntity(
                             unit.position,
@@ -787,6 +818,25 @@ export class GameState {
             }
             if (isBlocked) continue;
             
+            // Check if projectile is blocked by ShieldTower shields
+            let blockedByShield = false;
+            for (const player of this.players) {
+                for (const building of player.buildings) {
+                    if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
+                        // Shield blocks enemy projectiles but not friendly fire
+                        if (bullet.owner !== player && building.isEnemyBlocked(bullet.position)) {
+                            // Damage the shield instead of letting projectile through
+                            building.damageShield(bullet.damage);
+                            bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                            blockedByShield = true;
+                            break;
+                        }
+                    }
+                }
+                if (blockedByShield) break;
+            }
+            if (blockedByShield) continue;
+            
             // Check if healing bomb reached max range or lifetime - if so, explode
             if (bullet.isHealingBomb && bullet.healingBombOwner && bullet.shouldDespawn()) {
                 bullet.healingBombOwner.explodeHealingBomb(bullet.position);
@@ -1049,6 +1099,26 @@ export class GameState {
                 if (isBlocked) break;
             }
             if (isBlocked) continue;
+            
+            // Check if projectile is blocked by ShieldTower shields
+            let blockedByShield = false;
+            for (const player of this.players) {
+                for (const building of player.buildings) {
+                    if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
+                        // Shield blocks enemy projectiles but not friendly fire
+                        if (projectile.owner !== player && building.isEnemyBlocked(projectile.position)) {
+                            // Damage the shield instead of letting projectile through
+                            const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : Constants.DEFAULT_PROJECTILE_DAMAGE;
+                            building.damageShield(projectileDamage);
+                            projectile.distanceTraveledPx = projectile.maxRangePx; // Mark for removal
+                            blockedByShield = true;
+                            break;
+                        }
+                    }
+                }
+                if (blockedByShield) break;
+            }
+            if (blockedByShield) continue;
             
             // Apply fluid-like force to space dust particles
             const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
@@ -4395,14 +4465,14 @@ export class GameState {
         const position = new Vector2D(positionX, positionY);
         
         // Check faction restrictions for Radiant-specific buildings
-        const radiantOnlyBuildings = ['Minigun', 'Cannon', 'Gatling', 'GatlingTower', 'SpaceDustSwirler'];
+        const radiantOnlyBuildings = ['Minigun', 'Cannon', 'Gatling', 'GatlingTower', 'ShieldTower'];
         if (radiantOnlyBuildings.includes(buildingType) && player.faction !== Faction.RADIANT) {
             // Aurum and Velaris cannot build Radiant-specific buildings
             return;
         }
         
         // Check faction restrictions for Velaris-specific buildings
-        const velarisOnlyBuildings = ['StrikerTower', 'LockOnLaserTower'];
+        const velarisOnlyBuildings = ['StrikerTower', 'LockOnLaserTower', 'SpaceDustSwirler'];
         if (velarisOnlyBuildings.includes(buildingType) && player.faction !== Faction.VELARIS) {
             // Radiant and Aurum cannot build Velaris-specific buildings
             return;
@@ -4422,6 +4492,8 @@ export class GameState {
             cost = Constants.STRIKER_TOWER_COST;
         } else if (buildingType === 'LockOnLaserTower') {
             cost = Constants.LOCKON_TOWER_COST;
+        } else if (buildingType === 'ShieldTower') {
+            cost = Constants.SHIELD_TOWER_COST;
         }
         
         if (player.spendEnergy(cost)) {
@@ -4438,6 +4510,8 @@ export class GameState {
                 player.buildings.push(new StrikerTower(position, player));
             } else if (buildingType === 'LockOnLaserTower') {
                 player.buildings.push(new LockOnLaserTower(position, player));
+            } else if (buildingType === 'ShieldTower') {
+                player.buildings.push(new ShieldTower(position, player));
             }
         }
     }
