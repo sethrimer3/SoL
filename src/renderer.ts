@@ -862,10 +862,19 @@ export class GameRenderer {
             shape.angle += shape.speed * deltaTime;
         });
 
-        // Create an offscreen canvas for XOR composition
+        // Calculate bounding box for optimization
+        const padding = baseSize * 2;
+        const minX = Math.max(0, Math.floor(screenPos.x - padding));
+        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
+        const minY = Math.max(0, Math.floor(screenPos.y - padding));
+        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
+        const cropWidth = maxX - minX;
+        const cropHeight = maxY - minY;
+
+        // Create a smaller offscreen canvas for better performance
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvas.width;
-        tempCanvas.height = this.canvas.height;
+        tempCanvas.width = cropWidth;
+        tempCanvas.height = cropHeight;
         const tempCtx = tempCanvas.getContext('2d')!;
 
         // Draw all squares filled on the temp canvas
@@ -874,8 +883,8 @@ export class GameRenderer {
             const size = baseSize * shape.size;
             const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
             const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
-            const x = screenPos.x + offsetX;
-            const y = screenPos.y + offsetY;
+            const x = screenPos.x + offsetX - minX;
+            const y = screenPos.y + offsetY - minY;
             
             tempCtx.save();
             tempCtx.translate(x, y);
@@ -885,39 +894,34 @@ export class GameRenderer {
         });
 
         // Get the image data to detect edges
-        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
         const data = imageData.data;
 
         // Draw glowing outline where filled areas border empty areas
         this.ctx.save();
         this.ctx.strokeStyle = displayColor;
         this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 8;
+        this.ctx.shadowBlur = 10;
         this.ctx.lineWidth = 2;
+        this.ctx.fillStyle = displayColor;
 
-        // Simple edge detection: draw a line at the boundary of filled regions
-        const width = tempCanvas.width;
-        const height = tempCanvas.height;
-        
-        // Use a path to draw the outline
-        this.ctx.beginPath();
-        
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const idx = (y * width + x) * 4;
+        // Edge detection: draw pixels at the boundary of filled regions
+        for (let y = 1; y < cropHeight - 1; y++) {
+            for (let x = 1; x < cropWidth - 1; x++) {
+                const idx = (y * cropWidth + x) * 4;
                 const alpha = data[idx + 3];
                 
                 // Check if this pixel is filled
                 if (alpha > 128) {
                     // Check if any neighbor is empty
                     const hasEmptyNeighbor = 
-                        data[((y - 1) * width + x) * 4 + 3] < 128 ||  // top
-                        data[((y + 1) * width + x) * 4 + 3] < 128 ||  // bottom
-                        data[(y * width + (x - 1)) * 4 + 3] < 128 ||  // left
-                        data[(y * width + (x + 1)) * 4 + 3] < 128;    // right
+                        data[((y - 1) * cropWidth + x) * 4 + 3] < 128 ||  // top
+                        data[((y + 1) * cropWidth + x) * 4 + 3] < 128 ||  // bottom
+                        data[(y * cropWidth + (x - 1)) * 4 + 3] < 128 ||  // left
+                        data[(y * cropWidth + (x + 1)) * 4 + 3] < 128;    // right
                     
                     if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(x, y, 1, 1);
+                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
                     }
                 }
             }
@@ -945,10 +949,19 @@ export class GameRenderer {
             shape.angle += shape.speed * deltaTime;
         });
 
-        // Create an offscreen canvas for XOR composition
+        // Calculate bounding box for optimization
+        const padding = baseSize * 2;
+        const minX = Math.max(0, Math.floor(screenPos.x - padding));
+        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
+        const minY = Math.max(0, Math.floor(screenPos.y - padding));
+        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
+        const cropWidth = maxX - minX;
+        const cropHeight = maxY - minY;
+
+        // Create a smaller offscreen canvas for better performance
         const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = this.canvas.width;
-        tempCanvas.height = this.canvas.height;
+        tempCanvas.width = cropWidth;
+        tempCanvas.height = cropHeight;
         const tempCtx = tempCanvas.getContext('2d')!;
 
         // Draw all triangles filled on the temp canvas
@@ -957,8 +970,8 @@ export class GameRenderer {
             const size = baseSize * shape.size;
             const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
             const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
-            const x = screenPos.x + offsetX;
-            const y = screenPos.y + offsetY;
+            const x = screenPos.x + offsetX - minX;
+            const y = screenPos.y + offsetY - minY;
             
             tempCtx.save();
             tempCtx.translate(x, y);
@@ -981,36 +994,34 @@ export class GameRenderer {
         });
 
         // Get the image data to detect edges
-        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
         const data = imageData.data;
 
         // Draw glowing outline where filled areas border empty areas
         this.ctx.save();
         this.ctx.strokeStyle = displayColor;
         this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 8;
+        this.ctx.shadowBlur = 10;
         this.ctx.lineWidth = 2;
+        this.ctx.fillStyle = displayColor;
 
-        // Simple edge detection: draw a line at the boundary of filled regions
-        const width = tempCanvas.width;
-        const height = tempCanvas.height;
-        
-        for (let y = 1; y < height - 1; y++) {
-            for (let x = 1; x < width - 1; x++) {
-                const idx = (y * width + x) * 4;
+        // Edge detection: draw pixels at the boundary of filled regions
+        for (let y = 1; y < cropHeight - 1; y++) {
+            for (let x = 1; x < cropWidth - 1; x++) {
+                const idx = (y * cropWidth + x) * 4;
                 const alpha = data[idx + 3];
                 
                 // Check if this pixel is filled
                 if (alpha > 128) {
                     // Check if any neighbor is empty
                     const hasEmptyNeighbor = 
-                        data[((y - 1) * width + x) * 4 + 3] < 128 ||  // top
-                        data[((y + 1) * width + x) * 4 + 3] < 128 ||  // bottom
-                        data[(y * width + (x - 1)) * 4 + 3] < 128 ||  // left
-                        data[(y * width + (x + 1)) * 4 + 3] < 128;    // right
+                        data[((y - 1) * cropWidth + x) * 4 + 3] < 128 ||  // top
+                        data[((y + 1) * cropWidth + x) * 4 + 3] < 128 ||  // bottom
+                        data[(y * cropWidth + (x - 1)) * 4 + 3] < 128 ||  // left
+                        data[(y * cropWidth + (x + 1)) * 4 + 3] < 128;    // right
                     
                     if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(x, y, 1, 1);
+                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
                     }
                 }
             }
