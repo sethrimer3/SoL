@@ -6,6 +6,7 @@ import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, 
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
+import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 
 class GameController {
     public game: GameState | null = null;
@@ -43,6 +44,12 @@ class GameController {
     private lastTapPosition: Vector2D | null = null; // Position of last tap
     private readonly DOUBLE_TAP_THRESHOLD_MS = 300; // Max time between taps (ms)
     private readonly DOUBLE_TAP_POSITION_THRESHOLD = 30; // Max distance between taps (pixels)
+
+    // P2P Multiplayer properties
+    private network: MultiplayerNetworkManager | null = null;
+    private isMultiplayer: boolean = false;
+    private tickAccumulator: number = 0;
+    private readonly TICK_INTERVAL_MS: number = 1000 / 30; // 30 ticks/second (33.333... ms)
 
     private abilityArrowStarts: Vector2D[] = [];
 
@@ -976,10 +983,19 @@ class GameController {
     }
 
     private sendNetworkCommand(command: string, data: Record<string, unknown>): void {
-        if (!this.game || !this.game.networkManager) {
+        // LAN multiplayer
+        if (this.game && this.game.networkManager) {
+            this.game.sendGameCommand(command, data);
             return;
         }
-        this.game.sendGameCommand(command, data);
+        
+        // P2P multiplayer
+        if (this.isMultiplayer && this.network) {
+            this.network.sendCommand(command, data);
+            return;
+        }
+        
+        // Single-player: No-op (game state already updated locally before calling this)
     }
 
     private surrender(): void {
@@ -1047,6 +1063,57 @@ class GameController {
 
         // Set up input handlers
         this.setupInputHandlers(canvas);
+    }
+
+    /**
+     * Initialize P2P multiplayer mode
+     */
+    initializeMultiplayer(supabaseUrl: string, supabaseKey: string, playerId: string): void {
+        console.log('[GameController] Initializing P2P multiplayer...');
+        
+        this.network = new MultiplayerNetworkManager(supabaseUrl, supabaseKey, playerId);
+        this.isMultiplayer = true;
+
+        this.setupNetworkEvents();
+    }
+
+    /**
+     * Setup network event handlers for P2P multiplayer
+     */
+    private setupNetworkEvents(): void {
+        if (!this.network) return;
+
+        this.network.on(NetworkEvent.MATCH_CREATED, (data) => {
+            console.log('[GameController] P2P match created:', data.match.id);
+        });
+
+        this.network.on(NetworkEvent.PLAYER_JOINED, (data) => {
+            console.log('[GameController] Player joined:', data.username);
+        });
+
+        this.network.on(NetworkEvent.CONNECTING, () => {
+            console.log('[GameController] Establishing P2P connections...');
+        });
+
+        this.network.on(NetworkEvent.CONNECTED, () => {
+            console.log('[GameController] All players connected!');
+        });
+
+        this.network.on(NetworkEvent.MATCH_STARTED, (data) => {
+            console.log('[GameController] P2P match started! Seed:', data.seed);
+        });
+
+        this.network.on(NetworkEvent.COMMAND_RECEIVED, (data) => {
+            console.log('[GameController] Command received:', data.command);
+        });
+
+        this.network.on(NetworkEvent.MATCH_ENDED, (data) => {
+            console.log('[GameController] P2P match ended:', data.reason);
+        });
+
+        this.network.on(NetworkEvent.ERROR, (data) => {
+            console.error('[GameController] Network error:', data.error);
+        });
     }
 
     private startNewGame(settings: GameSettings): void {
@@ -3102,6 +3169,19 @@ class GameController {
         // Don't update game logic if paused
         if (this.isPaused) return;
 
+        if (this.isMultiplayer) {
+            this.updateMultiplayer(deltaTime);
+        } else {
+            this.updateSinglePlayer(deltaTime);
+        }
+    }
+
+    /**
+     * Update single-player game (or LAN)
+     */
+    private updateSinglePlayer(deltaTime: number): void {
+        if (!this.game) return;
+
         // Update screen shake
         this.renderer.updateScreenShake(deltaTime);
 
@@ -3127,6 +3207,83 @@ class GameController {
         for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
             const gate = this.game.warpGates[i];
             gate.update(deltaTime);
+            
+            if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
+                this.scatterParticles(gate.position);
+                this.renderer.createWarpGateShockwave(gate.position);
+            }
+
+            if (gate.hasDissipated) {
+                this.unlinkMirrorsFromWarpGate(gate);
+                this.scatterParticles(gate.position);
+                this.renderer.createWarpGateShockwave(gate.position);
+                if (this.selectedWarpGate === gate) {
+                    this.clearWarpGateSelection();
+                }
+                this.game.warpGates.splice(i, 1);
+            }
+        }
+
+        for (const explosion of this.game.starlingMergeGateExplosions) {
+            this.scatterParticles(explosion);
+            this.renderer.createWarpGateShockwave(explosion);
+        }
+    }
+
+    /**
+     * Update P2P multiplayer game with fixed timestep
+     */
+    private updateMultiplayer(deltaTime: number): void {
+        if (!this.network || !this.game) return;
+
+        // Update screen shake
+        this.renderer.updateScreenShake(deltaTime);
+
+        this.updateStarlingMergeHold();
+        this.updateMirrorWarpGateHold();
+
+        if (this.mirrorCommandMode === 'warpgate' && !this.canCreateWarpGateFromSelectedMirrors()) {
+            this.mirrorCommandMode = null;
+        }
+
+        // Accumulate time for fixed timestep
+        this.tickAccumulator += deltaTime * 1000; // Convert to milliseconds
+
+        // Process ticks
+        while (this.tickAccumulator >= this.TICK_INTERVAL_MS) {
+            // Get synchronized commands for this tick
+            const commands = this.network.getNextTickCommands();
+
+            if (commands) {
+                // Execute all commands for this tick (already deterministic via GameState)
+                this.game.executeCommands(commands);
+
+                // Advance to next tick
+                this.network.advanceTick();
+
+                // Check if game has ended
+                const winner = this.game.checkVictoryConditions();
+                if (winner && this.game.isRunning) {
+                    this.game.isRunning = false;
+                }
+
+                // Update game state (deterministic simulation)
+                if (this.game.isRunning) {
+                    this.game.update(this.TICK_INTERVAL_MS / 1000);
+                }
+
+                this.tickAccumulator -= this.TICK_INTERVAL_MS;
+            } else {
+                // Waiting for commands from other players
+                break;
+            }
+        }
+
+        // Update warp gates with fixed timestep (multiplayer uses fixed ticks for determinism)
+        const tickDeltaTime = this.TICK_INTERVAL_MS / 1000;
+        for (let i = this.game.warpGates.length - 1; i >= 0; i--) {
+            const gate = this.game.warpGates[i];
+            gate.update(tickDeltaTime);
             
             if (!gate.isComplete && gate.isCharging && !gate.isCancelling && gate.shouldEmitShockwave()) {
                 this.scatterParticles(gate.position);

@@ -11,6 +11,9 @@ import { MenuAtmosphereLayer } from './menu/atmosphere';
 import { ParticleMenuLayer } from './menu/particle-layer';
 import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
 import { BUILD_NUMBER } from './build-info';
+import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
+import { getSupabaseConfig } from './supabase-config';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Re-export types for backward compatibility
 export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
@@ -34,8 +37,9 @@ export interface GameSettings {
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
     username: string; // Player's username for multiplayer
-    gameMode: 'ai' | 'online' | 'lan'; // Game mode selection
+    gameMode: 'ai' | 'online' | 'lan' | 'p2p'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
+    multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
 
 interface LanLobbyEntry {
@@ -62,7 +66,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -71,6 +75,10 @@ export class MainMenu {
     private lanServerListTimeout: number | null = null; // Track timeout for cleanup
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
+    private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
+    private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
+    private p2pMatchName: string = ''; // Track P2P match name
+    private p2pMaxPlayers: number = 2; // Track P2P max players
     private mainScreenRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
     private visibilityHandler: (() => void) | null = null;
@@ -1615,6 +1623,577 @@ export class MainMenu {
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
+    private renderP2PScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'P2P Multiplayer (Beta)';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Host match button
+        const hostButton = this.createButton('HOST MATCH', () => {
+            this.currentScreen = 'p2p-host';
+            this.startMenuTransition();
+            this.renderP2PHostScreen(this.contentElement);
+        }, '#00AA00');
+        hostButton.style.marginBottom = '20px';
+        hostButton.style.padding = '15px 40px';
+        hostButton.style.fontSize = '28px';
+        container.appendChild(hostButton);
+
+        // Join match button
+        const joinButton = this.createButton('JOIN MATCH', () => {
+            this.currentScreen = 'p2p-join';
+            this.startMenuTransition();
+            this.renderP2PJoinScreen(this.contentElement);
+        }, '#0088FF');
+        joinButton.style.marginBottom = '40px';
+        joinButton.style.padding = '15px 40px';
+        joinButton.style.fontSize = '28px';
+        container.appendChild(joinButton);
+
+        // Back button
+        const backButton = this.createButton('BACK', () => {
+            this.currentScreen = 'game-mode-select';
+            this.startMenuTransition();
+            this.renderGameModeSelectionScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(backButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderP2PHostScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Host P2P Match';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Create form container
+        const formContainer = document.createElement('div');
+        formContainer.style.maxWidth = '500px';
+        formContainer.style.width = '100%';
+        formContainer.style.padding = '20px';
+        formContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        formContainer.style.borderRadius = '12px';
+        formContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        formContainer.style.marginBottom = '20px';
+        container.appendChild(formContainer);
+
+        // Match name input
+        const matchNameLabel = document.createElement('label');
+        matchNameLabel.textContent = 'Match Name:';
+        matchNameLabel.style.fontSize = '20px';
+        matchNameLabel.style.color = '#FFFFFF';
+        matchNameLabel.style.marginBottom = '8px';
+        matchNameLabel.style.display = 'block';
+        formContainer.appendChild(matchNameLabel);
+
+        const matchNameInput = document.createElement('input');
+        matchNameInput.type = 'text';
+        matchNameInput.value = `${this.settings.username}'s Match`;
+        matchNameInput.placeholder = 'Enter match name';
+        matchNameInput.style.fontSize = '18px';
+        matchNameInput.style.padding = '8px 15px';
+        matchNameInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        matchNameInput.style.color = '#FFFFFF';
+        matchNameInput.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        matchNameInput.style.borderRadius = '5px';
+        matchNameInput.style.fontFamily = 'inherit';
+        matchNameInput.style.width = '100%';
+        matchNameInput.style.marginBottom = '20px';
+        matchNameInput.style.boxSizing = 'border-box';
+        formContainer.appendChild(matchNameInput);
+
+        // Max players input
+        const maxPlayersLabel = document.createElement('label');
+        maxPlayersLabel.textContent = 'Max Players (2-8):';
+        maxPlayersLabel.style.fontSize = '20px';
+        maxPlayersLabel.style.color = '#FFFFFF';
+        maxPlayersLabel.style.marginBottom = '8px';
+        maxPlayersLabel.style.display = 'block';
+        formContainer.appendChild(maxPlayersLabel);
+
+        const maxPlayersInput = document.createElement('input');
+        maxPlayersInput.type = 'number';
+        maxPlayersInput.min = '2';
+        maxPlayersInput.max = '8';
+        maxPlayersInput.value = '2';
+        maxPlayersInput.style.fontSize = '18px';
+        maxPlayersInput.style.padding = '8px 15px';
+        maxPlayersInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        maxPlayersInput.style.color = '#FFFFFF';
+        maxPlayersInput.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        maxPlayersInput.style.borderRadius = '5px';
+        maxPlayersInput.style.fontFamily = 'inherit';
+        maxPlayersInput.style.width = '100%';
+        maxPlayersInput.style.boxSizing = 'border-box';
+        formContainer.appendChild(maxPlayersInput);
+
+        // Match info container (hidden initially, shown after match creation)
+        const matchInfoContainer = document.createElement('div');
+        matchInfoContainer.style.maxWidth = '600px';
+        matchInfoContainer.style.width = '100%';
+        matchInfoContainer.style.padding = '20px';
+        matchInfoContainer.style.backgroundColor = 'rgba(0, 100, 0, 0.2)';
+        matchInfoContainer.style.borderRadius = '12px';
+        matchInfoContainer.style.border = '2px solid rgba(0, 255, 136, 0.4)';
+        matchInfoContainer.style.marginBottom = '20px';
+        matchInfoContainer.style.display = 'none';
+        container.appendChild(matchInfoContainer);
+
+        const matchIdLabel = document.createElement('div');
+        matchIdLabel.textContent = 'SHARE THIS CODE:';
+        matchIdLabel.style.fontSize = '18px';
+        matchIdLabel.style.color = '#00FF88';
+        matchIdLabel.style.marginBottom = '10px';
+        matchIdLabel.style.textAlign = 'center';
+        matchInfoContainer.appendChild(matchIdLabel);
+
+        const matchIdText = document.createElement('div');
+        matchIdText.textContent = '';
+        matchIdText.style.fontSize = '32px';
+        matchIdText.style.color = '#FFFFFF';
+        matchIdText.style.marginBottom = '15px';
+        matchIdText.style.textAlign = 'center';
+        matchIdText.style.fontFamily = 'monospace';
+        matchIdText.style.letterSpacing = '4px';
+        matchInfoContainer.appendChild(matchIdText);
+
+        const copyButton = this.createButton('COPY CODE', async () => {
+            try {
+                await navigator.clipboard.writeText(matchIdText.textContent || '');
+                matchIdLabel.textContent = 'CODE COPIED!';
+                setTimeout(() => {
+                    matchIdLabel.textContent = 'SHARE THIS CODE:';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy match ID:', err);
+                matchIdLabel.textContent = 'Failed to copy. Please copy manually.';
+                setTimeout(() => {
+                    matchIdLabel.textContent = 'SHARE THIS CODE:';
+                }, 2000);
+            }
+        }, '#00FF88');
+        copyButton.style.padding = '10px 30px';
+        copyButton.style.fontSize = '18px';
+        matchInfoContainer.appendChild(copyButton);
+
+        // Players list container
+        const playersContainer = document.createElement('div');
+        playersContainer.style.maxWidth = '600px';
+        playersContainer.style.width = '100%';
+        playersContainer.style.padding = '20px';
+        playersContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        playersContainer.style.borderRadius = '12px';
+        playersContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        playersContainer.style.marginBottom = '20px';
+        playersContainer.style.display = 'none';
+        container.appendChild(playersContainer);
+
+        const playersTitle = document.createElement('h3');
+        playersTitle.textContent = 'Players:';
+        playersTitle.style.fontSize = '24px';
+        playersTitle.style.color = '#FFD700';
+        playersTitle.style.marginBottom = '15px';
+        playersTitle.style.textAlign = 'center';
+        playersContainer.appendChild(playersTitle);
+
+        const playersList = document.createElement('div');
+        playersList.style.display = 'flex';
+        playersList.style.flexDirection = 'column';
+        playersList.style.gap = '10px';
+        playersContainer.appendChild(playersList);
+
+        // Status message container
+        const statusMessage = document.createElement('div');
+        statusMessage.style.fontSize = '18px';
+        statusMessage.style.color = '#FF6666';
+        statusMessage.style.marginBottom = '20px';
+        statusMessage.style.textAlign = 'center';
+        statusMessage.style.display = 'none';
+        container.appendChild(statusMessage);
+
+        // Create match button
+        const createButton = this.createButton('CREATE MATCH', async () => {
+            const config = getSupabaseConfig();
+            if (!config.url || !config.anonKey) {
+                statusMessage.textContent = 'Supabase not configured. Cannot create P2P match.';
+                statusMessage.style.display = 'block';
+                return;
+            }
+
+            createButton.disabled = true;
+            createButton.textContent = 'CREATING...';
+
+            const matchName = matchNameInput.value.trim() || `${this.settings.username}'s Match`;
+            const maxPlayers = Math.max(2, Math.min(8, parseInt(maxPlayersInput.value) || 2));
+
+            this.p2pMatchName = matchName;
+            this.p2pMaxPlayers = maxPlayers;
+
+            const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            this.multiplayerNetworkManager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
+
+            // Set up event listeners
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.MATCH_CREATED, (data) => {
+                const match: Match = data.match;
+                matchIdText.textContent = match.id.substring(0, 8).toUpperCase();
+                matchInfoContainer.style.display = 'block';
+                playersContainer.style.display = 'block';
+                formContainer.style.display = 'none';
+                createButton.style.display = 'none';
+                startButton.style.display = 'block';
+                
+                this.p2pMatchPlayers = [{
+                    id: playerId,
+                    match_id: match.id,
+                    player_id: playerId,
+                    role: 'host',
+                    connected: true,
+                    username: this.settings.username,
+                    faction: null
+                }];
+                this.updatePlayersList(playersList);
+            });
+
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.PLAYER_JOINED, (data) => {
+                this.fetchAndUpdatePlayers(playersList);
+            });
+
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.MATCH_STARTED, () => {
+                this.settings.multiplayerNetworkManager = this.multiplayerNetworkManager || undefined;
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            });
+
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
+                statusMessage.textContent = `Error: ${data.error}`;
+                statusMessage.style.display = 'block';
+                createButton.disabled = false;
+                createButton.textContent = 'CREATE MATCH';
+            });
+
+            // Create the match
+            const match = await this.multiplayerNetworkManager.createMatch({
+                matchName: matchName,
+                username: this.settings.username,
+                maxPlayers: maxPlayers,
+                gameSettings: {}
+            });
+
+            if (!match) {
+                createButton.disabled = false;
+                createButton.textContent = 'CREATE MATCH';
+            }
+        }, '#00AA00');
+        createButton.style.marginBottom = '20px';
+        createButton.style.padding = '15px 40px';
+        createButton.style.fontSize = '24px';
+        container.appendChild(createButton);
+
+        // Start match button (shown after match creation)
+        const startButton = this.createButton('START MATCH', async () => {
+            if (!this.multiplayerNetworkManager) return;
+            
+            startButton.disabled = true;
+            startButton.textContent = 'STARTING...';
+            
+            await this.multiplayerNetworkManager.startMatch();
+        }, '#00FF88');
+        startButton.style.marginBottom = '20px';
+        startButton.style.padding = '15px 40px';
+        startButton.style.fontSize = '24px';
+        startButton.style.display = 'none';
+        container.appendChild(startButton);
+
+        // Cancel button
+        const cancelButton = this.createButton('CANCEL', () => {
+            if (this.multiplayerNetworkManager) {
+                void this.multiplayerNetworkManager.disconnect();
+                this.multiplayerNetworkManager = null;
+            }
+            this.currentScreen = 'p2p';
+            this.startMenuTransition();
+            this.renderP2PScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(cancelButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderP2PJoinScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        const screenWidth = window.innerWidth;
+        const isCompactLayout = screenWidth < 600;
+
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Join P2P Match';
+        title.style.fontSize = isCompactLayout ? '32px' : '48px';
+        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
+        title.style.color = '#FFD700';
+        title.style.textAlign = 'center';
+        title.style.maxWidth = '100%';
+        title.style.fontWeight = '300';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFD700';
+        container.appendChild(title);
+
+        // Match ID input container
+        const inputContainer = document.createElement('div');
+        inputContainer.style.maxWidth = '500px';
+        inputContainer.style.width = '100%';
+        inputContainer.style.padding = '20px';
+        inputContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        inputContainer.style.borderRadius = '12px';
+        inputContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        inputContainer.style.marginBottom = '20px';
+        container.appendChild(inputContainer);
+
+        const matchIdLabel = document.createElement('label');
+        matchIdLabel.textContent = 'Match ID:';
+        matchIdLabel.style.fontSize = '20px';
+        matchIdLabel.style.color = '#FFFFFF';
+        matchIdLabel.style.marginBottom = '8px';
+        matchIdLabel.style.display = 'block';
+        inputContainer.appendChild(matchIdLabel);
+
+        const matchIdInput = document.createElement('input');
+        matchIdInput.type = 'text';
+        matchIdInput.placeholder = 'Enter 8-character match ID';
+        matchIdInput.style.fontSize = '24px';
+        matchIdInput.style.padding = '12px 15px';
+        matchIdInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
+        matchIdInput.style.color = '#FFFFFF';
+        matchIdInput.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        matchIdInput.style.borderRadius = '5px';
+        matchIdInput.style.fontFamily = 'monospace';
+        matchIdInput.style.width = '100%';
+        matchIdInput.style.boxSizing = 'border-box';
+        matchIdInput.style.letterSpacing = '4px';
+        matchIdInput.style.textTransform = 'uppercase';
+        inputContainer.appendChild(matchIdInput);
+
+        // Status message
+        const statusMessage = document.createElement('div');
+        statusMessage.style.fontSize = '18px';
+        statusMessage.style.color = '#FFD700';
+        statusMessage.style.marginBottom = '20px';
+        statusMessage.style.textAlign = 'center';
+        statusMessage.style.display = 'none';
+        container.appendChild(statusMessage);
+
+        // Lobby container (shown after successful join)
+        const lobbyContainer = document.createElement('div');
+        lobbyContainer.style.maxWidth = '600px';
+        lobbyContainer.style.width = '100%';
+        lobbyContainer.style.padding = '20px';
+        lobbyContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.35)';
+        lobbyContainer.style.borderRadius = '12px';
+        lobbyContainer.style.border = '2px solid rgba(255, 215, 0, 0.25)';
+        lobbyContainer.style.marginBottom = '20px';
+        lobbyContainer.style.display = 'none';
+        container.appendChild(lobbyContainer);
+
+        const lobbyTitle = document.createElement('h3');
+        lobbyTitle.textContent = 'Match Lobby';
+        lobbyTitle.style.fontSize = '24px';
+        lobbyTitle.style.color = '#FFD700';
+        lobbyTitle.style.marginBottom = '15px';
+        lobbyTitle.style.textAlign = 'center';
+        lobbyContainer.appendChild(lobbyTitle);
+
+        const playersList = document.createElement('div');
+        playersList.style.display = 'flex';
+        playersList.style.flexDirection = 'column';
+        playersList.style.gap = '10px';
+        playersList.style.marginBottom = '15px';
+        lobbyContainer.appendChild(playersList);
+
+        const waitingMessage = document.createElement('div');
+        waitingMessage.textContent = 'Waiting for host to start...';
+        waitingMessage.style.fontSize = '18px';
+        waitingMessage.style.color = '#CCCCCC';
+        waitingMessage.style.textAlign = 'center';
+        waitingMessage.style.fontStyle = 'italic';
+        lobbyContainer.appendChild(waitingMessage);
+
+        // Join button
+        const joinButton = this.createButton('JOIN MATCH', async () => {
+            const config = getSupabaseConfig();
+            if (!config.url || !config.anonKey) {
+                statusMessage.textContent = 'Supabase not configured. Cannot join P2P match.';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
+                return;
+            }
+
+            const matchIdShort = matchIdInput.value.trim().toUpperCase();
+            if (!matchIdShort || matchIdShort.length < 6) {
+                statusMessage.textContent = 'Please enter a valid match ID (at least 6 characters).';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
+                return;
+            }
+
+            joinButton.disabled = true;
+            joinButton.textContent = 'JOINING...';
+            statusMessage.textContent = 'Connecting...';
+            statusMessage.style.color = '#FFD700';
+            statusMessage.style.display = 'block';
+
+            const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+            this.multiplayerNetworkManager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
+
+            // Set up event listeners
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.PLAYER_JOINED, () => {
+                statusMessage.textContent = 'Joined successfully!';
+                statusMessage.style.color = '#00FF88';
+                inputContainer.style.display = 'none';
+                joinButton.style.display = 'none';
+                lobbyContainer.style.display = 'block';
+                this.fetchAndUpdatePlayers(playersList);
+            });
+
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.MATCH_STARTED, () => {
+                this.settings.multiplayerNetworkManager = this.multiplayerNetworkManager || undefined;
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            });
+
+            this.multiplayerNetworkManager.on(P2PNetworkEvent.ERROR, (data) => {
+                statusMessage.textContent = `Error: ${data.error || 'Failed to join match'}`;
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
+                joinButton.disabled = false;
+                joinButton.textContent = 'JOIN MATCH';
+            });
+
+            // Find match by short ID prefix
+            const matches = await this.multiplayerNetworkManager.listMatches();
+            const match = matches.find(m => m.id.toUpperCase().startsWith(matchIdShort));
+
+            if (!match) {
+                statusMessage.textContent = 'Match not found. Please check the match ID.';
+                statusMessage.style.color = '#FF6666';
+                statusMessage.style.display = 'block';
+                joinButton.disabled = false;
+                joinButton.textContent = 'JOIN MATCH';
+                return;
+            }
+
+            // Join the match
+            const success = await this.multiplayerNetworkManager.joinMatch(match.id, this.settings.username);
+            if (!success) {
+                joinButton.disabled = false;
+                joinButton.textContent = 'JOIN MATCH';
+            } else {
+                // Start match connection
+                await this.multiplayerNetworkManager.startMatch();
+            }
+        }, '#0088FF');
+        joinButton.style.marginBottom = '20px';
+        joinButton.style.padding = '15px 40px';
+        joinButton.style.fontSize = '24px';
+        container.appendChild(joinButton);
+
+        // Leave button
+        const leaveButton = this.createButton('LEAVE', () => {
+            if (this.multiplayerNetworkManager) {
+                void this.multiplayerNetworkManager.disconnect();
+                this.multiplayerNetworkManager = null;
+            }
+            this.currentScreen = 'p2p';
+            this.startMenuTransition();
+            this.renderP2PScreen(this.contentElement);
+        }, '#666666');
+        container.appendChild(leaveButton);
+
+        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private updatePlayersList(playersList: HTMLElement): void {
+        playersList.innerHTML = '';
+        
+        for (const player of this.p2pMatchPlayers) {
+            const playerItem = document.createElement('div');
+            playerItem.style.padding = '10px';
+            playerItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            playerItem.style.borderRadius = '5px';
+            playerItem.style.display = 'flex';
+            playerItem.style.justifyContent = 'space-between';
+            playerItem.style.alignItems = 'center';
+
+            const playerName = document.createElement('span');
+            playerName.textContent = player.username;
+            playerName.style.fontSize = '18px';
+            playerName.style.color = '#FFFFFF';
+            playerItem.appendChild(playerName);
+
+            const playerRole = document.createElement('span');
+            playerRole.textContent = player.role === 'host' ? '(Host)' : '(Player)';
+            playerRole.style.fontSize = '14px';
+            playerRole.style.color = player.role === 'host' ? '#FFD700' : '#CCCCCC';
+            playerItem.appendChild(playerRole);
+
+            playersList.appendChild(playerItem);
+        }
+    }
+
+    private async fetchAndUpdatePlayers(playersList: HTMLElement): Promise<void> {
+        if (!this.multiplayerNetworkManager) return;
+        
+        const match = this.multiplayerNetworkManager.getCurrentMatch();
+        if (!match) return;
+
+        // Fetch players from Supabase
+        const config = getSupabaseConfig();
+        const supabase = createSupabaseClient(config.url, config.anonKey);
+        
+        const { data, error } = await supabase
+            .from('match_players')
+            .select('*')
+            .eq('match_id', match.id);
+
+        if (!error && data) {
+            this.p2pMatchPlayers = data as MatchPlayer[];
+            this.updatePlayersList(playersList);
+        }
+    }
+
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
@@ -1835,6 +2414,11 @@ export class MainMenu {
                 id: 'lan',
                 name: 'LAN',
                 description: 'Play on local network'
+            },
+            {
+                id: 'p2p',
+                name: 'P2P MULTIPLAYER',
+                description: 'Peer-to-peer multiplayer (Beta)'
             }
         ];
 
@@ -1848,7 +2432,7 @@ export class MainMenu {
             this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
         });
         this.carouselMenu.onSelect((option: MenuOption) => {
-            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan';
+            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan' | 'p2p';
             
             switch (option.id) {
                 case 'ai':
@@ -1870,6 +2454,12 @@ export class MainMenu {
                     this.currentScreen = 'lan';
                     this.startMenuTransition();
                     this.renderLANScreen(this.contentElement);
+                    break;
+                case 'p2p':
+                    // Show P2P menu
+                    this.currentScreen = 'p2p';
+                    this.startMenuTransition();
+                    this.renderP2PScreen(this.contentElement);
                     break;
             }
         });

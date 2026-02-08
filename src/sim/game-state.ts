@@ -5,6 +5,7 @@
 import { Vector2D, LightRay } from './math';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
+import { GameCommand as P2PGameCommand } from '../transport';
 import { getGameRNG } from '../seeded-random';
 import { Player } from './entities/player';
 import { Sun } from './entities/sun';
@@ -66,6 +67,7 @@ import {
 import { Faction } from './entities/player';
 export class GameState {
     players: Player[] = [];
+    private playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
     spaceDust: SpaceDustParticle[] = [];
     warpGates: WarpGate[] = [];
@@ -4231,63 +4233,117 @@ export class GameState {
         
         if (!player) return;
         
-        switch (cmd.command) {
+        // Use shared command routing logic (LAN uses 'command' and 'data')
+        this.executePlayerCommand(player, cmd.command, cmd.data);
+    }
+
+    /**
+     * Update the player name map for efficient P2P lookups
+     * Should be called whenever players array is modified
+     */
+    updatePlayerNameMap(): void {
+        this.playersByName.clear();
+        for (const player of this.players) {
+            this.playersByName.set(player.name, player);
+        }
+    }
+
+    /**
+     * Execute a command for a specific player using the shared routing logic
+     * @param player - Player to execute command for
+     * @param commandType - Type of command
+     * @param payload - Command payload/data
+     */
+    private executePlayerCommand(player: Player, commandType: string, payload: any): void {
+        switch (commandType) {
             case 'unit_move':
-                this.executeUnitMoveCommand(player, cmd.data);
+                this.executeUnitMoveCommand(player, payload);
                 break;
             case 'unit_target_structure':
-                this.executeUnitTargetStructureCommand(player, cmd.data);
+                this.executeUnitTargetStructureCommand(player, payload);
                 break;
             case 'unit_ability':
-                this.executeUnitAbilityCommand(player, cmd.data);
+                this.executeUnitAbilityCommand(player, payload);
                 break;
             case 'unit_path':
-                this.executeUnitPathCommand(player, cmd.data);
+                this.executeUnitPathCommand(player, payload);
                 break;
             case 'hero_purchase':
-                this.executeHeroPurchaseCommand(player, cmd.data);
+                this.executeHeroPurchaseCommand(player, payload);
                 break;
             case 'building_purchase':
-                this.executeBuildingPurchaseCommand(player, cmd.data);
+                this.executeBuildingPurchaseCommand(player, payload);
                 break;
             case 'mirror_purchase':
-                this.executeMirrorPurchaseCommand(player, cmd.data);
+                this.executeMirrorPurchaseCommand(player, payload);
                 break;
             case 'mirror_move':
-                this.executeMirrorMoveCommand(player, cmd.data);
+                this.executeMirrorMoveCommand(player, payload);
                 break;
             case 'mirror_link':
-                this.executeMirrorLinkCommand(player, cmd.data);
+                this.executeMirrorLinkCommand(player, payload);
                 break;
             case 'starling_merge':
-                this.executeStarlingMergeCommand(player, cmd.data);
+                this.executeStarlingMergeCommand(player, payload);
                 break;
             case 'foundry_production':
-                this.executeFoundryProductionCommand(player, cmd.data);
+                this.executeFoundryProductionCommand(player, payload);
                 break;
             case 'foundry_strafe_upgrade':
-                this.executeFoundryUpgradeCommand(player, cmd.data, 'strafe');
+                this.executeFoundryUpgradeCommand(player, payload, 'strafe');
                 break;
             case 'foundry_regen_upgrade':
-                this.executeFoundryUpgradeCommand(player, cmd.data, 'regen');
+                this.executeFoundryUpgradeCommand(player, payload, 'regen');
                 break;
             case 'foundry_attack_upgrade':
-                this.executeFoundryUpgradeCommand(player, cmd.data, 'attack');
+                this.executeFoundryUpgradeCommand(player, payload, 'attack');
                 break;
             case 'foundry_blink_upgrade':
-                this.executeFoundryUpgradeCommand(player, cmd.data, 'blink');
+                this.executeFoundryUpgradeCommand(player, payload, 'blink');
                 break;
             case 'striker_tower_fire':
-                this.executeStrikerTowerFireCommand(player, cmd.data);
+                this.executeStrikerTowerFireCommand(player, payload);
                 break;
             case 'forge_move':
-                this.executeForgeMoveCommand(player, cmd.data);
+                this.executeForgeMoveCommand(player, payload);
                 break;
             case 'set_rally_path':
-                this.executeSetRallyPathCommand(player, cmd.data);
+                this.executeSetRallyPathCommand(player, payload);
                 break;
             default:
-                console.warn('Unknown network command:', cmd.command);
+                console.warn('Unknown command type:', commandType);
+        }
+    }
+
+    /**
+     * Execute a P2P transport command (deterministic)
+     * This method accepts commands from the P2P multiplayer system
+     * @param cmd - Command from P2P transport system
+     * 
+     * NOTE: In the P2P system, cmd.playerId contains the player's name (not an ID).
+     * This is because SoL uses player names as identifiers throughout the game state.
+     */
+    executeCommand(cmd: P2PGameCommand): void {
+        // Find the player by name using efficient map lookup
+        // cmd.playerId is the player's name in SoL's system
+        const player = this.playersByName.get(cmd.playerId);
+        if (!player) {
+            console.warn('Player not found for P2P command:', cmd.playerId);
+            return;
+        }
+
+        // Use shared command routing logic
+        this.executePlayerCommand(player, cmd.commandType, cmd.payload);
+    }
+
+    /**
+     * Execute multiple P2P commands (for a tick)
+     * Commands are executed in the order provided (should be pre-sorted by the command queue)
+     * @param commands - Array of commands to execute
+     */
+    executeCommands(commands: P2PGameCommand[]): void {
+        for (const cmd of commands) {
+            this.executeCommand(cmd);
         }
     }
 
@@ -4797,6 +4853,9 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
         
         game.players.push(player);
     }
+    
+    // Update player name map after all players have been added
+    game.updatePlayerNameMap();
     
     // Initialize default minion paths (each forge targets the enemy's spawn location)
     if (game.players.length >= 2) {

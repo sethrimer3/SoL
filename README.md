@@ -113,10 +113,58 @@ python3 -m http.server 8080
 
 ## Multiplayer
 
-SoL supports two types of multiplayer:
+SoL supports three types of multiplayer:
 
 - **LAN Play**: Local area network multiplayer for 1v1 matches using WebRTC peer-to-peer. See [LAN_PLAY.md](./LAN_PLAY.md) for details.
+- **P2P Multiplayer (Beta)**: Peer-to-peer multiplayer over the internet using Supabase for signaling and WebRTC for game data. Supports 2-8 players with deterministic lockstep synchronization. See [P2P Multiplayer Setup](#p2p-multiplayer-setup) below for configuration.
 - **Online Play (Beta)**: Internet multiplayer using Supabase for fast, accurate RTS gameplay. See [ONLINE_PLAY.md](./ONLINE_PLAY.md) for setup and usage instructions.
+
+### P2P Multiplayer Setup
+
+P2P multiplayer uses Supabase for WebRTC signaling (match creation, joining) while game data flows peer-to-peer for low latency.
+
+#### Prerequisites
+1. Create a free Supabase project at [supabase.com](https://supabase.com)
+2. Run the P2P schema: Execute `supabase-p2p-schema.sql` in your Supabase SQL Editor
+3. Get your credentials from Settings > API in your Supabase dashboard
+
+#### Configuration
+Set environment variables before building:
+```bash
+export SUPABASE_URL=https://your-project.supabase.co
+export SUPABASE_ANON_KEY=your-anon-public-key-here
+npm run build
+```
+
+Or create a `.env` file (copy from `.env.example`) and use a tool like `dotenv`:
+```bash
+# .env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-public-key-here
+```
+
+#### Playing P2P Multiplayer
+1. **Host a Match**: 
+   - Select "P2P MULTIPLAYER" from the game mode menu
+   - Click "HOST MATCH"
+   - Enter a match name and select max players (2-8)
+   - Share the match code with friends
+   - Wait for players to join, then click "START MATCH"
+
+2. **Join a Match**:
+   - Select "P2P MULTIPLAYER" from the game mode menu
+   - Click "JOIN MATCH"
+   - Enter the match code from your friend
+   - Wait for the host to start the game
+
+#### Features
+- ✅ Deterministic lockstep synchronization
+- ✅ Peer-to-peer data transfer (low latency)
+- ✅ Support for 2-8 players
+- ✅ Automatic WebRTC connection establishment
+- ✅ Match codes for easy joining
+
+For detailed architecture and technical details, see [P2P_MULTIPLAYER_ARCHITECTURE.md](./P2P_MULTIPLAYER_ARCHITECTURE.md) and [MULTIPLAYER_QUICKSTART.md](./MULTIPLAYER_QUICKSTART.md).
 
 ## Legacy Python Implementation
 
