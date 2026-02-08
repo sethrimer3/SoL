@@ -22,6 +22,16 @@ type ForgeScriptState = {
     lastGameTime: number;
 };
 
+type AurumShapeState = {
+    shapes: Array<{
+        size: number;
+        speed: number;
+        angle: number;
+        offset: number;
+    }>;
+    lastGameTime: number;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -67,6 +77,11 @@ export class GameRenderer {
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
+    private readonly AURUM_EDGE_DETECTION_FILL_COLOR = 'white'; // Color used for edge detection in Aurum outline rendering
+    private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
+    private readonly AURUM_SEED_BASE_MULTIPLIER = 1000; // Base multiplier for generating pseudo-random seeds from position
+    private readonly AURUM_FORGE_SEED_MULTIPLIER = 137.5; // Prime-like multiplier for pseudo-random shape distribution
+    private readonly AURUM_FOUNDRY_SEED_MULTIPLIER = 157.3; // Prime-like multiplier for pseudo-random shape distribution
     private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
     private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
@@ -143,6 +158,9 @@ export class GameRenderer {
     private starlingParticleSeeds = new WeakMap<Starling, number>();
     private velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
     private velarisFoundrySeeds = new WeakMap<SubsidiaryFactory, number>();
+    private aurumForgeShapeStates = new WeakMap<StellarForge, AurumShapeState>();
+    private aurumFoundryShapeStates = new WeakMap<SubsidiaryFactory, AurumShapeState>();
+    private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
     private velarisWarpGateSeeds = new WeakMap<WarpGate, number>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
@@ -831,6 +849,188 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
+    /**
+     * Detect and draw edges from an offscreen canvas with filled shapes
+     * Used for Aurum outline rendering effect
+     */
+    private detectAndDrawEdges(
+        imageData: ImageData,
+        cropWidth: number,
+        cropHeight: number,
+        minX: number,
+        minY: number,
+        displayColor: string
+    ): void {
+        const data = imageData.data;
+
+        // Draw glowing outline where filled areas border empty areas
+        this.ctx.save();
+        this.ctx.strokeStyle = displayColor;
+        this.ctx.shadowColor = displayColor;
+        this.ctx.shadowBlur = 10;
+        this.ctx.lineWidth = 2;
+        this.ctx.fillStyle = displayColor;
+
+        // Edge detection: draw pixels at the boundary of filled regions
+        for (let y = 1; y < cropHeight - 1; y++) {
+            for (let x = 1; x < cropWidth - 1; x++) {
+                const idx = (y * cropWidth + x) * 4;
+                const alpha = data[idx + 3];
+                
+                // Check if this pixel is filled
+                if (alpha > this.AURUM_EDGE_ALPHA_THRESHOLD) {
+                    // Check if any neighbor is empty
+                    const hasEmptyNeighbor = 
+                        data[((y - 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // top
+                        data[((y + 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // bottom
+                        data[(y * cropWidth + (x - 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // left
+                        data[(y * cropWidth + (x + 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD;    // right
+                    
+                    if (hasEmptyNeighbor) {
+                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
+                    }
+                }
+            }
+        }
+        
+        this.ctx.restore();
+    }
+
+    /**
+     * Draw Aurum stellar forge with moving squares and outline-only rendering
+     */
+    private drawAurumForgeOutline(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        baseSize: number,
+        displayColor: string,
+        gameTime: number
+    ): void {
+        const state = this.getAurumForgeShapeState(forge, gameTime);
+        const deltaTime = gameTime - state.lastGameTime;
+        state.lastGameTime = gameTime;
+
+        // Update angles for each shape
+        state.shapes.forEach(shape => {
+            shape.angle += shape.speed * deltaTime;
+        });
+
+        // Calculate bounding box for optimization
+        const padding = baseSize * 2;
+        const minX = Math.max(0, Math.floor(screenPos.x - padding));
+        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
+        const minY = Math.max(0, Math.floor(screenPos.y - padding));
+        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
+        const cropWidth = maxX - minX;
+        const cropHeight = maxY - minY;
+
+        // Reuse or create offscreen canvas for better performance
+        if (!this.aurumOffscreenCanvas) {
+            this.aurumOffscreenCanvas = document.createElement('canvas');
+        }
+        const tempCanvas = this.aurumOffscreenCanvas;
+        tempCanvas.width = cropWidth;
+        tempCanvas.height = cropHeight;
+        const tempCtx = tempCanvas.getContext('2d')!;
+        
+        // Clear canvas
+        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
+
+        // Draw all squares filled on the temp canvas
+        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
+        state.shapes.forEach(shape => {
+            const size = baseSize * shape.size;
+            const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
+            const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
+            const x = screenPos.x + offsetX - minX;
+            const y = screenPos.y + offsetY - minY;
+            
+            tempCtx.save();
+            tempCtx.translate(x, y);
+            tempCtx.rotate(shape.angle);
+            tempCtx.fillRect(-size / 2, -size / 2, size, size);
+            tempCtx.restore();
+        });
+
+        // Get the image data and detect/draw edges
+        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
+        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
+    }
+
+    /**
+     * Draw Aurum foundry with moving triangles and outline-only rendering
+     */
+    private drawAurumFoundryOutline(
+        foundry: SubsidiaryFactory,
+        screenPos: Vector2D,
+        baseSize: number,
+        displayColor: string,
+        gameTime: number
+    ): void {
+        const state = this.getAurumFoundryShapeState(foundry, gameTime);
+        const deltaTime = gameTime - state.lastGameTime;
+        state.lastGameTime = gameTime;
+
+        // Update angles for each shape
+        state.shapes.forEach(shape => {
+            shape.angle += shape.speed * deltaTime;
+        });
+
+        // Calculate bounding box for optimization
+        const padding = baseSize * 2;
+        const minX = Math.max(0, Math.floor(screenPos.x - padding));
+        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
+        const minY = Math.max(0, Math.floor(screenPos.y - padding));
+        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
+        const cropWidth = maxX - minX;
+        const cropHeight = maxY - minY;
+
+        // Reuse or create offscreen canvas for better performance
+        if (!this.aurumOffscreenCanvas) {
+            this.aurumOffscreenCanvas = document.createElement('canvas');
+        }
+        const tempCanvas = this.aurumOffscreenCanvas;
+        tempCanvas.width = cropWidth;
+        tempCanvas.height = cropHeight;
+        const tempCtx = tempCanvas.getContext('2d')!;
+        
+        // Clear canvas
+        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
+
+        // Draw all triangles filled on the temp canvas
+        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
+        state.shapes.forEach(shape => {
+            const size = baseSize * shape.size;
+            const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
+            const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
+            const x = screenPos.x + offsetX - minX;
+            const y = screenPos.y + offsetY - minY;
+            
+            tempCtx.save();
+            tempCtx.translate(x, y);
+            tempCtx.rotate(shape.angle);
+            tempCtx.beginPath();
+            // Draw equilateral triangle
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
+                const px = Math.cos(angle) * size;
+                const py = Math.sin(angle) * size;
+                if (i === 0) {
+                    tempCtx.moveTo(px, py);
+                } else {
+                    tempCtx.lineTo(px, py);
+                }
+            }
+            tempCtx.closePath();
+            tempCtx.fill();
+            tempCtx.restore();
+        });
+
+        // Get the image data and detect/draw edges
+        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
+        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
+    }
+
     private getHeroSpritePath(unit: Unit): string | null {
         if (unit.owner.faction !== Faction.RADIANT) {
             return null;
@@ -1392,11 +1592,21 @@ export class GameRenderer {
             ? this.darkenColor(forgeColor, Constants.SHADE_OPACITY)
             : forgeColor;
         const isVelarisForge = forge.owner.faction === Faction.VELARIS;
+        const isAurumForge = forge.owner.faction === Faction.AURUM;
         const forgeSpritePath = this.getForgeSpritePath(forge);
         const forgeSprite = forgeSpritePath
             ? this.getTintedSprite(forgeSpritePath, tintColor)
             : null;
-        if (isVelarisForge) {
+        if (isAurumForge) {
+            // Draw Aurum forge with moving squares outline
+            this.drawAurumForgeOutline(
+                forge,
+                screenPos,
+                size,
+                displayColor,
+                game.gameTime
+            );
+        } else if (isVelarisForge) {
             this.drawVelarisForgeScript(
                 forge,
                 screenPos,
@@ -1738,6 +1948,64 @@ export class GameRenderer {
             this.velarisWarpGateSeeds.set(gate, seed);
         }
         return seed;
+    }
+
+    /**
+     * Get or initialize Aurum forge shape state
+     */
+    private getAurumForgeShapeState(forge: StellarForge, gameTime: number): AurumShapeState {
+        let state = this.aurumForgeShapeStates.get(forge);
+        if (!state) {
+            // Initialize with multiple squares of different sizes and speeds
+            const shapeCount = 12;
+            const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
+            const seed = forge.position.x * this.AURUM_SEED_BASE_MULTIPLIER + forge.position.y;
+            
+            for (let i = 0; i < shapeCount; i++) {
+                const random = (seed + i * this.AURUM_FORGE_SEED_MULTIPLIER) % 1000 / 1000;
+                const size = 0.3 + random * 1.2; // Sizes from 0.3 to 1.5
+                const speed = 0.15 + (random * 0.5); // Speeds from 0.15 to 0.65 rad/sec
+                const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
+                const offset = random * 0.4; // Random offset from center (0 to 0.4 of base size)
+                shapes.push({ size, speed, angle, offset });
+            }
+            
+            state = {
+                shapes,
+                lastGameTime: gameTime
+            };
+            this.aurumForgeShapeStates.set(forge, state);
+        }
+        return state;
+    }
+
+    /**
+     * Get or initialize Aurum foundry shape state
+     */
+    private getAurumFoundryShapeState(foundry: SubsidiaryFactory, gameTime: number): AurumShapeState {
+        let state = this.aurumFoundryShapeStates.get(foundry);
+        if (!state) {
+            // Initialize with multiple triangles of different sizes and speeds
+            const shapeCount = 10;
+            const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
+            const seed = foundry.position.x * this.AURUM_SEED_BASE_MULTIPLIER + foundry.position.y;
+            
+            for (let i = 0; i < shapeCount; i++) {
+                const random = (seed + i * this.AURUM_FOUNDRY_SEED_MULTIPLIER) % 1000 / 1000;
+                const size = 0.25 + random * 1.0; // Sizes from 0.25 to 1.25
+                const speed = 0.2 + (random * 0.6); // Speeds from 0.2 to 0.8 rad/sec
+                const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
+                const offset = random * 0.35; // Random offset from center
+                shapes.push({ size, speed, angle, offset });
+            }
+            
+            state = {
+                shapes,
+                lastGameTime: gameTime
+            };
+            this.aurumFoundryShapeStates.set(foundry, state);
+        }
+        return state;
     }
 
     /**
@@ -5580,7 +5848,22 @@ export class GameRenderer {
             this.drawLadAura(screenPos, radius, auraColor, ownerSide);
         }
 
-        if (isVelarisFoundry) {
+        const isAurumFoundry = building.owner.faction === Faction.AURUM;
+        
+        if (isAurumFoundry) {
+            // Draw Aurum foundry with moving triangles outline - slightly smaller
+            this.drawAurumFoundryOutline(
+                building,
+                screenPos,
+                radius * 0.85, // Slightly smaller than forge
+                displayColor,
+                game.gameTime
+            );
+            if (building.isSelected) {
+                this.drawBuildingSelectionIndicator(screenPos, radius);
+                this.drawFoundryButtons(building, screenPos);
+            }
+        } else if (isVelarisFoundry) {
             this.drawVelarisFoundrySigil(building, screenPos, radius, displayColor, game.gameTime, shouldDim);
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
