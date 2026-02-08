@@ -506,6 +506,49 @@ class GameController {
         return -1;
     }
 
+    private isWarpGateButtonAvailable(player: Player, buttonIndex: number): boolean {
+        const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const playerEnergy = player.energy;
+
+        if (player.faction === Faction.RADIANT) {
+            if (buttonIndex === 0) {
+                return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
+            }
+            if (buttonIndex === 1) {
+                return playerEnergy >= Constants.MINIGUN_COST;
+            }
+            if (buttonIndex === 2) {
+                return playerEnergy >= Constants.GATLING_COST;
+            }
+            if (buttonIndex === 3) {
+                return playerEnergy >= Constants.SHIELD_TOWER_COST;
+            }
+            return false;
+        }
+
+        if (player.faction === Faction.VELARIS) {
+            if (buttonIndex === 0) {
+                return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
+            }
+            if (buttonIndex === 1) {
+                return playerEnergy >= Constants.STRIKER_TOWER_COST;
+            }
+            if (buttonIndex === 2) {
+                return playerEnergy >= Constants.LOCKON_TOWER_COST;
+            }
+            if (buttonIndex === 3) {
+                return playerEnergy >= Constants.SWIRLER_COST;
+            }
+            return false;
+        }
+
+        if (buttonIndex === 0) {
+            return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
+        }
+
+        return false;
+    }
+
     private getWarpGateButtonDirection(buttonIndex: number): Vector2D | null {
         const directions = this.getRadialButtonOffsets(4);
         const direction = directions[buttonIndex];
@@ -1547,9 +1590,14 @@ class GameController {
                             this.renderer.highlightedButtonIndex = -1;
                         }
                     } else if (this.selectedWarpGate) {
-                        this.renderer.highlightedButtonIndex = dragDirection
-                            ? this.getNearestButtonIndexFromAngle(angle, 4)
-                            : -1;
+                        if (dragDirection && player) {
+                            const nearestIndex = this.getNearestButtonIndexFromAngle(angle, 4);
+                            this.renderer.highlightedButtonIndex = this.isWarpGateButtonAvailable(player, nearestIndex)
+                                ? nearestIndex
+                                : -1;
+                        } else {
+                            this.renderer.highlightedButtonIndex = -1;
+                        }
                     } else if (this.selectedBuildings.size === 1) {
                         // Foundry building has 4 buttons
                         const selectedBuilding = Array.from(this.selectedBuildings)[0];
@@ -1719,6 +1767,16 @@ class GameController {
                 if (this.selectedWarpGate) {
                     const buttonIndex = this.getWarpGateButtonIndexFromClick(this.selectedWarpGate, lastX, lastY);
                     if (buttonIndex >= 0) {
+                        if (!this.isWarpGateButtonAvailable(player, buttonIndex)) {
+                            isPanning = false;
+                            isMouseDown = false;
+                            this.isSelecting = false;
+                            this.selectionStartScreen = null;
+                            this.renderer.selectionStart = null;
+                            this.renderer.selectionEnd = null;
+                            this.endHold();
+                            return;
+                        }
                         const buttonWorldPos = this.getWarpGateButtonWorldPosition(this.selectedWarpGate, buttonIndex);
                         if (buttonWorldPos) {
                             this.renderer.createProductionButtonWave(buttonWorldPos);
@@ -2516,7 +2574,9 @@ class GameController {
                                 this.selectedMirrors.clear();
                             }
                         } else if (this.selectedWarpGate) {
-                            this.buildFromWarpGate(player, this.selectedWarpGate, this.renderer.highlightedButtonIndex);
+                            if (this.isWarpGateButtonAvailable(player, this.renderer.highlightedButtonIndex)) {
+                                this.buildFromWarpGate(player, this.selectedWarpGate, this.renderer.highlightedButtonIndex);
+                            }
                         } else if (this.selectedBuildings.size === 1) {
                             // Foundry building button selected
                             const selectedBuilding = Array.from(this.selectedBuildings)[0];

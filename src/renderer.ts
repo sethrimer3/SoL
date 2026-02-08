@@ -2996,28 +2996,66 @@ export class GameRenderer {
             if (isSelected) {
                 const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
                 const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
+                const hasSubFactory = gate.owner.buildings.some((building) => building instanceof SubsidiaryFactory);
+                const playerEnergy = gate.owner.energy;
                 
                 // Faction-specific building buttons
-                let buttonConfigs: Array<{ label: string; index: number }>;
+                let buttonConfigs: Array<{ label: string; index: number; isAvailable: boolean }>;
                 if (gate.owner.faction === Faction.RADIANT) {
                     buttonConfigs = [
-                        { label: 'Foundry', index: 0 },
-                        { label: 'Cannon', index: 1 },
-                        { label: 'Gatling', index: 2 },
-                        { label: 'Shield', index: 3 }
+                        {
+                            label: 'Foundry',
+                            index: 0,
+                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
+                        },
+                        {
+                            label: 'Cannon',
+                            index: 1,
+                            isAvailable: playerEnergy >= Constants.MINIGUN_COST
+                        },
+                        {
+                            label: 'Gatling',
+                            index: 2,
+                            isAvailable: playerEnergy >= Constants.GATLING_COST
+                        },
+                        {
+                            label: 'Shield',
+                            index: 3,
+                            isAvailable: playerEnergy >= Constants.SHIELD_TOWER_COST
+                        }
                     ];
                 } else if (gate.owner.faction === Faction.VELARIS) {
                     buttonConfigs = [
-                        { label: 'Foundry', index: 0 },
-                        { label: 'Striker', index: 1 },
-                        { label: 'Lock-on', index: 2 },
-                        { label: 'Cyclone', index: 3 }
+                        {
+                            label: 'Foundry',
+                            index: 0,
+                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
+                        },
+                        {
+                            label: 'Striker',
+                            index: 1,
+                            isAvailable: playerEnergy >= Constants.STRIKER_TOWER_COST
+                        },
+                        {
+                            label: 'Lock-on',
+                            index: 2,
+                            isAvailable: playerEnergy >= Constants.LOCKON_TOWER_COST
+                        },
+                        {
+                            label: 'Cyclone',
+                            index: 3,
+                            isAvailable: playerEnergy >= Constants.SWIRLER_COST
+                        }
                     ];
                 } else {
                     // Aurum or default - currently only Foundry is available
                     // TODO: Add Aurum-specific buildings in future updates
                     buttonConfigs = [
-                        { label: 'Foundry', index: 0 }
+                        {
+                            label: 'Foundry',
+                            index: 0,
+                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
+                        }
                     ];
                 }
                 
@@ -3029,18 +3067,24 @@ export class GameRenderer {
                     const btnX = screenPos.x + pos.x * buttonDistance;
                     const btnY = screenPos.y + pos.y * buttonDistance;
                     const labelOffset = buttonRadius + 14 * this.zoom;
-                    const isHighlighted = this.highlightedButtonIndex === config.index;
+                    const isHighlighted = config.isAvailable && this.highlightedButtonIndex === config.index;
 
-                    this.ctx.fillStyle = isHighlighted ? 'rgba(0, 255, 255, 0.6)' : '#444444';
-                    this.ctx.strokeStyle = '#00FFFF';
-                    this.ctx.lineWidth = isHighlighted ? 4 : 2;
+                    if (config.isAvailable) {
+                        this.ctx.fillStyle = isHighlighted ? 'rgba(0, 255, 255, 0.6)' : '#444444';
+                        this.ctx.strokeStyle = '#00FFFF';
+                        this.ctx.lineWidth = isHighlighted ? 4 : 2;
+                    } else {
+                        this.ctx.fillStyle = '#1F1F1F';
+                        this.ctx.strokeStyle = '#555555';
+                        this.ctx.lineWidth = 2;
+                    }
                     this.ctx.beginPath();
                     this.ctx.arc(btnX, btnY, buttonRadius, 0, Math.PI * 2);
                     this.ctx.fill();
                     this.ctx.stroke();
 
                     // Draw button label
-                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.fillStyle = config.isAvailable ? '#FFFFFF' : '#777777';
                     this.ctx.font = `${11 * this.zoom}px Doto`;
                     this.ctx.textAlign = 'center';
                     this.ctx.textBaseline = 'middle';
