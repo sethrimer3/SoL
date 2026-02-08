@@ -2,6 +2,16 @@
 
 This document outlines the remaining work needed to fully integrate the P2P multiplayer system with the existing SoL game.
 
+## 🎉 Recent Updates
+
+**2026-02-08**: Enhanced Phase 2 features implemented:
+- ✅ **Latency Measurement**: Added PING/PONG protocol for real-time RTT tracking in P2P connections
+- ✅ **State Hash Verification**: Implemented comprehensive desync detection system with automatic hash exchange
+- ✅ **Network Diagnostics**: Enhanced transport statistics with per-peer latency monitoring
+- ✅ **Event-driven Desync Alerts**: Added `DESYNC_DETECTED` event for game-level handling
+
+These improvements provide better visibility into network health and enable early detection of synchronization issues.
+
 ## ✅ Completed
 
 - [x] Supabase database schema (`supabase-p2p-schema.sql`)
@@ -14,6 +24,8 @@ This document outlines the remaining work needed to fully integrate the P2P mult
 - [x] WebRTC signaling via Supabase
 - [x] Comprehensive documentation
 - [x] Integration examples
+- [x] **Latency measurement (PING/PONG)**
+- [x] **State hash verification system**
 
 ## 🚧 TODO: Core Integration
 
@@ -370,14 +382,42 @@ setInterval(() => {
 
 **Priority: Phase 2**
 
+**Status: ✅ COMPLETE**
+
 **File**: `src/state-verification.ts`
 
-**Tasks**:
-- [ ] Implement deterministic state hash generation
-- [ ] Add hash exchange every N ticks
-- [ ] Implement hash comparison logic
-- [ ] Add desync detection
-- [ ] Add desync recovery (replay from last good state)
+**Completed tasks**:
+- [x] Implement StateVerifier class for hash exchange
+- [x] Add hash exchange every N ticks (when lockstep_enabled)
+- [x] Implement hash comparison logic across all peers
+- [x] Add desync detection event system
+- [x] Integrate with MultiplayerNetworkManager
+- [x] Clean up old hashes to prevent memory growth
+- [x] Add statistics tracking (hashes exchanged, desyncs detected)
+
+**Implementation details**:
+- State hashes are exchanged via the transport layer using a special command type
+- Desyncs trigger `DESYNC_DETECTED` network event
+- Configurable timeout for waiting for all player hashes
+- Automatic cleanup of old hash data
+- Only enabled when `lockstep_enabled` flag is set in match settings
+
+**Usage**:
+```typescript
+// State verification happens automatically when lockstep_enabled = true
+// Game code should call submitStateHash() periodically:
+if (multiplayerNetworkManager.isInMatch()) {
+  multiplayerNetworkManager.submitStateHash(gameState.stateHash);
+}
+
+// Listen for desync events:
+multiplayerNetworkManager.on(NetworkEvent.DESYNC_DETECTED, (event) => {
+  console.error('Desync detected!', event);
+  // Pause game, show error, or attempt recovery
+});
+```
+
+**Note**: Desync recovery (replay from last good state) is deferred to Phase 3.
 
 ### 11. Anti-Cheat System
 
@@ -393,9 +433,40 @@ setInterval(() => {
 - [ ] Rate limiting enforcement
 - [ ] Ban system for detected cheaters
 
+### 12. Network Diagnostics
+
+**Priority: Phase 2**
+
+**Status: ✅ COMPLETE**
+
+**File**: `src/p2p-transport.ts`
+
+**Completed tasks**:
+- [x] Implement PING/PONG protocol for latency measurement
+- [x] Track round-trip time (RTT) for each peer connection
+- [x] Report worst-case latency in transport statistics
+- [x] Periodic pings every 2 seconds
+- [x] Automatic cleanup of stale ping requests
+
+**Implementation details**:
+- PING/PONG messages sent over WebRTC data channel
+- RTT calculated from PING send time to PONG receipt
+- Per-peer latency tracking with worst-case aggregation
+- Non-intrusive to game commands (separate message type)
+- Helps identify network issues and monitor connection health
+
+**Usage**:
+```typescript
+// Get network statistics including latency
+const stats = multiplayerNetworkManager.getNetworkStats();
+console.log(`Latency: ${stats.latencyMs}ms`);
+console.log(`Packets sent: ${stats.packetsSent}`);
+console.log(`Packets received: ${stats.packetsReceived}`);
+```
+
 ## 📝 TODO: Documentation & Polish
 
-### 12. Update Existing Documentation
+### 13. Update Existing Documentation
 
 **Tasks**:
 - [x] Update main README.md with P2P multiplayer section (with setup instructions)
@@ -404,7 +475,7 @@ setInterval(() => {
 - [x] Add multiplayer to GAME_DESIGN.md
 - [x] Create TROUBLESHOOTING.md for common issues
 
-### 13. Add TypeScript Types
+### 14. Add TypeScript Types
 
 **Status: ✅ COMPLETE**
 
@@ -434,7 +505,7 @@ setInterval(() => {
 
 **Note**: Existing code uses `any` for flexibility during Phase 1. New code should use types from `multiplayer-types.ts`. Full migration can be done in Phase 2 without breaking changes.
 
-### 14. Performance Optimization
+### 15. Performance Optimization
 
 **Tasks**:
 - [ ] Profile command serialization/deserialization
@@ -445,7 +516,7 @@ setInterval(() => {
 
 ## 🔧 TODO: DevOps & Deployment
 
-### 15. CI/CD Integration
+### 16. CI/CD Integration
 
 **Tasks**:
 - [ ] Add TypeScript compilation to CI
@@ -453,7 +524,7 @@ setInterval(() => {
 - [ ] Add build size checks
 - [ ] Automate Supabase schema migration
 
-### 16. Production Configuration
+### 17. Production Configuration
 
 **Tasks**:
 - [ ] Set up production Supabase project
@@ -462,7 +533,7 @@ setInterval(() => {
 - [ ] Add error tracking (Sentry, etc.)
 - [ ] Add analytics for multiplayer usage
 
-### 17. Monitoring & Logging
+### 18. Monitoring & Logging
 
 **Tasks**:
 - [ ] Add structured logging
