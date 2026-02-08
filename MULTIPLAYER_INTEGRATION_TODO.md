@@ -400,9 +400,9 @@ setInterval(() => {
 **Tasks**:
 - [x] Update main README.md with P2P multiplayer section (with setup instructions)
 - [x] Update MULTIPLAYER_INTEGRATION_TODO.md with completion status
-- [ ] Update ARCHITECTURE.md with multiplayer integration details
-- [ ] Add multiplayer to GAME_DESIGN.md
-- [ ] Create TROUBLESHOOTING.md for common issues (optional)
+- [x] Update ARCHITECTURE.md with multiplayer integration details
+- [x] Add multiplayer to GAME_DESIGN.md
+- [x] Create TROUBLESHOOTING.md for common issues
 
 ### 13. Add TypeScript Types
 
