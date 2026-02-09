@@ -10,6 +10,13 @@ import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
 import { ParticleMenuLayer } from './menu/particle-layer';
 import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
+import { 
+    createSettingSection, 
+    createSelect, 
+    createToggle, 
+    createColorPicker, 
+    createTextInput 
+} from './menu/ui-helpers';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
@@ -2592,9 +2599,9 @@ export class MainMenu {
         settingsContainer.style.padding = '20px';
 
         // Difficulty setting
-        const difficultySection = this.createSettingSection(
+        const difficultySection = createSettingSection(
             'Difficulty',
-            this.createSelect(
+            createSelect(
                 ['easy', 'normal', 'hard'],
                 this.settings.difficulty,
                 (value) => {
@@ -2605,9 +2612,9 @@ export class MainMenu {
         settingsContainer.appendChild(difficultySection);
 
         // Username setting
-        const usernameSection = this.createSettingSection(
+        const usernameSection = createSettingSection(
             'Username',
-            this.createTextInput(
+            createTextInput(
                 this.settings.username,
                 (value) => {
                     this.saveUsername(value);
@@ -2618,9 +2625,9 @@ export class MainMenu {
         settingsContainer.appendChild(usernameSection);
 
         // Sound setting
-        const soundSection = this.createSettingSection(
+        const soundSection = createSettingSection(
             'Sound Effects',
-            this.createToggle(
+            createToggle(
                 this.settings.soundEnabled,
                 (value) => {
                     this.settings.soundEnabled = value;
@@ -2630,9 +2637,9 @@ export class MainMenu {
         settingsContainer.appendChild(soundSection);
 
         // Music setting
-        const musicSection = this.createSettingSection(
+        const musicSection = createSettingSection(
             'Music',
-            this.createToggle(
+            createToggle(
                 this.settings.musicEnabled,
                 (value) => {
                     this.settings.musicEnabled = value;
@@ -2641,9 +2648,9 @@ export class MainMenu {
         );
         settingsContainer.appendChild(musicSection);
 
-        const battleStatsSection = this.createSettingSection(
+        const battleStatsSection = createSettingSection(
             'Battle Stats Info',
-            this.createToggle(
+            createToggle(
                 this.settings.isBattleStatsInfoEnabled,
                 (value) => {
                     this.settings.isBattleStatsInfoEnabled = value;
@@ -2653,9 +2660,9 @@ export class MainMenu {
         settingsContainer.appendChild(battleStatsSection);
 
         // Screen shake setting
-        const screenShakeSection = this.createSettingSection(
+        const screenShakeSection = createSettingSection(
             'Screen Shake',
-            this.createToggle(
+            createToggle(
                 this.settings.screenShakeEnabled,
                 (value) => {
                     this.settings.screenShakeEnabled = value;
@@ -2665,9 +2672,9 @@ export class MainMenu {
         settingsContainer.appendChild(screenShakeSection);
 
         // Player Color setting
-        const playerColorSection = this.createSettingSection(
+        const playerColorSection = createSettingSection(
             'Player Color',
-            this.createColorPicker(
+            createColorPicker(
                 this.settings.playerColor,
                 (value) => {
                     this.settings.playerColor = value;
@@ -2677,9 +2684,9 @@ export class MainMenu {
         settingsContainer.appendChild(playerColorSection);
 
         // Enemy Color setting
-        const enemyColorSection = this.createSettingSection(
+        const enemyColorSection = createSettingSection(
             'Enemy Color',
-            this.createColorPicker(
+            createColorPicker(
                 this.settings.enemyColor,
                 (value) => {
                     this.settings.enemyColor = value;
@@ -2689,9 +2696,9 @@ export class MainMenu {
         settingsContainer.appendChild(enemyColorSection);
 
         // Graphics Quality setting
-        const graphicsQualitySection = this.createSettingSection(
+        const graphicsQualitySection = createSettingSection(
             'Graphics Quality',
-            this.createSelect(
+            createSelect(
                 ['low', 'medium', 'high'],
                 this.settings.graphicsQuality,
                 (value) => {
@@ -2702,9 +2709,9 @@ export class MainMenu {
         settingsContainer.appendChild(graphicsQualitySection);
 
         // Color Scheme setting
-        const colorSchemeSection = this.createSettingSection(
+        const colorSchemeSection = createSettingSection(
             'Color Scheme',
-            this.createSelect(
+            createSelect(
                 Object.keys(COLOR_SCHEMES),
                 this.settings.colorScheme,
                 (value) => {
@@ -2727,7 +2734,7 @@ export class MainMenu {
         resetButton.style.fontSize = '18px';
         resetButton.style.padding = '10px 20px';
 
-        const resetSection = this.createSettingSection('Reset Player Data', resetButton);
+        const resetSection = createSettingSection('Reset Player Data', resetButton);
         settingsContainer.appendChild(resetSection);
 
         container.appendChild(settingsContainer);
@@ -3487,134 +3494,6 @@ export class MainMenu {
         button.addEventListener('click', onClick);
         
         return button;
-    }
-
-    private createSettingSection(label: string, control: HTMLElement): HTMLElement {
-        const section = document.createElement('div');
-        section.style.marginBottom = '30px';
-        section.style.display = 'flex';
-        section.style.justifyContent = 'space-between';
-        section.style.alignItems = 'center';
-
-        const labelElement = document.createElement('label');
-        labelElement.textContent = label;
-        labelElement.style.fontSize = '24px';
-        labelElement.style.color = '#FFFFFF';
-        labelElement.style.fontWeight = '300';
-        labelElement.dataset.particleText = 'true';
-        labelElement.dataset.particleColor = '#FFFFFF';
-
-        section.appendChild(labelElement);
-        section.appendChild(control);
-
-        return section;
-    }
-
-    private createSelect(options: string[], currentValue: string, onChange: (value: string) => void): HTMLSelectElement {
-        const select = document.createElement('select');
-        select.style.fontSize = '24px';
-        select.style.padding = '8px 15px';
-        select.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-        select.style.color = '#FFFFFF';
-        select.style.border = '2px solid rgba(255, 255, 255, 0.3)';
-        select.style.borderRadius = '5px';
-        select.style.cursor = 'pointer';
-        select.style.fontFamily = 'inherit';
-        select.style.fontWeight = '300';
-
-        for (const option of options) {
-            const optionElement = document.createElement('option');
-            optionElement.value = option;
-            optionElement.textContent = option.charAt(0).toUpperCase() + option.slice(1);
-            optionElement.selected = option === currentValue;
-            optionElement.style.backgroundColor = Constants.UI_BACKGROUND_COLOR;
-            select.appendChild(optionElement);
-        }
-
-        select.addEventListener('change', () => {
-            onChange(select.value);
-        });
-
-        return select;
-    }
-
-    private createToggle(currentValue: boolean, onChange: (value: boolean) => void): HTMLElement {
-        const toggleContainer = document.createElement('div');
-        toggleContainer.style.display = 'flex';
-        toggleContainer.style.alignItems = 'center';
-        toggleContainer.style.gap = '10px';
-
-        const toggle = document.createElement('div');
-        toggle.style.width = '60px';
-        toggle.style.height = '30px';
-        toggle.style.backgroundColor = currentValue ? '#00FF88' : '#666666';
-        toggle.style.borderRadius = '15px';
-        toggle.style.position = 'relative';
-        toggle.style.cursor = 'pointer';
-        toggle.style.transition = 'all 0.3s';
-
-        const knob = document.createElement('div');
-        knob.style.width = '26px';
-        knob.style.height = '26px';
-        knob.style.backgroundColor = '#FFFFFF';
-        knob.style.borderRadius = '50%';
-        knob.style.position = 'absolute';
-        knob.style.top = '2px';
-        knob.style.left = currentValue ? '32px' : '2px';
-        knob.style.transition = 'all 0.3s';
-
-        toggle.appendChild(knob);
-
-        toggle.addEventListener('click', () => {
-            const newValue = !currentValue;
-            currentValue = newValue;
-            toggle.style.backgroundColor = newValue ? '#00FF88' : '#666666';
-            knob.style.left = newValue ? '32px' : '2px';
-            onChange(newValue);
-        });
-
-        toggleContainer.appendChild(toggle);
-
-        return toggleContainer;
-    }
-
-    private createColorPicker(currentValue: string, onChange: (value: string) => void): HTMLElement {
-        const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.alignItems = 'center';
-        container.style.gap = '10px';
-
-        // Color preview box
-        const preview = document.createElement('div');
-        preview.style.width = '40px';
-        preview.style.height = '40px';
-        preview.style.backgroundColor = currentValue;
-        preview.style.border = '2px solid rgba(255, 255, 255, 0.3)';
-        preview.style.borderRadius = '5px';
-        preview.style.cursor = 'pointer';
-
-        // Hidden color input
-        const input = document.createElement('input');
-        input.type = 'color';
-        input.value = currentValue;
-        input.style.opacity = '0';
-        input.style.width = '0';
-        input.style.height = '0';
-        input.style.position = 'absolute';
-
-        input.addEventListener('change', () => {
-            preview.style.backgroundColor = input.value;
-            onChange(input.value);
-        });
-
-        preview.addEventListener('click', () => {
-            input.click();
-        });
-
-        container.appendChild(preview);
-        container.appendChild(input);
-
-        return container;
     }
 
     /**
