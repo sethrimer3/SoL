@@ -58,7 +58,7 @@ export function renderLoadoutCustomizationScreen(
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = 'bold';
+    title.style.fontWeight = '300';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);
@@ -105,7 +105,7 @@ export function renderLoadoutCustomizationScreen(
     heroTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
     heroTitle.style.color = '#00AAFF';
     heroTitle.style.marginBottom = '15px';
-    heroTitle.style.fontWeight = 'bold';
+    heroTitle.style.fontWeight = '300';
     heroTitle.dataset.particleText = 'true';
     heroTitle.dataset.particleColor = '#00AAFF';
     heroSection.appendChild(heroTitle);
@@ -158,7 +158,7 @@ function createLoadoutSection(
     sectionTitle.style.fontSize = isCompact ? '24px' : '32px';
     sectionTitle.style.color = '#00AAFF';
     sectionTitle.style.marginBottom = '15px';
-    sectionTitle.style.fontWeight = 'bold';
+    sectionTitle.style.fontWeight = '300';
     sectionTitle.dataset.particleText = 'true';
     sectionTitle.dataset.particleColor = '#00AAFF';
     section.appendChild(sectionTitle);
@@ -182,7 +182,7 @@ function createLoadoutSection(
         nameDiv.textContent = loadout.name;
         nameDiv.style.fontSize = '22px';
         nameDiv.style.color = isSelected ? '#00AAFF' : '#FFFFFF';
-        nameDiv.style.fontWeight = 'bold';
+        nameDiv.style.fontWeight = '300';
         nameDiv.style.marginBottom = '5px';
         nameDiv.dataset.particleText = 'true';
         nameDiv.dataset.particleColor = isSelected ? '#00AAFF' : '#FFFFFF';
