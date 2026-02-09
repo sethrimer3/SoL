@@ -162,7 +162,7 @@ export function createTextInput(currentValue: string, onChange: (value: string) 
     input.style.fontFamily = 'inherit';
     input.style.fontWeight = '300';
     input.style.minWidth = '200px';
-    input.maxLength = 20;
+    input.maxLength = 20; // DOM property for input validation
     input.style.outline = 'none';
 
     // Update on blur to avoid excessive onChange triggers
