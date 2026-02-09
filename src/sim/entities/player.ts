@@ -34,6 +34,7 @@ export class Player {
     aiNextStructureCommandSec: number = 0;
     aiNextMirrorPurchaseCommandSec: number = 0;
     aiStrategy: Constants.AIStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy (randomly assigned in createStandardGame for AI players)
+    aiDifficulty: Constants.AIDifficulty = Constants.AIDifficulty.NORMAL; // AI difficulty level
     hasStrafeUpgrade: boolean = false;
     hasRegenUpgrade: boolean = false;
     hasBlinkUpgrade: boolean = false;
