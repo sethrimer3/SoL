@@ -1184,7 +1184,8 @@ class GameController {
             if (opponent) {
                 // Get MMR data
                 const mmrData = getPlayerMMRData();
-                const opponentMMR = opponent.mmr || 1000; // Default if not set
+                // For opponent MMR: use 1000 as default for AI, or it could be passed from multiplayer system
+                const opponentMMR = 1000; // Default starting MMR
                 
                 // Calculate MMR change
                 const { mmrChange } = updatePlayerMMR(opponentMMR, isVictory);
