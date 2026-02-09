@@ -257,7 +257,7 @@ export class ReplayManager {
      * Generate a unique replay ID
      */
     private generateReplayId(): string {
-        return `replay_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        return `replay_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     }
 
     /**

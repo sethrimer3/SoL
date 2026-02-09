@@ -1170,8 +1170,13 @@ class GameController {
         // Initialize RNG for single-player games
         // For multiplayer modes (lan, p2p, online), RNG is initialized by the network manager
         const isSinglePlayer = settings.gameMode !== 'lan' && settings.gameMode !== 'p2p' && settings.gameMode !== 'online';
+        
+        // Generate match seed and ID for replay recording
+        const matchSeed = isSinglePlayer ? generateMatchSeed() : 0; // Multiplayer will have its own seed
+        this.matchStartSeed = matchSeed;
+        this.currentMatchId = `match_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        
         if (isSinglePlayer) {
-            const matchSeed = generateMatchSeed();
             setGameRNG(new SeededRandom(matchSeed));
             console.log(`[GameController] Initialized RNG with seed: ${matchSeed}`);
         }
