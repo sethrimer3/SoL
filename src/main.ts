@@ -3498,4 +3498,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const controller = new GameController();
     // Expose for dev/testing purposes
     (window as any).gameController = controller;
+    // Expose LocalReplayStorage for menu access
+    (window as any).LocalReplayStorage = LocalReplayStorage;
 });

@@ -53,7 +53,8 @@ export enum ReplayPlaybackState {
     STOPPED = 'stopped',
     PLAYING = 'playing',
     PAUSED = 'paused',
-    SEEKING = 'seeking'
+    SEEKING = 'seeking',
+    ENDED = 'ended'
 }
 
 /**
@@ -68,6 +69,8 @@ export class ReplayManager {
     private currentCommandIndex: number = 0;
     private playbackSpeed: number = 1.0;
     private startTime: Date | null = null;
+    private currentTick: number = 0;
+    private lastHashCheckTick: number = 0;
 
     /**
      * Start recording a match
@@ -251,6 +254,79 @@ export class ReplayManager {
      */
     getTotalCommands(): number {
         return this.replayData ? this.replayData.commands.length : 0;
+    }
+
+    /**
+     * Get current tick
+     */
+    getCurrentTick(): number {
+        return this.currentTick;
+    }
+
+    /**
+     * Set current tick
+     */
+    setCurrentTick(tick: number): void {
+        this.currentTick = tick;
+    }
+
+    /**
+     * Get playback progress (0-1)
+     */
+    getProgress(): number {
+        if (!this.replayData || this.replayData.commands.length === 0) {
+            return 0;
+        }
+        const lastCommand = this.replayData.commands[this.replayData.commands.length - 1];
+        const totalTicks = lastCommand.tick;
+        return totalTicks > 0 ? Math.min(1, this.currentTick / totalTicks) : 0;
+    }
+
+    /**
+     * Get remaining time estimate in seconds
+     */
+    getRemainingTime(): number {
+        if (!this.replayData) {
+            return 0;
+        }
+        const progress = this.getProgress();
+        const elapsed = this.currentTick / 30; // Assuming 30 ticks per second
+        const total = this.replayData.duration;
+        return Math.max(0, total - elapsed);
+    }
+
+    /**
+     * Verify state hash at current tick
+     */
+    verifyStateHash(currentTick: number, currentHash: number): boolean {
+        if (!this.replayData || this.replayData.stateHashes.length === 0) {
+            return true; // No hashes to verify
+        }
+
+        // Find the closest state hash for this tick
+        const hashCheckpoint = this.replayData.stateHashes.find(h => h.tick === currentTick);
+        
+        if (hashCheckpoint) {
+            this.lastHashCheckTick = currentTick;
+            if (hashCheckpoint.hash !== currentHash) {
+                console.error(`State hash mismatch at tick ${currentTick}!`, {
+                    expected: hashCheckpoint.hash,
+                    actual: currentHash
+                });
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Reset playback to beginning
+     */
+    reset(): void {
+        this.currentCommandIndex = 0;
+        this.currentTick = 0;
+        this.playbackState = ReplayPlaybackState.STOPPED;
     }
 
     /**

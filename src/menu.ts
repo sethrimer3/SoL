@@ -3103,6 +3103,8 @@ export class MainMenu {
         this.setLadButtonVisible(false);
         this.setMenuParticleDensity(1.0);
         container.style.justifyContent = 'flex-start';
+        container.style.padding = '20px';
+        container.style.overflowY = 'auto';
         
         // Title
         const title = document.createElement('h2');
@@ -3115,19 +3117,206 @@ export class MainMenu {
         title.dataset.particleColor = '#FFFFFF';
         container.appendChild(title);
         
-        // Coming soon message
-        const message = document.createElement('div');
-        message.style.fontSize = '18px';
-        message.style.color = '#D0D0D0';
-        message.style.textAlign = 'center';
-        message.style.marginBottom = '30px';
-        message.style.maxWidth = '600px';
-        message.textContent = 'Match replay feature is recording your games! UI for browsing and playback coming soon.';
-        message.dataset.particleText = 'true';
-        message.dataset.particleColor = '#D0D0D0';
-        container.appendChild(message);
+        // Load replays from storage
+        const LocalReplayStorageClass = (window as any).LocalReplayStorage;
+        if (!LocalReplayStorageClass) {
+            // Fallback if storage not available
+            const message = document.createElement('div');
+            message.style.fontSize = '18px';
+            message.style.color = '#D0D0D0';
+            message.style.textAlign = 'center';
+            message.style.marginBottom = '30px';
+            message.textContent = 'Match replay system is recording your games!';
+            container.appendChild(message);
+            
+            this.addBackButton(container);
+            return;
+        }
         
-        // Back button
+        const storage = new LocalReplayStorageClass();
+        
+        // Load replays asynchronously
+        storage.listReplays().then((replays: any[]) => {
+            if (replays.length === 0) {
+                const message = document.createElement('div');
+                message.style.fontSize = '18px';
+                message.style.color = '#D0D0D0';
+                message.style.textAlign = 'center';
+                message.style.marginBottom = '30px';
+                message.style.maxWidth = '600px';
+                message.style.margin = '0 auto 30px';
+                message.textContent = 'No replays saved yet. Play some matches to start recording!';
+                message.dataset.particleText = 'true';
+                message.dataset.particleColor = '#D0D0D0';
+                container.appendChild(message);
+            } else {
+                // Sort replays by date (newest first)
+                replays.sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
+                
+                // Info message
+                const info = document.createElement('div');
+                info.style.fontSize = '16px';
+                info.style.color = '#A0A0A0';
+                info.style.textAlign = 'center';
+                info.style.marginBottom = '20px';
+                info.textContent = `${replays.length} replay${replays.length === 1 ? '' : 's'} saved`;
+                container.appendChild(info);
+                
+                // Replay list container
+                const listContainer = document.createElement('div');
+                listContainer.style.maxWidth = '800px';
+                listContainer.style.margin = '0 auto';
+                listContainer.style.width = '100%';
+                
+                for (const replay of replays) {
+                    const replayCard = this.createReplayCard(replay, storage);
+                    listContainer.appendChild(replayCard);
+                }
+                
+                container.appendChild(listContainer);
+            }
+            
+            this.addBackButton(container);
+            this.menuParticleLayer?.requestTargetRefresh(container);
+        }).catch((err: Error) => {
+            console.error('Failed to load replays:', err);
+            const errorMsg = document.createElement('div');
+            errorMsg.style.color = '#FF6666';
+            errorMsg.style.textAlign = 'center';
+            errorMsg.textContent = 'Failed to load replays';
+            container.appendChild(errorMsg);
+            this.addBackButton(container);
+        });
+    }
+    
+    private createReplayCard(replay: any, storage: any): HTMLElement {
+        const card = document.createElement('div');
+        card.style.backgroundColor = 'rgba(30, 30, 30, 0.85)';
+        card.style.border = '2px solid rgba(100, 100, 100, 0.5)';
+        card.style.borderRadius = '10px';
+        card.style.padding = '15px';
+        card.style.marginBottom = '15px';
+        card.style.transition = 'all 0.3s';
+        card.style.cursor = 'pointer';
+        
+        // Format date
+        const date = new Date(replay.startTime);
+        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        
+        // Format duration
+        const minutes = Math.floor(replay.duration / 60);
+        const seconds = Math.floor(replay.duration % 60);
+        const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        
+        // Create card content
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.justifyContent = 'space-between';
+        header.style.marginBottom = '10px';
+        
+        const dateLabel = document.createElement('div');
+        dateLabel.style.fontSize = '14px';
+        dateLabel.style.color = '#888';
+        dateLabel.textContent = dateStr;
+        
+        const durationLabel = document.createElement('div');
+        durationLabel.style.fontSize = '14px';
+        durationLabel.style.color = '#888';
+        durationLabel.textContent = `Duration: ${durationStr}`;
+        
+        header.appendChild(dateLabel);
+        header.appendChild(durationLabel);
+        card.appendChild(header);
+        
+        // Players info
+        const playersDiv = document.createElement('div');
+        playersDiv.style.marginBottom = '10px';
+        
+        for (const player of replay.players) {
+            const playerLine = document.createElement('div');
+            playerLine.style.fontSize = '16px';
+            playerLine.style.color = player.isWinner ? '#FFD700' : '#CCC';
+            playerLine.style.marginBottom = '5px';
+            playerLine.textContent = `${player.username} (${player.faction})${player.isWinner ? ' 👑' : ''}`;
+            playersDiv.appendChild(playerLine);
+        }
+        
+        card.appendChild(playersDiv);
+        
+        // Action buttons
+        const buttonContainer = document.createElement('div');
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '10px';
+        buttonContainer.style.marginTop = '10px';
+        
+        const watchButton = document.createElement('button');
+        watchButton.textContent = 'WATCH';
+        watchButton.style.flex = '1';
+        watchButton.style.padding = '8px 16px';
+        watchButton.style.fontSize = '14px';
+        watchButton.style.backgroundColor = 'rgba(100, 180, 100, 0.8)';
+        watchButton.style.color = '#FFF';
+        watchButton.style.border = 'none';
+        watchButton.style.borderRadius = '5px';
+        watchButton.style.cursor = 'pointer';
+        watchButton.style.fontWeight = 'bold';
+        watchButton.onclick = (e) => {
+            e.stopPropagation();
+            this.playReplay(replay);
+        };
+        
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'DELETE';
+        deleteButton.style.flex = '1';
+        deleteButton.style.padding = '8px 16px';
+        deleteButton.style.fontSize = '14px';
+        deleteButton.style.backgroundColor = 'rgba(180, 100, 100, 0.8)';
+        deleteButton.style.color = '#FFF';
+        deleteButton.style.border = 'none';
+        deleteButton.style.borderRadius = '5px';
+        deleteButton.style.cursor = 'pointer';
+        deleteButton.style.fontWeight = 'bold';
+        deleteButton.onclick = (e) => {
+            e.stopPropagation();
+            if (confirm('Delete this replay?')) {
+                storage.deleteReplay(replay.id).then(() => {
+                    // Refresh the screen
+                    this.clearMenu();
+                    this.renderReplaysScreen(this.contentElement);
+                });
+            }
+        };
+        
+        buttonContainer.appendChild(watchButton);
+        buttonContainer.appendChild(deleteButton);
+        card.appendChild(buttonContainer);
+        
+        // Hover effects
+        card.onmouseenter = () => {
+            card.style.borderColor = 'rgba(150, 150, 150, 0.8)';
+            card.style.backgroundColor = 'rgba(40, 40, 40, 0.95)';
+        };
+        card.onmouseleave = () => {
+            card.style.borderColor = 'rgba(100, 100, 100, 0.5)';
+            card.style.backgroundColor = 'rgba(30, 30, 30, 0.85)';
+        };
+        
+        return card;
+    }
+    
+    private playReplay(replay: any): void {
+        // For now, show a message that playback UI is coming soon
+        alert('Replay playback UI coming soon! The replay is saved and can be played back once the viewer is implemented.');
+        
+        // TODO: Implement full replay playback
+        // This would involve:
+        // 1. Loading the replay into a ReplayManager
+        // 2. Initializing a new GameState with the saved seed
+        // 3. Running through commands tick by tick
+        // 4. Rendering the game in replay mode with playback controls
+    }
+    
+    private addBackButton(container: HTMLElement): void {
         const backButton = document.createElement('button');
         backButton.textContent = 'BACK';
         backButton.style.fontSize = '20px';
@@ -3139,6 +3328,7 @@ export class MainMenu {
         backButton.style.cursor = 'pointer';
         backButton.style.fontWeight = 'bold';
         backButton.style.transition = 'all 0.2s';
+        backButton.style.marginTop = '20px';
         backButton.dataset.particleText = 'true';
         backButton.dataset.particleColor = '#FFFFFF';
         
