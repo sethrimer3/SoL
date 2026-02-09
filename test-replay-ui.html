@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Replay System Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #00ff00;
+            padding: 20px;
+            margin: 0;
+        }
+        #output {
+            white-space: pre-wrap;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .success { color: #00ff00; }
+        .error { color: #ff4444; }
+        .info { color: #4444ff; }
+        .warning { color: #ffaa00; }
+        h1 {
+            color: #ffffff;
+            border-bottom: 2px solid #00ff00;
+            padding-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Replay System Test</h1>
+    <div id="output">Running tests...</div>
+    
+    <script src="dist/bundle.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message, type = 'info') {
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = message + '\n';
+            output.appendChild(span);
+        }
+        
+        function clearOutput() {
+            output.textContent = '';
+        }
+        
+        // Wait for game to load
+        setTimeout(() => {
+            try {
+                clearOutput();
+                log('=== Replay System Test ===\n', 'success');
+                
+                // Check if LocalReplayStorage is available
+                if (!window.LocalReplayStorage) {
+                    log('❌ LocalReplayStorage not found on window object', 'error');
+                    return;
+                }
+                
+                log('✓ LocalReplayStorage is available', 'success');
+                
+                // Create storage instance
+                const storage = new window.LocalReplayStorage();
+                log('✓ Storage instance created', 'success');
+                
+                // Test data
+                const testReplay = {
+                    id: 'test_replay_' + Date.now(),
+                    matchId: 'test_match_123',
+                    gameSeed: 12345,
+                    startTime: new Date(),
+                    endTime: new Date(Date.now() + 300000), // 5 minutes later
+                    duration: 300,
+                    playerCount: 2,
+                    players: [
+                        {
+                            playerId: 'p1',
+                            playerIndex: 0,
+                            username: 'TestPlayer1',
+                            faction: 'RADIANT',
+                            isWinner: true
+                        },
+                        {
+                            playerId: 'p2',
+                            playerIndex: 1,
+                            username: 'TestPlayer2',
+                            faction: 'AURUM',
+                            isWinner: false
+                        }
+                    ],
+                    commands: [
+                        { tick: 10, playerId: 'p1', command: 'mirror_move', data: { x: 100, y: 50 } },
+                        { tick: 50, playerId: 'p2', command: 'hero_purchase', data: { heroId: 'marine' } }
+                    ],
+                    stateHashes: [
+                        { tick: 100, hash: 123456, timestamp: Date.now() }
+                    ],
+                    version: '1.0'
+                };
+                
+                log('\nTest Replay Data:', 'info');
+                log(`  ID: ${testReplay.id}`);
+                log(`  Players: ${testReplay.players.map(p => p.username).join(' vs ')}`);
+                log(`  Duration: ${testReplay.duration}s`);
+                log(`  Commands: ${testReplay.commands.length}`);
+                
+                // Test saving
+                log('\nTesting save operation...', 'info');
+                storage.saveReplay(testReplay)
+                    .then(() => {
+                        log('✓ Replay saved successfully', 'success');
+                        
+                        // Test listing
+                        log('\nTesting list operation...', 'info');
+                        return storage.listReplays();
+                    })
+                    .then((replays) => {
+                        log(`✓ Found ${replays.length} replay(s) in storage`, 'success');
+                        
+                        if (replays.length > 0) {
+                            const lastReplay = replays[replays.length - 1];
+                            log(`  Latest: ${lastReplay.id}`);
+                            log(`  Players: ${lastReplay.players.map(p => p.username).join(' vs ')}`);
+                        }
+                        
+                        // Test loading specific replay
+                        log('\nTesting load operation...', 'info');
+                        return storage.loadReplay(testReplay.id);
+                    })
+                    .then((loaded) => {
+                        if (loaded) {
+                            log('✓ Replay loaded successfully', 'success');
+                            log(`  Match ID: ${loaded.matchId}`);
+                            log(`  Seed: ${loaded.gameSeed}`);
+                            log(`  Commands: ${loaded.commands.length}`);
+                            log(`  State hashes: ${loaded.stateHashes.length}`);
+                            
+                            // Verify data integrity
+                            const commandsMatch = loaded.commands.length === testReplay.commands.length;
+                            const playersMatch = loaded.players.length === testReplay.players.length;
+                            
+                            if (commandsMatch && playersMatch) {
+                                log('\n✓ Data integrity verified', 'success');
+                            } else {
+                                log('\n⚠ Data integrity issues detected', 'warning');
+                            }
+                            
+                            // Test deletion
+                            log('\nTesting delete operation...', 'info');
+                            return storage.deleteReplay(testReplay.id);
+                        }
+                        throw new Error('Failed to load replay');
+                    })
+                    .then(() => {
+                        log('✓ Replay deleted successfully', 'success');
+                        
+                        // Verify deletion
+                        return storage.listReplays();
+                    })
+                    .then((replays) => {
+                        const stillExists = replays.some(r => r.id === testReplay.id);
+                        if (!stillExists) {
+                            log('✓ Deletion verified', 'success');
+                        } else {
+                            log('⚠ Replay still exists after deletion', 'warning');
+                        }
+                        
+                        log('\n=== All Tests Passed ===', 'success');
+                    })
+                    .catch((err) => {
+                        log('\n❌ Test failed: ' + err.message, 'error');
+                        console.error(err);
+                    });
+                
+            } catch (err) {
+                log('❌ Critical error: ' + err.message, 'error');
+                console.error(err);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
