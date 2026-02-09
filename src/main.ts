@@ -1037,8 +1037,10 @@ class GameController {
         // Record command for replay if recording is active
         if (this.replayRecorder && this.replayRecorder.isActive() && this.game) {
             const player = this.getLocalPlayer();
+            // Convert gameTime (seconds) to tick number assuming 60 ticks/second
+            const tickNumber = Math.floor(this.game.gameTime * 60);
             this.replayRecorder.recordCommand({
-                tick: this.game.gameTime,
+                tick: tickNumber,
                 playerId: player?.name || 'player',
                 command: command,
                 data: data
@@ -1127,7 +1129,13 @@ class GameController {
 
         // Get map info
         const mapInfo = {
-            forgePositions: this.game.players.map(p => p.stellarForge?.position || new Vector2D(0, 0)),
+            forgePositions: this.game.players.map(p => {
+                if (!p.stellarForge) {
+                    console.warn('[Replay] Player missing stellarForge during recording');
+                    return new Vector2D(0, 0); // Fallback for safety
+                }
+                return p.stellarForge.position;
+            }),
             mirrorPositions: this.game.players.map(p => p.solarMirrors.map(m => m.position)),
             suns: this.game.suns.map(s => s.position)
         };

@@ -177,8 +177,8 @@ export class ReplayPlayer {
             const player = new Player(playerInfo.playerName, playerInfo.faction);
             game.players.push(player);
             
-            // Set initial energy
-            player.energy = 5000; // Standard starting energy
+            // Player constructor sets initial energy to 100.0
+            // No need to override unless replay metadata stores custom starting energy
         }
 
         // Initialize player positions if available

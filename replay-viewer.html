@@ -151,6 +151,9 @@
 
         <div class="section">
             <h2>🎬 Playback Controls</h2>
+            <p style="background: rgba(255, 200, 0, 0.2); padding: 10px; border-radius: 5px; border-left: 4px solid #ffc800;">
+                <strong>⚠️ Note:</strong> This is a metadata viewer only. Full replay playback with game visualization requires loading the replay in the main game engine.
+            </p>
             <div class="controls">
                 <button onclick="playReplay()" id="playBtn" disabled>▶️ Play</button>
                 <button onclick="pauseReplay()" id="pauseBtn" disabled>⏸️ Pause</button>
@@ -350,9 +353,8 @@
         }
 
         function playReplay() {
-            updateStatus('Playing replay...');
+            updateStatus('Replay metadata loaded. Use main game to play back.');
             console.log('Play functionality requires full game implementation');
-            alert('Full replay playback requires running this in the main game. This viewer shows replay metadata only.');
         }
 
         function pauseReplay() {

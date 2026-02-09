@@ -102,6 +102,26 @@ python3 -m http.server 8080
 ✅ Cross-platform support (Mobile & Desktop)  
 ✅ LAN multiplayer (WebRTC peer-to-peer)  
 ✅ Online multiplayer (Supabase - Beta)  
+✅ Match replay system - Record and playback matches  
+
+## Match Replay System
+
+SoL includes a fully deterministic replay system that automatically records all your matches.
+
+### Features
+- **Automatic Recording**: Every game is recorded automatically
+- **Deterministic Playback**: Same seed + same commands = identical replay
+- **Local Storage**: Replays saved to browser storage
+- **File Export**: Download replays as JSON files
+- **Replay Viewer**: Standalone HTML viewer for browsing replays
+
+### Usage
+1. **Play a Game**: Replays are automatically recorded
+2. **Auto-Save**: When the game ends, replay is saved to local storage and downloaded
+3. **View Replays**: Open `replay-viewer.html` to browse and load replays
+4. **Load Replay**: Use the replay viewer to see match metadata and command history
+
+For detailed documentation, see [REPLAY_SYSTEM.md](./REPLAY_SYSTEM.md)
 
 ## Future Development
 

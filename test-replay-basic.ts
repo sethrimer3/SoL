@@ -7,7 +7,7 @@ import { SeededRandom, setGameRNG } from './src/seeded-random';
 import * as Constants from './src/constants';
 
 const originalRandom = Math.random;
-Math.random = () => 0.12345;
+// Note: Math.random override not needed since we use setGameRNG
 
 console.log('=== Replay System Test ===\n');
 
@@ -148,5 +148,3 @@ console.log('\n=== Test Results ===');
 console.log(`Position match: ${posMatch ? '✓ PASS' : '✗ FAIL'}`);
 console.log(`Energy match: ${energyMatch ? '✓ PASS' : '✗ FAIL'}`);
 console.log(`Overall: ${posMatch && energyMatch ? '✓ ALL TESTS PASSED' : '✗ SOME TESTS FAILED'}`);
-
-Math.random = originalRandom;
