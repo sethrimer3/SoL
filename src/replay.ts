@@ -29,6 +29,8 @@ export interface ReplayMetadata {
         mirrorPositions: Vector2D[][];
         suns?: Vector2D[];
     };
+    mapName?: string;          // Name of the map played
+    matchResult?: MatchResult; // Match outcome and MMR changes
 }
 
 export interface ReplayPlayerInfo {
@@ -36,6 +38,19 @@ export interface ReplayPlayerInfo {
     playerName: string;
     faction: Faction;
     isLocal: boolean;
+    mmr?: number;              // Player's MMR at match start
+    mmrChange?: number;        // MMR change from this match
+}
+
+/**
+ * Match result information
+ */
+export interface MatchResult {
+    winnerId: string;          // Player ID of the winner
+    winnerName: string;        // Player name of the winner
+    loserId?: string;          // Player ID of the loser (for 1v1)
+    loserName?: string;        // Player name of the loser (for 1v1)
+    wasForfeit: boolean;       // Whether match ended in forfeit
 }
 
 /**
@@ -59,7 +74,8 @@ export class ReplayRecorder {
         seed: number,
         players: ReplayPlayerInfo[],
         gameMode: string = 'singleplayer',
-        mapInfo?: ReplayMetadata['mapInfo']
+        mapInfo?: ReplayMetadata['mapInfo'],
+        mapName?: string
     ) {
         this.startTime = Date.now();
         this.metadata = {
@@ -69,7 +85,8 @@ export class ReplayRecorder {
             duration: 0,
             players: players,
             gameMode: gameMode,
-            mapInfo: mapInfo
+            mapInfo: mapInfo,
+            mapName: mapName
         };
     }
 
@@ -433,4 +450,172 @@ export function uploadReplay(file: File): Promise<ReplayData> {
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsText(file);
     });
+}
+
+/**
+ * Match History Entry
+ * Represents a single match in the player's history
+ */
+export interface MatchHistoryEntry {
+    id: string;                    // Unique match ID (timestamp-based)
+    timestamp: number;             // When the match was played
+    replayKey: string;             // Key to retrieve replay from storage
+    localPlayerName: string;       // Local player's name
+    localPlayerFaction: Faction;   // Local player's faction
+    opponentName: string;          // Opponent's name
+    opponentFaction: Faction;      // Opponent's faction
+    mapName: string;               // Map that was played
+    gameMode: string;              // Game mode (singleplayer, lan, p2p, online)
+    isVictory: boolean;            // Whether local player won
+    duration: number;              // Match duration in seconds
+    localPlayerMMR: number;        // Local player's MMR before match
+    opponentMMR?: number;          // Opponent's MMR before match (if available)
+    mmrChange: number;             // MMR change for local player
+}
+
+/**
+ * Player MMR data
+ */
+export interface PlayerMMRData {
+    mmr: number;                   // Current MMR rating
+    wins: number;                  // Total wins
+    losses: number;                // Total losses
+    gamesPlayed: number;           // Total games played
+}
+
+/**
+ * Calculate MMR change using Elo rating system
+ * @param playerMMR - Current player MMR
+ * @param opponentMMR - Opponent's MMR
+ * @param isWin - Whether player won
+ * @param kFactor - K-factor (rating volatility, default 32)
+ * @returns MMR change (positive for win, negative for loss)
+ */
+export function calculateMMRChange(
+    playerMMR: number,
+    opponentMMR: number,
+    isWin: boolean,
+    kFactor: number = 32
+): number {
+    // Calculate expected score using Elo formula
+    // The constants 10 and 400 are standard Elo rating system values:
+    // - 10 is the base for the power calculation
+    // - 400 is the rating difference that corresponds to a 10:1 odds ratio
+    const expectedScore = 1 / (1 + Math.pow(10, (opponentMMR - playerMMR) / 400));
+    
+    // Actual score: 1 for win, 0 for loss
+    const actualScore = isWin ? 1 : 0;
+    
+    // Calculate MMR change
+    const mmrChange = Math.round(kFactor * (actualScore - expectedScore));
+    
+    return mmrChange;
+}
+
+/**
+ * Get or initialize player MMR data from localStorage
+ */
+export function getPlayerMMRData(): PlayerMMRData {
+    const key = 'sol_player_mmr';
+    const data = localStorage.getItem(key);
+    
+    if (data) {
+        try {
+            return JSON.parse(data);
+        } catch {
+            // Corrupted data, return default
+        }
+    }
+    
+    // Default starting MMR
+    return {
+        mmr: 1000,
+        wins: 0,
+        losses: 0,
+        gamesPlayed: 0
+    };
+}
+
+/**
+ * Save player MMR data to localStorage
+ */
+export function savePlayerMMRData(data: PlayerMMRData): void {
+    const key = 'sol_player_mmr';
+    localStorage.setItem(key, JSON.stringify(data));
+}
+
+/**
+ * Update player MMR after a match
+ */
+export function updatePlayerMMR(opponentMMR: number, isWin: boolean): { newMMR: number; mmrChange: number } {
+    const mmrData = getPlayerMMRData();
+    const mmrChange = calculateMMRChange(mmrData.mmr, opponentMMR, isWin);
+    
+    mmrData.mmr += mmrChange;
+    mmrData.gamesPlayed++;
+    if (isWin) {
+        mmrData.wins++;
+    } else {
+        mmrData.losses++;
+    }
+    
+    savePlayerMMRData(mmrData);
+    
+    return {
+        newMMR: mmrData.mmr,
+        mmrChange: mmrChange
+    };
+}
+
+/**
+ * Save match to history
+ */
+export function saveMatchToHistory(entry: MatchHistoryEntry): void {
+    const history = getMatchHistory();
+    history.unshift(entry); // Add to beginning
+    
+    // Keep only last 100 matches
+    const maxMatches = 100;
+    if (history.length > maxMatches) {
+        history.splice(maxMatches);
+    }
+    
+    const key = 'sol_match_history';
+    localStorage.setItem(key, JSON.stringify(history));
+}
+
+/**
+ * Get match history from localStorage
+ */
+export function getMatchHistory(): MatchHistoryEntry[] {
+    const key = 'sol_match_history';
+    const data = localStorage.getItem(key);
+    
+    if (data) {
+        try {
+            return JSON.parse(data);
+        } catch {
+            return [];
+        }
+    }
+    
+    return [];
+}
+
+/**
+ * Clear all match history
+ */
+export function clearMatchHistory(): void {
+    const key = 'sol_match_history';
+    localStorage.removeItem(key);
+}
+
+/**
+ * Delete a specific match from history
+ */
+export function deleteMatchFromHistory(matchId: string): void {
+    const history = getMatchHistory();
+    const filtered = history.filter(m => m.id !== matchId);
+    const key = 'sol_match_history';
+    localStorage.setItem(key, JSON.stringify(filtered));
 }

@@ -8,7 +8,18 @@ import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
-import { ReplayRecorder, ReplayPlayer, ReplayData, ReplaySpeed, downloadReplay, saveReplayToStorage } from './replay';
+import { 
+    ReplayRecorder, 
+    ReplayPlayer, 
+    ReplayData, 
+    ReplaySpeed, 
+    downloadReplay, 
+    saveReplayToStorage,
+    saveMatchToHistory,
+    MatchHistoryEntry,
+    getPlayerMMRData,
+    updatePlayerMMR
+} from './replay';
 
 class GameController {
     public game: GameState | null = null;
@@ -1145,7 +1156,8 @@ class GameController {
             this.currentGameSeed,
             players,
             settings.gameMode || 'singleplayer',
-            mapInfo
+            mapInfo,
+            settings.selectedMap?.name || 'Unknown Map'
         );
         this.replayRecorder.start();
         console.log('[Replay] Recording started');
@@ -1159,26 +1171,132 @@ class GameController {
         const replayData = this.replayRecorder.stop();
         console.log(`[Replay] Recording stopped. ${replayData.commands.length} commands recorded.`);
 
-        // Auto-save to local storage
-        const timestamp = new Date(replayData.metadata.timestamp).toISOString().replace(/[:.]/g, '-');
-        const replayName = `match_${timestamp}`;
-        
-        try {
-            saveReplayToStorage(replayData, replayName);
-            console.log(`[Replay] Saved to storage as "${replayName}"`);
-        } catch (error) {
-            console.error('[Replay] Failed to save to storage:', error);
-        }
+        // Determine match result
+        const winner = this.game?.checkVictoryConditions();
+        if (winner && this.game) {
+            // Find winner and loser
+            const localPlayer = this.game.players[this.localPlayerIndex];
+            const isVictory = winner === localPlayer;
+            
+            // Get opponent (assumes 1v1)
+            const opponent = this.game.players.find(p => p !== localPlayer);
+            
+            if (opponent) {
+                // Get MMR data
+                const mmrData = getPlayerMMRData();
+                // For opponent MMR: use 1000 as default for AI opponents
+                // In multiplayer, the opponent's MMR would need to be passed from the network system
+                const opponentMMR = 1000; // Default starting MMR for AI opponents
+                
+                // Calculate MMR change
+                const { mmrChange } = updatePlayerMMR(opponentMMR, isVictory);
+                
+                // Add match result to replay metadata
+                replayData.metadata.matchResult = {
+                    winnerId: winner.name,
+                    winnerName: winner.name,
+                    loserId: opponent.name,
+                    loserName: opponent.name,
+                    wasForfeit: false
+                };
+                
+                // Update player info with MMR
+                const localPlayerInfo = replayData.metadata.players.find(p => p.isLocal);
+                if (localPlayerInfo) {
+                    localPlayerInfo.mmr = mmrData.mmr - mmrChange; // MMR before match
+                    localPlayerInfo.mmrChange = mmrChange;
+                }
+                
+                // Get map name from settings
+                const mapName = replayData.metadata.mapName || 'Unknown Map';
+                
+                // Auto-save to local storage
+                const timestamp = new Date(replayData.metadata.timestamp).toISOString().replace(/[:.]/g, '-');
+                const replayName = `match_${timestamp}`;
+                
+                try {
+                    saveReplayToStorage(replayData, replayName);
+                    console.log(`[Replay] Saved to storage as "${replayName}"`);
+                } catch (error) {
+                    console.error('[Replay] Failed to save to storage:', error);
+                }
 
-        // Also offer download
-        try {
-            downloadReplay(replayData, `sol_replay_${replayName}.json`);
-            console.log('[Replay] Download initiated');
-        } catch (error) {
-            console.error('[Replay] Failed to download replay:', error);
+                // Save to match history
+                try {
+                    const matchEntry: MatchHistoryEntry = {
+                        id: `${replayData.metadata.timestamp}`,
+                        timestamp: replayData.metadata.timestamp,
+                        replayKey: replayName,
+                        localPlayerName: localPlayer.name,
+                        localPlayerFaction: localPlayer.faction,
+                        opponentName: opponent.name,
+                        opponentFaction: opponent.faction,
+                        mapName: mapName,
+                        gameMode: replayData.metadata.gameMode,
+                        isVictory: isVictory,
+                        duration: replayData.metadata.duration,
+                        localPlayerMMR: mmrData.mmr - mmrChange,
+                        opponentMMR: opponentMMR,
+                        mmrChange: mmrChange
+                    };
+                    
+                    saveMatchToHistory(matchEntry);
+                    console.log('[Match History] Match saved to history');
+                } catch (error) {
+                    console.error('[Match History] Failed to save match:', error);
+                }
+
+                // Also offer download
+                try {
+                    downloadReplay(replayData, `sol_replay_${replayName}.json`);
+                    console.log('[Replay] Download initiated');
+                } catch (error) {
+                    console.error('[Replay] Failed to download replay:', error);
+                }
+            }
+        } else {
+            // No winner determined, save replay without match history
+            const timestamp = new Date(replayData.metadata.timestamp).toISOString().replace(/[:.]/g, '-');
+            const replayName = `match_${timestamp}`;
+            
+            try {
+                saveReplayToStorage(replayData, replayName);
+                console.log(`[Replay] Saved to storage as "${replayName}"`);
+            } catch (error) {
+                console.error('[Replay] Failed to save to storage:', error);
+            }
+
+            try {
+                downloadReplay(replayData, `sol_replay_${replayName}.json`);
+                console.log('[Replay] Download initiated');
+            } catch (error) {
+                console.error('[Replay] Failed to download replay:', error);
+            }
         }
 
         this.replayRecorder = null;
+    }
+
+    private startReplayViewing(replayData: ReplayData): void {
+        console.log('[Replay] Starting replay viewer...');
+        
+        // Initialize replay player
+        this.replayPlayer = new ReplayPlayer(replayData);
+        this.game = this.replayPlayer.initializeGame();
+        this.isWatchingReplay = true;
+        this.isPaused = false;
+        
+        // Start playback
+        this.replayPlayer.play();
+        
+        // Start game loop
+        if (!this.isRunning) {
+            this.isRunning = true;
+            this.lastTime = performance.now();
+            requestAnimationFrame((time) => this.gameLoop(time));
+        }
+        
+        console.log('[Replay] Replay viewing started');
     }
 
     constructor() {
@@ -1199,6 +1317,11 @@ class GameController {
 
         // Set up input handlers
         this.setupInputHandlers(canvas);
+
+        // Listen for replay launch events from menu
+        window.addEventListener('launchReplay', ((event: CustomEvent) => {
+            this.startReplayViewing(event.detail.replay);
+        }) as EventListener);
     }
 
     /**
