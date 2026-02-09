@@ -22,6 +22,9 @@ import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
 import { renderMatchHistoryScreen } from './menu/screens/match-history-screen';
 import { renderOnlinePlaceholderScreen } from './menu/screens/online-placeholder-screen';
+import { renderFactionSelectionScreen } from './menu/screens/faction-selection-screen';
+import { renderLoadoutCustomizationScreen } from './menu/screens/loadout-customization-screen';
+import { renderLoadoutSelectionScreen } from './menu/screens/loadout-selection-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
@@ -2211,134 +2214,47 @@ export class MainMenu {
     private renderFactionSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
 
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Select Your Faction';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '8px' : '12px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Faction carousel
-        const carouselContainer = document.createElement('div');
-        carouselContainer.style.width = '100%';
-        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
-        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = '12px';
-        container.appendChild(carouselContainer);
-
-        const factions: FactionCarouselOption[] = [
-            { 
-                id: Faction.RADIANT, 
-                name: 'Radiant', 
-                description: 'Well-Balanced, Ranged-Focused',
-                color: '#FF5722' // Deep yet bright reddish-orange (like glowing embers)
-            },
-            { 
-                id: Faction.AURUM, 
-                name: 'Aurum', 
-                description: 'Fast-Paced, Melee-Focused',
-                color: '#FFD700' // Bright gold
-            },
-            { 
-                id: Faction.VELARIS, 
-                name: 'Velaris', 
-                description: 'Strategic, Ability-Heavy. Particles from Nebulae',
-                color: '#9C27B0' // Purple
-            }
-        ];
-        const selectedIndex = factions.findIndex((faction) => faction.id === this.settings.selectedFaction);
-        const initialIndex = selectedIndex >= 0 ? selectedIndex : 0;
-        if (!this.settings.selectedFaction && factions.length > 0) {
-            this.settings.selectedFaction = factions[initialIndex].id;
+        // Ensure default faction is selected
+        if (!this.settings.selectedFaction) {
+            this.settings.selectedFaction = Faction.RADIANT;
         }
 
-        this.factionCarousel = new FactionCarouselView(carouselContainer, factions, initialIndex);
-        this.factionCarousel.onSelectionChange((option) => {
-            if (this.settings.selectedFaction !== option.id) {
-                this.settings.selectedFaction = option.id;
-                this.settings.selectedHeroes = []; // Reset hero selection when faction changes
-                this.ensureDefaultHeroSelection();
-            }
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-        this.factionCarousel.onRender(() => {
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-
-        // Action buttons
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '20px';
-        buttonContainer.style.marginTop = '8px';
-        buttonContainer.style.flexWrap = 'wrap';
-        buttonContainer.style.justifyContent = 'center';
-        if (isCompactLayout) {
-            buttonContainer.style.flexDirection = 'column';
-            buttonContainer.style.alignItems = 'center';
-        }
-
-        // Continue button to loadout customization (only enabled if faction is selected)
-        if (this.settings.selectedFaction) {
-            const continueButton = this.createButton('CUSTOMIZE LOADOUT', () => {
+        renderFactionSelectionScreen(container, {
+            selectedFaction: this.settings.selectedFaction,
+            onFactionChange: (faction: Faction) => {
+                if (this.settings.selectedFaction !== faction) {
+                    this.settings.selectedFaction = faction;
+                    this.settings.selectedHeroes = [];
+                    this.ensureDefaultHeroSelection();
+                }
+            },
+            onContinue: () => {
                 this.currentScreen = 'loadout-customization';
                 this.startMenuTransition();
                 this.renderLoadoutCustomizationScreen(this.contentElement);
-            }, '#00FF88');
-            buttonContainer.appendChild(continueButton);
-        }
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'main';
-            this.startMenuTransition();
-            this.renderMainScreen(this.contentElement);
-        }, '#666666');
-        buttonContainer.appendChild(backButton);
-
-        container.appendChild(buttonContainer);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer,
+            onCarouselCreated: (carousel) => {
+                this.factionCarousel = carousel;
+            }
+        });
     }
 
     private renderLoadoutCustomizationScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-
-        if (!this.settings.selectedFaction) {
-            // Should not happen, but safety fallback
-            this.currentScreen = 'faction-select';
-            this.renderFactionSelectionScreen(container);
-            return;
-        }
-
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Customize Loadout';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = 'bold';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Get faction-specific loadouts
-        const factionBaseLoadouts = this.baseLoadouts.filter(l => l.faction === this.settings.selectedFaction);
-        const factionSpawnLoadouts = this.spawnLoadouts.filter(l => l.faction === this.settings.selectedFaction);
 
         // Set defaults if not selected
+        const factionBaseLoadouts = this.baseLoadouts.filter(l => l.faction === this.settings.selectedFaction);
+        const factionSpawnLoadouts = this.spawnLoadouts.filter(l => l.faction === this.settings.selectedFaction);
+        
         if (!this.settings.selectedBaseLoadout && factionBaseLoadouts.length > 0) {
             this.settings.selectedBaseLoadout = factionBaseLoadouts[0].id;
         }
@@ -2346,476 +2262,95 @@ export class MainMenu {
             this.settings.selectedSpawnLoadout = factionSpawnLoadouts[0].id;
         }
 
-        // Main content container
-        const contentContainer = document.createElement('div');
-        contentContainer.style.display = 'flex';
-        contentContainer.style.flexDirection = 'column';
-        contentContainer.style.gap = '40px';
-        contentContainer.style.width = '100%';
-        contentContainer.style.maxWidth = isCompactLayout ? '100%' : '800px';
-        contentContainer.style.padding = isCompactLayout ? '0 10px' : '0 20px';
-        container.appendChild(contentContainer);
-
-        // Base Loadout Section
-        this.createLoadoutSection(
-            contentContainer,
-            'Base Loadout',
-            factionBaseLoadouts,
-            this.settings.selectedBaseLoadout,
-            (loadoutId) => { this.settings.selectedBaseLoadout = loadoutId; },
-            isCompactLayout
-        );
-
-        // Spawn Loadout Section
-        this.createLoadoutSection(
-            contentContainer,
-            'Spawn Loadout',
-            factionSpawnLoadouts,
-            this.settings.selectedSpawnLoadout,
-            (loadoutId) => { this.settings.selectedSpawnLoadout = loadoutId; },
-            isCompactLayout
-        );
-
-        // Hero Loadout Section (link to hero selection)
-        const heroSection = document.createElement('div');
-        heroSection.style.marginTop = '20px';
-        const heroTitle = document.createElement('h3');
-        heroTitle.textContent = 'Hero Loadout';
-        heroTitle.style.fontSize = isCompactLayout ? '24px' : '32px';
-        heroTitle.style.color = '#00AAFF';
-        heroTitle.style.marginBottom = '15px';
-        heroTitle.style.fontWeight = 'bold';
-        heroTitle.dataset.particleText = 'true';
-        heroTitle.dataset.particleColor = '#00AAFF';
-        heroSection.appendChild(heroTitle);
-
-        const heroDesc = document.createElement('div');
-        heroDesc.textContent = this.settings.selectedHeroes.length > 0 
-            ? `Selected: ${this.settings.selectedHeroNames.join(', ')}`
-            : 'No heroes selected yet';
-        heroDesc.style.fontSize = '20px';
-        heroDesc.style.color = '#CCCCCC';
-        heroDesc.style.marginBottom = '15px';
-        heroSection.appendChild(heroDesc);
-
-        const selectHeroesBtn = this.createButton('SELECT HEROES', () => {
-            this.currentScreen = 'loadout-select';
-            this.startMenuTransition();
-            this.renderLoadoutSelectionScreen(this.contentElement);
-        }, '#00FF88');
-        heroSection.appendChild(selectHeroesBtn);
-        contentContainer.appendChild(heroSection);
-
-        // Action buttons
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.gap = '20px';
-        buttonContainer.style.marginTop = '30px';
-        buttonContainer.style.flexWrap = 'wrap';
-        buttonContainer.style.justifyContent = 'center';
-        if (isCompactLayout) {
-            buttonContainer.style.flexDirection = 'column';
-            buttonContainer.style.alignItems = 'center';
-        }
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'loadout-select';
-            this.startMenuTransition();
-            this.renderLoadoutSelectionScreen(this.contentElement);
-        }, '#666666');
-        buttonContainer.appendChild(backButton);
-
-        container.appendChild(buttonContainer);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-    }
-
-    private createLoadoutSection(
-        container: HTMLElement,
-        title: string,
-        loadouts: (BaseLoadout | SpawnLoadout)[],
-        selectedId: string | null,
-        onSelect: (id: string) => void,
-        isCompact: boolean
-    ): void {
-        const section = document.createElement('div');
-        
-        const sectionTitle = document.createElement('h3');
-        sectionTitle.textContent = title;
-        sectionTitle.style.fontSize = isCompact ? '24px' : '32px';
-        sectionTitle.style.color = '#00AAFF';
-        sectionTitle.style.marginBottom = '15px';
-        sectionTitle.style.fontWeight = 'bold';
-        sectionTitle.dataset.particleText = 'true';
-        sectionTitle.dataset.particleColor = '#00AAFF';
-        section.appendChild(sectionTitle);
-
-        const optionsContainer = document.createElement('div');
-        optionsContainer.style.display = 'flex';
-        optionsContainer.style.flexDirection = 'column';
-        optionsContainer.style.gap = '10px';
-
-        loadouts.forEach(loadout => {
-            const isSelected = loadout.id === selectedId;
-            const optionDiv = document.createElement('div');
-            optionDiv.style.padding = '15px';
-            optionDiv.style.backgroundColor = isSelected ? 'rgba(0, 170, 255, 0.2)' : 'rgba(0, 0, 0, 0.3)';
-            optionDiv.style.border = isSelected ? '2px solid #00AAFF' : '2px solid rgba(255, 255, 255, 0.2)';
-            optionDiv.style.borderRadius = '8px';
-            optionDiv.style.cursor = 'pointer';
-            optionDiv.style.transition = 'all 0.2s';
-
-            const nameDiv = document.createElement('div');
-            nameDiv.textContent = loadout.name;
-            nameDiv.style.fontSize = '22px';
-            nameDiv.style.color = isSelected ? '#00AAFF' : '#FFFFFF';
-            nameDiv.style.fontWeight = 'bold';
-            nameDiv.style.marginBottom = '5px';
-            nameDiv.dataset.particleText = 'true';
-            nameDiv.dataset.particleColor = isSelected ? '#00AAFF' : '#FFFFFF';
-            optionDiv.appendChild(nameDiv);
-
-            const descDiv = document.createElement('div');
-            descDiv.textContent = loadout.description;
-            descDiv.style.fontSize = '18px';
-            descDiv.style.color = '#CCCCCC';
-            optionDiv.appendChild(descDiv);
-
-            optionDiv.addEventListener('click', () => {
-                onSelect(loadout.id);
+        renderLoadoutCustomizationScreen(container, {
+            selectedFaction: this.settings.selectedFaction,
+            baseLoadouts: this.baseLoadouts,
+            spawnLoadouts: this.spawnLoadouts,
+            selectedBaseLoadout: this.settings.selectedBaseLoadout,
+            selectedSpawnLoadout: this.settings.selectedSpawnLoadout,
+            selectedHeroNames: this.settings.selectedHeroNames,
+            onFactionMissing: () => {
+                this.currentScreen = 'faction-select';
+                this.renderFactionSelectionScreen(container);
+            },
+            onBaseLoadoutSelect: (id: string) => {
+                this.settings.selectedBaseLoadout = id;
                 this.renderLoadoutCustomizationScreen(this.contentElement);
-            });
-
-            optionDiv.addEventListener('mouseenter', () => {
-                if (!isSelected) {
-                    optionDiv.style.backgroundColor = 'rgba(0, 170, 255, 0.1)';
-                    optionDiv.style.borderColor = '#00AAFF';
-                }
-            });
-
-            optionDiv.addEventListener('mouseleave', () => {
-                if (!isSelected) {
-                    optionDiv.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-                    optionDiv.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                }
-            });
-
-            optionsContainer.appendChild(optionDiv);
+            },
+            onSpawnLoadoutSelect: (id: string) => {
+                this.settings.selectedSpawnLoadout = id;
+                this.renderLoadoutCustomizationScreen(this.contentElement);
+            },
+            onSelectHeroes: () => {
+                this.currentScreen = 'loadout-select';
+                this.startMenuTransition();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'loadout-select';
+                this.startMenuTransition();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
         });
-
-        section.appendChild(optionsContainer);
-        container.appendChild(section);
     }
 
     private renderLoadoutSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
 
-        container.style.justifyContent = 'flex-start';
-
-        // Header with back button
-        const header = document.createElement('div');
-        header.style.display = 'flex';
-        header.style.justifyContent = 'flex-start';
-        header.style.width = '100%';
-        header.style.maxWidth = isCompactLayout ? '100%' : '900px';
-        header.style.padding = isCompactLayout ? '10px' : '10px 0';
-        header.style.alignSelf = 'center';
-
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'main';
-            this.startMenuTransition();
-            this.renderMainScreen(this.contentElement);
-        }, '#666666');
-        backButton.style.fontSize = '18px';
-        backButton.style.padding = '8px 18px';
-        header.appendChild(backButton);
-        container.appendChild(header);
-
-        // Faction carousel
-        const carouselContainer = document.createElement('div');
-        carouselContainer.style.width = '100%';
-        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
-        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = isCompactLayout ? '10px' : '12px';
-        container.appendChild(carouselContainer);
-
-        const factions: FactionCarouselOption[] = [
-            { 
-                id: Faction.RADIANT, 
-                name: 'Radiant', 
-                description: 'Well-Balanced, Ranged-Focused',
-                color: '#FF5722' // Deep yet bright reddish-orange (like glowing embers)
-            },
-            { 
-                id: Faction.AURUM, 
-                name: 'Aurum', 
-                description: 'Fast-Paced, Melee-Focused',
-                color: '#FFD700' // Bright gold
-            },
-            { 
-                id: Faction.VELARIS, 
-                name: 'Velaris', 
-                description: 'Strategic, Ability-Heavy. Particles from Nebulae',
-                color: '#9C27B0' // Purple
-            }
-        ];
-
-        const selectedIndex = factions.findIndex((faction) => faction.id === this.settings.selectedFaction);
-        const initialIndex = selectedIndex >= 0 ? selectedIndex : 0;
-        if (!this.settings.selectedFaction && factions.length > 0) {
-            this.settings.selectedFaction = factions[initialIndex].id;
+        // Ensure defaults
+        if (!this.settings.selectedFaction) {
+            this.settings.selectedFaction = Faction.RADIANT;
             this.settings.selectedHeroes = [];
             this.ensureDefaultHeroSelection();
         }
 
-        this.factionCarousel = new FactionCarouselView(carouselContainer, factions, initialIndex);
-        this.factionCarousel.onSelectionChange((option) => {
-            if (this.settings.selectedFaction !== option.id) {
-                this.settings.selectedFaction = option.id;
-                this.settings.selectedHeroes = [];
-                this.ensureDefaultHeroSelection();
-                this.renderLoadoutSelectionScreen(this.contentElement);
-                return;
-            }
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-        this.factionCarousel.onRender(() => {
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-
-        // Hero selection title
-        const title = document.createElement('h2');
-        title.textContent = 'Select 4 Heroes';
-        title.style.fontSize = isCompactLayout ? '26px' : '36px';
-        title.style.marginBottom = isCompactLayout ? '8px' : '12px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
 
-        // Selection counter
-        const counter = document.createElement('div');
-        counter.textContent = `Selected: ${this.settings.selectedHeroes.length} / 4`;
-        counter.style.fontSize = isCompactLayout ? '24px' : '26px';
-        counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        counter.style.color = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
-        counter.style.fontWeight = '300';
-        counter.dataset.particleText = 'true';
-        counter.dataset.particleColor = this.settings.selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
-        container.appendChild(counter);
-
-        // Hero grid
-        const heroGrid = document.createElement('div');
-        heroGrid.style.display = 'grid';
-        heroGrid.style.gridTemplateColumns = isCompactLayout
-            ? 'repeat(2, minmax(0, 1fr))'
-            : 'repeat(auto-fit, minmax(280px, 1fr))';
-        heroGrid.style.gap = '15px';
-        heroGrid.style.maxWidth = '1200px';
-        heroGrid.style.padding = '20px';
-        heroGrid.style.marginBottom = '20px';
-        heroGrid.style.maxHeight = isCompactLayout ? 'none' : '600px';
-        heroGrid.style.overflowY = isCompactLayout ? 'visible' : 'auto';
-
-        // Filter heroes by selected faction
-        const factionHeroes = this.heroUnits.filter(hero => hero.faction === this.settings.selectedFaction);
-
-        for (const hero of factionHeroes) {
-            const isSelected = this.settings.selectedHeroes.includes(hero.id);
-            const canSelect = isSelected || this.settings.selectedHeroes.length < 4;
-
-            const heroCard = document.createElement('div');
-            heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
-            heroCard.style.border = '2px solid transparent';
-            heroCard.style.borderRadius = '10px';
-            heroCard.style.padding = '15px';
-            heroCard.style.cursor = canSelect ? 'pointer' : 'not-allowed';
-            heroCard.style.transition = 'all 0.3s';
-            heroCard.style.opacity = canSelect ? '1' : '0.5';
-            heroCard.style.minHeight = '300px';
-            heroCard.dataset.particleBox = 'true';
-            heroCard.dataset.particleColor = isSelected ? '#00FF88' : '#66B3FF';
-
-            if (canSelect) {
-                heroCard.addEventListener('mouseenter', () => {
-                    if (!isSelected) {
-                        heroCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                        heroCard.style.transform = 'scale(1.02)';
-                    }
-                });
-
-                heroCard.addEventListener('mouseleave', () => {
-                    heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
-                    heroCard.style.transform = 'scale(1)';
-                });
-
-                heroCard.addEventListener('click', () => {
-                    if (isSelected) {
-                        // Deselect hero
-                        this.settings.selectedHeroes = this.settings.selectedHeroes.filter(id => id !== hero.id);
-                    } else if (this.settings.selectedHeroes.length < 4) {
-                        // Select hero
-                        this.settings.selectedHeroes.push(hero.id);
-                    }
-                    this.settings.selectedHeroNames = this.getSelectedHeroNames();
+        renderLoadoutSelectionScreen(container, {
+            selectedFaction: this.settings.selectedFaction,
+            selectedHeroes: this.settings.selectedHeroes,
+            heroUnits: this.heroUnits,
+            onFactionChange: (faction: Faction) => {
+                if (this.settings.selectedFaction !== faction) {
+                    this.settings.selectedFaction = faction;
+                    this.settings.selectedHeroes = [];
+                    this.ensureDefaultHeroSelection();
                     this.renderLoadoutSelectionScreen(this.contentElement);
-                });
-            }
-
-            // Hero name
-            const heroName = document.createElement('h4');
-            heroName.textContent = hero.name;
-            heroName.style.fontSize = '24px';
-            heroName.style.marginBottom = '8px';
-            heroName.style.color = isSelected ? '#00FF88' : '#E0F2FF';
-            heroName.style.fontWeight = '300';
-            heroName.dataset.particleText = 'true';
-            heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
-            heroCard.appendChild(heroName);
-
-            // Hero description
-            const heroDesc = document.createElement('p');
-            heroDesc.textContent = hero.description;
-            heroDesc.style.fontSize = '24px';
-            heroDesc.style.lineHeight = '1.4';
-            heroDesc.style.color = '#AAAAAA';
-            heroDesc.style.marginBottom = '10px';
-            heroDesc.style.fontWeight = '300';
-            heroDesc.dataset.particleText = 'true';
-            heroDesc.dataset.particleColor = '#AAAAAA';
-            heroCard.appendChild(heroDesc);
-
-            // Stats section
-            const statsContainer = document.createElement('div');
-            statsContainer.style.fontSize = '24px';
-            statsContainer.style.lineHeight = '1.6';
-            statsContainer.style.color = '#CCCCCC';
-            statsContainer.style.marginBottom = '8px';
-            statsContainer.style.padding = '8px';
-            statsContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-            statsContainer.style.borderRadius = '5px';
-            statsContainer.style.fontWeight = '300';
-
-            // Create stat rows
-            const healthStat = document.createElement('div');
-            healthStat.textContent = `HP: ${hero.maxHealth}`;
-            healthStat.style.color = '#CCCCCC';
-            healthStat.style.fontWeight = 'bold';
-            healthStat.dataset.particleText = 'true';
-            healthStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(healthStat);
-
-            const regenStat = document.createElement('div');
-            regenStat.textContent = `RGN: ${hero.regen}%`;
-            regenStat.style.color = '#CCCCCC';
-            regenStat.style.fontWeight = 'bold';
-            regenStat.dataset.particleText = 'true';
-            regenStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(regenStat);
-
-            const defenseStat = document.createElement('div');
-            defenseStat.textContent = `DEF: ${hero.defense}%`;
-            defenseStat.style.color = '#CCCCCC';
-            defenseStat.style.fontWeight = 'bold';
-            defenseStat.dataset.particleText = 'true';
-            defenseStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(defenseStat);
-
-            const attackStat = document.createElement('div');
-            const attackSuffix = hero.attackIgnoresDefense ? ' (ignores defense)' : '';
-            attackStat.textContent = `ATK: ${hero.attackDamage}${attackSuffix}`;
-            attackStat.style.color = '#CCCCCC';
-            attackStat.style.fontWeight = 'bold';
-            attackStat.dataset.particleText = 'true';
-            attackStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(attackStat);
-
-            const attackSpeedStat = document.createElement('div');
-            attackSpeedStat.textContent = `SPD: ${hero.attackSpeed}/s`;
-            attackSpeedStat.style.color = '#CCCCCC';
-            attackSpeedStat.style.fontWeight = 'bold';
-            attackSpeedStat.dataset.particleText = 'true';
-            attackSpeedStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(attackSpeedStat);
-
-            const rangeStat = document.createElement('div');
-            rangeStat.textContent = `RNG: ${hero.attackRange}`;
-            rangeStat.style.color = '#CCCCCC';
-            rangeStat.style.fontWeight = 'bold';
-            rangeStat.dataset.particleText = 'true';
-            rangeStat.dataset.particleColor = '#CCCCCC';
-            statsContainer.appendChild(rangeStat);
-
-            heroCard.appendChild(statsContainer);
-
-            // Ability description
-            const abilityDesc = document.createElement('div');
-            abilityDesc.style.fontSize = '24px';
-            abilityDesc.style.lineHeight = '1.4';
-            abilityDesc.style.color = '#FFD700';
-            abilityDesc.style.marginBottom = '8px';
-            abilityDesc.style.fontStyle = 'italic';
-            abilityDesc.style.fontWeight = 'bold';
-            abilityDesc.textContent = `${hero.abilityDescription}`;
-            abilityDesc.dataset.particleText = 'true';
-            abilityDesc.dataset.particleColor = '#FFD700';
-            heroCard.appendChild(abilityDesc);
-
-            // Selection indicator
-            if (isSelected) {
-                const indicator = document.createElement('div');
-                indicator.textContent = '✓ Selected';
-                indicator.style.fontSize = '24px';
-                indicator.style.marginTop = '8px';
-                indicator.style.color = '#00FF88';
-                indicator.style.fontWeight = '300';
-                indicator.dataset.particleText = 'true';
-                indicator.dataset.particleColor = '#00FF88';
-                heroCard.appendChild(indicator);
-            }
-
-            heroGrid.appendChild(heroCard);
-        }
-
-        container.appendChild(heroGrid);
-
-        const actionContainer = document.createElement('div');
-        actionContainer.style.display = 'flex';
-        actionContainer.style.gap = '20px';
-        actionContainer.style.marginTop = '20px';
-        actionContainer.style.flexWrap = 'wrap';
-        actionContainer.style.justifyContent = 'center';
-        if (isCompactLayout) {
-            actionContainer.style.flexDirection = 'column';
-            actionContainer.style.alignItems = 'center';
-        }
-
-        const customizeButton = this.createButton('CUSTOMIZE LOADOUT', () => {
-            this.currentScreen = 'loadout-customization';
-            this.startMenuTransition();
-            this.renderLoadoutCustomizationScreen(this.contentElement);
-        }, '#00AAFF');
-        actionContainer.appendChild(customizeButton);
-
-        // Confirm button (only enabled if 4 heroes selected)
-        if (this.settings.selectedHeroes.length === 4) {
-            const confirmButton = this.createButton('CONFIRM LOADOUT', () => {
+                }
+            },
+            onHeroToggle: (heroId: string, isSelected: boolean) => {
+                if (isSelected) {
+                    this.settings.selectedHeroes = this.settings.selectedHeroes.filter(id => id !== heroId);
+                } else if (this.settings.selectedHeroes.length < 4) {
+                    this.settings.selectedHeroes.push(heroId);
+                }
+                this.settings.selectedHeroNames = this.getSelectedHeroNames();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+            },
+            onCustomizeLoadout: () => {
+                this.currentScreen = 'loadout-customization';
+                this.startMenuTransition();
+                this.renderLoadoutCustomizationScreen(this.contentElement);
+            },
+            onConfirm: () => {
                 this.currentScreen = 'main';
                 this.startMenuTransition();
                 this.renderMainScreen(this.contentElement);
-            }, '#00FF88');
-            actionContainer.appendChild(confirmButton);
-        }
-        container.appendChild(actionContainer);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer,
+            onCarouselCreated: (carousel) => {
+                this.factionCarousel = carousel;
+            }
+        });
     }
 
     private createButton(text: string, onClick: () => void, color: string = '#FFD700'): HTMLButtonElement {
@@ -3092,7 +2627,7 @@ export class MainMenu {
 /**
  * Faction carousel view - displays factions in a horizontal carousel
  */
-class FactionCarouselView {
+export class FactionCarouselView {
     private static readonly ITEM_SPACING_PX = 210;
     private static readonly BASE_SIZE_PX = 224;
     private static readonly TEXT_SCALE = 2.4;
