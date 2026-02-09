@@ -2209,16 +2209,19 @@ export class GameState {
         preferredRadius: number,
         stellarForge: StellarForge
     ): Vector2D | null {
-        const mirrorRadius = 20; // Mirror collision radius
+        const mirrorRadius = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
         
-        // Try the preferred position first
+        // Try multiple radius and angle combinations to find a valid position
+        // The search pattern varies both closer/farther and left/right from preferred position
         for (let radiusAttempt = 0; radiusAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; radiusAttempt++) {
-            // Vary radius slightly to avoid obstacles
-            const radius = preferredRadius + (radiusAttempt * 30) - 60;
+            // Vary radius: starts closer (-60), then moves through preferred (0) to farther (+60)
+            // This explores positions both closer to sun and farther from sun
+            const radius = preferredRadius + (radiusAttempt * Constants.AI_MIRROR_RADIUS_VARIATION_STEP_PX) - Constants.AI_MIRROR_RADIUS_VARIATION_OFFSET_PX;
             
             for (let angleAttempt = 0; angleAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; angleAttempt++) {
-                // Vary angle slightly to find clear spots
-                const angleDelta = (angleAttempt * 0.15) - 0.6;
+                // Vary angle: starts left (-0.6 rad), then moves through preferred (0) to right (+0.6 rad)
+                // This explores positions in an arc around the preferred angle
+                const angleDelta = (angleAttempt * Constants.AI_MIRROR_ANGLE_VARIATION_STEP_RAD) - Constants.AI_MIRROR_ANGLE_VARIATION_OFFSET_RAD;
                 const angle = preferredAngle + angleDelta;
                 
                 const candidate = new Vector2D(
@@ -2273,13 +2276,22 @@ export class GameState {
     }
 
     /**
+     * Check if a unit is eligible to be a guard (hero or starling)
+     */
+    private isGuardEligible(unit: Unit): boolean {
+        return unit.isHero || unit instanceof Starling;
+    }
+
+    /**
      * Position defensive units near mirrors for hard difficulty AI
      */
     private positionGuardsNearMirrors(player: Player): void {
         // Only run this occasionally to avoid excessive computation
+        // Check every 5 seconds to reassess mirror guard positions
+        const guardCheckInterval = 5.0;
         const timeSinceLastDefense = this.gameTime - (player.aiNextDefenseCommandSec - Constants.AI_DEFENSE_COMMAND_INTERVAL_SEC);
-        if (timeSinceLastDefense < 5.0) {
-            return; // Only check every 5 seconds
+        if (timeSinceLastDefense < guardCheckInterval) {
+            return;
         }
         
         // Find unguarded mirrors (mirrors without nearby defensive units)
@@ -2289,7 +2301,7 @@ export class GameState {
             
             // Check if there's already a unit or building near this mirror
             for (const unit of player.units) {
-                if (unit.isHero || unit instanceof Starling) {
+                if (this.isGuardEligible(unit)) {
                     const distance = unit.position.distanceTo(mirror.position);
                     if (distance < guardRadius * 2) {
                         hasNearbyGuard = true;
@@ -2317,7 +2329,7 @@ export class GameState {
                     if (guardsAssigned >= maxGuards) break;
                     
                     // Assign starlings or hero units to guard
-                    if (unit instanceof Starling || unit.isHero) {
+                    if (this.isGuardEligible(unit)) {
                         // Check if unit is far from mirror (to avoid reassigning guards constantly)
                         const distance = unit.position.distanceTo(mirror.position);
                         if (distance > guardRadius * 3) {
@@ -2961,14 +2973,14 @@ export class GameState {
                 );
                 
                 // If target is blocked, try to find alternative position
-                if (this.checkCollision(leftTarget, 20)) {
+                if (this.checkCollision(leftTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
                     // Try closer or further positions
                     for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
                         const altTarget = new Vector2D(
                             forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
                             forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
                         );
-                        if (!this.checkCollision(altTarget, 20)) {
+                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
                             leftTarget = altTarget;
                             break;
                         }
@@ -2986,14 +2998,14 @@ export class GameState {
                 );
                 
                 // If target is blocked, try to find alternative position
-                if (this.checkCollision(rightTarget, 20)) {
+                if (this.checkCollision(rightTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
                     // Try closer or further positions
                     for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
                         const altTarget = new Vector2D(
                             forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
                             forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
                         );
-                        if (!this.checkCollision(altTarget, 20)) {
+                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
                             rightTarget = altTarget;
                             break;
                         }
