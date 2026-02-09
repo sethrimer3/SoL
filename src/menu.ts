@@ -66,7 +66,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'replays' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -872,6 +872,11 @@ export class MainMenu {
                 description: 'Begin game'
             },
             {
+                id: 'replays',
+                name: 'REPLAYS',
+                description: 'Watch saved matches'
+            },
+            {
                 id: 'maps',
                 name: 'MAPS',
                 description: 'Select map'
@@ -906,6 +911,11 @@ export class MainMenu {
                     this.currentScreen = 'game-mode-select';
                     this.startMenuTransition();
                     this.renderGameModeSelectionScreen(this.contentElement);
+                    break;
+                case 'replays':
+                    this.currentScreen = 'replays';
+                    this.startMenuTransition();
+                    this.renderReplaysScreen(this.contentElement);
                     break;
                 case 'maps':
                     this.currentScreen = 'maps';
@@ -3086,6 +3096,67 @@ export class MainMenu {
         }
         container.appendChild(actionContainer);
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+    }
+
+    private renderReplaysScreen(container: HTMLElement): void {
+        this.setTestLevelButtonVisible(false);
+        this.setLadButtonVisible(false);
+        this.setMenuParticleDensity(1.0);
+        container.style.justifyContent = 'flex-start';
+        
+        // Title
+        const title = document.createElement('h2');
+        title.textContent = 'Match Replays';
+        title.style.fontSize = '36px';
+        title.style.color = '#FFFFFF';
+        title.style.marginBottom = '20px';
+        title.style.textAlign = 'center';
+        title.dataset.particleText = 'true';
+        title.dataset.particleColor = '#FFFFFF';
+        container.appendChild(title);
+        
+        // Coming soon message
+        const message = document.createElement('div');
+        message.style.fontSize = '18px';
+        message.style.color = '#D0D0D0';
+        message.style.textAlign = 'center';
+        message.style.marginBottom = '30px';
+        message.style.maxWidth = '600px';
+        message.textContent = 'Match replay feature is recording your games! UI for browsing and playback coming soon.';
+        message.dataset.particleText = 'true';
+        message.dataset.particleColor = '#D0D0D0';
+        container.appendChild(message);
+        
+        // Back button
+        const backButton = document.createElement('button');
+        backButton.textContent = 'BACK';
+        backButton.style.fontSize = '20px';
+        backButton.style.padding = '12px 32px';
+        backButton.style.backgroundColor = 'rgba(80, 80, 80, 0.8)';
+        backButton.style.color = '#FFFFFF';
+        backButton.style.border = '2px solid #666';
+        backButton.style.borderRadius = '8px';
+        backButton.style.cursor = 'pointer';
+        backButton.style.fontWeight = 'bold';
+        backButton.style.transition = 'all 0.2s';
+        backButton.dataset.particleText = 'true';
+        backButton.dataset.particleColor = '#FFFFFF';
+        
+        backButton.onmouseenter = () => {
+            backButton.style.backgroundColor = 'rgba(100, 100, 100, 0.9)';
+            backButton.style.borderColor = '#999';
+        };
+        backButton.onmouseleave = () => {
+            backButton.style.backgroundColor = 'rgba(80, 80, 80, 0.8)';
+            backButton.style.borderColor = '#666';
+        };
+        backButton.onclick = () => {
+            this.currentScreen = 'main';
+            this.startMenuTransition();
+            this.renderMainScreen(this.contentElement);
+        };
+        
+        container.appendChild(backButton);
     }
 
     private createButton(text: string, onClick: () => void, color: string = '#FFD700'): HTMLButtonElement {

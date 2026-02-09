@@ -8,6 +8,7 @@ import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
+import { ReplayManager, LocalReplayStorage, ReplayData, ReplayPlayerInfo, ReplayPlaybackState } from './replay';
 
 class GameController {
     public game: GameState | null = null;
@@ -51,6 +52,11 @@ class GameController {
     private isMultiplayer: boolean = false;
     private tickAccumulator: number = 0;
     private readonly TICK_INTERVAL_MS: number = 1000 / 30; // 30 ticks/second (33.333... ms)
+
+    // Replay properties
+    private replayStorage: LocalReplayStorage = new LocalReplayStorage();
+    private currentMatchId: string | null = null;
+    private matchStartSeed: number | null = null;
 
     private abilityArrowStarts: Vector2D[] = [];
 
@@ -1231,6 +1237,30 @@ class GameController {
 
         this.showInfo = settings.isBattleStatsInfoEnabled;
         this.renderer.showInfo = this.showInfo;
+
+        // Initialize replay recording for non-replay matches
+        if (!this.game.isReplayMode && this.matchStartSeed !== null && this.currentMatchId !== null) {
+            this.game.replayManager = new ReplayManager();
+            
+            // Create player info for replay
+            const replayPlayers: ReplayPlayerInfo[] = this.game.players.map((player, index) => ({
+                playerId: `player_${index}`,
+                playerIndex: index,
+                username: player.name,
+                faction: player.faction,
+                isWinner: false // Will be updated at game end
+            }));
+            
+            // Start recording
+            this.game.replayManager.startRecording(
+                this.currentMatchId,
+                this.matchStartSeed,
+                replayPlayers,
+                settings.selectedMap
+            );
+            
+            console.log(`Started replay recording for match ${this.currentMatchId}`);
+        }
 
         // Start game loop
         this.start();
@@ -3285,6 +3315,28 @@ class GameController {
         const winner = this.game.checkVictoryConditions();
         if (winner && this.game.isRunning) {
             this.game.isRunning = false;
+            
+            // Save replay if recording
+            if (this.game.replayManager && this.game.replayManager.getIsRecording()) {
+                const replayData = this.game.replayManager.stopRecording();
+                if (replayData) {
+                    // Update winner information
+                    for (const playerInfo of replayData.players) {
+                        if (this.game.players[playerInfo.playerIndex] === winner) {
+                            playerInfo.isWinner = true;
+                        }
+                    }
+                    
+                    // Save to local storage
+                    this.replayStorage.saveReplay(replayData)
+                        .then(() => {
+                            console.log(`Replay saved: ${replayData.id}`);
+                        })
+                        .catch((error) => {
+                            console.error('Failed to save replay:', error);
+                        });
+                }
+            }
         }
         
         if (this.game.isRunning) {

@@ -7,6 +7,7 @@ import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
 import { getGameRNG } from '../seeded-random';
+import { ReplayManager } from '../replay';
 import { Player } from './entities/player';
 import { Sun } from './entities/sun';
 import { Asteroid } from './entities/asteroid';
@@ -109,6 +110,10 @@ export class GameState {
     networkManager: NetworkManager | null = null; // Network manager for LAN/online play
     localPlayerIndex: number = 0; // Index of the local player (0 or 1)
     pendingCommands: GameCommand[] = []; // Commands from network to be processed
+
+    // Replay support
+    replayManager: ReplayManager | null = null; // Replay manager for recording/playback
+    isReplayMode: boolean = false; // True when playing back a replay
 
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
@@ -782,6 +787,11 @@ export class GameState {
         this.stateHashTickCounter += 1;
         if (this.stateHashTickCounter % Constants.STATE_HASH_TICK_INTERVAL === 0) {
             this.updateStateHash();
+            
+            // Record state hash if replay recording is active
+            if (this.replayManager && this.replayManager.getIsRecording() && !this.isReplayMode) {
+                this.replayManager.recordStateHash(this.stateHashTickCounter, this.stateHash);
+            }
         }
 
         // Update muzzle flashes
@@ -4229,6 +4239,11 @@ export class GameState {
     receiveNetworkCommand(command: GameCommand): void {
         // Add to pending commands queue to be processed in next update
         this.pendingCommands.push(command);
+        
+        // Record command if replay recording is active
+        if (this.replayManager && this.replayManager.getIsRecording() && !this.isReplayMode) {
+            this.replayManager.recordCommand(command);
+        }
     }
 
     /**
