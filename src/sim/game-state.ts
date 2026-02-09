@@ -2158,24 +2158,206 @@ export class GameState {
             return;
         }
 
+        // Determine mirror distance based on AI strategy
+        let radiusFromSun: number;
+        switch (player.aiStrategy) {
+            case Constants.AIStrategy.AGGRESSIVE:
+                radiusFromSun = sun.radius + Constants.AI_MIRROR_AGGRESSIVE_DISTANCE_PX;
+                break;
+            case Constants.AIStrategy.DEFENSIVE:
+                radiusFromSun = sun.radius + Constants.AI_MIRROR_DEFENSIVE_DISTANCE_PX;
+                break;
+            case Constants.AIStrategy.ECONOMIC:
+                radiusFromSun = sun.radius + Constants.AI_MIRROR_ECONOMIC_DISTANCE_PX;
+                break;
+            case Constants.AIStrategy.WAVES:
+                radiusFromSun = sun.radius + Constants.AI_MIRROR_WAVES_DISTANCE_PX;
+                break;
+            default:
+                radiusFromSun = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
+        }
+
         const mirrorCount = player.solarMirrors.length;
         const baseAngleRad = Math.atan2(
             player.stellarForge.position.y - sun.position.y,
             player.stellarForge.position.x - sun.position.x
         );
         const startAngleRad = baseAngleRad - (Constants.AI_MIRROR_ARC_SPACING_RAD * (mirrorCount - 1)) / 2;
-        const radiusPx = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
 
         for (let i = 0; i < mirrorCount; i++) {
             const mirror = player.solarMirrors[i];
             const angleRad = startAngleRad + Constants.AI_MIRROR_ARC_SPACING_RAD * i;
-            const target = new Vector2D(
-                sun.position.x + Math.cos(angleRad) * radiusPx,
-                sun.position.y + Math.sin(angleRad) * radiusPx
+            
+            // Try to find a valid position for the mirror
+            const target = this.findValidMirrorPosition(
+                sun,
+                angleRad,
+                radiusFromSun,
+                player.stellarForge
             );
-            const distance = mirror.position.distanceTo(target);
-            if (distance > Constants.AI_MIRROR_REPOSITION_THRESHOLD_PX) {
-                mirror.setTarget(target);
+            
+            if (target) {
+                const distance = mirror.position.distanceTo(target);
+                if (distance > Constants.AI_MIRROR_REPOSITION_THRESHOLD_PX) {
+                    mirror.setTarget(target);
+                }
+            }
+        }
+        
+        // For hard difficulty, position defensive units near mirrors
+        if (player.aiDifficulty === Constants.AIDifficulty.HARD) {
+            this.positionGuardsNearMirrors(player);
+        }
+    }
+
+    /**
+     * Find a valid mirror position that avoids asteroids and has line of sight to sun and base
+     */
+    private findValidMirrorPosition(
+        sun: Sun,
+        preferredAngle: number,
+        preferredRadius: number,
+        stellarForge: StellarForge
+    ): Vector2D | null {
+        const mirrorRadius = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
+        
+        // Try multiple radius and angle combinations to find a valid position
+        // The search pattern varies both closer/farther and left/right from preferred position
+        for (let radiusAttempt = 0; radiusAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; radiusAttempt++) {
+            // Vary radius: starts closer (-60), then moves through preferred (0) to farther (+60)
+            // This explores positions both closer to sun and farther from sun
+            const radius = preferredRadius + (radiusAttempt * Constants.AI_MIRROR_RADIUS_VARIATION_STEP_PX) - Constants.AI_MIRROR_RADIUS_VARIATION_OFFSET_PX;
+            
+            for (let angleAttempt = 0; angleAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; angleAttempt++) {
+                // Vary angle: starts left (-0.6 rad), then moves through preferred (0) to right (+0.6 rad)
+                // This explores positions in an arc around the preferred angle
+                const angleDelta = (angleAttempt * Constants.AI_MIRROR_ANGLE_VARIATION_STEP_RAD) - Constants.AI_MIRROR_ANGLE_VARIATION_OFFSET_RAD;
+                const angle = preferredAngle + angleDelta;
+                
+                const candidate = new Vector2D(
+                    sun.position.x + Math.cos(angle) * radius,
+                    sun.position.y + Math.sin(angle) * radius
+                );
+                
+                // Check if position is valid (not in asteroid)
+                if (this.checkCollision(candidate, mirrorRadius)) {
+                    continue;
+                }
+                
+                // Check if mirror would have line of sight to sun
+                if (!this.hasLineOfSight(candidate, sun.position, mirrorRadius)) {
+                    continue;
+                }
+                
+                // Check if mirror would have line of sight to forge
+                if (!this.hasLineOfSight(candidate, stellarForge.position, mirrorRadius)) {
+                    continue;
+                }
+                
+                // Found a valid position
+                return candidate;
+            }
+        }
+        
+        // No valid position found
+        return null;
+    }
+
+    /**
+     * Check if there's a clear line of sight between two points
+     */
+    private hasLineOfSight(from: Vector2D, to: Vector2D, objectRadius: number = 0): boolean {
+        const direction = new Vector2D(
+            to.x - from.x,
+            to.y - from.y
+        ).normalize();
+        
+        const ray = new LightRay(from, direction);
+        const distance = from.distanceTo(to);
+        
+        for (const asteroid of this.asteroids) {
+            const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+            if (intersectionDist !== null && intersectionDist < distance - objectRadius) {
+                return false; // Path is blocked
+            }
+        }
+        
+        return true; // Path is clear
+    }
+
+    /**
+     * Check if a unit is eligible to be a guard (hero or starling)
+     */
+    private isGuardEligible(unit: Unit): boolean {
+        return unit.isHero || unit instanceof Starling;
+    }
+
+    /**
+     * Position defensive units near mirrors for hard difficulty AI
+     */
+    private positionGuardsNearMirrors(player: Player): void {
+        // Only run this occasionally to avoid excessive computation
+        // Check every 5 seconds to reassess mirror guard positions
+        const guardCheckInterval = 5.0;
+        const timeSinceLastDefense = this.gameTime - (player.aiNextDefenseCommandSec - Constants.AI_DEFENSE_COMMAND_INTERVAL_SEC);
+        if (timeSinceLastDefense < guardCheckInterval) {
+            return;
+        }
+        
+        // Find unguarded mirrors (mirrors without nearby defensive units)
+        for (const mirror of player.solarMirrors) {
+            let hasNearbyGuard = false;
+            const guardRadius = Constants.AI_MIRROR_GUARD_DISTANCE_PX;
+            
+            // Check if there's already a unit or building near this mirror
+            for (const unit of player.units) {
+                if (this.isGuardEligible(unit)) {
+                    const distance = unit.position.distanceTo(mirror.position);
+                    if (distance < guardRadius * 2) {
+                        hasNearbyGuard = true;
+                        break;
+                    }
+                }
+            }
+            
+            if (!hasNearbyGuard) {
+                for (const building of player.buildings) {
+                    const distance = building.position.distanceTo(mirror.position);
+                    if (distance < guardRadius * 2) {
+                        hasNearbyGuard = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If mirror is unguarded, set rally points for some units to guard it
+            if (!hasNearbyGuard) {
+                let guardsAssigned = 0;
+                const maxGuards = 2; // Assign up to 2 units per mirror
+                
+                for (const unit of player.units) {
+                    if (guardsAssigned >= maxGuards) break;
+                    
+                    // Assign starlings or hero units to guard
+                    if (this.isGuardEligible(unit)) {
+                        // Check if unit is far from mirror (to avoid reassigning guards constantly)
+                        const distance = unit.position.distanceTo(mirror.position);
+                        if (distance > guardRadius * 3) {
+                            // Set rally point near mirror
+                            const guardPos = new Vector2D(
+                                mirror.position.x,
+                                mirror.position.y
+                            );
+                            
+                            if (unit.isHero) {
+                                unit.rallyPoint = guardPos;
+                            } else if (unit instanceof Starling) {
+                                unit.setManualRallyPoint(guardPos);
+                            }
+                            guardsAssigned++;
+                        }
+                    }
+                }
             }
         }
     }
@@ -2792,20 +2974,54 @@ export class GameState {
             const leftAngle = angleToForge + Math.PI / 2;
             const rightAngle = angleToForge - Math.PI / 2;
             
-            // Set target positions for the two mirrors
+            // Try to find valid positions for mirrors, avoiding asteroids
             if (player.solarMirrors.length >= 1) {
-                const leftTarget = new Vector2D(
+                // Try to place left mirror perpendicular to sun-forge line
+                let leftTarget = new Vector2D(
                     forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
                     forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
                 );
+                
+                // If target is blocked, try to find alternative position
+                if (this.checkCollision(leftTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
+                    // Try closer or further positions
+                    for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
+                        const altTarget = new Vector2D(
+                            forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
+                            forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
+                        );
+                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
+                            leftTarget = altTarget;
+                            break;
+                        }
+                    }
+                }
+                
                 player.solarMirrors[0].setTarget(leftTarget);
             }
             
             if (player.solarMirrors.length >= 2) {
-                const rightTarget = new Vector2D(
+                // Try to place right mirror perpendicular to sun-forge line
+                let rightTarget = new Vector2D(
                     forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
                     forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
                 );
+                
+                // If target is blocked, try to find alternative position
+                if (this.checkCollision(rightTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
+                    // Try closer or further positions
+                    for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
+                        const altTarget = new Vector2D(
+                            forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
+                            forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
+                        );
+                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
+                            rightTarget = altTarget;
+                            break;
+                        }
+                    }
+                }
+                
                 player.solarMirrors[1].setTarget(rightTarget);
             }
         }
@@ -3819,6 +4035,7 @@ export class GameState {
             mix(player.aiNextStructureCommandSec);
             mix(player.aiNextMirrorPurchaseCommandSec);
             mixString(player.aiStrategy);
+            mixString(player.aiDifficulty);
             mixInt(player.hasStrafeUpgrade ? 1 : 0);
             mixInt(player.hasRegenUpgrade ? 1 : 0);
             mixInt(player.hasBlinkUpgrade ? 1 : 0);

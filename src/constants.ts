@@ -329,6 +329,18 @@ export const AI_WAVES_HERO_MULTIPLIER = 1.2; // Slightly slower hero production
 export const AI_MIRROR_SUN_DISTANCE_PX = 220;
 export const AI_MIRROR_ARC_SPACING_RAD = 0.6;
 export const AI_MIRROR_REPOSITION_THRESHOLD_PX = 40;
+// Strategy-based mirror positioning (distance from sun)
+export const AI_MIRROR_AGGRESSIVE_DISTANCE_PX = 180;  // Very close to sun for max energy
+export const AI_MIRROR_DEFENSIVE_DISTANCE_PX = 400;   // Further from sun, closer to base
+export const AI_MIRROR_ECONOMIC_DISTANCE_PX = 250;    // Balanced distance
+export const AI_MIRROR_WAVES_DISTANCE_PX = 280;       // Moderate distance
+export const AI_MIRROR_PLACEMENT_ATTEMPTS = 8;        // Number of attempts to find valid mirror position
+export const AI_MIRROR_GUARD_DISTANCE_PX = 80;        // Distance from mirror to place guards
+export const AI_MIRROR_COLLISION_RADIUS_PX = 20;      // Mirror collision detection radius
+export const AI_MIRROR_RADIUS_VARIATION_STEP_PX = 30; // Step size for radius variation when finding positions
+export const AI_MIRROR_RADIUS_VARIATION_OFFSET_PX = 60; // Offset for radius variation (varies from -60 to +60)
+export const AI_MIRROR_ANGLE_VARIATION_STEP_RAD = 0.15; // Step size for angle variation when finding positions
+export const AI_MIRROR_ANGLE_VARIATION_OFFSET_RAD = 0.6; // Offset for angle variation (varies from -0.6 to +0.6)
 export const AI_DEFENSE_RADIUS_PX = 350;
 export const AI_STRUCTURE_PLACEMENT_DISTANCE_PX = 140;
 export const AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD = Math.PI / 4;
@@ -582,4 +594,11 @@ export enum AIStrategy {
     DEFENSIVE = "defensive",      // Build defensive structures early
     AGGRESSIVE = "aggressive",    // Rush with units
     WAVES = "waves"              // Build up then attack in waves
+}
+
+// AI Difficulty levels
+export enum AIDifficulty {
+    EASY = "easy",
+    NORMAL = "normal",
+    HARD = "hard"
 }
