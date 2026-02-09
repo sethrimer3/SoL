@@ -8,6 +8,7 @@ import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
+import { ReplayRecorder, ReplayPlayer, ReplayData, ReplaySpeed, downloadReplay, saveReplayToStorage } from './replay';
 
 class GameController {
     public game: GameState | null = null;
@@ -51,6 +52,12 @@ class GameController {
     private isMultiplayer: boolean = false;
     private tickAccumulator: number = 0;
     private readonly TICK_INTERVAL_MS: number = 1000 / 30; // 30 ticks/second (33.333... ms)
+
+    // Replay system properties
+    private replayRecorder: ReplayRecorder | null = null;
+    private replayPlayer: ReplayPlayer | null = null;
+    private isWatchingReplay: boolean = false;
+    private currentGameSeed: number = 0;
 
     private abilityArrowStarts: Vector2D[] = [];
 
@@ -1027,6 +1034,19 @@ class GameController {
     }
 
     private sendNetworkCommand(command: string, data: Record<string, unknown>): void {
+        // Record command for replay if recording is active
+        if (this.replayRecorder && this.replayRecorder.isActive() && this.game) {
+            const player = this.getLocalPlayer();
+            // Convert gameTime (seconds) to tick number assuming 60 ticks/second
+            const tickNumber = Math.floor(this.game.gameTime * 60);
+            this.replayRecorder.recordCommand({
+                tick: tickNumber,
+                playerId: player?.name || 'player',
+                command: command,
+                data: data
+            });
+        }
+
         // LAN multiplayer
         if (this.game && this.game.networkManager) {
             this.game.sendGameCommand(command, data);
@@ -1064,6 +1084,11 @@ class GameController {
     }
 
     private returnToMainMenu(): void {
+        // Stop replay recording if active
+        if (this.replayRecorder && this.replayRecorder.isActive()) {
+            this.stopReplayRecording();
+        }
+
         // Stop the game
         this.stop();
         this.game = null;
@@ -1087,6 +1112,73 @@ class GameController {
         
         // Show main menu
         this.menu.show();
+    }
+
+    private initializeReplayRecorder(settings: GameSettings): void {
+        if (!this.game || this.isWatchingReplay) {
+            return;
+        }
+
+        // Create replay player info from game state
+        const players = this.game.players.map((player, index) => ({
+            playerId: `p${index + 1}`,
+            playerName: player.name,
+            faction: player.faction,
+            isLocal: index === this.localPlayerIndex
+        }));
+
+        // Get map info
+        const mapInfo = {
+            forgePositions: this.game.players.map(p => {
+                if (!p.stellarForge) {
+                    console.warn('[Replay] Player missing stellarForge during recording');
+                    return new Vector2D(0, 0); // Fallback for safety
+                }
+                return p.stellarForge.position;
+            }),
+            mirrorPositions: this.game.players.map(p => p.solarMirrors.map(m => m.position)),
+            suns: this.game.suns.map(s => s.position)
+        };
+
+        // Create and start recorder
+        this.replayRecorder = new ReplayRecorder(
+            this.currentGameSeed,
+            players,
+            settings.gameMode || 'singleplayer',
+            mapInfo
+        );
+        this.replayRecorder.start();
+        console.log('[Replay] Recording started');
+    }
+
+    private stopReplayRecording(): void {
+        if (!this.replayRecorder || !this.replayRecorder.isActive()) {
+            return;
+        }
+
+        const replayData = this.replayRecorder.stop();
+        console.log(`[Replay] Recording stopped. ${replayData.commands.length} commands recorded.`);
+
+        // Auto-save to local storage
+        const timestamp = new Date(replayData.metadata.timestamp).toISOString().replace(/[:.]/g, '-');
+        const replayName = `match_${timestamp}`;
+        
+        try {
+            saveReplayToStorage(replayData, replayName);
+            console.log(`[Replay] Saved to storage as "${replayName}"`);
+        } catch (error) {
+            console.error('[Replay] Failed to save to storage:', error);
+        }
+
+        // Also offer download
+        try {
+            downloadReplay(replayData, `sol_replay_${replayName}.json`);
+            console.log('[Replay] Download initiated');
+        } catch (error) {
+            console.error('[Replay] Failed to download replay:', error);
+        }
+
+        this.replayRecorder = null;
     }
 
     constructor() {
@@ -1166,6 +1258,7 @@ class GameController {
         const isSinglePlayer = settings.gameMode !== 'lan' && settings.gameMode !== 'p2p' && settings.gameMode !== 'online';
         if (isSinglePlayer) {
             const matchSeed = generateMatchSeed();
+            this.currentGameSeed = matchSeed;
             setGameRNG(new SeededRandom(matchSeed));
             console.log(`[GameController] Initialized RNG with seed: ${matchSeed}`);
         }
@@ -1173,6 +1266,9 @@ class GameController {
         // Create game based on selected map
         this.game = this.createGameFromSettings(settings);
         this.renderer.selectedHeroNames = settings.selectedHeroNames;
+        
+        // Initialize replay recorder
+        this.initializeReplayRecorder(settings);
         
         // Set player and enemy colors from settings
         this.renderer.playerColor = settings.playerColor;
@@ -3285,6 +3381,10 @@ class GameController {
         const winner = this.game.checkVictoryConditions();
         if (winner && this.game.isRunning) {
             this.game.isRunning = false;
+            // Stop replay recording when game ends
+            if (this.replayRecorder && this.replayRecorder.isActive()) {
+                this.stopReplayRecording();
+            }
         }
         
         if (this.game.isRunning) {
