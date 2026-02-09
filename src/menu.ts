@@ -25,6 +25,7 @@ import { renderOnlinePlaceholderScreen } from './menu/screens/online-placeholder
 import { renderFactionSelectionScreen } from './menu/screens/faction-selection-screen';
 import { renderLoadoutCustomizationScreen } from './menu/screens/loadout-customization-screen';
 import { renderLoadoutSelectionScreen } from './menu/screens/loadout-selection-screen';
+import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
@@ -1496,53 +1497,26 @@ export class MainMenu {
     private renderP2PScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
 
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'P2P Multiplayer (Beta)';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Host match button
-        const hostButton = this.createButton('HOST MATCH', () => {
-            this.currentScreen = 'p2p-host';
-            this.startMenuTransition();
-            this.renderP2PHostScreen(this.contentElement);
-        }, '#00AA00');
-        hostButton.style.marginBottom = '20px';
-        hostButton.style.padding = '15px 40px';
-        hostButton.style.fontSize = '28px';
-        container.appendChild(hostButton);
-
-        // Join match button
-        const joinButton = this.createButton('JOIN MATCH', () => {
-            this.currentScreen = 'p2p-join';
-            this.startMenuTransition();
-            this.renderP2PJoinScreen(this.contentElement);
-        }, '#0088FF');
-        joinButton.style.marginBottom = '40px';
-        joinButton.style.padding = '15px 40px';
-        joinButton.style.fontSize = '28px';
-        container.appendChild(joinButton);
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'game-mode-select';
-            this.startMenuTransition();
-            this.renderGameModeSelectionScreen(this.contentElement);
-        }, '#666666');
-        container.appendChild(backButton);
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        renderP2PMenuScreen(container, {
+            onHost: () => {
+                this.currentScreen = 'p2p-host';
+                this.startMenuTransition();
+                this.renderP2PHostScreen(this.contentElement);
+            },
+            onJoin: () => {
+                this.currentScreen = 'p2p-join';
+                this.startMenuTransition();
+                this.renderP2PJoinScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderP2PHostScreen(container: HTMLElement): void {
