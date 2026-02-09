@@ -498,6 +498,9 @@ export function calculateMMRChange(
     kFactor: number = 32
 ): number {
     // Calculate expected score using Elo formula
+    // The constants 10 and 400 are standard Elo rating system values:
+    // - 10 is the base for the power calculation
+    // - 400 is the rating difference that corresponds to a 10:1 odds ratio
     const expectedScore = 1 / (1 + Math.pow(10, (opponentMMR - playerMMR) / 400));
     
     // Actual score: 1 for win, 0 for loss

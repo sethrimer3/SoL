@@ -2437,6 +2437,7 @@ export class MainMenu {
 
         const createInfoRow = (label: string, value: string, fullWidth: boolean = false) => {
             const row = document.createElement('div');
+            // fullWidth=true spans both columns for entries that need more space (e.g., long map names)
             if (fullWidth) {
                 row.style.gridColumn = '1 / -1';
             }
