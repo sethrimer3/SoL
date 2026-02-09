@@ -22,6 +22,11 @@ module.exports = {
     path: path.resolve(__dirname, 'dist'),
     clean: true,
   },
+  performance: {
+    hints: 'warning',
+    maxAssetSize: 800 * 1024,
+    maxEntrypointSize: 800 * 1024,
+  },
   plugins: [
     new HtmlWebpackPlugin({
       template: './src/index.html',
