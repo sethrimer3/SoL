@@ -1,56 +1,20 @@
-"use strict";
 /**
  * Player entity - Represents a player in the game
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Player = exports.Faction = void 0;
-const Constants = __importStar(require("../../constants"));
+import * as Constants from '../../constants';
 /**
  * Three playable factions in the game
  */
-var Faction;
+export var Faction;
 (function (Faction) {
     Faction["RADIANT"] = "Radiant";
     Faction["AURUM"] = "Aurum";
     Faction["VELARIS"] = "Velaris";
-})(Faction || (exports.Faction = Faction = {}));
+})(Faction || (Faction = {}));
 /**
  * Player in the game
  */
-class Player {
+export class Player {
     constructor(name, faction) {
         this.name = name;
         this.faction = faction;
@@ -66,6 +30,7 @@ class Player {
         this.aiNextStructureCommandSec = 0;
         this.aiNextMirrorPurchaseCommandSec = 0;
         this.aiStrategy = Constants.AIStrategy.ECONOMIC; // AI build strategy (randomly assigned in createStandardGame for AI players)
+        this.aiDifficulty = Constants.AIDifficulty.NORMAL; // AI difficulty level
         this.hasStrafeUpgrade = false;
         this.hasRegenUpgrade = false;
         this.hasBlinkUpgrade = false;
@@ -99,4 +64,3 @@ class Player {
         return false;
     }
 }
-exports.Player = Player;

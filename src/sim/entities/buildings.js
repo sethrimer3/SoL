@@ -1,51 +1,15 @@
-"use strict";
 /**
  * Building entities for SoL game
  * Extracted from game-core.ts
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.ShieldTower = exports.LockOnLaserTower = exports.StrikerTower = exports.SubsidiaryFactory = exports.SpaceDustSwirler = exports.GatlingTower = exports.Minigun = exports.Building = void 0;
-const math_1 = require("../math");
-const Constants = __importStar(require("../../constants"));
-const particles_1 = require("./particles");
-const seeded_random_1 = require("../../seeded-random");
+import { Vector2D } from '../math';
+import * as Constants from '../../constants';
+import { BulletCasing, BouncingBullet, LaserBeam, MuzzleFlash } from './particles';
+import { getGameRNG } from '../../seeded-random';
 /**
  * Base class for all buildings
  */
-class Building {
+export class Building {
     constructor(position, owner, maxHealth, radius, attackRange, attackDamage, attackSpeed // attacks per second
     ) {
         this.position = position;
@@ -178,12 +142,11 @@ class Building {
         return this.attackRange > 0 && this.attackDamage > 0;
     }
 }
-exports.Building = Building;
 /**
  * Cannon Building - Offensive building for Radiant faction
  * Fast-shooting defensive turret with visual effects like Marine
  */
-class Minigun extends Building {
+export class Minigun extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.MINIGUN_MAX_HEALTH, Constants.MINIGUN_RADIUS, Constants.MINIGUN_ATTACK_RANGE, Constants.MINIGUN_ATTACK_DAMAGE, Constants.MINIGUN_ATTACK_SPEED);
         this.lastShotEffects = {};
@@ -220,8 +183,8 @@ class Minigun extends Building {
                 stopStructure = null;
             }
         }
-        const endPos = new math_1.Vector2D(this.position.x + dirX * stopDistance, this.position.y + dirY * stopDistance);
-        const laserBeam = new particles_1.LaserBeam(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(endPos.x, endPos.y), this.owner, this.attackDamage, Constants.MINIGUN_LASER_WIDTH_PX);
+        const endPos = new Vector2D(this.position.x + dirX * stopDistance, this.position.y + dirY * stopDistance);
+        const laserBeam = new LaserBeam(new Vector2D(this.position.x, this.position.y), new Vector2D(endPos.x, endPos.y), this.owner, this.attackDamage, Constants.MINIGUN_LASER_WIDTH_PX);
         this.lastShotLasers.push(laserBeam);
         const beamHalfWidth = Constants.MINIGUN_LASER_WIDTH_PX * 0.5;
         const beamHalfWidthSq = beamHalfWidth * beamHalfWidth;
@@ -253,16 +216,16 @@ class Minigun extends Building {
         // Calculate angle to target
         const angle = Math.atan2(dy, dx);
         // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = new particles_1.MuzzleFlash(new math_1.Vector2D(this.position.x, this.position.y), angle);
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(new Vector2D(this.position.x, this.position.y), angle);
         // Create bullet casing with slight angle deviation
-        const rng = (0, seeded_random_1.getGameRNG)();
+        const rng = getGameRNG();
         const casingAngle = angle + Math.PI / 2 + rng.nextFloat(-0.25, 0.25);
         const casingSpeed = rng.nextFloat(Constants.BULLET_CASING_SPEED_MIN, Constants.BULLET_CASING_SPEED_MAX);
-        this.lastShotEffects.casing = new particles_1.BulletCasing(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed));
+        this.lastShotEffects.casing = new BulletCasing(new Vector2D(this.position.x, this.position.y), new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed));
         // Create bouncing bullet at target position
         const bounceAngle = angle + Math.PI + rng.nextFloat(-0.5, 0.5);
         const bounceSpeed = rng.nextFloat(Constants.BOUNCING_BULLET_SPEED_MIN, Constants.BOUNCING_BULLET_SPEED_MAX);
-        this.lastShotEffects.bouncingBullet = new particles_1.BouncingBullet(new math_1.Vector2D(target.position.x, target.position.y), new math_1.Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed));
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(new Vector2D(target.position.x, target.position.y), new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed));
     }
     /**
      * Get effects from last shot (for game state to manage)
@@ -329,12 +292,11 @@ class Minigun extends Building {
         return Constants.MIRROR_CLICK_RADIUS_PX;
     }
 }
-exports.Minigun = Minigun;
 /**
  * Gatling Tower Building - Offensive building for Radiant faction
  * Copy of Cannon/Minigun with identical effects
  */
-class GatlingTower extends Building {
+export class GatlingTower extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.GATLING_MAX_HEALTH, Constants.GATLING_RADIUS, Constants.GATLING_ATTACK_RANGE, Constants.GATLING_ATTACK_DAMAGE, Constants.GATLING_ATTACK_SPEED);
         this.lastShotEffects = {};
@@ -351,16 +313,16 @@ class GatlingTower extends Building {
         const dy = target.position.y - this.position.y;
         const angle = Math.atan2(dy, dx);
         // Create muzzle flash
-        this.lastShotEffects.muzzleFlash = new particles_1.MuzzleFlash(new math_1.Vector2D(this.position.x, this.position.y), angle);
+        this.lastShotEffects.muzzleFlash = new MuzzleFlash(new Vector2D(this.position.x, this.position.y), angle);
         // Create bullet casing with slight angle deviation
-        const rng = (0, seeded_random_1.getGameRNG)();
+        const rng = getGameRNG();
         const casingAngle = angle + Math.PI / 2 + rng.nextFloat(-0.25, 0.25);
         const casingSpeed = rng.nextFloat(Constants.BULLET_CASING_SPEED_MIN, Constants.BULLET_CASING_SPEED_MAX);
-        this.lastShotEffects.casing = new particles_1.BulletCasing(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed));
+        this.lastShotEffects.casing = new BulletCasing(new Vector2D(this.position.x, this.position.y), new Vector2D(Math.cos(casingAngle) * casingSpeed, Math.sin(casingAngle) * casingSpeed));
         // Create bouncing bullet at target position
         const bounceAngle = angle + Math.PI + rng.nextFloat(-0.5, 0.5);
         const bounceSpeed = rng.nextFloat(Constants.BOUNCING_BULLET_SPEED_MIN, Constants.BOUNCING_BULLET_SPEED_MAX);
-        this.lastShotEffects.bouncingBullet = new particles_1.BouncingBullet(new math_1.Vector2D(target.position.x, target.position.y), new math_1.Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed));
+        this.lastShotEffects.bouncingBullet = new BouncingBullet(new Vector2D(target.position.x, target.position.y), new Vector2D(Math.cos(bounceAngle) * bounceSpeed, Math.sin(bounceAngle) * bounceSpeed));
     }
     /**
      * Get effects from last shot (for game state to manage)
@@ -371,7 +333,6 @@ class GatlingTower extends Building {
         return effects;
     }
 }
-exports.GatlingTower = GatlingTower;
 /**
  * Space Dust Swirler Building - Defensive building for Radiant faction
  * Swirls space dust in counter-clockwise orbits and deflects non-melee projectiles
@@ -381,7 +342,7 @@ exports.GatlingTower = GatlingTower;
  * Swirls space dust in counter-clockwise orbits and absorbs projectiles within its influence radius.
  * The radius starts at half the max and grows over time, but shrinks when projectiles are absorbed.
  */
-class SpaceDustSwirler extends Building {
+export class SpaceDustSwirler extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.SWIRLER_MAX_HEALTH, Constants.SWIRLER_RADIUS, Constants.SWIRLER_ATTACK_RANGE, Constants.SWIRLER_ATTACK_DAMAGE, Constants.SWIRLER_ATTACK_SPEED);
         this.energyRequired = Constants.SWIRLER_COST;
@@ -476,12 +437,11 @@ class SpaceDustSwirler extends Building {
         return this.absorbProjectile(projectile);
     }
 }
-exports.SpaceDustSwirler = SpaceDustSwirler;
 /**
  * Foundry Building - Production building
  * Handles production and upgrades. Only one can exist at a time.
  */
-class SubsidiaryFactory extends Building {
+export class SubsidiaryFactory extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.SUBSIDIARY_FACTORY_MAX_HEALTH, Constants.SUBSIDIARY_FACTORY_RADIUS, Constants.SUBSIDIARY_FACTORY_ATTACK_RANGE, Constants.SUBSIDIARY_FACTORY_ATTACK_DAMAGE, Constants.SUBSIDIARY_FACTORY_ATTACK_SPEED);
         this.productionTimer = 0;
@@ -667,13 +627,12 @@ class SubsidiaryFactory extends Building {
         return true;
     }
 }
-exports.SubsidiaryFactory = SubsidiaryFactory;
 /**
  * Striker Tower - Manual-fire missile tower for Velaris faction
  * Reloads a missile every 10 seconds that the player must manually fire
  * Can only target areas that are in shade (not visible) and not visible by player units
  */
-class StrikerTower extends Building {
+export class StrikerTower extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.STRIKER_TOWER_MAX_HEALTH, Constants.STRIKER_TOWER_RADIUS, Constants.STRIKER_TOWER_ATTACK_RANGE, Constants.STRIKER_TOWER_ATTACK_DAMAGE, Constants.STRIKER_TOWER_ATTACK_SPEED);
         this.reloadTimer = 0;
@@ -793,13 +752,12 @@ class StrikerTower extends Building {
         return Math.min(1.0, this.reloadTimer / Constants.STRIKER_TOWER_RELOAD_TIME);
     }
 }
-exports.StrikerTower = StrikerTower;
 /**
  * Lock-on Laser Tower - Lock-on laser tower for Velaris faction
  * Locks onto an enemy within range, and if they don't leave, fires a laser
  * that does massive damage to all enemies in that direction
  */
-class LockOnLaserTower extends Building {
+export class LockOnLaserTower extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.LOCKON_TOWER_MAX_HEALTH, Constants.LOCKON_TOWER_RADIUS, Constants.LOCKON_TOWER_ATTACK_RANGE, Constants.LOCKON_TOWER_ATTACK_DAMAGE, Constants.LOCKON_TOWER_ATTACK_SPEED);
         this.lockedTarget = null;
@@ -875,9 +833,9 @@ class LockOnLaserTower extends Building {
                 stopStructure = null;
             }
         }
-        const endPos = new math_1.Vector2D(this.position.x + dirX * stopDistance, this.position.y + dirY * stopDistance);
+        const endPos = new Vector2D(this.position.x + dirX * stopDistance, this.position.y + dirY * stopDistance);
         // Create laser beam for rendering
-        const laserBeam = new particles_1.LaserBeam(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(endPos.x, endPos.y), this.owner, this.attackDamage, Constants.LOCKON_TOWER_LASER_WIDTH_PX);
+        const laserBeam = new LaserBeam(new Vector2D(this.position.x, this.position.y), new Vector2D(endPos.x, endPos.y), this.owner, this.attackDamage, Constants.LOCKON_TOWER_LASER_WIDTH_PX);
         this.lastShotLasers.push(laserBeam);
         // Damage all enemies along the laser beam
         const beamHalfWidth = Constants.LOCKON_TOWER_LASER_WIDTH_PX * 0.5;
@@ -980,12 +938,11 @@ class LockOnLaserTower extends Building {
         return Constants.MIRROR_CLICK_RADIUS_PX;
     }
 }
-exports.LockOnLaserTower = LockOnLaserTower;
 /**
  * Shield Tower Building - Defensive building for Radiant faction
  * Projects a shield that blocks enemies but allows friendly units to pass through
  */
-class ShieldTower extends Building {
+export class ShieldTower extends Building {
     constructor(position, owner) {
         super(position, owner, Constants.SHIELD_TOWER_MAX_HEALTH, Constants.SHIELD_TOWER_RADIUS, Constants.SHIELD_TOWER_ATTACK_RANGE, Constants.SHIELD_TOWER_ATTACK_DAMAGE, Constants.SHIELD_TOWER_ATTACK_SPEED);
         this.energyRequired = Constants.SHIELD_TOWER_COST;
@@ -1056,4 +1013,3 @@ class ShieldTower extends Building {
         return this.shieldHealth / this.maxShieldHealth;
     }
 }
-exports.ShieldTower = ShieldTower;

@@ -1,15 +1,12 @@
-"use strict";
 /**
  * Asteroid entity - Polygon obstacle that blocks light and casts shadows
  */
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Asteroid = void 0;
-const math_1 = require("../math");
-const seeded_random_1 = require("../../seeded-random");
+import { Vector2D } from '../math';
+import { getGameRNG } from '../../seeded-random';
 /**
  * Asteroid - Polygon obstacle that blocks light and casts shadows
  */
-class Asteroid {
+export class Asteroid {
     constructor(position, sides, // 3-9 sides (triangle to nonagon)
     size) {
         this.position = position;
@@ -18,7 +15,7 @@ class Asteroid {
         this.vertices = [];
         this.rotation = 0;
         this.generateVertices();
-        const rng = (0, seeded_random_1.getGameRNG)();
+        const rng = getGameRNG();
         this.rotationSpeed = rng.nextFloat(-0.25, 0.25); // Random rotation speed
     }
     /**
@@ -26,13 +23,13 @@ class Asteroid {
      */
     generateVertices() {
         this.vertices = [];
-        const rng = (0, seeded_random_1.getGameRNG)();
+        const rng = getGameRNG();
         for (let i = 0; i < this.sides; i++) {
             const angle = (Math.PI * 2 * i) / this.sides;
             // Add some randomness to make asteroids less uniform
             const radiusVariation = rng.nextFloat(0.8, 1.2);
             const radius = this.size * radiusVariation;
-            this.vertices.push(new math_1.Vector2D(Math.cos(angle) * radius, Math.sin(angle) * radius));
+            this.vertices.push(new Vector2D(Math.cos(angle) * radius, Math.sin(angle) * radius));
         }
     }
     /**
@@ -42,7 +39,7 @@ class Asteroid {
         return this.vertices.map(v => {
             const cos = Math.cos(this.rotation);
             const sin = Math.sin(this.rotation);
-            return new math_1.Vector2D(this.position.x + v.x * cos - v.y * sin, this.position.y + v.x * sin + v.y * cos);
+            return new Vector2D(this.position.x + v.x * cos - v.y * sin, this.position.y + v.x * sin + v.y * cos);
         });
     }
     /**
@@ -68,4 +65,3 @@ class Asteroid {
         return inside;
     }
 }
-exports.Asteroid = Asteroid;

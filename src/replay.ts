@@ -11,7 +11,7 @@
  */
 
 import { GameCommand } from './network';
-import { GameState, Player, Faction, Vector2D } from './sim';
+import { GameState, Player, Faction, Vector2D } from './game-core';
 import { SeededRandom, setGameRNG } from './seeded-random';
 
 /**

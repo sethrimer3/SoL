@@ -1,50 +1,14 @@
-"use strict";
 /**
  * Starling minion unit for SoL game
  * Basic minion unit that follows paths and attacks enemies
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.Starling = void 0;
-const math_1 = require("../math");
-const Constants = __importStar(require("../../constants"));
-const unit_1 = require("./unit");
-const particles_1 = require("./particles");
-const stellar_forge_1 = require("./stellar-forge");
-const seeded_random_1 = require("../../seeded-random");
-class Starling extends unit_1.Unit {
+import { Vector2D } from '../math';
+import * as Constants from '../../constants';
+import { Unit } from './unit';
+import { LaserBeam } from './particles';
+import { StellarForge } from './stellar-forge';
+import { getGameRNG } from '../../seeded-random';
+export class Starling extends Unit {
     constructor(position, owner, assignedPath = []) {
         super(position, owner, Constants.STARLING_MAX_HEALTH, Constants.STARLING_ATTACK_RANGE, Constants.STARLING_ATTACK_DAMAGE, Constants.STARLING_ATTACK_SPEED, Constants.STARLING_BLINK_COOLDOWN_SEC, Constants.STARLING_COLLISION_RADIUS_PX);
         this.explorationTarget = null;
@@ -57,7 +21,7 @@ class Starling extends unit_1.Unit {
         this.hasReachedFinalWaypoint = false; // True when starling reaches the last waypoint
         this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
         this.spriteLevel = 1; // Sprite level (1-4)
-        this.assignedPath = assignedPath.map((waypoint) => new math_1.Vector2D(waypoint.x, waypoint.y));
+        this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
     }
     /**
@@ -88,7 +52,7 @@ class Starling extends unit_1.Unit {
         }
     }
     setPath(path) {
-        this.assignedPath = path.map((waypoint) => new math_1.Vector2D(waypoint.x, waypoint.y));
+        this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
         this.currentPathWaypointIndex = 0;
         this.hasManualOrder = true;
@@ -151,7 +115,6 @@ class Starling extends unit_1.Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(gameState, enemies) {
-        var _a, _b;
         if (this.hasManualOrder) {
             return;
         }
@@ -159,14 +122,14 @@ class Starling extends unit_1.Unit {
         if (this.assignedPath.length > 0) {
             // Follow the base's path
             const targetWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-            const rallyTarget = (_a = this.getStandoffPointForWaypoint(gameState, targetWaypoint)) !== null && _a !== void 0 ? _a : targetWaypoint;
+            const rallyTarget = this.getStandoffPointForWaypoint(gameState, targetWaypoint) ?? targetWaypoint;
             // Check if we've reached the current waypoint
             if (this.position.distanceTo(rallyTarget) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
                 // Move to next waypoint if there is one
                 if (this.currentPathWaypointIndex < this.assignedPath.length - 1) {
                     this.currentPathWaypointIndex++;
                     const nextWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-                    this.rallyPoint = (_b = this.getStandoffPointForWaypoint(gameState, nextWaypoint)) !== null && _b !== void 0 ? _b : nextWaypoint;
+                    this.rallyPoint = this.getStandoffPointForWaypoint(gameState, nextWaypoint) ?? nextWaypoint;
                 }
                 else {
                     // We've reached the end of the path, stay here (pile up)
@@ -188,7 +151,7 @@ class Starling extends unit_1.Unit {
             let targetRadiusPx = null;
             // 1. Try to target enemy base if visible
             for (const enemy of enemies) {
-                if (enemy instanceof stellar_forge_1.StellarForge && enemy.owner !== this.owner) {
+                if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
                     // Check if enemy base is visible (not in shadow)
                     if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
                         targetPosition = enemy.position;
@@ -218,10 +181,10 @@ class Starling extends unit_1.Unit {
                 if (this.explorationTimer <= 0 || !this.explorationTarget ||
                     this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
                     // Pick a random position in shadow
-                    const rng = (0, seeded_random_1.getGameRNG)();
+                    const rng = getGameRNG();
                     const angle = rng.nextAngle();
                     const distance = rng.nextFloat(300, 800);
-                    this.explorationTarget = new math_1.Vector2D(this.position.x + Math.cos(angle) * distance, this.position.y + Math.sin(angle) * distance);
+                    this.explorationTarget = new Vector2D(this.position.x + Math.cos(angle) * distance, this.position.y + Math.sin(angle) * distance);
                     this.explorationTimer = Constants.STARLING_EXPLORATION_CHANGE_INTERVAL;
                 }
                 targetPosition = this.explorationTarget;
@@ -346,14 +309,14 @@ class Starling extends unit_1.Unit {
             return;
         }
         let finalDamage = attackDamage;
-        if (target instanceof stellar_forge_1.StellarForge) {
+        if (target instanceof StellarForge) {
             finalDamage = Math.max(0, attackDamage - Constants.STELLAR_FORGE_STARLING_DEFENSE);
         }
         // Create laser beam for visual effect
-        const laserBeam = new particles_1.LaserBeam(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(target.position.x, target.position.y), this.owner, finalDamage);
+        const laserBeam = new LaserBeam(new Vector2D(this.position.x, this.position.y), new Vector2D(target.position.x, target.position.y), this.owner, finalDamage);
         this.lastShotLasers.push(laserBeam);
         // Deal instant damage to target
-        if (target instanceof stellar_forge_1.StellarForge) {
+        if (target instanceof StellarForge) {
             target.health -= finalDamage;
         }
         else if ('takeDamage' in target) {
@@ -364,4 +327,3 @@ class Starling extends unit_1.Unit {
         }
     }
 }
-exports.Starling = Starling;

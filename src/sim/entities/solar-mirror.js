@@ -1,45 +1,9 @@
-"use strict";
 /**
  * Solar Mirror - Reflects light from suns to structures
  */
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.SolarMirror = void 0;
-const math_1 = require("../math");
-const Constants = __importStar(require("../../constants"));
-class SolarMirror {
+import { Vector2D, LightRay } from '../math';
+import * as Constants from '../../constants';
+export class SolarMirror {
     constructor(position, owner) {
         this.position = position;
         this.owner = owner;
@@ -49,7 +13,7 @@ class SolarMirror {
         this.isSelected = false;
         this.linkedStructure = null;
         this.targetPosition = null;
-        this.velocity = new math_1.Vector2D(0, 0);
+        this.velocity = new Vector2D(0, 0);
         this.reflectionAngle = 0; // Angle in radians for the flat surface rotation
         this.closestSunDistance = Infinity; // Distance to closest visible sun
         this.moveOrder = 0; // Movement order indicator (0 = no order)
@@ -68,8 +32,8 @@ class SolarMirror {
      * Helper method to avoid code duplication
      */
     isPathClear(target, asteroids = []) {
-        const direction = new math_1.Vector2D(target.x - this.position.x, target.y - this.position.y).normalize();
-        const ray = new math_1.LightRay(this.position, direction);
+        const direction = new Vector2D(target.x - this.position.x, target.y - this.position.y).normalize();
+        const ray = new LightRay(this.position, direction);
         const distance = this.position.distanceTo(target);
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
@@ -113,9 +77,9 @@ class SolarMirror {
         return this.hasLineOfSightToStructure(forge, asteroids, players);
     }
     hasLineOfSightToStructure(structure, asteroids = [], players = []) {
-        const direction = new math_1.Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
+        const direction = new Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
         const distanceToStructure = this.position.distanceTo(structure.position);
-        const ray = new math_1.LightRay(this.position, direction);
+        const ray = new LightRay(this.position, direction);
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
             if (intersectionDist !== null && intersectionDist < distanceToStructure) {
@@ -200,8 +164,7 @@ class SolarMirror {
         this.linkedStructure = structure;
     }
     getLinkedStructure(fallbackForge) {
-        var _a;
-        return (_a = this.linkedStructure) !== null && _a !== void 0 ? _a : fallbackForge;
+        return this.linkedStructure ?? fallbackForge;
     }
     /**
      * Update mirror reflection angle based on closest sun and linked structure
@@ -218,8 +181,8 @@ class SolarMirror {
         this.closestSunDistance = this.position.distanceTo(closestSun.position);
         // Calculate the reflection angle as if reflecting light from sun to forge
         // The mirror surface should be perpendicular to the bisector of sun-mirror-forge angle
-        const sunDirection = new math_1.Vector2D(closestSun.position.x - this.position.x, closestSun.position.y - this.position.y).normalize();
-        const forgeDirection = new math_1.Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
+        const sunDirection = new Vector2D(closestSun.position.x - this.position.x, closestSun.position.y - this.position.y).normalize();
+        const forgeDirection = new Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
         // The bisector direction (average of both directions)
         const bisectorX = sunDirection.x + forgeDirection.x;
         const bisectorY = sunDirection.y + forgeDirection.y;
@@ -259,7 +222,7 @@ class SolarMirror {
             for (const asteroid of gameState.asteroids) {
                 if (asteroid.containsPoint(this.targetPosition)) {
                     this.targetPosition = null;
-                    this.velocity = new math_1.Vector2D(0, 0);
+                    this.velocity = new Vector2D(0, 0);
                     return;
                 }
             }
@@ -271,7 +234,7 @@ class SolarMirror {
         if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
             this.position = this.targetPosition;
             this.targetPosition = null;
-            this.velocity = new math_1.Vector2D(0, 0);
+            this.velocity = new Vector2D(0, 0);
             return;
         }
         // Calculate desired direction
@@ -298,7 +261,7 @@ class SolarMirror {
         }
         else {
             // Calculate distance needed to decelerate to stop
-            const currentSpeed = Math.sqrt(Math.pow(this.velocity.x, 2) + Math.pow(this.velocity.y, 2));
+            const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
             const decelerationDistance = (currentSpeed * currentSpeed) / (2 * this.DECELERATION);
             // Should we accelerate or decelerate?
             if (distanceToTarget > decelerationDistance && currentSpeed < this.MAX_SPEED) {
@@ -320,7 +283,7 @@ class SolarMirror {
                 }
             }
             // Cap speed at MAX_SPEED
-            const speed = Math.sqrt(Math.pow(this.velocity.x, 2) + Math.pow(this.velocity.y, 2));
+            const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
             if (speed > this.MAX_SPEED) {
                 this.velocity.x = (this.velocity.x / speed) * this.MAX_SPEED;
                 this.velocity.y = (this.velocity.y / speed) * this.MAX_SPEED;
@@ -398,7 +361,7 @@ class SolarMirror {
         if (avoidCount > 0) {
             const length = Math.sqrt(avoidX * avoidX + avoidY * avoidY);
             if (length > 0) {
-                return new math_1.Vector2D(avoidX / length, avoidY / length);
+                return new Vector2D(avoidX / length, avoidY / length);
             }
         }
         return null;
@@ -417,4 +380,3 @@ class SolarMirror {
         return distance < Constants.MIRROR_CLICK_RADIUS_PX; // Match the rendering size
     }
 }
-exports.SolarMirror = SolarMirror;
