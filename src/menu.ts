@@ -17,6 +17,9 @@ import {
     createColorPicker, 
     createTextInput 
 } from './menu/ui-helpers';
+import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
+import { renderSettingsScreen } from './menu/screens/settings-screen';
+import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
@@ -950,106 +953,22 @@ export class MainMenu {
     private renderMapSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Select Map';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Map grid
-        const mapGrid = document.createElement('div');
-        mapGrid.style.display = 'grid';
-        mapGrid.style.gridTemplateColumns = `repeat(auto-fit, minmax(${isCompactLayout ? 220 : 300}px, 1fr))`;
-        mapGrid.style.gap = '20px';
-        mapGrid.style.maxWidth = '900px';
-        mapGrid.style.padding = '20px';
-        mapGrid.style.marginBottom = '30px';
-
-        for (const map of this.availableMaps) {
-            const mapCard = document.createElement('div');
-            mapCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            mapCard.style.border = '2px solid transparent';
-            mapCard.style.borderRadius = '10px';
-            mapCard.style.padding = '20px';
-            mapCard.style.cursor = 'pointer';
-            mapCard.style.transition = 'all 0.3s';
-            mapCard.dataset.particleBox = 'true';
-            mapCard.dataset.particleColor = map.id === this.settings.selectedMap.id ? '#FFD700' : '#66B3FF';
-
-            mapCard.addEventListener('mouseenter', () => {
-                if (map.id !== this.settings.selectedMap.id) {
-                    mapCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                    mapCard.style.transform = 'scale(1.02)';
-                }
-            });
-
-            mapCard.addEventListener('mouseleave', () => {
-                mapCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-                mapCard.style.transform = 'scale(1)';
-            });
-
-            mapCard.addEventListener('click', () => {
+        
+        renderMapSelectionScreen(container, {
+            availableMaps: this.availableMaps,
+            selectedMap: this.settings.selectedMap,
+            onMapSelect: (map) => {
                 this.settings.selectedMap = map;
                 this.renderMapSelectionScreen(this.contentElement);
-            });
-
-            // Map name
-            const mapName = document.createElement('h3');
-            mapName.textContent = map.name;
-            mapName.style.fontSize = '28px';
-            mapName.style.marginBottom = '10px';
-            mapName.style.color = map.id === this.settings.selectedMap.id ? '#FFD700' : '#FFFFFF';
-            mapName.style.fontWeight = '300';
-            mapName.dataset.particleText = 'true';
-            mapName.dataset.particleColor = map.id === this.settings.selectedMap.id ? '#FFF2B3' : '#E0F2FF';
-            mapCard.appendChild(mapName);
-
-            // Map description
-            const mapDesc = document.createElement('p');
-            mapDesc.textContent = map.description;
-            mapDesc.style.fontSize = '24px';
-            mapDesc.style.lineHeight = '1.5';
-            mapDesc.style.marginBottom = '15px';
-            mapDesc.style.color = '#CCCCCC';
-            mapDesc.style.fontWeight = '300';
-            mapDesc.dataset.particleText = 'true';
-            mapDesc.dataset.particleColor = '#CCCCCC';
-            mapCard.appendChild(mapDesc);
-
-            // Map stats
-            const mapStats = document.createElement('div');
-            mapStats.style.fontSize = '24px';
-            mapStats.style.color = '#888888';
-            mapStats.innerHTML = `
-                <div>⭐ Suns: ${map.numSuns}</div>
-                <div>🌑 Asteroids: ${map.numAsteroids}</div>
-                <div>📏 Size: ${map.mapSize}px</div>
-            `;
-            mapCard.appendChild(mapStats);
-
-            mapGrid.appendChild(mapCard);
-        }
-
-        container.appendChild(mapGrid);
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'main';
-            this.startMenuTransition();
-            this.renderMainScreen(this.contentElement);
-        }, '#666666');
-        container.appendChild(backButton);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderLANScreen(container: HTMLElement): void {
@@ -2576,283 +2495,109 @@ export class MainMenu {
     private renderSettingsScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Settings';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Settings container
-        const settingsContainer = document.createElement('div');
-        settingsContainer.style.maxWidth = '500px';
-        settingsContainer.style.width = '100%';
-        settingsContainer.style.padding = '20px';
-
-        // Difficulty setting
-        const difficultySection = createSettingSection(
-            'Difficulty',
-            createSelect(
-                ['easy', 'normal', 'hard'],
-                this.settings.difficulty,
-                (value) => {
-                    this.settings.difficulty = value as 'easy' | 'normal' | 'hard';
-                }
-            )
-        );
-        settingsContainer.appendChild(difficultySection);
-
-        // Username setting
-        const usernameSection = createSettingSection(
-            'Username',
-            createTextInput(
-                this.settings.username,
-                (value) => {
-                    this.saveUsername(value);
-                },
-                'Enter your username'
-            )
-        );
-        settingsContainer.appendChild(usernameSection);
-
-        // Sound setting
-        const soundSection = createSettingSection(
-            'Sound Effects',
-            createToggle(
-                this.settings.soundEnabled,
-                (value) => {
-                    this.settings.soundEnabled = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(soundSection);
-
-        // Music setting
-        const musicSection = createSettingSection(
-            'Music',
-            createToggle(
-                this.settings.musicEnabled,
-                (value) => {
-                    this.settings.musicEnabled = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(musicSection);
-
-        const battleStatsSection = createSettingSection(
-            'Battle Stats Info',
-            createToggle(
-                this.settings.isBattleStatsInfoEnabled,
-                (value) => {
-                    this.settings.isBattleStatsInfoEnabled = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(battleStatsSection);
-
-        // Screen shake setting
-        const screenShakeSection = createSettingSection(
-            'Screen Shake',
-            createToggle(
-                this.settings.screenShakeEnabled,
-                (value) => {
-                    this.settings.screenShakeEnabled = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(screenShakeSection);
-
-        // Player Color setting
-        const playerColorSection = createSettingSection(
-            'Player Color',
-            createColorPicker(
-                this.settings.playerColor,
-                (value) => {
-                    this.settings.playerColor = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(playerColorSection);
-
-        // Enemy Color setting
-        const enemyColorSection = createSettingSection(
-            'Enemy Color',
-            createColorPicker(
-                this.settings.enemyColor,
-                (value) => {
-                    this.settings.enemyColor = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(enemyColorSection);
-
-        // Graphics Quality setting
-        const graphicsQualitySection = createSettingSection(
-            'Graphics Quality',
-            createSelect(
-                ['low', 'medium', 'high'],
-                this.settings.graphicsQuality,
-                (value) => {
-                    this.settings.graphicsQuality = value as 'low' | 'medium' | 'high';
-                }
-            )
-        );
-        settingsContainer.appendChild(graphicsQualitySection);
-
-        // Color Scheme setting
-        const colorSchemeSection = createSettingSection(
-            'Color Scheme',
-            createSelect(
-                Object.keys(COLOR_SCHEMES),
-                this.settings.colorScheme,
-                (value) => {
-                    this.settings.colorScheme = value;
-                }
-            )
-        );
-        settingsContainer.appendChild(colorSchemeSection);
-
-        const resetButton = this.createButton('DELETE DATA', async () => {
-            const isConfirmed = window.confirm(
-                'Delete all player data and cached files? This will reload the game and start fresh.'
-            );
-            if (!isConfirmed) {
-                return;
-            }
-            await this.clearPlayerDataAndCache();
-            window.location.reload();
-        }, '#FF6666');
-        resetButton.style.fontSize = '18px';
-        resetButton.style.padding = '10px 20px';
-
-        const resetSection = createSettingSection('Reset Player Data', resetButton);
-        settingsContainer.appendChild(resetSection);
-
-        container.appendChild(settingsContainer);
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'main';
-            this.startMenuTransition();
-            this.renderMainScreen(this.contentElement);
-        }, '#666666');
-        backButton.style.marginTop = '30px';
-        container.appendChild(backButton);
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        
+        renderSettingsScreen(container, {
+            difficulty: this.settings.difficulty,
+            username: this.settings.username,
+            soundEnabled: this.settings.soundEnabled,
+            musicEnabled: this.settings.musicEnabled,
+            isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
+            screenShakeEnabled: this.settings.screenShakeEnabled,
+            playerColor: this.settings.playerColor,
+            enemyColor: this.settings.enemyColor,
+            graphicsQuality: this.settings.graphicsQuality,
+            colorScheme: this.settings.colorScheme,
+            onDifficultyChange: (value) => {
+                this.settings.difficulty = value;
+            },
+            onUsernameChange: (value) => {
+                this.saveUsername(value);
+            },
+            onSoundEnabledChange: (value) => {
+                this.settings.soundEnabled = value;
+            },
+            onMusicEnabledChange: (value) => {
+                this.settings.musicEnabled = value;
+            },
+            onBattleStatsInfoChange: (value) => {
+                this.settings.isBattleStatsInfoEnabled = value;
+            },
+            onScreenShakeChange: (value) => {
+                this.settings.screenShakeEnabled = value;
+            },
+            onPlayerColorChange: (value) => {
+                this.settings.playerColor = value;
+            },
+            onEnemyColorChange: (value) => {
+                this.settings.enemyColor = value;
+            },
+            onGraphicsQualityChange: (value) => {
+                this.settings.graphicsQuality = value;
+            },
+            onColorSchemeChange: (value) => {
+                this.settings.colorScheme = value;
+            },
+            onClearDataAndCache: () => this.clearPlayerDataAndCache(),
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderGameModeSelectionScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Select Game Mode';
-        title.style.fontSize = isCompactLayout ? '32px' : '48px';
-        title.style.marginBottom = isCompactLayout ? '20px' : '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.style.maxWidth = '100%';
-        title.style.fontWeight = '300';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        container.appendChild(title);
-
-        // Create carousel menu container
-        const carouselContainer = document.createElement('div');
-        carouselContainer.style.width = '100%';
-        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
-        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
-        container.appendChild(carouselContainer);
-
-        // Create game mode options
-        const gameModeOptions: MenuOption[] = [
-            {
-                id: 'ai',
-                name: 'AI',
-                description: 'Play against computer opponent'
+        
+        renderGameModeSelectionScreen(container, {
+            onGameModeSelect: (mode, option) => {
+                this.settings.gameMode = mode;
+                
+                switch (mode) {
+                    case 'ai':
+                        this.hide();
+                        if (this.onStartCallback) {
+                            this.ensureDefaultHeroSelection();
+                            this.onStartCallback(this.settings);
+                        }
+                        break;
+                    case 'online':
+                        this.currentScreen = 'online';
+                        this.startMenuTransition();
+                        this.renderOnlinePlaceholderScreen(this.contentElement);
+                        break;
+                    case 'lan':
+                        this.currentScreen = 'lan';
+                        this.startMenuTransition();
+                        this.renderLANScreen(this.contentElement);
+                        break;
+                    case 'p2p':
+                        this.currentScreen = 'p2p';
+                        this.startMenuTransition();
+                        this.renderP2PScreen(this.contentElement);
+                        break;
+                }
             },
-            {
-                id: 'online',
-                name: 'ONLINE',
-                description: 'Play against players worldwide'
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
             },
-            {
-                id: 'lan',
-                name: 'LAN',
-                description: 'Play on local network'
+            createButton: this.createButton.bind(this),
+            createCarouselMenu: (container, options, initialIndex, onRender, onNavigate, onSelect) => {
+                this.carouselMenu = new CarouselMenuView(container, options, initialIndex);
+                this.carouselMenu.onRender(onRender);
+                this.carouselMenu.onNavigate(() => {
+                    this.startMenuTransition();
+                    onNavigate();
+                });
+                this.carouselMenu.onSelect(onSelect);
             },
-            {
-                id: 'p2p',
-                name: 'P2P MULTIPLAYER',
-                description: 'Peer-to-peer multiplayer (Beta)'
-            }
-        ];
-
-        // Default to AI mode (index 0)
-        this.carouselMenu = new CarouselMenuView(carouselContainer, gameModeOptions, 0);
-        this.carouselMenu.onRender(() => {
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+            menuParticleLayer: this.menuParticleLayer
         });
-        this.carouselMenu.onNavigate(() => {
-            this.startMenuTransition();
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-        this.carouselMenu.onSelect((option: MenuOption) => {
-            this.settings.gameMode = option.id as 'ai' | 'online' | 'lan' | 'p2p';
-            
-            switch (option.id) {
-                case 'ai':
-                    // Start AI game directly
-                    this.hide();
-                    if (this.onStartCallback) {
-                        this.ensureDefaultHeroSelection();
-                        this.onStartCallback(this.settings);
-                    }
-                    break;
-                case 'online':
-                    // Show online play placeholder
-                    this.currentScreen = 'online';
-                    this.startMenuTransition();
-                    this.renderOnlinePlaceholderScreen(this.contentElement);
-                    break;
-                case 'lan':
-                    // Show LAN menu
-                    this.currentScreen = 'lan';
-                    this.startMenuTransition();
-                    this.renderLANScreen(this.contentElement);
-                    break;
-                case 'p2p':
-                    // Show P2P menu
-                    this.currentScreen = 'p2p';
-                    this.startMenuTransition();
-                    this.renderP2PScreen(this.contentElement);
-                    break;
-            }
-        });
-
-        // Back button
-        const backButton = this.createButton('BACK', () => {
-            this.currentScreen = 'main';
-            this.startMenuTransition();
-            this.renderMainScreen(this.contentElement);
-        }, '#666666');
-        backButton.style.marginTop = '30px';
-        container.appendChild(backButton);
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderFactionSelectionScreen(container: HTMLElement): void {
