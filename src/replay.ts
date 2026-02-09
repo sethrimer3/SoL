@@ -74,7 +74,8 @@ export class ReplayRecorder {
         seed: number,
         players: ReplayPlayerInfo[],
         gameMode: string = 'singleplayer',
-        mapInfo?: ReplayMetadata['mapInfo']
+        mapInfo?: ReplayMetadata['mapInfo'],
+        mapName?: string
     ) {
         this.startTime = Date.now();
         this.metadata = {
@@ -84,7 +85,8 @@ export class ReplayRecorder {
             duration: 0,
             players: players,
             gameMode: gameMode,
-            mapInfo: mapInfo
+            mapInfo: mapInfo,
+            mapName: mapName
         };
     }
 
