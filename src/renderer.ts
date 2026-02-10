@@ -206,6 +206,12 @@ export class GameRenderer {
         stars: Array<{x: number, y: number, size: number, brightness: number}>,
         parallaxFactor: number
     }> = [];
+    private starfieldCacheCanvas: HTMLCanvasElement | null = null;
+    private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
+    private starfieldCacheWidth = 0;
+    private starfieldCacheHeight = 0;
+    private starfieldCacheCameraX = Number.NaN;
+    private starfieldCacheCameraY = Number.NaN;
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -281,6 +287,66 @@ export class GameRenderer {
                 parallaxFactor: layerConfig.parallaxFactor
             });
         }
+    }
+
+    private drawStarfield(screenWidth: number, screenHeight: number): void {
+        if (!this.starfieldCacheCanvas) {
+            this.starfieldCacheCanvas = document.createElement('canvas');
+            this.starfieldCacheCtx = this.starfieldCacheCanvas.getContext('2d');
+        }
+
+        if (!this.starfieldCacheCanvas || !this.starfieldCacheCtx) {
+            return;
+        }
+
+        if (this.starfieldCacheWidth !== screenWidth || this.starfieldCacheHeight !== screenHeight) {
+            this.starfieldCacheCanvas.width = screenWidth;
+            this.starfieldCacheCanvas.height = screenHeight;
+            this.starfieldCacheWidth = screenWidth;
+            this.starfieldCacheHeight = screenHeight;
+        }
+
+        const cameraX = this.parallaxCamera.x;
+        const cameraY = this.parallaxCamera.y;
+        const needsRefresh = cameraX !== this.starfieldCacheCameraX ||
+            cameraY !== this.starfieldCacheCameraY ||
+            this.starfieldCacheWidth !== screenWidth ||
+            this.starfieldCacheHeight !== screenHeight;
+
+        if (needsRefresh) {
+            const ctx = this.starfieldCacheCtx;
+            const centerX = screenWidth / 2;
+            const centerY = screenHeight / 2;
+            const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
+            const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
+
+            ctx.clearRect(0, 0, screenWidth, screenHeight);
+
+            for (const layer of this.starLayers) {
+                ctx.fillStyle = '#FFFFFF';
+                const parallaxX = cameraX * layer.parallaxFactor;
+                const parallaxY = cameraY * layer.parallaxFactor;
+
+                for (const star of layer.stars) {
+                    const screenX = centerX + (star.x - parallaxX);
+                    const screenY = centerY + (star.y - parallaxY);
+                    const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
+                    const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
+
+                    if (wrappedX >= -100 && wrappedX <= screenWidth + 100 &&
+                        wrappedY >= -100 && wrappedY <= screenHeight + 100) {
+                        ctx.globalAlpha = star.brightness;
+                        ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                    }
+                }
+                ctx.globalAlpha = 1.0;
+            }
+
+            this.starfieldCacheCameraX = cameraX;
+            this.starfieldCacheCameraY = cameraY;
+        }
+
+        this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
     }
 
     /**
@@ -7713,35 +7779,7 @@ export class GameRenderer {
             const dpr = window.devicePixelRatio || 1;
             const screenWidth = this.canvas.width / dpr;
             const screenHeight = this.canvas.height / dpr;
-            const centerX = screenWidth / 2;
-            const centerY = screenHeight / 2;
-            const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
-            const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
-            const ctx = this.ctx;
-
-            for (const layer of this.starLayers) {
-                ctx.fillStyle = '#FFFFFF';
-                const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
-                const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
-
-                for (const star of layer.stars) {
-                    // Convert to screen space
-                    const screenX = centerX + (star.x - parallaxX);
-                    const screenY = centerY + (star.y - parallaxY);
-
-                    // Wrap stars around screen edges for infinite scrolling effect
-                    const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
-                    const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
-
-                    // Only draw if on screen
-                    if (wrappedX >= -100 && wrappedX <= screenWidth + 100 &&
-                        wrappedY >= -100 && wrappedY <= screenHeight + 100) {
-                        ctx.globalAlpha = star.brightness;
-                        ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
-                    }
-                }
-                ctx.globalAlpha = 1.0;
-            }
+            this.drawStarfield(screenWidth, screenHeight);
         }
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
