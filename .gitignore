@@ -31,9 +31,8 @@ npm-debug.log
 yarn-error.log
 
 # Compiled JavaScript (TypeScript output)
-*.js
-!webpack.config.js
-!test-rng-determinism-simple.js
+dist/**/*.js
+build/**/*.js
 
 # Environment variables
 .env
