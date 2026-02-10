@@ -2176,7 +2176,7 @@ export class MainMenu {
             },
             createButton: this.createButton.bind(this),
             createCarouselMenu: (container, options, initialIndex, onRender, onNavigate, onSelect) => {
-                this.carouselMenu = new CarouselMenuView(container, options, initialIndex);
+                this.carouselMenu = new CarouselMenuView(container, options, initialIndex, 'rgba(0, 0, 0, 0.5)');
                 this.carouselMenu.onRender(onRender);
                 this.carouselMenu.onNavigate(() => {
                     this.startMenuTransition();
