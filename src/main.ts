@@ -3659,9 +3659,19 @@ class GameController {
     }
 }
 
-// Start game when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+const bootstrapGameController = (): void => {
+    if ((window as any).gameController) {
+        return;
+    }
     const controller = new GameController();
     // Expose for dev/testing purposes
     (window as any).gameController = controller;
-});
+};
+
+// Start game when DOM is loaded. If this bundle executes after DOMContentLoaded
+// (for example from an async script injection), initialize immediately.
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', bootstrapGameController, { once: true });
+} else {
+    bootstrapGameController();
+}
