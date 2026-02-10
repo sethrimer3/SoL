@@ -177,6 +177,10 @@ export class GameRenderer {
     private graphicsOptionByKey = new Map<GraphicKey, GraphicOption>();
     private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
     private graphicsMenuScrollOffset = 0;
+    private sunRayScreenPosA = new Vector2D(0, 0);
+    private sunRayScreenPosB = new Vector2D(0, 0);
+    private sunRayScreenPosC = new Vector2D(0, 0);
+    private sunRayScreenPosD = new Vector2D(0, 0);
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -371,6 +375,23 @@ export class GameRenderer {
             centerX + (worldPos.x - this.camera.x) * this.zoom + shakeOffsetX,
             centerY + (worldPos.y - this.camera.y) * this.zoom + shakeOffsetY
         );
+    }
+
+    private worldToScreenCoords(worldX: number, worldY: number, out: Vector2D): void {
+        const dpr = window.devicePixelRatio || 1;
+        const centerX = (this.canvas.width / dpr) / 2;
+        const centerY = (this.canvas.height / dpr) / 2;
+
+        let shakeOffsetX = 0;
+        let shakeOffsetY = 0;
+        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+            const angle = Math.random() * Math.PI * 2;
+            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
+            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+        }
+
+        out.x = centerX + (worldX - this.camera.x) * this.zoom + shakeOffsetX;
+        out.y = centerY + (worldY - this.camera.y) * this.zoom + shakeOffsetY;
     }
 
     /**
@@ -2795,34 +2816,51 @@ export class GameRenderer {
 
             let hasShadowPath = false;
             this.ctx.beginPath();
+            const sunX = sun.position.x;
+            const sunY = sun.position.y;
+            const sv1 = this.sunRayScreenPosA;
+            const sv2 = this.sunRayScreenPosB;
+            const ss1 = this.sunRayScreenPosC;
+            const ss2 = this.sunRayScreenPosD;
 
             // Draw shadow regions behind asteroids
             for (const asteroid of game.asteroids) {
                 const worldVertices = asteroid.getWorldVertices();
+                const vertexCount = worldVertices.length;
 
                 // For each edge of the asteroid, cast a shadow
-                for (let i = 0; i < worldVertices.length; i++) {
+                for (let i = 0; i < vertexCount; i++) {
                     const v1 = worldVertices[i];
-                    const v2 = worldVertices[(i + 1) % worldVertices.length];
+                    const v2 = worldVertices[(i + 1) % vertexCount];
 
                     // Calculate if this edge faces away from the sun
-                    const edgeCenter = new Vector2D((v1.x + v2.x) / 2, (v1.y + v2.y) / 2);
-                    const toSun = new Vector2D(sun.position.x - edgeCenter.x, sun.position.y - edgeCenter.y);
-                    const edgeNormal = new Vector2D(-(v2.y - v1.y), v2.x - v1.x);
-                    const dot = toSun.x * edgeNormal.x + toSun.y * edgeNormal.y;
+                    const edgeCenterX = (v1.x + v2.x) * 0.5;
+                    const edgeCenterY = (v1.y + v2.y) * 0.5;
+                    const toSunX = sunX - edgeCenterX;
+                    const toSunY = sunY - edgeCenterY;
+                    const edgeNormalX = -(v2.y - v1.y);
+                    const edgeNormalY = v2.x - v1.x;
+                    const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
 
                     if (dot < 0) {
                         // This edge is facing away from the sun, cast shadow
-                        const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
-                        const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
+                        const dirFromSun1X = v1.x - sunX;
+                        const dirFromSun1Y = v1.y - sunY;
+                        const dirFromSun2X = v2.x - sunX;
+                        const dirFromSun2Y = v2.y - sunY;
+                        const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
+                        const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
+                        const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
+                        const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
+                        const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
+                        const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
+                        const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
+                        const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
 
-                        const shadow1 = new Vector2D(v1.x + dirFromSun1.x * Constants.SHADOW_LENGTH, v1.y + dirFromSun1.y * Constants.SHADOW_LENGTH);
-                        const shadow2 = new Vector2D(v2.x + dirFromSun2.x * Constants.SHADOW_LENGTH, v2.y + dirFromSun2.y * Constants.SHADOW_LENGTH);
-
-                        const sv1 = this.worldToScreen(v1);
-                        const sv2 = this.worldToScreen(v2);
-                        const ss1 = this.worldToScreen(shadow1);
-                        const ss2 = this.worldToScreen(shadow2);
+                        this.worldToScreenCoords(v1.x, v1.y, sv1);
+                        this.worldToScreenCoords(v2.x, v2.y, sv2);
+                        this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
+                        this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
                         // Add shadow polygon to a single path so overlaps don't darken
                         this.ctx.moveTo(sv1.x, sv1.y);
@@ -2871,38 +2909,55 @@ export class GameRenderer {
         this.ctx.fillStyle = '#000000';
         this.ctx.beginPath();
         let hasLightSideShadow = false;
+        const sunX = sun.position.x;
+        const sunY = sun.position.y;
+        const sv1 = this.sunRayScreenPosA;
+        const sv2 = this.sunRayScreenPosB;
+        const ss1 = this.sunRayScreenPosC;
+        const ss2 = this.sunRayScreenPosD;
 
         for (const asteroid of game.asteroids) {
             const worldVertices = asteroid.getWorldVertices();
+            const vertexCount = worldVertices.length;
 
             // For each edge of the asteroid, cast a shadow
-            for (let i = 0; i < worldVertices.length; i++) {
+            for (let i = 0; i < vertexCount; i++) {
                 const v1 = worldVertices[i];
-                const v2 = worldVertices[(i + 1) % worldVertices.length];
+                const v2 = worldVertices[(i + 1) % vertexCount];
 
                 // Calculate if this edge faces away from the sun
-                const edgeCenter = new Vector2D((v1.x + v2.x) / 2, (v1.y + v2.y) / 2);
-                const toSun = new Vector2D(sun.position.x - edgeCenter.x, sun.position.y - edgeCenter.y);
-                const edgeNormal = new Vector2D(-(v2.y - v1.y), v2.x - v1.x);
-                const dot = toSun.x * edgeNormal.x + toSun.y * edgeNormal.y;
+                const edgeCenterX = (v1.x + v2.x) * 0.5;
+                const edgeCenterY = (v1.y + v2.y) * 0.5;
+                const toSunX = sunX - edgeCenterX;
+                const toSunY = sunY - edgeCenterY;
+                const edgeNormalX = -(v2.y - v1.y);
+                const edgeNormalY = v2.x - v1.x;
+                const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
 
                 if (dot < 0) {
                     // This edge is facing away from the sun, cast shadow
-                    const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
-                    const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
-
-                    const shadow1 = new Vector2D(v1.x + dirFromSun1.x * Constants.SHADOW_LENGTH, v1.y + dirFromSun1.y * Constants.SHADOW_LENGTH);
-                    const shadow2 = new Vector2D(v2.x + dirFromSun2.x * Constants.SHADOW_LENGTH, v2.y + dirFromSun2.y * Constants.SHADOW_LENGTH);
+                    const dirFromSun1X = v1.x - sunX;
+                    const dirFromSun1Y = v1.y - sunY;
+                    const dirFromSun2X = v2.x - sunX;
+                    const dirFromSun2Y = v2.y - sunY;
+                    const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
+                    const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
+                    const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
+                    const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
+                    const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
+                    const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
+                    const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
+                    const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
 
                     // Determine which side of the field the shadow is on
-                    const shadowCenterX = (shadow1.x + shadow2.x) / 2;
-                    const isOnLightSide = shadowCenterX < sun.position.x;
+                    const shadowCenterX = (shadow1X + shadow2X) * 0.5;
+                    const isOnLightSide = shadowCenterX < sunX;
 
                     if (isOnLightSide) {
-                        const sv1 = this.worldToScreen(v1);
-                        const sv2 = this.worldToScreen(v2);
-                        const ss1 = this.worldToScreen(shadow1);
-                        const ss2 = this.worldToScreen(shadow2);
+                        this.worldToScreenCoords(v1.x, v1.y, sv1);
+                        this.worldToScreenCoords(v2.x, v2.y, sv2);
+                        this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
+                        this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
                         this.ctx.moveTo(sv1.x, sv1.y);
                         this.ctx.lineTo(sv2.x, sv2.y);
@@ -2927,35 +2982,46 @@ export class GameRenderer {
 
         for (const asteroid of game.asteroids) {
             const worldVertices = asteroid.getWorldVertices();
+            const vertexCount = worldVertices.length;
 
             // For each edge of the asteroid, cast a shadow
-            for (let i = 0; i < worldVertices.length; i++) {
+            for (let i = 0; i < vertexCount; i++) {
                 const v1 = worldVertices[i];
-                const v2 = worldVertices[(i + 1) % worldVertices.length];
+                const v2 = worldVertices[(i + 1) % vertexCount];
 
                 // Calculate if this edge faces away from the sun
-                const edgeCenter = new Vector2D((v1.x + v2.x) / 2, (v1.y + v2.y) / 2);
-                const toSun = new Vector2D(sun.position.x - edgeCenter.x, sun.position.y - edgeCenter.y);
-                const edgeNormal = new Vector2D(-(v2.y - v1.y), v2.x - v1.x);
-                const dot = toSun.x * edgeNormal.x + toSun.y * edgeNormal.y;
+                const edgeCenterX = (v1.x + v2.x) * 0.5;
+                const edgeCenterY = (v1.y + v2.y) * 0.5;
+                const toSunX = sunX - edgeCenterX;
+                const toSunY = sunY - edgeCenterY;
+                const edgeNormalX = -(v2.y - v1.y);
+                const edgeNormalY = v2.x - v1.x;
+                const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
 
                 if (dot < 0) {
                     // This edge is facing away from the sun, cast shadow
-                    const dirFromSun1 = new Vector2D(v1.x - sun.position.x, v1.y - sun.position.y).normalize();
-                    const dirFromSun2 = new Vector2D(v2.x - sun.position.x, v2.y - sun.position.y).normalize();
-
-                    const shadow1 = new Vector2D(v1.x + dirFromSun1.x * Constants.SHADOW_LENGTH, v1.y + dirFromSun1.y * Constants.SHADOW_LENGTH);
-                    const shadow2 = new Vector2D(v2.x + dirFromSun2.x * Constants.SHADOW_LENGTH, v2.y + dirFromSun2.y * Constants.SHADOW_LENGTH);
+                    const dirFromSun1X = v1.x - sunX;
+                    const dirFromSun1Y = v1.y - sunY;
+                    const dirFromSun2X = v2.x - sunX;
+                    const dirFromSun2Y = v2.y - sunY;
+                    const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
+                    const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
+                    const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
+                    const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
+                    const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
+                    const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
+                    const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
+                    const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
 
                     // Determine which side of the field the shadow is on
-                    const shadowCenterX = (shadow1.x + shadow2.x) / 2;
-                    const isOnLightSide = shadowCenterX < sun.position.x;
+                    const shadowCenterX = (shadow1X + shadow2X) * 0.5;
+                    const isOnLightSide = shadowCenterX < sunX;
 
                     if (!isOnLightSide) {
-                        const sv1 = this.worldToScreen(v1);
-                        const sv2 = this.worldToScreen(v2);
-                        const ss1 = this.worldToScreen(shadow1);
-                        const ss2 = this.worldToScreen(shadow2);
+                        this.worldToScreenCoords(v1.x, v1.y, sv1);
+                        this.worldToScreenCoords(v2.x, v2.y, sv2);
+                        this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
+                        this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
                         this.ctx.moveTo(sv1.x, sv1.y);
                         this.ctx.lineTo(sv2.x, sv2.y);
