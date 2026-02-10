@@ -54,7 +54,7 @@ export class MenuAtmosphereLayer {
         this.container.appendChild(this.canvas);
         this.resize();
         this.initializeAsteroids();
-        this.start();
+        // Don't auto-start - let resumeMenuAnimations() start it after menu is in DOM
     }
 
     public start(): void {

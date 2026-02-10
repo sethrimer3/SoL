@@ -122,7 +122,7 @@ export class BackgroundParticleLayer {
         this.resize();
         this.initializeParticles();
         this.initializeAttractionMatrix();
-        this.start();
+        // Don't auto-start - let resumeMenuAnimations() start it after menu is in DOM
     }
     
     private initializeParticles(): void {
