@@ -69,7 +69,7 @@ export class ParticleMenuLayer {
                 console.error('Failed to resize particle canvas:', error);
             }
         });
-        this.start();
+        // Don't auto-start - let resumeMenuAnimations() start it after menu is in DOM
     }
 
     public start(): void {
