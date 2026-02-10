@@ -301,6 +301,9 @@ export class MainMenu {
             this.resumeMenuAnimations();
         };
         document.addEventListener('visibilitychange', this.visibilityHandler);
+        
+        // Start menu animations on initial load
+        this.resumeMenuAnimations();
     }
 
     private createMenuElement(): HTMLElement {
