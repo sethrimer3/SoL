@@ -7710,33 +7710,37 @@ export class GameRenderer {
 
         // Draw parallax star layers
         if (!ladSun) {
+            const dpr = window.devicePixelRatio || 1;
+            const screenWidth = this.canvas.width / dpr;
+            const screenHeight = this.canvas.height / dpr;
+            const centerX = screenWidth / 2;
+            const centerY = screenHeight / 2;
+            const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
+            const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
+            const ctx = this.ctx;
+
             for (const layer of this.starLayers) {
-                this.ctx.fillStyle = '#FFFFFF';
-                const dpr = window.devicePixelRatio || 1;
-                
+                ctx.fillStyle = '#FFFFFF';
+                const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
+                const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
+
                 for (const star of layer.stars) {
-                    // Calculate star position with parallax effect
-                    const parallaxX = this.parallaxCamera.x * layer.parallaxFactor;
-                    const parallaxY = this.parallaxCamera.y * layer.parallaxFactor;
-                    
                     // Convert to screen space
-                    const centerX = (this.canvas.width / dpr) / 2;
-                    const centerY = (this.canvas.height / dpr) / 2;
                     const screenX = centerX + (star.x - parallaxX);
                     const screenY = centerY + (star.y - parallaxY);
-                    
+
                     // Wrap stars around screen edges for infinite scrolling effect
-                    const wrappedX = ((screenX + centerX) % (centerX * 2 + Constants.STAR_WRAP_SIZE)) - centerX;
-                    const wrappedY = ((screenY + centerY) % (centerY * 2 + Constants.STAR_WRAP_SIZE)) - centerY;
-                    
+                    const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
+                    const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
+
                     // Only draw if on screen
-                    if (wrappedX >= -100 && wrappedX <= this.canvas.width / dpr + 100 &&
-                        wrappedY >= -100 && wrappedY <= this.canvas.height / dpr + 100) {
-                        this.ctx.globalAlpha = star.brightness;
-                        this.ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                    if (wrappedX >= -100 && wrappedX <= screenWidth + 100 &&
+                        wrappedY >= -100 && wrappedY <= screenHeight + 100) {
+                        ctx.globalAlpha = star.brightness;
+                        ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
                     }
                 }
-                this.ctx.globalAlpha = 1.0;
+                ctx.globalAlpha = 1.0;
             }
         }
 
