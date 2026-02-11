@@ -5,8 +5,8 @@
 import { Particle, ParticleTarget } from './background-particles';
 
 export class ParticleMenuLayer {
-    private static readonly REFRESH_INTERVAL_MS = 140;
-    private static readonly POSITION_SMOOTHING = 0.08 / 14;
+    private static readonly REFRESH_INTERVAL_MS = 45;
+    private static readonly POSITION_SMOOTHING = 0.028;
     private static readonly DRIFT_SPEED = 0.0007 / 6;
     private static readonly DRIFT_RADIUS_MIN_PX = 0.03;
     private static readonly DRIFT_RADIUS_MAX_PX = 0.11;
@@ -17,6 +17,8 @@ export class ParticleMenuLayer {
     private static readonly BASE_PARTICLE_OPACITY = 0.15;
     private static readonly PEAK_PARTICLE_OPACITY = 0.4;
     private static readonly TRANSITION_DURATION_MS = 600;
+    private static readonly SPEED_MULTIPLIER_MIN = 1.8;
+    private static readonly SPEED_MULTIPLIER_MAX = 16;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -192,7 +194,9 @@ export class ParticleMenuLayer {
         const driftPhase = Math.random() * Math.PI * 2;
         const driftRadiusPx = ParticleMenuLayer.DRIFT_RADIUS_MIN_PX
             + Math.random() * (ParticleMenuLayer.DRIFT_RADIUS_MAX_PX - ParticleMenuLayer.DRIFT_RADIUS_MIN_PX);
-        const speedMultiplier = 0.8 + Math.random() * 0.4; // Random value between 0.8 and 1.2
+        const speedGradient = Math.pow(Math.random(), 1.35);
+        const speedMultiplier = ParticleMenuLayer.SPEED_MULTIPLIER_MIN
+            + speedGradient * (ParticleMenuLayer.SPEED_MULTIPLIER_MAX - ParticleMenuLayer.SPEED_MULTIPLIER_MIN);
         const parsedColor = this.parseColor(color);
         return {
             x,
@@ -241,12 +245,14 @@ export class ParticleMenuLayer {
             const deltaX = particle.baseTargetX - particle.x;
             const deltaY = particle.baseTargetY - particle.y;
 
-            const positionSmoothing = ParticleMenuLayer.POSITION_SMOOTHING * particle.speedMultiplier;
+            const positionSmoothing = ParticleMenuLayer.POSITION_SMOOTHING
+                * (0.55 + particle.speedMultiplier * 0.45);
             particle.velocityX += deltaX * positionSmoothing;
             particle.velocityY += deltaY * positionSmoothing;
 
-            particle.velocityX *= 0.82;
-            particle.velocityY *= 0.82;
+            const velocityDamping = Math.max(0.58, 0.84 - particle.speedMultiplier * 0.018);
+            particle.velocityX *= velocityDamping;
+            particle.velocityY *= velocityDamping;
 
             particle.x += particle.velocityX;
             particle.y += particle.velocityY;
