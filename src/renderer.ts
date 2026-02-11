@@ -50,6 +50,17 @@ type SunRenderCache = {
     shaftTextureInner: HTMLCanvasElement;
 };
 
+type ShadowQuad = {
+    sv1x: number;
+    sv1y: number;
+    sv2x: number;
+    sv2y: number;
+    ss1x: number;
+    ss1y: number;
+    ss2x: number;
+    ss2y: number;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -201,12 +212,16 @@ export class GameRenderer {
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
+    private enemyVisibilityAlpha = new WeakMap<object, number>();
+    private enemyVisibilityLastUpdateSec = Number.NaN;
+    private enemyVisibilityFrameDeltaSec = 0;
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
     private readonly ULTRA_SUN_BLOOM_STEPS = 4;
     private readonly ULTRA_SOLAR_EMBER_COUNT = 96;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
+    private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -1881,12 +1896,14 @@ export class GameRenderer {
         // Check visibility for enemy forges
         let shouldDim = false;
         let displayColor = forgeColor;
+        let visibilityAlpha = 1;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy forge
+            visibilityAlpha = this.getEnemyVisibilityAlpha(forge, isVisible, game.gameTime);
+            if (visibilityAlpha <= 0.01) {
+                return;
             }
-            
+
             // Check if in shadow for dimming effect - darken color instead of using alpha
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(forge.position);
@@ -1896,6 +1913,9 @@ export class GameRenderer {
                 }
             }
         }
+
+        this.ctx.save();
+        this.ctx.globalAlpha = visibilityAlpha;
 
         // Draw selection circle if selected
         if (forge.isSelected) {
@@ -2045,6 +2065,8 @@ export class GameRenderer {
         if (forge.moveOrder > 0 && forge.targetPosition) {
             this.drawMoveOrderIndicator(forge.position, forge.targetPosition, forge.moveOrder, shouldDim ? displayColor : color);
         }
+
+        this.ctx.restore();
     }
 
     /**
@@ -2408,12 +2430,14 @@ export class GameRenderer {
         // Check visibility for enemy mirrors
         let shouldDim = false;
         let displayColor = mirrorColor;
+        let visibilityAlpha = 1;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy mirrors
+            visibilityAlpha = this.getEnemyVisibilityAlpha(mirror, isVisible, game.gameTime);
+            if (visibilityAlpha <= 0.01) {
+                return;
             }
-            
+
             // Check if in shadow for dimming effect - darken color instead of using alpha
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(mirror.position);
@@ -2430,7 +2454,8 @@ export class GameRenderer {
 
         // Save context state
         this.ctx.save();
-        
+        this.ctx.globalAlpha = visibilityAlpha;
+
         // Calculate glow intensity based on distance to closest sun
         // Closer = brighter glow (inverse relationship)
         const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
@@ -3351,6 +3376,90 @@ export class GameRenderer {
         return this.hashNormalized(inputValue) * 2 - 1;
     }
 
+    private updateEnemyVisibilityFadeClock(gameTimeSec: number): void {
+        if (Number.isNaN(this.enemyVisibilityLastUpdateSec)) {
+            this.enemyVisibilityFrameDeltaSec = 0;
+            this.enemyVisibilityLastUpdateSec = gameTimeSec;
+            return;
+        }
+
+        this.enemyVisibilityFrameDeltaSec = Math.max(0, gameTimeSec - this.enemyVisibilityLastUpdateSec);
+        this.enemyVisibilityLastUpdateSec = gameTimeSec;
+    }
+
+    private getEnemyVisibilityAlpha(entity: object, isVisible: boolean, _gameTimeSec: number): number {
+        const currentAlpha = this.enemyVisibilityAlpha.get(entity) ?? (isVisible ? 1 : 0);
+        const dtSec = this.enemyVisibilityFrameDeltaSec;
+        const maxStep = this.ENEMY_VISIBILITY_FADE_SPEED_PER_SEC * dtSec;
+        const targetAlpha = isVisible ? 1 : 0;
+        const alphaDelta = targetAlpha - currentAlpha;
+        const nextAlpha = Math.abs(alphaDelta) <= maxStep
+            ? targetAlpha
+            : currentAlpha + Math.sign(alphaDelta) * maxStep;
+        this.enemyVisibilityAlpha.set(entity, nextAlpha);
+        return nextAlpha;
+    }
+
+    private buildSunShadowQuads(sun: Sun, asteroids: Asteroid[]): ShadowQuad[] {
+        const quads: ShadowQuad[] = [];
+        const sunX = sun.position.x;
+        const sunY = sun.position.y;
+        const sv1 = this.sunRayScreenPosA;
+        const sv2 = this.sunRayScreenPosB;
+        const ss1 = this.sunRayScreenPosC;
+        const ss2 = this.sunRayScreenPosD;
+
+        for (const asteroid of asteroids) {
+            const worldVertices = asteroid.getWorldVertices();
+            const vertexCount = worldVertices.length;
+
+            for (let i = 0; i < vertexCount; i++) {
+                const v1 = worldVertices[i];
+                const v2 = worldVertices[(i + 1) % vertexCount];
+                const edgeCenterX = (v1.x + v2.x) * 0.5;
+                const edgeCenterY = (v1.y + v2.y) * 0.5;
+                const toSunX = sunX - edgeCenterX;
+                const toSunY = sunY - edgeCenterY;
+                const edgeNormalX = -(v2.y - v1.y);
+                const edgeNormalY = v2.x - v1.x;
+                const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
+
+                if (dot < 0) {
+                    const dirFromSun1X = v1.x - sunX;
+                    const dirFromSun1Y = v1.y - sunY;
+                    const dirFromSun2X = v2.x - sunX;
+                    const dirFromSun2Y = v2.y - sunY;
+                    const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
+                    const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
+                    const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
+                    const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
+                    const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
+                    const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
+                    const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
+                    const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
+
+                    this.worldToScreenCoords(v1.x, v1.y, sv1);
+                    this.worldToScreenCoords(v2.x, v2.y, sv2);
+                    this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
+                    this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
+
+                    quads.push({
+                        sv1x: sv1.x,
+                        sv1y: sv1.y,
+                        sv2x: sv2.x,
+                        sv2y: sv2.y,
+                        ss1x: ss1.x,
+                        ss1y: ss1.y,
+                        ss2x: ss2.x,
+                        ss2y: ss2.y,
+                    });
+                }
+            }
+        }
+
+        return quads;
+    }
+
     /**
      * Draw sun rays with raytracing (brightens field and casts shadows)
      */
@@ -3370,19 +3479,20 @@ export class GameRenderer {
         for (const sun of game.suns) {
             const sunScreenPos = this.worldToScreen(sun.position);
             const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
-            
+            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+
             // Create radial gradient centered on the sun
             const gradient = this.ctx.createRadialGradient(
                 sunScreenPos.x, sunScreenPos.y, 0,
                 sunScreenPos.x, sunScreenPos.y, maxRadius
             );
-            
-            // Use color scheme for subtle brightness falloff from sun
-            gradient.addColorStop(0, this.colorScheme.sunLightRays.nearCenter);     // Brightest near sun
-            gradient.addColorStop(0.2, this.colorScheme.sunLightRays.mid);          // Strong warm halo close to sun
-            gradient.addColorStop(0.52, this.colorScheme.sunLightRays.edge);         // Falloff zone
-            gradient.addColorStop(1, 'rgba(255, 190, 95, 0)');                       // Fade out
-            
+
+            // Use warmer color scheme and brighter shade edges for cinematic lighting
+            gradient.addColorStop(0, 'rgba(255, 192, 96, 0.42)');
+            gradient.addColorStop(0.18, 'rgba(255, 166, 70, 0.28)');
+            gradient.addColorStop(0.42, 'rgba(255, 140, 56, 0.16)');
+            gradient.addColorStop(1, 'rgba(255, 120, 45, 0)');
+
             this.ctx.fillStyle = gradient;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
@@ -3391,10 +3501,10 @@ export class GameRenderer {
                     sunScreenPos.x, sunScreenPos.y, 0,
                     sunScreenPos.x, sunScreenPos.y, maxRadius * 1.1
                 );
-                bloomGradient.addColorStop(0, 'rgba(255, 255, 225, 0.6)');
-                bloomGradient.addColorStop(0.18, 'rgba(255, 235, 165, 0.38)');
-                bloomGradient.addColorStop(0.42, 'rgba(255, 208, 120, 0.16)');
-                bloomGradient.addColorStop(1, 'rgba(255, 190, 95, 0)');
+                bloomGradient.addColorStop(0, 'rgba(255, 232, 178, 0.68)');
+                bloomGradient.addColorStop(0.16, 'rgba(255, 190, 104, 0.44)');
+                bloomGradient.addColorStop(0.38, 'rgba(255, 146, 74, 0.24)');
+                bloomGradient.addColorStop(1, 'rgba(255, 122, 58, 0)');
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'screen';
                 this.ctx.fillStyle = bloomGradient;
@@ -3403,85 +3513,70 @@ export class GameRenderer {
             }
 
             if (this.graphicsQuality === 'ultra') {
-                this.drawUltraVolumetricShafts(sun, game.gameTime);
+                this.drawUltraVolumetricShafts(sun, game.gameTime, shadowQuads);
+            }
+
+            if (shadowQuads.length > 0) {
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'screen';
+                this.ctx.strokeStyle = 'rgba(255, 160, 74, 0.2)';
+                this.ctx.lineWidth = Math.max(1.25, 2.4 * this.zoom);
+                for (const quad of shadowQuads) {
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                    this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                    this.ctx.stroke();
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(quad.sv2x, quad.sv2y);
+                    this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                    this.ctx.stroke();
+                }
+                this.ctx.restore();
             }
         }
 
         // Draw asteroid shadows cast by sunlight
         // Process each sun separately so overlapping shadows from the same sun don't stack
         for (const sun of game.suns) {
+            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+            if (shadowQuads.length === 0) {
+                continue;
+            }
+
             this.ctx.save();
             this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.fillStyle = 'rgba(0, 0, 14, 0.7)';
-
-            let hasShadowPath = false;
+            this.ctx.fillStyle = 'rgba(0, 0, 14, 0.62)';
             this.ctx.beginPath();
-            const sunX = sun.position.x;
-            const sunY = sun.position.y;
-            const sv1 = this.sunRayScreenPosA;
-            const sv2 = this.sunRayScreenPosB;
-            const ss1 = this.sunRayScreenPosC;
-            const ss2 = this.sunRayScreenPosD;
 
-            // Draw shadow regions behind asteroids
-            for (const asteroid of game.asteroids) {
-                const worldVertices = asteroid.getWorldVertices();
-                const vertexCount = worldVertices.length;
-
-                // For each edge of the asteroid, cast a shadow
-                for (let i = 0; i < vertexCount; i++) {
-                    const v1 = worldVertices[i];
-                    const v2 = worldVertices[(i + 1) % vertexCount];
-
-                    // Calculate if this edge faces away from the sun
-                    const edgeCenterX = (v1.x + v2.x) * 0.5;
-                    const edgeCenterY = (v1.y + v2.y) * 0.5;
-                    const toSunX = sunX - edgeCenterX;
-                    const toSunY = sunY - edgeCenterY;
-                    const edgeNormalX = -(v2.y - v1.y);
-                    const edgeNormalY = v2.x - v1.x;
-                    const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
-
-                    if (dot < 0) {
-                        // This edge is facing away from the sun, cast shadow
-                        const dirFromSun1X = v1.x - sunX;
-                        const dirFromSun1Y = v1.y - sunY;
-                        const dirFromSun2X = v2.x - sunX;
-                        const dirFromSun2Y = v2.y - sunY;
-                        const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
-                        const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
-                        const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
-                        const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
-                        const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
-                        const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
-                        const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
-                        const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
-
-                        this.worldToScreenCoords(v1.x, v1.y, sv1);
-                        this.worldToScreenCoords(v2.x, v2.y, sv2);
-                        this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
-                        this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
-
-                        // Add shadow polygon to a single path so overlaps don't darken
-                        this.ctx.moveTo(sv1.x, sv1.y);
-                        this.ctx.lineTo(sv2.x, sv2.y);
-                        this.ctx.lineTo(ss2.x, ss2.y);
-                        this.ctx.lineTo(ss1.x, ss1.y);
-                        this.ctx.closePath();
-                        hasShadowPath = true;
-                    }
-                }
+            for (const quad of shadowQuads) {
+                this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                this.ctx.lineTo(quad.sv2x, quad.sv2y);
+                this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                this.ctx.closePath();
             }
 
-            if (hasShadowPath) {
-                this.ctx.fill();
-            }
+            this.ctx.fill();
+            this.ctx.restore();
 
+            // Slightly lighten the interior of shadowed areas for readable sight ranges
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'screen';
+            this.ctx.fillStyle = 'rgba(255, 152, 88, 0.08)';
+            this.ctx.beginPath();
+            for (const quad of shadowQuads) {
+                this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                this.ctx.lineTo(quad.sv2x, quad.sv2y);
+                this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                this.ctx.closePath();
+            }
+            this.ctx.fill();
             this.ctx.restore();
         }
     }
 
-    private drawUltraVolumetricShafts(sun: Sun, gameTimeSec: number): void {
+    private drawUltraVolumetricShafts(sun: Sun, gameTimeSec: number, shadowQuads: ShadowQuad[]): void {
         const sunScreenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
@@ -3492,15 +3587,34 @@ export class GameRenderer {
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        this.ctx.globalAlpha = 0.48;
+        this.ctx.globalAlpha = 0.58;
         const shaftSize = 1024 * shaftScale;
         this.ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
 
         this.ctx.rotate(-gameTimeSec * 0.017);
-        this.ctx.globalAlpha = 0.36 + shimmerAlpha;
+        this.ctx.globalAlpha = 0.45 + shimmerAlpha;
         const innerSize = shaftSize * 0.72;
         this.ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
+        this.ctx.restore();
+
+        if (shadowQuads.length === 0) {
+            return;
+        }
+
+        // Remove shafts inside asteroid shade to prevent ultra shafts leaking through occlusion.
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'destination-out';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
+        this.ctx.beginPath();
+        for (const quad of shadowQuads) {
+            this.ctx.moveTo(quad.sv1x, quad.sv1y);
+            this.ctx.lineTo(quad.sv2x, quad.sv2y);
+            this.ctx.lineTo(quad.ss2x, quad.ss2y);
+            this.ctx.lineTo(quad.ss1x, quad.ss1y);
+            this.ctx.closePath();
+        }
+        this.ctx.fill();
         this.ctx.restore();
     }
 
@@ -3530,7 +3644,7 @@ export class GameRenderer {
                 const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
                 const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.24) * (1 - outwardT * 0.45);
 
-                this.ctx.fillStyle = `rgba(255, ${Math.floor(180 + this.hashNormalized(seed + 23.7) * 70)}, ${Math.floor(80 + this.hashNormalized(seed + 29.2) * 60)}, ${alpha.toFixed(4)})`;
+                this.ctx.fillStyle = `rgba(255, ${Math.floor(126 + this.hashNormalized(seed + 23.7) * 64)}, ${Math.floor(36 + this.hashNormalized(seed + 29.2) * 42)}, ${alpha.toFixed(4)})`;
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, size * this.zoom, 0, Math.PI * 2);
                 this.ctx.fill();
@@ -3547,7 +3661,7 @@ export class GameRenderer {
             const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
             const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
 
-            this.ctx.fillStyle = `rgba(255, 215, 152, ${alpha.toFixed(4)})`;
+            this.ctx.fillStyle = `rgba(255, 182, 112, ${alpha.toFixed(4)})`;
             this.ctx.beginPath();
             this.ctx.arc(driftX, driftY, size, 0, Math.PI * 2);
             this.ctx.fill();
@@ -3576,9 +3690,9 @@ export class GameRenderer {
             }
             const sunScreenPos = this.worldToScreen(sun.position);
             const warmGradient = this.ctx.createRadialGradient(sunScreenPos.x, sunScreenPos.y, 0, sunScreenPos.x, sunScreenPos.y, Math.max(width, height) * 0.45);
-            warmGradient.addColorStop(0, 'rgba(255, 205, 108, 0.2)');
-            warmGradient.addColorStop(0.38, 'rgba(255, 188, 98, 0.12)');
-            warmGradient.addColorStop(1, 'rgba(255, 156, 72, 0)');
+            warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');
+            warmGradient.addColorStop(0.34, 'rgba(255, 148, 62, 0.18)');
+            warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
             this.ctx.fillStyle = warmGradient;
             this.ctx.fillRect(0, 0, width, height);
         }
@@ -4130,12 +4244,14 @@ export class GameRenderer {
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = unitColor;
+        let visibilityAlpha = 1;
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy units
+            visibilityAlpha = this.getEnemyVisibilityAlpha(unit, isVisible, game.gameTime);
+            if (visibilityAlpha <= 0.01) {
+                return;
             }
-            
+
             // Enemy units revealed in shadow should remain bright for readability.
         }
 
@@ -4161,6 +4277,39 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
 
+        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun && !game.isPointInShadow(unit.position)) {
+            let nearestSun: Sun | null = null;
+            let nearestDistance = Infinity;
+            for (const sun of game.suns) {
+                const distance = unit.position.distanceTo(sun.position);
+                if (distance < nearestDistance) {
+                    nearestDistance = distance;
+                    nearestSun = sun;
+                }
+            }
+
+            if (nearestSun && nearestDistance > 0) {
+                const dx = unit.position.x - nearestSun.position.x;
+                const dy = unit.position.y - nearestSun.position.y;
+                const invDistance = 1 / nearestDistance;
+                const dirX = dx * invDistance;
+                const dirY = dy * invDistance;
+                const shadowLength = size * (1.35 + Math.min(1, nearestDistance / 800) * 1.25);
+                const tailX = screenPos.x + dirX * shadowLength;
+                const tailY = screenPos.y + dirY * shadowLength;
+                const shadowGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                shadowGradient.addColorStop(0, 'rgba(3, 3, 11, 0.28)');
+                shadowGradient.addColorStop(0.6, 'rgba(3, 3, 11, 0.12)');
+                shadowGradient.addColorStop(1, 'rgba(3, 3, 11, 0)');
+                this.ctx.strokeStyle = shadowGradient;
+                this.ctx.lineWidth = Math.max(1.2, size * 0.72);
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
+            }
+        }
+
         // Draw unit body (circle) - use darkened color if should dim
         const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
         const tintColor = shouldDim
@@ -4171,6 +4320,9 @@ export class GameRenderer {
             ? this.getTintedSprite(heroSpritePath, tintColor)
             : null;
             
+        this.ctx.save();
+        this.ctx.globalAlpha = visibilityAlpha;
+
         if (heroSprite) {
             const spriteSize = size * this.HERO_SPRITE_SCALE;
             const rotationRad = unit.rotation;
@@ -4198,9 +4350,11 @@ export class GameRenderer {
         if (this.isFancyGraphicsEnabled) {
             const glowColor = shouldDim ? this.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor;
             const glowRadius = size * (isSelected ? 1.9 : 1.5);
-            const glowIntensity = isSelected ? 0.45 : 0.3;
+            const glowIntensity = (isSelected ? 0.45 : 0.3) * visibilityAlpha;
             this.drawFancyBloom(screenPos, glowRadius, glowColor, glowIntensity);
         }
+
+        this.ctx.restore();
 
         this.drawHealthDisplay(screenPos, unit.health, unit.maxHealth, size, -size - 8);
 
@@ -5099,12 +5253,12 @@ export class GameRenderer {
                 return; // Don't draw invisible enemy units
             }
             
-            // Check if in shadow for dimming effect - darken color instead of using alpha
+            // Keep visible enemy heroes bright even while they are in shadow.
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(grave.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5356,8 +5510,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(starling.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5684,8 +5838,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(ray.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5743,8 +5897,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(nova.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5794,8 +5948,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(ball.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5836,8 +5990,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(deployer.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5877,8 +6031,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(driller.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5921,8 +6075,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(dagger.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -5993,8 +6147,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(beam.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -6075,8 +6229,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(spotlight.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -6159,8 +6313,8 @@ export class GameRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(mortar.position);
                 if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    shouldDim = false;
+                    displayColor = color;
                 }
             }
         }
@@ -8579,6 +8733,7 @@ export class GameRenderer {
 
         this.updateViewBounds();
         const ladSun = game.suns.find(s => s.type === 'lad');
+        this.updateEnemyVisibilityFadeClock(game.gameTime);
 
         if (ladSun) {
             this.drawLadSunRays(game, ladSun);
