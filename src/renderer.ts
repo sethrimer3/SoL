@@ -46,7 +46,8 @@ type AsteroidRenderCache = {
 type SunRenderCache = {
     plasmaLayerA: HTMLCanvasElement;
     plasmaLayerB: HTMLCanvasElement;
-    shaftTexture: HTMLCanvasElement;
+    shaftTextureOuter: HTMLCanvasElement;
+    shaftTextureInner: HTMLCanvasElement;
 };
 
 export class GameRenderer {
@@ -1445,6 +1446,7 @@ export class GameRenderer {
     private drawUltraSun(sun: Sun, screenPos: Vector2D, screenRadius: number, gameTimeSec: number): void {
         const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
         const pulseAmount = 1 + Math.sin(gameTimeSec * 1.2) * 0.012;
+        const corePulseAmount = 1 + Math.sin(gameTimeSec * (Math.PI * 2 / 5)) * 0.018;
         const microFlicker = 1 + Math.sin(gameTimeSec * 8.0 + sun.position.x * 0.01 + sun.position.y * 0.015) * 0.015;
         const animatedRadius = screenRadius * pulseAmount;
 
@@ -1465,36 +1467,51 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, animatedRadius, 0, Math.PI * 2);
         this.ctx.clip();
 
-        this.ctx.globalAlpha = 0.86 * microFlicker;
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.rotate(gameTimeSec * 0.04);
+        this.ctx.globalAlpha = 0.84 * microFlicker;
         this.ctx.drawImage(
             sunRenderCache.plasmaLayerA,
-            screenPos.x - animatedRadius,
-            screenPos.y - animatedRadius,
+            -animatedRadius,
+            -animatedRadius,
             animatedRadius * 2,
             animatedRadius * 2
         );
+        this.ctx.restore();
 
-        const driftX = Math.sin(gameTimeSec * 0.11) * animatedRadius * 0.08;
-        const driftY = Math.cos(gameTimeSec * 0.09) * animatedRadius * 0.08;
-        this.ctx.globalAlpha = 0.64;
+        const driftX = Math.sin(gameTimeSec * 0.09) * animatedRadius * 0.09;
+        const driftY = Math.cos(gameTimeSec * 0.07) * animatedRadius * 0.09;
+        this.ctx.save();
+        this.ctx.translate(screenPos.x + driftX, screenPos.y + driftY);
+        this.ctx.rotate(-gameTimeSec * 0.032);
+        this.ctx.globalAlpha = 0.66;
         this.ctx.drawImage(
             sunRenderCache.plasmaLayerB,
-            screenPos.x - animatedRadius + driftX,
-            screenPos.y - animatedRadius + driftY,
+            -animatedRadius,
+            -animatedRadius,
             animatedRadius * 2,
             animatedRadius * 2
         );
+        this.ctx.restore();
 
         this.ctx.restore();
 
-        const coreRadius = animatedRadius * 0.34;
+        const coreRadius = animatedRadius * 0.34 * corePulseAmount;
         const hardCore = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, coreRadius);
-        hardCore.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        hardCore.addColorStop(0.42, 'rgba(255, 251, 230, 0.95)');
-        hardCore.addColorStop(1, 'rgba(255, 236, 170, 0.16)');
+        hardCore.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        hardCore.addColorStop(0.3, 'rgba(255, 255, 248, 0.98)');
+        hardCore.addColorStop(0.68, 'rgba(255, 246, 206, 0.9)');
+        hardCore.addColorStop(1, 'rgba(255, 236, 170, 0.14)');
         this.ctx.fillStyle = hardCore;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        const whiteDiscRadius = animatedRadius * 0.16 * corePulseAmount;
+        this.ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, whiteDiscRadius, 0, Math.PI * 2);
         this.ctx.fill();
 
         const surfaceGradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, animatedRadius * 0.15, screenPos.x, screenPos.y, animatedRadius);
@@ -1527,6 +1544,23 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
             this.ctx.fill();
         }
+
+        this.ctx.globalAlpha = 0.23;
+        this.ctx.beginPath();
+        this.ctx.ellipse(screenPos.x, screenPos.y, screenRadius * 2.9, screenRadius * 1.85, 0, 0, Math.PI * 2);
+        const horizontalStretch = this.ctx.createRadialGradient(
+            screenPos.x,
+            screenPos.y,
+            screenRadius * 0.3,
+            screenPos.x,
+            screenPos.y,
+            screenRadius * 2.9
+        );
+        horizontalStretch.addColorStop(0, 'rgba(255, 242, 186, 0.42)');
+        horizontalStretch.addColorStop(0.4, 'rgba(255, 212, 120, 0.18)');
+        horizontalStretch.addColorStop(1, 'rgba(255, 170, 95, 0)');
+        this.ctx.fillStyle = horizontalStretch;
+        this.ctx.fill();
         this.ctx.restore();
     }
 
@@ -1581,41 +1615,56 @@ export class GameRenderer {
             return textureCanvas;
         };
 
-        const shaftTexture = document.createElement('canvas');
-        shaftTexture.width = 1024;
-        shaftTexture.height = 1024;
-        const shaftContext = shaftTexture.getContext('2d');
-        if (shaftContext) {
+        const buildShaftTexture = (isOuterLayer: boolean): HTMLCanvasElement => {
+            const shaftTexture = document.createElement('canvas');
+            shaftTexture.width = 1024;
+            shaftTexture.height = 1024;
+            const shaftContext = shaftTexture.getContext('2d');
+            if (!shaftContext) {
+                return shaftTexture;
+            }
+
             const shaftCenterX = shaftTexture.width / 2;
             const shaftCenterY = shaftTexture.height / 2;
             shaftContext.translate(shaftCenterX, shaftCenterY);
             shaftContext.globalCompositeOperation = 'lighter';
-            const shaftCount = 28;
+            const shaftCount = isOuterLayer ? 32 : 20;
             for (let shaftIndex = 0; shaftIndex < shaftCount; shaftIndex++) {
-                const angle = (Math.PI * 2 * shaftIndex) / shaftCount + this.hashSigned(shaftIndex * 3.1) * 0.05;
-                const shaftLength = 380 + this.hashNormalized(shaftIndex * 17.9) * 250;
-                const shaftWidth = 14 + this.hashNormalized(shaftIndex * 9.3) * 34;
+                const angle = (Math.PI * 2 * shaftIndex) / shaftCount + this.hashSigned(shaftIndex * 7.1 + (isOuterLayer ? 3 : 11)) * 0.09;
+                const shaftLength = (isOuterLayer ? 430 : 320) + this.hashNormalized(shaftIndex * 17.9) * (isOuterLayer ? 300 : 220);
+                const shaftWidth = (isOuterLayer ? 22 : 16) + this.hashNormalized(shaftIndex * 9.3 + 4.7) * (isOuterLayer ? 48 : 26);
                 shaftContext.save();
                 shaftContext.rotate(angle);
-                const shaftGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
-                shaftGradient.addColorStop(0, 'rgba(255, 245, 200, 0.34)');
-                shaftGradient.addColorStop(0.2, 'rgba(255, 216, 130, 0.26)');
-                shaftGradient.addColorStop(1, 'rgba(255, 178, 95, 0)');
-                shaftContext.fillStyle = shaftGradient;
+
+                const softEdgeGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
+                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 246, 206, 0.16)' : 'rgba(255, 242, 190, 0.2)');
+                softEdgeGradient.addColorStop(0.2, isOuterLayer ? 'rgba(255, 215, 132, 0.18)' : 'rgba(255, 220, 138, 0.24)');
+                softEdgeGradient.addColorStop(1, 'rgba(255, 170, 85, 0)');
+                shaftContext.fillStyle = softEdgeGradient;
                 shaftContext.beginPath();
-                shaftContext.moveTo(0, 0);
-                shaftContext.lineTo(shaftLength, -shaftWidth * 0.5);
-                shaftContext.lineTo(shaftLength, shaftWidth * 0.5);
-                shaftContext.closePath();
+                shaftContext.ellipse(shaftLength * 0.5, 0, shaftLength * 0.52, shaftWidth * 0.5, 0, 0, Math.PI * 2);
                 shaftContext.fill();
+
+                const spineGradient = shaftContext.createLinearGradient(0, 0, shaftLength * 0.92, 0);
+                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 251, 232, 0.2)' : 'rgba(255, 250, 230, 0.32)');
+                spineGradient.addColorStop(0.5, isOuterLayer ? 'rgba(255, 229, 152, 0.18)' : 'rgba(255, 234, 160, 0.26)');
+                spineGradient.addColorStop(1, 'rgba(255, 198, 108, 0)');
+                shaftContext.fillStyle = spineGradient;
+                shaftContext.beginPath();
+                shaftContext.ellipse(shaftLength * 0.45, 0, shaftLength * 0.47, Math.max(2, shaftWidth * 0.13), 0, 0, Math.PI * 2);
+                shaftContext.fill();
+
                 shaftContext.restore();
             }
-        }
+
+            return shaftTexture;
+        };
 
         const generatedCache: SunRenderCache = {
             plasmaLayerA: buildPlasmaLayer(1),
             plasmaLayerB: buildPlasmaLayer(2),
-            shaftTexture
+            shaftTextureOuter: buildShaftTexture(true),
+            shaftTextureInner: buildShaftTexture(false)
         };
         this.sunRenderCacheByRadiusBucket.set(radiusBucket, generatedCache);
         return generatedCache;
@@ -3435,20 +3484,21 @@ export class GameRenderer {
         const sunScreenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
-        const shaftScale = 1.8 + Math.sin(gameTimeSec * 0.07) * 0.03;
+        const shaftScale = 1.95 + Math.sin(gameTimeSec * 0.07) * 0.03;
+        const shimmerAlpha = 0.08 + (Math.sin(gameTimeSec * 0.62 + sun.position.x * 0.003) + 1) * 0.04;
 
         this.ctx.save();
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        this.ctx.globalAlpha = 0.52;
+        this.ctx.globalAlpha = 0.48;
         const shaftSize = 1024 * shaftScale;
-        this.ctx.drawImage(sunRenderCache.shaftTexture, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
+        this.ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
 
         this.ctx.rotate(-gameTimeSec * 0.017);
-        this.ctx.globalAlpha = 0.34;
+        this.ctx.globalAlpha = 0.36 + shimmerAlpha;
         const innerSize = shaftSize * 0.72;
-        this.ctx.drawImage(sunRenderCache.shaftTexture, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
+        this.ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
         this.ctx.restore();
     }
@@ -3471,12 +3521,13 @@ export class GameRenderer {
 
             for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
                 const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
-                const orbitAngle = (game.gameTime * 0.32 + emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25) % (Math.PI * 2);
-                const radius = screenRadius * (0.45 + this.hashNormalized(seed + 7.3) * 3.1);
+                const outwardT = (game.gameTime * (0.16 + this.hashNormalized(seed + 2.2) * 0.22) + this.hashNormalized(seed + 11.5) * 7.0) % 1;
+                const orbitAngle = emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25;
+                const radius = screenRadius * (0.4 + outwardT * (2.1 + this.hashNormalized(seed + 7.3) * 1.6));
                 const x = sunScreenPos.x + Math.cos(orbitAngle) * radius;
                 const y = sunScreenPos.y + Math.sin(orbitAngle) * radius;
                 const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
-                const alpha = 0.08 + this.hashNormalized(seed + 19.9) * 0.26;
+                const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.24) * (1 - outwardT * 0.45);
 
                 this.ctx.fillStyle = `rgba(255, ${Math.floor(180 + this.hashNormalized(seed + 23.7) * 70)}, ${Math.floor(80 + this.hashNormalized(seed + 29.2) * 60)}, ${alpha.toFixed(4)})`;
                 this.ctx.beginPath();
@@ -3493,7 +3544,7 @@ export class GameRenderer {
             const driftX = (game.gameTime * (0.6 + this.hashNormalized(seed + 1.7) * 0.5) + seed) % width;
             const driftY = (game.gameTime * (0.35 + this.hashNormalized(seed + 3.4) * 0.4) + seed * 1.7) % height;
             const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
-            const alpha = 0.04 + this.hashNormalized(seed + 8.1) * 0.08;
+            const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
 
             this.ctx.fillStyle = `rgba(255, 215, 152, ${alpha.toFixed(4)})`;
             this.ctx.beginPath();
@@ -3513,7 +3564,7 @@ export class GameRenderer {
         this.ctx.globalCompositeOperation = 'multiply';
         const coolVignette = this.ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
         coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        coolVignette.addColorStop(1, 'rgba(150, 165, 210, 0.92)');
+        coolVignette.addColorStop(1, 'rgba(138, 155, 210, 0.94)');
         this.ctx.fillStyle = coolVignette;
         this.ctx.fillRect(0, 0, width, height);
 
@@ -3524,7 +3575,8 @@ export class GameRenderer {
             }
             const sunScreenPos = this.worldToScreen(sun.position);
             const warmGradient = this.ctx.createRadialGradient(sunScreenPos.x, sunScreenPos.y, 0, sunScreenPos.x, sunScreenPos.y, Math.max(width, height) * 0.45);
-            warmGradient.addColorStop(0, 'rgba(255, 198, 105, 0.16)');
+            warmGradient.addColorStop(0, 'rgba(255, 205, 108, 0.2)');
+            warmGradient.addColorStop(0.38, 'rgba(255, 188, 98, 0.12)');
             warmGradient.addColorStop(1, 'rgba(255, 156, 72, 0)');
             this.ctx.fillStyle = warmGradient;
             this.ctx.fillRect(0, 0, width, height);
