@@ -55,6 +55,8 @@ export interface GameSettings {
     selectedHeroNames: string[];
     playerColor: string;
     enemyColor: string;
+    allyColor: string; // Color for teammates in 2v2
+    enemy2Color: string; // Color for second enemy in 2v2
     selectedBaseLoadout: string | null; // Base loadout ID
     selectedSpawnLoadout: string | null; // Spawn loadout ID
     colorScheme: string; // Color scheme ID
@@ -281,6 +283,8 @@ export class MainMenu {
             selectedHeroNames: [],
             playerColor: '#66B3FF', // Somewhat light blue
             enemyColor: '#FF6B6B',   // Slightly light red
+            allyColor: '#88FF88',    // Light green for allies
+            enemy2Color: '#FFA500',  // Orange for second enemy
             selectedBaseLoadout: null,
             selectedSpawnLoadout: null,
             colorScheme: 'SpaceBlack', // Default color scheme
@@ -2162,6 +2166,8 @@ export class MainMenu {
             screenShakeEnabled: this.settings.screenShakeEnabled,
             playerColor: this.settings.playerColor,
             enemyColor: this.settings.enemyColor,
+            allyColor: this.settings.allyColor,
+            enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
@@ -2187,6 +2193,12 @@ export class MainMenu {
             },
             onEnemyColorChange: (value) => {
                 this.settings.enemyColor = value;
+            },
+            onAllyColorChange: (value) => {
+                this.settings.allyColor = value;
+            },
+            onEnemy2ColorChange: (value) => {
+                this.settings.enemy2Color = value;
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;

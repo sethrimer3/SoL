@@ -15,6 +15,8 @@ export interface SettingsScreenParams {
     screenShakeEnabled: boolean;
     playerColor: string;
     enemyColor: string;
+    allyColor: string;
+    enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
@@ -25,6 +27,8 @@ export interface SettingsScreenParams {
     onScreenShakeChange: (value: boolean) => void;
     onPlayerColorChange: (value: string) => void;
     onEnemyColorChange: (value: string) => void;
+    onAllyColorChange: (value: string) => void;
+    onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
@@ -46,6 +50,8 @@ export function renderSettingsScreen(
         screenShakeEnabled,
         playerColor,
         enemyColor,
+        allyColor,
+        enemy2Color,
         graphicsQuality,
         colorScheme,
         onDifficultyChange,
@@ -56,6 +62,8 @@ export function renderSettingsScreen(
         onScreenShakeChange,
         onPlayerColorChange,
         onEnemyColorChange,
+        onAllyColorChange,
+        onEnemy2ColorChange,
         onGraphicsQualityChange,
         onColorSchemeChange,
         onClearDataAndCache,
@@ -150,6 +158,20 @@ export function renderSettingsScreen(
         createColorPicker(enemyColor, onEnemyColorChange)
     );
     settingsContainer.appendChild(enemyColorSection);
+
+    // Ally Color setting (for 2v2 games)
+    const allyColorSection = createSettingSection(
+        'Ally Color (2v2)',
+        createColorPicker(allyColor, onAllyColorChange)
+    );
+    settingsContainer.appendChild(allyColorSection);
+
+    // Second Enemy Color setting (for 2v2 games)
+    const enemy2ColorSection = createSettingSection(
+        'Enemy 2 Color (2v2)',
+        createColorPicker(enemy2Color, onEnemy2ColorChange)
+    );
+    settingsContainer.appendChild(enemy2ColorSection);
 
     // Graphics Quality setting
     const graphicsQualitySection = createSettingSection(
