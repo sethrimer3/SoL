@@ -9053,9 +9053,9 @@ export class GameRenderer {
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const margin = 10;
-        const boxWidth = 200;
+        const productionBoxWidth = 200;
         const boxHeight = 60;
-        const x = screenWidth - boxWidth - margin;
+        const rightX = screenWidth - margin;
         let y = margin;
 
         const starlingSymbol = '✦';
@@ -9069,43 +9069,21 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.globalAlpha = this.infoBoxOpacity;
         
-        // Draw incoming SoL energy and starlings count
         const compactBoxHeight = 30;
-        
-        // Draw incoming energy box
+        const compactTextPaddingLeft = 8;
+        const compactTextPaddingRight = 8;
+        const compactIconInset = 4;
+        const compactIconSize = compactBoxHeight - compactIconInset * 2;
+        this.ctx.font = 'bold 14px Doto';
+
+        const compactTextWidths: number[] = [];
         if (player.stellarForge) {
-            const forge = player.stellarForge;
-            const energyRate = forge.incomingLightPerSec;
-            
-            // Draw background box
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
-            
-            // Draw border - green if receiving light, red otherwise
-            this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
-            
-            // Get cached SoL icon
-            const solIcon = this.getSolEnergyIcon();
-            const iconSize = compactBoxHeight - 8; // Slightly smaller than box height
-            const iconX = x + 4;
-            const iconY = y + 4;
-            
-            if (solIcon.complete && solIcon.naturalWidth > 0) {
-                this.ctx.drawImage(solIcon, iconX, iconY, iconSize, iconSize);
-            }
-            
-            // Draw text next to icon
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(`${energyRate.toFixed(1)}/s`, x + 8 + iconSize + 4, y + compactBoxHeight / 2);
-            
-            y += compactBoxHeight + 5;
+            const energyText = `${player.stellarForge.incomingLightPerSec.toFixed(1)}/s`;
+            compactTextWidths.push(
+                compactTextPaddingLeft + compactIconSize + compactIconInset + this.ctx.measureText(energyText).width + compactTextPaddingRight
+            );
         }
-        
+
         // Count starlings
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
         const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - starlingCount);
@@ -9120,37 +9098,86 @@ export class GameRenderer {
             Math.floor(projectedEnergy / Constants.STARLING_COST_PER_ENERGY),
             availableStarlingSlots
         );
+        const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
+        const starlingRateText = `${starlingSymbol} ${starlingCount}${starlingRateLabel}`;
+        const maxStarlingsText = `${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`;
+
+        compactTextWidths.push(
+            compactTextPaddingLeft + this.ctx.measureText(starlingRateText).width + compactTextPaddingRight,
+            compactTextPaddingLeft + this.ctx.measureText(maxStarlingsText).width + compactTextPaddingRight
+        );
+
+        const compactBoxWidth = Math.ceil(Math.max(...compactTextWidths));
+        const compactX = rightX - compactBoxWidth;
+        const productionX = rightX - productionBoxWidth;
+        
+        // Draw incoming energy box
+        if (player.stellarForge) {
+            const forge = player.stellarForge;
+            const energyRate = forge.incomingLightPerSec;
+            
+            // Draw background box
+            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+            this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
+            
+            // Draw border - green if receiving light, red otherwise
+            this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
+            this.ctx.lineWidth = 2;
+            this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
+            
+            // Get cached SoL icon
+            const solIcon = this.getSolEnergyIcon();
+            const iconX = compactX + compactIconInset;
+            const iconY = y + compactIconInset;
+            
+            if (solIcon.complete && solIcon.naturalWidth > 0) {
+                this.ctx.drawImage(solIcon, iconX, iconY, compactIconSize, compactIconSize);
+            }
+            
+            // Draw text next to icon
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = 'bold 14px Doto';
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(
+                `${energyRate.toFixed(1)}/s`,
+                compactX + compactTextPaddingLeft + compactIconSize + compactIconInset,
+                y + compactBoxHeight / 2
+            );
+            
+            y += compactBoxHeight + 5;
+        }
+
         // Draw starlings count box
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-        this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+        this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
         
         // Draw border
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+        this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
         
         // Draw text
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = 'bold 14px Doto';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
-        this.ctx.fillText(`${starlingSymbol} ${starlingCount}${starlingRateLabel}`, x + 8, y + compactBoxHeight / 2);
+        this.ctx.fillText(starlingRateText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 5;
 
         this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-        this.ctx.fillRect(x, y, boxWidth, compactBoxHeight);
+        this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
 
         this.ctx.strokeStyle = '#FFD700';
         this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(x, y, boxWidth, compactBoxHeight);
+        this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
 
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = 'bold 14px Doto';
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`, x + 8, y + compactBoxHeight / 2);
+        this.ctx.fillText(maxStarlingsText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
         
         y += compactBoxHeight + 8;
         
@@ -9160,12 +9187,12 @@ export class GameRenderer {
             
             // Draw background box
             this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
             
             // Draw border
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
             
             // Draw production name
             this.ctx.fillStyle = '#FFFFFF';
@@ -9174,7 +9201,7 @@ export class GameRenderer {
             this.ctx.textBaseline = 'top';
             
             const productionName = this.getProductionDisplayName(forge.heroProductionUnitType!);
-            this.ctx.fillText(productionName, x + 8, y + 8);
+            this.ctx.fillText(productionName, productionX + 8, y + 8);
             
             // Calculate progress (guard against division by zero)
             const progress = forge.heroProductionDurationSec > 0 
@@ -9182,7 +9209,7 @@ export class GameRenderer {
                 : 0;
             
             // Draw progress bar
-            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, progress);
+            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, progress);
             
             y += boxHeight + 8;
         }
@@ -9190,11 +9217,11 @@ export class GameRenderer {
         const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
         if (foundry?.currentProduction) {
             this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
             
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
             
             this.ctx.fillStyle = '#FFFFFF';
             this.ctx.font = 'bold 14px Doto';
@@ -9202,9 +9229,9 @@ export class GameRenderer {
             this.ctx.textBaseline = 'top';
             
             const productionName = this.getProductionDisplayName(foundry.currentProduction);
-            this.ctx.fillText(`Foundry ${productionName}`, x + 8, y + 8);
+            this.ctx.fillText(`Foundry ${productionName}`, productionX + 8, y + 8);
             
-            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, foundry.productionProgress);
+            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, foundry.productionProgress);
             
             y += boxHeight + 8;
         }
@@ -9215,12 +9242,12 @@ export class GameRenderer {
         if (buildingInProgress) {
             // Draw background box
             this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(x, y, boxWidth, boxHeight);
+            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
             
             // Draw border
             this.ctx.strokeStyle = '#FFD700';
             this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(x, y, boxWidth, boxHeight);
+            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
             
             // Draw building name
             this.ctx.fillStyle = '#FFFFFF';
@@ -9229,10 +9256,10 @@ export class GameRenderer {
             this.ctx.textBaseline = 'top';
             
             const buildingName = this.getBuildingDisplayName(buildingInProgress);
-            this.ctx.fillText(`Building ${buildingName}`, x + 8, y + 8);
+            this.ctx.fillText(`Building ${buildingName}`, productionX + 8, y + 8);
             
             // Draw progress bar
-            this.drawProgressBar(x + 8, y + 32, boxWidth - 16, 16, buildingInProgress.buildProgress);
+            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, buildingInProgress.buildProgress);
         }
         
         // Reset text alignment
