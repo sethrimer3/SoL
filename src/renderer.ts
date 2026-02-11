@@ -2594,7 +2594,7 @@ export class GameRenderer {
                 const dy = particle.position.y - sun.position.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance <= 0 || distance >= shadowMaxDistance) {
+                if (distance <= 0 || distance >= Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX) {
                     continue;
                 }
 
@@ -2602,19 +2602,31 @@ export class GameRenderer {
                 const dirX = dx * invDistance;
                 const dirY = dy * invDistance;
 
-                // Keep the effect subtle: particles close to a sun get a faint cinematic umbra,
-                // while farther particles quickly fade out to avoid visual clutter.
-                const proximity = 1.0 - (distance / shadowMaxDistance);
-                const intensity = proximity * proximity;
-                if (intensity <= 0.01) {
+                // Keep the effect subtle: nearby particles get a stronger cinematic umbra,
+                // while farther particles still receive tiny aesthetic shadows.
+                const nearProximity = Math.max(0, 1.0 - (distance / shadowMaxDistance));
+                const nearIntensity = nearProximity * nearProximity;
+                const farMaxDistance = Math.max(shadowMaxDistance, Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX);
+                const farRange = Math.max(1, farMaxDistance - shadowMaxDistance);
+                const farDistanceRatio = (distance - shadowMaxDistance) / farRange;
+                const farFalloff = 1.0 - Math.max(0, Math.min(1, farDistanceRatio));
+                const farIntensity = Constants.DUST_SHADOW_FAR_MIN_INTENSITY * (farFalloff * farFalloff);
+                const intensity = distance < shadowMaxDistance ? nearIntensity : farIntensity;
+                if (intensity <= 0.0025) {
                     continue;
                 }
 
-                const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * (0.45 + intensity * 0.65)) * this.zoom;
+                const lengthFactor = distance < shadowMaxDistance
+                    ? (0.45 + nearIntensity * 0.65)
+                    : (0.24 + farFalloff * 0.2);
+                const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * lengthFactor) * this.zoom;
                 const tailX = screenPos.x + dirX * shadowLength;
                 const tailY = screenPos.y + dirY * shadowLength;
 
-                const penumbraWidth = shadowBaseWidth * (1.8 + intensity);
+                const widthFactor = distance < shadowMaxDistance
+                    ? (1.8 + nearIntensity)
+                    : (0.95 + farFalloff * 0.35);
+                const penumbraWidth = shadowBaseWidth * widthFactor;
                 const penumbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
                 penumbraGradient.addColorStop(0, `rgba(8, 10, 22, ${(Constants.DUST_SHADOW_OPACITY * 0.22 * intensity).toFixed(4)})`);
                 penumbraGradient.addColorStop(1, 'rgba(8, 10, 22, 0)');
@@ -2626,7 +2638,7 @@ export class GameRenderer {
                 this.ctx.lineTo(tailX, tailY);
                 this.ctx.stroke();
 
-                const umbraWidth = shadowBaseWidth * 0.9;
+                const umbraWidth = shadowBaseWidth * (distance < shadowMaxDistance ? 0.9 : 0.42);
                 const umbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
                 umbraGradient.addColorStop(0, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.45 * intensity).toFixed(4)})`);
                 umbraGradient.addColorStop(0.65, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.12 * intensity).toFixed(4)})`);
