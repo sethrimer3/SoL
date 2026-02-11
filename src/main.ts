@@ -393,48 +393,44 @@ class GameController {
         }
 
         if (buttonIndex === 0) {
-            if (foundry.canQueueStrafeUpgrade() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+            if (foundry.canQueueStrafeUpgrade()) {
                 foundry.enqueueProduction(Constants.FOUNDRY_STRAFE_UPGRADE_ITEM);
                 console.log('Queued foundry Strafe upgrade');
                 this.sendNetworkCommand('foundry_strafe_upgrade', { buildingId });
-                // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot queue Strafe upgrade or not enough energy');
+                console.log('Cannot queue Strafe upgrade');
             }
         } else if (buttonIndex === 1) {
-            if (foundry.canQueueBlinkUpgrade() && player.spendEnergy(Constants.FOUNDRY_BLINK_UPGRADE_COST)) {
+            if (foundry.canQueueBlinkUpgrade()) {
                 foundry.enqueueProduction(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
                 console.log('Queued foundry Blink upgrade');
                 this.sendNetworkCommand('foundry_blink_upgrade', { buildingId });
-                // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot queue Blink upgrade or not enough energy');
+                console.log('Cannot queue Blink upgrade');
             }
         } else if (buttonIndex === 2) {
-            if (foundry.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+            if (foundry.canQueueRegenUpgrade()) {
                 foundry.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
                 console.log('Queued foundry Regen upgrade');
                 this.sendNetworkCommand('foundry_regen_upgrade', { buildingId });
-                // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot queue Regen upgrade or not enough energy');
+                console.log('Cannot queue Regen upgrade');
             }
         } else if (buttonIndex === 3) {
-            if (foundry.canQueueAttackUpgrade() && player.spendEnergy(Constants.FOUNDRY_ATTACK_UPGRADE_COST)) {
+            if (foundry.canQueueAttackUpgrade()) {
                 foundry.enqueueProduction(Constants.FOUNDRY_ATTACK_UPGRADE_ITEM);
                 console.log('Queued foundry +1 ATK upgrade');
                 this.sendNetworkCommand('foundry_attack_upgrade', { buildingId });
-                // Deselect foundry
                 foundry.isSelected = false;
                 this.selectedBuildings.clear();
             } else {
-                console.log('Cannot queue +1 ATK upgrade or not enough energy');
+                console.log('Cannot queue +1 ATK upgrade');
             }
         }
     }
@@ -971,10 +967,119 @@ class GameController {
 
     private getNearestMirrorButtonIndexFromAngle(
         dragAngleRad: number,
-        shouldShowFoundryButton: boolean
+        shouldShowFoundryButton: boolean,
+        isSelectedMirrorInSunlight: boolean
     ): number {
+        if (!isSelectedMirrorInSunlight) {
+            return this.getNearestButtonIndexFromAngle(dragAngleRad, 1);
+        }
         const buttonCount = shouldShowFoundryButton ? 3 : 2;
         return this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount);
+    }
+
+    private isSelectedMirrorInSunlight(): boolean {
+        if (!this.game || this.selectedMirrors.size === 0) {
+            return false;
+        }
+        for (const mirror of this.selectedMirrors) {
+            if (mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private hasLineOfSightToAnySun(point: Vector2D): boolean {
+        if (!this.game || this.game.suns.length === 0) {
+            return false;
+        }
+        for (const sun of this.game.suns) {
+            const direction = new Vector2D(sun.position.x - point.x, sun.position.y - point.y).normalize();
+            const ray = new LightRay(point, direction);
+            const distanceToSun = point.distanceTo(sun.position);
+            let isBlocked = false;
+            for (const asteroid of this.game.asteroids) {
+                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+                if (intersectionDist !== null && intersectionDist < distanceToSun) {
+                    isBlocked = true;
+                    break;
+                }
+            }
+            if (!isBlocked) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private findNearestSunlightTarget(fromPos: Vector2D): Vector2D | null {
+        if (!this.game || this.game.suns.length === 0) {
+            return null;
+        }
+
+        let nearestSun: Sun | null = null;
+        let minDistance = Infinity;
+        for (const sun of this.game.suns) {
+            const distance = fromPos.distanceTo(sun.position);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestSun = sun;
+            }
+        }
+        if (!nearestSun) {
+            return null;
+        }
+
+        const targetDistance = nearestSun.radius + 180;
+        const baseAngleRad = Math.atan2(fromPos.y - nearestSun.position.y, fromPos.x - nearestSun.position.x);
+        const sampleCount = 24;
+
+        for (let i = 0; i < sampleCount; i++) {
+            const angleOffset = (Math.PI * 2 * i) / sampleCount;
+            const angleRad = baseAngleRad + angleOffset;
+            const candidate = new Vector2D(
+                nearestSun.position.x + Math.cos(angleRad) * targetDistance,
+                nearestSun.position.y + Math.sin(angleRad) * targetDistance
+            );
+            if (this.game.checkCollision(candidate, 20)) {
+                continue;
+            }
+            if (!this.hasLineOfSightToAnySun(candidate)) {
+                continue;
+            }
+            return candidate;
+        }
+
+        return null;
+    }
+
+    private moveSelectedMirrorsToNearestSunlight(player: Player): void {
+        if (this.selectedMirrors.size === 0 || !this.game) {
+            return;
+        }
+        const firstMirror = Array.from(this.selectedMirrors)[0];
+        const target = this.findNearestSunlightTarget(firstMirror.position);
+        if (!target) {
+            console.log('No nearby sunlight destination found for mirror');
+            return;
+        }
+
+        const mirrorIndices = Array.from(this.selectedMirrors)
+            .map((mirror) => player.solarMirrors.indexOf(mirror))
+            .filter((index) => index >= 0);
+
+        for (const mirror of this.selectedMirrors) {
+            mirror.setTarget(target);
+        }
+
+        this.moveOrderCounter++;
+        this.sendNetworkCommand('mirror_move', {
+            mirrorIndices,
+            targetX: target.x,
+            targetY: target.y,
+            moveOrder: this.moveOrderCounter
+        });
+        console.log(`Moving selected mirrors to sunlight at (${target.x.toFixed(0)}, ${target.y.toFixed(0)})`);
     }
 
     private getBuildingAbilityAnchorScreen(): Vector2D | null {
@@ -1803,10 +1908,13 @@ class GameController {
                     } else if (this.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 or 3 buttons
                         this.renderer.highlightedButtonIndex = dragDirection
-                            ? this.getNearestMirrorButtonIndexFromAngle(angle, this.hasSeenFoundry)
+                            ? this.getNearestMirrorButtonIndexFromAngle(angle, this.hasSeenFoundry, this.isSelectedMirrorInSunlight())
                             : -1;
-                        if (this.renderer.highlightedButtonIndex === 1 && !this.canCreateWarpGateFromSelectedMirrors()) {
-                            this.renderer.highlightedButtonIndex = -1;
+                        const isMirrorInSunlight = this.isSelectedMirrorInSunlight();
+                        if (isMirrorInSunlight) {
+                            if (this.renderer.highlightedButtonIndex === 1 && !this.canCreateWarpGateFromSelectedMirrors()) {
+                                this.renderer.highlightedButtonIndex = -1;
+                            }
                         }
                     } else if (this.selectedWarpGate) {
                         if (dragDirection && player) {
@@ -2290,78 +2398,78 @@ class GameController {
 
                 // Check if clicked on mirror command buttons
                 if (this.selectedMirrors.size > 0) {
-                    // Get one of the selected mirrors to determine button positions
                     const firstMirror = Array.from(this.selectedMirrors)[0] as any;
                     const mirrorScreenPos = this.renderer.worldToScreen(firstMirror.position);
-                    
-                    // Button layout: Warp gate above, forge on left (and foundry on right if available)
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
-                    const buttonOffset = 50 * this.renderer.zoom; // Distance from mirror
+                    const buttonOffset = 50 * this.renderer.zoom;
                     const shouldShowFoundryButton = this.hasSeenFoundry;
-                    
-                    const warpGateButtonX = mirrorScreenPos.x;
-                    const warpGateButtonY = mirrorScreenPos.y - buttonOffset;
-                    const forgeButtonX = mirrorScreenPos.x - buttonOffset;
-                    const forgeButtonY = mirrorScreenPos.y;
-                    const foundryButtonX = mirrorScreenPos.x + buttonOffset;
-                    const foundryButtonY = mirrorScreenPos.y;
-                    
-                    // Check if clicked on forge button
-                    let dx = lastX - forgeButtonX;
-                    let dy = lastY - forgeButtonY;
-                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
-                        console.log('Mirror command: Link to Forge');
-                        // Link all selected mirrors to the forge
-                        if (player.stellarForge) {
-                            for (const mirror of this.selectedMirrors) {
-                                mirror.setLinkedStructure(player.stellarForge);
+                    const isMirrorInSunlight = this.isSelectedMirrorInSunlight();
+                    const buttonCount = isMirrorInSunlight ? (shouldShowFoundryButton ? 3 : 2) : 1;
+                    const positions = this.getRadialButtonOffsets(buttonCount);
+
+                    for (let i = 0; i < positions.length; i++) {
+                        const pos = positions[i];
+                        const buttonX = mirrorScreenPos.x + pos.x * buttonOffset;
+                        const buttonY = mirrorScreenPos.y + pos.y * buttonOffset;
+                        const dx = lastX - buttonX;
+                        const dy = lastY - buttonY;
+                        if (Math.sqrt(dx * dx + dy * dy) > buttonRadius) {
+                            continue;
+                        }
+
+                        if (!isMirrorInSunlight) {
+                            this.moveSelectedMirrorsToNearestSunlight(player);
+                            isPanning = false;
+                            isMouseDown = false;
+                            this.isSelecting = false;
+                            this.selectionStartScreen = null;
+                            this.renderer.selectionStart = null;
+                            this.renderer.selectionEnd = null;
+                            return;
+                        }
+
+                        if (i === 0) {
+                            console.log('Mirror command: Link to Forge');
+                            if (player.stellarForge) {
+                                for (const mirror of this.selectedMirrors) {
+                                    mirror.setLinkedStructure(player.stellarForge);
+                                }
+                                const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                    player.solarMirrors.indexOf(mirror)
+                                ).filter((index) => index >= 0);
+                                this.sendNetworkCommand('mirror_link', {
+                                    mirrorIndices,
+                                    structureType: 'forge'
+                                });
                             }
-                            const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
-                                player.solarMirrors.indexOf(mirror)
-                            ).filter((index) => index >= 0);
-                            this.sendNetworkCommand('mirror_link', {
-                                mirrorIndices,
-                                structureType: 'forge'
-                            });
-                            console.log('Mirrors linked to forge');
+                            for (const mirror of this.selectedMirrors) {
+                                (mirror as any).isSelected = false;
+                            }
+                            this.selectedMirrors.clear();
+                            isPanning = false;
+                            isMouseDown = false;
+                            this.isSelecting = false;
+                            this.selectionStartScreen = null;
+                            this.renderer.selectionStart = null;
+                            this.renderer.selectionEnd = null;
+                            return;
                         }
-                        // Deselect mirrors
-                        for (const mirror of this.selectedMirrors) {
-                            (mirror as any).isSelected = false;
-                        }
-                        this.selectedMirrors.clear();
-                        
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        return;
-                    }
 
-                    // Check if clicked on warp gate button
-                    dx = lastX - warpGateButtonX;
-                    dy = lastY - warpGateButtonY;
-                    if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
-                        console.log('Mirror command: Create Warp Gate');
-                        if (this.canCreateWarpGateFromSelectedMirrors()) {
-                            this.mirrorCommandMode = 'warpgate';
+                        if (i === 1) {
+                            console.log('Mirror command: Create Warp Gate');
+                            if (this.canCreateWarpGateFromSelectedMirrors()) {
+                                this.mirrorCommandMode = 'warpgate';
+                            }
+                            isPanning = false;
+                            isMouseDown = false;
+                            this.isSelecting = false;
+                            this.selectionStartScreen = null;
+                            this.renderer.selectionStart = null;
+                            this.renderer.selectionEnd = null;
+                            return;
                         }
-                        // User will now tap a location to create the warp gate
-                        isPanning = false;
-                        isMouseDown = false;
-                        this.isSelecting = false;
-                        this.selectionStartScreen = null;
-                        this.renderer.selectionStart = null;
-                        this.renderer.selectionEnd = null;
-                        return;
-                    }
 
-                    if (shouldShowFoundryButton) {
-                        dx = lastX - foundryButtonX;
-                        dy = lastY - foundryButtonY;
-                        if (Math.sqrt(dx * dx + dy * dy) <= buttonRadius) {
+                        if (i === 2 && shouldShowFoundryButton) {
                             if (this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
                                 if (foundry) {
@@ -2379,14 +2487,12 @@ class GameController {
                                             buildingIndex
                                         });
                                     }
-                                    console.log('Mirrors linked to foundry');
                                 }
                             }
                             for (const mirror of this.selectedMirrors) {
                                 (mirror as any).isSelected = false;
                             }
                             this.selectedMirrors.clear();
-
                             isPanning = false;
                             isMouseDown = false;
                             this.isSelecting = false;
@@ -2420,7 +2526,7 @@ class GameController {
                                 console.log(`${clickedHeroName} is already active`);
                             } else if (isHeroProducing) {
                                 console.log(`${clickedHeroName} is already being produced`);
-                            } else if (player.spendEnergy(Constants.HERO_UNIT_COST)) {
+                            } else {
                                 player.stellarForge.enqueueHeroUnit(heroUnitType);
                                 player.stellarForge.startHeroProductionIfIdle();
                                 console.log(`Queued hero ${clickedHeroName} for forging`);
@@ -2428,8 +2534,6 @@ class GameController {
                                 this.sendNetworkCommand('hero_purchase', {
                                     heroType: heroUnitType
                                 });
-                            } else {
-                                console.log('Not enough energy to forge hero');
                             }
                         }
 
@@ -2730,7 +2834,7 @@ class GameController {
                                     const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
                                     const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
                                     
-                                    if (!isHeroAlive && !isHeroProducing && player.spendEnergy(Constants.HERO_UNIT_COST)) {
+                                    if (!isHeroAlive && !isHeroProducing) {
                                         player.stellarForge.enqueueHeroUnit(heroUnitType);
                                         player.stellarForge.startHeroProductionIfIdle();
                                         console.log(`Radial selection: Queued hero ${selectedHeroName} for forging`);
@@ -2746,7 +2850,10 @@ class GameController {
                             }
                         } else if (this.selectedMirrors.size > 0) {
                             // Solar mirror button selected
-                            if (this.renderer.highlightedButtonIndex === 0) {
+                            const isMirrorInSunlight = this.isSelectedMirrorInSunlight();
+                            if (!isMirrorInSunlight && this.renderer.highlightedButtonIndex === 0) {
+                                this.moveSelectedMirrorsToNearestSunlight(player);
+                            } else if (this.renderer.highlightedButtonIndex === 0) {
                                 // Forge button
                                 if (player.stellarForge) {
                                     for (const mirror of this.selectedMirrors) {
@@ -2765,13 +2872,13 @@ class GameController {
                                     (mirror as any).isSelected = false;
                                 }
                                 this.selectedMirrors.clear();
-                            } else if (this.renderer.highlightedButtonIndex === 1) {
+                            } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 1) {
                                 // Warp gate button
                                 if (this.canCreateWarpGateFromSelectedMirrors()) {
                                     this.mirrorCommandMode = 'warpgate';
                                     console.log('Radial selection: Mirror command mode set to warpgate');
                                 }
-                            } else if (this.renderer.highlightedButtonIndex === 2 && this.hasActiveFoundry) {
+                            } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 2 && this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
                                 if (foundry) {
                                     for (const mirror of this.selectedMirrors) {
@@ -3625,8 +3732,11 @@ class GameController {
     private render(): void {
         if (this.game) {
             this.updateFoundryButtonState();
+            const isSelectedMirrorInSunlight = this.isSelectedMirrorInSunlight();
             const canCreateWarpGate = this.selectedMirrors.size > 0
+                && isSelectedMirrorInSunlight
                 && this.canCreateWarpGateFromSelectedMirrors();
+            this.renderer.isSelectedMirrorInSunlight = isSelectedMirrorInSunlight;
             this.renderer.canCreateWarpGateFromMirrors = canCreateWarpGate;
             this.renderer.isWarpGatePlacementMode = this.mirrorCommandMode === 'warpgate'
                 && canCreateWarpGate;
