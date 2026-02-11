@@ -4374,23 +4374,26 @@ export class GameState {
     checkVictoryConditions(): Player | null {
         const activePlayers = this.players.filter(p => !p.isDefeated());
         
-        // Standard 1v1 logic (2 players on different teams or exactly 1 active player remaining)
+        // No winner yet if everyone is defeated (draw/error state) or no one is defeated yet
+        if (activePlayers.length === 0 || activePlayers.length === this.players.length) {
+            return null;
+        }
+        
+        // Single survivor wins (handles both 1v1 and last-man-standing in team games)
         if (activePlayers.length === 1) {
             return activePlayers[0];
         }
         
-        // No winner yet if 0 or 2+ players are still active
-        if (activePlayers.length === 0 || this.players.length <= 2) {
-            return null;
-        }
-        
-        // Team game logic (3+ players)
-        // Get unique teams that still have active players
-        const activeTeams = new Set(activePlayers.map(p => p.teamId));
-        
-        // Victory if only one team remains with active players
-        if (activeTeams.size === 1) {
-            return activePlayers[0]; // Return any player from the winning team
+        // Multiple players remaining - check for team victory
+        // In 1v1, this means both players are still alive (already handled above)
+        // In team games (3+ total players), check if only one team has survivors
+        if (this.players.length >= 3) {
+            const activeTeams = new Set(activePlayers.map(p => p.teamId));
+            
+            // Victory if only one team remains with active players
+            if (activeTeams.size === 1) {
+                return activePlayers[0]; // Return any player from the winning team
+            }
         }
         
         return null;

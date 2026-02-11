@@ -588,10 +588,21 @@ export function updatePlayerMMR(opponentMMR: number, isWin: boolean): { newMMR: 
 
 /**
  * Update player 2v2 MMR after a team match
- * Calculates MMR change based on player's current 2v2 rating vs enemy team average
- * @param enemyTeamMMR - Average MMR of enemy team
- * @param isWin - Whether player's team won
- * @returns Object with new MMR and change amount
+ * 
+ * Each player's MMR is updated individually based on their current rating
+ * vs the enemy team's average rating. Call this function once for each player
+ * on both teams after the match concludes.
+ * 
+ * Example: In a 2v2 match:
+ * - Team A wins: Player1 (1000 MMR) and Player2 (1200 MMR)
+ * - Team B loses: Player3 (1100 MMR) and Player4 (1000 MMR)
+ * - Enemy average = 1050
+ * - Call updatePlayer2v2MMR(1050, true) for Player1 and Player2
+ * - Call updatePlayer2v2MMR(1100, false) for Player3 and Player4
+ * 
+ * @param enemyTeamMMR - Average MMR of the enemy team
+ * @param isWin - Whether the player's team won
+ * @returns Object with new MMR and change amount for this player
  */
 export function updatePlayer2v2MMR(enemyTeamMMR: number, isWin: boolean): { newMMR: number; mmrChange: number } {
     const mmrData = getPlayerMMRData();
