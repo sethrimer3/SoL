@@ -31,7 +31,8 @@ npm-debug.log
 yarn-error.log
 
 # Compiled JavaScript (TypeScript output)
-dist/**/*.js
+# Dist folder is deployed by GitHub Actions, not committed
+dist/
 build/**/*.js
 
 # Environment variables
