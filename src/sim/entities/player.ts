@@ -28,6 +28,7 @@ export class Player {
     units: Unit[] = [];
     buildings: Building[] = []; // Offensive and defensive buildings
     isAi: boolean = false;
+    teamId: number = 0; // Team identifier for team-based games (0 or 1 for 2v2)
     aiNextMirrorCommandSec: number = 0;
     aiNextDefenseCommandSec: number = 0;
     aiNextHeroCommandSec: number = 0;

@@ -26,6 +26,7 @@ export interface GameRoom {
     max_players: number;
     created_at: string;
     game_settings: any;
+    game_mode?: '1v1' | '2v2' | 'custom'; // Game mode type
 }
 
 /**
@@ -39,6 +40,11 @@ export interface RoomPlayer {
     is_ready: boolean;
     faction: string | null;
     joined_at: string;
+    team_id?: number | null; // Team assignment (0 or 1 for 2v2, null for spectators)
+    is_spectator?: boolean; // Whether player is spectating
+    slot_type?: 'player' | 'ai' | 'spectator' | 'empty'; // Type of slot
+    ai_difficulty?: 'easy' | 'normal' | 'hard'; // AI difficulty if slot is AI
+    player_color?: string; // Custom color for this player
 }
 
 /**

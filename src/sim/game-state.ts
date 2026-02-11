@@ -4369,12 +4369,30 @@ export class GameState {
 
     /**
      * Check if any player has won
+     * In team games, victory is achieved when all players on a team are defeated
      */
     checkVictoryConditions(): Player | null {
         const activePlayers = this.players.filter(p => !p.isDefeated());
-        if (activePlayers.length === 1) {
-            return activePlayers[0];
+        
+        // Check if we're in a team game (more than 2 players or players have different team IDs)
+        const isTeamGame = this.players.length > 2 || 
+            (this.players.length === 2 && this.players[0].teamId === this.players[1].teamId);
+        
+        if (isTeamGame) {
+            // Get unique teams that still have active players
+            const activeTeams = new Set(activePlayers.map(p => p.teamId));
+            
+            // Victory if only one team remains
+            if (activeTeams.size === 1 && activePlayers.length > 0) {
+                return activePlayers[0]; // Return any player from the winning team
+            }
+        } else {
+            // Standard 1v1 logic
+            if (activePlayers.length === 1) {
+                return activePlayers[0];
+            }
         }
+        
         return null;
     }
 
@@ -5157,6 +5175,41 @@ export class GameState {
         // This is not perfect but works for most cases in the current implementation
         const ownerIndex = this.players.indexOf(unit.owner);
         return `${ownerIndex}_${unit.position.x.toFixed(1)}_${unit.position.y.toFixed(1)}_${unit.maxHealth}_${unit.constructor.name}`;
+    }
+
+    /**
+     * Check if two players are on the same team
+     */
+    areAllies(player1: Player, player2: Player): boolean {
+        return player1.teamId === player2.teamId;
+    }
+
+    /**
+     * Check if two players are enemies
+     */
+    areEnemies(player1: Player, player2: Player): boolean {
+        return player1.teamId !== player2.teamId;
+    }
+
+    /**
+     * Get all teammates of a player (excluding the player themselves)
+     */
+    getTeammates(player: Player): Player[] {
+        return this.players.filter(p => p !== player && p.teamId === player.teamId);
+    }
+
+    /**
+     * Get all enemies of a player
+     */
+    getEnemies(player: Player): Player[] {
+        return this.players.filter(p => p.teamId !== player.teamId);
+    }
+
+    /**
+     * Get all players on a specific team
+     */
+    getTeamPlayers(teamId: number): Player[] {
+        return this.players.filter(p => p.teamId === teamId);
     }
 }
 
