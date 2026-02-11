@@ -1345,16 +1345,30 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a selection indicator (green dashed circle) for selected buildings
+     * Draw the universal unit/structure selection ring.
      */
     private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
-        this.ctx.strokeStyle = '#00FF00'; // Green highlight for selection
-        this.ctx.lineWidth = 3;
-        this.ctx.setLineDash([5, 5]);
+        const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
+        const ringThickness = Math.max(1, this.zoom * 1.4);
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x,
+            screenPos.y,
+            Math.max(0, selectionRadius - ringThickness),
+            screenPos.x,
+            screenPos.y,
+            selectionRadius + ringThickness * 1.6
+        );
+        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
+        gradient.addColorStop(0.55, 'rgba(255, 215, 0, 0.95)');
+        gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+
+        this.ctx.save();
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = ringThickness;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius + 5, 0, Math.PI * 2);
+        this.ctx.arc(screenPos.x, screenPos.y, selectionRadius, 0, Math.PI * 2);
         this.ctx.stroke();
-        this.ctx.setLineDash([]); // Reset dash pattern
+        this.ctx.restore();
     }
 
     /**
@@ -1642,11 +1656,7 @@ export class GameRenderer {
 
         // Draw selection circle if selected
         if (forge.isSelected) {
-            this.ctx.strokeStyle = '#00FFFF';
-            this.ctx.lineWidth = 4;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
-            this.ctx.stroke();
+            this.drawBuildingSelectionIndicator(screenPos, size * 1.45);
             
             // Draw minion path if it exists
             if (forge.minionPath.length > 0) {
@@ -3781,6 +3791,10 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
+        if (isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, size);
+        }
+
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -4958,6 +4972,9 @@ export class GameRenderer {
         
         // Note: Range circles for starlings are drawn separately as merged outlines
         // in drawMergedStarlingRanges() before individual starlings are rendered
+        if (isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, size * 1.1);
+        }
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = this.getStarlingSpritePath(starling);
