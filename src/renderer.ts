@@ -82,7 +82,7 @@ export class GameRenderer {
     public inGameMenuTab: InGameMenuTab = 'main';
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
-    public graphicsQuality: 'low' | 'medium' | 'high' = 'high'; // Graphics quality setting
+    public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'high'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
@@ -2588,7 +2588,7 @@ export class GameRenderer {
             }
         }
 
-        if (this.graphicsQuality === 'high' && game.suns.length > 0 && !ladSun) {
+        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
             const shadowBaseWidth = Math.max(0.35, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
             const shadowMaxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
 
@@ -2641,6 +2641,64 @@ export class GameRenderer {
                 this.ctx.moveTo(screenPos.x, screenPos.y);
                 this.ctx.lineTo(tailX, tailY);
                 this.ctx.stroke();
+            }
+        }
+
+        if (this.graphicsQuality === 'ultra' && game.suns.length > 0 && !ladSun) {
+            let nearestSun: Sun | null = null;
+            let nearestDistance = Infinity;
+            for (const sun of game.suns) {
+                const distance = particle.position.distanceTo(sun.position);
+                if (distance < nearestDistance) {
+                    nearestSun = sun;
+                    nearestDistance = distance;
+                }
+            }
+
+            if (nearestSun && nearestDistance > 0) {
+                const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
+                const proximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
+                if (proximity > 0) {
+                    const dx = particle.position.x - nearestSun.position.x;
+                    const dy = particle.position.y - nearestSun.position.y;
+                    const angle = Math.atan2(dy, dx);
+                    const rotationFactor = Math.sin(angle * 2.0 + (particle.position.x + particle.position.y) * 0.004);
+                    const glowRadius = baseSize * (1.8 + proximity * 1.8 + Math.abs(rotationFactor) * 0.5);
+                    const glowAlpha = 0.06 + proximity * 0.14;
+                    const glowOffset = baseSize * (0.8 + proximity * 1.2);
+                    const glowX = screenPos.x + Math.cos(angle + rotationFactor * 0.35) * glowOffset;
+                    const glowY = screenPos.y + Math.sin(angle + rotationFactor * 0.35) * glowOffset;
+
+                    const corona = this.ctx.createRadialGradient(
+                        glowX,
+                        glowY,
+                        baseSize * 0.2,
+                        glowX,
+                        glowY,
+                        glowRadius
+                    );
+                    corona.addColorStop(0, `rgba(255, 244, 180, ${Math.min(0.32, glowAlpha * 1.9).toFixed(4)})`);
+                    corona.addColorStop(0.55, `rgba(255, 210, 125, ${glowAlpha.toFixed(4)})`);
+                    corona.addColorStop(1, 'rgba(255, 170, 90, 0)');
+                    this.ctx.fillStyle = corona;
+                    this.ctx.beginPath();
+                    this.ctx.arc(glowX, glowY, glowRadius, 0, Math.PI * 2);
+                    this.ctx.fill();
+
+                    const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * (0.7 + proximity * 1.0)) * this.zoom;
+                    const shadowAngle = angle + rotationFactor * 0.28;
+                    const shadowX = screenPos.x + Math.cos(shadowAngle) * shadowLength;
+                    const shadowY = screenPos.y + Math.sin(shadowAngle) * shadowLength;
+                    const stylizedShadow = this.ctx.createLinearGradient(screenPos.x, screenPos.y, shadowX, shadowY);
+                    stylizedShadow.addColorStop(0, `rgba(6, 10, 24, ${(0.18 + proximity * 0.2).toFixed(4)})`);
+                    stylizedShadow.addColorStop(1, 'rgba(6, 10, 24, 0)');
+                    this.ctx.strokeStyle = stylizedShadow;
+                    this.ctx.lineWidth = Math.max(0.25, baseSize * (0.6 + proximity * 0.9));
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(screenPos.x, screenPos.y);
+                    this.ctx.lineTo(shadowX, shadowY);
+                    this.ctx.stroke();
+                }
             }
         }
 
@@ -8438,7 +8496,7 @@ export class GameRenderer {
         }
         
         // Draw impact particles (only on high graphics quality)
-        if (this.graphicsQuality === 'high') {
+        if (this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') {
             for (const particle of game.impactParticles) {
                 if (this.isWithinViewBounds(particle.position, 120)) {
                     this.drawImpactParticle(particle);
@@ -9043,16 +9101,33 @@ export class GameRenderer {
         }
 
         if (this.inGameMenuTab === 'graphics') {
+            const qualityRowHeight = layout.isCompactLayout ? 34 : 38;
+            const qualityButtonGap = 8;
+            const qualityY = layout.graphicsSliderY;
+            const qualityLabelWidth = layout.graphicsSliderLabelWidth;
+            const qualityButtonWidth = (layout.graphicsSliderWidth - qualityLabelWidth - qualityButtonGap * 3) / 4;
+            const qualityStartX = layout.graphicsSliderX + qualityLabelWidth;
+            const qualityValues: Array<'low' | 'medium' | 'high' | 'ultra'> = ['low', 'medium', 'high', 'ultra'];
+            if (screenY >= qualityY && screenY <= qualityY + qualityRowHeight) {
+                for (let i = 0; i < qualityValues.length; i += 1) {
+                    const buttonX = qualityStartX + i * (qualityButtonWidth + qualityButtonGap);
+                    if (screenX >= buttonX && screenX <= buttonX + qualityButtonWidth) {
+                        return { type: 'graphicsQuality', quality: qualityValues[i] };
+                    }
+                }
+            }
+
             const sliderTrackX = layout.graphicsSliderX + layout.graphicsSliderLabelWidth;
             const sliderTrackWidth = layout.graphicsSliderWidth - layout.graphicsSliderLabelWidth;
             const sliderRowHeight = layout.graphicsSliderRowHeight;
             const sliderGap = layout.graphicsSliderGap;
+            const sliderBaseY = qualityY + qualityRowHeight + sliderGap;
             const sliderActionTypes: Array<InGameMenuAction['type']> = [
                 'offscreenIndicatorOpacity',
                 'infoBoxOpacity'
             ];
             for (let i = 0; i < sliderActionTypes.length; i += 1) {
-                const rowY = layout.graphicsSliderY + i * (sliderRowHeight + sliderGap);
+                const rowY = sliderBaseY + i * (sliderRowHeight + sliderGap);
                 const isWithinRow = screenY >= rowY && screenY <= rowY + sliderRowHeight;
                 if (!isWithinRow) {
                     continue;
@@ -9355,11 +9430,46 @@ export class GameRenderer {
             if (this.graphicsMenuScrollOffset > maxScroll) {
                 this.graphicsMenuScrollOffset = maxScroll;
             }
+            const qualityRowHeight = isCompactLayout ? 34 : 38;
+            const qualityButtonGap = 8;
+            const qualityY = layout.graphicsSliderY;
+            const qualityLabelX = layout.graphicsSliderX;
+            const qualityLabelWidth = layout.graphicsSliderLabelWidth;
+            const qualityButtonWidth = (layout.graphicsSliderWidth - qualityLabelWidth - qualityButtonGap * 3) / 4;
+            const qualityStartX = layout.graphicsSliderX + qualityLabelWidth;
+            const qualityValues: Array<'low' | 'medium' | 'high' | 'ultra'> = ['low', 'medium', 'high', 'ultra'];
+
+            this.ctx.fillStyle = '#FFFFFF';
+            this.ctx.font = `bold ${isCompactLayout ? 13 : 15}px Doto`;
+            this.ctx.textAlign = 'left';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText('Graphics Quality', qualityLabelX, qualityY + qualityRowHeight * 0.5);
+
+            for (let i = 0; i < qualityValues.length; i += 1) {
+                const quality = qualityValues[i];
+                const buttonX = qualityStartX + i * (qualityButtonWidth + qualityButtonGap);
+                const isSelected = this.graphicsQuality === quality;
+                this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
+                this.ctx.fillRect(buttonX, qualityY, qualityButtonWidth, qualityRowHeight);
+                this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.strokeRect(buttonX, qualityY, qualityButtonWidth, qualityRowHeight);
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(
+                    quality[0].toUpperCase() + quality.slice(1),
+                    buttonX + qualityButtonWidth / 2,
+                    qualityY + qualityRowHeight * 0.64
+                );
+            }
+
             const sliderTrackX = layout.graphicsSliderX + layout.graphicsSliderLabelWidth;
             const sliderTrackWidth = layout.graphicsSliderWidth - layout.graphicsSliderLabelWidth;
             const sliderRowHeight = layout.graphicsSliderRowHeight;
             const sliderGap = layout.graphicsSliderGap;
             const sliderTrackHeight = layout.graphicsSliderTrackHeight;
+            const sliderBaseY = qualityY + qualityRowHeight + sliderGap;
             const sliderRows = [
                 { label: 'Offscreen Indicators', valuePercent: Math.round(this.offscreenIndicatorOpacity * 100) },
                 { label: 'Info Box Opacity', valuePercent: Math.round(this.infoBoxOpacity * 100) }
@@ -9367,7 +9477,7 @@ export class GameRenderer {
 
             for (let i = 0; i < sliderRows.length; i += 1) {
                 const row = sliderRows[i];
-                const rowY = layout.graphicsSliderY + i * (sliderRowHeight + sliderGap);
+                const rowY = sliderBaseY + i * (sliderRowHeight + sliderGap);
                 const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
                 const trackY = rowY + (sliderRowHeight - sliderTrackHeight) / 2;
                 const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;

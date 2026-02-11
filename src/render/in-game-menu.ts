@@ -17,6 +17,7 @@ export type InGameMenuAction =
     | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
     | { type: 'healthDisplayMode'; mode: 'bar' | 'number' }
     | { type: 'fancyGraphics'; isEnabled: boolean }
+    | { type: 'graphicsQuality'; quality: 'low' | 'medium' | 'high' | 'ultra' }
     | { type: 'colorblindMode'; isEnabled: boolean };
 
 export type InGameMenuLayout = {
@@ -94,7 +95,7 @@ export function getInGameMenuLayout(canvasWidth: number, canvasHeight: number): 
     const graphicsSliderGap = isCompactLayout ? 10 : 12;
     const graphicsSliderLabelWidth = isCompactLayout ? 150 : 190;
     const graphicsSliderTrackHeight = isCompactLayout ? 8 : 10;
-    const graphicsSliderAreaHeight = graphicsSliderRowHeight * 2 + graphicsSliderGap;
+    const graphicsSliderAreaHeight = graphicsSliderRowHeight * 3 + graphicsSliderGap * 2;
     const graphicsListY = graphicsSliderY + graphicsSliderAreaHeight + (isCompactLayout ? 12 : 14);
     const graphicsListWidth = panelWidth - panelPaddingX * 2;
     const graphicsListHeight = Math.max(0, contentBottomY - graphicsListY);

@@ -1908,6 +1908,9 @@ class GameController {
                             case 'fancyGraphics':
                                 this.renderer.isFancyGraphicsEnabled = menuAction.isEnabled;
                                 break;
+                            case 'graphicsQuality':
+                                this.renderer.graphicsQuality = menuAction.quality;
+                                break;
                             case 'colorblindMode':
                                 this.renderer.colorblindMode = menuAction.isEnabled;
                                 break;
