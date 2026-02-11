@@ -646,6 +646,7 @@ export class MainMenu {
         }
         this.setTestLevelButtonVisible(false);
         this.setLadButtonVisible(false);
+        this.updateAtmosphereOpacityForCurrentScreen();
     }
 
     private setMenuParticleDensity(multiplier: number): void {
@@ -655,6 +656,15 @@ export class MainMenu {
 
     private startMenuTransition(): void {
         this.menuParticleLayer?.startTransition();
+    }
+
+    private updateAtmosphereOpacityForCurrentScreen(): void {
+        const mainMenuSunOpacity = 1;
+        const secondaryMenuSunOpacity = 0.35;
+        const targetOpacity = this.currentScreen === 'main'
+            ? mainMenuSunOpacity
+            : secondaryMenuSunOpacity;
+        this.atmosphereLayer?.setOpacity(targetOpacity);
     }
 
     private loadLanLobbyEntries(): LanLobbyEntry[] {
@@ -858,6 +868,7 @@ export class MainMenu {
         this.setTestLevelButtonVisible(true);
         this.setLadButtonVisible(true);
         this.setMenuParticleDensity(1.6);
+        this.updateAtmosphereOpacityForCurrentScreen();
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
         container.style.justifyContent = 'flex-start';
