@@ -195,10 +195,8 @@ export class GameRenderer {
 
     private readonly ASTEROID_MIN_FACET_COUNT = 10;
     private readonly ASTEROID_MAX_FACET_COUNT = 400;
-    private readonly ASTEROID_MIN_RING_COUNT = 2;
-    private readonly ASTEROID_MAX_RING_COUNT = 14;
-    private readonly ASTEROID_RING_ANGLE_JITTER_SCALE = 0.18;
-    private readonly ASTEROID_RING_RADIUS_JITTER_SCALE = 0.08;
+    private readonly ASTEROID_MIN_CORE_FACET_DENSITY = 0.2;
+    private readonly ASTEROID_MAX_CORE_FACET_DENSITY = 0.95;
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
 
@@ -2590,32 +2588,59 @@ export class GameRenderer {
             }
         }
 
-        if (game.suns.length > 0 && !ladSun) {
-            const shadowLineWidth = Math.max(0.4, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
-            this.ctx.strokeStyle = `rgba(0, 0, 20, ${Constants.DUST_SHADOW_OPACITY})`;
-            this.ctx.lineWidth = shadowLineWidth;
+        if (this.graphicsQuality === 'high' && game.suns.length > 0 && !ladSun) {
+            const shadowBaseWidth = Math.max(0.35, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
+            const shadowMaxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
 
             for (const sun of game.suns) {
                 const dx = particle.position.x - sun.position.x;
                 const dy = particle.position.y - sun.position.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance > 0 && distance < Constants.DUST_SHADOW_MAX_DISTANCE_PX) {
-                    const fade = 1.0 - (distance / Constants.DUST_SHADOW_MAX_DISTANCE_PX);
-                    const shadowLength = Constants.DUST_SHADOW_LENGTH_PX * fade;
-                    if (shadowLength > 0) {
-                        const invDistance = 1 / distance;
-                        const dirX = dx * invDistance;
-                        const dirY = dy * invDistance;
-                        const shadowEndX = screenPos.x + dirX * shadowLength * this.zoom;
-                        const shadowEndY = screenPos.y + dirY * shadowLength * this.zoom;
-
-                        this.ctx.beginPath();
-                        this.ctx.moveTo(screenPos.x, screenPos.y);
-                        this.ctx.lineTo(shadowEndX, shadowEndY);
-                        this.ctx.stroke();
-                    }
+                if (distance <= 0 || distance >= shadowMaxDistance) {
+                    continue;
                 }
+
+                const invDistance = 1 / distance;
+                const dirX = dx * invDistance;
+                const dirY = dy * invDistance;
+
+                // Keep the effect subtle: particles close to a sun get a faint cinematic umbra,
+                // while farther particles quickly fade out to avoid visual clutter.
+                const proximity = 1.0 - (distance / shadowMaxDistance);
+                const intensity = proximity * proximity;
+                if (intensity <= 0.01) {
+                    continue;
+                }
+
+                const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * (0.45 + intensity * 0.65)) * this.zoom;
+                const tailX = screenPos.x + dirX * shadowLength;
+                const tailY = screenPos.y + dirY * shadowLength;
+
+                const penumbraWidth = shadowBaseWidth * (1.8 + intensity);
+                const penumbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                penumbraGradient.addColorStop(0, `rgba(8, 10, 22, ${(Constants.DUST_SHADOW_OPACITY * 0.22 * intensity).toFixed(4)})`);
+                penumbraGradient.addColorStop(1, 'rgba(8, 10, 22, 0)');
+
+                this.ctx.strokeStyle = penumbraGradient;
+                this.ctx.lineWidth = penumbraWidth;
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
+
+                const umbraWidth = shadowBaseWidth * 0.9;
+                const umbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                umbraGradient.addColorStop(0, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.45 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(0.65, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.12 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(1, 'rgba(0, 0, 10, 0)');
+
+                this.ctx.strokeStyle = umbraGradient;
+                this.ctx.lineWidth = umbraWidth;
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
             }
         }
 
@@ -2963,91 +2988,39 @@ export class GameRenderer {
         const targetFacetCount = Math.round(minFacetCount + (maxFacetCount - minFacetCount) * sizeT);
         const asteroidSeed = this.computeAsteroidSeed(asteroid);
         const seededCountVariance = 0.88 + this.hashNormalized(asteroidSeed + 13.417) * 0.24;
-        const desiredFacetCount = Math.max(minFacetCount, Math.round(targetFacetCount * seededCountVariance));
-
-        const ringCount = Math.max(
-            this.ASTEROID_MIN_RING_COUNT,
-            Math.min(this.ASTEROID_MAX_RING_COUNT, Math.round(Math.sqrt(desiredFacetCount / 2)))
-        );
-        const sectorCount = Math.max(5, Math.round(desiredFacetCount / (ringCount * 2)));
-        const ringStep = 1 / ringCount;
-        const sectorStepRad = (Math.PI * 2) / sectorCount;
+        const facetCount = Math.max(minFacetCount, Math.round(targetFacetCount * seededCountVariance));
 
         const facets: AsteroidFacet[] = [];
+        const angleStepRad = (Math.PI * 2) / facetCount;
+        const minDensity = this.ASTEROID_MIN_CORE_FACET_DENSITY;
+        const maxDensity = this.ASTEROID_MAX_CORE_FACET_DENSITY;
 
-        for (let ringIndex = 0; ringIndex < ringCount; ringIndex++) {
-            const innerT = ringIndex * ringStep;
-            const outerT = (ringIndex + 1) * ringStep;
+        for (let facetIndex = 0; facetIndex < facetCount; facetIndex++) {
+            const jitterA = this.hashSigned(asteroidSeed + facetIndex * 13.11) * angleStepRad * 0.38;
+            const jitterB = this.hashSigned(asteroidSeed + facetIndex * 17.73) * angleStepRad * 0.38;
+            const angleA = facetIndex * angleStepRad + jitterA;
+            const angleB = (facetIndex + 1) * angleStepRad + jitterB;
+            const angleMid = (angleA + angleB) * 0.5 + this.hashSigned(asteroidSeed + facetIndex * 29.41) * angleStepRad * 0.15;
 
-            for (let sectorIndex = 0; sectorIndex < sectorCount; sectorIndex++) {
-                const angleA = this.getAsteroidFacetAngle(asteroidSeed, ringIndex, sectorIndex, sectorStepRad);
-                const angleB = this.getAsteroidFacetAngle(asteroidSeed, ringIndex, sectorIndex + 1, sectorStepRad);
+            const boundaryA = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleA);
+            const boundaryB = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleB);
+            const boundaryMid = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleMid);
+            const densityA = minDensity + this.hashNormalized(asteroidSeed + facetIndex * 39.13) * (maxDensity - minDensity);
+            const densityB = minDensity + this.hashNormalized(asteroidSeed + facetIndex * 41.29) * (maxDensity - minDensity);
+            const densityMid = 0.05 + this.hashNormalized(asteroidSeed + facetIndex * 43.61) * 0.9;
 
-                const boundaryA = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleA);
-                const boundaryB = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleB);
+            const pointA = new Vector2D(Math.cos(angleA) * boundaryA * densityA, Math.sin(angleA) * boundaryA * densityA);
+            const pointB = new Vector2D(Math.cos(angleB) * boundaryB * densityB, Math.sin(angleB) * boundaryB * densityB);
+            const pointC = new Vector2D(Math.cos(angleMid) * boundaryMid * densityMid, Math.sin(angleMid) * boundaryMid * densityMid);
 
-                const innerRadiusA = this.getFacetRadius(boundaryA, innerT, asteroidSeed, ringIndex, sectorIndex, 0);
-                const innerRadiusB = this.getFacetRadius(boundaryB, innerT, asteroidSeed, ringIndex, sectorIndex, 1);
-                const outerRadiusA = this.getFacetRadius(boundaryA, outerT, asteroidSeed, ringIndex, sectorIndex, 2);
-                const outerRadiusB = this.getFacetRadius(boundaryB, outerT, asteroidSeed, ringIndex, sectorIndex, 3);
-
-                const innerA = new Vector2D(Math.cos(angleA) * innerRadiusA, Math.sin(angleA) * innerRadiusA);
-                const innerB = new Vector2D(Math.cos(angleB) * innerRadiusB, Math.sin(angleB) * innerRadiusB);
-                const outerA = new Vector2D(Math.cos(angleA) * outerRadiusA, Math.sin(angleA) * outerRadiusA);
-                const outerB = new Vector2D(Math.cos(angleB) * outerRadiusB, Math.sin(angleB) * outerRadiusB);
-
-                const shouldFlipDiagonal = ((ringIndex + sectorIndex) % 2) === 0;
-                if (shouldFlipDiagonal) {
-                    this.addAsteroidFacet(facets, innerA, outerA, outerB);
-                    this.addAsteroidFacet(facets, innerA, outerB, innerB);
-                } else {
-                    this.addAsteroidFacet(facets, innerA, outerA, innerB);
-                    this.addAsteroidFacet(facets, outerA, outerB, innerB);
-                }
-            }
+            const centroidLocal = new Vector2D(
+                (pointA.x + pointB.x + pointC.x) / 3,
+                (pointA.y + pointB.y + pointC.y) / 3
+            );
+            facets.push({ points: [pointA, pointB, pointC], centroidLocal });
         }
 
         return facets;
-    }
-
-    private addAsteroidFacet(facets: AsteroidFacet[], pointA: Vector2D, pointB: Vector2D, pointC: Vector2D): void {
-        const centroidLocal = new Vector2D(
-            (pointA.x + pointB.x + pointC.x) / 3,
-            (pointA.y + pointB.y + pointC.y) / 3
-        );
-        facets.push({ points: [pointA, pointB, pointC], centroidLocal });
-    }
-
-    private getAsteroidFacetAngle(
-        asteroidSeed: number,
-        ringIndex: number,
-        sectorIndex: number,
-        sectorStepRad: number
-    ): number {
-        const baseAngle = sectorIndex * sectorStepRad;
-        const angleJitter = this.hashSigned(asteroidSeed + ringIndex * 37.13 + sectorIndex * 11.47)
-            * sectorStepRad
-            * this.ASTEROID_RING_ANGLE_JITTER_SCALE;
-        return baseAngle + angleJitter;
-    }
-
-    private getFacetRadius(
-        boundaryRadius: number,
-        radialT: number,
-        asteroidSeed: number,
-        ringIndex: number,
-        sectorIndex: number,
-        cornerIndex: number
-    ): number {
-        if (radialT <= 0.0001) {
-            return 0;
-        }
-
-        const jitterSeed = asteroidSeed + ringIndex * 53.29 + sectorIndex * 17.93 + cornerIndex * 7.11;
-        const radiusJitter = 1 + this.hashSigned(jitterSeed) * this.ASTEROID_RING_RADIUS_JITTER_SCALE;
-        const minRadialT = ringIndex === 0 ? 0.06 : radialT * 0.9;
-        const clampedT = Math.min(1, Math.max(minRadialT, radialT));
-        return boundaryRadius * clampedT * radiusJitter;
     }
 
     private computeAsteroidSeed(asteroid: Asteroid): number {
