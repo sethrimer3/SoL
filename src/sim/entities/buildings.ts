@@ -30,6 +30,8 @@ export class Building {
     energyRequired: number = 0; // Total energy required to complete construction
     isComplete: boolean = false;
     isSelected: boolean = false;
+    isReceivingLight: boolean = false;
+    incomingLightPerSec: number = 0;
     
     constructor(
         public position: Vector2D,
@@ -694,7 +696,7 @@ export class SubsidiaryFactory extends Building {
         }
 
         // Advance production
-        if (this.currentProduction) {
+        if (this.currentProduction && this.isReceivingLight && this.incomingLightPerSec > 0) {
             const productionTime = this.getProductionTime(this.currentProduction);
             this.addProductionProgress(deltaTime / productionTime);
         }

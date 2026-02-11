@@ -87,6 +87,7 @@ export class GameRenderer {
     public hasActiveFoundry: boolean = false;
     public isWarpGatePlacementMode: boolean = false;
     public canCreateWarpGateFromMirrors: boolean = false;
+    public isSelectedMirrorInSunlight: boolean = false;
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -4118,24 +4119,24 @@ export class GameRenderer {
         
         const shouldShowFoundryButton = this.hasSeenFoundry;
         const hasFoundryAvailable = this.hasActiveFoundry;
+        const isMirrorInSunlight = this.isSelectedMirrorInSunlight;
         
         const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
         const buttonOffset = 50 * this.zoom; // Distance from mirror
 
-        const useThreeButtons = shouldShowFoundryButton;
-        const buttonCount = useThreeButtons ? 3 : 2;
+        const buttonCount = isMirrorInSunlight ? (shouldShowFoundryButton ? 3 : 2) : 1;
         const positions = this.getRadialButtonOffsets(buttonCount);
         const forgePos = positions[0];
-        const warpGatePos = positions[1];
-        const foundryPos = useThreeButtons ? positions[2] : null;
+        const warpGatePos = isMirrorInSunlight ? positions[1] : null;
+        const foundryPos = isMirrorInSunlight && shouldShowFoundryButton ? positions[2] : null;
         const forgeButtonX = screenPos.x + forgePos.x * buttonOffset;
         const forgeButtonY = screenPos.y + forgePos.y * buttonOffset;
-        const warpGateButtonX = screenPos.x + warpGatePos.x * buttonOffset;
-        const warpGateButtonY = screenPos.y + warpGatePos.y * buttonOffset;
+        const warpGateButtonX = warpGatePos ? screenPos.x + warpGatePos.x * buttonOffset : screenPos.x;
+        const warpGateButtonY = warpGatePos ? screenPos.y + warpGatePos.y * buttonOffset : screenPos.y;
         const foundryButtonX = foundryPos ? screenPos.x + foundryPos.x * buttonOffset : screenPos.x;
         const foundryButtonY = foundryPos ? screenPos.y + foundryPos.y * buttonOffset : screenPos.y;
 
-        // Draw "Forge" button (left)
+        // Draw primary mirror button
         const isForgeHighlighted = this.highlightedButtonIndex === 0;
         this.ctx.fillStyle = isForgeHighlighted ? 'rgba(255, 215, 0, 0.4)' : '#444444';
         this.ctx.strokeStyle = '#FFD700';
@@ -4149,8 +4150,14 @@ export class GameRenderer {
         this.ctx.font = `${11 * this.zoom}px Doto`;
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
+        if (isMirrorInSunlight) {
+            this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
+        } else {
+            this.ctx.fillText('To', forgeButtonX, forgeButtonY - 5 * this.zoom);
+            this.ctx.fillText('Sun', forgeButtonX, forgeButtonY + 6 * this.zoom);
+        }
 
+        if (isMirrorInSunlight && warpGatePos) {
         // Draw "Warp Gate" button (center or right)
         const isWarpGateAvailable = this.canCreateWarpGateFromMirrors;
         const isWarpGateHighlighted = this.highlightedButtonIndex === 1 && isWarpGateAvailable;
@@ -4183,8 +4190,9 @@ export class GameRenderer {
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
         this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
+        }
 
-        if (useThreeButtons) {
+        if (isMirrorInSunlight && shouldShowFoundryButton) {
             const isFoundryHighlighted = hasFoundryAvailable && this.highlightedButtonIndex === 2;
             const foundryFill = hasFoundryAvailable
                 ? (isFoundryHighlighted ? 'rgba(160, 160, 160, 0.4)' : '#444444')

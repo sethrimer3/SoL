@@ -255,6 +255,11 @@ export class GameState {
                 }
             }
 
+            for (const building of player.buildings) {
+                building.isReceivingLight = false;
+                building.incomingLightPerSec = 0;
+            }
+
             // Update solar mirrors - position and reflection angle
             // Mirrors can move during countdown to reach the sun
             for (const mirror of player.solarMirrors) {
@@ -299,6 +304,8 @@ export class GameState {
                         player.stellarForge.addPendingEnergy(energyGenerated);
                     } else if (linkedStructure instanceof Building &&
                                mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
+                        linkedStructure.isReceivingLight = true;
+                        linkedStructure.incomingLightPerSec += mirror.getEnergyRatePerSec();
                         // Provide energy to building being constructed
                         if (!linkedStructure.isComplete) {
                             linkedStructure.addEnergy(energyGenerated);
@@ -5098,24 +5105,24 @@ export class GameState {
             return;
         }
         if (upgradeType === 'strafe') {
-            if (building.canQueueStrafeUpgrade() && player.spendEnergy(Constants.FOUNDRY_STRAFE_UPGRADE_COST)) {
+            if (building.canQueueStrafeUpgrade()) {
                 building.enqueueProduction(Constants.FOUNDRY_STRAFE_UPGRADE_ITEM);
             }
             return;
         }
         if (upgradeType === 'blink') {
-            if (building.canQueueBlinkUpgrade() && player.spendEnergy(Constants.FOUNDRY_BLINK_UPGRADE_COST)) {
+            if (building.canQueueBlinkUpgrade()) {
                 building.enqueueProduction(Constants.FOUNDRY_BLINK_UPGRADE_ITEM);
             }
             return;
         }
         if (upgradeType === 'attack') {
-            if (building.canQueueAttackUpgrade() && player.spendEnergy(Constants.FOUNDRY_ATTACK_UPGRADE_COST)) {
+            if (building.canQueueAttackUpgrade()) {
                 building.enqueueProduction(Constants.FOUNDRY_ATTACK_UPGRADE_ITEM);
             }
             return;
         }
-        if (building.canQueueRegenUpgrade() && player.spendEnergy(Constants.FOUNDRY_REGEN_UPGRADE_COST)) {
+        if (building.canQueueRegenUpgrade()) {
             building.enqueueProduction(Constants.FOUNDRY_REGEN_UPGRADE_ITEM);
         }
     }
