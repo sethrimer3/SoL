@@ -2638,8 +2638,9 @@ export class GameRenderer {
                     : (0.95 + farFalloff * 0.35);
                 const penumbraWidth = shadowBaseWidth * widthFactor;
                 const penumbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                penumbraGradient.addColorStop(0, `rgba(8, 10, 22, ${(Constants.DUST_SHADOW_OPACITY * 0.22 * intensity).toFixed(4)})`);
-                penumbraGradient.addColorStop(1, 'rgba(8, 10, 22, 0)');
+                penumbraGradient.addColorStop(0, `rgba(5, 7, 16, ${(Constants.DUST_SHADOW_OPACITY * 0.7 * intensity).toFixed(4)})`);
+                penumbraGradient.addColorStop(0.55, `rgba(5, 7, 16, ${(Constants.DUST_SHADOW_OPACITY * 0.25 * intensity).toFixed(4)})`);
+                penumbraGradient.addColorStop(1, 'rgba(5, 7, 16, 0)');
 
                 this.ctx.strokeStyle = penumbraGradient;
                 this.ctx.lineWidth = penumbraWidth;
@@ -2648,11 +2649,12 @@ export class GameRenderer {
                 this.ctx.lineTo(tailX, tailY);
                 this.ctx.stroke();
 
-                const umbraWidth = shadowBaseWidth * (distance < shadowMaxDistance ? 0.9 : 0.42);
+                const umbraWidth = shadowBaseWidth * (distance < shadowMaxDistance ? 0.72 : 0.36);
                 const umbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                umbraGradient.addColorStop(0, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.45 * intensity).toFixed(4)})`);
-                umbraGradient.addColorStop(0.65, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.12 * intensity).toFixed(4)})`);
-                umbraGradient.addColorStop(1, 'rgba(0, 0, 10, 0)');
+                umbraGradient.addColorStop(0, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 1.05 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(0.45, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 0.55 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(0.72, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 0.2 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(1, 'rgba(0, 0, 6, 0)');
 
                 this.ctx.strokeStyle = umbraGradient;
                 this.ctx.lineWidth = umbraWidth;
@@ -2709,7 +2711,7 @@ export class GameRenderer {
                     const shadowX = screenPos.x + Math.cos(shadowAngle) * shadowLength;
                     const shadowY = screenPos.y + Math.sin(shadowAngle) * shadowLength;
                     const stylizedShadow = this.ctx.createLinearGradient(screenPos.x, screenPos.y, shadowX, shadowY);
-                    stylizedShadow.addColorStop(0, `rgba(6, 10, 24, ${(0.18 + proximity * 0.2).toFixed(4)})`);
+                    stylizedShadow.addColorStop(0, `rgba(4, 6, 14, ${(0.32 + proximity * 0.28).toFixed(4)})`);
                     stylizedShadow.addColorStop(1, 'rgba(6, 10, 24, 0)');
                     this.ctx.strokeStyle = stylizedShadow;
                     this.ctx.lineWidth = Math.max(0.25, baseSize * (0.6 + proximity * 0.9));
@@ -3130,8 +3132,9 @@ export class GameRenderer {
             
             // Use color scheme for subtle brightness falloff from sun
             gradient.addColorStop(0, this.colorScheme.sunLightRays.nearCenter);     // Brightest near sun
-            gradient.addColorStop(0.5, this.colorScheme.sunLightRays.mid);          // Medium
-            gradient.addColorStop(1, this.colorScheme.sunLightRays.edge);           // Fade out
+            gradient.addColorStop(0.2, this.colorScheme.sunLightRays.mid);          // Strong warm halo close to sun
+            gradient.addColorStop(0.52, this.colorScheme.sunLightRays.edge);         // Falloff zone
+            gradient.addColorStop(1, 'rgba(255, 190, 95, 0)');                       // Fade out
             
             this.ctx.fillStyle = gradient;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -3141,9 +3144,10 @@ export class GameRenderer {
                     sunScreenPos.x, sunScreenPos.y, 0,
                     sunScreenPos.x, sunScreenPos.y, maxRadius * 1.1
                 );
-                bloomGradient.addColorStop(0, 'rgba(255, 255, 220, 0.35)');
-                bloomGradient.addColorStop(0.4, 'rgba(255, 230, 160, 0.18)');
-                bloomGradient.addColorStop(1, 'rgba(255, 220, 120, 0)');
+                bloomGradient.addColorStop(0, 'rgba(255, 255, 225, 0.6)');
+                bloomGradient.addColorStop(0.18, 'rgba(255, 235, 165, 0.38)');
+                bloomGradient.addColorStop(0.42, 'rgba(255, 208, 120, 0.16)');
+                bloomGradient.addColorStop(1, 'rgba(255, 190, 95, 0)');
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'screen';
                 this.ctx.fillStyle = bloomGradient;
@@ -3157,7 +3161,7 @@ export class GameRenderer {
         for (const sun of game.suns) {
             this.ctx.save();
             this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.fillStyle = 'rgba(0, 0, 20, 0.5)';
+            this.ctx.fillStyle = 'rgba(0, 0, 14, 0.7)';
 
             let hasShadowPath = false;
             this.ctx.beginPath();
