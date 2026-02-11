@@ -43,6 +43,12 @@ type AsteroidRenderCache = {
     facetCount: number;
 };
 
+type SunRenderCache = {
+    plasmaLayerA: HTMLCanvasElement;
+    plasmaLayerB: HTMLCanvasElement;
+    shaftTexture: HTMLCanvasElement;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -193,9 +199,13 @@ export class GameRenderer {
     private sunRayScreenPosC = new Vector2D(0, 0);
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
+    private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
+    private readonly ULTRA_SUN_BLOOM_STEPS = 4;
+    private readonly ULTRA_SOLAR_EMBER_COUNT = 96;
+    private readonly ULTRA_LIGHT_DUST_COUNT = 180;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -1374,13 +1384,18 @@ export class GameRenderer {
     /**
      * Draw a sun
      */
-    private drawSun(sun: Sun): void {
+    private drawSun(sun: Sun, gameTimeSec: number = 0): void {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         
         // Special rendering for LaD (Light and Dark) sun
         if (sun.type === 'lad') {
             this.drawLadSun(sun, screenPos, screenRadius);
+            return;
+        }
+
+        if (this.graphicsQuality === 'ultra') {
+            this.drawUltraSun(sun, screenPos, screenRadius, gameTimeSec);
             return;
         }
 
@@ -1425,6 +1440,185 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.8, 0, Math.PI * 2);
         this.ctx.stroke();
+    }
+
+    private drawUltraSun(sun: Sun, screenPos: Vector2D, screenRadius: number, gameTimeSec: number): void {
+        const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
+        const pulseAmount = 1 + Math.sin(gameTimeSec * 1.2) * 0.012;
+        const microFlicker = 1 + Math.sin(gameTimeSec * 8.0 + sun.position.x * 0.01 + sun.position.y * 0.015) * 0.015;
+        const animatedRadius = screenRadius * pulseAmount;
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'lighter';
+
+        const corona = this.ctx.createRadialGradient(screenPos.x, screenPos.y, animatedRadius * 0.25, screenPos.x, screenPos.y, animatedRadius * 2.8);
+        corona.addColorStop(0, 'rgba(255, 246, 210, 0.52)');
+        corona.addColorStop(0.28, 'rgba(255, 207, 116, 0.35)');
+        corona.addColorStop(1, 'rgba(255, 170, 90, 0)');
+        this.ctx.fillStyle = corona;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, animatedRadius * 2.8, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, animatedRadius, 0, Math.PI * 2);
+        this.ctx.clip();
+
+        this.ctx.globalAlpha = 0.86 * microFlicker;
+        this.ctx.drawImage(
+            sunRenderCache.plasmaLayerA,
+            screenPos.x - animatedRadius,
+            screenPos.y - animatedRadius,
+            animatedRadius * 2,
+            animatedRadius * 2
+        );
+
+        const driftX = Math.sin(gameTimeSec * 0.11) * animatedRadius * 0.08;
+        const driftY = Math.cos(gameTimeSec * 0.09) * animatedRadius * 0.08;
+        this.ctx.globalAlpha = 0.64;
+        this.ctx.drawImage(
+            sunRenderCache.plasmaLayerB,
+            screenPos.x - animatedRadius + driftX,
+            screenPos.y - animatedRadius + driftY,
+            animatedRadius * 2,
+            animatedRadius * 2
+        );
+
+        this.ctx.restore();
+
+        const coreRadius = animatedRadius * 0.34;
+        const hardCore = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, coreRadius);
+        hardCore.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+        hardCore.addColorStop(0.42, 'rgba(255, 251, 230, 0.95)');
+        hardCore.addColorStop(1, 'rgba(255, 236, 170, 0.16)');
+        this.ctx.fillStyle = hardCore;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        const surfaceGradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, animatedRadius * 0.15, screenPos.x, screenPos.y, animatedRadius);
+        surfaceGradient.addColorStop(0, 'rgba(255, 247, 190, 0.6)');
+        surfaceGradient.addColorStop(0.65, 'rgba(255, 180, 75, 0.42)');
+        surfaceGradient.addColorStop(1, 'rgba(255, 124, 45, 0.2)');
+        this.ctx.fillStyle = surfaceGradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, animatedRadius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        this.ctx.restore();
+
+        this.drawUltraSunBloom(screenPos, animatedRadius);
+    }
+
+    private drawUltraSunBloom(screenPos: Vector2D, screenRadius: number): void {
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+        for (let stepIndex = 0; stepIndex < this.ULTRA_SUN_BLOOM_STEPS; stepIndex++) {
+            const stepT = stepIndex / Math.max(1, this.ULTRA_SUN_BLOOM_STEPS - 1);
+            const radius = screenRadius * (1.15 + stepT * 2.65);
+            const alpha = 0.2 * (1 - stepT);
+            const bloom = this.ctx.createRadialGradient(screenPos.x, screenPos.y, radius * 0.22, screenPos.x, screenPos.y, radius);
+            bloom.addColorStop(0, `rgba(255, 250, 225, ${Math.min(0.5, alpha * 2.2).toFixed(4)})`);
+            bloom.addColorStop(0.45, `rgba(255, 200, 115, ${alpha.toFixed(4)})`);
+            bloom.addColorStop(1, 'rgba(255, 140, 70, 0)');
+            this.ctx.fillStyle = bloom;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        this.ctx.restore();
+    }
+
+    private getOrCreateSunRenderCache(screenRadius: number): SunRenderCache {
+        const radiusBucket = Math.max(48, Math.round(screenRadius / 16) * 16);
+        const existingCache = this.sunRenderCacheByRadiusBucket.get(radiusBucket);
+        if (existingCache) {
+            return existingCache;
+        }
+
+        const textureSize = Math.max(128, radiusBucket * 2);
+        const buildPlasmaLayer = (seedOffset: number): HTMLCanvasElement => {
+            const textureCanvas = document.createElement('canvas');
+            textureCanvas.width = textureSize;
+            textureCanvas.height = textureSize;
+            const textureContext = textureCanvas.getContext('2d');
+            if (!textureContext) {
+                return textureCanvas;
+            }
+
+            const imageData = textureContext.createImageData(textureSize, textureSize);
+            const pixelData = imageData.data;
+            const center = textureSize * 0.5;
+            const invSize = 1 / textureSize;
+            for (let y = 0; y < textureSize; y++) {
+                for (let x = 0; x < textureSize; x++) {
+                    const dx = (x - center) * invSize;
+                    const dy = (y - center) * invSize;
+                    const radialDistance = Math.sqrt(dx * dx + dy * dy);
+                    const radialFalloff = Math.max(0, 1 - radialDistance * 2.0);
+                    const n1 = this.hashNormalized((x + seedOffset * 17.0) * 0.093 + (y + seedOffset * 13.0) * 0.061);
+                    const n2 = this.hashNormalized((x - seedOffset * 19.0) * 0.143 + (y - seedOffset * 11.0) * 0.109);
+                    const plasma = Math.max(0, Math.min(1, n1 * 0.6 + n2 * 0.4));
+                    const brightness = Math.pow(radialFalloff, 0.72) * (0.62 + plasma * 0.68);
+                    const pixelIndex = (y * textureSize + x) * 4;
+                    pixelData[pixelIndex + 0] = Math.min(255, 255 * (0.96 + brightness * 0.04));
+                    pixelData[pixelIndex + 1] = Math.min(255, 145 + brightness * 110);
+                    pixelData[pixelIndex + 2] = Math.min(255, 38 + brightness * 70);
+                    pixelData[pixelIndex + 3] = Math.floor(255 * Math.max(0, radialFalloff));
+                }
+            }
+
+            textureContext.putImageData(imageData, 0, 0);
+            textureContext.globalCompositeOperation = 'lighter';
+            const whiteCore = textureContext.createRadialGradient(center, center, 0, center, center, textureSize * 0.24);
+            whiteCore.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+            whiteCore.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            textureContext.fillStyle = whiteCore;
+            textureContext.beginPath();
+            textureContext.arc(center, center, textureSize * 0.24, 0, Math.PI * 2);
+            textureContext.fill();
+            return textureCanvas;
+        };
+
+        const shaftTexture = document.createElement('canvas');
+        shaftTexture.width = 1024;
+        shaftTexture.height = 1024;
+        const shaftContext = shaftTexture.getContext('2d');
+        if (shaftContext) {
+            const shaftCenterX = shaftTexture.width / 2;
+            const shaftCenterY = shaftTexture.height / 2;
+            shaftContext.translate(shaftCenterX, shaftCenterY);
+            shaftContext.globalCompositeOperation = 'lighter';
+            const shaftCount = 28;
+            for (let shaftIndex = 0; shaftIndex < shaftCount; shaftIndex++) {
+                const angle = (Math.PI * 2 * shaftIndex) / shaftCount + this.hashSigned(shaftIndex * 3.1) * 0.05;
+                const shaftLength = 380 + this.hashNormalized(shaftIndex * 17.9) * 250;
+                const shaftWidth = 14 + this.hashNormalized(shaftIndex * 9.3) * 34;
+                shaftContext.save();
+                shaftContext.rotate(angle);
+                const shaftGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
+                shaftGradient.addColorStop(0, 'rgba(255, 245, 200, 0.34)');
+                shaftGradient.addColorStop(0.2, 'rgba(255, 216, 130, 0.26)');
+                shaftGradient.addColorStop(1, 'rgba(255, 178, 95, 0)');
+                shaftContext.fillStyle = shaftGradient;
+                shaftContext.beginPath();
+                shaftContext.moveTo(0, 0);
+                shaftContext.lineTo(shaftLength, -shaftWidth * 0.5);
+                shaftContext.lineTo(shaftLength, shaftWidth * 0.5);
+                shaftContext.closePath();
+                shaftContext.fill();
+                shaftContext.restore();
+            }
+        }
+
+        const generatedCache: SunRenderCache = {
+            plasmaLayerA: buildPlasmaLayer(1),
+            plasmaLayerB: buildPlasmaLayer(2),
+            shaftTexture
+        };
+        this.sunRenderCacheByRadiusBucket.set(radiusBucket, generatedCache);
+        return generatedCache;
     }
 
     private drawLadSun(sun: Sun, screenPos: Vector2D, screenRadius: number): void {
@@ -2985,11 +3179,12 @@ export class GameRenderer {
         const gradientStartY = centerScreen.y - lightDirection.y * approxRadiusScreen;
         const gradientEndX = centerScreen.x + lightDirection.x * approxRadiusScreen;
         const gradientEndY = centerScreen.y + lightDirection.y * approxRadiusScreen;
+        const isUltraQuality = this.graphicsQuality === 'ultra';
         const rimGradient = this.ctx.createLinearGradient(gradientStartX, gradientStartY, gradientEndX, gradientEndY);
-        rimGradient.addColorStop(0, 'rgba(0, 0, 0, 0.34)');
-        rimGradient.addColorStop(0.4, 'rgba(0, 0, 0, 0.02)');
-        rimGradient.addColorStop(0.62, 'rgba(255, 233, 180, 0.08)');
-        rimGradient.addColorStop(1, 'rgba(255, 239, 194, 0.24)');
+        rimGradient.addColorStop(0, isUltraQuality ? 'rgba(5, 12, 30, 0.44)' : 'rgba(0, 0, 0, 0.34)');
+        rimGradient.addColorStop(0.4, isUltraQuality ? 'rgba(6, 12, 24, 0.06)' : 'rgba(0, 0, 0, 0.02)');
+        rimGradient.addColorStop(0.62, isUltraQuality ? 'rgba(255, 210, 140, 0.18)' : 'rgba(255, 233, 180, 0.08)');
+        rimGradient.addColorStop(1, isUltraQuality ? 'rgba(255, 228, 150, 0.32)' : 'rgba(255, 239, 194, 0.24)');
         this.ctx.fillStyle = rimGradient;
         this.ctx.fillRect(
             centerScreen.x - approxRadiusScreen * 1.4,
@@ -3023,15 +3218,17 @@ export class GameRenderer {
             const edgeFacingLight = normalX * lightDirection.x + normalY * lightDirection.y;
 
             if (edgeFacingLight > 0.08) {
-                this.ctx.strokeStyle = `rgba(255, 238, 196, ${(edgeFacingLight * 0.55).toFixed(3)})`;
-                this.ctx.lineWidth = this.ASTEROID_RIM_HIGHLIGHT_WIDTH;
+                const highlightAlpha = isUltraQuality ? edgeFacingLight * 0.72 : edgeFacingLight * 0.55;
+                this.ctx.strokeStyle = `rgba(255, 226, 150, ${highlightAlpha.toFixed(3)})`;
+                this.ctx.lineWidth = isUltraQuality ? this.ASTEROID_RIM_HIGHLIGHT_WIDTH + 1 : this.ASTEROID_RIM_HIGHLIGHT_WIDTH;
                 this.ctx.beginPath();
                 this.ctx.moveTo(currentScreen.x, currentScreen.y);
                 this.ctx.lineTo(nextScreen.x, nextScreen.y);
                 this.ctx.stroke();
             } else if (edgeFacingLight < -0.08) {
-                this.ctx.strokeStyle = `rgba(5, 8, 18, ${(-edgeFacingLight * 0.52).toFixed(3)})`;
-                this.ctx.lineWidth = this.ASTEROID_RIM_SHADOW_WIDTH;
+                const shadowAlpha = isUltraQuality ? -edgeFacingLight * 0.66 : -edgeFacingLight * 0.52;
+                this.ctx.strokeStyle = `rgba(6, 12, 28, ${shadowAlpha.toFixed(3)})`;
+                this.ctx.lineWidth = isUltraQuality ? this.ASTEROID_RIM_SHADOW_WIDTH + 1 : this.ASTEROID_RIM_SHADOW_WIDTH;
                 this.ctx.beginPath();
                 this.ctx.moveTo(currentScreen.x, currentScreen.y);
                 this.ctx.lineTo(nextScreen.x, nextScreen.y);
@@ -3154,6 +3351,10 @@ export class GameRenderer {
                 this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
                 this.ctx.restore();
             }
+
+            if (this.graphicsQuality === 'ultra') {
+                this.drawUltraVolumetricShafts(sun, game.gameTime);
+            }
         }
 
         // Draw asteroid shadows cast by sunlight
@@ -3228,6 +3429,108 @@ export class GameRenderer {
 
             this.ctx.restore();
         }
+    }
+
+    private drawUltraVolumetricShafts(sun: Sun, gameTimeSec: number): void {
+        const sunScreenPos = this.worldToScreen(sun.position);
+        const screenRadius = sun.radius * this.zoom;
+        const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
+        const shaftScale = 1.8 + Math.sin(gameTimeSec * 0.07) * 0.03;
+
+        this.ctx.save();
+        this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
+        this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
+        this.ctx.globalCompositeOperation = 'lighter';
+        this.ctx.globalAlpha = 0.52;
+        const shaftSize = 1024 * shaftScale;
+        this.ctx.drawImage(sunRenderCache.shaftTexture, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
+
+        this.ctx.rotate(-gameTimeSec * 0.017);
+        this.ctx.globalAlpha = 0.34;
+        const innerSize = shaftSize * 0.72;
+        this.ctx.drawImage(sunRenderCache.shaftTexture, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
+
+        this.ctx.restore();
+    }
+
+    private drawUltraSunParticleLayers(game: GameState): void {
+        if (game.suns.length === 0) {
+            return;
+        }
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'lighter';
+
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+
+            const sunScreenPos = this.worldToScreen(sun.position);
+            const screenRadius = sun.radius * this.zoom;
+
+            for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
+                const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
+                const orbitAngle = (game.gameTime * 0.32 + emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25) % (Math.PI * 2);
+                const radius = screenRadius * (0.45 + this.hashNormalized(seed + 7.3) * 3.1);
+                const x = sunScreenPos.x + Math.cos(orbitAngle) * radius;
+                const y = sunScreenPos.y + Math.sin(orbitAngle) * radius;
+                const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
+                const alpha = 0.08 + this.hashNormalized(seed + 19.9) * 0.26;
+
+                this.ctx.fillStyle = `rgba(255, ${Math.floor(180 + this.hashNormalized(seed + 23.7) * 70)}, ${Math.floor(80 + this.hashNormalized(seed + 29.2) * 60)}, ${alpha.toFixed(4)})`;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, size * this.zoom, 0, Math.PI * 2);
+                this.ctx.fill();
+            }
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const width = this.canvas.width / dpr;
+        const height = this.canvas.height / dpr;
+        for (let dustIndex = 0; dustIndex < this.ULTRA_LIGHT_DUST_COUNT; dustIndex++) {
+            const seed = dustIndex * 31.91;
+            const driftX = (game.gameTime * (0.6 + this.hashNormalized(seed + 1.7) * 0.5) + seed) % width;
+            const driftY = (game.gameTime * (0.35 + this.hashNormalized(seed + 3.4) * 0.4) + seed * 1.7) % height;
+            const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
+            const alpha = 0.04 + this.hashNormalized(seed + 8.1) * 0.08;
+
+            this.ctx.fillStyle = `rgba(255, 215, 152, ${alpha.toFixed(4)})`;
+            this.ctx.beginPath();
+            this.ctx.arc(driftX, driftY, size, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.restore();
+    }
+
+    private applyUltraWarmCoolGrade(game: GameState): void {
+        const dpr = window.devicePixelRatio || 1;
+        const width = this.canvas.width / dpr;
+        const height = this.canvas.height / dpr;
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'multiply';
+        const coolVignette = this.ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
+        coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        coolVignette.addColorStop(1, 'rgba(150, 165, 210, 0.92)');
+        this.ctx.fillStyle = coolVignette;
+        this.ctx.fillRect(0, 0, width, height);
+
+        this.ctx.globalCompositeOperation = 'screen';
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+            const sunScreenPos = this.worldToScreen(sun.position);
+            const warmGradient = this.ctx.createRadialGradient(sunScreenPos.x, sunScreenPos.y, 0, sunScreenPos.x, sunScreenPos.y, Math.max(width, height) * 0.45);
+            warmGradient.addColorStop(0, 'rgba(255, 198, 105, 0.16)');
+            warmGradient.addColorStop(1, 'rgba(255, 156, 72, 0)');
+            this.ctx.fillStyle = warmGradient;
+            this.ctx.fillRect(0, 0, width, height);
+        }
+
+        this.ctx.restore();
     }
 
     private drawLadSunRays(game: GameState, sun: Sun): void {
@@ -8218,13 +8521,17 @@ export class GameRenderer {
         // Draw suns
         for (const sun of game.suns) {
             if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
-                this.drawSun(sun);
+                this.drawSun(sun, game.gameTime);
             }
         }
 
         // Draw sun rays with raytracing (light and shadows)
         if (!ladSun) {
             this.drawSunRays(game);
+        }
+
+        if (this.graphicsQuality === 'ultra' && !ladSun) {
+            this.drawUltraSunParticleLayers(game);
         }
 
         // Draw lens flare effects for visible suns
@@ -8239,6 +8546,10 @@ export class GameRenderer {
                 this.isWithinViewBounds(asteroid.position, asteroid.size * 2)) {
                 this.drawAsteroid(asteroid, game.suns);
             }
+        }
+
+        if (this.graphicsQuality === 'ultra' && !ladSun) {
+            this.applyUltraWarmCoolGrade(game);
         }
 
         // Draw influence circles (with proper handling of overlaps)
