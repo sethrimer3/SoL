@@ -29,6 +29,7 @@ export class MenuAtmosphereLayer {
     private widthPx: number = 0;
     private heightPx: number = 0;
     private sunSprite: HTMLImageElement;
+    private opacity: number = 0.2;
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -40,7 +41,7 @@ export class MenuAtmosphereLayer {
         this.canvas.style.height = '100%';
         this.canvas.style.pointerEvents = 'none';
         this.canvas.style.zIndex = '0';
-        this.canvas.style.opacity = '0.2';
+        this.canvas.style.opacity = this.opacity.toString();
 
         const context = this.canvas.getContext('2d');
         if (!context) {
@@ -89,6 +90,15 @@ export class MenuAtmosphereLayer {
         if (this.canvas.parentElement) {
             this.canvas.parentElement.removeChild(this.canvas);
         }
+    }
+
+    public setOpacity(opacity: number): void {
+        const clampedOpacity = Math.max(0, Math.min(1, opacity));
+        if (this.opacity === clampedOpacity) {
+            return;
+        }
+        this.opacity = clampedOpacity;
+        this.canvas.style.opacity = this.opacity.toString();
     }
 
     private initializeAsteroids(): void {
