@@ -165,6 +165,13 @@ export class GameState {
             }
 
             if (player.solarMirrors.length > 0) {
+                const destroyedMirrors = player.solarMirrors.filter(mirror => mirror.health <= 0);
+                if (destroyedMirrors.length > 0) {
+                    const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                    for (const mirror of destroyedMirrors) {
+                        this.createDeathParticlesForMirror(mirror, color);
+                    }
+                }
                 player.solarMirrors = player.solarMirrors.filter(mirror => mirror.health > 0);
             }
 
@@ -1312,10 +1319,7 @@ export class GameState {
         this.sparkleParticles = this.sparkleParticles.filter(sparkle => !sparkle.shouldDespawn());
         
         // Update death particles (breaking apart effect)
-        for (const deathParticle of this.deathParticles) {
-            deathParticle.update(deltaTime);
-        }
-        this.deathParticles = this.deathParticles.filter(particle => !particle.shouldDespawn());
+        this.updateDeathParticles(deltaTime);
         
         // Clean up old striker tower explosions (keep for 1 second)
         this.strikerTowerExplosions = this.strikerTowerExplosions.filter(
@@ -4663,45 +4667,42 @@ export class GameState {
      * @param color - The player color to tint particles
      */
     private createDeathParticles(entity: Unit | Building, color: string): void {
-        // Determine number of particles based on entity type
-        let particleCount: number;
-        let baseSize: number;
+        const approximateRadiusPx = entity instanceof Building
+            ? entity.radius
+            : Math.max(entity.collisionRadiusPx, entity.isHero ? Constants.HERO_BUTTON_RADIUS_PX * 0.8 : entity.collisionRadiusPx);
+        this.spawnDeathParticles(entity.position, color, approximateRadiusPx, entity instanceof Unit && entity.isHero);
+    }
+
+    private createDeathParticlesForMirror(mirror: SolarMirror, color: string): void {
+        this.spawnDeathParticles(mirror.position, color, Constants.MIRROR_CLICK_RADIUS_PX, false);
+    }
+
+    private spawnDeathParticles(position: Vector2D, color: string, approximateRadiusPx: number, isHero: boolean): void {
         const rng = getGameRNG();
-        
-        if (entity instanceof Building) {
-            // Structures: 10-20 pieces
-            particleCount = rng.nextInt(10, 20);
-            baseSize = 16;
-        } else if (entity.isHero) {
-            // Heroes: 10-20 pieces
-            particleCount = rng.nextInt(10, 20);
-            baseSize = 12;
-        } else {
-            // Starlings and other units: 4-8 pieces
-            particleCount = rng.nextInt(4, 8);
-            baseSize = 8;
-        }
-        
-        // Random fade start time between 5-15 seconds
+        const radiusFactor = Math.max(0.6, approximateRadiusPx / Constants.UNIT_RADIUS_PX);
+        const sizeFactor = Math.max(0.85, Math.min(3.2, radiusFactor));
+
+        const baseMinCount = isHero ? 14 : 6;
+        const baseMaxCount = isHero ? 24 : 12;
+        const particleCount = Math.max(
+            4,
+            Math.round(rng.nextInt(baseMinCount, baseMaxCount) * (0.8 + sizeFactor * 0.75))
+        );
+        const baseSize = Math.max(2.2, (6 + approximateRadiusPx * 0.28) * Constants.DEATH_PARTICLE_SIZE_SCALE);
+
         const fadeStartTime = rng.nextFloat(5, 15);
-        
-        // Create particles flying apart in different directions
+
         for (let i = 0; i < particleCount; i++) {
             const angle = (Math.PI * 2 * i) / particleCount + rng.nextFloat(-0.25, 0.25);
-            const speed = rng.nextFloat(50, 150); // 50-150 pixels per second
-            
+            const speed = rng.nextFloat(48, 155) * (0.7 + sizeFactor * 0.25);
+
             const velocity = new Vector2D(
                 Math.cos(angle) * speed,
                 Math.sin(angle) * speed
             );
-            
-            // Create a small fragment canvas (simple colored rectangles for efficiency)
-            // Note: Canvas creation per death is acceptable since:
-            // - Only 4-20 small canvases per death event
-            // - Death events are infrequent (not hundreds per second)
-            // - Pre-pooling would add complexity without significant benefit
+
             const fragment = document.createElement('canvas');
-            const size = rng.nextFloat(baseSize, baseSize * 2);
+            const size = rng.nextFloat(baseSize, baseSize * 2.0);
             fragment.width = size;
             fragment.height = size;
             const ctx = fragment.getContext('2d');
@@ -4709,17 +4710,104 @@ export class GameState {
                 ctx.fillStyle = color;
                 ctx.fillRect(0, 0, size, size);
             }
-            
+
             const particle = new DeathParticle(
-                new Vector2D(entity.position.x, entity.position.y),
+                new Vector2D(position.x, position.y),
                 velocity,
-                rng.nextAngle(), // Random initial rotation
+                rng.nextAngle(),
                 fragment,
                 fadeStartTime
             );
-            
+
             this.deathParticles.push(particle);
         }
+    }
+
+    private updateDeathParticles(deltaTime: number): void {
+        const collisionTargets: Array<{ position: Vector2D; radius: number }> = [];
+
+        for (const asteroid of this.asteroids) {
+            collisionTargets.push({ position: asteroid.position, radius: asteroid.size });
+        }
+
+        for (const player of this.players) {
+            if (player.stellarForge && !player.isDefeated()) {
+                collisionTargets.push({ position: player.stellarForge.position, radius: player.stellarForge.radius });
+            }
+            for (const building of player.buildings) {
+                if (!building.isDestroyed()) {
+                    collisionTargets.push({ position: building.position, radius: building.radius });
+                }
+            }
+            for (const mirror of player.solarMirrors) {
+                if (mirror.health > 0) {
+                    collisionTargets.push({ position: mirror.position, radius: Constants.MIRROR_CLICK_RADIUS_PX });
+                }
+            }
+            for (const unit of player.units) {
+                if (!unit.isDead()) {
+                    collisionTargets.push({ position: unit.position, radius: unit.collisionRadiusPx });
+                }
+            }
+        }
+
+        const mapHalf = this.mapSize / 2;
+
+        for (const deathParticle of this.deathParticles) {
+            deathParticle.update(deltaTime);
+
+            const particleRadius = Math.max(0.75, ((deathParticle.spriteFragment?.width ?? 2) * 0.5));
+
+            if (deathParticle.position.x - particleRadius < -mapHalf) {
+                deathParticle.position.x = -mapHalf + particleRadius;
+                deathParticle.bounce(1, 0, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
+            } else if (deathParticle.position.x + particleRadius > mapHalf) {
+                deathParticle.position.x = mapHalf - particleRadius;
+                deathParticle.bounce(-1, 0, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
+            }
+
+            if (deathParticle.position.y - particleRadius < -mapHalf) {
+                deathParticle.position.y = -mapHalf + particleRadius;
+                deathParticle.bounce(0, 1, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
+            } else if (deathParticle.position.y + particleRadius > mapHalf) {
+                deathParticle.position.y = mapHalf - particleRadius;
+                deathParticle.bounce(0, -1, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
+            }
+
+            for (const target of collisionTargets) {
+                const dx = deathParticle.position.x - target.position.x;
+                const dy = deathParticle.position.y - target.position.y;
+                const minDist = target.radius + particleRadius;
+                const minDistSq = minDist * minDist;
+                const distSq = dx * dx + dy * dy;
+                if (distSq <= 0 || distSq >= minDistSq) {
+                    continue;
+                }
+
+                const dist = Math.sqrt(distSq);
+                const normalX = dx / dist;
+                const normalY = dy / dist;
+                deathParticle.position.x = target.position.x + normalX * minDist;
+                deathParticle.position.y = target.position.y + normalY * minDist;
+                deathParticle.bounce(
+                    normalX,
+                    normalY,
+                    Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION,
+                    Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING
+                );
+            }
+
+            this.applyDustPushFromMovingEntity(
+                deathParticle.position,
+                deathParticle.velocity,
+                Constants.DEATH_PARTICLE_DUST_PUSH_RADIUS_PX,
+                Constants.DEATH_PARTICLE_DUST_PUSH_FORCE_MULTIPLIER,
+                null,
+                deltaTime
+            );
+        }
+
+        this.deathParticles = this.deathParticles.filter(particle => !particle.shouldDespawn());
     }
 
     private getCombatTargetRadiusPx(target: CombatTarget): number {

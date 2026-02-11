@@ -2908,7 +2908,7 @@ export class GameRenderer {
             }
         }
 
-        if (this.graphicsQuality === 'ultra' && game.suns.length > 0 && !ladSun) {
+        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
             let nearestSun: Sun | null = null;
             let nearestDistance = Infinity;
             for (const sun of game.suns) {
@@ -2923,12 +2923,13 @@ export class GameRenderer {
                 const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
                 const proximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
                 if (proximity > 0) {
+                    const qualityFactor = this.graphicsQuality === 'ultra' ? 1 : 0.6;
                     const dx = particle.position.x - nearestSun.position.x;
                     const dy = particle.position.y - nearestSun.position.y;
                     const angle = Math.atan2(dy, dx);
                     const rotationFactor = Math.sin(angle * 2.0 + (particle.position.x + particle.position.y) * 0.004);
-                    const glowRadius = baseSize * (1.8 + proximity * 1.8 + Math.abs(rotationFactor) * 0.5);
-                    const glowAlpha = 0.06 + proximity * 0.14;
+                    const glowRadius = baseSize * (1.5 + proximity * (1.4 * qualityFactor) + Math.abs(rotationFactor) * 0.4);
+                    const glowAlpha = (0.05 + proximity * 0.12) * qualityFactor;
                     const glowOffset = baseSize * (0.8 + proximity * 1.2);
                     const glowX = screenPos.x + Math.cos(angle + rotationFactor * 0.35) * glowOffset;
                     const glowY = screenPos.y + Math.sin(angle + rotationFactor * 0.35) * glowOffset;
@@ -2957,7 +2958,7 @@ export class GameRenderer {
                     stylizedShadow.addColorStop(0, `rgba(4, 6, 14, ${(0.32 + proximity * 0.28).toFixed(4)})`);
                     stylizedShadow.addColorStop(1, 'rgba(6, 10, 24, 0)');
                     this.ctx.strokeStyle = stylizedShadow;
-                    this.ctx.lineWidth = Math.max(0.25, baseSize * (0.6 + proximity * 0.9));
+                    this.ctx.lineWidth = Math.max(0.22, baseSize * (0.5 + proximity * (0.75 * qualityFactor)));
                     this.ctx.beginPath();
                     this.ctx.moveTo(screenPos.x, screenPos.y);
                     this.ctx.lineTo(shadowX, shadowY);
@@ -4816,9 +4817,41 @@ export class GameRenderer {
     /**
      * Draw a death particle (breaking apart effect)
      */
-    private drawDeathParticle(particle: DeathParticle): void {
+    private drawDeathParticle(particle: DeathParticle, game: GameState): void {
         const screenPos = this.worldToScreen(particle.position);
-        
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
+            const alphaScale = this.graphicsQuality === 'ultra' ? 1 : 0.72;
+            for (const sun of game.suns) {
+                const dx = particle.position.x - sun.position.x;
+                const dy = particle.position.y - sun.position.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance <= 0 || distance >= Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX) {
+                    continue;
+                }
+
+                const invDistance = 1 / distance;
+                const dirX = dx * invDistance;
+                const dirY = dy * invDistance;
+                const proximity = 1 - Math.max(0, Math.min(1, distance / Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX));
+                const size = Math.max(1.1, (particle.spriteFragment?.width ?? 2) * this.zoom * 0.75);
+                const shadowLength = Math.max(size * 2.4, Constants.DUST_SHADOW_LENGTH_PX * this.zoom * (0.9 + proximity * 0.8));
+                const tailX = screenPos.x + dirX * shadowLength;
+                const tailY = screenPos.y + dirY * shadowLength;
+                const gradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                gradient.addColorStop(0, `rgba(2, 3, 10, ${(0.34 * particle.opacity * alphaScale).toFixed(4)})`);
+                gradient.addColorStop(0.55, `rgba(2, 3, 10, ${(0.16 * particle.opacity * alphaScale).toFixed(4)})`);
+                gradient.addColorStop(1, 'rgba(2, 3, 10, 0)');
+                this.ctx.strokeStyle = gradient;
+                this.ctx.lineWidth = Math.max(0.35, size * (0.7 + proximity * 0.65));
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
+            }
+        }
+
         if (particle.spriteFragment) {
             this.ctx.save();
             this.ctx.translate(screenPos.x, screenPos.y);
@@ -8864,7 +8897,7 @@ export class GameRenderer {
         // Draw death particles (breaking apart effect)
         for (const particle of game.deathParticles) {
             if (this.isWithinViewBounds(particle.position, 100)) {
-                this.drawDeathParticle(particle);
+                this.drawDeathParticle(particle, game);
             }
         }
         
