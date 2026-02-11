@@ -187,13 +187,6 @@ export function renderCustomLobbyScreen(
         });
     }
 
-    const emptyMessage = document.createElement('div');
-    emptyMessage.textContent = '';
-    emptyMessage.style.textAlign = 'center';
-    emptyMessage.style.color = '#999999';
-    emptyMessage.style.marginTop = '50px';
-    lobbyList.appendChild(emptyMessage);
-
     // Info section
     const infoSection = document.createElement('div');
     infoSection.style.width = '100%';

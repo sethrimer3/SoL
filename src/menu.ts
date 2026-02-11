@@ -105,6 +105,7 @@ export class MainMenu {
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
+    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
@@ -597,8 +598,14 @@ export class MainMenu {
         if (storedPlayerId && storedPlayerId.trim() !== '') {
             return storedPlayerId;
         }
-        // Generate a UUID-like player ID
-        const newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+        // Generate a UUID using crypto API if available, otherwise fallback
+        let newPlayerId: string;
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            newPlayerId = crypto.randomUUID();
+        } else {
+            // Fallback for older browsers
+            newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
         localStorage.setItem('sol_player_id', newPlayerId);
         return newPlayerId;
     }
@@ -2214,6 +2221,12 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
                 
+                // Clear polling interval
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
                 if (!this.onlineNetworkManager) {
                     return;
                 }
@@ -2224,6 +2237,11 @@ export class MainMenu {
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
+                // Clear polling if active
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -2232,9 +2250,47 @@ export class MainMenu {
             menuParticleLayer: this.menuParticleLayer
         });
         
-        // TODO: Poll for matchmaking results or set up real-time subscription
-        // For now, just log that we're searching
-        console.log('Searching for 2v2 match...');
+        // Start polling for matchmaking results
+        // TODO: Replace with Supabase real-time subscriptions for better UX
+        console.log('Starting matchmaking search...');
+        
+        this.matchmakingPollInterval = window.setInterval(async () => {
+            if (!this.onlineNetworkManager) {
+                return;
+            }
+            
+            // Check if still in queue
+            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
+            if (!inQueue) {
+                // No longer in queue, stop polling
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                return;
+            }
+            
+            // Find potential matches
+            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
+            
+            if (candidates.length >= 3) {
+                // Found enough players for 2v2 (need 3 others + us = 4 total)
+                console.log('Match found! Candidates:', candidates);
+                
+                // Stop polling
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
+                // TODO: Create game room with matched players
+                alert('Match found! (Game initialization not yet implemented)');
+                
+                // Leave queue and return to matchmaking screen
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                this.render2v2MatchmakingScreen(this.contentElement);
+            }
+        }, 5000); // Poll every 5 seconds
     }
 
     private renderMatchHistoryScreen(container: HTMLElement): void {
