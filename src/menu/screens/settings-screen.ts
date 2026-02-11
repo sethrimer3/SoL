@@ -15,7 +15,7 @@ export interface SettingsScreenParams {
     screenShakeEnabled: boolean;
     playerColor: string;
     enemyColor: string;
-    graphicsQuality: 'low' | 'medium' | 'high';
+    graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -25,7 +25,7 @@ export interface SettingsScreenParams {
     onScreenShakeChange: (value: boolean) => void;
     onPlayerColorChange: (value: string) => void;
     onEnemyColorChange: (value: string) => void;
-    onGraphicsQualityChange: (value: 'low' | 'medium' | 'high') => void;
+    onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -155,10 +155,10 @@ export function renderSettingsScreen(
     const graphicsQualitySection = createSettingSection(
         'Graphics Quality',
         createSelect(
-            ['low', 'medium', 'high'],
+            ['low', 'medium', 'high', 'ultra'],
             graphicsQuality,
             (value) => {
-                onGraphicsQualityChange(value as 'low' | 'medium' | 'high');
+                onGraphicsQualityChange(value as 'low' | 'medium' | 'high' | 'ultra');
             }
         )
     );

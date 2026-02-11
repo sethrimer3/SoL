@@ -58,7 +58,7 @@ export interface GameSettings {
     colorScheme: string; // Color scheme ID
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
-    graphicsQuality: 'low' | 'medium' | 'high'; // Graphics quality setting
+    graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
