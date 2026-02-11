@@ -30,6 +30,7 @@ import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
+import { OnlineNetworkManager } from './online-network';
 import { getSupabaseConfig } from './supabase-config';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { 
@@ -103,6 +104,7 @@ export class MainMenu {
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
+    private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
@@ -295,6 +297,10 @@ export class MainMenu {
             gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
+        
+        // Initialize online network manager for custom lobbies and matchmaking
+        const playerId = this.getOrGeneratePlayerId();
+        this.onlineNetworkManager = new OnlineNetworkManager(playerId);
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
@@ -581,6 +587,20 @@ export class MainMenu {
         const newUsername = this.generateRandomUsername();
         localStorage.setItem('sol_username', newUsername);
         return newUsername;
+    }
+
+    /**
+     * Get or generate a unique player ID for online play
+     */
+    private getOrGeneratePlayerId(): string {
+        const storedPlayerId = localStorage.getItem('sol_player_id');
+        if (storedPlayerId && storedPlayerId.trim() !== '') {
+            return storedPlayerId;
+        }
+        // Generate a UUID-like player ID
+        const newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('sol_player_id', newPlayerId);
+        return newPlayerId;
     }
 
     /**
@@ -2060,20 +2080,58 @@ export class MainMenu {
         }
     }
 
-    private renderCustomLobbyScreen(container: HTMLElement): void {
+    private async renderCustomLobbyScreen(container: HTMLElement): Promise<void> {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
         
+        // Fetch available lobbies
+        let lobbies: any[] = [];
+        if (this.onlineNetworkManager && this.onlineNetworkManager.isAvailable()) {
+            lobbies = await this.onlineNetworkManager.listCustomLobbies();
+        }
+        
         renderCustomLobbyScreen(container, {
-            onCreateLobby: (lobbyName: string) => {
-                // TODO: Implement lobby creation logic
+            lobbies: lobbies,
+            onCreateLobby: async (lobbyName: string) => {
                 console.log('Creating lobby:', lobbyName);
-                // For now, show a placeholder message
-                alert(`Lobby "${lobbyName}" creation coming soon!`);
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const room = await this.onlineNetworkManager.createCustomLobby(lobbyName, this.settings.username);
+                
+                if (room) {
+                    console.log('Lobby created successfully:', room);
+                    // TODO: Navigate to lobby detail screen
+                    alert(`Lobby "${lobbyName}" created! Room ID: ${room.id}`);
+                    // Refresh the screen to show the new lobby
+                    await this.renderCustomLobbyScreen(this.contentElement);
+                } else {
+                    alert('Failed to create lobby. Please try again.');
+                }
             },
-            onJoinLobby: (lobbyId: string) => {
-                // TODO: Implement lobby join logic
+            onJoinLobby: async (lobbyId: string) => {
                 console.log('Joining lobby:', lobbyId);
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const success = await this.onlineNetworkManager.joinRoom(lobbyId, this.settings.username);
+                
+                if (success) {
+                    console.log('Joined lobby successfully');
+                    // TODO: Navigate to lobby detail screen
+                    alert(`Joined lobby successfully!`);
+                } else {
+                    alert('Failed to join lobby. It may be full or no longer available.');
+                }
+            },
+            onRefresh: async () => {
+                await this.renderCustomLobbyScreen(this.contentElement);
             },
             onBack: () => {
                 this.currentScreen = 'game-mode-select';
@@ -2097,14 +2155,39 @@ export class MainMenu {
             wins: mmrData.wins2v2,
             losses: mmrData.losses2v2,
             isSearching: false,
-            onStartMatchmaking: () => {
-                // TODO: Implement matchmaking logic
+            onStartMatchmaking: async () => {
                 console.log('Starting 2v2 matchmaking...');
-                alert('2v2 Matchmaking coming soon!');
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const success = await this.onlineNetworkManager.joinMatchmakingQueue(
+                    this.settings.username,
+                    mmrData.mmr2v2,
+                    this.settings.selectedFaction || 'RADIANT'
+                );
+                
+                if (success) {
+                    console.log('Joined matchmaking queue');
+                    // Re-render with searching state
+                    this.render2v2MatchmakingScreenSearching(this.contentElement);
+                } else {
+                    alert('Failed to join matchmaking queue. Please try again.');
+                }
             },
-            onCancelMatchmaking: () => {
-                // TODO: Implement cancel logic
+            onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                // Re-render without searching state
+                this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
                 this.currentScreen = 'game-mode-select';
@@ -2114,6 +2197,44 @@ export class MainMenu {
             createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer
         });
+    }
+
+    private render2v2MatchmakingScreenSearching(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking2v2Screen(container, {
+            currentMMR: mmrData.mmr2v2,
+            wins: mmrData.wins2v2,
+            losses: mmrData.losses2v2,
+            isSearching: true,
+            onStartMatchmaking: async () => {},
+            onCancelMatchmaking: async () => {
+                console.log('Cancelling matchmaking...');
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                // Re-render without searching state
+                this.render2v2MatchmakingScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+        
+        // TODO: Poll for matchmaking results or set up real-time subscription
+        // For now, just log that we're searching
+        console.log('Searching for 2v2 match...');
     }
 
     private renderMatchHistoryScreen(container: HTMLElement): void {

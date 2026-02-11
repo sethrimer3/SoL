@@ -746,4 +746,386 @@ export class OnlineNetworkManager {
     getLocalPlayerId(): string {
         return this.localPlayerId;
     }
+
+    // ============================================================================
+    // 2v2 CUSTOM LOBBY METHODS
+    // ============================================================================
+
+    /**
+     * Create a custom 2v2 lobby
+     */
+    async createCustomLobby(lobbyName: string, username: string): Promise<GameRoom | null> {
+        if (!this.supabase) {
+            console.error('Supabase not initialized');
+            return null;
+        }
+
+        try {
+            this.isHost = true;
+
+            // Create room with 2v2 mode and 4 max players
+            const { data: room, error: roomError } = await this.supabase
+                .from('game_rooms')
+                .insert([{
+                    name: lobbyName,
+                    host_id: this.localPlayerId,
+                    status: 'waiting',
+                    max_players: 4,
+                    game_mode: 'custom',
+                    game_settings: {
+                        teamConfig: {
+                            enabled: true,
+                            maxPlayersPerTeam: 2
+                        }
+                    }
+                }])
+                .select()
+                .single();
+
+            if (roomError) {
+                console.error('Failed to create custom lobby:', roomError);
+                return null;
+            }
+
+            this.currentRoom = room;
+
+            // Add host as player on team 0
+            const { error: playerError } = await this.supabase
+                .from('room_players')
+                .insert([{
+                    room_id: room.id,
+                    player_id: this.localPlayerId,
+                    username: username,
+                    is_host: true,
+                    is_ready: false,
+                    team_id: 0,
+                    slot_type: 'player'
+                }]);
+
+            if (playerError) {
+                console.error('Failed to add host player:', playerError);
+                return null;
+            }
+
+            // Subscribe to room channel
+            await this.subscribeToRoom(room.id);
+
+            console.log('Custom lobby created:', room.id);
+            return room;
+        } catch (error) {
+            console.error('Error creating custom lobby:', error);
+            return null;
+        }
+    }
+
+    /**
+     * List custom lobbies (2v2 and custom games)
+     */
+    async listCustomLobbies(): Promise<GameRoom[]> {
+        if (!this.supabase) return [];
+
+        try {
+            const { data, error } = await this.supabase
+                .from('game_rooms')
+                .select('*')
+                .in('game_mode', ['2v2', 'custom'])
+                .eq('status', 'waiting')
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (error) {
+                console.error('Failed to list custom lobbies:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('Error listing custom lobbies:', error);
+            return [];
+        }
+    }
+
+    /**
+     * Set player's team in the lobby (host only)
+     */
+    async setPlayerTeam(playerId: string, teamId: number): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to set team');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ team_id: teamId })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', playerId);
+
+            if (error) {
+                console.error('Failed to set player team:', error);
+                return false;
+            }
+
+            // Broadcast team change
+            if (this.channel) {
+                await this.channel.send({
+                    type: 'broadcast',
+                    event: 'player_event',
+                    payload: {
+                        type: 'team_changed',
+                        data: { playerId, teamId }
+                    }
+                });
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting player team:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Set slot type (player, AI, spectator) - host only
+     */
+    async setSlotType(playerId: string, slotType: 'player' | 'ai' | 'spectator'): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to set slot type');
+            return false;
+        }
+
+        try {
+            const updates: any = { slot_type: slotType };
+            
+            // If setting to spectator, clear team_id
+            if (slotType === 'spectator') {
+                updates.is_spectator = true;
+                updates.team_id = null;
+            } else {
+                updates.is_spectator = false;
+            }
+
+            const { error } = await this.supabase
+                .from('room_players')
+                .update(updates)
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', playerId);
+
+            if (error) {
+                console.error('Failed to set slot type:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting slot type:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Set AI difficulty for an AI slot (host only)
+     */
+    async setAIDifficulty(playerId: string, difficulty: 'easy' | 'normal' | 'hard'): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to set AI difficulty');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ ai_difficulty: difficulty })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', playerId)
+                .eq('slot_type', 'ai');
+
+            if (error) {
+                console.error('Failed to set AI difficulty:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting AI difficulty:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Set player color
+     */
+    async setPlayerColor(color: string): Promise<boolean> {
+        if (!this.supabase || !this.currentRoom) {
+            console.error('Not in a room');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ player_color: color })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', this.localPlayerId);
+
+            if (error) {
+                console.error('Failed to set player color:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting player color:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Set player faction
+     */
+    async setPlayerFaction(faction: string): Promise<boolean> {
+        if (!this.supabase || !this.currentRoom) {
+            console.error('Not in a room');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ faction: faction })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', this.localPlayerId);
+
+            if (error) {
+                console.error('Failed to set player faction:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting player faction:', error);
+            return false;
+        }
+    }
+
+    // ============================================================================
+    // 2v2 MATCHMAKING METHODS
+    // ============================================================================
+
+    /**
+     * Join the 2v2 matchmaking queue
+     */
+    async joinMatchmakingQueue(username: string, mmr: number, faction: string): Promise<boolean> {
+        if (!this.supabase) {
+            console.error('Supabase not initialized');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('matchmaking_queue')
+                .insert([{
+                    player_id: this.localPlayerId,
+                    username: username,
+                    mmr: mmr,
+                    game_mode: '2v2',
+                    faction: faction,
+                    status: 'searching'
+                }]);
+
+            if (error) {
+                console.error('Failed to join matchmaking queue:', error);
+                return false;
+            }
+
+            console.log('Joined 2v2 matchmaking queue');
+            return true;
+        } catch (error) {
+            console.error('Error joining matchmaking queue:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Leave the matchmaking queue
+     */
+    async leaveMatchmakingQueue(): Promise<boolean> {
+        if (!this.supabase) {
+            console.error('Supabase not initialized');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('matchmaking_queue')
+                .delete()
+                .eq('player_id', this.localPlayerId);
+
+            if (error) {
+                console.error('Failed to leave matchmaking queue:', error);
+                return false;
+            }
+
+            console.log('Left matchmaking queue');
+            return true;
+        } catch (error) {
+            console.error('Error leaving matchmaking queue:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if player is in matchmaking queue
+     */
+    async isInMatchmakingQueue(): Promise<boolean> {
+        if (!this.supabase) return false;
+
+        try {
+            const { data, error } = await this.supabase
+                .from('matchmaking_queue')
+                .select('*')
+                .eq('player_id', this.localPlayerId)
+                .eq('status', 'searching')
+                .single();
+
+            if (error) {
+                return false;
+            }
+
+            return data !== null;
+        } catch (error) {
+            return false;
+        }
+    }
+
+    /**
+     * Find matchmaking candidates (simplified matching)
+     */
+    async findMatchmakingCandidates(mmr: number): Promise<any[]> {
+        if (!this.supabase) return [];
+
+        try {
+            // Simple MMR-based matching (±100 MMR range)
+            const { data, error } = await this.supabase
+                .from('matchmaking_queue')
+                .select('*')
+                .eq('game_mode', '2v2')
+                .eq('status', 'searching')
+                .neq('player_id', this.localPlayerId)
+                .gte('mmr', mmr - 100)
+                .lte('mmr', mmr + 100)
+                .order('joined_at', { ascending: true })
+                .limit(3); // Need 3 other players for 2v2
+
+            if (error) {
+                console.error('Failed to find matchmaking candidates:', error);
+                return [];
+            }
+
+            return data || [];
+        } catch (error) {
+            console.error('Error finding matchmaking candidates:', error);
+            return [];
+        }
+    }
 }

@@ -5,10 +5,22 @@
 
 import { MenuOption } from '../types';
 
+export interface GameRoom {
+    id: string;
+    name: string;
+    host_id: string;
+    status: string;
+    max_players: number;
+    game_mode?: string;
+    created_at?: string;
+}
+
 export interface CustomLobbyScreenParams {
     onCreateLobby: (lobbyName: string) => void;
     onJoinLobby: (lobbyId: string) => void;
     onBack: () => void;
+    onRefresh?: () => void;
+    lobbies?: GameRoom[];
     createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
     menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
 }
@@ -17,7 +29,7 @@ export function renderCustomLobbyScreen(
     container: HTMLElement,
     params: CustomLobbyScreenParams
 ): void {
-    const { onCreateLobby, onJoinLobby, onBack, createButton, menuParticleLayer } = params;
+    const { onCreateLobby, onJoinLobby, onBack, onRefresh, lobbies = [], createButton, menuParticleLayer } = params;
     const screenWidth = window.innerWidth;
     const isCompactLayout = screenWidth < 600;
 
@@ -91,15 +103,29 @@ export function renderCustomLobbyScreen(
     joinSection.style.border = '2px solid rgba(255, 215, 0, 0.3)';
     container.appendChild(joinSection);
 
+    const joinTitleRow = document.createElement('div');
+    joinTitleRow.style.display = 'flex';
+    joinTitleRow.style.justifyContent = 'space-between';
+    joinTitleRow.style.alignItems = 'center';
+    joinTitleRow.style.marginBottom = '15px';
+    joinSection.appendChild(joinTitleRow);
+
     const joinTitle = document.createElement('h3');
     joinTitle.textContent = 'Join Existing Lobby';
     joinTitle.style.fontSize = '24px';
     joinTitle.style.color = '#FFD700';
-    joinTitle.style.marginBottom = '15px';
-    joinTitle.style.textAlign = 'center';
-    joinSection.appendChild(joinTitle);
+    joinTitle.style.margin = '0';
+    joinTitleRow.appendChild(joinTitle);
 
-    // Lobby list (placeholder for now)
+    // Refresh button
+    if (onRefresh) {
+        const refreshButton = createButton('↻ Refresh', onRefresh, '#4CAF50');
+        refreshButton.style.fontSize = '16px';
+        refreshButton.style.padding = '8px 16px';
+        joinTitleRow.appendChild(refreshButton);
+    }
+
+    // Lobby list
     const lobbyList = document.createElement('div');
     lobbyList.style.width = '100%';
     lobbyList.style.minHeight = '150px';
@@ -112,8 +138,57 @@ export function renderCustomLobbyScreen(
     lobbyList.style.color = '#ffffff';
     joinSection.appendChild(lobbyList);
 
+    if (lobbies.length === 0) {
+        const emptyMessage = document.createElement('div');
+        emptyMessage.textContent = 'No lobbies available. Create one to get started!';
+        emptyMessage.style.textAlign = 'center';
+        emptyMessage.style.color = '#999999';
+        emptyMessage.style.marginTop = '50px';
+        lobbyList.appendChild(emptyMessage);
+    } else {
+        // Display lobbies
+        lobbies.forEach(lobby => {
+            const lobbyItem = document.createElement('div');
+            lobbyItem.style.padding = '12px';
+            lobbyItem.style.marginBottom = '10px';
+            lobbyItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            lobbyItem.style.borderRadius = '5px';
+            lobbyItem.style.border = '1px solid rgba(255, 215, 0, 0.2)';
+            lobbyItem.style.cursor = 'pointer';
+            lobbyItem.style.transition = 'background-color 0.2s';
+            
+            lobbyItem.addEventListener('mouseenter', () => {
+                lobbyItem.style.backgroundColor = 'rgba(255, 215, 0, 0.1)';
+            });
+            
+            lobbyItem.addEventListener('mouseleave', () => {
+                lobbyItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
+            });
+            
+            const lobbyName = document.createElement('div');
+            lobbyName.textContent = lobby.name;
+            lobbyName.style.fontSize = '18px';
+            lobbyName.style.fontWeight = 'bold';
+            lobbyName.style.color = '#FFD700';
+            lobbyName.style.marginBottom = '5px';
+            lobbyItem.appendChild(lobbyName);
+            
+            const lobbyInfo = document.createElement('div');
+            lobbyInfo.textContent = `Mode: ${lobby.game_mode || 'custom'} | Status: ${lobby.status}`;
+            lobbyInfo.style.fontSize = '14px';
+            lobbyInfo.style.color = '#CCCCCC';
+            lobbyItem.appendChild(lobbyInfo);
+            
+            lobbyItem.addEventListener('click', () => {
+                onJoinLobby(lobby.id);
+            });
+            
+            lobbyList.appendChild(lobbyItem);
+        });
+    }
+
     const emptyMessage = document.createElement('div');
-    emptyMessage.textContent = 'No lobbies available. Create one to get started!';
+    emptyMessage.textContent = '';
     emptyMessage.style.textAlign = 'center';
     emptyMessage.style.color = '#999999';
     emptyMessage.style.marginTop = '50px';
