@@ -2588,32 +2588,59 @@ export class GameRenderer {
             }
         }
 
-        if (game.suns.length > 0 && !ladSun) {
-            const shadowLineWidth = Math.max(0.4, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
-            this.ctx.strokeStyle = `rgba(0, 0, 20, ${Constants.DUST_SHADOW_OPACITY})`;
-            this.ctx.lineWidth = shadowLineWidth;
+        if (this.graphicsQuality === 'high' && game.suns.length > 0 && !ladSun) {
+            const shadowBaseWidth = Math.max(0.35, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
+            const shadowMaxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
 
             for (const sun of game.suns) {
                 const dx = particle.position.x - sun.position.x;
                 const dy = particle.position.y - sun.position.y;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                if (distance > 0 && distance < Constants.DUST_SHADOW_MAX_DISTANCE_PX) {
-                    const fade = 1.0 - (distance / Constants.DUST_SHADOW_MAX_DISTANCE_PX);
-                    const shadowLength = Constants.DUST_SHADOW_LENGTH_PX * fade;
-                    if (shadowLength > 0) {
-                        const invDistance = 1 / distance;
-                        const dirX = dx * invDistance;
-                        const dirY = dy * invDistance;
-                        const shadowEndX = screenPos.x + dirX * shadowLength * this.zoom;
-                        const shadowEndY = screenPos.y + dirY * shadowLength * this.zoom;
-
-                        this.ctx.beginPath();
-                        this.ctx.moveTo(screenPos.x, screenPos.y);
-                        this.ctx.lineTo(shadowEndX, shadowEndY);
-                        this.ctx.stroke();
-                    }
+                if (distance <= 0 || distance >= shadowMaxDistance) {
+                    continue;
                 }
+
+                const invDistance = 1 / distance;
+                const dirX = dx * invDistance;
+                const dirY = dy * invDistance;
+
+                // Keep the effect subtle: particles close to a sun get a faint cinematic umbra,
+                // while farther particles quickly fade out to avoid visual clutter.
+                const proximity = 1.0 - (distance / shadowMaxDistance);
+                const intensity = proximity * proximity;
+                if (intensity <= 0.01) {
+                    continue;
+                }
+
+                const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * (0.45 + intensity * 0.65)) * this.zoom;
+                const tailX = screenPos.x + dirX * shadowLength;
+                const tailY = screenPos.y + dirY * shadowLength;
+
+                const penumbraWidth = shadowBaseWidth * (1.8 + intensity);
+                const penumbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                penumbraGradient.addColorStop(0, `rgba(8, 10, 22, ${(Constants.DUST_SHADOW_OPACITY * 0.22 * intensity).toFixed(4)})`);
+                penumbraGradient.addColorStop(1, 'rgba(8, 10, 22, 0)');
+
+                this.ctx.strokeStyle = penumbraGradient;
+                this.ctx.lineWidth = penumbraWidth;
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
+
+                const umbraWidth = shadowBaseWidth * 0.9;
+                const umbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+                umbraGradient.addColorStop(0, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.45 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(0.65, `rgba(0, 0, 10, ${(Constants.DUST_SHADOW_OPACITY * 0.12 * intensity).toFixed(4)})`);
+                umbraGradient.addColorStop(1, 'rgba(0, 0, 10, 0)');
+
+                this.ctx.strokeStyle = umbraGradient;
+                this.ctx.lineWidth = umbraWidth;
+                this.ctx.beginPath();
+                this.ctx.moveTo(screenPos.x, screenPos.y);
+                this.ctx.lineTo(tailX, tailY);
+                this.ctx.stroke();
             }
         }
 
