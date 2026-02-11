@@ -6,7 +6,7 @@
 import { MenuOption } from '../types';
 
 export interface GameModeSelectionScreenParams {
-    onGameModeSelect: (mode: 'ai' | 'online' | 'lan' | 'p2p', option: MenuOption) => void;
+    onGameModeSelect: (mode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking', option: MenuOption) => void;
     onBack: () => void;
     createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
     createCarouselMenu: (
@@ -57,6 +57,16 @@ export function renderGameModeSelectionScreen(
             description: 'Play against computer opponent'
         },
         {
+            id: 'custom-lobby',
+            name: 'CUSTOM LOBBY',
+            description: 'Create/join custom 2v2 games'
+        },
+        {
+            id: '2v2-matchmaking',
+            name: '2v2 MATCHMAKING',
+            description: 'Find 2v2 ranked match'
+        },
+        {
             id: 'online',
             name: 'ONLINE',
             description: 'Play against players worldwide'
@@ -81,7 +91,7 @@ export function renderGameModeSelectionScreen(
         () => menuParticleLayer?.requestTargetRefresh(container),
         () => menuParticleLayer?.requestTargetRefresh(container),
         (option: MenuOption) => {
-            onGameModeSelect(option.id as 'ai' | 'online' | 'lan' | 'p2p', option);
+            onGameModeSelect(option.id as 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking', option);
         }
     );
 

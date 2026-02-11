@@ -26,6 +26,8 @@ import { renderFactionSelectionScreen } from './menu/screens/faction-selection-s
 import { renderLoadoutCustomizationScreen } from './menu/screens/loadout-customization-screen';
 import { renderLoadoutSelectionScreen } from './menu/screens/loadout-selection-screen';
 import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
+import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
+import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { getSupabaseConfig } from './supabase-config';
@@ -60,7 +62,7 @@ export interface GameSettings {
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     username: string; // Player's username for multiplayer
-    gameMode: 'ai' | 'online' | 'lan' | 'p2p'; // Game mode selection
+    gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
     multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
@@ -89,7 +91,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -2054,6 +2056,62 @@ export class MainMenu {
         }
     }
 
+    private renderCustomLobbyScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        renderCustomLobbyScreen(container, {
+            onCreateLobby: (lobbyName: string) => {
+                // TODO: Implement lobby creation logic
+                console.log('Creating lobby:', lobbyName);
+                // For now, show a placeholder message
+                alert(`Lobby "${lobbyName}" creation coming soon!`);
+            },
+            onJoinLobby: (lobbyId: string) => {
+                // TODO: Implement lobby join logic
+                console.log('Joining lobby:', lobbyId);
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private render2v2MatchmakingScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        // Get 2v2 MMR data
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking2v2Screen(container, {
+            currentMMR: mmrData.mmr2v2,
+            wins: mmrData.wins2v2,
+            losses: mmrData.losses2v2,
+            isSearching: false,
+            onStartMatchmaking: () => {
+                // TODO: Implement matchmaking logic
+                console.log('Starting 2v2 matchmaking...');
+                alert('2v2 Matchmaking coming soon!');
+            },
+            onCancelMatchmaking: () => {
+                // TODO: Implement cancel logic
+                console.log('Cancelling matchmaking...');
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
     private renderMatchHistoryScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
@@ -2177,6 +2235,16 @@ export class MainMenu {
                         this.currentScreen = 'p2p';
                         this.startMenuTransition();
                         this.renderP2PScreen(this.contentElement);
+                        break;
+                    case 'custom-lobby':
+                        this.currentScreen = 'custom-lobby';
+                        this.startMenuTransition();
+                        this.renderCustomLobbyScreen(this.contentElement);
+                        break;
+                    case '2v2-matchmaking':
+                        this.currentScreen = '2v2-matchmaking';
+                        this.startMenuTransition();
+                        this.render2v2MatchmakingScreen(this.contentElement);
                         break;
                 }
             },
