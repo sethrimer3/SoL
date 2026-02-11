@@ -38,6 +38,12 @@ jobs:
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: npm run build
 
+      - name: Verify Pages artifact contents
+        run: |
+          test -f dist/index.html
+          test -f dist/bundle.js
+          test -f "dist/ASSETS/sprites/loadingScreen/gravyThymeLogo.png"
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
