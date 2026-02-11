@@ -4369,28 +4369,28 @@ export class GameState {
 
     /**
      * Check if any player has won
-     * In team games, victory is achieved when all players on a team are defeated
+     * In team games, victory is achieved when all players on one team are defeated
      */
     checkVictoryConditions(): Player | null {
         const activePlayers = this.players.filter(p => !p.isDefeated());
         
-        // Check if we're in a team game (more than 2 players or players have different team IDs)
-        const isTeamGame = this.players.length > 2 || 
-            (this.players.length === 2 && this.players[0].teamId === this.players[1].teamId);
+        // Standard 1v1 logic (2 players on different teams or exactly 1 active player remaining)
+        if (activePlayers.length === 1) {
+            return activePlayers[0];
+        }
         
-        if (isTeamGame) {
-            // Get unique teams that still have active players
-            const activeTeams = new Set(activePlayers.map(p => p.teamId));
-            
-            // Victory if only one team remains
-            if (activeTeams.size === 1 && activePlayers.length > 0) {
-                return activePlayers[0]; // Return any player from the winning team
-            }
-        } else {
-            // Standard 1v1 logic
-            if (activePlayers.length === 1) {
-                return activePlayers[0];
-            }
+        // No winner yet if 0 or 2+ players are still active
+        if (activePlayers.length === 0 || this.players.length <= 2) {
+            return null;
+        }
+        
+        // Team game logic (3+ players)
+        // Get unique teams that still have active players
+        const activeTeams = new Set(activePlayers.map(p => p.teamId));
+        
+        // Victory if only one team remains with active players
+        if (activeTeams.size === 1) {
+            return activePlayers[0]; // Return any player from the winning team
         }
         
         return null;

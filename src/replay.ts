@@ -588,11 +588,12 @@ export function updatePlayerMMR(opponentMMR: number, isWin: boolean): { newMMR: 
 
 /**
  * Update player 2v2 MMR after a team match
- * @param teamMMR - Average MMR of player's team
+ * Calculates MMR change based on player's current 2v2 rating vs enemy team average
  * @param enemyTeamMMR - Average MMR of enemy team
  * @param isWin - Whether player's team won
+ * @returns Object with new MMR and change amount
  */
-export function updatePlayer2v2MMR(teamMMR: number, enemyTeamMMR: number, isWin: boolean): { newMMR: number; mmrChange: number } {
+export function updatePlayer2v2MMR(enemyTeamMMR: number, isWin: boolean): { newMMR: number; mmrChange: number } {
     const mmrData = getPlayerMMRData();
     const mmrChange = calculateMMRChange(mmrData.mmr2v2, enemyTeamMMR, isWin);
     

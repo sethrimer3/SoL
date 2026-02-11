@@ -205,12 +205,12 @@ const enemies = gameState.getEnemies(player1);
 
 ### Updating 2v2 MMR
 ```typescript
-const teamMMR = 1000; // Average of player's team
-const enemyTeamMMR = 1050;
+const enemyTeamMMR = 1050; // Average MMR of enemy team
 const won = true;
 
-const result = updatePlayer2v2MMR(teamMMR, enemyTeamMMR, won);
+const result = updatePlayer2v2MMR(enemyTeamMMR, won);
 // Returns { newMMR: 1016, mmrChange: 16 }
+// Calculates change based on player's current 2v2 MMR vs enemy team average
 ```
 
 ## Next Steps
