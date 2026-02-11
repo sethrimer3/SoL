@@ -10093,17 +10093,19 @@ export class GameRenderer {
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
         const isCompactLayout = screenWidth < 700;
+        const localPlayer = this.viewingPlayer;
+        const didLocalPlayerWin = winner === localPlayer;
         
         // Semi-transparent background
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
         
         // Victory message
-        this.ctx.fillStyle = this.getFactionColor(winner.faction);
+        this.ctx.fillStyle = didLocalPlayerWin ? '#4CAF50' : '#F44336';
         const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
         this.ctx.font = `bold ${victoryFontSize}px Doto`;
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(`${winner.name} WINS!`, screenWidth / 2, 80);
+        this.ctx.fillText(didLocalPlayerWin ? 'VICTORY' : 'DEFEAT', screenWidth / 2, 80);
         
         // Stats panel
         const panelWidth = Math.min(700, screenWidth - 40);

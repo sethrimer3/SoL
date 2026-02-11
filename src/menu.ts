@@ -2062,7 +2062,7 @@ export class MainMenu {
             onBack: () => {
                 this.currentScreen = 'main';
                 this.startMenuTransition();
-                this.renderMainScreenContent(this.contentElement);
+                this.renderMainScreen(this.contentElement);
             },
             onLaunchReplay: (match) => {
                 this.launchReplayFromHistory(match);
