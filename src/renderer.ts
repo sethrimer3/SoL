@@ -35,6 +35,7 @@ type AurumShapeState = {
 type AsteroidFacet = {
     points: [Vector2D, Vector2D, Vector2D];
     centroidLocal: Vector2D;
+    baseShadeFactor: number;
 };
 
 type AsteroidRenderCache = {
@@ -193,10 +194,6 @@ export class GameRenderer {
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
 
-    private readonly ASTEROID_MIN_FACET_COUNT = 10;
-    private readonly ASTEROID_MAX_FACET_COUNT = 400;
-    private readonly ASTEROID_MIN_CORE_FACET_DENSITY = 0.2;
-    private readonly ASTEROID_MAX_CORE_FACET_DENSITY = 0.95;
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
 
@@ -2845,22 +2842,8 @@ export class GameRenderer {
             sizeT
         );
 
-        // Draw asteroid body
-        this.ctx.fillStyle = asteroidFill;
-        this.ctx.strokeStyle = asteroidStroke;
-        this.ctx.lineWidth = 2;
-
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenVertices[0].x, screenVertices[0].y);
-        for (let i = 1; i < screenVertices.length; i++) {
-            this.ctx.lineTo(screenVertices[i].x, screenVertices[i].y);
-        }
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-
         const lightDirection = this.getAsteroidLightDirection(asteroid, suns);
-        this.drawAsteroidFacets(asteroid, lightDirection);
+        this.drawAsteroidFacets(asteroid, lightDirection, asteroidFill, asteroidStroke, screenVertices);
         this.drawAsteroidRimLighting(worldVertices, screenVertices, lightDirection, asteroid.size);
     }
 
@@ -2888,7 +2871,22 @@ export class GameRenderer {
         return toSun.normalize();
     }
 
-    private drawAsteroidFacets(asteroid: Asteroid, lightDirection: Vector2D): void {
+    private drawAsteroidFacets(
+        asteroid: Asteroid,
+        lightDirection: Vector2D,
+        asteroidFill: string,
+        asteroidStroke: string,
+        screenVertices: Vector2D[]
+    ): void {
+        this.ctx.save();
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenVertices[0].x, screenVertices[0].y);
+        for (let vertexIndex = 1; vertexIndex < screenVertices.length; vertexIndex++) {
+            this.ctx.lineTo(screenVertices[vertexIndex].x, screenVertices[vertexIndex].y);
+        }
+        this.ctx.closePath();
+        this.ctx.clip();
+
         const asteroidRenderCache = this.getAsteroidRenderCache(asteroid);
         const rotationCos = Math.cos(asteroid.rotation);
         const rotationSin = Math.sin(asteroid.rotation);
@@ -2906,33 +2904,37 @@ export class GameRenderer {
             ).normalize();
 
             const diffuse = normalWorld.x * lightDirection.x + normalWorld.y * lightDirection.y;
-            const highlightAlpha = Math.max(0, diffuse) * 0.28;
-            const shadowAlpha = Math.max(0, -diffuse) * 0.22;
+            const directionalShadeFactor = 1 + diffuse * 0.28;
+            const facetShadeFactor = facet.baseShadeFactor * directionalShadeFactor;
+            const facetColor = this.adjustColorBrightness(asteroidFill, facetShadeFactor);
 
             const screenA = this.worldToScreen(worldA);
             const screenB = this.worldToScreen(worldB);
             const screenC = this.worldToScreen(worldC);
 
-            if (highlightAlpha > 0.003) {
-                this.ctx.fillStyle = `rgba(255, 238, 198, ${highlightAlpha.toFixed(3)})`;
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenA.x, screenA.y);
-                this.ctx.lineTo(screenB.x, screenB.y);
-                this.ctx.lineTo(screenC.x, screenC.y);
-                this.ctx.closePath();
-                this.ctx.fill();
-            }
-
-            if (shadowAlpha > 0.003) {
-                this.ctx.fillStyle = `rgba(6, 10, 24, ${shadowAlpha.toFixed(3)})`;
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenA.x, screenA.y);
-                this.ctx.lineTo(screenB.x, screenB.y);
-                this.ctx.lineTo(screenC.x, screenC.y);
-                this.ctx.closePath();
-                this.ctx.fill();
-            }
+            this.ctx.fillStyle = facetColor;
+            this.ctx.strokeStyle = asteroidStroke;
+            this.ctx.lineWidth = 1;
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenA.x, screenA.y);
+            this.ctx.lineTo(screenB.x, screenB.y);
+            this.ctx.lineTo(screenC.x, screenC.y);
+            this.ctx.closePath();
+            this.ctx.fill();
+            this.ctx.stroke();
         }
+
+        this.ctx.restore();
+
+        this.ctx.strokeStyle = asteroidStroke;
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenVertices[0].x, screenVertices[0].y);
+        for (let i = 1; i < screenVertices.length; i++) {
+            this.ctx.lineTo(screenVertices[i].x, screenVertices[i].y);
+        }
+        this.ctx.closePath();
+        this.ctx.stroke();
     }
 
     private drawAsteroidRimLighting(worldVertices: Vector2D[], screenVertices: Vector2D[], lightDirection: Vector2D, asteroidSize: number): void {
@@ -3037,45 +3039,29 @@ export class GameRenderer {
     }
 
     private generateAsteroidFacets(asteroid: Asteroid): AsteroidFacet[] {
-        const sizeRange = Constants.ASTEROID_MAX_SIZE - Constants.ASTEROID_MIN_SIZE;
-        const sizeT = sizeRange > 0
-            ? Math.min(1, Math.max(0, (asteroid.size - Constants.ASTEROID_MIN_SIZE) / sizeRange))
-            : 0;
-        const minFacetCount = this.ASTEROID_MIN_FACET_COUNT;
-        const maxFacetCount = this.ASTEROID_MAX_FACET_COUNT;
-        const targetFacetCount = Math.round(minFacetCount + (maxFacetCount - minFacetCount) * sizeT);
+        if (asteroid.vertices.length < 3) {
+            return [];
+        }
+
         const asteroidSeed = this.computeAsteroidSeed(asteroid);
-        const seededCountVariance = 0.88 + this.hashNormalized(asteroidSeed + 13.417) * 0.24;
-        const facetCount = Math.max(minFacetCount, Math.round(targetFacetCount * seededCountVariance));
+        const centerLocal = new Vector2D(
+            asteroid.vertices.reduce((sum, vertex) => sum + vertex.x, 0) / asteroid.vertices.length,
+            asteroid.vertices.reduce((sum, vertex) => sum + vertex.y, 0) / asteroid.vertices.length
+        );
 
         const facets: AsteroidFacet[] = [];
-        const angleStepRad = (Math.PI * 2) / facetCount;
-        const minDensity = this.ASTEROID_MIN_CORE_FACET_DENSITY;
-        const maxDensity = this.ASTEROID_MAX_CORE_FACET_DENSITY;
-
-        for (let facetIndex = 0; facetIndex < facetCount; facetIndex++) {
-            const jitterA = this.hashSigned(asteroidSeed + facetIndex * 13.11) * angleStepRad * 0.38;
-            const jitterB = this.hashSigned(asteroidSeed + facetIndex * 17.73) * angleStepRad * 0.38;
-            const angleA = facetIndex * angleStepRad + jitterA;
-            const angleB = (facetIndex + 1) * angleStepRad + jitterB;
-            const angleMid = (angleA + angleB) * 0.5 + this.hashSigned(asteroidSeed + facetIndex * 29.41) * angleStepRad * 0.15;
-
-            const boundaryA = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleA);
-            const boundaryB = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleB);
-            const boundaryMid = this.getBoundaryRadiusAtAngle(asteroid.vertices, angleMid);
-            const densityA = minDensity + this.hashNormalized(asteroidSeed + facetIndex * 39.13) * (maxDensity - minDensity);
-            const densityB = minDensity + this.hashNormalized(asteroidSeed + facetIndex * 41.29) * (maxDensity - minDensity);
-            const densityMid = 0.05 + this.hashNormalized(asteroidSeed + facetIndex * 43.61) * 0.9;
-
-            const pointA = new Vector2D(Math.cos(angleA) * boundaryA * densityA, Math.sin(angleA) * boundaryA * densityA);
-            const pointB = new Vector2D(Math.cos(angleB) * boundaryB * densityB, Math.sin(angleB) * boundaryB * densityB);
-            const pointC = new Vector2D(Math.cos(angleMid) * boundaryMid * densityMid, Math.sin(angleMid) * boundaryMid * densityMid);
+        for (let facetIndex = 0; facetIndex < asteroid.vertices.length; facetIndex++) {
+            const pointA = centerLocal;
+            const pointB = asteroid.vertices[facetIndex];
+            const pointC = asteroid.vertices[(facetIndex + 1) % asteroid.vertices.length];
 
             const centroidLocal = new Vector2D(
                 (pointA.x + pointB.x + pointC.x) / 3,
                 (pointA.y + pointB.y + pointC.y) / 3
             );
-            facets.push({ points: [pointA, pointB, pointC], centroidLocal });
+            const baseShadeFactor = 0.9 + this.hashNormalized(asteroidSeed + facetIndex * 31.37) * 0.2;
+
+            facets.push({ points: [pointA, pointB, pointC], centroidLocal, baseShadeFactor });
         }
 
         return facets;
@@ -3092,38 +3078,6 @@ export class GameRenderer {
 
     private hashSigned(inputValue: number): number {
         return this.hashNormalized(inputValue) * 2 - 1;
-    }
-
-    private getBoundaryRadiusAtAngle(vertices: Vector2D[], angleRad: number): number {
-        const rayDirectionX = Math.cos(angleRad);
-        const rayDirectionY = Math.sin(angleRad);
-        let closestDistance = Infinity;
-
-        for (let i = 0; i < vertices.length; i++) {
-            const start = vertices[i];
-            const end = vertices[(i + 1) % vertices.length];
-            const edgeX = end.x - start.x;
-            const edgeY = end.y - start.y;
-            const denominator = rayDirectionX * edgeY - rayDirectionY * edgeX;
-            if (Math.abs(denominator) < 0.000001) {
-                continue;
-            }
-
-            const fromStartToOriginX = -start.x;
-            const fromStartToOriginY = -start.y;
-            const rayDistance = (fromStartToOriginX * edgeY - fromStartToOriginY * edgeX) / denominator;
-            const edgeDistance = (fromStartToOriginX * rayDirectionY - fromStartToOriginY * rayDirectionX) / denominator;
-
-            if (rayDistance > 0 && edgeDistance >= 0 && edgeDistance <= 1 && rayDistance < closestDistance) {
-                closestDistance = rayDistance;
-            }
-        }
-
-        if (!Number.isFinite(closestDistance)) {
-            return 0;
-        }
-
-        return closestDistance;
     }
 
     /**
