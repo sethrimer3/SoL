@@ -85,6 +85,11 @@ export const DUST_TRAIL_MIN_LENGTH_PX = 2;
 export const DUST_TRAIL_MAX_LENGTH_PX = 8;
 export const DUST_TRAIL_LENGTH_PER_SPEED = 0.08;
 export const DUST_TRAIL_WIDTH_PX = 0.6;
+export const DEATH_PARTICLE_SIZE_SCALE = 0.33;
+export const DEATH_PARTICLE_DUST_PUSH_RADIUS_PX = 42;
+export const DEATH_PARTICLE_DUST_PUSH_FORCE_MULTIPLIER = 0.42;
+export const DEATH_PARTICLE_BOUNCE_RESTITUTION = 0.52;
+export const DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING = 0.92;
 
 // Screen shake constants
 export const SCREEN_SHAKE_DURATION = 0.3; // Duration of screen shake in seconds

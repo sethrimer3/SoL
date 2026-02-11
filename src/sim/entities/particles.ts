@@ -671,6 +671,23 @@ export class DeathParticle {
         }
     }
     
+    bounce(normalX: number, normalY: number, restitution: number, tangentialDamping: number): void {
+        const dot = this.velocity.x * normalX + this.velocity.y * normalY;
+        if (dot >= 0) {
+            return;
+        }
+
+        const tangentX = -normalY;
+        const tangentY = normalX;
+        const tangentDot = this.velocity.x * tangentX + this.velocity.y * tangentY;
+        const reflectedNormal = -dot * restitution;
+        const dampedTangent = tangentDot * tangentialDamping;
+
+        this.velocity.x = normalX * reflectedNormal + tangentX * dampedTangent;
+        this.velocity.y = normalY * reflectedNormal + tangentY * dampedTangent;
+        this.rotationSpeed *= 0.96;
+    }
+
     shouldDespawn(): boolean {
         return this.lifetime >= this.fadeStartTime + DeathParticle.FINAL_FADE_DURATION;
     }
