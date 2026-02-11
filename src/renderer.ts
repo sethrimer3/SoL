@@ -2864,77 +2864,10 @@ export class GameRenderer {
             }
         }
 
-        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
-            const shadowBaseWidth = Math.max(0.35, Constants.DUST_SHADOW_WIDTH_PX * this.zoom);
-            const shadowMaxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
-
-            for (const sun of game.suns) {
-                const dx = particle.position.x - sun.position.x;
-                const dy = particle.position.y - sun.position.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance <= 0 || distance >= Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX) {
-                    continue;
-                }
-
-                const invDistance = 1 / distance;
-                const dirX = dx * invDistance;
-                const dirY = dy * invDistance;
-
-                // Keep the effect subtle: nearby particles get a stronger cinematic umbra,
-                // while farther particles still receive tiny aesthetic shadows.
-                const nearProximity = Math.max(0, 1.0 - (distance / shadowMaxDistance));
-                const nearIntensity = nearProximity * nearProximity;
-                const farMaxDistance = Math.max(shadowMaxDistance, Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX);
-                const farRange = Math.max(1, farMaxDistance - shadowMaxDistance);
-                const farDistanceRatio = (distance - shadowMaxDistance) / farRange;
-                const farFalloff = 1.0 - Math.max(0, Math.min(1, farDistanceRatio));
-                const farIntensity = Constants.DUST_SHADOW_FAR_MIN_INTENSITY * (farFalloff * farFalloff);
-                const intensity = distance < shadowMaxDistance ? nearIntensity : farIntensity;
-                if (intensity <= 0.0025) {
-                    continue;
-                }
-
-                const lengthFactor = distance < shadowMaxDistance
-                    ? (0.45 + nearIntensity * 0.65)
-                    : (0.24 + farFalloff * 0.2);
-                const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * lengthFactor) * this.zoom;
-                const tailX = screenPos.x + dirX * shadowLength;
-                const tailY = screenPos.y + dirY * shadowLength;
-
-                const widthFactor = distance < shadowMaxDistance
-                    ? (1.8 + nearIntensity)
-                    : (0.95 + farFalloff * 0.35);
-                const penumbraWidth = shadowBaseWidth * widthFactor;
-                const penumbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                penumbraGradient.addColorStop(0, `rgba(5, 7, 16, ${(Constants.DUST_SHADOW_OPACITY * 0.7 * intensity).toFixed(4)})`);
-                penumbraGradient.addColorStop(0.55, `rgba(5, 7, 16, ${(Constants.DUST_SHADOW_OPACITY * 0.25 * intensity).toFixed(4)})`);
-                penumbraGradient.addColorStop(1, 'rgba(5, 7, 16, 0)');
-
-                this.ctx.strokeStyle = penumbraGradient;
-                this.ctx.lineWidth = penumbraWidth;
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(tailX, tailY);
-                this.ctx.stroke();
-
-                const umbraWidth = shadowBaseWidth * (distance < shadowMaxDistance ? 0.72 : 0.36);
-                const umbraGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                umbraGradient.addColorStop(0, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 1.05 * intensity).toFixed(4)})`);
-                umbraGradient.addColorStop(0.45, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 0.55 * intensity).toFixed(4)})`);
-                umbraGradient.addColorStop(0.72, `rgba(0, 0, 6, ${(Constants.DUST_SHADOW_OPACITY * 0.2 * intensity).toFixed(4)})`);
-                umbraGradient.addColorStop(1, 'rgba(0, 0, 6, 0)');
-
-                this.ctx.strokeStyle = umbraGradient;
-                this.ctx.lineWidth = umbraWidth;
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(tailX, tailY);
-                this.ctx.stroke();
-            }
-        }
-
-        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
+        const isHighGraphics = this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra';
+        let lightAngle: number | null = null;
+        let sunProximity = 0;
+        if (isHighGraphics && game.suns.length > 0 && !ladSun) {
             let nearestSun: Sun | null = null;
             let nearestDistance = Infinity;
             for (const sun of game.suns) {
@@ -2947,48 +2880,11 @@ export class GameRenderer {
 
             if (nearestSun && nearestDistance > 0) {
                 const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
-                const proximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
-                if (proximity > 0) {
-                    const qualityFactor = this.graphicsQuality === 'ultra' ? 1 : 0.6;
+                sunProximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
+                if (sunProximity > 0) {
                     const dx = particle.position.x - nearestSun.position.x;
                     const dy = particle.position.y - nearestSun.position.y;
-                    const angle = Math.atan2(dy, dx);
-                    const rotationFactor = Math.sin(angle * 2.0 + (particle.position.x + particle.position.y) * 0.004);
-                    const glowRadius = baseSize * (1.5 + proximity * (1.4 * qualityFactor) + Math.abs(rotationFactor) * 0.4);
-                    const glowAlpha = (0.05 + proximity * 0.12) * qualityFactor;
-                    const glowOffset = baseSize * (0.8 + proximity * 1.2);
-                    const glowX = screenPos.x + Math.cos(angle + rotationFactor * 0.35) * glowOffset;
-                    const glowY = screenPos.y + Math.sin(angle + rotationFactor * 0.35) * glowOffset;
-
-                    const corona = this.ctx.createRadialGradient(
-                        glowX,
-                        glowY,
-                        baseSize * 0.2,
-                        glowX,
-                        glowY,
-                        glowRadius
-                    );
-                    corona.addColorStop(0, `rgba(255, 244, 180, ${Math.min(0.32, glowAlpha * 1.9).toFixed(4)})`);
-                    corona.addColorStop(0.55, `rgba(255, 210, 125, ${glowAlpha.toFixed(4)})`);
-                    corona.addColorStop(1, 'rgba(255, 170, 90, 0)');
-                    this.ctx.fillStyle = corona;
-                    this.ctx.beginPath();
-                    this.ctx.arc(glowX, glowY, glowRadius, 0, Math.PI * 2);
-                    this.ctx.fill();
-
-                    const shadowLength = (Constants.DUST_SHADOW_LENGTH_PX * (0.7 + proximity * 1.0)) * this.zoom;
-                    const shadowAngle = angle + rotationFactor * 0.28;
-                    const shadowX = screenPos.x + Math.cos(shadowAngle) * shadowLength;
-                    const shadowY = screenPos.y + Math.sin(shadowAngle) * shadowLength;
-                    const stylizedShadow = this.ctx.createLinearGradient(screenPos.x, screenPos.y, shadowX, shadowY);
-                    stylizedShadow.addColorStop(0, `rgba(4, 6, 14, ${(0.32 + proximity * 0.28).toFixed(4)})`);
-                    stylizedShadow.addColorStop(1, 'rgba(6, 10, 24, 0)');
-                    this.ctx.strokeStyle = stylizedShadow;
-                    this.ctx.lineWidth = Math.max(0.22, baseSize * (0.5 + proximity * (0.75 * qualityFactor)));
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(screenPos.x, screenPos.y);
-                    this.ctx.lineTo(shadowX, shadowY);
-                    this.ctx.stroke();
+                    lightAngle = Math.atan2(dy, dx);
                 }
             }
         }
@@ -3073,7 +2969,19 @@ export class GameRenderer {
             }
         }
 
-        if (glowLevel > 0) {
+        if (isHighGraphics && speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {
+            const disturbanceBlend = Math.max(
+                0,
+                Math.min(
+                    1,
+                    (speed - Constants.DUST_SLOW_MOVEMENT_THRESHOLD)
+                    / Math.max(0.001, Constants.DUST_FAST_MOVEMENT_THRESHOLD - Constants.DUST_SLOW_MOVEMENT_THRESHOLD)
+                )
+            );
+            glowLevel = Math.max(glowLevel, 0.2 + disturbanceBlend * 0.55);
+        }
+
+        if (isHighGraphics && glowLevel > 0) {
             const glowSize = baseSize * (1.2 + glowLevel * 0.35);
             this.ctx.fillStyle = dustColor;
             this.ctx.globalAlpha = 0.15 + glowLevel * 0.1;
@@ -3083,7 +2991,7 @@ export class GameRenderer {
             this.ctx.globalAlpha = 1.0;
         }
 
-        if (this.isFancyGraphicsEnabled) {
+        if (isHighGraphics && this.isFancyGraphicsEnabled) {
             const bloomSize = baseSize * (1.6 + glowLevel * 0.6);
             const bloomIntensity = 0.25 + glowLevel * 0.2;
             this.drawFancyBloom(screenPos, bloomSize, dustColor, bloomIntensity);
@@ -3093,6 +3001,25 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
         this.ctx.fill();
+
+        if (isHighGraphics && lightAngle !== null && sunProximity > 0) {
+            const qualityFactor = this.graphicsQuality === 'ultra' ? 1.0 : 0.8;
+            const sheenArc = Math.PI * 0.55;
+            const litSheenAlpha = (0.08 + sunProximity * 0.12 + glowLevel * 0.09) * qualityFactor;
+            this.ctx.strokeStyle = `rgba(255, 240, 185, ${Math.min(0.35, litSheenAlpha).toFixed(4)})`;
+            this.ctx.lineWidth = Math.max(0.2, baseSize * 0.7);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, baseSize * 0.92, lightAngle - sheenArc / 2, lightAngle + sheenArc / 2);
+            this.ctx.stroke();
+
+            const shadowAngle = lightAngle + Math.PI;
+            const shadeAlpha = (0.1 + sunProximity * 0.12) * qualityFactor;
+            this.ctx.strokeStyle = `rgba(0, 0, 10, ${Math.min(0.34, shadeAlpha).toFixed(4)})`;
+            this.ctx.lineWidth = Math.max(0.22, baseSize * 0.85);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, baseSize * 0.9, shadowAngle - sheenArc / 2, shadowAngle + sheenArc / 2);
+            this.ctx.stroke();
+        }
     }
 
     private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
