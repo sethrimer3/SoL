@@ -104,7 +104,7 @@ export class GameRenderer {
     public inGameMenuTab: InGameMenuTab = 'main';
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
-    public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'high'; // Graphics quality setting
+    public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators

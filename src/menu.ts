@@ -294,7 +294,7 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'high', // Default to high graphics
+            graphicsQuality: 'ultra', // Default to ultra graphics
             username: this.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
@@ -358,6 +358,7 @@ export class MainMenu {
             menu,
             this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
         );
+        this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setMenuContentElement(content);
         menu.appendChild(this.createBuildNumberLabel());
@@ -2618,6 +2619,7 @@ export class MainMenu {
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
+                this.atmosphereLayer?.setGraphicsQuality(value);
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
