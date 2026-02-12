@@ -3424,6 +3424,9 @@ export class GameRenderer {
             widthScale?: number;
             particleCount?: number;
             particleSpread?: number;
+            spriteMask?: HTMLCanvasElement;
+            spriteSize?: number;
+            spriteRotation?: number;
         }
     ): void {
         if ((this.graphicsQuality !== 'high' && this.graphicsQuality !== 'ultra') || game.suns.length === 0) {
@@ -3450,6 +3453,21 @@ export class GameRenderer {
             opacity,
             alphaScale
         );
+
+        const spriteMask = options?.spriteMask;
+        const spriteSize = options?.spriteSize ?? screenSize;
+        if (spriteMask && spriteSize > 0) {
+            this.drawSpriteSunShadowSilhouette(
+                worldPos,
+                screenPos,
+                spriteMask,
+                spriteSize,
+                options?.spriteRotation ?? 0,
+                game.suns,
+                opacity,
+                alphaScale
+            );
+        }
 
         const particleCount = Math.max(0, options?.particleCount ?? 3);
         if (particleCount === 0) {
@@ -3487,6 +3505,68 @@ export class GameRenderer {
             );
         }
         this.ctx.restore();
+    }
+
+    private drawSpriteSunShadowSilhouette(
+        worldPos: Vector2D,
+        screenPos: Vector2D,
+        spriteMask: HTMLCanvasElement,
+        spriteSize: number,
+        rotationRad: number,
+        suns: Sun[],
+        opacity: number,
+        alphaScale: number
+    ): void {
+        const blurPx = Math.max(1.4, spriteSize * 0.08);
+
+        for (const sun of suns) {
+            const dx = worldPos.x - sun.position.x;
+            const dy = worldPos.y - sun.position.y;
+            const distance = Math.hypot(dx, dy);
+            if (distance <= 0 || distance >= Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX) {
+                continue;
+            }
+
+            const invDistance = 1 / distance;
+            const dirX = dx * invDistance;
+            const dirY = dy * invDistance;
+            const proximity = 1 - Math.max(0, Math.min(1, distance / Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX));
+            const maxOffset = Math.max(
+                spriteSize * 0.75,
+                Constants.DUST_SHADOW_LENGTH_PX * this.zoom * (0.32 + proximity * 0.28)
+            );
+
+            this.ctx.save();
+            this.ctx.globalCompositeOperation = 'multiply';
+            this.ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+
+            const shadowLayers = 3;
+            for (let i = 0; i < shadowLayers; i++) {
+                const t = (i + 1) / shadowLayers;
+                const offset = maxOffset * t;
+                const alpha = (0.2 * (1 - t * 0.38) * opacity * alphaScale);
+                if (alpha <= 0) {
+                    continue;
+                }
+                const drawX = screenPos.x + dirX * offset;
+                const drawY = screenPos.y + dirY * offset;
+
+                this.ctx.save();
+                this.ctx.translate(drawX, drawY);
+                this.ctx.rotate(rotationRad);
+                this.ctx.globalAlpha = alpha;
+                this.ctx.drawImage(
+                    spriteMask,
+                    -spriteSize / 2,
+                    -spriteSize / 2,
+                    spriteSize,
+                    spriteSize
+                );
+                this.ctx.restore();
+            }
+
+            this.ctx.restore();
+        }
     }
 
     private drawParticleSunShadowTrail(
@@ -4833,11 +4913,24 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
 
+        // Draw unit body (circle) - use darkened color if should dim
+        const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
+        const tintColor = shouldDim
+            ? this.darkenColor(ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor), Constants.SHADE_OPACITY)
+            : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
+        const heroSprite = heroSpritePath
+            ? this.getTintedSprite(heroSpritePath, tintColor)
+            : null;
+        const heroSpriteSize = size * this.HERO_SPRITE_SCALE;
+
         this.drawAestheticSpriteShadow(unit.position, screenPos, size, game, {
             opacity: 1,
             widthScale: 0.72,
             particleCount: 3,
-            particleSpread: size * 0.6
+            particleSpread: size * 0.6,
+            spriteMask: heroSprite ?? undefined,
+            spriteSize: heroSprite ? heroSpriteSize : undefined,
+            spriteRotation: heroSprite ? unit.rotation : undefined
         });
 
         const glowColor = shouldDim
@@ -4846,31 +4939,20 @@ export class GameRenderer {
         const glowAlphaScale = isSelected ? 1.3 : 1;
         this.drawCachedUnitGlow(screenPos, size * (isSelected ? 2.25 : 1.95), glowColor, glowAlphaScale * visibilityAlpha);
 
-        // Draw unit body (circle) - use darkened color if should dim
-        const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
-        const tintColor = shouldDim
-            ? this.darkenColor(ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor), Constants.SHADE_OPACITY)
-            : (ladSun ? unitColor : (isEnemy ? this.enemyColor : this.playerColor));
-        
-        const heroSprite = heroSpritePath 
-            ? this.getTintedSprite(heroSpritePath, tintColor)
-            : null;
-            
         this.ctx.save();
         this.ctx.globalAlpha = visibilityAlpha;
 
         if (heroSprite) {
-            const spriteSize = size * this.HERO_SPRITE_SCALE;
             const rotationRad = unit.rotation;
             this.ctx.save();
             this.ctx.translate(screenPos.x, screenPos.y);
             this.ctx.rotate(rotationRad);
             this.ctx.drawImage(
                 heroSprite,
-                -spriteSize / 2,
-                -spriteSize / 2,
-                spriteSize,
-                spriteSize
+                -heroSpriteSize / 2,
+                -heroSpriteSize / 2,
+                heroSpriteSize,
+                heroSpriteSize
             );
             this.ctx.restore();
         } else {
