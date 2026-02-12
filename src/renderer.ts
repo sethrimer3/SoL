@@ -3188,16 +3188,22 @@ export class GameRenderer {
             ).normalize();
 
             const diffuse = normalWorld.x * lightDirection.x + normalWorld.y * lightDirection.y;
-            const directionalShadeFactor = 1 + diffuse * 0.28;
-            const facetShadeFactor = facet.baseShadeFactor * directionalShadeFactor;
+            const lightFacingFactor = Math.max(0, diffuse);
+            const shadowFacingFactor = Math.max(0, -diffuse);
+            const directionalShadeFactor = 1 + lightFacingFactor * 0.22 - shadowFacingFactor * 0.62;
+            const facetShadeFactor = Math.min(1.14, Math.max(0.3, facet.baseShadeFactor * directionalShadeFactor));
             const facetColor = this.adjustColorBrightness(asteroidFill, facetShadeFactor);
+            const facetStrokeColor = this.adjustColorBrightness(
+                asteroidStroke,
+                Math.min(1.05, Math.max(0.24, facetShadeFactor - 0.12))
+            );
 
             const screenA = this.worldToScreen(worldA);
             const screenB = this.worldToScreen(worldB);
             const screenC = this.worldToScreen(worldC);
 
             this.ctx.fillStyle = facetColor;
-            this.ctx.strokeStyle = asteroidStroke;
+            this.ctx.strokeStyle = facetStrokeColor;
             this.ctx.lineWidth = 1;
             this.ctx.beginPath();
             this.ctx.moveTo(screenA.x, screenA.y);
@@ -3247,10 +3253,10 @@ export class GameRenderer {
         const gradientEndY = centerScreen.y + lightDirection.y * approxRadiusScreen;
         const isUltraQuality = this.graphicsQuality === 'ultra';
         const rimGradient = this.ctx.createLinearGradient(gradientStartX, gradientStartY, gradientEndX, gradientEndY);
-        rimGradient.addColorStop(0, isUltraQuality ? 'rgba(5, 12, 30, 0.44)' : 'rgba(0, 0, 0, 0.34)');
-        rimGradient.addColorStop(0.4, isUltraQuality ? 'rgba(6, 12, 24, 0.06)' : 'rgba(0, 0, 0, 0.02)');
-        rimGradient.addColorStop(0.62, isUltraQuality ? 'rgba(255, 210, 140, 0.18)' : 'rgba(255, 233, 180, 0.08)');
-        rimGradient.addColorStop(1, isUltraQuality ? 'rgba(255, 228, 150, 0.32)' : 'rgba(255, 239, 194, 0.24)');
+        rimGradient.addColorStop(0, isUltraQuality ? 'rgba(0, 0, 0, 0.74)' : 'rgba(0, 0, 0, 0.44)');
+        rimGradient.addColorStop(0.45, isUltraQuality ? 'rgba(0, 0, 0, 0.3)' : 'rgba(0, 0, 0, 0.14)');
+        rimGradient.addColorStop(0.72, isUltraQuality ? 'rgba(235, 205, 145, 0.08)' : 'rgba(255, 233, 180, 0.06)');
+        rimGradient.addColorStop(1, isUltraQuality ? 'rgba(255, 234, 176, 0.12)' : 'rgba(255, 239, 194, 0.2)');
         this.ctx.fillStyle = rimGradient;
         this.ctx.fillRect(
             centerScreen.x - approxRadiusScreen * 1.4,
@@ -3283,8 +3289,10 @@ export class GameRenderer {
             const normalY = (normalYRaw / normalLength) * outwardSign;
             const edgeFacingLight = normalX * lightDirection.x + normalY * lightDirection.y;
 
-            if (edgeFacingLight > 0.08) {
-                const highlightAlpha = isUltraQuality ? edgeFacingLight * 0.72 : edgeFacingLight * 0.55;
+            if (edgeFacingLight > 0.14) {
+                const highlightAlpha = isUltraQuality
+                    ? Math.pow(edgeFacingLight, 1.3) * 0.32
+                    : Math.pow(edgeFacingLight, 1.2) * 0.42;
                 this.ctx.strokeStyle = `rgba(255, 226, 150, ${highlightAlpha.toFixed(3)})`;
                 this.ctx.lineWidth = isUltraQuality ? this.ASTEROID_RIM_HIGHLIGHT_WIDTH + 1 : this.ASTEROID_RIM_HIGHLIGHT_WIDTH;
                 this.ctx.beginPath();
@@ -3292,8 +3300,8 @@ export class GameRenderer {
                 this.ctx.lineTo(nextScreen.x, nextScreen.y);
                 this.ctx.stroke();
             } else if (edgeFacingLight < -0.08) {
-                const shadowAlpha = isUltraQuality ? -edgeFacingLight * 0.66 : -edgeFacingLight * 0.52;
-                this.ctx.strokeStyle = `rgba(6, 12, 28, ${shadowAlpha.toFixed(3)})`;
+                const shadowAlpha = isUltraQuality ? -edgeFacingLight * 0.88 : -edgeFacingLight * 0.64;
+                this.ctx.strokeStyle = `rgba(0, 0, 0, ${shadowAlpha.toFixed(3)})`;
                 this.ctx.lineWidth = isUltraQuality ? this.ASTEROID_RIM_SHADOW_WIDTH + 1 : this.ASTEROID_RIM_SHADOW_WIDTH;
                 this.ctx.beginPath();
                 this.ctx.moveTo(currentScreen.x, currentScreen.y);
