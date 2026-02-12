@@ -2090,6 +2090,13 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
 
+        this.drawAestheticSpriteShadow(forge.position, screenPos, size * 1.05, game, {
+            opacity: visibilityAlpha,
+            widthScale: 0.9,
+            particleCount: 5,
+            particleSpread: size * 0.85
+        });
+
         // Draw base structure - use darkened color if should dim
         const tintColor = shouldDim
             ? this.darkenColor(forgeColor, Constants.SHADE_OPACITY)
@@ -2561,6 +2568,13 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(mirror.position);
         const mirrorSizeWorld = 14;
         const size = mirrorSizeWorld * this.zoom;
+
+        this.drawAestheticSpriteShadow(mirror.position, screenPos, size * 0.95, game, {
+            opacity: visibilityAlpha,
+            widthScale: 0.78,
+            particleCount: 4,
+            particleSpread: size * 0.7
+        });
 
         // Save context state
         this.ctx.save();
@@ -3134,6 +3148,82 @@ export class GameRenderer {
             this.ctx.arc(screenPos.x, screenPos.y, baseSize * 0.9, shadowAngle - sheenArc / 2, shadowAngle + sheenArc / 2);
             this.ctx.stroke();
         }
+    }
+
+
+    private drawAestheticSpriteShadow(
+        worldPos: Vector2D,
+        screenPos: Vector2D,
+        screenSize: number,
+        game: GameState,
+        options?: {
+            opacity?: number;
+            widthScale?: number;
+            particleCount?: number;
+            particleSpread?: number;
+        }
+    ): void {
+        if ((this.graphicsQuality !== 'high' && this.graphicsQuality !== 'ultra') || game.suns.length === 0) {
+            return;
+        }
+
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        if (ladSun || game.isPointInShadow(worldPos)) {
+            return;
+        }
+
+        const opacity = options?.opacity ?? 1;
+        if (opacity <= 0) {
+            return;
+        }
+
+        const alphaScale = this.graphicsQuality === 'ultra' ? 1 : 0.72;
+        this.drawParticleSunShadowTrail(
+            worldPos,
+            screenPos,
+            Math.max(1, screenSize),
+            game.suns,
+            Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX,
+            opacity,
+            alphaScale
+        );
+
+        const particleCount = Math.max(0, options?.particleCount ?? 3);
+        if (particleCount === 0) {
+            return;
+        }
+
+        const spread = Math.max(screenSize * 0.4, options?.particleSpread ?? screenSize * 0.7);
+        const particleRadius = Math.max(0.6, screenSize * 0.1);
+        const widthScale = Math.max(0.35, options?.widthScale ?? 0.75);
+        const time = performance.now() * 0.001;
+
+        this.ctx.save();
+        for (let i = 0; i < particleCount; i++) {
+            const seed = worldPos.x * 0.013 + worldPos.y * 0.017 + i * 19.7;
+            const baseAngle = this.getPseudoRandom(seed) * Math.PI * 2;
+            const orbit = spread * (0.3 + this.getPseudoRandom(seed + 3.1) * 0.7);
+            const drift = 0.65 + this.getPseudoRandom(seed + 7.2) * 0.75;
+            const wobble = Math.sin(time * drift + seed) * spread * 0.14;
+            const particleX = screenPos.x + Math.cos(baseAngle + time * 0.28) * (orbit + wobble);
+            const particleY = screenPos.y + Math.sin(baseAngle + time * 0.22) * (orbit + wobble * 0.8);
+
+            this.ctx.fillStyle = `rgba(6, 7, 16, ${(0.2 * opacity * alphaScale).toFixed(4)})`;
+            this.ctx.beginPath();
+            this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            this.drawParticleSunShadowTrail(
+                worldPos,
+                new Vector2D(particleX, particleY),
+                particleRadius * widthScale,
+                game.suns,
+                Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX,
+                opacity * 0.85,
+                alphaScale
+            );
+        }
+        this.ctx.restore();
     }
 
     private drawParticleSunShadowTrail(
@@ -3978,6 +4068,13 @@ export class GameRenderer {
         const isVelarisGate = gate.owner.faction === Faction.VELARIS;
         const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
 
+        this.drawAestheticSpriteShadow(gate.position, screenPos, maxRadius * 0.9, game, {
+            opacity: gate.isComplete ? 0.95 : 0.55,
+            widthScale: 0.85,
+            particleCount: gate.isComplete ? 5 : 3,
+            particleSpread: maxRadius * 0.9
+        });
+
         if (!gate.isComplete) {
             if (isVelarisGate) {
                 this.drawVelarisWarpGateVortex(gate, screenPos, currentRadius, game.gameTime, displayColor);
@@ -4144,13 +4241,20 @@ export class GameRenderer {
     /**
      * Draw a starling merge gate
      */
-    private drawStarlingMergeGate(gate: StarlingMergeGate): void {
+    private drawStarlingMergeGate(gate: StarlingMergeGate, game: GameState): void {
         const screenPos = this.worldToScreen(gate.position);
         const radius = Constants.STARLING_MERGE_GATE_RADIUS_PX * this.zoom;
         const totalDuration = Constants.STARLING_MERGE_DURATION_SEC;
         const progress = totalDuration > 0 ? gate.remainingSec / totalDuration : 0;
         const pulse = 0.18 + Math.sin((totalDuration - gate.remainingSec) * 4) * 0.06;
         const glowAlpha = 0.35 + Math.sin((totalDuration - gate.remainingSec) * 5) * 0.1;
+
+        this.drawAestheticSpriteShadow(gate.position, screenPos, radius * 0.92, game, {
+            opacity: 0.85,
+            widthScale: 0.82,
+            particleCount: 4,
+            particleSpread: radius * 0.9
+        });
 
         this.ctx.fillStyle = `rgba(0, 255, 255, ${Math.max(0.1, pulse)})`;
         this.ctx.beginPath();
@@ -4374,38 +4478,12 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
 
-        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun && !game.isPointInShadow(unit.position)) {
-            let nearestSun: Sun | null = null;
-            let nearestDistance = Infinity;
-            for (const sun of game.suns) {
-                const distance = unit.position.distanceTo(sun.position);
-                if (distance < nearestDistance) {
-                    nearestDistance = distance;
-                    nearestSun = sun;
-                }
-            }
-
-            if (nearestSun && nearestDistance > 0) {
-                const dx = unit.position.x - nearestSun.position.x;
-                const dy = unit.position.y - nearestSun.position.y;
-                const invDistance = 1 / nearestDistance;
-                const dirX = dx * invDistance;
-                const dirY = dy * invDistance;
-                const shadowLength = size * (1.35 + Math.min(1, nearestDistance / 800) * 1.25);
-                const tailX = screenPos.x + dirX * shadowLength;
-                const tailY = screenPos.y + dirY * shadowLength;
-                const shadowGradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                shadowGradient.addColorStop(0, 'rgba(3, 3, 11, 0.28)');
-                shadowGradient.addColorStop(0.6, 'rgba(3, 3, 11, 0.12)');
-                shadowGradient.addColorStop(1, 'rgba(3, 3, 11, 0)');
-                this.ctx.strokeStyle = shadowGradient;
-                this.ctx.lineWidth = Math.max(1.2, size * 0.72);
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(tailX, tailY);
-                this.ctx.stroke();
-            }
-        }
+        this.drawAestheticSpriteShadow(unit.position, screenPos, size, game, {
+            opacity: 1,
+            widthScale: 0.72,
+            particleCount: 3,
+            particleSpread: size * 0.6
+        });
 
         // Draw unit body (circle) - use darkened color if should dim
         const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
@@ -8978,7 +9056,7 @@ export class GameRenderer {
         // Draw starling merge gates
         for (const gate of game.starlingMergeGates) {
             if (this.isWithinViewBounds(gate.position, Constants.STARLING_MERGE_GATE_RADIUS_PX * 4)) {
-                this.drawStarlingMergeGate(gate);
+                this.drawStarlingMergeGate(gate, game);
             }
         }
 
