@@ -236,6 +236,7 @@ export class GameRenderer {
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
+    private shadeGlowAlphaByEntity = new WeakMap<object, number>();
     private enemyVisibilityLastUpdateSec = Number.NaN;
     private enemyVisibilityFrameDeltaSec = 0;
 
@@ -245,6 +246,8 @@ export class GameRenderer {
     private readonly ULTRA_SOLAR_EMBER_COUNT = 96;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
+    private readonly SHADE_GLOW_FADE_IN_SPEED_PER_SEC = 4.2;
+    private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
 
@@ -3960,6 +3963,22 @@ export class GameRenderer {
         return nextAlpha;
     }
 
+    private getShadeGlowAlpha(entity: object, shouldGlowInShade: boolean): number {
+        const currentAlpha = this.shadeGlowAlphaByEntity.get(entity) ?? 0;
+        const dtSec = this.enemyVisibilityFrameDeltaSec;
+        const fadeSpeedPerSec = shouldGlowInShade
+            ? this.SHADE_GLOW_FADE_IN_SPEED_PER_SEC
+            : this.SHADE_GLOW_FADE_OUT_SPEED_PER_SEC;
+        const maxStep = fadeSpeedPerSec * dtSec;
+        const targetAlpha = shouldGlowInShade ? 1 : 0;
+        const alphaDelta = targetAlpha - currentAlpha;
+        const nextAlpha = Math.abs(alphaDelta) <= maxStep
+            ? targetAlpha
+            : currentAlpha + Math.sign(alphaDelta) * maxStep;
+        this.shadeGlowAlphaByEntity.set(entity, nextAlpha);
+        return nextAlpha;
+    }
+
     private ensureLightingLayer(): CanvasRenderingContext2D {
         if (!this.lightingLayerCanvas) {
             this.lightingLayerCanvas = document.createElement('canvas');
@@ -4915,6 +4934,8 @@ export class GameRenderer {
         let shouldDim = false;
         let displayColor = unitColor;
         let visibilityAlpha = 1;
+        let shadeGlowAlpha = 0;
+        const isInShadow = !ladSun && game.isPointInShadow(unit.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit);
             visibilityAlpha = this.getEnemyVisibilityAlpha(unit, isVisible, game.gameTime);
@@ -4922,7 +4943,13 @@ export class GameRenderer {
                 return;
             }
 
+            const isEnemyRevealedInShade = isInShadow && isVisible;
+            shadeGlowAlpha = this.getShadeGlowAlpha(unit, isEnemyRevealedInShade);
             // Enemy units revealed in shadow should remain bright for readability.
+        } else if (isInShadow) {
+            shadeGlowAlpha = this.getShadeGlowAlpha(unit, true);
+        } else {
+            shadeGlowAlpha = this.getShadeGlowAlpha(unit, false);
         }
 
         // Draw attack range circle for selected hero units (only friendly units)
@@ -4974,7 +5001,13 @@ export class GameRenderer {
             ? this.darkenColor(displayColor, Constants.SHADE_OPACITY)
             : displayColor;
         const glowAlphaScale = isSelected ? 1.3 : 1;
-        this.drawCachedUnitGlow(screenPos, size * (isSelected ? 2.25 : 1.95), glowColor, glowAlphaScale * visibilityAlpha);
+        const shadeGlowBoost = 0.55 * shadeGlowAlpha;
+        this.drawCachedUnitGlow(
+            screenPos,
+            size * (isSelected ? 2.25 : 1.95),
+            glowColor,
+            (glowAlphaScale + shadeGlowBoost) * visibilityAlpha
+        );
 
         this.ctx.save();
         this.ctx.globalAlpha = visibilityAlpha;
@@ -6138,20 +6171,25 @@ export class GameRenderer {
         // Check visibility for enemy units
         let shouldDim = false;
         let displayColor = color;
+        let shadeGlowAlpha = 0;
+        const isInShadow = !ladSun && game.isPointInShadow(starling.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(starling.position, this.viewingPlayer);
             if (!isVisible) {
                 return; // Don't draw invisible enemy units
             }
             
+            const isEnemyRevealedInShade = isInShadow && isVisible;
+            shadeGlowAlpha = this.getShadeGlowAlpha(starling, isEnemyRevealedInShade);
             // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(starling.position);
-                if (inShadow) {
-                    shouldDim = false;
-                    displayColor = color;
-                }
+            if (isInShadow) {
+                shouldDim = false;
+                displayColor = color;
             }
+        } else if (isInShadow) {
+            shadeGlowAlpha = this.getShadeGlowAlpha(starling, true);
+        } else {
+            shadeGlowAlpha = this.getShadeGlowAlpha(starling, false);
         }
         
         // Note: Range circles for starlings are drawn separately as merged outlines
@@ -6186,7 +6224,13 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
         
-        this.drawCachedUnitGlow(screenPos, size * (isSelected ? 2.1 : 1.85), displayColor, isSelected ? 1.2 : 1);
+        const shadeGlowBoost = 0.55 * shadeGlowAlpha;
+        this.drawCachedUnitGlow(
+            screenPos,
+            size * (isSelected ? 2.1 : 1.85),
+            displayColor,
+            (isSelected ? 1.2 : 1) + shadeGlowBoost
+        );
 
         if (isVelarisStarling) {
             this.drawVelarisStarlingParticles(screenPos, size, starling, displayColor, game.gameTime);
