@@ -31,6 +31,7 @@ export class Unit {
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
     stunDuration: number = 0; // Duration of stun effect in seconds
+    lineOfSight: number; // Line of sight range (calculated from attack range)
     
     constructor(
         public position: Vector2D,
@@ -45,6 +46,8 @@ export class Unit {
         this.health = maxHealth;
         this.maxHealth = maxHealth;
         this.collisionRadiusPx = collisionRadiusPx;
+        // Line of sight is 20% more than attack range
+        this.lineOfSight = attackRange * Constants.UNIT_LINE_OF_SIGHT_MULTIPLIER;
     }
 
     setManualTarget(target: CombatTarget, rallyPoint: Vector2D | null): void {

@@ -365,14 +365,62 @@ export class Starling extends Unit {
         if (this.target && this.attackCooldown <= 0) {
             const distance = this.position.distanceTo(this.target.position);
             if (distance <= this.attackRange) {
-                this.attack(this.target);
-                this.attackCooldown = 1.0 / this.attackSpeed;
+                // Check if target is in frontal arc when moving
+                if (this.canShootTarget(this.target)) {
+                    this.attack(this.target);
+                    this.attackCooldown = 1.0 / this.attackSpeed;
+                }
             }
         }
     }
 
     private getAttackDamage(): number {
         return this.attackDamage + (this.owner.hasAttackUpgrade ? Constants.STARLING_ATTACK_UPGRADE_BONUS : 0);
+    }
+
+    /**
+     * Check if starling can shoot a target based on frontal arc when moving
+     * Returns true if:
+     * - Starling is stationary (velocity ~= 0), OR
+     * - Target is within 180-degree frontal arc in the direction of movement
+     */
+    private canShootTarget(target: CombatTarget): boolean {
+        // Calculate velocity magnitude
+        const velocityMagnitude = Math.sqrt(
+            this.velocity.x * this.velocity.x + 
+            this.velocity.y * this.velocity.y
+        );
+        
+        // If stationary (velocity very small), can shoot in any direction
+        const stationaryThreshold = 1.0; // pixels per second
+        if (velocityMagnitude < stationaryThreshold) {
+            return true;
+        }
+        
+        // Moving - check if target is in frontal arc
+        // Calculate normalized velocity direction
+        const velocityDirX = this.velocity.x / velocityMagnitude;
+        const velocityDirY = this.velocity.y / velocityMagnitude;
+        
+        // Calculate direction to target
+        const toTargetX = target.position.x - this.position.x;
+        const toTargetY = target.position.y - this.position.y;
+        const toTargetDist = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
+        
+        if (toTargetDist <= 0) {
+            return true; // Target is at same position
+        }
+        
+        const toTargetDirX = toTargetX / toTargetDist;
+        const toTargetDirY = toTargetY / toTargetDist;
+        
+        // Calculate dot product to get angle between directions
+        // dot = cos(angle)
+        const dotProduct = velocityDirX * toTargetDirX + velocityDirY * toTargetDirY;
+        
+        // For 180-degree arc, we need cos(angle) >= 0
+        // This means angle is within ±90 degrees from movement direction
+        return dotProduct >= 0;
     }
 
     attack(target: CombatTarget): void {

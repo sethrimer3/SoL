@@ -1606,6 +1606,70 @@ export class GameRenderer {
     }
 
     /**
+     * Calculate brightness boost for a position in shade based on proximity to player units/structures
+     * Returns a factor from 0 (no boost) to 1 (maximum boost)
+     */
+    private getShadeBrightnessBoost(position: Vector2D, game: GameState, player: Player): number {
+        if (!player) {
+            return 0;
+        }
+
+        let minDistance = Infinity;
+
+        // Check distance to player units
+        for (const unit of player.units) {
+            const distance = unit.position.distanceTo(position);
+            if (distance < minDistance) {
+                minDistance = distance;
+            }
+        }
+
+        // Check distance to player forge
+        if (player.stellarForge) {
+            const distance = player.stellarForge.position.distanceTo(position);
+            if (distance < minDistance) {
+                minDistance = distance;
+            }
+        }
+
+        // Check distance to player buildings (mirrors, etc.)
+        for (const building of player.buildings) {
+            const distance = building.position.distanceTo(position);
+            if (distance < minDistance) {
+                minDistance = distance;
+            }
+        }
+
+        // Calculate brightness boost based on distance (smooth falloff)
+        if (minDistance >= Constants.SHADE_BRIGHTNESS_RADIUS) {
+            return 0;
+        }
+
+        // Smooth falloff: 1.0 at distance 0, 0.0 at SHADE_BRIGHTNESS_RADIUS
+        const falloff = 1.0 - (minDistance / Constants.SHADE_BRIGHTNESS_RADIUS);
+        return falloff * falloff; // Quadratic falloff for smoother transition
+    }
+
+    /**
+     * Apply shade brightening effect to a color based on proximity to player units
+     * Only applies the boost if the position is in shade
+     */
+    private applyShadeBrightening(color: string, position: Vector2D, game: GameState, isInShade: boolean): string {
+        if (!isInShade || !this.viewingPlayer) {
+            return color;
+        }
+
+        const brightnessBoost = this.getShadeBrightnessBoost(position, game, this.viewingPlayer);
+        if (brightnessBoost <= 0) {
+            return color;
+        }
+
+        // Apply brightness boost (1.0 = original, higher = brighter)
+        const boostFactor = 1.0 + (Constants.SHADE_BRIGHTNESS_BOOST * brightnessBoost);
+        return this.adjustColorBrightness(color, boostFactor);
+    }
+
+    /**
      * Brighten and pale a color (make it lighter and more desaturated)
      * Used for solar mirrors to make them slightly brighter and paler than player color
      */
@@ -2323,6 +2387,8 @@ export class GameRenderer {
                 if (inShadow) {
                     shouldDim = true;
                     displayColor = this.darkenColor(forgeColor, Constants.SHADE_OPACITY);
+                    // Apply shade brightening effect near player units
+                    displayColor = this.applyShadeBrightening(displayColor, forge.position, game, true);
                 }
             }
         }
@@ -2871,6 +2937,8 @@ export class GameRenderer {
                 if (inShadow) {
                     shouldDim = true;
                     displayColor = this.darkenColor(mirrorColor, Constants.SHADE_OPACITY);
+                    // Apply shade brightening effect near player units
+                    displayColor = this.applyShadeBrightening(displayColor, mirror.position, game, true);
                 }
             }
         }
@@ -6182,6 +6250,14 @@ export class GameRenderer {
             const isEnemyRevealedInShade = isInShadow && isVisible;
             shadeGlowAlpha = this.getShadeGlowAlpha(starling, isEnemyRevealedInShade);
             // Check if in shadow for dimming effect - darken color instead of using alpha
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(starling.position);
+                if (inShadow) {
+                    shouldDim = true;
+                    displayColor = this.darkenColor(color, Constants.SHADE_OPACITY);
+                    // Apply shade brightening effect near player units
+                    displayColor = this.applyShadeBrightening(displayColor, starling.position, game, true);
+                }
             if (isInShadow) {
                 shouldDim = false;
                 displayColor = color;
