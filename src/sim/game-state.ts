@@ -3188,10 +3188,11 @@ export class GameState {
             return true;
         }
         
-        // In shadow - check proximity to player units
+        // In shadow - check proximity to player units (using their line of sight)
         for (const unit of player.units) {
             const distance = unit.position.distanceTo(objectPos);
-            if (distance <= Constants.VISIBILITY_PROXIMITY_RANGE) {
+            const visibilityRange = unit.lineOfSight || Constants.VISIBILITY_PROXIMITY_RANGE;
+            if (distance <= visibilityRange) {
                 return true;
             }
         }
