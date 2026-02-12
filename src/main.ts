@@ -1569,11 +1569,14 @@ class GameController {
 
     /**
      * Start a 4-player game from custom lobby configuration
+     * @param playerConfigs Array of player configurations [name, faction, teamId, slotType, difficulty, isLocal]
+     * @param settings Game settings from the menu
+     * @param roomId Database room ID (currently unused, reserved for future network sync)
      */
     private start4PlayerGame(
-        playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']>,
+        playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]>,
         settings: GameSettings,
-        roomId: string
+        roomId: string | null
     ): void {
         console.log('[GameController] Starting 4-player game from lobby...');
         
@@ -1605,10 +1608,16 @@ class GameController {
             this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
         }
         
-        // Configure players based on lobby settings
+        // Configure players based on lobby settings and find local player index
+        let localPlayerIndex = 0;
         for (let i = 0; i < playerConfigs.length && i < this.game.players.length; i++) {
-            const [name, faction, teamId, slotType, aiDifficulty] = playerConfigs[i];
+            const [name, faction, teamId, slotType, aiDifficulty, isLocal] = playerConfigs[i];
             const player = this.game.players[i];
+            
+            // Track local player index
+            if (isLocal) {
+                localPlayerIndex = i;
+            }
             
             // Set team ID
             player.teamId = teamId;
@@ -1649,9 +1658,9 @@ class GameController {
         this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
         this.renderer.graphicsQuality = settings.graphicsQuality;
         
-        // Set local player (first human player)
-        this.localPlayerIndex = 0;
-        const localPlayer = this.game.players[0]; // First player is always local
+        // Set local player using the found index
+        this.localPlayerIndex = localPlayerIndex;
+        const localPlayer = this.game.players[localPlayerIndex];
         
         if (localPlayer) {
             this.renderer.viewingPlayer = localPlayer;
@@ -1666,7 +1675,7 @@ class GameController {
         this.showInfo = settings.isBattleStatsInfoEnabled;
         this.renderer.showInfo = this.showInfo;
         
-        console.log('[GameController] 4-player game initialized. Starting game loop...');
+        console.log(`[GameController] 4-player game initialized. Local player is index ${localPlayerIndex}. Starting game loop...`);
         
         // Start game loop
         this.start();

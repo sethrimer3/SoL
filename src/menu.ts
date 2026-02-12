@@ -2291,38 +2291,41 @@ export class MainMenu {
                 
                 // Create balanced teams based on MMR
                 const allPlayers = [
-                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT },
-                    ...candidates.map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction }))
+                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
+                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
                 ];
                 
                 // Sort by MMR and alternate teams for balance
                 allPlayers.sort((a, b) => b.mmr - a.mmr);
                 
                 // Create player configs (highest MMR with lowest, etc.)
-                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']> = [
-                    [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal'],
-                    [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal'],
-                    [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal'],
-                    [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal']
-                ];
-                
-                // Update settings
-                this.settings.gameMode = '2v2-matchmaking';
-                
-                // Hide menu and start game
-                this.hide();
-                
-                // Dispatch event to start 4-player game
-                const event = new CustomEvent('start4PlayerGame', {
-                    detail: {
-                        playerConfigs: playerConfigs,
-                        settings: this.settings,
-                        roomId: null // No room for matchmaking
-                    }
-                });
-                window.dispatchEvent(event);
-                
-                return;
+                // Ensure we have exactly 4 players
+                if (allPlayers.length === 4) {
+                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
+                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
+                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
+                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
+                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
+                    ];
+                    
+                    // Update settings
+                    this.settings.gameMode = '2v2-matchmaking';
+                    
+                    // Hide menu and start game
+                    this.hide();
+                    
+                    // Dispatch event to start 4-player game
+                    const event = new CustomEvent('start4PlayerGame', {
+                        detail: {
+                            playerConfigs: playerConfigs,
+                            settings: this.settings,
+                            roomId: null // No room for matchmaking
+                        }
+                    });
+                    window.dispatchEvent(event);
+                    
+                    return;
+                }
             }
         }, 5000); // Poll every 5 seconds
     }
@@ -2350,7 +2353,7 @@ export class MainMenu {
         }
 
         const players = await this.onlineNetworkManager.getRoomPlayers();
-        const isHost = this.onlineNetworkManager.getIsHost();
+        const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
 
         renderLobbyDetailScreen(container, {
@@ -2400,7 +2403,7 @@ export class MainMenu {
             onAddAI: async (teamId: number) => {
                 if (!this.onlineNetworkManager) return;
                 // Generate a unique AI player ID
-                const aiPlayerId = `ai-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                const aiPlayerId = `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
                 
                 // Add AI slot to database
                 try {
@@ -2451,7 +2454,7 @@ export class MainMenu {
                 }
                 
                 // Prepare game settings with 4 players (fill remaining with AI if needed)
-                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']> = [];
+                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
                 
                 // Sort players by team for proper positioning
                 const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
@@ -2460,24 +2463,28 @@ export class MainMenu {
                 // Add team 0 players
                 for (const player of team0Players.slice(0, 2)) {
                     const faction = (player.faction as Faction) || Faction.RADIANT;
+                    const isLocal = player.player_id === localPlayerId;
                     playerConfigs.push([
                         player.username,
                         faction,
                         0,
                         player.slot_type as 'player' | 'ai',
-                        player.ai_difficulty || 'normal'
+                        player.ai_difficulty || 'normal',
+                        isLocal
                     ]);
                 }
                 
                 // Add team 1 players
                 for (const player of team1Players.slice(0, 2)) {
                     const faction = (player.faction as Faction) || Faction.RADIANT;
+                    const isLocal = player.player_id === localPlayerId;
                     playerConfigs.push([
                         player.username,
                         faction,
                         1,
                         player.slot_type as 'player' | 'ai',
-                        player.ai_difficulty || 'normal'
+                        player.ai_difficulty || 'normal',
+                        isLocal
                     ]);
                 }
                 
@@ -2489,7 +2496,8 @@ export class MainMenu {
                         Faction.RADIANT,
                         teamId,
                         'ai',
-                        'normal'
+                        'normal',
+                        false
                     ]);
                 }
                 

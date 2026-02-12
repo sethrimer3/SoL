@@ -734,13 +734,6 @@ export class OnlineNetworkManager {
     }
 
     /**
-     * Check if user is host
-     */
-    getIsHost(): boolean {
-        return this.isHost;
-    }
-
-    /**
      * Toggle ready status for current player
      */
     async toggleReady(): Promise<boolean> {
