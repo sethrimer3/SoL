@@ -636,6 +636,43 @@ export class GameRenderer {
         this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
     }
 
+    private drawShadowStarfieldOverlay(game: GameState): void {
+        if (!this.starfieldCacheCanvas || game.suns.length === 0) {
+            return;
+        }
+
+        this.ctx.save();
+        this.ctx.beginPath();
+
+        let hasShadowGeometry = false;
+        for (const sun of game.suns) {
+            const shadowQuads = this.buildSunShadowQuads(sun, game);
+            for (const quad of shadowQuads) {
+                hasShadowGeometry = true;
+                this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                this.ctx.lineTo(quad.sv2x, quad.sv2y);
+                this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                this.ctx.closePath();
+            }
+        }
+
+        if (!hasShadowGeometry) {
+            this.ctx.restore();
+            return;
+        }
+
+        this.ctx.clip();
+        this.ctx.globalCompositeOperation = 'screen';
+        this.ctx.globalAlpha = this.graphicsQuality === 'ultra' ? 0.82 : 0.68;
+
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
+        this.ctx.restore();
+    }
+
 
     /**
      * Convert world coordinates to screen coordinates
@@ -9449,6 +9486,10 @@ export class GameRenderer {
         if (this.graphicsQuality === 'ultra' && !ladSun) {
             this.applyUltraWarmCoolGrade(game);
             this.applyUltraShadowReinforcement(game);
+        }
+
+        if (!ladSun) {
+            this.drawShadowStarfieldOverlay(game);
         }
 
         // Draw influence circles (with proper handling of overlaps)
