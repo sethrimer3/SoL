@@ -14,10 +14,20 @@ export class MenuAtmosphereLayer {
     private static readonly ASTEROID_ROTATION_MAX_RAD = 0.014;
     private static readonly SUN_RADIUS_PX = 120;
     private static readonly SUN_GLOW_RADIUS_PX = 320;
-    private static readonly STAR_COUNT = 420;
-    private static readonly STAR_PARALLAX_LAYERS = 3;
-    private static readonly STAR_BASE_DRIFT_PX = 0.06;
-    private static readonly STAR_FLICKER_SPEED = 0.0012;
+    private static readonly STAR_PARALLAX_LAYERS = 4;
+    private static readonly STAR_BASE_DRIFT_PX = 0.055;
+    private static readonly STAR_SIZE_MIN_PX = 0.45;
+    private static readonly STAR_SIZE_MAX_PX = 3.4;
+    private static readonly STAR_SIZE_POWER_ALPHA = 1.82;
+    private static readonly STAR_FLICKER_BASE_HZ = 0.16;
+    private static readonly STAR_FLICKER_AMPLITUDE = 0.03;
+    private static readonly STAR_DENSITY_NOISE_SCALE = 0.0048;
+    private static readonly STAR_DENSITY_THRESHOLD = 0.38;
+    private static readonly STAR_PLACEMENT_MAX_ATTEMPTS = 30000;
+    private static readonly STAR_POINT_BUDGET_LOW = 1400;
+    private static readonly STAR_POINT_BUDGET_MEDIUM = 2200;
+    private static readonly STAR_POINT_BUDGET_HIGH = 3400;
+    private static readonly STAR_POINT_BUDGET_ULTRA = 5200;
     private static readonly SUN_OFFSET_X_PX = -28;
     private static readonly SUN_OFFSET_Y_PX = -22;
     private static readonly SHADOW_LENGTH_BASE_PX = 120;
@@ -34,6 +44,7 @@ export class MenuAtmosphereLayer {
     private heightPx: number = 0;
     private sunSprite: HTMLImageElement;
     private opacity: number = 0.2;
+    private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     private stars: {
         x: number;
         y: number;
@@ -41,9 +52,12 @@ export class MenuAtmosphereLayer {
         layerIndex: number;
         phase: number;
         brightness: number;
-        emberColor: string;
+        colorRgb: [number, number, number];
+        flickerHz: number;
+        hasChromaticAberration: boolean;
     }[] = [];
-    private starGlowCacheCanvas: HTMLCanvasElement;
+    private readonly starCoreCacheByTemperature: HTMLCanvasElement[];
+    private readonly starHaloCacheByTemperature: HTMLCanvasElement[];
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -65,13 +79,22 @@ export class MenuAtmosphereLayer {
 
         this.sunSprite = new Image();
         this.sunSprite.src = sunSpritePath;
-        this.starGlowCacheCanvas = this.createStarGlowCacheCanvas();
+        this.starCoreCacheByTemperature = this.createStarCoreCacheByTemperature();
+        this.starHaloCacheByTemperature = this.createStarHaloCacheByTemperature();
 
         this.container.appendChild(this.canvas);
         this.resize();
         this.initializeAsteroids();
         this.initializeStars();
         // Don't auto-start - let resumeMenuAnimations() start it after menu is in DOM
+    }
+
+    public setGraphicsQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
+        if (this.graphicsQuality === quality) {
+            return;
+        }
+        this.graphicsQuality = quality;
+        this.initializeStars();
     }
 
     public start(): void {
@@ -224,16 +247,35 @@ export class MenuAtmosphereLayer {
 
     private initializeStars(): void {
         this.stars = [];
-        const emberPalette = ['#FFCF66', '#FF9A2A', '#FF6A00'];
-        for (let i = 0; i < MenuAtmosphereLayer.STAR_COUNT; i++) {
+        const starCount = this.getStarCountForGraphicsQuality();
+        const minWidth = Math.max(1, this.widthPx);
+        const minHeight = Math.max(1, this.heightPx);
+        let attempts = 0;
+
+        while (this.stars.length < starCount && attempts < MenuAtmosphereLayer.STAR_PLACEMENT_MAX_ATTEMPTS) {
+            attempts++;
+            const x = Math.random() * minWidth;
+            const y = Math.random() * minHeight;
+            const density = this.sampleDensityNoise(x, y, minWidth, minHeight);
+            if (density < MenuAtmosphereLayer.STAR_DENSITY_THRESHOLD && Math.random() > 0.06) {
+                continue;
+            }
+
+            const brightness = this.randomRange(0.42, 1.0) * (0.7 + density * 0.3);
+            const sizePx = this.randomStarSizePx();
+            const colorTemperatureK = this.sampleColorTemperatureK(brightness);
+            const colorRgb = this.kelvinToRgb(colorTemperatureK);
+
             this.stars.push({
-                x: Math.random() * Math.max(1, this.widthPx),
-                y: Math.random() * Math.max(1, this.heightPx),
-                sizePx: this.randomRange(0.8, 2.1),
+                x,
+                y,
+                sizePx,
                 layerIndex: Math.floor(Math.random() * MenuAtmosphereLayer.STAR_PARALLAX_LAYERS),
                 phase: Math.random() * Math.PI * 2,
-                brightness: this.randomRange(0.4, 1),
-                emberColor: emberPalette[Math.floor(Math.random() * emberPalette.length)],
+                brightness,
+                colorRgb,
+                flickerHz: MenuAtmosphereLayer.STAR_FLICKER_BASE_HZ + Math.random() * 0.14,
+                hasChromaticAberration: sizePx > 2.15 && brightness > 0.82 && Math.random() > 0.4,
             });
         }
     }
@@ -241,7 +283,7 @@ export class MenuAtmosphereLayer {
     private renderStars(): void {
         const nowMs = performance.now();
         const sunCenter = this.getSunCenter();
-        const cacheRadiusPx = this.starGlowCacheCanvas.width * 0.5;
+        const layerDepthParallax = [0.02, 0.04, 0.07, 0.11];
 
         this.context.save();
         this.context.globalCompositeOperation = 'lighter';
@@ -249,56 +291,236 @@ export class MenuAtmosphereLayer {
         for (let i = 0; i < this.stars.length; i++) {
             const star = this.stars[i];
             const depthScale = (star.layerIndex + 1) / MenuAtmosphereLayer.STAR_PARALLAX_LAYERS;
-            const parallaxOffsetX = (sunCenter.x - this.widthPx * 0.5) * depthScale * 0.05;
-            const parallaxOffsetY = (sunCenter.y - this.heightPx * 0.5) * depthScale * 0.05;
+            const parallaxScale = layerDepthParallax[star.layerIndex] ?? 0.05;
+            const parallaxOffsetX = (sunCenter.x - this.widthPx * 0.5) * parallaxScale;
+            const parallaxOffsetY = (sunCenter.y - this.heightPx * 0.5) * parallaxScale;
 
-            const twinkle = 0.7 + 0.3 * Math.sin(star.phase + nowMs * MenuAtmosphereLayer.STAR_FLICKER_SPEED);
-            const alpha = star.brightness * twinkle * (0.45 + depthScale * 0.55);
+            const flicker = 1 + MenuAtmosphereLayer.STAR_FLICKER_AMPLITUDE
+                * Math.sin(star.phase + (nowMs * 0.001) * Math.PI * 2 * star.flickerHz);
+            const alpha = star.brightness * flicker * (0.4 + depthScale * 0.6);
 
             const renderedX = (star.x + parallaxOffsetX + nowMs * MenuAtmosphereLayer.STAR_BASE_DRIFT_PX * depthScale) % this.widthPx;
             const renderedY = (star.y + parallaxOffsetY) % this.heightPx;
             const sizePx = star.sizePx * (0.8 + depthScale * 0.6);
+            const cacheIndex = this.getTemperatureCacheIndex(star.colorRgb);
+            const coreCacheCanvas = this.starCoreCacheByTemperature[cacheIndex];
+            const haloCacheCanvas = this.starHaloCacheByTemperature[cacheIndex];
+
+            this.context.globalAlpha = alpha * (0.56 + depthScale * 0.44);
+            const haloRadiusPx = sizePx * (3.2 + depthScale * 1.8);
+            this.context.drawImage(
+                haloCacheCanvas,
+                renderedX - haloRadiusPx,
+                renderedY - haloRadiusPx,
+                haloRadiusPx * 2,
+                haloRadiusPx * 2
+            );
 
             this.context.globalAlpha = alpha;
-            this.context.fillStyle = star.emberColor;
-            this.context.beginPath();
-            this.context.arc(renderedX, renderedY, sizePx * 0.45, 0, Math.PI * 2);
-            this.context.fill();
-
+            const coreRadiusPx = sizePx * 0.95;
             this.context.drawImage(
-                this.starGlowCacheCanvas,
-                renderedX - cacheRadiusPx,
-                renderedY - cacheRadiusPx,
-                cacheRadiusPx * 2,
-                cacheRadiusPx * 2
+                coreCacheCanvas,
+                renderedX - coreRadiusPx,
+                renderedY - coreRadiusPx,
+                coreRadiusPx * 2,
+                coreRadiusPx * 2
             );
+
+            if (star.hasChromaticAberration) {
+                this.renderChromaticAberration(renderedX, renderedY, sizePx, alpha * 0.17, star.colorRgb);
+            }
         }
 
         this.context.restore();
         this.context.globalAlpha = 1;
     }
 
-    private createStarGlowCacheCanvas(): HTMLCanvasElement {
+    private createStarCoreCacheByTemperature(): HTMLCanvasElement[] {
+        return [
+            this.createStarCoreCacheCanvas([255, 191, 130]),
+            this.createStarCoreCacheCanvas([255, 226, 181]),
+            this.createStarCoreCacheCanvas([245, 245, 255]),
+            this.createStarCoreCacheCanvas([215, 229, 255]),
+        ];
+    }
+
+    private createStarHaloCacheByTemperature(): HTMLCanvasElement[] {
+        return [
+            this.createStarHaloCacheCanvas([255, 184, 120]),
+            this.createStarHaloCacheCanvas([255, 214, 154]),
+            this.createStarHaloCacheCanvas([236, 239, 255]),
+            this.createStarHaloCacheCanvas([202, 219, 255]),
+        ];
+    }
+
+    private createStarCoreCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
         const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = 48;
-        cacheCanvas.height = 48;
+        cacheCanvas.width = 64;
+        cacheCanvas.height = 64;
         const cacheContext = cacheCanvas.getContext('2d');
         if (!cacheContext) {
             return cacheCanvas;
         }
 
         const centerPx = cacheCanvas.width * 0.5;
-        const glowGradient = cacheContext.createRadialGradient(centerPx, centerPx, 0, centerPx, centerPx, centerPx);
-        glowGradient.addColorStop(0, 'rgba(255, 241, 184, 0.8)');
-        glowGradient.addColorStop(0.35, 'rgba(255, 179, 71, 0.55)');
-        glowGradient.addColorStop(0.75, 'rgba(255, 140, 40, 0.22)');
-        glowGradient.addColorStop(1, 'rgba(255, 106, 0, 0)');
+        const coreGradient = cacheContext.createRadialGradient(centerPx, centerPx, 0, centerPx, centerPx, centerPx);
+        coreGradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+        coreGradient.addColorStop(0.18, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0.95)`);
+        coreGradient.addColorStop(0.5, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0.44)`);
+        coreGradient.addColorStop(1, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0)`);
 
-        cacheContext.fillStyle = glowGradient;
+        cacheContext.fillStyle = coreGradient;
         cacheContext.beginPath();
         cacheContext.arc(centerPx, centerPx, centerPx, 0, Math.PI * 2);
         cacheContext.fill();
         return cacheCanvas;
+    }
+
+    private createStarHaloCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
+        const cacheCanvas = document.createElement('canvas');
+        cacheCanvas.width = 96;
+        cacheCanvas.height = 96;
+        const cacheContext = cacheCanvas.getContext('2d');
+        if (!cacheContext) {
+            return cacheCanvas;
+        }
+
+        const centerPx = cacheCanvas.width * 0.5;
+        const haloGradient = cacheContext.createRadialGradient(centerPx, centerPx, 0, centerPx, centerPx, centerPx);
+        haloGradient.addColorStop(0, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0.36)`);
+        haloGradient.addColorStop(0.3, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0.18)`);
+        haloGradient.addColorStop(0.75, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0.05)`);
+        haloGradient.addColorStop(1, `rgba(${colorRgb[0]}, ${colorRgb[1]}, ${colorRgb[2]}, 0)`);
+
+        cacheContext.fillStyle = haloGradient;
+        cacheContext.beginPath();
+        cacheContext.arc(centerPx, centerPx, centerPx, 0, Math.PI * 2);
+        cacheContext.fill();
+        return cacheCanvas;
+    }
+
+    private renderChromaticAberration(
+        x: number,
+        y: number,
+        sizePx: number,
+        alpha: number,
+        colorRgb: [number, number, number]
+    ): void {
+        const offsetPx = Math.min(0.45, sizePx * 0.1);
+        this.context.globalAlpha = alpha;
+        this.context.fillStyle = `rgba(${Math.min(255, colorRgb[0] + 20)}, 92, 92, 0.65)`;
+        this.context.beginPath();
+        this.context.arc(x - offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
+        this.context.fill();
+
+        this.context.fillStyle = `rgba(118, ${Math.min(255, colorRgb[1] + 16)}, 255, 0.62)`;
+        this.context.beginPath();
+        this.context.arc(x + offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
+        this.context.fill();
+    }
+
+    private getStarCountForGraphicsQuality(): number {
+        switch (this.graphicsQuality) {
+            case 'low':
+                return MenuAtmosphereLayer.STAR_POINT_BUDGET_LOW;
+            case 'medium':
+                return MenuAtmosphereLayer.STAR_POINT_BUDGET_MEDIUM;
+            case 'high':
+                return MenuAtmosphereLayer.STAR_POINT_BUDGET_HIGH;
+            case 'ultra':
+            default:
+                return MenuAtmosphereLayer.STAR_POINT_BUDGET_ULTRA;
+        }
+    }
+
+    private randomStarSizePx(): number {
+        const randomValue = Math.random();
+        const clampedRandomValue = Math.min(0.9994, Math.max(0.0001, randomValue));
+        const powerValue = MenuAtmosphereLayer.STAR_SIZE_MIN_PX
+            * Math.pow(1 - clampedRandomValue, -1 / MenuAtmosphereLayer.STAR_SIZE_POWER_ALPHA);
+        return Math.min(MenuAtmosphereLayer.STAR_SIZE_MAX_PX, powerValue);
+    }
+
+    private sampleColorTemperatureK(brightness: number): number {
+        const randomRoll = Math.random();
+        if (randomRoll < 0.58) {
+            return this.randomRange(4500, 6000);
+        }
+        if (randomRoll < 0.85) {
+            return this.randomRange(3800, 4700);
+        }
+        if (brightness > 0.86) {
+            return this.randomRange(6200, 8600);
+        }
+        return this.randomRange(5600, 7300);
+    }
+
+    private kelvinToRgb(temperatureK: number): [number, number, number] {
+        const clampedK = Math.max(3000, Math.min(9000, temperatureK));
+        if (clampedK < 4200) {
+            return [255, 190, 128];
+        }
+        if (clampedK < 5600) {
+            return [255, 226, 181];
+        }
+        if (clampedK < 7200) {
+            return [245, 245, 255];
+        }
+        return [212, 227, 255];
+    }
+
+    private getTemperatureCacheIndex(colorRgb: [number, number, number]): number {
+        if (colorRgb[2] > 250 && colorRgb[0] < 230) {
+            return 3;
+        }
+        if (colorRgb[1] > 236) {
+            return 2;
+        }
+        if (colorRgb[1] > 210) {
+            return 1;
+        }
+        return 0;
+    }
+
+    private sampleDensityNoise(x: number, y: number, widthPx: number, heightPx: number): number {
+        const nx = x * MenuAtmosphereLayer.STAR_DENSITY_NOISE_SCALE;
+        const ny = y * MenuAtmosphereLayer.STAR_DENSITY_NOISE_SCALE;
+        const octave1 = this.valueNoise2D(nx, ny);
+        const octave2 = this.valueNoise2D(nx * 2.05, ny * 2.05) * 0.5;
+        const octave3 = this.valueNoise2D(nx * 4.1, ny * 4.1) * 0.25;
+        const ridge = 1 - Math.abs(this.valueNoise2D(nx * 0.55 + 11.7, ny * 0.55 - 7.3) * 2 - 1);
+        const edgeDistanceX = Math.min(x / widthPx, (widthPx - x) / widthPx);
+        const edgeDistanceY = Math.min(y / heightPx, (heightPx - y) / heightPx);
+        const edgeFadeX = Math.min(1, Math.max(0.22, edgeDistanceX) * 2.1);
+        const edgeFadeY = Math.min(1, Math.max(0.22, edgeDistanceY) * 2.1);
+        return Math.min(1, (octave1 + octave2 + octave3) / 1.75 * 0.8 + ridge * 0.2) * edgeFadeX * edgeFadeY;
+    }
+
+    private valueNoise2D(x: number, y: number): number {
+        const x0 = Math.floor(x);
+        const y0 = Math.floor(y);
+        const x1 = x0 + 1;
+        const y1 = y0 + 1;
+        const sx = x - x0;
+        const sy = y - y0;
+        const fx = sx * sx * (3 - 2 * sx);
+        const fy = sy * sy * (3 - 2 * sy);
+
+        const n00 = this.hashNoise(x0, y0);
+        const n10 = this.hashNoise(x1, y0);
+        const n01 = this.hashNoise(x0, y1);
+        const n11 = this.hashNoise(x1, y1);
+
+        const ix0 = n00 + (n10 - n00) * fx;
+        const ix1 = n01 + (n11 - n01) * fx;
+        return ix0 + (ix1 - ix0) * fy;
+    }
+
+    private hashNoise(x: number, y: number): number {
+        let hash = x * 374761393 + y * 668265263;
+        hash = (hash ^ (hash >> 13)) * 1274126177;
+        hash ^= hash >> 16;
+        return (hash >>> 0) / 4294967295;
     }
 
     private renderSunGlow(): void {
