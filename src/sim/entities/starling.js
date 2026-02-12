@@ -31,8 +31,16 @@ export class Starling extends Unit {
         if (path.length === 0) {
             return 'no-path';
         }
-        // Create hash from path waypoints (rounded to avoid floating point issues)
-        return path.map(waypoint => `${Math.round(waypoint.x)},${Math.round(waypoint.y)}`).join('|');
+        // Hash every waypoint so mid-path geometry changes invalidate the cache key.
+        let checksum = 2166136261;
+        for (let i = 0; i < path.length; i++) {
+            const waypoint = path[i];
+            const xCentiPx = Math.round(waypoint.x * 100);
+            const yCentiPx = Math.round(waypoint.y * 100);
+            checksum = Math.imul(checksum ^ xCentiPx, 16777619);
+            checksum = Math.imul(checksum ^ yCentiPx, 16777619);
+        }
+        return `path:${path.length}:${(checksum >>> 0).toString(16)}`;
     }
     setManualRallyPoint(target) {
         this.tryBlinkToward(target);
