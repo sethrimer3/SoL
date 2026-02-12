@@ -42,9 +42,9 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
         background: '#0A0F1A',
         asteroidColors: {
             fillStart: '#FFC46B',
-            fillEnd: '#1A2238',
+            fillEnd: '#3B2A1A',
             strokeStart: '#FFD08A',
-            strokeEnd: '#1C2A4A'
+            strokeEnd: '#5A3F26'
         },
         spaceDustPalette: {
             neutral: ['#0B1020', '#10192E', '#1C2A4A', '#243459'],

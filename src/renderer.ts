@@ -4129,6 +4129,31 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
+    private applyUltraShadowReinforcement(game: GameState): void {
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'multiply';
+
+        for (const sun of game.suns) {
+            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+            if (shadowQuads.length === 0) {
+                continue;
+            }
+
+            this.ctx.fillStyle = 'rgba(32, 30, 44, 0.8)';
+            this.ctx.beginPath();
+            for (const quad of shadowQuads) {
+                this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                this.ctx.lineTo(quad.sv2x, quad.sv2y);
+                this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                this.ctx.closePath();
+            }
+            this.ctx.fill();
+        }
+
+        this.ctx.restore();
+    }
+
     private drawLadSunRays(game: GameState, sun: Sun): void {
         const sunScreenPos = this.worldToScreen(sun.position);
         
@@ -9205,6 +9230,7 @@ export class GameRenderer {
 
         if (this.graphicsQuality === 'ultra' && !ladSun) {
             this.applyUltraWarmCoolGrade(game);
+            this.applyUltraShadowReinforcement(game);
         }
 
         // Draw influence circles (with proper handling of overlaps)
