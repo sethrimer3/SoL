@@ -85,6 +85,7 @@ export class GameRenderer {
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
     public selectedWarpGate: WarpGate | null = null;
     public pathPreviewForge: StellarForge | null = null;
+    public pathPreviewStartWorld: Vector2D | null = null;
     public pathPreviewPoints: Vector2D[] = [];
     public pathPreviewEnd: Vector2D | null = null;
     public selectedHeroNames: string[] = [];
@@ -97,6 +98,11 @@ export class GameRenderer {
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
     private productionButtonWaves: Array<{position: Vector2D, progress: number}> = [];
+    private pathCommitEffects: Array<{
+        pointsWorld: Vector2D[];
+        startTimeSec: number;
+        durationSec: number;
+    }> = [];
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
     public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
@@ -986,28 +992,7 @@ export class GameRenderer {
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        // Use the unit's smooth rotation if it's moving
-        if (starling.rallyPoint) {
-            const distanceToRally = starling.position.distanceTo(starling.rallyPoint);
-            if (distanceToRally > Constants.UNIT_ARRIVAL_THRESHOLD) {
-                // Use the smoothly interpolated rotation from the unit's movement logic
-                return starling.rotation;
-            }
-        }
-
-        // If not moving but has a target, face the target
-        if (starling.target && 'position' in starling.target) {
-            if (!('health' in starling.target) || starling.target.health > 0) {
-                const targetPosition = starling.target.position;
-                const dx = targetPosition.x - starling.position.x;
-                const dy = targetPosition.y - starling.position.y;
-                if (dx !== 0 || dy !== 0) {
-                    // Add π/2 so the TOP of the sprite is treated as the FRONT
-                    return Math.atan2(dy, dx) + Math.PI / 2;
-                }
-            }
-        }
-
+        // Preserve the unit's last simulation rotation so stopped starlings keep their final heading.
         return starling.rotation;
     }
 
@@ -1748,18 +1733,18 @@ export class GameRenderer {
      */
     private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
         const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
-        const ringThickness = Math.max(1, this.zoom * 1.4);
+        const ringThickness = Math.max(1.5, this.zoom * 1.8);
         const gradient = this.ctx.createRadialGradient(
             screenPos.x,
             screenPos.y,
-            Math.max(0, selectionRadius - ringThickness),
+            Math.max(0, selectionRadius - ringThickness * 0.4),
             screenPos.x,
             screenPos.y,
-            selectionRadius + ringThickness * 1.6
+            selectionRadius + ringThickness * 2.4
         );
-        gradient.addColorStop(0, 'rgba(255, 255, 255, 0.65)');
-        gradient.addColorStop(0.55, 'rgba(255, 215, 0, 0.95)');
-        gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.95)');
+        gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.85)');
+        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
         this.ctx.save();
         this.ctx.strokeStyle = gradient;
@@ -2335,16 +2320,17 @@ export class GameRenderer {
                 }
             }
 
-            // Draw path preview while drawing a new path
-            if (this.pathPreviewForge === forge && (this.pathPreviewPoints.length > 0 || this.pathPreviewEnd)) {
-                this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
-            }
-            
             if (forge.isSelected && this.selectedHeroNames.length > 0) {
                 // Draw hero production buttons around the forge
                 this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
             }
 
+        }
+
+
+        // Draw path preview while drawing a new path from this forge (even if forge was auto-deselected).
+        if (this.pathPreviewForge === forge && (this.pathPreviewPoints.length > 0 || this.pathPreviewEnd)) {
+            this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
         }
 
         // Draw aura in LaD mode
@@ -3118,19 +3104,12 @@ export class GameRenderer {
             this.ctx.fill();
         }
 
-        if (mirror.isSelected) {
-            this.ctx.strokeStyle = '#FFFF00';
-            this.ctx.lineWidth = 3;
-            this.ctx.strokeRect(
-                -selectionWidth / 2 - 3,
-                -selectionHeight / 2 - 3,
-                selectionWidth + 6,
-                selectionHeight + 6
-            );
-        }
-        
         // Restore context state
         this.ctx.restore();
+
+        if (mirror.isSelected) {
+            this.drawBuildingSelectionIndicator(screenPos, Math.max(selectionWidth, selectionHeight) * 0.52);
+        }
 
         if (this.isWarpGatePlacementMode && mirror.isSelected) {
             const particleCount = 8;
@@ -4743,8 +4722,11 @@ export class GameRenderer {
         }
 
         if (isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, size);
+            const isStarling = unit instanceof Starling;
+            const selectionRadiusMultiplier = (unit.isHero || isStarling) ? 1.2 : 1.0;
+            this.drawBuildingSelectionIndicator(screenPos, size * selectionRadiusMultiplier);
         }
+
 
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
@@ -5979,6 +5961,7 @@ export class GameRenderer {
             : starlingColor;
         displayColor = tintColor;
         
+
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -7082,6 +7065,7 @@ export class GameRenderer {
             return;
         }
 
+
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -7266,6 +7250,7 @@ export class GameRenderer {
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
 
+
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -7391,6 +7376,7 @@ export class GameRenderer {
             }
             return;
         }
+
 
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
@@ -7575,6 +7561,7 @@ export class GameRenderer {
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
             return;
         }
+
 
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
@@ -7827,6 +7814,7 @@ export class GameRenderer {
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
             return;
         }
+
 
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
@@ -8481,8 +8469,57 @@ export class GameRenderer {
             if (count > 0) {
                 const startWorld = new Vector2D(avgX / count, avgY / count);
                 this.drawMinionPathPreview(startWorld, this.pathPreviewPoints, this.pathPreviewEnd);
+            } else if (this.pathPreviewStartWorld) {
+                this.drawMinionPathPreview(this.pathPreviewStartWorld, this.pathPreviewPoints, this.pathPreviewEnd);
             }
         }
+    }
+
+    public createPathCommitEffect(startWorld: Vector2D, waypoints: Vector2D[], gameTimeSec: number): void {
+        const pointsWorld: Vector2D[] = [new Vector2D(startWorld.x, startWorld.y)];
+        for (const waypoint of waypoints) {
+            pointsWorld.push(new Vector2D(waypoint.x, waypoint.y));
+        }
+        if (pointsWorld.length < 2) {
+            return;
+        }
+        this.pathCommitEffects.push({
+            pointsWorld,
+            startTimeSec: gameTimeSec,
+            durationSec: 1.1
+        });
+    }
+
+    private updateAndDrawPathCommitEffects(gameTimeSec: number): void {
+        if (this.pathCommitEffects.length === 0) {
+            return;
+        }
+
+        this.pathCommitEffects = this.pathCommitEffects.filter((effect) => {
+            const ageSec = gameTimeSec - effect.startTimeSec;
+            const progress = ageSec / effect.durationSec;
+            if (progress >= 1) {
+                return false;
+            }
+
+            const alpha = Math.max(0, 1 - progress);
+            const pathPointsScreen = effect.pointsWorld.map((point) => this.worldToScreen(point));
+
+            this.ctx.save();
+            this.ctx.lineWidth = 2.5;
+            this.ctx.strokeStyle = `rgba(255, 225, 120, ${0.55 * alpha})`;
+            this.ctx.setLineDash([14, 10]);
+            this.ctx.lineDashOffset = -progress * 80;
+            this.ctx.beginPath();
+            this.ctx.moveTo(pathPointsScreen[0].x, pathPointsScreen[0].y);
+            for (let i = 1; i < pathPointsScreen.length; i++) {
+                this.ctx.lineTo(pathPointsScreen[i].x, pathPointsScreen[i].y);
+            }
+            this.ctx.stroke();
+            this.ctx.restore();
+
+            return true;
+        });
     }
 
     /**
@@ -9596,6 +9633,9 @@ export class GameRenderer {
 
         // Draw unit path preview
         this.drawUnitPathPreview();
+
+        // Draw temporary path confirmation effects
+        this.updateAndDrawPathCommitEffects(game.gameTime);
 
         // Draw tap and swipe visual effects
         this.updateAndDrawProductionButtonWaves();

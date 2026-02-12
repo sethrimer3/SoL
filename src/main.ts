@@ -51,6 +51,7 @@ class GameController {
     private isDraggingBuildingArrow: boolean = false; // Flag for building ability arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
+    private shouldCancelMirrorWarpGateOnRelease: boolean = false;
     private moveOrderCounter: number = 0; // Counter for move order indicators
     private localPlayerIndex: number = 0; // Track local player index for LAN mode
     private lastTapTime: number = 0; // Timestamp of last tap for double-tap detection
@@ -758,6 +759,7 @@ class GameController {
         this.mirrorCommandMode = null;
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
         return true;
     }
 
@@ -816,6 +818,7 @@ class GameController {
         this.mirrorCommandMode = null;
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
         
         // Deselect all entities
         if (player.stellarForge) {
@@ -1122,10 +1125,24 @@ class GameController {
         return positions;
     }
 
+
+    private cancelMirrorWarpGateModeAndDeselectMirrors(): void {
+        this.mirrorCommandMode = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
+        for (const mirror of this.selectedMirrors) {
+            mirror.isSelected = false;
+        }
+        this.selectedMirrors.clear();
+        this.selectedBase = null;
+        this.renderer.selectedMirrors = this.selectedMirrors;
+        this.clearPathPreview();
+    }
+
     private clearPathPreview(): void {
         this.pathPoints = [];
         this.isDrawingPath = false;
         this.renderer.pathPreviewForge = null;
+        this.renderer.pathPreviewStartWorld = null;
         this.renderer.pathPreviewPoints = this.pathPoints;
         this.renderer.pathPreviewEnd = null;
     }
@@ -1911,13 +1928,17 @@ class GameController {
                         this.isDrawingPath = true;
                         this.pathPoints = [];
                         this.renderer.pathPreviewForge = this.selectedBase;
+                        this.renderer.pathPreviewStartWorld = new Vector2D(this.selectedBase.position.x, this.selectedBase.position.y);
                         this.renderer.pathPreviewPoints = this.pathPoints;
+                        this.selectedBase.isSelected = false;
                         this.cancelHold();
                     } else if (isDragStartOnSelectedMirror) {
                         // Drawing a path from selected solar mirrors
                         this.isDrawingPath = true;
                         this.pathPoints = [];
                         this.renderer.pathPreviewForge = null;
+                        const firstMirror = Array.from(this.selectedMirrors)[0];
+                        this.renderer.pathPreviewStartWorld = firstMirror ? new Vector2D(firstMirror.position.x, firstMirror.position.y) : null;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
                     } else if (isDragStartOnSelectedWarpGate) {
@@ -1942,6 +1963,7 @@ class GameController {
                             this.isDrawingPath = true;
                             this.pathPoints = [];
                             this.renderer.pathPreviewForge = null; // No forge for unit paths
+                            this.renderer.pathPreviewStartWorld = dragStartWorld ? new Vector2D(dragStartWorld.x, dragStartWorld.y) : null;
                             this.renderer.pathPreviewPoints = this.pathPoints;
                             this.cancelHold();
                         } else if (hasHeroUnits) {
@@ -2037,6 +2059,12 @@ class GameController {
                                 this.renderer.highlightedButtonIndex = -1;
                             }
                         }
+                        this.shouldCancelMirrorWarpGateOnRelease = Boolean(
+                            dragDirection &&
+                            this.mirrorCommandMode === 'warpgate' &&
+                            dragDirection.y > 0.7 &&
+                            this.renderer.buildingAbilityArrowLengthPx >= Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH)
+                        );
                     } else if (this.selectedWarpGate) {
                         if (dragDirection && player) {
                             const nearestIndex = this.getNearestButtonIndexFromAngle(angle, 4);
@@ -2269,6 +2297,18 @@ class GameController {
                 }
 
                 if (this.mirrorCommandMode === 'warpgate' && this.selectedMirrors.size > 0) {
+                    if (this.isDragStartNearSelectedMirrors(worldPos)) {
+                        this.cancelMirrorWarpGateModeAndDeselectMirrors();
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.renderer.selectionStart = null;
+                        this.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
+                    }
+
                     this.tryCreateWarpGateAt(worldPos);
                     isPanning = false;
                     isMouseDown = false;
@@ -2792,13 +2832,14 @@ class GameController {
                 this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
             } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.game) {
                 // Finalize the path drawing
-                if (this.selectedBase && this.selectedBase.isSelected) {
+                if (this.selectedBase) {
                     // Path for base (minion spawning)
                     this.selectedBase.setMinionPath(this.pathPoints);
                     console.log(`Base path set with ${this.pathPoints.length} waypoints`);
                     this.sendNetworkCommand('set_rally_path', {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
                     });
+                    this.renderer.createPathCommitEffect(this.selectedBase.position, this.pathPoints, this.game.gameTime);
                 } else if (this.selectedMirrors.size > 0) {
                     const player = this.getLocalPlayer();
                     const lastWaypoint = this.pathPoints[this.pathPoints.length - 1];
@@ -2824,6 +2865,10 @@ class GameController {
                             targetY: lastWaypoint.y,
                             moveOrder: this.moveOrderCounter
                         });
+                        const startMirror = Array.from(this.selectedMirrors)[0];
+                        if (startMirror) {
+                            this.renderer.createPathCommitEffect(startMirror.position, this.pathPoints, this.game.gameTime);
+                        }
                     }
 
                     this.selectedMirrors.clear();
@@ -2856,6 +2901,9 @@ class GameController {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y })),
                         moveOrder: this.moveOrderCounter
                     });
+                    if (this.renderer.pathPreviewStartWorld) {
+                        this.renderer.createPathCommitEffect(this.renderer.pathPreviewStartWorld, this.pathPoints, this.game.gameTime);
+                    }
                     
                     // Deselect units and buildings after setting path
                     this.selectedUnits.clear();
@@ -2877,6 +2925,11 @@ class GameController {
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
                 const hasHeroUnits = this.hasHeroUnitsSelected();
+                if (this.shouldCancelMirrorWarpGateOnRelease) {
+                    this.cancelMirrorWarpGateModeAndDeselectMirrors();
+                    this.shouldCancelMirrorWarpGateOnRelease = false;
+                }
+
                 const shouldUseAbility = this.selectedUnits.size > 0 && (
                     (!hasHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
                     (hasHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
@@ -2995,7 +3048,10 @@ class GameController {
                                 this.selectedMirrors.clear();
                             } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 1) {
                                 // Warp gate button
-                                if (this.canCreateWarpGateFromSelectedMirrors()) {
+                                if (this.mirrorCommandMode === 'warpgate') {
+                                    this.cancelMirrorWarpGateModeAndDeselectMirrors();
+                                    console.log('Radial selection: Mirror warp gate mode cancelled');
+                                } else if (this.canCreateWarpGateFromSelectedMirrors()) {
                                     this.mirrorCommandMode = 'warpgate';
                                     console.log('Radial selection: Mirror command mode set to warpgate');
                                 }
@@ -3149,6 +3205,7 @@ class GameController {
             this.isDraggingBuildingArrow = false;
             this.isDrawingPath = false;
             this.pathPoints = [];
+            this.shouldCancelMirrorWarpGateOnRelease = false;
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
@@ -3559,6 +3616,7 @@ class GameController {
         this.isUsingMirrorsForWarpGate = false;
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     private endHold(): void {
@@ -3568,6 +3626,7 @@ class GameController {
         this.isUsingMirrorsForWarpGate = false;
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     private updateStarlingMergeHold(): void {
@@ -3636,6 +3695,7 @@ class GameController {
         this.tryCreateWarpGateAt(this.mirrorHoldWorldPos);
         this.mirrorHoldStartTimeMs = null;
         this.mirrorHoldWorldPos = null;
+        this.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     /**
