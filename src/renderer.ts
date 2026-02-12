@@ -186,6 +186,8 @@ export class GameRenderer {
     private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
     private lightingLayerCanvas: HTMLCanvasElement | null = null;
     private lightingLayerCtx: CanvasRenderingContext2D | null = null;
+    private lightingSunPassCanvas: HTMLCanvasElement | null = null;
+    private lightingSunPassCtx: CanvasRenderingContext2D | null = null;
     private readonly VELARIS_MIRROR_PARTICLE_TIME_SCALE = 0.35;
     private readonly VELARIS_MIRROR_PARTICLE_DRIFT_SPEED = 0.7;
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
@@ -2968,7 +2970,7 @@ export class GameRenderer {
 
         if (this.isFancyGraphicsEnabled) {
             const bloomColor = this.brightenAndPaleColor(displayColor);
-            const bloomIntensity = 0.25 + glowIntensity * 0.5;
+            const bloomIntensity = (0.25 + glowIntensity * 0.5) * visibilityAlpha;
             this.drawFancyBloom(screenPos, size * 1.6, bloomColor, bloomIntensity);
         }
         
@@ -4066,6 +4068,25 @@ export class GameRenderer {
         return this.lightingLayerCtx;
     }
 
+    private ensureLightingSunPassLayer(): CanvasRenderingContext2D {
+        if (!this.lightingSunPassCanvas) {
+            this.lightingSunPassCanvas = document.createElement('canvas');
+            this.lightingSunPassCtx = this.lightingSunPassCanvas.getContext('2d');
+        }
+
+        if (!this.lightingSunPassCtx || !this.lightingSunPassCanvas) {
+            throw new Error('Failed to initialize sun lighting pass context');
+        }
+
+        if (this.lightingSunPassCanvas.width !== this.canvas.width || this.lightingSunPassCanvas.height !== this.canvas.height) {
+            this.lightingSunPassCanvas.width = this.canvas.width;
+            this.lightingSunPassCanvas.height = this.canvas.height;
+        }
+
+        this.lightingSunPassCtx.clearRect(0, 0, this.lightingSunPassCanvas.width, this.lightingSunPassCanvas.height);
+        return this.lightingSunPassCtx;
+    }
+
     private buildOrientedShadowOccluder(position: Vector2D, rotationRad: number, sizeWorld: number): Vector2D[] {
         const halfSizeWorld = sizeWorld * 0.5;
         const cosTheta = Math.cos(rotationRad);
@@ -4197,10 +4218,12 @@ export class GameRenderer {
     private drawNormalSunRays(game: GameState): void {
         const targetCtx = this.ctx;
         const lightingCtx = this.ensureLightingLayer();
-        this.ctx = lightingCtx;
 
         // Draw ambient lighting layers for each sun (brighter closer to sun)
         for (const sun of game.suns) {
+            const sunPassCtx = this.ensureLightingSunPassLayer();
+            this.ctx = sunPassCtx;
+
             const sunScreenPos = this.worldToScreen(sun.position);
             const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
             const shadowQuads = this.buildSunShadowQuads(sun, game);
@@ -4256,31 +4279,29 @@ export class GameRenderer {
                     this.ctx.stroke();
                 }
                 this.ctx.restore();
-            }
-        }
 
-        // Cut out any area occluded from the sun so the background remains visible through shadows.
-        for (const sun of game.suns) {
-            const shadowQuads = this.buildSunShadowQuads(sun, game);
-            if (shadowQuads.length === 0) {
-                continue;
-            }
+                // Cut out any area occluded from this sun so the background remains visible through shadows.
+                this.ctx.save();
+                this.ctx.globalCompositeOperation = 'destination-out';
+                this.ctx.fillStyle = 'rgba(0, 0, 0, 1)';
+                this.ctx.beginPath();
 
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'destination-out';
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-            this.ctx.beginPath();
+                for (const quad of shadowQuads) {
+                    this.ctx.moveTo(quad.sv1x, quad.sv1y);
+                    this.ctx.lineTo(quad.sv2x, quad.sv2y);
+                    this.ctx.lineTo(quad.ss2x, quad.ss2y);
+                    this.ctx.lineTo(quad.ss1x, quad.ss1y);
+                    this.ctx.closePath();
+                }
 
-            for (const quad of shadowQuads) {
-                this.ctx.moveTo(quad.sv1x, quad.sv1y);
-                this.ctx.lineTo(quad.sv2x, quad.sv2y);
-                this.ctx.lineTo(quad.ss2x, quad.ss2y);
-                this.ctx.lineTo(quad.ss1x, quad.ss1y);
-                this.ctx.closePath();
+                this.ctx.fill();
+                this.ctx.restore();
             }
 
-            this.ctx.fill();
-            this.ctx.restore();
+            lightingCtx.save();
+            lightingCtx.globalCompositeOperation = 'lighter';
+            lightingCtx.drawImage(this.lightingSunPassCanvas!, 0, 0);
+            lightingCtx.restore();
         }
 
         this.ctx = targetCtx;
@@ -6258,6 +6279,7 @@ export class GameRenderer {
                     // Apply shade brightening effect near player units
                     displayColor = this.applyShadeBrightening(displayColor, starling.position, game, true);
                 }
+            }
             if (isInShadow) {
                 shouldDim = false;
                 displayColor = color;
