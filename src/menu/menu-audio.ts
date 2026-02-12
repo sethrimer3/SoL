@@ -42,6 +42,7 @@ interface AudioTrack {
     targetVolume: number;
     isPlaying: boolean;
     hasEndedListener: boolean;
+    hasCanPlayThroughListener: boolean;
 }
 
 export class MenuAudioController {
@@ -60,6 +61,15 @@ export class MenuAudioController {
     constructor(resolveAssetPath: (path: string) => string) {
         this.resolveAssetPath = resolveAssetPath;
         this.tracksById = this.createTracks();
+    }
+
+
+    public async preloadTracks(): Promise<void> {
+        const preloadPromises: Promise<void>[] = [];
+        for (const trackId of Object.keys(this.tracksById) as TrackId[]) {
+            preloadPromises.push(this.preloadTrack(trackId));
+        }
+        await Promise.all(preloadPromises);
     }
 
     public setVisible(isVisible: boolean): void {
@@ -120,9 +130,46 @@ export class MenuAudioController {
                 targetVolume: 0,
                 isPlaying: false,
                 hasEndedListener: false,
+                hasCanPlayThroughListener: false,
             };
         }
         return tracksById;
+    }
+
+
+    private preloadTrack(trackId: TrackId): Promise<void> {
+        const track = this.tracksById[trackId];
+        const element = track.element;
+
+        if (element.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) {
+            return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+            const cleanup = () => {
+                element.removeEventListener('canplaythrough', onCanPlayThrough);
+                element.removeEventListener('error', onError);
+                track.hasCanPlayThroughListener = false;
+            };
+
+            const onCanPlayThrough = () => {
+                cleanup();
+                resolve();
+            };
+
+            const onError = () => {
+                cleanup();
+                resolve();
+            };
+
+            if (!track.hasCanPlayThroughListener) {
+                element.addEventListener('canplaythrough', onCanPlayThrough, { once: true });
+                element.addEventListener('error', onError, { once: true });
+                track.hasCanPlayThroughListener = true;
+            }
+
+            element.load();
+        });
     }
 
     private updateTargetVolumes(): void {

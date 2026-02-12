@@ -2335,8 +2335,8 @@ export class GameRenderer {
                 }
             }
 
-            if (forge.isSelected && this.selectedHeroNames.length > 0) {
-                // Draw hero production buttons around the forge
+            if (forge.isSelected) {
+                // Draw forge production buttons around the forge
                 this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
             }
 
@@ -2461,19 +2461,20 @@ export class GameRenderer {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
         const buttonDistance = (Constants.HERO_BUTTON_DISTANCE_PX * this.zoom);
         
-        const maxButtons = 4;
-        const displayHeroes = heroNames.slice(0, maxButtons);
-        const positions = this.getRadialButtonOffsets(displayHeroes.length);
+        const displayLabels = [...heroNames.slice(0, 4), 'Solar Mirror'];
+        const positions = this.getRadialButtonOffsets(displayLabels.length);
 
-        for (let i = 0; i < displayHeroes.length; i++) {
-            const heroName = displayHeroes[i];
+        for (let i = 0; i < displayLabels.length; i++) {
+            const heroName = displayLabels[i];
             const pos = positions[i];
             const buttonX = screenPos.x + pos.x * buttonDistance;
             const buttonY = screenPos.y + pos.y * buttonDistance;
-            const heroUnitType = this.getHeroUnitType(heroName);
+            const isMirrorOption = heroName === 'Solar Mirror';
+            const heroUnitType = isMirrorOption ? null : this.getHeroUnitType(heroName);
             const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
             const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
-            const isAvailable = heroUnitType ? !isHeroAlive && !isHeroProducing : false;
+            const isMirrorAffordable = forge.owner.energy >= Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
+            const isAvailable = isMirrorOption ? isMirrorAffordable : (heroUnitType ? !isHeroAlive && !isHeroProducing : false);
             const isHighlighted = this.highlightedButtonIndex === i;
 
             // Draw button background with highlight effect
@@ -2494,9 +2495,14 @@ export class GameRenderer {
             this.ctx.font = `${14 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(heroName, buttonX, buttonY);
+            if (isMirrorOption) {
+                this.ctx.fillText('Mirror', buttonX, buttonY - 6 * this.zoom);
+                this.ctx.fillText('2000', buttonX, buttonY + 7 * this.zoom);
+            } else {
+                this.ctx.fillText(heroName, buttonX, buttonY);
+            }
 
-            if (isHeroProducing) {
+            if (!isMirrorOption && isHeroProducing) {
                 this.drawHeroHourglass(buttonX, buttonY, buttonRadius);
             } else if (isHeroAlive) {
                 this.drawHeroCheckmark(buttonX, buttonY, buttonRadius);

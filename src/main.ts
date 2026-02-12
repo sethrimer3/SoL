@@ -882,6 +882,60 @@ class GameController {
         console.log(`Double-tap: Selected all ${this.selectedBuildings.size} buildings of type ${buildingType.name}`);
     }
 
+
+    private getForgeButtonLabels(): string[] {
+        const heroLabels = this.renderer.selectedHeroNames.slice(0, 4);
+        return [...heroLabels, 'Solar Mirror'];
+    }
+
+    private trySpawnSolarMirrorFromForge(player: Player): boolean {
+        if (!this.game || !player.stellarForge) {
+            return false;
+        }
+
+        if (!player.spendEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST)) {
+            console.log('Not enough energy to forge a Solar Mirror');
+            return false;
+        }
+
+        const mirrorRadiusPx = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
+        const spawnDistancePx = player.stellarForge.radius + Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+        let spawnPosition = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
+        let hasSpawnPosition = false;
+
+        for (let ringIndex = 0; ringIndex < 4 && !hasSpawnPosition; ringIndex++) {
+            const ringDistancePx = spawnDistancePx + ringIndex * (mirrorRadiusPx + 12);
+            for (let angleIndex = 0; angleIndex < 12; angleIndex++) {
+                const angleRad = (Math.PI * 2 * angleIndex) / 12;
+                const candidate = new Vector2D(
+                    player.stellarForge.position.x + Math.cos(angleRad) * ringDistancePx,
+                    player.stellarForge.position.y + Math.sin(angleRad) * ringDistancePx
+                );
+                if (!this.game.checkCollision(candidate, mirrorRadiusPx)) {
+                    spawnPosition = candidate;
+                    hasSpawnPosition = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasSpawnPosition) {
+            player.addEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST);
+            console.log('No valid spawn point for new Solar Mirror');
+            return false;
+        }
+
+        const mirror = new SolarMirror(spawnPosition, player);
+        player.solarMirrors.push(mirror);
+        this.sendNetworkCommand('mirror_purchase', {
+            positionX: spawnPosition.x,
+            positionY: spawnPosition.y,
+            cost: Constants.STELLAR_FORGE_SOLAR_MIRROR_COST
+        });
+        console.log('Forged a new Solar Mirror from Stellar Forge');
+        return true;
+    }
+
     private getClickedHeroButton(
         screenX: number,
         screenY: number,
@@ -895,8 +949,7 @@ class GameController {
         const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.renderer.zoom;
         const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.renderer.zoom;
         
-        const maxButtons = 4;
-        const displayHeroes = heroNames.slice(0, maxButtons);
+        const displayHeroes = heroNames;
         const positions = this.getRadialButtonOffsets(displayHeroes.length);
         for (let i = 0; i < displayHeroes.length; i++) {
             const pos = positions[i];
@@ -2044,9 +2097,9 @@ class GameController {
                     
                     // Determine number of buttons based on what's selected
                     if (player && player.stellarForge && player.stellarForge.isSelected) {
-                        // Stellar forge has 4 buttons
+                        const forgeButtonCount = this.getForgeButtonLabels().length;
                         this.renderer.highlightedButtonIndex = dragDirection
-                            ? this.getNearestButtonIndexFromAngle(angle, 4)
+                            ? this.getNearestButtonIndexFromAngle(angle, forgeButtonCount)
                             : -1;
                     } else if (this.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 or 3 buttons
@@ -2665,40 +2718,44 @@ class GameController {
                     }
                 }
 
-                if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
+                if (player.stellarForge && player.stellarForge.isSelected) {
                     const clickedHero = this.getClickedHeroButton(
                         lastX,
                         lastY,
                         player.stellarForge,
-                        this.renderer.selectedHeroNames
+                        this.getForgeButtonLabels()
                     );
                     if (clickedHero) {
                         const clickedHeroName = clickedHero.heroName;
                         this.renderer.createProductionButtonWave(clickedHero.buttonPos);
-                        const heroUnitType = this.getHeroUnitType(clickedHeroName);
-                        let isHeroQueued = false;
-                        if (heroUnitType) {
-                            const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
-                            const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
-                            console.log(
-                                `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | energy=${player.energy.toFixed(1)}`
-                            );
-                            if (isHeroAlive) {
-                                console.log(`${clickedHeroName} is already active`);
-                            } else if (isHeroProducing) {
-                                console.log(`${clickedHeroName} is already being produced`);
-                            } else {
-                                player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                player.stellarForge.startHeroProductionIfIdle();
-                                console.log(`Queued hero ${clickedHeroName} for forging`);
-                                isHeroQueued = true;
-                                this.sendNetworkCommand('hero_purchase', {
-                                    heroType: heroUnitType
-                                });
+                        let didTriggerForgeAction = false;
+                        if (clickedHeroName === 'Solar Mirror') {
+                            didTriggerForgeAction = this.trySpawnSolarMirrorFromForge(player);
+                        } else {
+                            const heroUnitType = this.getHeroUnitType(clickedHeroName);
+                            if (heroUnitType) {
+                                const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
+                                const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                                console.log(
+                                    `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | energy=${player.energy.toFixed(1)}`
+                                );
+                                if (isHeroAlive) {
+                                    console.log(`${clickedHeroName} is already active`);
+                                } else if (isHeroProducing) {
+                                    console.log(`${clickedHeroName} is already being produced`);
+                                } else {
+                                    player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                    player.stellarForge.startHeroProductionIfIdle();
+                                    console.log(`Queued hero ${clickedHeroName} for forging`);
+                                    didTriggerForgeAction = true;
+                                    this.sendNetworkCommand('hero_purchase', {
+                                        heroType: heroUnitType
+                                    });
+                                }
                             }
                         }
 
-                        if (isHeroQueued) {
+                        if (didTriggerForgeAction) {
                             player.stellarForge.isSelected = false;
                             this.selectedBase = null;
                             this.selectedUnits.clear();
@@ -2997,28 +3054,33 @@ class GameController {
                     // Building ability arrow was dragged - activate the highlighted button
                     const player = this.getLocalPlayer();
                     if (player && this.renderer.highlightedButtonIndex >= 0) {
-                        if (player.stellarForge && player.stellarForge.isSelected && this.renderer.selectedHeroNames.length > 0) {
-                            // Stellar forge button selected
-                            const heroNames = this.renderer.selectedHeroNames;
-                            if (this.renderer.highlightedButtonIndex < heroNames.length) {
-                                const selectedHeroName = heroNames[this.renderer.highlightedButtonIndex];
-                                const heroUnitType = this.getHeroUnitType(selectedHeroName);
-                                
-                                if (heroUnitType) {
-                                    const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
-                                    const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
-                                    
-                                    if (!isHeroAlive && !isHeroProducing) {
-                                        player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                        player.stellarForge.startHeroProductionIfIdle();
-                                        console.log(`Radial selection: Queued hero ${selectedHeroName} for forging`);
-                                        this.sendNetworkCommand('hero_purchase', {
-                                            heroType: heroUnitType
-                                        });
-                                        
-                                        // Deselect forge
+                        if (player.stellarForge && player.stellarForge.isSelected) {
+                            const forgeButtonLabels = this.getForgeButtonLabels();
+                            if (this.renderer.highlightedButtonIndex < forgeButtonLabels.length) {
+                                const selectedLabel = forgeButtonLabels[this.renderer.highlightedButtonIndex];
+                                if (selectedLabel === 'Solar Mirror') {
+                                    const didCreateMirror = this.trySpawnSolarMirrorFromForge(player);
+                                    if (didCreateMirror) {
                                         player.stellarForge.isSelected = false;
                                         this.selectedBase = null;
+                                    }
+                                } else {
+                                    const heroUnitType = this.getHeroUnitType(selectedLabel);
+                                    if (heroUnitType) {
+                                        const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
+                                        const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+
+                                        if (!isHeroAlive && !isHeroProducing) {
+                                            player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                            player.stellarForge.startHeroProductionIfIdle();
+                                            console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
+                                            this.sendNetworkCommand('hero_purchase', {
+                                                heroType: heroUnitType
+                                            });
+
+                                            player.stellarForge.isSelected = false;
+                                            this.selectedBase = null;
+                                        }
                                     }
                                 }
                             }

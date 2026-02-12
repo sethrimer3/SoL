@@ -2386,7 +2386,28 @@ export class GameState {
     }
 
     private updateAiMirrorPurchaseForPlayer(player: Player): void {
-        return;
+        if (this.gameTime < player.aiNextMirrorPurchaseCommandSec) {
+            return;
+        }
+        player.aiNextMirrorPurchaseCommandSec = this.gameTime + Constants.AI_MIRROR_PURCHASE_INTERVAL_SEC;
+
+        if (!player.stellarForge) {
+            return;
+        }
+
+        if (player.solarMirrors.length >= Constants.AI_MAX_MIRRORS) {
+            return;
+        }
+
+        if (!player.spendEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST)) {
+            return;
+        }
+
+        const spawnPosition = this.findMirrorSpawnPositionNearForge(player.stellarForge);
+        const mirror = new SolarMirror(spawnPosition, player);
+        player.solarMirrors.push(mirror);
+
+        this.assignAiMirrorsToIncompleteBuilding(player);
     }
 
     private updateAiDefenseForPlayer(
@@ -2554,6 +2575,42 @@ export class GameState {
         }
     }
 
+    private assignAiMirrorsToIncompleteBuilding(player: Player): void {
+        const incompleteBuilding = player.buildings.find((building) => !building.isComplete && !building.isDestroyed());
+        if (!incompleteBuilding) {
+            return;
+        }
+
+        for (const mirror of player.solarMirrors) {
+            if (mirror.linkedStructure !== null && mirror.linkedStructure !== player.stellarForge) {
+                continue;
+            }
+            mirror.setLinkedStructure(incompleteBuilding);
+        }
+    }
+
+    private findMirrorSpawnPositionNearForge(stellarForge: StellarForge): Vector2D {
+        const baseRadiusPx = stellarForge.radius + Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+        const mirrorRadiusPx = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
+        const angleStepRad = Math.PI / 6;
+
+        for (let ringIndex = 0; ringIndex < 4; ringIndex++) {
+            const ringRadiusPx = baseRadiusPx + ringIndex * (mirrorRadiusPx + 12);
+            for (let angleIndex = 0; angleIndex < 12; angleIndex++) {
+                const angleRad = angleStepRad * angleIndex;
+                const candidate = new Vector2D(
+                    stellarForge.position.x + Math.cos(angleRad) * ringRadiusPx,
+                    stellarForge.position.y + Math.sin(angleRad) * ringRadiusPx
+                );
+                if (!this.checkCollision(candidate, mirrorRadiusPx)) {
+                    return candidate;
+                }
+            }
+        }
+
+        return new Vector2D(stellarForge.position.x, stellarForge.position.y);
+    }
+
     private updateAiStructuresForPlayer(
         player: Player,
         enemies: CombatTarget[]
@@ -2636,26 +2693,34 @@ export class GameState {
         }
 
         let placement: Vector2D | null = null;
+        let didBuildStructure = false;
 
         switch (buildType) {
             case 'subsidiaryFactory':
                 placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player);
                 if (placement && player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                     player.buildings.push(new SubsidiaryFactory(placement, player));
+                    didBuildStructure = true;
                 }
                 break;
             case 'swirler':
                 placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player);
                 if (placement && player.spendEnergy(Constants.SWIRLER_COST)) {
                     player.buildings.push(new SpaceDustSwirler(placement, player));
+                    didBuildStructure = true;
                 }
                 break;
             case 'minigun':
                 placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player);
                 if (placement && player.spendEnergy(Constants.MINIGUN_COST)) {
                     player.buildings.push(new Minigun(placement, player));
+                    didBuildStructure = true;
                 }
                 break;
+        }
+
+        if (didBuildStructure) {
+            this.assignAiMirrorsToIncompleteBuilding(player);
         }
     }
 
@@ -4972,10 +5037,20 @@ export class GameState {
         }
     }
 
-    // Mirror purchase is handled differently (not through commands)
     private executeMirrorPurchaseCommand(player: Player, data: any): void {
-        // No-op: Mirror purchases are handled through direct game state modification
-        return;
+        const cost = typeof data?.cost === 'number' ? data.cost : Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
+        const positionX = typeof data?.positionX === 'number' ? data.positionX : player.stellarForge?.position.x;
+        const positionY = typeof data?.positionY === 'number' ? data.positionY : player.stellarForge?.position.y;
+
+        if (typeof positionX !== 'number' || typeof positionY !== 'number') {
+            return;
+        }
+
+        if (!player.spendEnergy(cost)) {
+            return;
+        }
+
+        player.solarMirrors.push(new SolarMirror(new Vector2D(positionX, positionY), player));
     }
 
     private executeStrikerTowerStartCountdownCommand(player: Player, data: any): void {
