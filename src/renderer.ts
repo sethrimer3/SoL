@@ -251,7 +251,16 @@ export class GameRenderer {
     
     // Parallax star layers for depth
     private starLayers: Array<{
-        stars: Array<{x: number, y: number, size: number, brightness: number}>,
+        stars: Array<{
+            x: number,
+            y: number,
+            coreSize: number,
+            glowRadius: number,
+            brightness: number,
+            hue: number,
+            saturation: number,
+            lightness: number
+        }>,
         parallaxFactor: number
     }> = [];
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
@@ -319,14 +328,31 @@ export class GameRenderer {
         };
         
         for (const layerConfig of Constants.STAR_LAYER_CONFIGS) {
-            const stars: Array<{x: number, y: number, size: number, brightness: number}> = [];
+            const stars: Array<{
+                x: number,
+                y: number,
+                coreSize: number,
+                glowRadius: number,
+                brightness: number,
+                hue: number,
+                saturation: number,
+                lightness: number
+            }> = [];
             
             for (let i = 0; i < layerConfig.count; i++) {
+                const size = layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]);
+                const warmBias = Math.pow(seededRandom(), 0.55);
+                const brightness = 0.05 + Math.pow(seededRandom(), 1.8) * 0.45;
+
                 stars.push({
                     x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
                     y: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
-                    size: layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]),
-                    brightness: 0.15 + seededRandom() * 0.55  // Vary brightness (darker sky)
+                    coreSize: size,
+                    glowRadius: size * (2.5 + seededRandom() * 6.0),
+                    brightness,
+                    hue: 22 + warmBias * 26,
+                    saturation: 78 + warmBias * 20,
+                    lightness: 62 + warmBias * 24
                 });
             }
             
@@ -371,7 +397,6 @@ export class GameRenderer {
             ctx.clearRect(0, 0, screenWidth, screenHeight);
 
             for (const layer of this.starLayers) {
-                ctx.fillStyle = '#FFFFFF';
                 const parallaxX = cameraX * layer.parallaxFactor;
                 const parallaxY = cameraY * layer.parallaxFactor;
 
@@ -383,8 +408,29 @@ export class GameRenderer {
 
                     if (wrappedX >= -100 && wrappedX <= screenWidth + 100 &&
                         wrappedY >= -100 && wrappedY <= screenHeight + 100) {
-                        ctx.globalAlpha = star.brightness;
-                        ctx.fillRect(wrappedX, wrappedY, star.size, star.size);
+                        const gradient = ctx.createRadialGradient(
+                            wrappedX,
+                            wrappedY,
+                            0,
+                            wrappedX,
+                            wrappedY,
+                            star.glowRadius
+                        );
+
+                        gradient.addColorStop(0, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, ${Math.min(1, star.brightness * 1.7)})`);
+                        gradient.addColorStop(0.24, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, ${star.brightness})`);
+                        gradient.addColorStop(1, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, 0)`);
+
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(wrappedX, wrappedY, star.glowRadius, 0, Math.PI * 2);
+                        ctx.fill();
+
+                        ctx.globalAlpha = Math.min(1, star.brightness * 1.8);
+                        ctx.fillStyle = `hsl(${star.hue}, ${star.saturation}%, ${Math.min(95, star.lightness + 12)}%)`;
+                        ctx.beginPath();
+                        ctx.arc(wrappedX, wrappedY, Math.max(0.45, star.coreSize * 0.5), 0, Math.PI * 2);
+                        ctx.fill();
                     }
                 }
                 ctx.globalAlpha = 1.0;
