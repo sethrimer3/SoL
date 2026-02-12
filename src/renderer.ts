@@ -66,6 +66,12 @@ type ShadowQuad = {
     ss2y: number;
 };
 
+type ShadowOccluder = {
+    position: Vector2D;
+    rotationRad: number;
+    sizeWorld: number;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -178,6 +184,8 @@ export class GameRenderer {
     private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
     private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
     private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
+    private lightingLayerCanvas: HTMLCanvasElement | null = null;
+    private lightingLayerCtx: CanvasRenderingContext2D | null = null;
     private readonly VELARIS_MIRROR_PARTICLE_TIME_SCALE = 0.35;
     private readonly VELARIS_MIRROR_PARTICLE_DRIFT_SPEED = 0.7;
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
@@ -1174,6 +1182,8 @@ export class GameRenderer {
             this.ctx.fill();
         }
         this.ctx.restore();
+
+        this.ctx.restore();
     }
 
     private drawVelarisFoundrySigil(
@@ -2145,6 +2155,9 @@ export class GameRenderer {
      * Draw a subtle lens flare effect when a sun is visible on screen
      */
     private drawLensFlare(sun: Sun): void {
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         
@@ -2163,6 +2176,7 @@ export class GameRenderer {
         // Only draw lens flare if sun is reasonably visible
         const maxDistance = Math.sqrt(canvasWidth * canvasWidth + canvasHeight * canvasHeight) / 2;
         if (distanceFromCenter > maxDistance + screenRadius) {
+            this.ctx.restore();
             return; // Sun is too far off screen
         }
         
@@ -2230,6 +2244,7 @@ export class GameRenderer {
             this.ctx.stroke();
         }
         
+        this.ctx.restore();
         this.ctx.restore();
     }
 
@@ -3822,61 +3837,134 @@ export class GameRenderer {
         return nextAlpha;
     }
 
-    private buildSunShadowQuads(sun: Sun, asteroids: Asteroid[]): ShadowQuad[] {
-        const quads: ShadowQuad[] = [];
+    private ensureLightingLayer(): CanvasRenderingContext2D {
+        if (!this.lightingLayerCanvas) {
+            this.lightingLayerCanvas = document.createElement('canvas');
+            this.lightingLayerCtx = this.lightingLayerCanvas.getContext('2d');
+        }
+
+        if (!this.lightingLayerCtx || !this.lightingLayerCanvas) {
+            throw new Error('Failed to initialize lighting layer context');
+        }
+
+        if (this.lightingLayerCanvas.width !== this.canvas.width || this.lightingLayerCanvas.height !== this.canvas.height) {
+            this.lightingLayerCanvas.width = this.canvas.width;
+            this.lightingLayerCanvas.height = this.canvas.height;
+        }
+
+        this.lightingLayerCtx.clearRect(0, 0, this.lightingLayerCanvas.width, this.lightingLayerCanvas.height);
+        return this.lightingLayerCtx;
+    }
+
+    private buildOrientedShadowOccluder(position: Vector2D, rotationRad: number, sizeWorld: number): Vector2D[] {
+        const halfSizeWorld = sizeWorld * 0.5;
+        const cosTheta = Math.cos(rotationRad);
+        const sinTheta = Math.sin(rotationRad);
+        const localCorners = [
+            { x: -halfSizeWorld, y: -halfSizeWorld },
+            { x: halfSizeWorld, y: -halfSizeWorld },
+            { x: halfSizeWorld, y: halfSizeWorld },
+            { x: -halfSizeWorld, y: halfSizeWorld }
+        ];
+        const worldVertices: Vector2D[] = [];
+
+        for (const corner of localCorners) {
+            worldVertices.push(new Vector2D(
+                position.x + corner.x * cosTheta - corner.y * sinTheta,
+                position.y + corner.x * sinTheta + corner.y * cosTheta
+            ));
+        }
+
+        return worldVertices;
+    }
+
+    private appendShadowQuadsFromVertices(sun: Sun, worldVertices: Vector2D[], quads: ShadowQuad[]): void {
         const sunX = sun.position.x;
         const sunY = sun.position.y;
+        const vertexCount = worldVertices.length;
         const sv1 = this.sunRayScreenPosA;
         const sv2 = this.sunRayScreenPosB;
         const ss1 = this.sunRayScreenPosC;
         const ss2 = this.sunRayScreenPosD;
 
-        for (const asteroid of asteroids) {
-            const worldVertices = asteroid.getWorldVertices();
-            const vertexCount = worldVertices.length;
+        for (let i = 0; i < vertexCount; i++) {
+            const v1 = worldVertices[i];
+            const v2 = worldVertices[(i + 1) % vertexCount];
+            const edgeCenterX = (v1.x + v2.x) * 0.5;
+            const edgeCenterY = (v1.y + v2.y) * 0.5;
+            const toSunX = sunX - edgeCenterX;
+            const toSunY = sunY - edgeCenterY;
+            const edgeNormalX = -(v2.y - v1.y);
+            const edgeNormalY = v2.x - v1.x;
+            const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
 
-            for (let i = 0; i < vertexCount; i++) {
-                const v1 = worldVertices[i];
-                const v2 = worldVertices[(i + 1) % vertexCount];
-                const edgeCenterX = (v1.x + v2.x) * 0.5;
-                const edgeCenterY = (v1.y + v2.y) * 0.5;
-                const toSunX = sunX - edgeCenterX;
-                const toSunY = sunY - edgeCenterY;
-                const edgeNormalX = -(v2.y - v1.y);
-                const edgeNormalY = v2.x - v1.x;
-                const dot = toSunX * edgeNormalX + toSunY * edgeNormalY;
+            if (dot >= 0) {
+                continue;
+            }
 
-                if (dot < 0) {
-                    const dirFromSun1X = v1.x - sunX;
-                    const dirFromSun1Y = v1.y - sunY;
-                    const dirFromSun2X = v2.x - sunX;
-                    const dirFromSun2Y = v2.y - sunY;
-                    const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
-                    const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
-                    const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
-                    const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
-                    const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
-                    const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
-                    const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
-                    const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
+            const dirFromSun1X = v1.x - sunX;
+            const dirFromSun1Y = v1.y - sunY;
+            const dirFromSun2X = v2.x - sunX;
+            const dirFromSun2Y = v2.y - sunY;
+            const dirFromSun1Length = Math.sqrt(dirFromSun1X * dirFromSun1X + dirFromSun1Y * dirFromSun1Y);
+            const dirFromSun2Length = Math.sqrt(dirFromSun2X * dirFromSun2X + dirFromSun2Y * dirFromSun2Y);
+            const dirFromSun1Scale = dirFromSun1Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun1Length;
+            const dirFromSun2Scale = dirFromSun2Length === 0 ? 0 : Constants.SHADOW_LENGTH / dirFromSun2Length;
+            const shadow1X = v1.x + dirFromSun1X * dirFromSun1Scale;
+            const shadow1Y = v1.y + dirFromSun1Y * dirFromSun1Scale;
+            const shadow2X = v2.x + dirFromSun2X * dirFromSun2Scale;
+            const shadow2Y = v2.y + dirFromSun2Y * dirFromSun2Scale;
 
-                    this.worldToScreenCoords(v1.x, v1.y, sv1);
-                    this.worldToScreenCoords(v2.x, v2.y, sv2);
-                    this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
-                    this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
+            this.worldToScreenCoords(v1.x, v1.y, sv1);
+            this.worldToScreenCoords(v2.x, v2.y, sv2);
+            this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
+            this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
-                    quads.push({
-                        sv1x: sv1.x,
-                        sv1y: sv1.y,
-                        sv2x: sv2.x,
-                        sv2y: sv2.y,
-                        ss1x: ss1.x,
-                        ss1y: ss1.y,
-                        ss2x: ss2.x,
-                        ss2y: ss2.y,
-                    });
+            quads.push({
+                sv1x: sv1.x,
+                sv1y: sv1.y,
+                sv2x: sv2.x,
+                sv2y: sv2.y,
+                ss1x: ss1.x,
+                ss1y: ss1.y,
+                ss2x: ss2.x,
+                ss2y: ss2.y,
+            });
+        }
+    }
+
+    private collectSunShadowOccluders(game: GameState): ShadowOccluder[] {
+        const occluders: ShadowOccluder[] = [];
+
+        for (const player of game.players) {
+            for (const unit of player.units) {
+                if (unit instanceof Starling) {
+                    occluders.push({ position: unit.position, rotationRad: unit.rotation, sizeWorld: 8 * 0.3 * Constants.STARLING_SPRITE_SCALE_FACTOR });
+                } else if (unit.isHero) {
+                    occluders.push({ position: unit.position, rotationRad: unit.rotation, sizeWorld: 8 * this.HERO_SPRITE_SCALE });
                 }
             }
+
+            for (const mirror of player.solarMirrors) {
+                occluders.push({ position: mirror.position, rotationRad: mirror.reflectionAngle, sizeWorld: 14 * 2.4 });
+            }
+        }
+
+        return occluders;
+    }
+
+    private buildSunShadowQuads(sun: Sun, game: GameState): ShadowQuad[] {
+        const quads: ShadowQuad[] = [];
+
+        for (const asteroid of game.asteroids) {
+            const worldVertices = asteroid.getWorldVertices();
+            this.appendShadowQuadsFromVertices(sun, worldVertices, quads);
+        }
+
+        const entityOccluders = this.collectSunShadowOccluders(game);
+        for (const occluder of entityOccluders) {
+            const worldVertices = this.buildOrientedShadowOccluder(occluder.position, occluder.rotationRad, occluder.sizeWorld);
+            this.appendShadowQuadsFromVertices(sun, worldVertices, quads);
         }
 
         return quads;
@@ -3897,11 +3985,15 @@ export class GameRenderer {
     }
 
     private drawNormalSunRays(game: GameState): void {
+        const targetCtx = this.ctx;
+        const lightingCtx = this.ensureLightingLayer();
+        this.ctx = lightingCtx;
+
         // Draw ambient lighting layers for each sun (brighter closer to sun)
         for (const sun of game.suns) {
             const sunScreenPos = this.worldToScreen(sun.position);
             const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
-            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+            const shadowQuads = this.buildSunShadowQuads(sun, game);
 
             // Create radial gradient centered on the sun
             const gradient = this.ctx.createRadialGradient(
@@ -3957,17 +4049,16 @@ export class GameRenderer {
             }
         }
 
-        // Draw asteroid shadows cast by sunlight
-        // Process each sun separately so overlapping shadows from the same sun don't stack
+        // Cut out any area occluded from the sun so the background remains visible through shadows.
         for (const sun of game.suns) {
-            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+            const shadowQuads = this.buildSunShadowQuads(sun, game);
             if (shadowQuads.length === 0) {
                 continue;
             }
 
             this.ctx.save();
-            this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.fillStyle = this.ASTEROID_SHADOW_COLOR;
+            this.ctx.globalCompositeOperation = 'destination-out';
+            this.ctx.fillStyle = 'rgba(0, 0, 0, 1)';
             this.ctx.beginPath();
 
             for (const quad of shadowQuads) {
@@ -3980,8 +4071,10 @@ export class GameRenderer {
 
             this.ctx.fill();
             this.ctx.restore();
-
         }
+
+        this.ctx = targetCtx;
+        targetCtx.drawImage(this.lightingLayerCanvas!, 0, 0);
     }
 
     private drawUltraVolumetricShafts(sun: Sun, gameTimeSec: number, shadowQuads: ShadowQuad[]): void {
@@ -4113,7 +4206,7 @@ export class GameRenderer {
         this.ctx.globalCompositeOperation = 'multiply';
 
         for (const sun of game.suns) {
-            const shadowQuads = this.buildSunShadowQuads(sun, game.asteroids);
+            const shadowQuads = this.buildSunShadowQuads(sun, game);
             if (shadowQuads.length === 0) {
                 continue;
             }
