@@ -27,6 +27,9 @@ export interface Particle {
     driftPhase: number;
     driftRadiusPx: number;
     speedMultiplier: number; // Random multiplier for natural motion (0.8-1.2)
+    colorWarmthShift: number;
+    colorLightnessShift: number;
+    colorSaturationShift: number;
 }
 
 export interface BackgroundParticle {

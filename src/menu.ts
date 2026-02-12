@@ -377,6 +377,7 @@ export class MainMenu {
         );
         this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
+        this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
         menu.appendChild(this.createBuildNumberLabel());
         this.testLevelButton = this.createTestLevelButton();
@@ -2671,6 +2672,7 @@ export class MainMenu {
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
                 this.atmosphereLayer?.setGraphicsQuality(value);
+                this.menuParticleLayer?.setGraphicsQuality(value);
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;

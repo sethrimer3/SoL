@@ -19,6 +19,9 @@ export class ParticleMenuLayer {
     private static readonly TRANSITION_DURATION_MS = 600;
     private static readonly SPEED_MULTIPLIER_MIN = 1.8;
     private static readonly SPEED_MULTIPLIER_MAX = 16;
+    private static readonly ULTRA_BASE_HALO_ALPHA = 0.2;
+    private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MIN = 3.3;
+    private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -37,6 +40,7 @@ export class ParticleMenuLayer {
     private particleOpacity: number = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
     private menuOpacity: number = 1;
     private transitionStartMs: number | null = null;
+    private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -118,6 +122,10 @@ export class ParticleMenuLayer {
         this.densityMultiplier = Math.max(0.5, multiplier);
     }
 
+    public setGraphicsQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
+        this.graphicsQuality = quality;
+    }
+
     public startTransition(): void {
         this.transitionStartMs = performance.now();
     }
@@ -180,9 +188,15 @@ export class ParticleMenuLayer {
             particle.baseTargetX = relocatedTarget.x;
             particle.baseTargetY = relocatedTarget.y;
             const targetColor = this.parseColor(target.color);
-            particle.targetColorR = targetColor.r;
-            particle.targetColorG = targetColor.g;
-            particle.targetColorB = targetColor.b;
+            const variedColor = this.applyColorVariation(
+                targetColor,
+                particle.colorWarmthShift,
+                particle.colorLightnessShift,
+                particle.colorSaturationShift
+            );
+            particle.targetColorR = variedColor.r;
+            particle.targetColorG = variedColor.g;
+            particle.targetColorB = variedColor.b;
             particle.sizePx = ParticleMenuLayer.PARTICLE_SIZE_PX;
             updatedParticles.push(particle);
         }
@@ -217,6 +231,9 @@ export class ParticleMenuLayer {
             driftPhase,
             driftRadiusPx,
             speedMultiplier,
+            colorWarmthShift: this.randomRange(-0.075, 0.075),
+            colorLightnessShift: this.randomRange(-0.08, 0.1),
+            colorSaturationShift: this.randomRange(-0.1, 0.12),
         };
     }
 
@@ -312,10 +329,45 @@ export class ParticleMenuLayer {
         this.context.globalCompositeOperation = 'lighter';
         this.context.globalAlpha = this.particleOpacity;
 
+        const isUltraQuality = this.graphicsQuality === 'ultra';
         for (const particle of this.particles) {
             const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
             const green = Math.min(255, Math.max(0, Math.round(particle.colorG)));
             const blue = Math.min(255, Math.max(0, Math.round(particle.colorB)));
+
+            if (isUltraQuality) {
+                const haloAlpha = Math.min(0.7, Math.max(0.06,
+                    ParticleMenuLayer.ULTRA_BASE_HALO_ALPHA
+                    + particle.colorLightnessShift * 0.45
+                    + particle.colorSaturationShift * 0.15
+                ));
+                const haloRadiusMultiplier = Math.min(
+                    ParticleMenuLayer.ULTRA_HALO_RADIUS_MULTIPLIER_MAX,
+                    Math.max(
+                        ParticleMenuLayer.ULTRA_HALO_RADIUS_MULTIPLIER_MIN,
+                        ParticleMenuLayer.ULTRA_HALO_RADIUS_MULTIPLIER_MIN
+                        + (particle.speedMultiplier / ParticleMenuLayer.SPEED_MULTIPLIER_MAX) * 1.1
+                    )
+                );
+                const haloRadiusPx = particle.sizePx * haloRadiusMultiplier;
+                const haloGradient = this.context.createRadialGradient(
+                    particle.x,
+                    particle.y,
+                    0,
+                    particle.x,
+                    particle.y,
+                    haloRadiusPx
+                );
+                haloGradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, ${haloAlpha.toFixed(3)})`);
+                haloGradient.addColorStop(0.3, `rgba(${red}, ${green}, ${blue}, ${(haloAlpha * 0.42).toFixed(3)})`);
+                haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${(haloAlpha * 0.12).toFixed(3)})`);
+                haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
+                this.context.fillStyle = haloGradient;
+                this.context.beginPath();
+                this.context.arc(particle.x, particle.y, haloRadiusPx, 0, Math.PI * 2);
+                this.context.fill();
+            }
+
             this.context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
             this.context.beginPath();
             this.context.arc(particle.x, particle.y, particle.sizePx, 0, Math.PI * 2);
@@ -426,6 +478,105 @@ export class ParticleMenuLayer {
         }
 
         return targets;
+    }
+
+
+    private applyColorVariation(
+        color: { r: number; g: number; b: number },
+        warmthShift: number,
+        lightnessShift: number,
+        saturationShift: number
+    ): { r: number; g: number; b: number } {
+        const hsl = this.rgbToHsl(color.r, color.g, color.b);
+        const adjustedHue = this.wrapHue(hsl.h + warmthShift * 0.09);
+        const adjustedSaturation = Math.max(0, Math.min(1, hsl.s + saturationShift));
+        const adjustedLightness = Math.max(0, Math.min(1, hsl.l + lightnessShift));
+        const rgb = this.hslToRgb(adjustedHue, adjustedSaturation, adjustedLightness);
+        return { r: rgb.r, g: rgb.g, b: rgb.b };
+    }
+
+    private rgbToHsl(red: number, green: number, blue: number): { h: number; s: number; l: number } {
+        const r = red / 255;
+        const g = green / 255;
+        const b = blue / 255;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const lightness = (max + min) / 2;
+
+        if (max === min) {
+            return { h: 0, s: 0, l: lightness };
+        }
+
+        const chroma = max - min;
+        const saturation = lightness > 0.5
+            ? chroma / (2 - max - min)
+            : chroma / (max + min);
+
+        let hue: number;
+        if (max === r) {
+            hue = ((g - b) / chroma + (g < b ? 6 : 0)) / 6;
+        } else if (max === g) {
+            hue = ((b - r) / chroma + 2) / 6;
+        } else {
+            hue = ((r - g) / chroma + 4) / 6;
+        }
+
+        return { h: hue, s: saturation, l: lightness };
+    }
+
+    private hslToRgb(hue: number, saturation: number, lightness: number): { r: number; g: number; b: number } {
+        if (saturation === 0) {
+            const gray = Math.round(lightness * 255);
+            return { r: gray, g: gray, b: gray };
+        }
+
+        const q = lightness < 0.5
+            ? lightness * (1 + saturation)
+            : lightness + saturation - lightness * saturation;
+        const p = 2 * lightness - q;
+        const red = this.hueToRgb(p, q, hue + 1 / 3);
+        const green = this.hueToRgb(p, q, hue);
+        const blue = this.hueToRgb(p, q, hue - 1 / 3);
+        return {
+            r: Math.round(red * 255),
+            g: Math.round(green * 255),
+            b: Math.round(blue * 255),
+        };
+    }
+
+    private hueToRgb(p: number, q: number, t: number): number {
+        let normalized = t;
+        if (normalized < 0) {
+            normalized += 1;
+        }
+        if (normalized > 1) {
+            normalized -= 1;
+        }
+        if (normalized < 1 / 6) {
+            return p + (q - p) * 6 * normalized;
+        }
+        if (normalized < 1 / 2) {
+            return q;
+        }
+        if (normalized < 2 / 3) {
+            return p + (q - p) * (2 / 3 - normalized) * 6;
+        }
+        return p;
+    }
+
+    private wrapHue(hue: number): number {
+        let wrapped = hue;
+        while (wrapped < 0) {
+            wrapped += 1;
+        }
+        while (wrapped > 1) {
+            wrapped -= 1;
+        }
+        return wrapped;
+    }
+
+    private randomRange(min: number, max: number): number {
+        return min + Math.random() * (max - min);
     }
 
     private parseColor(color: string): { r: number; g: number; b: number } {
