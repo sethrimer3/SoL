@@ -50,6 +50,11 @@ type SunRenderCache = {
     shaftTextureInner: HTMLCanvasElement;
 };
 
+type UnitGlowRenderCache = {
+    texture: HTMLCanvasElement;
+    radiusPx: number;
+};
+
 type ShadowQuad = {
     sv1x: number;
     sv1y: number;
@@ -215,6 +220,7 @@ export class GameRenderer {
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
+    private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private enemyVisibilityLastUpdateSec = Number.NaN;
     private enemyVisibilityFrameDeltaSec = 0;
@@ -225,6 +231,8 @@ export class GameRenderer {
     private readonly ULTRA_SOLAR_EMBER_COUNT = 96;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
+    private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
+    private readonly UNIT_GLOW_ALPHA = 0.2;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -1652,6 +1660,89 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
+    private drawCachedUnitGlow(screenPos: Vector2D, radiusPx: number, color: string, alphaScale: number = 1): void {
+        const clampedRadiusPx = Math.max(6, Math.round(radiusPx));
+        const glowTexture = this.getOrCreateUnitGlowTexture(clampedRadiusPx, color);
+        const drawSize = glowTexture.width;
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+        this.ctx.globalAlpha = Math.max(0, Math.min(1, this.UNIT_GLOW_ALPHA * alphaScale));
+        this.ctx.drawImage(
+            glowTexture,
+            screenPos.x - drawSize * 0.5,
+            screenPos.y - drawSize * 0.5,
+            drawSize,
+            drawSize
+        );
+        this.ctx.restore();
+    }
+
+    private getOrCreateUnitGlowTexture(radiusPx: number, color: string): HTMLCanvasElement {
+        const cacheKey = `${radiusPx}:${color}`;
+        const cached = this.unitGlowRenderCache.get(cacheKey);
+        if (cached) {
+            return cached.texture;
+        }
+
+        const textureRadiusPx = Math.max(2, Math.round(radiusPx * 1.8));
+        const textureSize = textureRadiusPx * 2;
+        const glowCanvas = document.createElement('canvas');
+        glowCanvas.width = textureSize;
+        glowCanvas.height = textureSize;
+        const glowCtx = glowCanvas.getContext('2d');
+
+        if (!glowCtx) {
+            return glowCanvas;
+        }
+
+        const gradient = glowCtx.createRadialGradient(
+            textureRadiusPx,
+            textureRadiusPx,
+            0,
+            textureRadiusPx,
+            textureRadiusPx,
+            textureRadiusPx
+        );
+        gradient.addColorStop(0, this.withAlpha(color, 0.58));
+        gradient.addColorStop(0.42, this.withAlpha(color, 0.22));
+        gradient.addColorStop(1, this.withAlpha(color, 0));
+
+        glowCtx.fillStyle = gradient;
+        glowCtx.beginPath();
+        glowCtx.arc(textureRadiusPx, textureRadiusPx, textureRadiusPx, 0, Math.PI * 2);
+        glowCtx.fill();
+
+        this.unitGlowRenderCache.set(cacheKey, {
+            texture: glowCanvas,
+            radiusPx,
+        });
+
+        return glowCanvas;
+    }
+
+    private withAlpha(color: string, alpha: number): string {
+        if (color.startsWith('#')) {
+            const hex = color.slice(1);
+            if (hex.length === 6) {
+                const r = Number.parseInt(hex.slice(0, 2), 16);
+                const g = Number.parseInt(hex.slice(2, 4), 16);
+                const b = Number.parseInt(hex.slice(4, 6), 16);
+                return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+            }
+        }
+
+        const rgbaMatch = color.match(/rgba?\(([^)]+)\)/);
+        if (rgbaMatch) {
+            const components = rgbaMatch[1].split(',').map(component => component.trim());
+            if (components.length >= 3) {
+                return `rgba(${components[0]}, ${components[1]}, ${components[2]}, ${Math.max(0, Math.min(1, alpha))})`;
+            }
+        }
+
+        return color;
+    }
+
     /**
      * Draw the universal unit/structure selection ring.
      */
@@ -1977,7 +2068,7 @@ export class GameRenderer {
         this.ctx.closePath();
         this.ctx.clip();
 
-        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.fillStyle = this.withAlpha('#0D0A19', 0.55);
         this.ctx.fillRect(screenPos.x - screenRadius, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
 
         // Restore context to draw right half
@@ -1990,7 +2081,7 @@ export class GameRenderer {
         this.ctx.closePath();
         this.ctx.clip();
 
-        this.ctx.fillStyle = '#000000';
+        this.ctx.fillStyle = this.ASTEROID_SHADOW_COLOR;
         this.ctx.fillRect(screenPos.x, screenPos.y - screenRadius, screenRadius, screenRadius * 2);
 
         // Restore context
@@ -3897,7 +3988,7 @@ export class GameRenderer {
 
             this.ctx.save();
             this.ctx.globalCompositeOperation = 'source-over';
-            this.ctx.fillStyle = 'rgba(0, 0, 14, 0.62)';
+            this.ctx.fillStyle = this.ASTEROID_SHADOW_COLOR;
             this.ctx.beginPath();
 
             for (const quad of shadowQuads) {
@@ -3911,20 +4002,6 @@ export class GameRenderer {
             this.ctx.fill();
             this.ctx.restore();
 
-            // Slightly lighten the interior of shadowed areas for readable sight ranges
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'screen';
-            this.ctx.fillStyle = 'rgba(255, 152, 88, 0.08)';
-            this.ctx.beginPath();
-            for (const quad of shadowQuads) {
-                this.ctx.moveTo(quad.sv1x, quad.sv1y);
-                this.ctx.lineTo(quad.sv2x, quad.sv2y);
-                this.ctx.lineTo(quad.ss2x, quad.ss2y);
-                this.ctx.lineTo(quad.ss1x, quad.ss1y);
-                this.ctx.closePath();
-            }
-            this.ctx.fill();
-            this.ctx.restore();
         }
     }
 
@@ -4657,6 +4734,12 @@ export class GameRenderer {
             particleSpread: size * 0.6
         });
 
+        const glowColor = shouldDim
+            ? this.darkenColor(displayColor, Constants.SHADE_OPACITY)
+            : displayColor;
+        const glowAlphaScale = isSelected ? 1.3 : 1;
+        this.drawCachedUnitGlow(screenPos, size * (isSelected ? 2.25 : 1.95), glowColor, glowAlphaScale * visibilityAlpha);
+
         // Draw unit body (circle) - use darkened color if should dim
         const heroSpritePath = unit.isHero ? this.getHeroSpritePath(unit) : null;
         const tintColor = shouldDim
@@ -4695,10 +4778,10 @@ export class GameRenderer {
         }
 
         if (this.isFancyGraphicsEnabled) {
-            const glowColor = shouldDim ? this.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor;
+            const bloomColor = shouldDim ? this.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor;
             const glowRadius = size * (isSelected ? 1.9 : 1.5);
             const glowIntensity = (isSelected ? 0.45 : 0.3) * visibilityAlpha;
-            this.drawFancyBloom(screenPos, glowRadius, glowColor, glowIntensity);
+            this.drawFancyBloom(screenPos, glowRadius, bloomColor, glowIntensity);
         }
 
         this.ctx.restore();
@@ -5877,6 +5960,8 @@ export class GameRenderer {
             this.drawLadAura(screenPos, size, auraColor, ownerSide);
         }
         
+        this.drawCachedUnitGlow(screenPos, size * (isSelected ? 2.1 : 1.85), displayColor, isSelected ? 1.2 : 1);
+
         if (isVelarisStarling) {
             this.drawVelarisStarlingParticles(screenPos, size, starling, displayColor, game.gameTime);
         } else {
