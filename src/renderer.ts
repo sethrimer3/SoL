@@ -3065,7 +3065,12 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, baseSize, 0, Math.PI * 2);
         this.ctx.fill();
 
-        if (isHighGraphics && lightAngle !== null && sunProximity > 0) {
+        if (isHighGraphics && !inShadow && !ladSun && game.suns.length > 0) {
+            const shadowAlphaScale = this.graphicsQuality === 'ultra' ? 1 : 0.72;
+            this.drawParticleSunShadowTrail(particle.position, screenPos, baseSize, game.suns, Constants.DUST_SHADOW_MAX_DISTANCE_PX, 1, shadowAlphaScale);
+        }
+
+        if (isHighGraphics && lightAngle !== null && sunProximity > 0 && !inShadow) {
             const qualityFactor = this.graphicsQuality === 'ultra' ? 1.0 : 0.8;
             const sheenArc = Math.PI * 0.55;
             const litSheenAlpha = (0.08 + sunProximity * 0.12 + glowLevel * 0.09) * qualityFactor;
@@ -3081,6 +3086,46 @@ export class GameRenderer {
             this.ctx.lineWidth = Math.max(0.22, baseSize * 0.85);
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, baseSize * 0.9, shadowAngle - sheenArc / 2, shadowAngle + sheenArc / 2);
+            this.ctx.stroke();
+        }
+    }
+
+    private drawParticleSunShadowTrail(
+        worldPos: Vector2D,
+        screenPos: Vector2D,
+        screenSize: number,
+        suns: Sun[],
+        maxDistance: number,
+        opacity: number,
+        alphaScale: number
+    ): void {
+        for (const sun of suns) {
+            const dx = worldPos.x - sun.position.x;
+            const dy = worldPos.y - sun.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance <= 0 || distance >= maxDistance) {
+                continue;
+            }
+
+            const invDistance = 1 / distance;
+            const dirX = dx * invDistance;
+            const dirY = dy * invDistance;
+            const proximity = 1 - Math.max(0, Math.min(1, distance / maxDistance));
+            const shadowLength = Math.max(
+                screenSize * 2.4,
+                Constants.DUST_SHADOW_LENGTH_PX * this.zoom * (0.9 + proximity * 0.8)
+            );
+            const tailX = screenPos.x + dirX * shadowLength;
+            const tailY = screenPos.y + dirY * shadowLength;
+            const gradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
+            gradient.addColorStop(0, `rgba(2, 3, 10, ${(0.34 * opacity * alphaScale).toFixed(4)})`);
+            gradient.addColorStop(0.55, `rgba(2, 3, 10, ${(0.16 * opacity * alphaScale).toFixed(4)})`);
+            gradient.addColorStop(1, 'rgba(2, 3, 10, 0)');
+            this.ctx.strokeStyle = gradient;
+            this.ctx.lineWidth = Math.max(0.35, screenSize * (0.7 + proximity * 0.65));
+            this.ctx.beginPath();
+            this.ctx.moveTo(screenPos.x, screenPos.y);
+            this.ctx.lineTo(tailX, tailY);
             this.ctx.stroke();
         }
     }
@@ -4983,33 +5028,16 @@ export class GameRenderer {
 
         if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
             const alphaScale = this.graphicsQuality === 'ultra' ? 1 : 0.72;
-            for (const sun of game.suns) {
-                const dx = particle.position.x - sun.position.x;
-                const dy = particle.position.y - sun.position.y;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                if (distance <= 0 || distance >= Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX) {
-                    continue;
-                }
-
-                const invDistance = 1 / distance;
-                const dirX = dx * invDistance;
-                const dirY = dy * invDistance;
-                const proximity = 1 - Math.max(0, Math.min(1, distance / Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX));
-                const size = Math.max(1.1, (particle.spriteFragment?.width ?? 2) * this.zoom * 0.75);
-                const shadowLength = Math.max(size * 2.4, Constants.DUST_SHADOW_LENGTH_PX * this.zoom * (0.9 + proximity * 0.8));
-                const tailX = screenPos.x + dirX * shadowLength;
-                const tailY = screenPos.y + dirY * shadowLength;
-                const gradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-                gradient.addColorStop(0, `rgba(2, 3, 10, ${(0.34 * particle.opacity * alphaScale).toFixed(4)})`);
-                gradient.addColorStop(0.55, `rgba(2, 3, 10, ${(0.16 * particle.opacity * alphaScale).toFixed(4)})`);
-                gradient.addColorStop(1, 'rgba(2, 3, 10, 0)');
-                this.ctx.strokeStyle = gradient;
-                this.ctx.lineWidth = Math.max(0.35, size * (0.7 + proximity * 0.65));
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(tailX, tailY);
-                this.ctx.stroke();
-            }
+            const size = Math.max(1.1, (particle.spriteFragment?.width ?? 2) * this.zoom * 0.75);
+            this.drawParticleSunShadowTrail(
+                particle.position,
+                screenPos,
+                size,
+                game.suns,
+                Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX,
+                particle.opacity,
+                alphaScale
+            );
         }
 
         if (particle.spriteFragment) {
