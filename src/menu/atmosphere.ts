@@ -14,6 +14,10 @@ export class MenuAtmosphereLayer {
     private static readonly ASTEROID_ROTATION_MAX_RAD = 0.014;
     private static readonly SUN_RADIUS_PX = 120;
     private static readonly SUN_GLOW_RADIUS_PX = 320;
+    private static readonly STAR_COUNT = 420;
+    private static readonly STAR_PARALLAX_LAYERS = 3;
+    private static readonly STAR_BASE_DRIFT_PX = 0.06;
+    private static readonly STAR_FLICKER_SPEED = 0.0012;
     private static readonly SUN_OFFSET_X_PX = -28;
     private static readonly SUN_OFFSET_Y_PX = -22;
     private static readonly SHADOW_LENGTH_BASE_PX = 120;
@@ -30,6 +34,16 @@ export class MenuAtmosphereLayer {
     private heightPx: number = 0;
     private sunSprite: HTMLImageElement;
     private opacity: number = 0.2;
+    private stars: {
+        x: number;
+        y: number;
+        sizePx: number;
+        layerIndex: number;
+        phase: number;
+        brightness: number;
+        emberColor: string;
+    }[] = [];
+    private starGlowCacheCanvas: HTMLCanvasElement;
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -51,10 +65,12 @@ export class MenuAtmosphereLayer {
 
         this.sunSprite = new Image();
         this.sunSprite.src = sunSpritePath;
+        this.starGlowCacheCanvas = this.createStarGlowCacheCanvas();
 
         this.container.appendChild(this.canvas);
         this.resize();
         this.initializeAsteroids();
+        this.initializeStars();
         // Don't auto-start - let resumeMenuAnimations() start it after menu is in DOM
     }
 
@@ -83,6 +99,7 @@ export class MenuAtmosphereLayer {
         this.canvas.width = Math.round(width * devicePixelRatio);
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        this.initializeStars();
     }
 
     public destroy(): void {
@@ -200,12 +217,111 @@ export class MenuAtmosphereLayer {
 
     private render(): void {
         this.context.clearRect(0, 0, this.widthPx, this.heightPx);
+        this.renderStars();
         this.renderSunGlow();
         this.renderAsteroids();
     }
 
+    private initializeStars(): void {
+        this.stars = [];
+        const emberPalette = ['#FFCF66', '#FF9A2A', '#FF6A00'];
+        for (let i = 0; i < MenuAtmosphereLayer.STAR_COUNT; i++) {
+            this.stars.push({
+                x: Math.random() * Math.max(1, this.widthPx),
+                y: Math.random() * Math.max(1, this.heightPx),
+                sizePx: this.randomRange(0.8, 2.1),
+                layerIndex: Math.floor(Math.random() * MenuAtmosphereLayer.STAR_PARALLAX_LAYERS),
+                phase: Math.random() * Math.PI * 2,
+                brightness: this.randomRange(0.4, 1),
+                emberColor: emberPalette[Math.floor(Math.random() * emberPalette.length)],
+            });
+        }
+    }
+
+    private renderStars(): void {
+        const nowMs = performance.now();
+        const sunCenter = this.getSunCenter();
+        const cacheRadiusPx = this.starGlowCacheCanvas.width * 0.5;
+
+        this.context.save();
+        this.context.globalCompositeOperation = 'lighter';
+
+        for (let i = 0; i < this.stars.length; i++) {
+            const star = this.stars[i];
+            const depthScale = (star.layerIndex + 1) / MenuAtmosphereLayer.STAR_PARALLAX_LAYERS;
+            const parallaxOffsetX = (sunCenter.x - this.widthPx * 0.5) * depthScale * 0.05;
+            const parallaxOffsetY = (sunCenter.y - this.heightPx * 0.5) * depthScale * 0.05;
+
+            const twinkle = 0.7 + 0.3 * Math.sin(star.phase + nowMs * MenuAtmosphereLayer.STAR_FLICKER_SPEED);
+            const alpha = star.brightness * twinkle * (0.45 + depthScale * 0.55);
+
+            const renderedX = (star.x + parallaxOffsetX + nowMs * MenuAtmosphereLayer.STAR_BASE_DRIFT_PX * depthScale) % this.widthPx;
+            const renderedY = (star.y + parallaxOffsetY) % this.heightPx;
+            const sizePx = star.sizePx * (0.8 + depthScale * 0.6);
+
+            this.context.globalAlpha = alpha;
+            this.context.fillStyle = star.emberColor;
+            this.context.beginPath();
+            this.context.arc(renderedX, renderedY, sizePx * 0.45, 0, Math.PI * 2);
+            this.context.fill();
+
+            this.context.drawImage(
+                this.starGlowCacheCanvas,
+                renderedX - cacheRadiusPx,
+                renderedY - cacheRadiusPx,
+                cacheRadiusPx * 2,
+                cacheRadiusPx * 2
+            );
+        }
+
+        this.context.restore();
+        this.context.globalAlpha = 1;
+    }
+
+    private createStarGlowCacheCanvas(): HTMLCanvasElement {
+        const cacheCanvas = document.createElement('canvas');
+        cacheCanvas.width = 48;
+        cacheCanvas.height = 48;
+        const cacheContext = cacheCanvas.getContext('2d');
+        if (!cacheContext) {
+            return cacheCanvas;
+        }
+
+        const centerPx = cacheCanvas.width * 0.5;
+        const glowGradient = cacheContext.createRadialGradient(centerPx, centerPx, 0, centerPx, centerPx, centerPx);
+        glowGradient.addColorStop(0, 'rgba(255, 241, 184, 0.8)');
+        glowGradient.addColorStop(0.35, 'rgba(255, 179, 71, 0.55)');
+        glowGradient.addColorStop(0.75, 'rgba(255, 140, 40, 0.22)');
+        glowGradient.addColorStop(1, 'rgba(255, 106, 0, 0)');
+
+        cacheContext.fillStyle = glowGradient;
+        cacheContext.beginPath();
+        cacheContext.arc(centerPx, centerPx, centerPx, 0, Math.PI * 2);
+        cacheContext.fill();
+        return cacheCanvas;
+    }
+
     private renderSunGlow(): void {
         const sunCenter = this.getSunCenter();
+        this.context.save();
+        this.context.globalCompositeOperation = 'lighter';
+
+        const whiteHotCore = this.context.createRadialGradient(
+            sunCenter.x,
+            sunCenter.y,
+            0,
+            sunCenter.x,
+            sunCenter.y,
+            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.48
+        );
+        whiteHotCore.addColorStop(0, '#FFF8E6');
+        whiteHotCore.addColorStop(0.65, '#FFF2B0');
+        whiteHotCore.addColorStop(1, 'rgba(255, 210, 90, 0)');
+        this.context.fillStyle = whiteHotCore;
+        this.context.beginPath();
+        this.context.arc(sunCenter.x, sunCenter.y, MenuAtmosphereLayer.SUN_RADIUS_PX * 0.52, 0, Math.PI * 2);
+        this.context.fill();
+
         const gradient = this.context.createRadialGradient(
             sunCenter.x,
             sunCenter.y,
@@ -214,10 +330,11 @@ export class MenuAtmosphereLayer {
             sunCenter.y,
             MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
         );
-        gradient.addColorStop(0, 'rgba(255, 240, 200, 0.9)');
-        gradient.addColorStop(0.4, 'rgba(255, 200, 120, 0.5)');
-        gradient.addColorStop(0.7, 'rgba(255, 150, 80, 0.25)');
-        gradient.addColorStop(1, 'rgba(255, 120, 40, 0)');
+        gradient.addColorStop(0, 'rgba(255, 214, 90, 0.95)');
+        gradient.addColorStop(0.3, 'rgba(255, 179, 71, 0.65)');
+        gradient.addColorStop(0.55, 'rgba(255, 158, 58, 0.45)');
+        gradient.addColorStop(0.75, 'rgba(255, 122, 26, 0.28)');
+        gradient.addColorStop(1, 'rgba(230, 92, 0, 0)');
 
         this.context.fillStyle = gradient;
         this.context.beginPath();
@@ -240,7 +357,18 @@ export class MenuAtmosphereLayer {
                 diameterPx
             );
         } else {
-            this.context.fillStyle = 'rgba(255, 215, 120, 0.95)';
+            const plasmaGradient = this.context.createRadialGradient(
+                sunCenter.x,
+                sunCenter.y,
+                0,
+                sunCenter.x,
+                sunCenter.y,
+                MenuAtmosphereLayer.SUN_RADIUS_PX
+            );
+            plasmaGradient.addColorStop(0, '#FFD65A');
+            plasmaGradient.addColorStop(0.55, '#FFB347');
+            plasmaGradient.addColorStop(1, '#FF8C2E');
+            this.context.fillStyle = plasmaGradient;
             this.context.beginPath();
             this.context.arc(
                 sunCenter.x,
@@ -251,6 +379,8 @@ export class MenuAtmosphereLayer {
             );
             this.context.fill();
         }
+
+        this.context.restore();
     }
 
     private renderAsteroids(): void {
@@ -294,7 +424,16 @@ export class MenuAtmosphereLayer {
     }
 
     private renderAsteroidBody(asteroid: MenuAsteroid, points: { x: number; y: number }[]): void {
-        this.context.fillStyle = 'rgba(170, 160, 140, 0.8)';
+        const lightGradient = this.context.createLinearGradient(
+            asteroid.x - asteroid.radiusPx,
+            asteroid.y - asteroid.radiusPx,
+            asteroid.x + asteroid.radiusPx,
+            asteroid.y + asteroid.radiusPx
+        );
+        lightGradient.addColorStop(0, '#FFC46B');
+        lightGradient.addColorStop(1, '#1A2238');
+
+        this.context.fillStyle = lightGradient;
         this.context.beginPath();
         for (let i = 0; i < points.length; i++) {
             const point = points[i];
@@ -307,7 +446,7 @@ export class MenuAtmosphereLayer {
         this.context.closePath();
         this.context.fill();
 
-        this.context.strokeStyle = 'rgba(120, 105, 90, 0.65)';
+        this.context.strokeStyle = 'rgba(255, 196, 107, 0.35)';
         this.context.lineWidth = 1;
         this.context.stroke();
     }
