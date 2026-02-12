@@ -28,6 +28,7 @@ import { renderLoadoutSelectionScreen } from './menu/screens/loadout-selection-s
 import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
 import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
+import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { OnlineNetworkManager } from './online-network';
@@ -94,7 +95,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -2111,10 +2112,10 @@ export class MainMenu {
                 
                 if (room) {
                     console.log('Lobby created successfully:', room);
-                    // TODO: Navigate to lobby detail screen
-                    alert(`Lobby "${lobbyName}" created! Room ID: ${room.id}`);
-                    // Refresh the screen to show the new lobby
-                    await this.renderCustomLobbyScreen(this.contentElement);
+                    // Navigate to lobby detail screen
+                    this.currentScreen = 'lobby-detail';
+                    this.startMenuTransition();
+                    await this.renderLobbyDetailScreen(this.contentElement);
                 } else {
                     alert('Failed to create lobby. Please try again.');
                 }
@@ -2131,8 +2132,10 @@ export class MainMenu {
                 
                 if (success) {
                     console.log('Joined lobby successfully');
-                    // TODO: Navigate to lobby detail screen
-                    alert(`Joined lobby successfully!`);
+                    // Navigate to lobby detail screen
+                    this.currentScreen = 'lobby-detail';
+                    this.startMenuTransition();
+                    await this.renderLobbyDetailScreen(this.contentElement);
                 } else {
                     alert('Failed to join lobby. It may be full or no longer available.');
                 }
@@ -2283,14 +2286,250 @@ export class MainMenu {
                     this.matchmakingPollInterval = null;
                 }
                 
-                // TODO: Create game room with matched players
-                alert('Match found! (Game initialization not yet implemented)');
-                
-                // Leave queue and return to matchmaking screen
+                // Leave matchmaking queue
                 await this.onlineNetworkManager.leaveMatchmakingQueue();
-                this.render2v2MatchmakingScreen(this.contentElement);
+                
+                // Create balanced teams based on MMR
+                const allPlayers = [
+                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
+                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
+                ];
+                
+                // Sort by MMR and alternate teams for balance
+                allPlayers.sort((a, b) => b.mmr - a.mmr);
+                
+                // Create player configs (highest MMR with lowest, etc.)
+                // Ensure we have exactly 4 players
+                if (allPlayers.length === 4) {
+                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
+                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
+                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
+                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
+                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
+                    ];
+                    
+                    // Update settings
+                    this.settings.gameMode = '2v2-matchmaking';
+                    
+                    // Hide menu and start game
+                    this.hide();
+                    
+                    // Dispatch event to start 4-player game
+                    const event = new CustomEvent('start4PlayerGame', {
+                        detail: {
+                            playerConfigs: playerConfigs,
+                            settings: this.settings,
+                            roomId: null // No room for matchmaking
+                        }
+                    });
+                    window.dispatchEvent(event);
+                    
+                    return;
+                }
             }
         }, 5000); // Poll every 5 seconds
+    }
+
+    private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+            alert('Online networking not available.');
+            this.currentScreen = 'custom-lobby';
+            this.startMenuTransition();
+            await this.renderCustomLobbyScreen(this.contentElement);
+            return;
+        }
+
+        // Get current room and players
+        const room = this.onlineNetworkManager.getCurrentRoom();
+        if (!room) {
+            alert('Not in a lobby.');
+            this.currentScreen = 'custom-lobby';
+            this.startMenuTransition();
+            await this.renderCustomLobbyScreen(this.contentElement);
+            return;
+        }
+
+        const players = await this.onlineNetworkManager.getRoomPlayers();
+        const isHost = this.onlineNetworkManager.isRoomHost();
+        const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
+
+        renderLobbyDetailScreen(container, {
+            roomId: room.id,
+            roomName: room.name,
+            isHost: isHost,
+            players: players,
+            localPlayerId: localPlayerId,
+            onSetTeam: async (playerId: string, teamId: number) => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.setPlayerTeam(playerId, teamId);
+                if (success) {
+                    // Refresh the screen to show updated teams
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onSetSlotType: async (playerId: string, slotType: 'player' | 'ai' | 'spectator') => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.setSlotType(playerId, slotType);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onSetAIDifficulty: async (playerId: string, difficulty: 'easy' | 'normal' | 'hard') => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.setAIDifficulty(playerId, difficulty);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onSetFaction: async (faction: Faction) => {
+                if (!this.onlineNetworkManager) return;
+                this.settings.selectedFaction = faction;
+                const success = await this.onlineNetworkManager.setPlayerFaction(faction);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onSetColor: async (color: string) => {
+                if (!this.onlineNetworkManager) return;
+                this.settings.playerColor = color;
+                const success = await this.onlineNetworkManager.setPlayerColor(color);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onAddAI: async (teamId: number) => {
+                if (!this.onlineNetworkManager) return;
+                // Generate a unique AI player ID
+                const aiPlayerId = `ai-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+                
+                // Add AI slot to database
+                try {
+                    const success = await this.onlineNetworkManager.addAIPlayer(aiPlayerId, teamId);
+                    if (success) {
+                        await this.renderLobbyDetailScreen(this.contentElement);
+                    } else {
+                        alert('Failed to add AI player');
+                    }
+                } catch (error) {
+                    console.error('Error adding AI:', error);
+                    alert('Failed to add AI player');
+                }
+            },
+            onRemoveSlot: async (playerId: string) => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.removePlayer(playerId);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onToggleReady: async () => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.toggleReady();
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            onStartGame: async () => {
+                if (!this.onlineNetworkManager || !isHost) return;
+                
+                // Get all players
+                const allPlayers = await this.onlineNetworkManager.getRoomPlayers();
+                
+                // Validate we have enough players
+                const activePlayers = allPlayers.filter(p => p.slot_type === 'player' || p.slot_type === 'ai');
+                if (activePlayers.length < 2) {
+                    alert('Need at least 2 players to start the game');
+                    return;
+                }
+                
+                // Verify all human players are ready
+                const humanPlayers = allPlayers.filter(p => p.slot_type === 'player');
+                const allReady = humanPlayers.every(p => p.is_ready);
+                if (!allReady) {
+                    alert('All players must be ready before starting');
+                    return;
+                }
+                
+                // Prepare game settings with 4 players (fill remaining with AI if needed)
+                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
+                
+                // Sort players by team for proper positioning
+                const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                
+                // Add team 0 players
+                for (const player of team0Players.slice(0, 2)) {
+                    const faction = (player.faction as Faction) || Faction.RADIANT;
+                    const isLocal = player.player_id === localPlayerId;
+                    playerConfigs.push([
+                        player.username,
+                        faction,
+                        0,
+                        player.slot_type as 'player' | 'ai',
+                        player.ai_difficulty || 'normal',
+                        isLocal
+                    ]);
+                }
+                
+                // Add team 1 players
+                for (const player of team1Players.slice(0, 2)) {
+                    const faction = (player.faction as Faction) || Faction.RADIANT;
+                    const isLocal = player.player_id === localPlayerId;
+                    playerConfigs.push([
+                        player.username,
+                        faction,
+                        1,
+                        player.slot_type as 'player' | 'ai',
+                        player.ai_difficulty || 'normal',
+                        isLocal
+                    ]);
+                }
+                
+                // Ensure we have 4 players (fill with AI if needed)
+                while (playerConfigs.length < 4) {
+                    const teamId = playerConfigs.length < 2 ? 0 : 1;
+                    playerConfigs.push([
+                        `AI Player ${playerConfigs.length + 1}`,
+                        Faction.RADIANT,
+                        teamId,
+                        'ai',
+                        'normal',
+                        false
+                    ]);
+                }
+                
+                // Update game settings
+                this.settings.gameMode = 'custom-lobby';
+                
+                // Hide menu and start game
+                this.hide();
+                
+                // Dispatch event to start 4-player game
+                const event = new CustomEvent('start4PlayerGame', {
+                    detail: {
+                        playerConfigs: playerConfigs,
+                        settings: this.settings,
+                        roomId: room.id
+                    }
+                });
+                window.dispatchEvent(event);
+            },
+            onLeave: async () => {
+                if (!this.onlineNetworkManager) return;
+                await this.onlineNetworkManager.leaveRoom();
+                this.currentScreen = 'custom-lobby';
+                this.startMenuTransition();
+                await this.renderCustomLobbyScreen(this.contentElement);
+            },
+            onRefresh: async () => {
+                await this.renderLobbyDetailScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderMatchHistoryScreen(container: HTMLElement): void {
