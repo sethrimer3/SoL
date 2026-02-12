@@ -1501,6 +1501,8 @@ class GameController {
         // Set player and enemy colors from settings
         this.renderer.playerColor = settings.playerColor;
         this.renderer.enemyColor = settings.enemyColor;
+        this.renderer.allyColor = settings.allyColor;
+        this.renderer.enemy2Color = settings.enemy2Color;
         
         // Set color scheme from settings
         const colorScheme = COLOR_SCHEMES[settings.colorScheme];

@@ -477,10 +477,14 @@ export interface MatchHistoryEntry {
  * Player MMR data
  */
 export interface PlayerMMRData {
-    mmr: number;                   // Current MMR rating
-    wins: number;                  // Total wins
-    losses: number;                // Total losses
-    gamesPlayed: number;           // Total games played
+    mmr: number;                   // Current MMR rating for 1v1
+    mmr2v2: number;                // Current MMR rating for 2v2
+    wins: number;                  // Total 1v1 wins
+    losses: number;                // Total 1v1 losses
+    gamesPlayed: number;           // Total 1v1 games played
+    wins2v2: number;               // Total 2v2 wins
+    losses2v2: number;             // Total 2v2 losses
+    gamesPlayed2v2: number;        // Total 2v2 games played
 }
 
 /**
@@ -521,7 +525,18 @@ export function getPlayerMMRData(): PlayerMMRData {
     
     if (data) {
         try {
-            return JSON.parse(data);
+            const parsed = JSON.parse(data);
+            // Migrate old data format to new format with 2v2 support
+            return {
+                mmr: parsed.mmr ?? 1000,
+                mmr2v2: parsed.mmr2v2 ?? 1000,
+                wins: parsed.wins ?? 0,
+                losses: parsed.losses ?? 0,
+                gamesPlayed: parsed.gamesPlayed ?? 0,
+                wins2v2: parsed.wins2v2 ?? 0,
+                losses2v2: parsed.losses2v2 ?? 0,
+                gamesPlayed2v2: parsed.gamesPlayed2v2 ?? 0
+            };
         } catch {
             // Corrupted data, return default
         }
@@ -530,9 +545,13 @@ export function getPlayerMMRData(): PlayerMMRData {
     // Default starting MMR
     return {
         mmr: 1000,
+        mmr2v2: 1000,
         wins: 0,
         losses: 0,
-        gamesPlayed: 0
+        gamesPlayed: 0,
+        wins2v2: 0,
+        losses2v2: 0,
+        gamesPlayed2v2: 0
     };
 }
 
@@ -563,6 +582,44 @@ export function updatePlayerMMR(opponentMMR: number, isWin: boolean): { newMMR: 
     
     return {
         newMMR: mmrData.mmr,
+        mmrChange: mmrChange
+    };
+}
+
+/**
+ * Update player 2v2 MMR after a team match
+ * 
+ * Each player's MMR is updated individually based on their current rating
+ * vs the enemy team's average rating. Call this function once for each player
+ * on both teams after the match concludes.
+ * 
+ * Example: In a 2v2 match:
+ * - Team A wins: Player1 (1000 MMR) and Player2 (1200 MMR)
+ * - Team B loses: Player3 (1100 MMR) and Player4 (1000 MMR)
+ * - Enemy average = 1050
+ * - Call updatePlayer2v2MMR(1050, true) for Player1 and Player2
+ * - Call updatePlayer2v2MMR(1100, false) for Player3 and Player4
+ * 
+ * @param enemyTeamMMR - Average MMR of the enemy team
+ * @param isWin - Whether the player's team won
+ * @returns Object with new MMR and change amount for this player
+ */
+export function updatePlayer2v2MMR(enemyTeamMMR: number, isWin: boolean): { newMMR: number; mmrChange: number } {
+    const mmrData = getPlayerMMRData();
+    const mmrChange = calculateMMRChange(mmrData.mmr2v2, enemyTeamMMR, isWin);
+    
+    mmrData.mmr2v2 += mmrChange;
+    mmrData.gamesPlayed2v2++;
+    if (isWin) {
+        mmrData.wins2v2++;
+    } else {
+        mmrData.losses2v2++;
+    }
+    
+    savePlayerMMRData(mmrData);
+    
+    return {
+        newMMR: mmrData.mmr2v2,
         mmrChange: mmrChange
     };
 }

@@ -26,8 +26,11 @@ import { renderFactionSelectionScreen } from './menu/screens/faction-selection-s
 import { renderLoadoutCustomizationScreen } from './menu/screens/loadout-customization-screen';
 import { renderLoadoutSelectionScreen } from './menu/screens/loadout-selection-screen';
 import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
+import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
+import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
+import { OnlineNetworkManager } from './online-network';
 import { getSupabaseConfig } from './supabase-config';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { 
@@ -53,6 +56,8 @@ export interface GameSettings {
     selectedHeroNames: string[];
     playerColor: string;
     enemyColor: string;
+    allyColor: string; // Color for teammates in 2v2
+    enemy2Color: string; // Color for second enemy in 2v2
     selectedBaseLoadout: string | null; // Base loadout ID
     selectedSpawnLoadout: string | null; // Spawn loadout ID
     colorScheme: string; // Color scheme ID
@@ -60,7 +65,7 @@ export interface GameSettings {
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     username: string; // Player's username for multiplayer
-    gameMode: 'ai' | 'online' | 'lan' | 'p2p'; // Game mode selection
+    gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
     multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
@@ -89,7 +94,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -99,6 +104,8 @@ export class MainMenu {
     private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
+    private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
+    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
@@ -279,6 +286,8 @@ export class MainMenu {
             selectedHeroNames: [],
             playerColor: '#66B3FF', // Somewhat light blue
             enemyColor: '#FF6B6B',   // Slightly light red
+            allyColor: '#88FF88',    // Light green for allies
+            enemy2Color: '#FFA500',  // Orange for second enemy
             selectedBaseLoadout: null,
             selectedSpawnLoadout: null,
             colorScheme: 'SpaceBlack', // Default color scheme
@@ -289,6 +298,10 @@ export class MainMenu {
             gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
+        
+        // Initialize online network manager for custom lobbies and matchmaking
+        const playerId = this.getOrGeneratePlayerId();
+        this.onlineNetworkManager = new OnlineNetworkManager(playerId);
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
@@ -575,6 +588,26 @@ export class MainMenu {
         const newUsername = this.generateRandomUsername();
         localStorage.setItem('sol_username', newUsername);
         return newUsername;
+    }
+
+    /**
+     * Get or generate a unique player ID for online play
+     */
+    private getOrGeneratePlayerId(): string {
+        const storedPlayerId = localStorage.getItem('sol_player_id');
+        if (storedPlayerId && storedPlayerId.trim() !== '') {
+            return storedPlayerId;
+        }
+        // Generate a UUID using crypto API if available, otherwise fallback
+        let newPlayerId: string;
+        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+            newPlayerId = crypto.randomUUID();
+        } else {
+            // Fallback for older browsers
+            newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+        }
+        localStorage.setItem('sol_player_id', newPlayerId);
+        return newPlayerId;
     }
 
     /**
@@ -2054,6 +2087,212 @@ export class MainMenu {
         }
     }
 
+    private async renderCustomLobbyScreen(container: HTMLElement): Promise<void> {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        // Fetch available lobbies
+        let lobbies: any[] = [];
+        if (this.onlineNetworkManager && this.onlineNetworkManager.isAvailable()) {
+            lobbies = await this.onlineNetworkManager.listCustomLobbies();
+        }
+        
+        renderCustomLobbyScreen(container, {
+            lobbies: lobbies,
+            onCreateLobby: async (lobbyName: string) => {
+                console.log('Creating lobby:', lobbyName);
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const room = await this.onlineNetworkManager.createCustomLobby(lobbyName, this.settings.username);
+                
+                if (room) {
+                    console.log('Lobby created successfully:', room);
+                    // TODO: Navigate to lobby detail screen
+                    alert(`Lobby "${lobbyName}" created! Room ID: ${room.id}`);
+                    // Refresh the screen to show the new lobby
+                    await this.renderCustomLobbyScreen(this.contentElement);
+                } else {
+                    alert('Failed to create lobby. Please try again.');
+                }
+            },
+            onJoinLobby: async (lobbyId: string) => {
+                console.log('Joining lobby:', lobbyId);
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const success = await this.onlineNetworkManager.joinRoom(lobbyId, this.settings.username);
+                
+                if (success) {
+                    console.log('Joined lobby successfully');
+                    // TODO: Navigate to lobby detail screen
+                    alert(`Joined lobby successfully!`);
+                } else {
+                    alert('Failed to join lobby. It may be full or no longer available.');
+                }
+            },
+            onRefresh: async () => {
+                await this.renderCustomLobbyScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private render2v2MatchmakingScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        // Get 2v2 MMR data
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking2v2Screen(container, {
+            currentMMR: mmrData.mmr2v2,
+            wins: mmrData.wins2v2,
+            losses: mmrData.losses2v2,
+            isSearching: false,
+            onStartMatchmaking: async () => {
+                console.log('Starting 2v2 matchmaking...');
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const success = await this.onlineNetworkManager.joinMatchmakingQueue(
+                    this.settings.username,
+                    mmrData.mmr2v2,
+                    this.settings.selectedFaction || 'RADIANT'
+                );
+                
+                if (success) {
+                    console.log('Joined matchmaking queue');
+                    // Re-render with searching state
+                    this.render2v2MatchmakingScreenSearching(this.contentElement);
+                } else {
+                    alert('Failed to join matchmaking queue. Please try again.');
+                }
+            },
+            onCancelMatchmaking: async () => {
+                console.log('Cancelling matchmaking...');
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                // Re-render without searching state
+                this.render2v2MatchmakingScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private render2v2MatchmakingScreenSearching(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking2v2Screen(container, {
+            currentMMR: mmrData.mmr2v2,
+            wins: mmrData.wins2v2,
+            losses: mmrData.losses2v2,
+            isSearching: true,
+            onStartMatchmaking: async () => {},
+            onCancelMatchmaking: async () => {
+                console.log('Cancelling matchmaking...');
+                
+                // Clear polling interval
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                // Re-render without searching state
+                this.render2v2MatchmakingScreen(this.contentElement);
+            },
+            onBack: () => {
+                // Clear polling if active
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+        
+        // Start polling for matchmaking results
+        // TODO: Replace with Supabase real-time subscriptions for better UX
+        console.log('Starting matchmaking search...');
+        
+        this.matchmakingPollInterval = window.setInterval(async () => {
+            if (!this.onlineNetworkManager) {
+                return;
+            }
+            
+            // Check if still in queue
+            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
+            if (!inQueue) {
+                // No longer in queue, stop polling
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                return;
+            }
+            
+            // Find potential matches
+            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
+            
+            if (candidates.length >= 3) {
+                // Found enough players for 2v2 (need 3 others + us = 4 total)
+                console.log('Match found! Candidates:', candidates);
+                
+                // Stop polling
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
+                // TODO: Create game room with matched players
+                alert('Match found! (Game initialization not yet implemented)');
+                
+                // Leave queue and return to matchmaking screen
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                this.render2v2MatchmakingScreen(this.contentElement);
+            }
+        }, 5000); // Poll every 5 seconds
+    }
+
     private renderMatchHistoryScreen(container: HTMLElement): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
@@ -2104,6 +2343,8 @@ export class MainMenu {
             screenShakeEnabled: this.settings.screenShakeEnabled,
             playerColor: this.settings.playerColor,
             enemyColor: this.settings.enemyColor,
+            allyColor: this.settings.allyColor,
+            enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
@@ -2129,6 +2370,12 @@ export class MainMenu {
             },
             onEnemyColorChange: (value) => {
                 this.settings.enemyColor = value;
+            },
+            onAllyColorChange: (value) => {
+                this.settings.allyColor = value;
+            },
+            onEnemy2ColorChange: (value) => {
+                this.settings.enemy2Color = value;
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
@@ -2177,6 +2424,16 @@ export class MainMenu {
                         this.currentScreen = 'p2p';
                         this.startMenuTransition();
                         this.renderP2PScreen(this.contentElement);
+                        break;
+                    case 'custom-lobby':
+                        this.currentScreen = 'custom-lobby';
+                        this.startMenuTransition();
+                        this.renderCustomLobbyScreen(this.contentElement);
+                        break;
+                    case '2v2-matchmaking':
+                        this.currentScreen = '2v2-matchmaking';
+                        this.startMenuTransition();
+                        this.render2v2MatchmakingScreen(this.contentElement);
                         break;
                 }
             },

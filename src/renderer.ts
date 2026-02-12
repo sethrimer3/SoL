@@ -98,6 +98,8 @@ export class GameRenderer {
     public isPaused: boolean = false; // Game pause state
     public playerColor: string = Constants.PLAYER_1_COLOR; // Player 1 color (customizable)
     public enemyColor: string = Constants.PLAYER_2_COLOR; // Player 2 color (customizable)
+    public allyColor: string = '#88FF88'; // Ally color for team games (green)
+    public enemy2Color: string = '#FFA500'; // Second enemy color for team games (orange)
     public colorScheme: ColorScheme = COLOR_SCHEMES['SpaceBlack']; // Color scheme for rendering
     public inGameMenuTab: InGameMenuTab = 'main';
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
@@ -505,9 +507,70 @@ export class GameRenderer {
             return ownerSide === 'light' ? '#FFFFFF' : '#000000';
         }
         
-        // In normal mode, use player/enemy colors based on viewing player
-        const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
-        return isEnemy ? this.enemyColor : this.playerColor;
+        // In normal mode, use team-aware colors
+        return this.getTeamColor(player, game);
+    }
+
+    /**
+     * Get the color for a player based on team relationships
+     * Returns: playerColor (self), allyColor (teammate), enemyColor (first enemy), enemy2Color (second enemy)
+     */
+    private getTeamColor(player: Player, game: GameState): string {
+        if (!this.viewingPlayer) {
+            return this.playerColor;
+        }
+        
+        // Player themself
+        if (player === this.viewingPlayer) {
+            return this.playerColor;
+        }
+        
+        // Check if team game (3+ players)
+        if (game.players.length >= 3) {
+            // Teammate
+            if (player.teamId === this.viewingPlayer.teamId) {
+                return this.allyColor;
+            }
+            
+            // Enemy - distinguish between first and second enemy
+            const enemies = game.players.filter(p => 
+                p !== this.viewingPlayer && 
+                this.viewingPlayer !== null &&
+                p.teamId !== this.viewingPlayer.teamId
+            );
+            
+            const enemyIndex = enemies.indexOf(player);
+            if (enemyIndex === 0) {
+                return this.enemyColor;
+            } else if (enemyIndex >= 1) {
+                return this.enemy2Color;
+            }
+        }
+        
+        // Default 1v1 logic
+        return this.enemyColor;
+    }
+
+    /**
+     * Check if a player is an enemy (not self or teammate)
+     */
+    private isEnemyPlayer(player: Player, game: GameState): boolean {
+        if (!this.viewingPlayer) {
+            return false;
+        }
+        
+        // Not an enemy if it's the viewing player
+        if (player === this.viewingPlayer) {
+            return false;
+        }
+        
+        // In team games, check team ID
+        if (game.players.length >= 3) {
+            return player.teamId !== this.viewingPlayer.teamId;
+        }
+        
+        // In 1v1, anyone other than viewing player is enemy
+        return true;
     }
 
     private getSpriteImage(path: string): HTMLImageElement {
@@ -8806,7 +8869,7 @@ export class GameRenderer {
             if (player.isDefeated()) continue;
 
             const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+            const isEnemy = this.isEnemyPlayer(player, game);
 
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
             for (const mirror of player.solarMirrors) {
@@ -8848,7 +8911,7 @@ export class GameRenderer {
             if (player.isDefeated()) continue;
             
             const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+            const isEnemy = this.isEnemyPlayer(player, game);
             
             for (const unit of player.units) {
                 const unitMargin = unit.isHero ? 120 : 60;
@@ -8897,7 +8960,7 @@ export class GameRenderer {
             if (player.isDefeated()) continue;
             
             const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = this.viewingPlayer !== null && player !== this.viewingPlayer;
+            const isEnemy = this.isEnemyPlayer(player, game);
             
             for (const building of player.buildings) {
                 if (!this.isWithinViewBounds(building.position, building.radius * 2)) {

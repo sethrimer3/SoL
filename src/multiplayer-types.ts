@@ -10,7 +10,7 @@
  */
 export interface GameSettings {
     /** Game mode variant (if multiple modes supported) */
-    gameMode?: 'standard' | 'custom';
+    gameMode?: 'standard' | 'custom' | '2v2';
     
     /** Starting resources for players */
     startingEnergy?: number;
@@ -37,6 +37,12 @@ export interface GameSettings {
     /** Custom game rules */
     customRules?: {
         [key: string]: boolean | number | string;
+    };
+
+    /** Team configuration for team games */
+    teamConfig?: {
+        enabled: boolean;
+        maxPlayersPerTeam: number;
     };
 }
 

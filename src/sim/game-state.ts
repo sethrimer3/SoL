@@ -398,25 +398,34 @@ export class GameState {
         for (const player of this.players) {
             if (player.isDefeated()) continue;
 
-            // Get enemies (units and structures not owned by this player)
+            // Get enemies (units and structures not owned by this player or their team)
             const enemies: CombatTarget[] = [];
             for (const otherPlayer of this.players) {
-                if (otherPlayer !== player && !otherPlayer.isDefeated()) {
-                    enemies.push(...otherPlayer.units);
-                    enemies.push(...otherPlayer.buildings);
-                    for (const mirror of otherPlayer.solarMirrors) {
-                        if (mirror.health > 0) {
-                            enemies.push(mirror);
-                        }
+                // Skip self
+                if (otherPlayer === player) continue;
+                
+                // Skip defeated players
+                if (otherPlayer.isDefeated()) continue;
+                
+                // Skip teammates in team games (3+ players)
+                if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
+                    continue;
+                }
+                
+                enemies.push(...otherPlayer.units);
+                enemies.push(...otherPlayer.buildings);
+                for (const mirror of otherPlayer.solarMirrors) {
+                    if (mirror.health > 0) {
+                        enemies.push(mirror);
                     }
-                    for (const gate of this.starlingMergeGates) {
-                        if (gate.owner === otherPlayer && gate.health > 0) {
-                            enemies.push(gate);
-                        }
+                }
+                for (const gate of this.starlingMergeGates) {
+                    if (gate.owner === otherPlayer && gate.health > 0) {
+                        enemies.push(gate);
                     }
-                    if (otherPlayer.stellarForge) {
-                        enemies.push(otherPlayer.stellarForge);
-                    }
+                }
+                if (otherPlayer.stellarForge) {
+                    enemies.push(otherPlayer.stellarForge);
                 }
             }
 
@@ -430,32 +439,36 @@ export class GameState {
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
 
-                    // Apply shield blocking from enemy ShieldTowers
+                    // Apply shield blocking from enemy ShieldTowers (not allied ones)
                     for (const enemyPlayer of this.players) {
-                        if (enemyPlayer !== unit.owner) {
-                            for (const building of enemyPlayer.buildings) {
-                                if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
-                                    const dx = unit.position.x - building.position.x;
-                                    const dy = unit.position.y - building.position.y;
-                                    const distance = Math.sqrt(dx * dx + dy * dy);
-                                    
-                                    // If unit is inside shield radius, push it back out
-                                    if (distance < building.shieldRadius) {
-                                        const pushDistance = building.shieldRadius - distance;
-                                        // Avoid division by zero when unit is exactly at tower center
-                                        if (distance > Constants.SHIELD_CENTER_COLLISION_THRESHOLD) {
-                                            const dirX = dx / distance;
-                                            const dirY = dy / distance;
-                                            unit.position.x += dirX * pushDistance;
-                                            unit.position.y += dirY * pushDistance;
-                                        } else {
-                                            // Push in arbitrary direction when at center
-                                            unit.position.x += pushDistance;
-                                        }
-                                        // Stop unit's velocity when hitting shield
-                                        unit.velocity.x = 0;
-                                        unit.velocity.y = 0;
+                        // Skip own units and teammates
+                        if (enemyPlayer === unit.owner) continue;
+                        if (this.players.length >= 3 && enemyPlayer.teamId === unit.owner.teamId) {
+                            continue;
+                        }
+                        
+                        for (const building of enemyPlayer.buildings) {
+                            if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
+                                const dx = unit.position.x - building.position.x;
+                                const dy = unit.position.y - building.position.y;
+                                const distance = Math.sqrt(dx * dx + dy * dy);
+                                
+                                // If unit is inside shield radius, push it back out
+                                if (distance < building.shieldRadius) {
+                                    const pushDistance = building.shieldRadius - distance;
+                                    // Avoid division by zero when unit is exactly at tower center
+                                    if (distance > Constants.SHIELD_CENTER_COLLISION_THRESHOLD) {
+                                        const dirX = dx / distance;
+                                        const dirY = dy / distance;
+                                        unit.position.x += dirX * pushDistance;
+                                        unit.position.y += dirY * pushDistance;
+                                    } else {
+                                        // Push in arbitrary direction when at center
+                                        unit.position.x += pushDistance;
                                     }
+                                    // Stop unit's velocity when hitting shield
+                                    unit.velocity.x = 0;
+                                    unit.velocity.y = 0;
                                 }
                             }
                         }
@@ -2113,22 +2126,31 @@ export class GameState {
     private getEnemiesForPlayer(player: Player): CombatTarget[] {
         const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
-            if (otherPlayer !== player && !otherPlayer.isDefeated()) {
-                enemies.push(...otherPlayer.units);
-                enemies.push(...otherPlayer.buildings);
-                for (const mirror of otherPlayer.solarMirrors) {
-                    if (mirror.health > 0) {
-                        enemies.push(mirror);
-                    }
+            // Skip self
+            if (otherPlayer === player) continue;
+            
+            // Skip defeated players
+            if (otherPlayer.isDefeated()) continue;
+            
+            // Skip teammates in team games (3+ players)
+            if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
+                continue;
+            }
+            
+            enemies.push(...otherPlayer.units);
+            enemies.push(...otherPlayer.buildings);
+            for (const mirror of otherPlayer.solarMirrors) {
+                if (mirror.health > 0) {
+                    enemies.push(mirror);
                 }
-                for (const gate of this.starlingMergeGates) {
-                    if (gate.owner === otherPlayer && gate.health > 0) {
-                        enemies.push(gate);
-                    }
+            }
+            for (const gate of this.starlingMergeGates) {
+                if (gate.owner === otherPlayer && gate.health > 0) {
+                    enemies.push(gate);
                 }
-                if (otherPlayer.stellarForge) {
-                    enemies.push(otherPlayer.stellarForge);
-                }
+            }
+            if (otherPlayer.stellarForge) {
+                enemies.push(otherPlayer.stellarForge);
             }
         }
         return enemies;
@@ -2473,7 +2495,15 @@ export class GameState {
     
     private getEnemyForgeForPlayer(player: Player): StellarForge | null {
         for (const otherPlayer of this.players) {
-            if (otherPlayer !== player && !otherPlayer.isDefeated() && otherPlayer.stellarForge) {
+            // Skip self and defeated players
+            if (otherPlayer === player || otherPlayer.isDefeated()) continue;
+            
+            // Skip teammates in team games (3+ players)
+            if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
+                continue;
+            }
+            
+            if (otherPlayer.stellarForge) {
                 return otherPlayer.stellarForge;
             }
         }
@@ -4369,12 +4399,33 @@ export class GameState {
 
     /**
      * Check if any player has won
+     * In team games, victory is achieved when all players on one team are defeated
      */
     checkVictoryConditions(): Player | null {
         const activePlayers = this.players.filter(p => !p.isDefeated());
+        
+        // No winner yet if everyone is defeated (draw/error state) or no one is defeated yet
+        if (activePlayers.length === 0 || activePlayers.length === this.players.length) {
+            return null;
+        }
+        
+        // Single survivor wins (handles both 1v1 and last-man-standing in team games)
         if (activePlayers.length === 1) {
             return activePlayers[0];
         }
+        
+        // Multiple players remaining - check for team victory
+        // In 1v1, this means both players are still alive (already handled above)
+        // In team games (3+ total players), check if only one team has survivors
+        if (this.players.length >= 3) {
+            const activeTeams = new Set(activePlayers.map(p => p.teamId));
+            
+            // Victory if only one team remains with active players
+            if (activeTeams.size === 1) {
+                return activePlayers[0]; // Return any player from the winning team
+            }
+        }
+        
         return null;
     }
 
@@ -4965,13 +5016,19 @@ export class GameState {
             // Get all enemy units and structures
             const enemies: CombatTarget[] = [];
             for (const otherPlayer of this.players) {
-                if (otherPlayer !== player) {
-                    enemies.push(...otherPlayer.units);
-                    if (otherPlayer.stellarForge) {
-                        enemies.push(otherPlayer.stellarForge);
-                    }
-                    enemies.push(...otherPlayer.buildings);
+                // Skip self
+                if (otherPlayer === player) continue;
+                
+                // Skip teammates in team games (3+ players)
+                if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
+                    continue;
                 }
+                
+                enemies.push(...otherPlayer.units);
+                if (otherPlayer.stellarForge) {
+                    enemies.push(otherPlayer.stellarForge);
+                }
+                enemies.push(...otherPlayer.buildings);
             }
             
             // Fire missile with visibility checks
@@ -5158,6 +5215,41 @@ export class GameState {
         const ownerIndex = this.players.indexOf(unit.owner);
         return `${ownerIndex}_${unit.position.x.toFixed(1)}_${unit.position.y.toFixed(1)}_${unit.maxHealth}_${unit.constructor.name}`;
     }
+
+    /**
+     * Check if two players are on the same team
+     */
+    areAllies(player1: Player, player2: Player): boolean {
+        return player1.teamId === player2.teamId;
+    }
+
+    /**
+     * Check if two players are enemies
+     */
+    areEnemies(player1: Player, player2: Player): boolean {
+        return player1.teamId !== player2.teamId;
+    }
+
+    /**
+     * Get all teammates of a player (excluding the player themselves)
+     */
+    getTeammates(player: Player): Player[] {
+        return this.players.filter(p => p !== player && p.teamId === player.teamId);
+    }
+
+    /**
+     * Get all enemies of a player
+     */
+    getEnemies(player: Player): Player[] {
+        return this.players.filter(p => p.teamId !== player.teamId);
+    }
+
+    /**
+     * Get all players on a specific team
+     */
+    getTeamPlayers(teamId: number): Player[] {
+        return this.players.filter(p => p.teamId === teamId);
+    }
 }
 
 /**
@@ -5169,17 +5261,53 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
     // Add sun at center
     game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
 
-    // Create players with starting positions in bottom-left and top-right
-    // Randomly assign which player gets which position
-    const bottomLeft = new Vector2D(-700, 700);
-    const topRight = new Vector2D(700, -700);
+    // Create players with starting positions
+    // For 2 players: bottom-left and top-right (diagonal)
+    // For 4 players (2v2): all four corners (team 0 on one diagonal, team 1 on other)
     const rng = getGameRNG();
     
-    // Randomly decide player assignment
-    const randomizePositions = rng.next() < 0.5;
-    const positions = randomizePositions 
-        ? [bottomLeft, topRight]
-        : [topRight, bottomLeft];
+    let positions: Vector2D[];
+    let teamAssignments: number[];
+    
+    if (playerNames.length === 2) {
+        // Standard 1v1: bottom-left and top-right
+        const bottomLeft = new Vector2D(-700, 700);
+        const topRight = new Vector2D(700, -700);
+        
+        // Randomly decide player assignment
+        const randomizePositions = rng.next() < 0.5;
+        positions = randomizePositions 
+            ? [bottomLeft, topRight]
+            : [topRight, bottomLeft];
+        
+        teamAssignments = [0, 0]; // Both assigned team 0 (team logic disabled for 1v1)
+    } else if (playerNames.length >= 4) {
+        // 2v2 game: Four corners
+        // Team 0: top-left and bottom-right (one diagonal)
+        // Team 1: top-right and bottom-left (other diagonal)
+        const topLeft = new Vector2D(-700, -700);
+        const topRight = new Vector2D(700, -700);
+        const bottomLeft = new Vector2D(-700, 700);
+        const bottomRight = new Vector2D(700, 700);
+        
+        // Randomly assign which team gets which diagonal
+        const randomizeTeams = rng.next() < 0.5;
+        
+        if (randomizeTeams) {
+            positions = [topLeft, bottomRight, topRight, bottomLeft];
+            teamAssignments = [0, 0, 1, 1];
+        } else {
+            positions = [topRight, bottomLeft, topLeft, bottomRight];
+            teamAssignments = [0, 0, 1, 1];
+        }
+    } else {
+        // 3 players - treat as FFA with positions around a circle
+        const bottomLeft = new Vector2D(-700, 700);
+        const topRight = new Vector2D(700, -700);
+        const top = new Vector2D(0, -700);
+        positions = [bottomLeft, topRight, top];
+        teamAssignments = [0, 1, 2]; // Each on own team
+    }
 
     for (let i = 0; i < playerNames.length; i++) {
         if (i >= positions.length) {
@@ -5188,6 +5316,7 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
         const [name, faction] = playerNames[i];
         const player = new Player(name, faction);
         player.isAi = i !== 0;
+        player.teamId = teamAssignments[i];
         
         // Assign random AI strategy for AI players
         if (player.isAi) {
@@ -5224,14 +5353,26 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
     // Update player name map after all players have been added
     game.updatePlayerNameMap();
     
-    // Initialize default minion paths (each forge targets the enemy's spawn location)
+    // Initialize default minion paths (each forge targets an enemy's spawn location)
     if (game.players.length >= 2) {
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
-            const enemyIndex = (i + 1) % game.players.length;
-            const enemyPlayer = game.players[enemyIndex];
             
-            if (player.stellarForge && enemyPlayer.stellarForge) {
+            // Find an enemy player (different team in team games, or next player in 1v1)
+            let enemyPlayer: Player | null = null;
+            
+            if (game.players.length >= 3) {
+                // Team game or FFA: target a player on a different team
+                enemyPlayer = game.players.find(p => 
+                    p !== player && p.teamId !== player.teamId
+                ) || null;
+            } else {
+                // 1v1: target the other player
+                const enemyIndex = (i + 1) % game.players.length;
+                enemyPlayer = game.players[enemyIndex];
+            }
+            
+            if (player.stellarForge && enemyPlayer && enemyPlayer.stellarForge) {
                 player.stellarForge.initializeDefaultPath(enemyPlayer.stellarForge.position);
             }
         }
