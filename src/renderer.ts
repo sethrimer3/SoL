@@ -255,14 +255,21 @@ export class GameRenderer {
             x: number,
             y: number,
             coreSize: number,
-            glowRadius: number,
+            haloSize: number,
             brightness: number,
-            hue: number,
-            saturation: number,
-            lightness: number
+            colorRgb: [number, number, number],
+            flickerFreqHz: number,
+            flickerPhase: number,
+            flickerAmp: number,
+            blurPx: number,
+            chromaOffsetPx: number,
+            isChromatic: boolean
         }>,
-        parallaxFactor: number
+        parallaxFactor: number,
+        brightnessScale: number,
+        blurVariance: number
     }> = [];
+    private readonly starColorTemperatureLut = this.createStarTemperatureLookup();
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
     private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
     private starfieldCacheWidth = 0;
@@ -317,51 +324,181 @@ export class GameRenderer {
     }
 
     /**
-     * Initialize star layers with random positions for parallax effect
+     * Initialize star layers with clustered, power-law-distributed stars for realistic depth.
      */
     private initializeStarLayers(): void {
-        // Use a seeded random for consistent star positions
         let seed = 42;
         const seededRandom = () => {
-            seed = (seed * 9301 + 49297) % 233280;
-            return seed / 233280;
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 4294967296;
         };
-        
+
+        const minSpacing = 5;
+        const gridCell = minSpacing / Math.SQRT2;
+        const gridSize = Math.ceil(Constants.STAR_WRAP_SIZE / gridCell);
+
         for (const layerConfig of Constants.STAR_LAYER_CONFIGS) {
             const stars: Array<{
                 x: number,
                 y: number,
                 coreSize: number,
-                glowRadius: number,
+                haloSize: number,
                 brightness: number,
-                hue: number,
-                saturation: number,
-                lightness: number
+                colorRgb: [number, number, number],
+                flickerFreqHz: number,
+                flickerPhase: number,
+                flickerAmp: number,
+                blurPx: number,
+                chromaOffsetPx: number,
+                isChromatic: boolean
             }> = [];
-            
-            for (let i = 0; i < layerConfig.count; i++) {
-                const size = layerConfig.sizeRange[0] + seededRandom() * (layerConfig.sizeRange[1] - layerConfig.sizeRange[0]);
-                const warmBias = Math.pow(seededRandom(), 0.55);
-                const brightness = 0.05 + Math.pow(seededRandom(), 1.8) * 0.45;
+
+            const grid = new Int32Array(gridSize * gridSize).fill(-1);
+            const noiseScale = 0.004 + seededRandom() * 0.006;
+            let attempts = 0;
+            const maxAttempts = layerConfig.count * 22;
+
+            while (stars.length < layerConfig.count && attempts < maxAttempts) {
+                attempts++;
+                const x = seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2;
+                const y = seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2;
+
+                const density = this.fractalNoise2D((x + Constants.STAR_WRAP_SIZE * 0.5) * noiseScale, (y + Constants.STAR_WRAP_SIZE * 0.5) * noiseScale, 4);
+                const ridge = Math.abs(this.valueNoise2D(x * noiseScale * 0.35 + 19.2, y * noiseScale * 0.35 - 7.1) * 2 - 1);
+                const clusterBias = density * 0.8 + (1 - ridge) * 0.2;
+                if (clusterBias < 0.48 + seededRandom() * 0.12) {
+                    continue;
+                }
+
+                const gx = Math.max(0, Math.min(gridSize - 1, Math.floor((x + Constants.STAR_WRAP_SIZE / 2) / gridCell)));
+                const gy = Math.max(0, Math.min(gridSize - 1, Math.floor((y + Constants.STAR_WRAP_SIZE / 2) / gridCell)));
+
+                let canPlace = true;
+                for (let oy = -1; oy <= 1 && canPlace; oy++) {
+                    for (let ox = -1; ox <= 1; ox++) {
+                        const nx = gx + ox;
+                        const ny = gy + oy;
+                        if (nx < 0 || ny < 0 || nx >= gridSize || ny >= gridSize) {
+                            continue;
+                        }
+                        const starIndex = grid[ny * gridSize + nx];
+                        if (starIndex >= 0) {
+                            const other = stars[starIndex];
+                            const dx = x - other.x;
+                            const dy = y - other.y;
+                            if ((dx * dx + dy * dy) < minSpacing * minSpacing) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if (!canPlace) {
+                    continue;
+                }
+
+                const baseSize = this.samplePowerLawSize(layerConfig.sizeRange[0], layerConfig.sizeRange[1], 1.85, seededRandom());
+                const luminance = 0.16 + Math.pow(seededRandom(), 2.1) * 0.84;
+                const kelvin = this.sampleStarTemperatureK(seededRandom());
+                const color = this.starColorTemperatureLut[Math.max(0, Math.min(this.starColorTemperatureLut.length - 1, Math.round((kelvin - 3000) / 50)))];
+                const brightness = Math.min(1.4, (luminance * (0.85 + clusterBias * 0.45)) * layerConfig.brightnessScale);
+                const isChromatic = baseSize > 2.4 && brightness > 1.02 && seededRandom() > 0.55;
 
                 stars.push({
-                    x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
-                    y: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
-                    coreSize: size,
-                    glowRadius: size * (2.5 + seededRandom() * 6.0),
+                    x,
+                    y,
+                    coreSize: baseSize,
+                    haloSize: baseSize * (2.8 + seededRandom() * 2.4),
                     brightness,
-                    hue: 22 + warmBias * 26,
-                    saturation: 78 + warmBias * 20,
-                    lightness: 62 + warmBias * 24
+                    colorRgb: color,
+                    flickerFreqHz: 0.1 + seededRandom() * 0.2,
+                    flickerPhase: seededRandom() * Math.PI * 2,
+                    flickerAmp: 0.008 + seededRandom() * 0.022,
+                    blurPx: layerConfig.blurVariance * (0.18 + seededRandom() * 0.55),
+                    chromaOffsetPx: isChromatic ? (0.12 + seededRandom() * 0.25) : 0,
+                    isChromatic
                 });
+
+                grid[gy * gridSize + gx] = stars.length - 1;
             }
-            
+
             this.starLayers.push({
                 stars,
-                parallaxFactor: layerConfig.parallaxFactor
+                parallaxFactor: layerConfig.parallaxFactor,
+                brightnessScale: layerConfig.brightnessScale,
+                blurVariance: layerConfig.blurVariance
             });
         }
     }
+
+    private samplePowerLawSize(minSize: number, maxSize: number, alpha: number, randomSample: number): number {
+        const safeR = Math.max(0.000001, Math.min(0.999999, randomSample));
+        const size = minSize * Math.pow(1 - safeR, -1 / alpha);
+        return Math.min(maxSize, size);
+    }
+
+    private sampleStarTemperatureK(randomSample: number): number {
+        const warmWhiteBand = 4500 + Math.pow(randomSample, 0.75) * 1500;
+        if (randomSample < 0.82) {
+            return warmWhiteBand;
+        }
+        return 6000 + Math.pow((randomSample - 0.82) / 0.18, 1.6) * 2600;
+    }
+
+    private createStarTemperatureLookup(): Array<[number, number, number]> {
+        const lut: Array<[number, number, number]> = [];
+        for (let kelvin = 3000; kelvin <= 9000; kelvin += 50) {
+            const t = (kelvin - 3000) / 6000;
+            const r = Math.round(255 * (1.0 - Math.max(0, t - 0.55) * 0.14));
+            const g = Math.round(170 + 75 * Math.min(1, t * 1.1));
+            const b = Math.round(120 + 135 * Math.pow(t, 0.82));
+            lut.push([r, g, b]);
+        }
+        return lut;
+    }
+
+    private valueNoise2D(x: number, y: number): number {
+        const ix = Math.floor(x);
+        const iy = Math.floor(y);
+        const fx = x - ix;
+        const fy = y - iy;
+
+        const smooth = (v: number) => v * v * (3 - 2 * v);
+        const hash = (hx: number, hy: number) => {
+            let n = hx * 374761393 + hy * 668265263;
+            n = (n ^ (n >> 13)) * 1274126177;
+            n ^= n >> 16;
+            return (n >>> 0) / 4294967295;
+        };
+        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+        const v00 = hash(ix, iy);
+        const v10 = hash(ix + 1, iy);
+        const v01 = hash(ix, iy + 1);
+        const v11 = hash(ix + 1, iy + 1);
+        const ux = smooth(fx);
+        const uy = smooth(fy);
+
+        return lerp(lerp(v00, v10, ux), lerp(v01, v11, ux), uy);
+    }
+
+    private fractalNoise2D(x: number, y: number, octaves: number): number {
+        let amplitude = 0.5;
+        let frequency = 1;
+        let value = 0;
+        let norm = 0;
+
+        for (let i = 0; i < octaves; i++) {
+            value += this.valueNoise2D(x * frequency, y * frequency) * amplitude;
+            norm += amplitude;
+            frequency *= 2;
+            amplitude *= 0.5;
+        }
+
+        return value / Math.max(0.0001, norm);
+    }
+
 
     private drawStarfield(screenWidth: number, screenHeight: number): void {
         if (!this.starfieldCacheCanvas) {
@@ -382,6 +519,7 @@ export class GameRenderer {
 
         const cameraX = this.parallaxCamera.x;
         const cameraY = this.parallaxCamera.y;
+        const nowSeconds = performance.now() * 0.001;
         const needsRefresh = cameraX !== this.starfieldCacheCameraX ||
             cameraY !== this.starfieldCacheCameraY ||
             this.starfieldCacheWidth !== screenWidth ||
@@ -394,7 +532,18 @@ export class GameRenderer {
             const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
             const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
 
+            ctx.globalCompositeOperation = 'source-over';
             ctx.clearRect(0, 0, screenWidth, screenHeight);
+
+            // Ultra-subtle nebulosity using large-scale noise for perceived depth.
+            const nebulaGradient = ctx.createLinearGradient(0, 0, screenWidth, screenHeight);
+            nebulaGradient.addColorStop(0, 'rgba(54, 38, 90, 0.035)');
+            nebulaGradient.addColorStop(0.5, 'rgba(28, 50, 92, 0.025)');
+            nebulaGradient.addColorStop(1, 'rgba(72, 34, 58, 0.03)');
+            ctx.fillStyle = nebulaGradient;
+            ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+            ctx.globalCompositeOperation = 'lighter';
 
             for (const layer of this.starLayers) {
                 const parallaxX = cameraX * layer.parallaxFactor;
@@ -406,42 +555,65 @@ export class GameRenderer {
                     const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
                     const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
 
-                    if (wrappedX >= -100 && wrappedX <= screenWidth + 100 &&
-                        wrappedY >= -100 && wrappedY <= screenHeight + 100) {
-                        const gradient = ctx.createRadialGradient(
-                            wrappedX,
-                            wrappedY,
-                            0,
-                            wrappedX,
-                            wrappedY,
-                            star.glowRadius
-                        );
+                    if (wrappedX >= -140 && wrappedX <= screenWidth + 140 &&
+                        wrappedY >= -140 && wrappedY <= screenHeight + 140) {
+                        const flicker = 1 + star.flickerAmp * Math.sin(nowSeconds * Math.PI * 2 * star.flickerFreqHz + star.flickerPhase);
+                        const intensity = star.brightness * flicker;
+                        const [r, g, b] = star.colorRgb;
 
-                        gradient.addColorStop(0, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, ${Math.min(1, star.brightness * 1.7)})`);
-                        gradient.addColorStop(0.24, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, ${star.brightness})`);
-                        gradient.addColorStop(1, `hsla(${star.hue}, ${star.saturation}%, ${star.lightness}%, 0)`);
+                        const haloGradient = ctx.createRadialGradient(wrappedX, wrappedY, 0, wrappedX, wrappedY, star.haloSize);
+                        // Gaussian-like smooth energy distribution: fast core decay + long soft bloom tail.
+                        haloGradient.addColorStop(0.0, `rgba(${r}, ${g}, ${b}, ${Math.min(0.78, intensity * 0.27)})`);
+                        haloGradient.addColorStop(0.16, `rgba(${r}, ${g}, ${b}, ${Math.min(0.42, intensity * 0.16)})`);
+                        haloGradient.addColorStop(0.38, `rgba(${r}, ${g}, ${b}, ${Math.min(0.19, intensity * 0.08)})`);
+                        haloGradient.addColorStop(0.72, `rgba(${r}, ${g}, ${b}, ${Math.min(0.07, intensity * 0.026)})`);
+                        haloGradient.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
 
-                        ctx.fillStyle = gradient;
+                        ctx.filter = `blur(${star.blurPx}px)`;
+                        ctx.fillStyle = haloGradient;
                         ctx.beginPath();
-                        ctx.arc(wrappedX, wrappedY, star.glowRadius, 0, Math.PI * 2);
+                        ctx.arc(wrappedX, wrappedY, star.haloSize, 0, Math.PI * 2);
                         ctx.fill();
 
-                        ctx.globalAlpha = Math.min(1, star.brightness * 1.8);
-                        ctx.fillStyle = `hsl(${star.hue}, ${star.saturation}%, ${Math.min(95, star.lightness + 12)}%)`;
+                        const coreGradient = ctx.createRadialGradient(wrappedX, wrappedY, 0, wrappedX, wrappedY, Math.max(0.9, star.coreSize * 1.12));
+                        coreGradient.addColorStop(0.0, `rgba(255,255,255,${Math.min(0.95, intensity * 0.85)})`);
+                        coreGradient.addColorStop(0.18, `rgba(${r}, ${g}, ${b}, ${Math.min(0.88, intensity * 0.72)})`);
+                        coreGradient.addColorStop(0.75, `rgba(${r}, ${g}, ${b}, ${Math.min(0.2, intensity * 0.12)})`);
+                        coreGradient.addColorStop(1.0, `rgba(${r}, ${g}, ${b}, 0)`);
+
+                        ctx.filter = 'none';
+                        ctx.fillStyle = coreGradient;
                         ctx.beginPath();
-                        ctx.arc(wrappedX, wrappedY, Math.max(0.45, star.coreSize * 0.5), 0, Math.PI * 2);
+                        ctx.arc(wrappedX, wrappedY, Math.max(0.5, star.coreSize), 0, Math.PI * 2);
                         ctx.fill();
+
+                        if (star.isChromatic) {
+                            const c = star.chromaOffsetPx;
+                            ctx.globalAlpha = Math.min(0.24, intensity * 0.18);
+                            ctx.fillStyle = `rgba(${Math.min(255, r + 20)}, ${Math.max(0, g - 4)}, ${Math.max(0, b - 8)}, 1)`;
+                            ctx.beginPath();
+                            ctx.arc(wrappedX - c, wrappedY, Math.max(0.3, star.coreSize * 0.38), 0, Math.PI * 2);
+                            ctx.fill();
+
+                            ctx.fillStyle = `rgba(${Math.max(0, r - 12)}, ${Math.max(0, g - 10)}, ${Math.min(255, b + 28)}, 1)`;
+                            ctx.beginPath();
+                            ctx.arc(wrappedX + c, wrappedY, Math.max(0.3, star.coreSize * 0.34), 0, Math.PI * 2);
+                            ctx.fill();
+                            ctx.globalAlpha = 1;
+                        }
                     }
                 }
-                ctx.globalAlpha = 1.0;
             }
 
+            ctx.filter = 'none';
+            ctx.globalCompositeOperation = 'source-over';
             this.starfieldCacheCameraX = cameraX;
             this.starfieldCacheCameraY = cameraY;
         }
 
         this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
     }
+
 
     /**
      * Convert world coordinates to screen coordinates
