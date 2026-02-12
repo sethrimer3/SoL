@@ -141,6 +141,16 @@ export class MenuAtmosphereLayer {
         this.canvas.style.opacity = this.opacity.toString();
     }
 
+    public getSunCenterNormalized(): { x: number; y: number } {
+        const sunCenter = this.getSunCenter();
+        const safeWidthPx = Math.max(1, this.widthPx);
+        const safeHeightPx = Math.max(1, this.heightPx);
+        return {
+            x: Math.max(0, Math.min(1, sunCenter.x / safeWidthPx)),
+            y: Math.max(0, Math.min(1, sunCenter.y / safeHeightPx)),
+        };
+    }
+
     private initializeAsteroids(): void {
         this.asteroids = [];
         for (let i = 0; i < MenuAtmosphereLayer.ASTEROID_COUNT; i++) {
