@@ -117,10 +117,11 @@ export const DUST_GLOW_TRANSITION_SPEED_DOWN = 0.5;
 // Star background parallax constants
 export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
 export const STAR_LAYER_CONFIGS = [
-    { count: 600, parallaxFactor: 0.1, sizeRange: [0.4, 0.9] as [number, number] },   // Far background
-    { count: 450, parallaxFactor: 0.2, sizeRange: [0.6, 1.2] as [number, number] },   // Mid-far
-    { count: 300, parallaxFactor: 0.35, sizeRange: [0.8, 1.6] as [number, number] },  // Mid-near
-    { count: 200, parallaxFactor: 0.5, sizeRange: [1.0, 2.2] as [number, number] }    // Near foreground
+    { count: 1800, parallaxFactor: 0.08, sizeRange: [0.5, 1.4] as [number, number], brightnessScale: 0.7, blurVariance: 0.75 },
+    { count: 1350, parallaxFactor: 0.15, sizeRange: [0.55, 1.8] as [number, number], brightnessScale: 0.85, blurVariance: 0.6 },
+    { count: 950, parallaxFactor: 0.25, sizeRange: [0.7, 2.2] as [number, number], brightnessScale: 1.0, blurVariance: 0.45 },
+    { count: 600, parallaxFactor: 0.38, sizeRange: [0.9, 2.8] as [number, number], brightnessScale: 1.15, blurVariance: 0.3 },
+    { count: 300, parallaxFactor: 0.55, sizeRange: [1.1, 3.4] as [number, number], brightnessScale: 1.35, blurVariance: 0.18 }
 ];
 
 // Raytracing constants
