@@ -39,34 +39,34 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
     'SpaceBlack': {
         id: 'SpaceBlack',
         name: 'Space Black',
-        background: '#000000',
+        background: '#0A0F1A',
         asteroidColors: {
-            fillStart: '#878787',
-            fillEnd: '#505050',
-            strokeStart: '#9B9B9B',
-            strokeEnd: '#646464'
+            fillStart: '#FFC46B',
+            fillEnd: '#1A2238',
+            strokeStart: '#FFD08A',
+            strokeEnd: '#1C2A4A'
         },
         spaceDustPalette: {
-            neutral: ['#5a5a5a', '#6c6c6c', '#7f7f7f', '#8f8f8f'],
-            accent: ['#5b6c8f', '#6a5f8f', '#7a6aa6']
+            neutral: ['#0B1020', '#10192E', '#1C2A4A', '#243459'],
+            accent: ['#FFCF66', '#FF9A2A', '#FF6A00']
         },
         sunCore: {
-            inner: 'rgba(255, 255, 255, 1)',     // #FFFFFF white-hot center
-            mid: 'rgba(255, 230, 120, 1)',       // #FFE678
-            outer: 'rgba(255, 180, 50, 0.9)'     // #FFB432
+            inner: 'rgba(255, 248, 230, 1)',     // #FFF8E6 clipped white-hot core
+            mid: 'rgba(255, 242, 176, 1)',       // #FFF2B0 inner glow white-yellow
+            outer: 'rgba(255, 214, 90, 0.95)'    // #FFD65A bright plasma gold
         },
         sunGlow: {
-            outerGlow1: 'rgba(255, 220, 100, 0.8)', // #FFDC64
-            outerGlow2: 'rgba(255, 180, 50, 0.4)',  // #FFB432
-            outerGlow3: 'rgba(255, 140, 30, 0.2)',  // #FF8C1E
-            outerGlow4: 'rgba(255, 100, 0, 0)'      // #FF6400 (fade)
+            outerGlow1: 'rgba(255, 185, 94, 0.8)',  // #FFB95E soft golden glow
+            outerGlow2: 'rgba(255, 158, 58, 0.5)',  // #FF9E3A radiant amber
+            outerGlow3: 'rgba(255, 122, 26, 0.28)', // #FF7A1A burning orange
+            outerGlow4: 'rgba(230, 92, 0, 0)'       // #E65C00 warm fade
         },
         sunLightRays: {
-            nearCenter: 'rgba(255, 245, 215, 0.2)',  // #FFF5D7 soft warm cream
-            mid: 'rgba(255, 220, 170, 0.45)',        // #FFDCAA warm peach
-            edge: 'rgba(255, 200, 140, 0.7)'         // #FFC88C fades to transparent
+            nearCenter: 'rgba(255, 241, 184, 0.3)',   // #FFF1B8 beam core
+            mid: 'rgba(255, 179, 71, 0.5)',           // #FFB347 mid beam
+            edge: 'rgba(255, 140, 40, 0)'             // beam edge fade
         },
-        lensFlareHalo: 'rgba(255, 240, 200, 0.15)'   // #FFF0C8
+        lensFlareHalo: 'rgba(255, 140, 0, 0.12)'      // warm cinematic grade overlay
     },
     'ColdIce': {
         id: 'ColdIce',
