@@ -305,6 +305,7 @@ export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
 export const SHIELD_TOWER_COST = 650; // Shield Tower (Radiant)
 export const HERO_UNIT_COST = 300;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
+export const STELLAR_FORGE_SOLAR_MIRROR_COST = 2000; // Cost to produce a solar mirror from the main stellar forge
 
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade

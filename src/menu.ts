@@ -919,10 +919,10 @@ export class MainMenu {
 
     private renderMainScreen(container: HTMLElement): void {
         this.clearMenu();
-        this.renderMainScreenWhenReady(container);
+        void this.renderMainScreenWhenReady(container);
     }
 
-    private renderMainScreenWhenReady(container: HTMLElement): void {
+    private async renderMainScreenWhenReady(container: HTMLElement): Promise<void> {
         const renderToken = ++this.mainScreenRenderToken;
         // Menu images are now preloaded in index.html
         if (this.currentScreen !== 'main') {
@@ -931,6 +931,12 @@ export class MainMenu {
         if (renderToken !== this.mainScreenRenderToken) {
             return;
         }
+
+        await this.menuAudioController.preloadTracks();
+        if (this.currentScreen !== 'main' || renderToken !== this.mainScreenRenderToken) {
+            return;
+        }
+
         this.renderMainScreenContent(container);
     }
 
