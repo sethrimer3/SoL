@@ -3051,10 +3051,10 @@ export class GameRenderer {
                 continue;
             }
 
-            const fromStartToOriginX = -start.x;
-            const fromStartToOriginY = -start.y;
-            const rayDistance = (fromStartToOriginX * edgeY - fromStartToOriginY * edgeX) / denominator;
-            const edgeDistance = (fromStartToOriginX * rayDirectionY - fromStartToOriginY * rayDirectionX) / denominator;
+            const fromOriginToStartX = start.x;
+            const fromOriginToStartY = start.y;
+            const rayDistance = (fromOriginToStartX * edgeY - fromOriginToStartY * edgeX) / denominator;
+            const edgeDistance = (fromOriginToStartX * rayDirectionY - fromOriginToStartY * rayDirectionX) / denominator;
 
             if (rayDistance > 0 && edgeDistance >= 0 && edgeDistance <= 1 && rayDistance < closestDistance) {
                 closestDistance = rayDistance;
