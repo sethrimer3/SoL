@@ -736,6 +736,123 @@ export class OnlineNetworkManager {
     /**
      * Check if user is host
      */
+    getIsHost(): boolean {
+        return this.isHost;
+    }
+
+    /**
+     * Toggle ready status for current player
+     */
+    async toggleReady(): Promise<boolean> {
+        if (!this.supabase || !this.currentRoom) {
+            console.error('Not in a room');
+            return false;
+        }
+
+        try {
+            // Get current ready status
+            const { data: currentPlayer, error: fetchError } = await this.supabase
+                .from('room_players')
+                .select('is_ready')
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', this.localPlayerId)
+                .single();
+
+            if (fetchError || !currentPlayer) {
+                console.error('Failed to get current ready status:', fetchError);
+                return false;
+            }
+
+            // Toggle ready status
+            const newReadyStatus = !currentPlayer.is_ready;
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ is_ready: newReadyStatus })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', this.localPlayerId);
+
+            if (error) {
+                console.error('Failed to toggle ready:', error);
+                return false;
+            }
+
+            console.log(`Ready status changed to: ${newReadyStatus}`);
+            return true;
+        } catch (error) {
+            console.error('Error toggling ready:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Add an AI player to the lobby (host only)
+     */
+    async addAIPlayer(aiPlayerId: string, teamId: number): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to add AI');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .insert([{
+                    room_id: this.currentRoom.id,
+                    player_id: aiPlayerId,
+                    username: `AI Player`,
+                    is_host: false,
+                    is_ready: true,
+                    team_id: teamId,
+                    slot_type: 'ai',
+                    ai_difficulty: 'normal',
+                    faction: 'RADIANT'
+                }]);
+
+            if (error) {
+                console.error('Failed to add AI player:', error);
+                return false;
+            }
+
+            console.log('AI player added');
+            return true;
+        } catch (error) {
+            console.error('Error adding AI player:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Remove a player or AI from the lobby (host only)
+     */
+    async removePlayer(playerId: string): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to remove player');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .delete()
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', playerId);
+
+            if (error) {
+                console.error('Failed to remove player:', error);
+                return false;
+            }
+
+            console.log('Player removed');
+            return true;
+        } catch (error) {
+            console.error('Error removing player:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Check if user is host
+     */
     isRoomHost(): boolean {
         return this.isHost;
     }
