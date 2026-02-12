@@ -1427,6 +1427,11 @@ class GameController {
         window.addEventListener('launchReplay', ((event: CustomEvent) => {
             this.startReplayViewing(event.detail.replay);
         }) as EventListener);
+        
+        // Listen for 4-player game start events from custom lobby
+        window.addEventListener('start4PlayerGame', ((event: CustomEvent) => {
+            this.start4PlayerGame(event.detail.playerConfigs, event.detail.settings, event.detail.roomId);
+        }) as EventListener);
     }
 
     /**
@@ -1558,6 +1563,111 @@ class GameController {
         this.showInfo = settings.isBattleStatsInfoEnabled;
         this.renderer.showInfo = this.showInfo;
 
+        // Start game loop
+        this.start();
+    }
+
+    /**
+     * Start a 4-player game from custom lobby configuration
+     */
+    private start4PlayerGame(
+        playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']>,
+        settings: GameSettings,
+        roomId: string
+    ): void {
+        console.log('[GameController] Starting 4-player game from lobby...');
+        
+        // Initialize RNG for the game
+        const matchSeed = generateMatchSeed();
+        this.currentGameSeed = matchSeed;
+        setGameRNG(new SeededRandom(matchSeed));
+        console.log(`[GameController] Initialized RNG with seed: ${matchSeed}`);
+        
+        // Create player names and factions for createStandardGame
+        const playerNames: Array<[string, Faction]> = playerConfigs.map(([name, faction]) => [name, faction]);
+        
+        // Create the game with 4 players
+        const colorScheme = COLOR_SCHEMES[settings.colorScheme];
+        this.game = createStandardGame(playerNames, colorScheme?.spaceDustPalette);
+        
+        // Set map configuration
+        const map = settings.selectedMap;
+        this.game.mapSize = map.mapSize;
+        
+        // Clear existing suns and add based on map
+        this.game.suns = [];
+        if (map.id === 'twin-suns') {
+            this.game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
+            this.game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else if (map.id === 'lad') {
+            this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0, 'lad'));
+        } else {
+            this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        }
+        
+        // Configure players based on lobby settings
+        for (let i = 0; i < playerConfigs.length && i < this.game.players.length; i++) {
+            const [name, faction, teamId, slotType, aiDifficulty] = playerConfigs[i];
+            const player = this.game.players[i];
+            
+            // Set team ID
+            player.teamId = teamId;
+            
+            // Set AI configuration
+            player.isAi = slotType === 'ai';
+            
+            if (player.isAi) {
+                // Map difficulty to AI strategy
+                if (aiDifficulty === 'easy') {
+                    player.aiStrategy = Constants.AIStrategy.ECONOMIC;
+                } else if (aiDifficulty === 'hard') {
+                    player.aiStrategy = Constants.AIStrategy.AGGRESSIVE;
+                } else {
+                    player.aiStrategy = Constants.AIStrategy.DEFENSIVE;
+                }
+            }
+        }
+        
+        // Initialize replay recorder
+        this.initializeReplayRecorder(settings);
+        
+        // Set renderer configuration
+        this.renderer.selectedHeroNames = settings.selectedHeroNames;
+        this.renderer.playerColor = settings.playerColor;
+        this.renderer.enemyColor = settings.enemyColor;
+        this.renderer.allyColor = settings.allyColor;
+        this.renderer.enemy2Color = settings.enemy2Color;
+        
+        const colorSchemeObj = COLOR_SCHEMES[settings.colorScheme];
+        if (colorSchemeObj) {
+            this.renderer.colorScheme = colorSchemeObj;
+        }
+        
+        this.renderer.damageDisplayMode = settings.damageDisplayMode;
+        this.renderer.healthDisplayMode = settings.healthDisplayMode;
+        this.game.damageDisplayMode = settings.damageDisplayMode;
+        this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
+        this.renderer.graphicsQuality = settings.graphicsQuality;
+        
+        // Set local player (first human player)
+        this.localPlayerIndex = 0;
+        const localPlayer = this.game.players[0]; // First player is always local
+        
+        if (localPlayer) {
+            this.renderer.viewingPlayer = localPlayer;
+            
+            // Center camera on player's base
+            if (localPlayer.stellarForge) {
+                this.renderer.setCameraPosition(localPlayer.stellarForge.position);
+                this.renderer.setZoom(0.5);
+            }
+        }
+        
+        this.showInfo = settings.isBattleStatsInfoEnabled;
+        this.renderer.showInfo = this.showInfo;
+        
+        console.log('[GameController] 4-player game initialized. Starting game loop...');
+        
         // Start game loop
         this.start();
     }

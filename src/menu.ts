@@ -2286,12 +2286,43 @@ export class MainMenu {
                     this.matchmakingPollInterval = null;
                 }
                 
-                // TODO: Create game room with matched players
-                alert('Match found! (Game initialization not yet implemented)');
-                
-                // Leave queue and return to matchmaking screen
+                // Leave matchmaking queue
                 await this.onlineNetworkManager.leaveMatchmakingQueue();
-                this.render2v2MatchmakingScreen(this.contentElement);
+                
+                // Create balanced teams based on MMR
+                const allPlayers = [
+                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT },
+                    ...candidates.map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction }))
+                ];
+                
+                // Sort by MMR and alternate teams for balance
+                allPlayers.sort((a, b) => b.mmr - a.mmr);
+                
+                // Create player configs (highest MMR with lowest, etc.)
+                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']> = [
+                    [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal'],
+                    [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal'],
+                    [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal'],
+                    [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal']
+                ];
+                
+                // Update settings
+                this.settings.gameMode = '2v2-matchmaking';
+                
+                // Hide menu and start game
+                this.hide();
+                
+                // Dispatch event to start 4-player game
+                const event = new CustomEvent('start4PlayerGame', {
+                    detail: {
+                        playerConfigs: playerConfigs,
+                        settings: this.settings,
+                        roomId: null // No room for matchmaking
+                    }
+                });
+                window.dispatchEvent(event);
+                
+                return;
             }
         }, 5000); // Poll every 5 seconds
     }
@@ -2401,8 +2432,82 @@ export class MainMenu {
             onStartGame: async () => {
                 if (!this.onlineNetworkManager || !isHost) return;
                 
-                // TODO: Start the 4-player game with configured teams
-                alert('Game start not yet implemented. Coming soon!');
+                // Get all players
+                const allPlayers = await this.onlineNetworkManager.getRoomPlayers();
+                
+                // Validate we have enough players
+                const activePlayers = allPlayers.filter(p => p.slot_type === 'player' || p.slot_type === 'ai');
+                if (activePlayers.length < 2) {
+                    alert('Need at least 2 players to start the game');
+                    return;
+                }
+                
+                // Verify all human players are ready
+                const humanPlayers = allPlayers.filter(p => p.slot_type === 'player');
+                const allReady = humanPlayers.every(p => p.is_ready);
+                if (!allReady) {
+                    alert('All players must be ready before starting');
+                    return;
+                }
+                
+                // Prepare game settings with 4 players (fill remaining with AI if needed)
+                const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard']> = [];
+                
+                // Sort players by team for proper positioning
+                const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                
+                // Add team 0 players
+                for (const player of team0Players.slice(0, 2)) {
+                    const faction = (player.faction as Faction) || Faction.RADIANT;
+                    playerConfigs.push([
+                        player.username,
+                        faction,
+                        0,
+                        player.slot_type as 'player' | 'ai',
+                        player.ai_difficulty || 'normal'
+                    ]);
+                }
+                
+                // Add team 1 players
+                for (const player of team1Players.slice(0, 2)) {
+                    const faction = (player.faction as Faction) || Faction.RADIANT;
+                    playerConfigs.push([
+                        player.username,
+                        faction,
+                        1,
+                        player.slot_type as 'player' | 'ai',
+                        player.ai_difficulty || 'normal'
+                    ]);
+                }
+                
+                // Ensure we have 4 players (fill with AI if needed)
+                while (playerConfigs.length < 4) {
+                    const teamId = playerConfigs.length < 2 ? 0 : 1;
+                    playerConfigs.push([
+                        `AI Player ${playerConfigs.length + 1}`,
+                        Faction.RADIANT,
+                        teamId,
+                        'ai',
+                        'normal'
+                    ]);
+                }
+                
+                // Update game settings
+                this.settings.gameMode = 'custom-lobby';
+                
+                // Hide menu and start game
+                this.hide();
+                
+                // Dispatch event to start 4-player game
+                const event = new CustomEvent('start4PlayerGame', {
+                    detail: {
+                        playerConfigs: playerConfigs,
+                        settings: this.settings,
+                        roomId: room.id
+                    }
+                });
+                window.dispatchEvent(event);
             },
             onLeave: async () => {
                 if (!this.onlineNetworkManager) return;
