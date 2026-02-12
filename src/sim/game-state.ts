@@ -5280,7 +5280,7 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
             ? [bottomLeft, topRight]
             : [topRight, bottomLeft];
         
-        teamAssignments = [0, 0]; // Both on same team (no team game)
+        teamAssignments = [0, 0]; // Both assigned team 0 (team logic disabled for 1v1)
     } else if (playerNames.length >= 4) {
         // 2v2 game: Four corners
         // Team 0: top-left and bottom-right (one diagonal)
