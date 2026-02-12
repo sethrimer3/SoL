@@ -29,6 +29,7 @@ import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
 import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
+import { MenuAudioController } from './menu/menu-audio';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { OnlineNetworkManager } from './online-network';
@@ -113,6 +114,8 @@ export class MainMenu {
     private mainScreenRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
     private visibilityHandler: (() => void) | null = null;
+    private menuAudioController: MenuAudioController;
+    private isMatchmakingSearching = false;
     
     // Hero unit data with complete stats
     private heroUnits: HeroUnit[] = [
@@ -299,6 +302,7 @@ export class MainMenu {
             gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
+        this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
         // Initialize online network manager for custom lobbies and matchmaking
         const playerId = this.getOrGeneratePlayerId();
@@ -306,12 +310,25 @@ export class MainMenu {
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
+        this.menuAudioController.setMusicEnabled(this.settings.musicEnabled);
+        this.menuAudioController.setVisible(true);
+        this.updateMenuAudioState();
+
+        const unlockAudioOnGesture = (): void => {
+            this.menuAudioController.unlockFromUserGesture();
+            document.removeEventListener('pointerdown', unlockAudioOnGesture);
+            document.removeEventListener('keydown', unlockAudioOnGesture);
+        };
+        document.addEventListener('pointerdown', unlockAudioOnGesture, { once: true });
+        document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
         this.visibilityHandler = () => {
             if (document.hidden) {
+                this.menuAudioController.setVisible(false);
                 this.pauseMenuAnimations();
                 return;
             }
+            this.menuAudioController.setVisible(true);
             this.resumeMenuAnimations();
         };
         document.addEventListener('visibilitychange', this.visibilityHandler);
@@ -373,6 +390,7 @@ export class MainMenu {
         this.resizeHandler = () => {
             this.backgroundParticleLayer?.resize();
             this.atmosphereLayer?.resize();
+            this.updateSunRumbleAudioContext();
             if (!this.menuParticleLayer) {
                 return;
             }
@@ -403,6 +421,7 @@ export class MainMenu {
         this.atmosphereLayer?.start();
         this.menuParticleLayer?.start();
         this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+        this.updateSunRumbleAudioContext();
         this.carouselMenu?.resumeAnimation();
         this.factionCarousel?.resumeAnimation();
     }
@@ -682,6 +701,22 @@ export class MainMenu {
         this.setTestLevelButtonVisible(false);
         this.setLadButtonVisible(false);
         this.updateAtmosphereOpacityForCurrentScreen();
+        this.updateSunRumbleAudioContext();
+        this.updateMenuAudioState();
+    }
+
+    private updateMenuAudioState(): void {
+        this.menuAudioController.setScreen(this.currentScreen, this.isMatchmakingSearching);
+    }
+
+    private updateSunRumbleAudioContext(): void {
+        const sunCenterNormalized = this.atmosphereLayer?.getSunCenterNormalized() ?? { x: 0, y: 0 };
+        const sunFocusLevel = this.currentScreen === 'main' ? 0.85 : 0.08;
+        this.menuAudioController.setSunRumbleContext(
+            sunFocusLevel,
+            sunCenterNormalized.x,
+            sunCenterNormalized.y
+        );
     }
 
     private setMenuParticleDensity(multiplier: number): void {
@@ -1534,6 +1569,7 @@ export class MainMenu {
                 this.renderOnlinePlaceholderScreen(this.contentElement);
             },
             onBack: () => {
+                this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -1559,6 +1595,7 @@ export class MainMenu {
                 this.renderP2PJoinScreen(this.contentElement);
             },
             onBack: () => {
+                this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -2145,6 +2182,7 @@ export class MainMenu {
                 await this.renderCustomLobbyScreen(this.contentElement);
             },
             onBack: () => {
+                this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -2155,6 +2193,7 @@ export class MainMenu {
     }
 
     private render2v2MatchmakingScreen(container: HTMLElement): void {
+        this.isMatchmakingSearching = false;
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
         
@@ -2198,9 +2237,11 @@ export class MainMenu {
                 await this.onlineNetworkManager.leaveMatchmakingQueue();
                 
                 // Re-render without searching state
+                this.isMatchmakingSearching = false;
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
+                this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -2211,6 +2252,7 @@ export class MainMenu {
     }
 
     private render2v2MatchmakingScreenSearching(container: HTMLElement): void {
+        this.isMatchmakingSearching = true;
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
         
@@ -2238,6 +2280,7 @@ export class MainMenu {
                 await this.onlineNetworkManager.leaveMatchmakingQueue();
                 
                 // Re-render without searching state
+                this.isMatchmakingSearching = false;
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
@@ -2246,6 +2289,7 @@ export class MainMenu {
                     window.clearInterval(this.matchmakingPollInterval);
                     this.matchmakingPollInterval = null;
                 }
+                this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
                 this.renderGameModeSelectionScreen(this.contentElement);
@@ -2598,6 +2642,7 @@ export class MainMenu {
             },
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
+                this.menuAudioController.setMusicEnabled(value);
             },
             onBattleStatsInfoChange: (value) => {
                 this.settings.isBattleStatsInfoEnabled = value;
@@ -3049,6 +3094,7 @@ export class MainMenu {
      */
     hide(): void {
         this.menuElement.style.display = 'none';
+        this.menuAudioController.setVisible(false);
         this.pauseMenuAnimations();
         
         // Show match loading screen
@@ -3060,7 +3106,9 @@ export class MainMenu {
      */
     show(): void {
         this.menuElement.style.display = 'block';
+        this.menuAudioController.setVisible(true);
         this.currentScreen = 'main';
+        this.isMatchmakingSearching = false;
         this.renderMainScreen(this.contentElement);
         this.resumeMenuAnimations();
     }
@@ -3069,6 +3117,8 @@ export class MainMenu {
      * Remove the menu from DOM
      */
     destroy(): void {
+        this.menuAudioController.destroy();
+
         // Cleanup network managers
         if (this.settings.networkManager) {
             this.settings.networkManager.disconnect();
