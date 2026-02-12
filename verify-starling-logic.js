@@ -42,7 +42,7 @@ function canShootTarget(
     // Calculate dot product
     const dotProduct = velocityDirX * toTargetDirX + velocityDirY * toTargetDirY;
     
-    // For 180-degree arc, we need dot product >= 0 (angle <= 90 degrees from forward)
+    // For 180-degree arc, we need dot product >= 0 (within ±90 degrees from movement direction)
     return dotProduct >= 0;
 }
 

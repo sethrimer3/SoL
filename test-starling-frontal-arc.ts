@@ -163,13 +163,13 @@ function testMovingStarlingCannotShootPastSides(): boolean {
     starling.velocity.x = 50; // Moving right
     starling.velocity.y = 0;
     
-    // Create target at slightly behind the perpendicular (95 degrees back)
+    // Create target at slightly behind the perpendicular (slightly past 90 degrees)
     const targetBehindSide = new StellarForge(new Vector2D(90, 50), player2);
     const canShootBehindSide = (starling as any).canShootTarget(targetBehindSide);
     
     console.log('Starling position:', starling.position);
     console.log('Starling velocity:', starling.velocity);
-    console.log('Target position (95 degrees back):', targetBehindSide.position);
+    console.log('Target position (slightly past 90 degrees):', targetBehindSide.position);
     console.log('Can shoot target slightly behind perpendicular:', canShootBehindSide);
     
     if (canShootBehindSide) {

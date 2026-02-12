@@ -418,8 +418,8 @@ export class Starling extends Unit {
         // dot = cos(angle)
         const dotProduct = velocityDirX * toTargetDirX + velocityDirY * toTargetDirY;
         
-        // For 180-degree arc (π radians), we need cos(π/2) = 0 or greater
-        // (angle between -90° and +90° from movement direction)
+        // For 180-degree arc, we need cos(angle) >= 0
+        // This means angle is within ±90 degrees from movement direction
         return dotProduct >= 0;
     }
 
