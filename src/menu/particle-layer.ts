@@ -385,17 +385,13 @@ export class ParticleMenuLayer {
                     haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${alpha2})`);
                     haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
                     
-                    // Implement true LRU cache eviction when cache is full
+                    // Simple FIFO eviction when cache is full (no LRU overhead)
                     if (this.haloGradientCache.size >= 100) {
                         const firstKey = this.haloGradientCache.keys().next().value;
                         if (firstKey) {
                             this.haloGradientCache.delete(firstKey);
                         }
                     }
-                    this.haloGradientCache.set(cacheKey, haloGradient);
-                } else {
-                    // Touch entry for true LRU: delete and re-insert to move to end
-                    this.haloGradientCache.delete(cacheKey);
                     this.haloGradientCache.set(cacheKey, haloGradient);
                 }
                 
