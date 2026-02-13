@@ -73,12 +73,6 @@ type ShadowQuad = {
     ss2y: number;
 };
 
-type ShadowOccluder = {
-    position: Vector2D;
-    rotationRad: number;
-    sizeWorld: number;
-};
-
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -367,9 +361,9 @@ export class GameRenderer {
         };
 
         const layerConfigs = [
-            { count: 320, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
-            { count: 220, parallaxFactor: 0.3, sizeMinPx: 1.0, sizeMaxPx: 2.5 },
-            { count: 140, parallaxFactor: 0.38, sizeMinPx: 1.2, sizeMaxPx: 2.9 },
+            { count: 2400, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
+            { count: 1700, parallaxFactor: 0.3, sizeMinPx: 1.0, sizeMaxPx: 2.5 },
+            { count: 1100, parallaxFactor: 0.38, sizeMinPx: 1.2, sizeMaxPx: 2.9 },
         ];
         const orangeSunlightPalette: Array<[number, number, number]> = [
             [255, 205, 126],
@@ -4485,27 +4479,6 @@ export class GameRenderer {
         return this.lightingSunPassCtx;
     }
 
-    private buildOrientedShadowOccluder(position: Vector2D, rotationRad: number, sizeWorld: number): Vector2D[] {
-        const halfSizeWorld = sizeWorld * 0.5;
-        const cosTheta = Math.cos(rotationRad);
-        const sinTheta = Math.sin(rotationRad);
-        const localCorners = [
-            { x: -halfSizeWorld, y: -halfSizeWorld },
-            { x: halfSizeWorld, y: -halfSizeWorld },
-            { x: halfSizeWorld, y: halfSizeWorld },
-            { x: -halfSizeWorld, y: halfSizeWorld }
-        ];
-        const worldVertices: Vector2D[] = [];
-
-        for (const corner of localCorners) {
-            worldVertices.push(new Vector2D(
-                position.x + corner.x * cosTheta - corner.y * sinTheta,
-                position.y + corner.x * sinTheta + corner.y * cosTheta
-            ));
-        }
-
-        return worldVertices;
-    }
 
     private appendShadowQuadsFromVertices(sun: Sun, worldVertices: Vector2D[], quads: ShadowQuad[]): void {
         const sunX = sun.position.x;
@@ -4562,29 +4535,11 @@ export class GameRenderer {
         }
     }
 
-    private collectSunShadowOccluders(game: GameState): ShadowOccluder[] {
-        const occluders: ShadowOccluder[] = [];
-
-        for (const player of game.players) {
-            for (const mirror of player.solarMirrors) {
-                occluders.push({ position: mirror.position, rotationRad: mirror.reflectionAngle, sizeWorld: 14 * 2.4 });
-            }
-        }
-
-        return occluders;
-    }
-
     private buildSunShadowQuads(sun: Sun, game: GameState): ShadowQuad[] {
         const quads: ShadowQuad[] = [];
 
         for (const asteroid of game.asteroids) {
             const worldVertices = asteroid.getWorldVertices();
-            this.appendShadowQuadsFromVertices(sun, worldVertices, quads);
-        }
-
-        const entityOccluders = this.collectSunShadowOccluders(game);
-        for (const occluder of entityOccluders) {
-            const worldVertices = this.buildOrientedShadowOccluder(occluder.position, occluder.rotationRad, occluder.sizeWorld);
             this.appendShadowQuadsFromVertices(sun, worldVertices, quads);
         }
 
