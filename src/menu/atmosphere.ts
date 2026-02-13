@@ -28,6 +28,7 @@ export class MenuAtmosphereLayer {
     private static readonly STAR_POINT_BUDGET_MEDIUM = 2200;
     private static readonly STAR_POINT_BUDGET_HIGH = 3400;
     private static readonly STAR_POINT_BUDGET_ULTRA = 5200;
+    private static readonly STAR_LAYER_PARALLAX_SCALE = [0.02, 0.04, 0.07, 0.11] as const;
     private static readonly SUN_OFFSET_X_PX = -28;
     private static readonly SUN_OFFSET_Y_PX = -22;
     private static readonly SHADOW_LENGTH_BASE_PX = 120;
@@ -293,7 +294,10 @@ export class MenuAtmosphereLayer {
     private renderStars(): void {
         const nowMs = performance.now();
         const sunCenter = this.getSunCenter();
-        const layerDepthParallax = [0.02, 0.04, 0.07, 0.11];
+        const sunParallaxOriginX = this.widthPx * 0.5;
+        const sunParallaxOriginY = this.heightPx * 0.5;
+        const sunParallaxDeltaX = sunCenter.x - sunParallaxOriginX;
+        const sunParallaxDeltaY = sunCenter.y - sunParallaxOriginY;
 
         this.context.save();
         this.context.globalCompositeOperation = 'lighter';
@@ -301,9 +305,9 @@ export class MenuAtmosphereLayer {
         for (let i = 0; i < this.stars.length; i++) {
             const star = this.stars[i];
             const depthScale = (star.layerIndex + 1) / MenuAtmosphereLayer.STAR_PARALLAX_LAYERS;
-            const parallaxScale = layerDepthParallax[star.layerIndex] ?? 0.05;
-            const parallaxOffsetX = (sunCenter.x - this.widthPx * 0.5) * parallaxScale;
-            const parallaxOffsetY = (sunCenter.y - this.heightPx * 0.5) * parallaxScale;
+            const parallaxScale = MenuAtmosphereLayer.STAR_LAYER_PARALLAX_SCALE[star.layerIndex] ?? 0.05;
+            const parallaxOffsetX = sunParallaxDeltaX * parallaxScale;
+            const parallaxOffsetY = sunParallaxDeltaY * parallaxScale;
 
             const flicker = 1 + MenuAtmosphereLayer.STAR_FLICKER_AMPLITUDE
                 * Math.sin(star.phase + (nowMs * 0.001) * Math.PI * 2 * star.flickerHz);
@@ -616,11 +620,9 @@ export class MenuAtmosphereLayer {
     }
 
     private renderAsteroids(): void {
-        const sunCenter = this.getSunCenter();
         for (const asteroid of this.asteroids) {
-            const points = this.getAsteroidPoints(asteroid);
             // Dropshadow removed per requirements
-            this.renderAsteroidBody(asteroid, points);
+            this.renderAsteroidBody(asteroid);
         }
     }
 
@@ -655,7 +657,7 @@ export class MenuAtmosphereLayer {
         this.context.fill();
     }
 
-    private renderAsteroidBody(asteroid: MenuAsteroid, points: { x: number; y: number }[]): void {
+    private renderAsteroidBody(asteroid: MenuAsteroid): void {
         const lightGradient = this.context.createLinearGradient(
             asteroid.x - asteroid.radiusPx,
             asteroid.y - asteroid.radiusPx,
@@ -667,12 +669,17 @@ export class MenuAtmosphereLayer {
 
         this.context.fillStyle = lightGradient;
         this.context.beginPath();
-        for (let i = 0; i < points.length; i++) {
-            const point = points[i];
+        const basePoints = asteroid.points;
+        for (let i = 0; i < basePoints.length; i++) {
+            const point = basePoints[i];
+            const angleRad = point.angleRad + asteroid.rotationRad;
+            const radiusPx = asteroid.radiusPx * point.radiusScale;
+            const x = asteroid.x + Math.cos(angleRad) * radiusPx;
+            const y = asteroid.y + Math.sin(angleRad) * radiusPx;
             if (i === 0) {
-                this.context.moveTo(point.x, point.y);
+                this.context.moveTo(x, y);
             } else {
-                this.context.lineTo(point.x, point.y);
+                this.context.lineTo(x, y);
             }
         }
         this.context.closePath();
@@ -700,21 +707,6 @@ export class MenuAtmosphereLayer {
             x: normX,
             y: normY,
         };
-    }
-
-    private getAsteroidPoints(asteroid: MenuAsteroid): { x: number; y: number }[] {
-        const points: { x: number; y: number }[] = [];
-        const basePoints = asteroid.points;
-        for (let i = 0; i < basePoints.length; i++) {
-            const point = basePoints[i];
-            const angleRad = point.angleRad + asteroid.rotationRad;
-            const radiusPx = asteroid.radiusPx * point.radiusScale;
-            points.push({
-                x: asteroid.x + Math.cos(angleRad) * radiusPx,
-                y: asteroid.y + Math.sin(angleRad) * radiusPx,
-            });
-        }
-        return points;
     }
 
     private randomRange(min: number, max: number): number {
