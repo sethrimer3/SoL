@@ -40,13 +40,12 @@ export class SolarMirror {
 
     // Pathfinding constants
     private readonly MAX_PATHFINDING_ITERATIONS = 5; // Maximum iterations for waypoint generation
-    private readonly ASTEROID_CLEARANCE = 30; // Extra clearance for asteroids
-    private readonly BUILDING_CLEARANCE = 10; // Extra clearance for buildings
-    private readonly SUN_CLEARANCE = 20; // Extra clearance for suns
-    private readonly FORGE_CLEARANCE = 10; // Extra clearance for stellar forges
+    private readonly ASTEROID_CLEARANCE = 20; // Extra clearance for asteroids (matches original reactive avoidance)
+    private readonly BUILDING_CLEARANCE = 20; // Extra clearance for buildings (matches original reactive avoidance)
+    private readonly SUN_CLEARANCE = 30; // Extra clearance for suns (matches original reactive avoidance)
+    private readonly FORGE_CLEARANCE = 30; // Extra clearance for stellar forges (matches original reactive avoidance)
     private readonly WAYPOINT_CLEARANCE_MULTIPLIER = 1.2; // Multiplier for waypoint clearance
     private readonly REACTIVE_AVOIDANCE_RANGE = 60; // Look ahead distance for reactive avoidance
-    private readonly REACTIVE_AVOIDANCE_BUILDING_CLEARANCE = 20; // Clearance for reactive building avoidance
 
     constructor(
         public position: Vector2D,
@@ -652,7 +651,7 @@ export class SolarMirror {
                 const dx = this.position.x - building.position.x;
                 const dy = this.position.y - building.position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const minDist = building.radius + this.REACTIVE_AVOIDANCE_BUILDING_CLEARANCE;
+                const minDist = building.radius + this.BUILDING_CLEARANCE;
                 if (dist < minDist + avoidanceRange) {
                     const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                     avoidX += (dx / dist) * avoidStrength;
