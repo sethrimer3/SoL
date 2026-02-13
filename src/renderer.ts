@@ -2270,13 +2270,19 @@ export class GameRenderer {
         const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
         const ringThickness = Math.max(1.5, this.zoom * 1.8);
         
-        // Cache gradient by selection radius bucket to avoid per-frame creation
+        // Cache gradient by quantized selection radius to avoid per-frame creation
         const radiusBucket = Math.round(selectionRadius / 5) * 5;
-        const cacheKey = `building-selection-${radiusBucket}`;
+        const thicknessBucket = Math.round(ringThickness * 10) / 10; // 0.1 precision
+        const cacheKey = `building-selection-${radiusBucket}-${thicknessBucket}`;
+        
+        // Use quantized values for gradient dimensions to match cache key
+        const innerR = Math.max(0, radiusBucket - thicknessBucket * 0.4);
+        const outerR = radiusBucket + thicknessBucket * 2.4;
+        
         const gradient = this.getCachedRadialGradient(
             cacheKey,
-            0, 0, Math.max(0, selectionRadius - ringThickness * 0.4),
-            0, 0, selectionRadius + ringThickness * 2.4,
+            0, 0, innerR,
+            0, 0, outerR,
             [
                 { offset: 0, color: 'rgba(255, 215, 0, 0.95)' },
                 { offset: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
@@ -2449,21 +2455,19 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
         
-        // Cache gradients to avoid creating them every frame
-        const radiusBucket = Math.round(screenRadius / 16) * 16;
-        
         for (let stepIndex = 0; stepIndex < this.ULTRA_SUN_BLOOM_STEPS; stepIndex++) {
             const stepT = stepIndex / Math.max(1, this.ULTRA_SUN_BLOOM_STEPS - 1);
             const radius = screenRadius * (1.15 + stepT * 2.65);
             const alpha = 0.2 * (1 - stepT);
             
-            // Use cached gradient at origin, then translate
+            // Cache gradient by quantized radius for this bloom step
+            const radiusBucket = Math.round(radius / 16) * 16;
             const cacheKey = `ultra-sun-bloom-${radiusBucket}-${stepIndex}`;
-            const innerRadius = radius * 0.22;
+            const innerRadius = radiusBucket * 0.22;
             const bloom = this.getCachedRadialGradient(
                 cacheKey,
                 0, 0, innerRadius,
-                0, 0, radius,
+                0, 0, radiusBucket,
                 [
                     { offset: 0, color: `rgba(255, 250, 225, ${Math.min(0.5, alpha * 2.2).toFixed(4)})` },
                     { offset: 0.45, color: `rgba(255, 200, 115, ${alpha.toFixed(4)})` },
@@ -2482,11 +2486,12 @@ export class GameRenderer {
 
         // Horizontal stretch gradient
         this.ctx.globalAlpha = 0.23;
-        const stretchCacheKey = `ultra-sun-bloom-stretch-${radiusBucket}`;
+        const stretchRadiusBucket = Math.round(screenRadius * 2.9 / 16) * 16;
+        const stretchCacheKey = `ultra-sun-bloom-stretch-${stretchRadiusBucket}`;
         const horizontalStretch = this.getCachedRadialGradient(
             stretchCacheKey,
-            0, 0, screenRadius * 0.3,
-            0, 0, screenRadius * 2.9,
+            0, 0, stretchRadiusBucket * (0.3 / 2.9),
+            0, 0, stretchRadiusBucket,
             [
                 { offset: 0, color: 'rgba(255, 242, 186, 0.42)' },
                 { offset: 0.4, color: 'rgba(255, 212, 120, 0.18)' },
