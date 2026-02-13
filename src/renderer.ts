@@ -57,6 +57,32 @@ type SunRenderCache = {
     shaftTextureInner: HTMLCanvasElement;
 };
 
+type UltraSunEmberStatic = {
+    seed: number;
+    speedOutward: number;
+    outwardOffset: number;
+    orbitAngle: number;
+    swirlSpeed: number;
+    swirlAmplitudeOffset: number;
+    swirlAmplitudeScale: number;
+    radiusScale: number;
+    radiusVariance: number;
+    arcBendSpeed: number;
+    arcBendAmplitudeOffset: number;
+    arcBendAmplitudeScale: number;
+    sizeBase: number;
+    sizeVariance: number;
+    alphaBase: number;
+    alphaVariance: number;
+    emberRed: number;
+    emberGreen: number;
+    emberBlue: number;
+};
+
+type UltraSunParticleCache = {
+    emberStatics: UltraSunEmberStatic[];
+};
+
 type UnitGlowRenderCache = {
     texture: HTMLCanvasElement;
     radiusPx: number;
@@ -239,6 +265,9 @@ export class GameRenderer {
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
+    private ultraSunParticleCacheBySun = new WeakMap<Sun, UltraSunParticleCache>();
+    private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
+    private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
@@ -4707,45 +4736,30 @@ export class GameRenderer {
                 continue;
             }
 
+            const particleCache = this.getOrCreateUltraSunParticleCache(sun);
+
             const sunScreenPos = this.worldToScreen(sun.position);
             const screenRadius = sun.radius * this.zoom;
 
-            for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
-                const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
-                const outwardT = (game.gameTime * (0.06 + this.hashNormalized(seed + 2.2) * 0.08) + this.hashNormalized(seed + 11.5) * 9.0) % 1;
-                const orbitAngle = emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25;
-                const swirl = Math.sin(game.gameTime * (2.2 + this.hashNormalized(seed + 4.4) * 3.1) + seed * 0.37 + outwardT * 8.4) * (0.24 + outwardT * 0.56);
-                const curveAngle = orbitAngle + swirl;
-                const radius = screenRadius * (0.35 + outwardT * (2.4 + this.hashNormalized(seed + 7.3) * 1.9));
-                const arcBend = Math.sin(game.gameTime * (3.1 + this.hashNormalized(seed + 9.7) * 2.6) + seed * 0.61) * screenRadius * (0.04 + outwardT * 0.14);
+            for (const ember of particleCache.emberStatics) {
+                const outwardT = (game.gameTime * ember.speedOutward + ember.outwardOffset) % 1;
+                const swirl = Math.sin(game.gameTime * ember.swirlSpeed + ember.seed * 0.37 + outwardT * 8.4)
+                    * (ember.swirlAmplitudeOffset + outwardT * ember.swirlAmplitudeScale);
+                const curveAngle = ember.orbitAngle + swirl;
+                const radius = screenRadius * (0.35 + outwardT * (ember.radiusScale + ember.radiusVariance));
+                const arcBend = Math.sin(game.gameTime * ember.arcBendSpeed + ember.seed * 0.61)
+                    * screenRadius * (ember.arcBendAmplitudeOffset + outwardT * ember.arcBendAmplitudeScale);
                 const tangentX = -Math.sin(curveAngle);
                 const tangentY = Math.cos(curveAngle);
                 const x = sunScreenPos.x + Math.cos(curveAngle) * radius + tangentX * arcBend;
                 const y = sunScreenPos.y + Math.sin(curveAngle) * radius + tangentY * arcBend;
-                const size = (0.35 + this.hashNormalized(seed + 17.1) * 1.1) * (1 - outwardT * 0.2);
+                const size = (ember.sizeBase + ember.sizeVariance) * (1 - outwardT * 0.2);
                 const fadeIn = Math.min(1, outwardT * 6);
                 const fadeOut = Math.max(0, 1 - outwardT);
-                const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.2) * fadeIn * fadeOut * fadeOut;
-                const fieryColorRoll = this.hashNormalized(seed + 23.7);
-                const emberRed = Math.floor(217 + fieryColorRoll * 38);
-                const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
-                const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
+                const alpha = (ember.alphaBase + ember.alphaVariance) * fadeIn * fadeOut * fadeOut;
 
                 const glowRadius = size * this.zoom * 1.4;
-                const glowGradient = this.ctx.createRadialGradient(x, y, 0, x, y, glowRadius * 2.4);
-                glowGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 28)}, ${Math.min(255, emberGreen + 28)}, ${Math.min(255, emberBlue + 14)}, ${(alpha * 0.9).toFixed(4)})`);
-                glowGradient.addColorStop(0.45, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, ${(alpha * 0.36).toFixed(4)})`);
-                glowGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
-
-                this.ctx.fillStyle = glowGradient;
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, glowRadius * 2.4, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                this.ctx.fillStyle = `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, ${alpha.toFixed(4)})`;
-                this.ctx.beginPath();
-                this.ctx.arc(x, y, size * this.zoom, 0, Math.PI * 2);
-                this.ctx.fill();
+                this.drawUltraSunEmber(x, y, glowRadius, alpha, ember.emberRed, ember.emberGreen, ember.emberBlue);
             }
         }
 
@@ -4766,6 +4780,126 @@ export class GameRenderer {
         }
 
         this.ctx.restore();
+    }
+
+    private getOrCreateUltraSunParticleCache(sun: Sun): UltraSunParticleCache {
+        const cached = this.ultraSunParticleCacheBySun.get(sun);
+        if (cached) {
+            return cached;
+        }
+
+        const emberStatics: UltraSunEmberStatic[] = [];
+        for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
+            const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
+            const fieryColorRoll = this.hashNormalized(seed + 23.7);
+            emberStatics.push({
+                seed,
+                speedOutward: 0.06 + this.hashNormalized(seed + 2.2) * 0.08,
+                outwardOffset: this.hashNormalized(seed + 11.5) * 9.0,
+                orbitAngle: emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25,
+                swirlSpeed: 2.2 + this.hashNormalized(seed + 4.4) * 3.1,
+                swirlAmplitudeOffset: 0.24,
+                swirlAmplitudeScale: 0.56,
+                radiusScale: 2.4,
+                radiusVariance: this.hashNormalized(seed + 7.3) * 1.9,
+                arcBendSpeed: 3.1 + this.hashNormalized(seed + 9.7) * 2.6,
+                arcBendAmplitudeOffset: 0.04,
+                arcBendAmplitudeScale: 0.14,
+                sizeBase: 0.35,
+                sizeVariance: this.hashNormalized(seed + 17.1) * 1.1,
+                alphaBase: 0.06,
+                alphaVariance: this.hashNormalized(seed + 19.9) * 0.2,
+                emberRed: Math.floor(217 + fieryColorRoll * 38),
+                emberGreen: Math.floor(71 + this.hashNormalized(seed + 29.2) * 107),
+                emberBlue: Math.floor(10 + this.hashNormalized(seed + 31.4) * 20)
+            });
+        }
+
+        const generated: UltraSunParticleCache = { emberStatics };
+        this.ultraSunParticleCacheBySun.set(sun, generated);
+        return generated;
+    }
+
+    private drawUltraSunEmber(
+        x: number,
+        y: number,
+        glowRadius: number,
+        alpha: number,
+        emberRed: number,
+        emberGreen: number,
+        emberBlue: number
+    ): void {
+        const glowTexture = this.getOrCreateUltraEmberGlowTexture(emberRed, emberGreen, emberBlue);
+        const coreTexture = this.getOrCreateUltraEmberCoreTexture(emberRed, emberGreen, emberBlue);
+
+        const glowSize = glowRadius * 4.8;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.drawImage(glowTexture, x - glowSize / 2, y - glowSize / 2, glowSize, glowSize);
+
+        const coreSize = glowRadius / 1.4;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.drawImage(coreTexture, x - coreSize / 2, y - coreSize / 2, coreSize, coreSize);
+    }
+
+    private getOrCreateUltraEmberGlowTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
+        const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
+        const cached = this.ultraEmberGlowTextureByColor.get(colorKey);
+        if (cached) {
+            return cached;
+        }
+
+        const textureSize = 96;
+        const textureCanvas = document.createElement('canvas');
+        textureCanvas.width = textureSize;
+        textureCanvas.height = textureSize;
+        const textureContext = textureCanvas.getContext('2d');
+        if (!textureContext) {
+            return textureCanvas;
+        }
+
+        const center = textureSize * 0.5;
+        const glowGradient = textureContext.createRadialGradient(center, center, 0, center, center, center);
+        glowGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 28)}, ${Math.min(255, emberGreen + 28)}, ${Math.min(255, emberBlue + 14)}, 1)`);
+        glowGradient.addColorStop(0.45, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0.4)`);
+        glowGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
+
+        textureContext.fillStyle = glowGradient;
+        textureContext.beginPath();
+        textureContext.arc(center, center, center, 0, Math.PI * 2);
+        textureContext.fill();
+
+        this.ultraEmberGlowTextureByColor.set(colorKey, textureCanvas);
+        return textureCanvas;
+    }
+
+    private getOrCreateUltraEmberCoreTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
+        const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
+        const cached = this.ultraEmberCoreTextureByColor.get(colorKey);
+        if (cached) {
+            return cached;
+        }
+
+        const textureSize = 48;
+        const textureCanvas = document.createElement('canvas');
+        textureCanvas.width = textureSize;
+        textureCanvas.height = textureSize;
+        const textureContext = textureCanvas.getContext('2d');
+        if (!textureContext) {
+            return textureCanvas;
+        }
+
+        const center = textureSize * 0.5;
+        const coreGradient = textureContext.createRadialGradient(center, center, 0, center, center, center);
+        coreGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, 1)`);
+        coreGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
+
+        textureContext.fillStyle = coreGradient;
+        textureContext.beginPath();
+        textureContext.arc(center, center, center, 0, Math.PI * 2);
+        textureContext.fill();
+
+        this.ultraEmberCoreTextureByColor.set(colorKey, textureCanvas);
+        return textureCanvas;
     }
 
     private applyUltraWarmCoolGrade(game: GameState): void {
