@@ -2270,12 +2270,11 @@ export class GameRenderer {
         const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
         const ringThickness = Math.max(1.5, this.zoom * 1.8);
         
-        // Cache gradient by quantized selection radius to avoid per-frame creation
+        // Quantize values for caching - use these for both gradient and drawing
         const radiusBucket = Math.round(selectionRadius / 5) * 5;
         const thicknessBucket = Math.round(ringThickness * 10) / 10; // 0.1 precision
         const cacheKey = `building-selection-${radiusBucket}-${thicknessBucket}`;
         
-        // Use quantized values for gradient dimensions to match cache key
         const innerR = Math.max(0, radiusBucket - thicknessBucket * 0.4);
         const outerR = radiusBucket + thicknessBucket * 2.4;
         
@@ -2293,9 +2292,9 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.strokeStyle = gradient;
-        this.ctx.lineWidth = ringThickness;
+        this.ctx.lineWidth = thicknessBucket;
         this.ctx.beginPath();
-        this.ctx.arc(0, 0, selectionRadius, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, radiusBucket, 0, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.restore();
     }
@@ -2460,7 +2459,7 @@ export class GameRenderer {
             const radius = screenRadius * (1.15 + stepT * 2.65);
             const alpha = 0.2 * (1 - stepT);
             
-            // Cache gradient by quantized radius for this bloom step
+            // Quantize radius for caching - use for both gradient and drawing
             const radiusBucket = Math.round(radius / 16) * 16;
             const cacheKey = `ultra-sun-bloom-${radiusBucket}-${stepIndex}`;
             const innerRadius = radiusBucket * 0.22;
@@ -2479,7 +2478,7 @@ export class GameRenderer {
             this.ctx.translate(screenPos.x, screenPos.y);
             this.ctx.fillStyle = bloom;
             this.ctx.beginPath();
-            this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
+            this.ctx.arc(0, 0, radiusBucket, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.restore();
         }
@@ -2487,7 +2486,8 @@ export class GameRenderer {
         // Horizontal stretch gradient
         this.ctx.globalAlpha = 0.23;
         const stretchRadiusBucket = Math.round(screenRadius * 2.9 / 16) * 16;
-        const stretchCacheKey = `ultra-sun-bloom-stretch-${stretchRadiusBucket}`;
+        const stretchMinorAxis = Math.round(screenRadius * 1.85 / 16) * 16;
+        const stretchCacheKey = `ultra-sun-bloom-stretch-${stretchRadiusBucket}-${stretchMinorAxis}`;
         const horizontalStretch = this.getCachedRadialGradient(
             stretchCacheKey,
             0, 0, stretchRadiusBucket * (0.3 / 2.9),
@@ -2502,7 +2502,7 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.beginPath();
-        this.ctx.ellipse(0, 0, screenRadius * 2.9, screenRadius * 1.85, 0, 0, Math.PI * 2);
+        this.ctx.ellipse(0, 0, stretchRadiusBucket, stretchMinorAxis, 0, 0, Math.PI * 2);
         this.ctx.fillStyle = horizontalStretch;
         this.ctx.fill();
         this.ctx.restore();
