@@ -126,6 +126,8 @@ export class GameRenderer {
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
     public infoBoxOpacity: number = 0.5; // Opacity for top-right info boxes
+    public soundVolume: number = 1; // Sound effect volume for in-game controls
+    public musicVolume: number = 1; // Music volume for in-game controls
     private screenShakeIntensity: number = 0; // Current screen shake intensity
     private screenShakeTimer: number = 0; // Screen shake timer
     private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
@@ -10590,7 +10592,29 @@ export class GameRenderer {
                     return { type: 'colorblindMode', isEnabled: false };
                 }
             }
-            
+
+            optionY += optionHeight + optionSpacing;
+
+            const sliderTrackX = optionX + optionWidth * 0.35;
+            const sliderTrackWidth = optionWidth * 0.65;
+            const sliderRows: Array<{ type: 'soundVolume' | 'musicVolume' }> = [
+                { type: 'soundVolume' },
+                { type: 'musicVolume' }
+            ];
+
+            for (let i = 0; i < sliderRows.length; i += 1) {
+                const rowY = optionY + i * (optionHeight + optionSpacing);
+                const isWithinRow = screenY >= rowY && screenY <= rowY + optionHeight;
+                if (!isWithinRow) {
+                    continue;
+                }
+                if (screenX >= sliderTrackX && screenX <= sliderTrackX + sliderTrackWidth) {
+                    const rawPercent = ((screenX - sliderTrackX) / sliderTrackWidth) * 100;
+                    const snappedPercent = Math.max(0, Math.min(100, Math.round(rawPercent / 5) * 5));
+                    return { type: sliderRows[i].type, volumePercent: snappedPercent };
+                }
+            }
+
             return null;
         }
 
@@ -10919,6 +10943,50 @@ export class GameRenderer {
             this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.fillText('Off', colorblindButtons.button2X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
+
+            optionY += optionHeight + optionSpacing;
+
+            const sliderTrackX = optionX + optionWidth * 0.35;
+            const sliderTrackWidth = optionWidth * 0.65;
+            const sliderTrackHeight = Math.max(8, Math.round(optionHeight * 0.16));
+            const volumeRows = [
+                { label: 'Sound FX Volume:', valuePercent: Math.round(this.soundVolume * 100) },
+                { label: 'Music Volume:', valuePercent: Math.round(this.musicVolume * 100) }
+            ];
+
+            for (let i = 0; i < volumeRows.length; i += 1) {
+                const row = volumeRows[i];
+                const rowY = optionY + i * (optionHeight + optionSpacing);
+                const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
+                const trackY = rowY + (optionHeight - sliderTrackHeight) / 2;
+                const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;
+
+                this.ctx.fillStyle = '#AAAAAA';
+                this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+                this.ctx.textAlign = 'left';
+                this.ctx.fillText(row.label, optionX, rowY + (optionHeight * 0.4));
+
+                this.ctx.fillStyle = 'rgba(60, 60, 60, 0.9)';
+                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
+                this.ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
+                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * (clampedPercent / 100), sliderTrackHeight);
+                this.ctx.strokeStyle = '#FFD700';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.strokeRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
+
+                this.ctx.beginPath();
+                this.ctx.arc(knobX, trackY + sliderTrackHeight / 2, sliderTrackHeight * 1.1, 0, Math.PI * 2);
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.fill();
+                this.ctx.strokeStyle = '#FFFFFF';
+                this.ctx.lineWidth = 1;
+                this.ctx.stroke();
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
+                this.ctx.textAlign = 'right';
+                this.ctx.fillText(`${clampedPercent}%`, optionX + optionWidth, rowY + (optionHeight * 0.4));
+            }
         } else {
             const maxScroll = this.getGraphicsMenuMaxScroll(layout);
             if (this.graphicsMenuScrollOffset > maxScroll) {

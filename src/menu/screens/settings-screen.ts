@@ -4,13 +4,15 @@
  */
 
 import { COLOR_SCHEMES } from '../color-schemes';
-import { createSettingSection, createSelect, createToggle, createColorPicker, createTextInput } from '../ui-helpers';
+import { createSettingSection, createSelect, createToggle, createColorPicker, createTextInput, createPercentSlider } from '../ui-helpers';
 
 export interface SettingsScreenParams {
     difficulty: 'easy' | 'normal' | 'hard';
     username: string;
     soundEnabled: boolean;
     musicEnabled: boolean;
+    soundVolume: number;
+    musicVolume: number;
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean;
     playerColor: string;
@@ -23,6 +25,8 @@ export interface SettingsScreenParams {
     onUsernameChange: (value: string) => void;
     onSoundEnabledChange: (value: boolean) => void;
     onMusicEnabledChange: (value: boolean) => void;
+    onSoundVolumeChange: (value: number) => void;
+    onMusicVolumeChange: (value: number) => void;
     onBattleStatsInfoChange: (value: boolean) => void;
     onScreenShakeChange: (value: boolean) => void;
     onPlayerColorChange: (value: string) => void;
@@ -46,6 +50,8 @@ export function renderSettingsScreen(
         username,
         soundEnabled,
         musicEnabled,
+        soundVolume,
+        musicVolume,
         isBattleStatsInfoEnabled,
         screenShakeEnabled,
         playerColor,
@@ -58,6 +64,8 @@ export function renderSettingsScreen(
         onUsernameChange,
         onSoundEnabledChange,
         onMusicEnabledChange,
+        onSoundVolumeChange,
+        onMusicVolumeChange,
         onBattleStatsInfoChange,
         onScreenShakeChange,
         onPlayerColorChange,
@@ -125,12 +133,24 @@ export function renderSettingsScreen(
     );
     settingsContainer.appendChild(soundSection);
 
+    const soundVolumeSection = createSettingSection(
+        'Sound Effects Volume',
+        createPercentSlider(soundVolume, onSoundVolumeChange)
+    );
+    settingsContainer.appendChild(soundVolumeSection);
+
     // Music setting
     const musicSection = createSettingSection(
         'Music',
         createToggle(musicEnabled, onMusicEnabledChange)
     );
     settingsContainer.appendChild(musicSection);
+
+    const musicVolumeSection = createSettingSection(
+        'Music Volume',
+        createPercentSlider(musicVolume, onMusicVolumeChange)
+    );
+    settingsContainer.appendChild(musicVolumeSection);
 
     const battleStatsSection = createSettingSection(
         'Battle Stats Info',

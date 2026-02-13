@@ -1637,6 +1637,9 @@ class GameController {
         this.renderer.showInfo = this.showInfo;
 
         this.gameAudioController.setSoundEnabled(settings.soundEnabled);
+        this.gameAudioController.setSoundVolume(settings.soundVolume / 100);
+        this.renderer.soundVolume = settings.soundVolume / 100;
+        this.renderer.musicVolume = settings.musicVolume / 100;
 
         // Start game loop
         this.start();
@@ -1753,6 +1756,9 @@ class GameController {
         console.log(`[GameController] 4-player game initialized. Local player is index ${localPlayerIndex}. Starting game loop...`);
         
         this.gameAudioController.setSoundEnabled(settings.soundEnabled);
+        this.gameAudioController.setSoundVolume(settings.soundVolume / 100);
+        this.renderer.soundVolume = settings.soundVolume / 100;
+        this.renderer.musicVolume = settings.musicVolume / 100;
 
         // Start game loop
         this.start();
@@ -2236,6 +2242,15 @@ class GameController {
                                 break;
                             case 'infoBoxOpacity':
                                 this.renderer.infoBoxOpacity = menuAction.opacityPercent / 100;
+                                break;
+                            case 'soundVolume':
+                                this.renderer.soundVolume = menuAction.volumePercent / 100;
+                                this.gameAudioController.setSoundVolume(this.renderer.soundVolume);
+                                this.menu.getSettings().soundVolume = menuAction.volumePercent;
+                                break;
+                            case 'musicVolume':
+                                this.renderer.musicVolume = menuAction.volumePercent / 100;
+                                this.menu.getSettings().musicVolume = menuAction.volumePercent;
                                 break;
                             default:
                                 break;

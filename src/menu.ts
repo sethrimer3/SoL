@@ -51,6 +51,8 @@ export interface GameSettings {
     difficulty: 'easy' | 'normal' | 'hard';
     soundEnabled: boolean;
     musicEnabled: boolean;
+    soundVolume: number; // Sound effect volume percentage (0-100)
+    musicVolume: number; // Music volume percentage (0-100)
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean; // Screen shake for explosions and splash damage
     selectedFaction: Faction | null;
@@ -283,6 +285,8 @@ export class MainMenu {
             difficulty: 'normal',
             soundEnabled: true,
             musicEnabled: true,
+            soundVolume: 100,
+            musicVolume: 100,
             isBattleStatsInfoEnabled: false,
             screenShakeEnabled: true, // Default to enabled
             selectedFaction: Faction.RADIANT,
@@ -311,6 +315,7 @@ export class MainMenu {
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
         this.menuAudioController.setMusicEnabled(this.settings.musicEnabled);
+        this.menuAudioController.setMusicVolume(this.settings.musicVolume / 100);
         this.menuAudioController.setVisible(true);
         this.updateMenuAudioState();
 
@@ -2630,6 +2635,8 @@ export class MainMenu {
             username: this.settings.username,
             soundEnabled: this.settings.soundEnabled,
             musicEnabled: this.settings.musicEnabled,
+            soundVolume: this.settings.soundVolume,
+            musicVolume: this.settings.musicVolume,
             isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
             screenShakeEnabled: this.settings.screenShakeEnabled,
             playerColor: this.settings.playerColor,
@@ -2650,6 +2657,13 @@ export class MainMenu {
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
                 this.menuAudioController.setMusicEnabled(value);
+            },
+            onSoundVolumeChange: (value) => {
+                this.settings.soundVolume = value;
+            },
+            onMusicVolumeChange: (value) => {
+                this.settings.musicVolume = value;
+                this.menuAudioController.setMusicVolume(value / 100);
             },
             onBattleStatsInfoChange: (value) => {
                 this.settings.isBattleStatsInfoEnabled = value;
@@ -3114,6 +3128,7 @@ export class MainMenu {
      */
     show(): void {
         this.menuElement.style.display = 'block';
+        this.menuAudioController.setMusicVolume(this.settings.musicVolume / 100);
         this.menuAudioController.setVisible(true);
         this.currentScreen = 'main';
         this.isMatchmakingSearching = false;
