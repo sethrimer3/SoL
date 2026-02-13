@@ -293,6 +293,11 @@ export class GameRenderer {
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
     private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
+    
+    // Gradient caching optimization constants
+    private readonly INTENSITY_QUANTIZATION_FACTOR = 10;
+    private readonly MIRROR_GLOW_INNER_ALPHA = 0.8;
+    private readonly MIRROR_GLOW_MID_ALPHA = 0.4;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -3385,18 +3390,28 @@ export class GameRenderer {
         // Draw glow if close to a light source
         if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {
             const glowRadius = Constants.MIRROR_ACTIVE_GLOW_RADIUS * this.zoom * (1 + glowIntensity);
-            const gradient = this.ctx.createRadialGradient(
-                screenPos.x, screenPos.y, 0,
-                screenPos.x, screenPos.y, glowRadius
+            // Quantize intensity to reduce unique gradients (cache optimization)
+            const quantizedIntensity = Math.round(glowIntensity * this.INTENSITY_QUANTIZATION_FACTOR) / this.INTENSITY_QUANTIZATION_FACTOR;
+            const glowRadiusRounded = Math.round(glowRadius);
+            const cacheKey = `mirror-glow-${glowRadiusRounded}-${quantizedIntensity}`;
+            const gradient = this.getCachedRadialGradient(
+                cacheKey,
+                0, 0, 0,
+                0, 0, glowRadius,
+                [
+                    { offset: 0, color: `rgba(255, 255, 150, ${quantizedIntensity * this.MIRROR_GLOW_INNER_ALPHA})` },
+                    { offset: 0.5, color: `rgba(255, 255, 100, ${quantizedIntensity * this.MIRROR_GLOW_MID_ALPHA})` },
+                    { offset: 1, color: 'rgba(255, 255, 50, 0)' }
+                ]
             );
-            gradient.addColorStop(0, `rgba(255, 255, 150, ${glowIntensity * 0.8})`);
-            gradient.addColorStop(0.5, `rgba(255, 255, 100, ${glowIntensity * 0.4})`);
-            gradient.addColorStop(1, 'rgba(255, 255, 50, 0)');
             
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
             this.ctx.fillStyle = gradient;
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, glowRadius, 0, Math.PI * 2);
+            this.ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.restore();
             
             // Draw reflected light beam in front of the mirror
             // Find the closest visible sun to determine reflection direction
@@ -4279,6 +4294,11 @@ export class GameRenderer {
     }
 
     private drawAsteroidRimLighting(worldVertices: Vector2D[], screenVertices: Vector2D[], lightDirection: Vector2D, asteroidSize: number): void {
+        // Skip expensive per-vertex rim lighting on low quality
+        if (this.graphicsQuality === 'low') {
+            return;
+        }
+
         const centerWorld = new Vector2D(
             worldVertices.reduce((sum, vertex) => sum + vertex.x, 0) / worldVertices.length,
             worldVertices.reduce((sum, vertex) => sum + vertex.y, 0) / worldVertices.length
@@ -4704,6 +4724,11 @@ export class GameRenderer {
     }
 
     private getSunShadowQuadsCached(sun: Sun, game: GameState): ShadowQuad[] {
+        // Skip shadow calculations entirely on low quality for performance
+        if (this.graphicsQuality === 'low') {
+            return [];
+        }
+
         const cached = this.sunShadowQuadFrameCache.get(sun);
         if (cached) {
             return cached;
@@ -4849,6 +4874,11 @@ export class GameRenderer {
     }
 
     private drawUltraSunParticleLayers(game: GameState): void {
+        // Only render ultra sun particle layers on ultra quality setting
+        if (this.graphicsQuality !== 'ultra') {
+            return;
+        }
+
         if (game.suns.length === 0) {
             return;
         }
@@ -5108,6 +5138,11 @@ export class GameRenderer {
     }
 
     private applyUltraWarmCoolGrade(game: GameState): void {
+        // Skip expensive color grading on low quality setting
+        if (this.graphicsQuality === 'low') {
+            return;
+        }
+
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
         const height = this.canvas.height / dpr;
@@ -6476,15 +6511,27 @@ export class GameRenderer {
         this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
         this.ctx.stroke();
         
-        // Draw inner fill
-        const gradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, radius);
-        gradient.addColorStop(0, `${color}40`);
-        gradient.addColorStop(1, `${color}10`);
+        // Draw inner fill with cached gradient
+        const radiusRounded = Math.round(radius);
+        const cacheKey = `influence-zone-${color}-${radiusRounded}`;
+        const gradient = this.getCachedRadialGradient(
+            cacheKey,
+            0, 0, 0,
+            0, 0, radius,
+            [
+                { offset: 0, color: `${color}40` },
+                { offset: 1, color: `${color}10` }
+            ]
+        );
+        
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.fillStyle = gradient;
         this.ctx.globalAlpha = opacity * 0.3;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
         this.ctx.fill();
+        this.ctx.restore();
         
         this.ctx.globalAlpha = 1.0;
     }
