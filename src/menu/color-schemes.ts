@@ -47,7 +47,7 @@ export const COLOR_SCHEMES: { [key: string]: ColorScheme } = {
             strokeEnd: '#5A3F26'
         },
         spaceDustPalette: {
-            neutral: ['#0B1020', '#10192E', '#1C2A4A', '#243459'],
+            neutral: ['#1A2540', '#223255', '#2F426A', '#3B527F'],
             accent: ['#FFCF66', '#FF9A2A', '#FF6A00']
         },
         sunCore: {
