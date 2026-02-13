@@ -3816,8 +3816,8 @@ export class GameRenderer {
             const tailX = screenPos.x + dirX * shadowLength;
             const tailY = screenPos.y + dirY * shadowLength;
             const gradient = this.ctx.createLinearGradient(screenPos.x, screenPos.y, tailX, tailY);
-            gradient.addColorStop(0, `rgba(2, 3, 10, ${(0.34 * opacity * alphaScale).toFixed(4)})`);
-            gradient.addColorStop(0.55, `rgba(2, 3, 10, ${(0.16 * opacity * alphaScale).toFixed(4)})`);
+            gradient.addColorStop(0, `rgba(2, 3, 10, ${(0.34 * Constants.DUST_SHADOW_OPACITY * opacity * alphaScale).toFixed(4)})`);
+            gradient.addColorStop(0.55, `rgba(2, 3, 10, ${(0.16 * Constants.DUST_SHADOW_OPACITY * opacity * alphaScale).toFixed(4)})`);
             gradient.addColorStop(1, 'rgba(2, 3, 10, 0)');
             this.ctx.strokeStyle = gradient;
             this.ctx.lineWidth = Math.max(0.35, screenSize * (0.7 + proximity * 0.65));
@@ -5200,16 +5200,6 @@ export class GameRenderer {
             ? this.getTintedSprite(heroSpritePath, tintColor)
             : null;
         const heroSpriteSize = size * this.HERO_SPRITE_SCALE;
-
-        this.drawAestheticSpriteShadow(unit.position, screenPos, size, game, {
-            opacity: 1,
-            widthScale: 0.72,
-            particleCount: 3,
-            particleSpread: size * 0.6,
-            spriteMask: heroSprite ?? undefined,
-            spriteSize: heroSprite ? heroSpriteSize : undefined,
-            spriteRotation: heroSprite ? unit.rotation : undefined
-        });
 
         const glowColor = shouldDim
             ? this.darkenColor(displayColor, Constants.SHADE_OPACITY)
@@ -9701,11 +9691,7 @@ export class GameRenderer {
         this.drawShadowStarfieldOverlay(game);
 
         // Draw environment stack between shadow-star overlay and influence circles.
-        // Back -> Front: parallax starfield -> suns -> asteroids -> space dust.
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        this.drawStarfield(screenWidth, screenHeight);
+        // Back -> Front: suns -> asteroids -> space dust.
 
         if (ladSun) {
             this.drawLadSunRays(game, ladSun);
@@ -10163,6 +10149,12 @@ export class GameRenderer {
         if (!game.isCountdownActive && !winner) {
             this.drawProductionProgress(game);
         }
+
+        // Troubleshooting: draw parallax stars at the very front for visibility verification.
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        this.drawStarfield(screenWidth, screenHeight);
         
         // Draw in-game menu overlay if open
         if (this.showInGameMenu && !winner) {
