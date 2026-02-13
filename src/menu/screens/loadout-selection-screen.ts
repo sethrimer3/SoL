@@ -70,19 +70,19 @@ export function renderLoadoutSelectionScreen(
     const factions: FactionCarouselOption[] = [
         { 
             id: Faction.RADIANT, 
-            name: 'Radiant', 
+            name: 'Radiant Apotheosis', 
             description: 'Well-Balanced, Ranged-Focused',
             color: '#FF5722'
         },
         { 
             id: Faction.AURUM, 
-            name: 'Aurum', 
+            name: 'Aurum Imperium', 
             description: 'Fast-Paced, Melee-Focused',
             color: '#FFD700'
         },
         { 
             id: Faction.VELARIS, 
-            name: 'Velaris', 
+            name: 'Velaris Collective', 
             description: 'Strategic, Ability-Heavy. Particles from Nebulae',
             color: '#9C27B0'
         }
@@ -103,7 +103,7 @@ export function renderLoadoutSelectionScreen(
 
     // Hero selection title
     const title = document.createElement('h2');
-    title.textContent = 'Select 4 Heroes';
+    title.textContent = 'Radiant Apotheosis';
     title.style.fontSize = isCompactLayout ? '26px' : '36px';
     title.style.marginBottom = isCompactLayout ? '8px' : '12px';
     title.style.color = '#FFD700';
@@ -146,44 +146,26 @@ export function renderLoadoutSelectionScreen(
         const canSelect = isSelected || selectedHeroes.length < 4;
 
         const heroCard = document.createElement('div');
-        heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
+        heroCard.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
         heroCard.style.border = '2px solid transparent';
         heroCard.style.borderRadius = '10px';
         heroCard.style.padding = '15px';
-        heroCard.style.cursor = canSelect ? 'pointer' : 'not-allowed';
+        heroCard.style.cursor = 'default';
         heroCard.style.transition = 'all 0.3s';
         heroCard.style.opacity = canSelect ? '1' : '0.5';
         heroCard.style.minHeight = '300px';
         heroCard.dataset.particleBox = 'true';
         heroCard.dataset.particleColor = isSelected ? '#00FF88' : '#66B3FF';
 
-        if (canSelect) {
-            heroCard.addEventListener('mouseenter', () => {
-                if (!isSelected) {
-                    heroCard.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-                    heroCard.style.transform = 'scale(1.02)';
-                }
-            });
-
-            heroCard.addEventListener('mouseleave', () => {
-                heroCard.style.backgroundColor = isSelected ? 'rgba(0, 255, 136, 0.1)' : 'rgba(255, 255, 255, 0.05)';
-                heroCard.style.transform = 'scale(1)';
-            });
-
-            heroCard.addEventListener('click', () => {
-                onHeroToggle(hero.id, isSelected);
-            });
-        }
-
         // Hero name
         const heroName = document.createElement('h4');
         heroName.textContent = hero.name;
         heroName.style.fontSize = '24px';
         heroName.style.marginBottom = '8px';
-        heroName.style.color = isSelected ? '#00FF88' : '#E0F2FF';
+        heroName.style.color = '#E0F2FF';
         heroName.style.fontWeight = '300';
         heroName.dataset.particleText = 'true';
-        heroName.dataset.particleColor = isSelected ? '#00FF88' : '#E0F2FF';
+        heroName.dataset.particleColor = '#E0F2FF';
         heroCard.appendChild(heroName);
 
         // Hero description
@@ -198,7 +180,28 @@ export function renderLoadoutSelectionScreen(
         heroDesc.dataset.particleColor = '#AAAAAA';
         heroCard.appendChild(heroDesc);
 
-        // Stats section
+        // Stats dropdown button
+        const statsToggle = document.createElement('div');
+        statsToggle.style.fontSize = '24px';
+        statsToggle.style.color = '#66B3FF';
+        statsToggle.style.cursor = 'pointer';
+        statsToggle.style.marginBottom = '8px';
+        statsToggle.style.fontWeight = '300';
+        statsToggle.style.userSelect = 'none';
+        statsToggle.dataset.particleText = 'true';
+        statsToggle.dataset.particleColor = '#66B3FF';
+        
+        const statsArrow = document.createElement('span');
+        statsArrow.textContent = '▶ ';
+        statsArrow.style.display = 'inline-block';
+        statsArrow.style.transition = 'transform 0.3s';
+        statsToggle.appendChild(statsArrow);
+        
+        const statsLabel = document.createElement('span');
+        statsLabel.textContent = 'Stats';
+        statsToggle.appendChild(statsLabel);
+
+        // Stats section (initially hidden)
         const statsContainer = document.createElement('div');
         statsContainer.style.fontSize = '24px';
         statsContainer.style.lineHeight = '1.6';
@@ -208,6 +211,9 @@ export function renderLoadoutSelectionScreen(
         statsContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
         statsContainer.style.borderRadius = '5px';
         statsContainer.style.fontWeight = '300';
+        statsContainer.style.display = 'none';
+        statsContainer.style.overflow = 'hidden';
+        statsContainer.style.transition = 'all 0.3s';
 
         // Create stat rows
         const healthStat = createStatElement('HP', hero.maxHealth);
@@ -229,6 +235,15 @@ export function renderLoadoutSelectionScreen(
         const rangeStat = createStatElement('RNG', hero.attackRange);
         statsContainer.appendChild(rangeStat);
 
+        // Toggle stats visibility
+        let statsVisible = false;
+        statsToggle.addEventListener('click', () => {
+            statsVisible = !statsVisible;
+            statsContainer.style.display = statsVisible ? 'block' : 'none';
+            statsArrow.style.transform = statsVisible ? 'rotate(90deg)' : 'rotate(0deg)';
+        });
+
+        heroCard.appendChild(statsToggle);
         heroCard.appendChild(statsContainer);
 
         // Ability description
@@ -244,18 +259,39 @@ export function renderLoadoutSelectionScreen(
         abilityDesc.dataset.particleColor = '#FFD700';
         heroCard.appendChild(abilityDesc);
 
-        // Selection indicator
-        if (isSelected) {
-            const indicator = document.createElement('div');
-            indicator.textContent = '✓ Selected';
-            indicator.style.fontSize = '24px';
-            indicator.style.marginTop = '8px';
-            indicator.style.color = '#00FF88';
-            indicator.style.fontWeight = '300';
-            indicator.dataset.particleText = 'true';
-            indicator.dataset.particleColor = '#00FF88';
-            heroCard.appendChild(indicator);
+        // Select/Deselect button
+        const selectButton = document.createElement('button');
+        selectButton.textContent = isSelected ? 'Deselect' : 'Select';
+        selectButton.style.fontSize = '24px';
+        selectButton.style.padding = '10px 20px';
+        selectButton.style.marginTop = '10px';
+        selectButton.style.backgroundColor = isSelected ? '#FF3333' : '#00FF88';
+        selectButton.style.color = '#000000';
+        selectButton.style.border = 'none';
+        selectButton.style.borderRadius = '5px';
+        selectButton.style.cursor = canSelect ? 'pointer' : 'not-allowed';
+        selectButton.style.fontWeight = 'bold';
+        selectButton.style.width = '100%';
+        selectButton.style.transition = 'all 0.3s';
+        selectButton.disabled = !canSelect;
+
+        if (canSelect) {
+            selectButton.addEventListener('mouseenter', () => {
+                selectButton.style.transform = 'scale(1.05)';
+                selectButton.style.backgroundColor = isSelected ? '#FF5555' : '#00FFAA';
+            });
+
+            selectButton.addEventListener('mouseleave', () => {
+                selectButton.style.transform = 'scale(1)';
+                selectButton.style.backgroundColor = isSelected ? '#FF3333' : '#00FF88';
+            });
+
+            selectButton.addEventListener('click', () => {
+                onHeroToggle(hero.id, isSelected);
+            });
         }
+
+        heroCard.appendChild(selectButton);
 
         heroGrid.appendChild(heroCard);
     }
