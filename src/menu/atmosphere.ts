@@ -715,7 +715,7 @@ export class MenuAtmosphereLayer {
         this.context.fill();
 
         this.context.strokeStyle = 'rgba(255, 196, 107, 0.35)';
-        this.context.lineWidth = 1 / asteroid.radiusPx; // Scale lineWidth to maintain visual consistency
+        this.context.lineWidth = 1; // Will be scaled by context, maintaining visual consistency
         this.context.stroke();
         
         this.context.restore();

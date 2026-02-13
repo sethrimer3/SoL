@@ -19,7 +19,7 @@ This document describes the performance optimizations made to the main menu scre
 - Modified `renderSunGlow()` to use cached gradients instead of creating new ones
 - Modified `renderAsteroidBody()` to use cached gradient with context transform
 
-**Impact**: Eliminates ~17 gradient creations per frame (60fps), reducing per-frame object allocation overhead.
+**Impact**: Eliminates ~17 gradient creations per frame (60fps), reducing per-frame object allocation overhead. Asteroid gradients now use normalized coordinates with scale transforms to maintain visual quality across varying sizes.
 
 ### 2. Particle Gradient Caching (`src/menu/particle-layer.ts`)
 
@@ -29,7 +29,8 @@ This document describes the performance optimizations made to the main menu scre
 - Added `haloGradientCache` Map to cache gradients by `color,radius,alpha` key
 - Modified `renderParticles()` to check cache before creating new gradients
 - Gradients are created at origin and reused with `context.translate()`
-- Cache limited to 100 entries to prevent memory bloat
+- Cache uses simple LRU eviction (removes oldest entry) limited to 100 entries
+- Cache key uses rounded integers (`Math.round()`) instead of `.toFixed()` to avoid string allocations
 
 **Impact**: Reduces gradient creation from N particles per frame to only unique color/radius/alpha combinations, dramatically reducing ultra quality overhead.
 
