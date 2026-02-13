@@ -293,6 +293,11 @@ export class GameRenderer {
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
     private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
+    
+    // Gradient caching optimization constants
+    private readonly INTENSITY_QUANTIZATION_FACTOR = 10;
+    private readonly MIRROR_GLOW_INNER_ALPHA = 0.8;
+    private readonly MIRROR_GLOW_MID_ALPHA = 0.4;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -3386,15 +3391,16 @@ export class GameRenderer {
         if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {
             const glowRadius = Constants.MIRROR_ACTIVE_GLOW_RADIUS * this.zoom * (1 + glowIntensity);
             // Quantize intensity to reduce unique gradients (cache optimization)
-            const quantizedIntensity = Math.round(glowIntensity * 10) / 10;
-            const cacheKey = `mirror-glow-${Math.round(glowRadius)}-${quantizedIntensity}`;
+            const quantizedIntensity = Math.round(glowIntensity * this.INTENSITY_QUANTIZATION_FACTOR) / this.INTENSITY_QUANTIZATION_FACTOR;
+            const glowRadiusRounded = Math.round(glowRadius);
+            const cacheKey = `mirror-glow-${glowRadiusRounded}-${quantizedIntensity}`;
             const gradient = this.getCachedRadialGradient(
                 cacheKey,
                 0, 0, 0,
                 0, 0, glowRadius,
                 [
-                    { offset: 0, color: `rgba(255, 255, 150, ${quantizedIntensity * 0.8})` },
-                    { offset: 0.5, color: `rgba(255, 255, 100, ${quantizedIntensity * 0.4})` },
+                    { offset: 0, color: `rgba(255, 255, 150, ${quantizedIntensity * this.MIRROR_GLOW_INNER_ALPHA})` },
+                    { offset: 0.5, color: `rgba(255, 255, 100, ${quantizedIntensity * this.MIRROR_GLOW_MID_ALPHA})` },
                     { offset: 1, color: 'rgba(255, 255, 50, 0)' }
                 ]
             );
