@@ -290,13 +290,24 @@ export class GameRenderer {
             flickerAmp: number,
             blurPx: number,
             chromaOffsetPx: number,
-            isChromatic: boolean
+            isChromatic: boolean,
+            spikeLengthPx: number,
+            spikeAlpha: number
         }>,
         parallaxFactor: number,
         brightnessScale: number,
         blurVariance: number
     }> = [];
     private readonly starColorTemperatureLut = this.createStarTemperatureLookup();
+    private readonly warmStarPalette: Array<[number, number, number]> = [
+        [255, 178, 26], // #FFB21A Brightest Orange
+        [255, 163, 26], // #FFA31A Bright Golden Orange
+        [255, 138, 20], // #FF8A14 Warm Amber
+        [255, 116, 18], // #FF7412 Rich Orange
+        [242, 92, 15],  // #F25C0F Deep Burning Orange
+        [217, 71, 12],  // #D9470C Dark Ember Orange
+        [183, 55, 10]   // #B7370A Deep Red-Orange
+    ];
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
     private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
     private starfieldCacheWidth = 0;
@@ -377,7 +388,9 @@ export class GameRenderer {
                 flickerAmp: number,
                 blurPx: number,
                 chromaOffsetPx: number,
-                isChromatic: boolean
+                isChromatic: boolean,
+                spikeLengthPx: number,
+                spikeAlpha: number
             }> = [];
 
             const grid = new Int32Array(gridSize * gridSize).fill(-1);
@@ -427,10 +440,10 @@ export class GameRenderer {
 
                 const baseSize = this.samplePowerLawSize(layerConfig.sizeRange[0], layerConfig.sizeRange[1], 1.85, seededRandom());
                 const luminance = 0.16 + Math.pow(seededRandom(), 2.1) * 0.84;
-                const kelvin = this.sampleStarTemperatureK(seededRandom());
-                const color = this.starColorTemperatureLut[Math.max(0, Math.min(this.starColorTemperatureLut.length - 1, Math.round((kelvin - 3000) / 50)))];
+                const color = this.sampleWarmStarColor(seededRandom());
                 const brightness = Math.min(1.4, (luminance * (0.85 + clusterBias * 0.45)) * layerConfig.brightnessScale);
                 const isChromatic = baseSize > 2.4 && brightness > 1.02 && seededRandom() > 0.55;
+                const hasSpike = baseSize > 1.35 && brightness > 0.82;
 
                 stars.push({
                     x,
@@ -444,7 +457,9 @@ export class GameRenderer {
                     flickerAmp: 0.008 + seededRandom() * 0.022,
                     blurPx: layerConfig.blurVariance * (0.18 + seededRandom() * 0.55),
                     chromaOffsetPx: isChromatic ? (0.12 + seededRandom() * 0.25) : 0,
-                    isChromatic
+                    isChromatic,
+                    spikeLengthPx: hasSpike ? baseSize * (2.8 + seededRandom() * 2.6) : 0,
+                    spikeAlpha: hasSpike ? (0.08 + seededRandom() * 0.16) : 0
                 });
 
                 grid[gy * gridSize + gx] = stars.length - 1;
@@ -471,6 +486,26 @@ export class GameRenderer {
             return warmWhiteBand;
         }
         return 6000 + Math.pow((randomSample - 0.82) / 0.18, 1.6) * 2600;
+    }
+
+    private sampleWarmStarColor(randomSample: number): [number, number, number] {
+        const paletteIndex = Math.floor(Math.pow(randomSample, 0.68) * this.warmStarPalette.length);
+        const clampedIndex = Math.max(0, Math.min(this.warmStarPalette.length - 1, paletteIndex));
+        const [baseR, baseG, baseB] = this.warmStarPalette[clampedIndex];
+
+        // Keep a small portion of stars neutral-hot so the field doesn't become fully monochrome.
+        if (randomSample > 0.86) {
+            const blend = (randomSample - 0.86) / 0.14;
+            const kelvin = this.sampleStarTemperatureK(randomSample);
+            const coolColor = this.starColorTemperatureLut[Math.max(0, Math.min(this.starColorTemperatureLut.length - 1, Math.round((kelvin - 3000) / 50)))];
+            return [
+                Math.round(baseR + (coolColor[0] - baseR) * blend),
+                Math.round(baseG + (coolColor[1] - baseG) * blend),
+                Math.round(baseB + (coolColor[2] - baseB) * blend)
+            ];
+        }
+
+        return [baseR, baseG, baseB];
     }
 
     private createStarTemperatureLookup(): Array<[number, number, number]> {
@@ -614,6 +649,18 @@ export class GameRenderer {
                         ctx.arc(wrappedX, wrappedY, Math.max(0.5, star.coreSize), 0, Math.PI * 2);
                         ctx.fill();
 
+                        if (star.spikeLengthPx > 0) {
+                            const spikeAlpha = Math.min(0.3, intensity * star.spikeAlpha);
+                            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${spikeAlpha})`;
+                            ctx.lineWidth = Math.max(0.45, star.coreSize * 0.22);
+                            ctx.beginPath();
+                            ctx.moveTo(wrappedX - star.spikeLengthPx, wrappedY);
+                            ctx.lineTo(wrappedX + star.spikeLengthPx, wrappedY);
+                            ctx.moveTo(wrappedX, wrappedY - star.spikeLengthPx);
+                            ctx.lineTo(wrappedX, wrappedY + star.spikeLengthPx);
+                            ctx.stroke();
+                        }
+
                         if (star.isChromatic) {
                             const c = star.chromaOffsetPx;
                             ctx.globalAlpha = Math.min(0.24, intensity * 0.18);
@@ -667,7 +714,10 @@ export class GameRenderer {
             return;
         }
 
-        this.ctx.clip();
+        // Exclude asteroid bodies from this shadow overlay pass so they are only
+        // darkened when occluded by other asteroids, never by their own shadow geometry.
+        this.appendAsteroidPolygonsToCurrentPath(game);
+        this.ctx.clip('evenodd');
         this.ctx.globalCompositeOperation = 'screen';
         this.ctx.globalAlpha = this.graphicsQuality === 'ultra' ? 0.82 : 0.68;
 
@@ -676,6 +726,25 @@ export class GameRenderer {
         const screenHeight = this.canvas.height / dpr;
         this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
         this.ctx.restore();
+    }
+
+    private appendAsteroidPolygonsToCurrentPath(game: GameState): void {
+        const sv = this.sunRayScreenPosA;
+
+        for (const asteroid of game.asteroids) {
+            const worldVertices = asteroid.getWorldVertices();
+            if (worldVertices.length === 0) {
+                continue;
+            }
+
+            this.worldToScreenCoords(worldVertices[0].x, worldVertices[0].y, sv);
+            this.ctx.moveTo(sv.x, sv.y);
+            for (let i = 1; i < worldVertices.length; i++) {
+                this.worldToScreenCoords(worldVertices[i].x, worldVertices[i].y, sv);
+                this.ctx.lineTo(sv.x, sv.y);
+            }
+            this.ctx.closePath();
+        }
     }
 
 
@@ -2126,18 +2195,21 @@ export class GameRenderer {
                 shaftContext.rotate(angle);
 
                 const softEdgeGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
-                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 246, 206, 0.16)' : 'rgba(255, 242, 190, 0.2)');
-                softEdgeGradient.addColorStop(0.2, isOuterLayer ? 'rgba(255, 215, 132, 0.18)' : 'rgba(255, 220, 138, 0.24)');
-                softEdgeGradient.addColorStop(1, 'rgba(255, 170, 85, 0)');
+                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                softEdgeGradient.addColorStop(0.16, isOuterLayer ? 'rgba(255, 138, 20, 0.4)' : 'rgba(255, 116, 18, 0.42)');
+                softEdgeGradient.addColorStop(0.46, isOuterLayer ? 'rgba(242, 92, 15, 0.28)' : 'rgba(217, 71, 12, 0.3)');
+                softEdgeGradient.addColorStop(0.78, 'rgba(183, 55, 10, 0.14)');
+                softEdgeGradient.addColorStop(1, 'rgba(183, 55, 10, 0)');
                 shaftContext.fillStyle = softEdgeGradient;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.5, 0, shaftLength * 0.52, shaftWidth * 0.5, 0, 0, Math.PI * 2);
                 shaftContext.fill();
 
                 const spineGradient = shaftContext.createLinearGradient(0, 0, shaftLength * 0.92, 0);
-                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 251, 232, 0.2)' : 'rgba(255, 250, 230, 0.32)');
-                spineGradient.addColorStop(0.5, isOuterLayer ? 'rgba(255, 229, 152, 0.18)' : 'rgba(255, 234, 160, 0.26)');
-                spineGradient.addColorStop(1, 'rgba(255, 198, 108, 0)');
+                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.46)' : 'rgba(255, 178, 26, 0.56)');
+                spineGradient.addColorStop(0.25, isOuterLayer ? 'rgba(255, 163, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                spineGradient.addColorStop(0.58, isOuterLayer ? 'rgba(255, 116, 18, 0.3)' : 'rgba(242, 92, 15, 0.36)');
+                spineGradient.addColorStop(1, 'rgba(217, 71, 12, 0)');
                 shaftContext.fillStyle = spineGradient;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.45, 0, shaftLength * 0.47, Math.max(2, shaftWidth * 0.13), 0, 0, Math.PI * 2);
@@ -4319,12 +4391,13 @@ export class GameRenderer {
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        this.ctx.globalAlpha = 0.58;
+        this.ctx.filter = 'blur(11px)';
+        this.ctx.globalAlpha = 0.4;
         const shaftSize = 1024 * shaftScale;
         this.ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
 
         this.ctx.rotate(-gameTimeSec * 0.017);
-        this.ctx.globalAlpha = 0.45 + shimmerAlpha;
+        this.ctx.globalAlpha = Math.min(0.4, 0.32 + shimmerAlpha);
         const innerSize = shaftSize * 0.72;
         this.ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
@@ -4375,8 +4448,17 @@ export class GameRenderer {
                 const y = sunScreenPos.y + Math.sin(orbitAngle) * radius;
                 const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
                 const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.24) * (1 - outwardT * 0.45);
+                const fieryColorRoll = this.hashNormalized(seed + 23.7);
+                const emberRed = Math.floor(217 + fieryColorRoll * 38);
+                const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
+                const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
 
-                this.ctx.fillStyle = `rgba(255, ${Math.floor(126 + this.hashNormalized(seed + 23.7) * 64)}, ${Math.floor(36 + this.hashNormalized(seed + 29.2) * 42)}, ${alpha.toFixed(4)})`;
+                this.ctx.fillStyle = `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, ${(alpha * 0.34).toFixed(4)})`;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, size * this.zoom * 2.75, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.fillStyle = `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, ${alpha.toFixed(4)})`;
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, size * this.zoom, 0, Math.PI * 2);
                 this.ctx.fill();
@@ -4451,7 +4533,10 @@ export class GameRenderer {
                 this.ctx.lineTo(quad.ss1x, quad.ss1y);
                 this.ctx.closePath();
             }
-            this.ctx.fill();
+
+            // Punch out asteroid silhouettes so this pass doesn't self-shadow the asteroid body.
+            this.appendAsteroidPolygonsToCurrentPath(game);
+            this.ctx.fill('evenodd');
         }
 
         this.ctx.restore();
