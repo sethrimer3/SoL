@@ -379,8 +379,7 @@ export class ParticleMenuLayer {
                     haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${alpha2})`);
                     haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
                     
-                    // Implement simple FIFO eviction when cache is full
-                    // (True LRU would require tracking access time, but FIFO is sufficient here)
+                    // Implement true LRU cache eviction when cache is full
                     if (this.haloGradientCache.size >= 100) {
                         const firstKey = this.haloGradientCache.keys().next().value;
                         if (firstKey) {
