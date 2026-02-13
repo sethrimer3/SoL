@@ -41,6 +41,10 @@ export class ParticleMenuLayer {
     private menuOpacity: number = 1;
     private transitionStartMs: number | null = null;
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
+    // Cache for gradient templates to avoid per-particle string allocation
+    private haloGradientCache: Map<string, CanvasGradient> = new Map();
+    // Pre-formatted opacity strings to avoid toFixed() calls
+    private cachedOpacityString: string = '';
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -65,6 +69,9 @@ export class ParticleMenuLayer {
             throw new Error('Unable to create offscreen particle canvas context.');
         }
         this.offscreenContext = offscreenContext;
+
+        // Initialize cached opacity string after particleOpacity is set
+        this.cachedOpacityString = this.particleOpacity.toFixed(3);
 
         this.container.appendChild(this.canvas);
         // Defer initial resize to ensure container has layout dimensions
@@ -284,6 +291,7 @@ export class ParticleMenuLayer {
         if (this.transitionStartMs === null) {
             this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
             this.menuOpacity = 1;
+            this.cachedOpacityString = this.particleOpacity.toFixed(3);
             this.applyMenuOpacity();
             return;
         }
@@ -296,6 +304,7 @@ export class ParticleMenuLayer {
             this.transitionStartMs = null;
             this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
             this.menuOpacity = 1;
+            this.cachedOpacityString = this.particleOpacity.toFixed(3);
             this.applyMenuOpacity();
             return;
         }
@@ -312,6 +321,7 @@ export class ParticleMenuLayer {
             this.menuOpacity = progress;
         }
 
+        this.cachedOpacityString = this.particleOpacity.toFixed(3);
         this.applyMenuOpacity();
     }
 
@@ -350,22 +360,47 @@ export class ParticleMenuLayer {
                     )
                 );
                 const haloRadiusPx = particle.sizePx * haloRadiusMultiplier;
-                const haloGradient = this.context.createRadialGradient(
-                    particle.x,
-                    particle.y,
-                    0,
-                    particle.x,
-                    particle.y,
-                    haloRadiusPx
-                );
-                haloGradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, ${haloAlpha.toFixed(3)})`);
-                haloGradient.addColorStop(0.3, `rgba(${red}, ${green}, ${blue}, ${(haloAlpha * 0.42).toFixed(3)})`);
-                haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${(haloAlpha * 0.12).toFixed(3)})`);
-                haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
+                
+                // Create cache key using rounded integers to avoid toFixed() calls
+                // Round radius and alpha to reduce cache key variations
+                const radiusKey = Math.round(haloRadiusPx * 10); // 0.1px precision
+                const alphaKey = Math.round(haloAlpha * 100); // 0.01 precision
+                const cacheKey = `${red},${green},${blue},${radiusKey},${alphaKey}`;
+                let haloGradient = this.haloGradientCache.get(cacheKey);
+                
+                if (!haloGradient) {
+                    // Create gradient at origin and cache it
+                    haloGradient = this.context.createRadialGradient(0, 0, 0, 0, 0, haloRadiusPx);
+                    const alpha0 = haloAlpha.toFixed(3);
+                    const alpha1 = (haloAlpha * 0.42).toFixed(3);
+                    const alpha2 = (haloAlpha * 0.12).toFixed(3);
+                    haloGradient.addColorStop(0, `rgba(${red}, ${green}, ${blue}, ${alpha0})`);
+                    haloGradient.addColorStop(0.3, `rgba(${red}, ${green}, ${blue}, ${alpha1})`);
+                    haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${alpha2})`);
+                    haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
+                    
+                    // Implement true LRU cache eviction when cache is full
+                    if (this.haloGradientCache.size >= 100) {
+                        const firstKey = this.haloGradientCache.keys().next().value;
+                        if (firstKey) {
+                            this.haloGradientCache.delete(firstKey);
+                        }
+                    }
+                    this.haloGradientCache.set(cacheKey, haloGradient);
+                } else {
+                    // Touch entry for true LRU: delete and re-insert to move to end
+                    this.haloGradientCache.delete(cacheKey);
+                    this.haloGradientCache.set(cacheKey, haloGradient);
+                }
+                
+                // Use the cached gradient with translate
+                this.context.save();
+                this.context.translate(particle.x, particle.y);
                 this.context.fillStyle = haloGradient;
                 this.context.beginPath();
-                this.context.arc(particle.x, particle.y, haloRadiusPx, 0, Math.PI * 2);
+                this.context.arc(0, 0, haloRadiusPx, 0, Math.PI * 2);
                 this.context.fill();
+                this.context.restore();
             }
 
             this.context.fillStyle = `rgb(${red}, ${green}, ${blue})`;
