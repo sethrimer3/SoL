@@ -34,6 +34,8 @@ export class MenuAtmosphereLayer {
     private static readonly SHADOW_LENGTH_BASE_PX = 120;
     private static readonly SHADOW_LENGTH_MULTIPLIER = 7.5;
     private static readonly BOUNDS_MARGIN_PX = 80;
+    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
+    private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -46,6 +48,7 @@ export class MenuAtmosphereLayer {
     private sunSprite: HTMLImageElement;
     private opacity: number = 0.2;
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
+    private lastFrameTimeMs: number = 0;
     private stars: {
         x: number;
         y: number;
@@ -278,6 +281,19 @@ export class MenuAtmosphereLayer {
         if (!this.isActive) {
             return;
         }
+        
+        // Throttle frame rate on low quality setting to reduce CPU load
+        if (this.graphicsQuality === 'low') {
+            const nowMs = performance.now();
+            const deltaMs = nowMs - this.lastFrameTimeMs;
+            
+            if (deltaMs < MenuAtmosphereLayer.LOW_QUALITY_FRAME_TIME_MS) {
+                this.animationFrameId = requestAnimationFrame(() => this.animate());
+                return;
+            }
+            this.lastFrameTimeMs = nowMs;
+        }
+        
         this.updateAsteroids();
         this.render();
         this.animationFrameId = requestAnimationFrame(() => this.animate());
@@ -654,7 +670,22 @@ export class MenuAtmosphereLayer {
     }
 
     private renderAsteroids(): void {
+        // Add viewport culling with margin to skip off-screen asteroids
+        const cullMargin = 50; // Small margin to ensure smooth transitions
+        const minX = -cullMargin;
+        const minY = -cullMargin;
+        const maxX = this.widthPx + cullMargin;
+        const maxY = this.heightPx + cullMargin;
+        
         for (const asteroid of this.asteroids) {
+            // Skip rendering if asteroid is outside viewport
+            if (asteroid.x + asteroid.radiusPx < minX || 
+                asteroid.x - asteroid.radiusPx > maxX ||
+                asteroid.y + asteroid.radiusPx < minY || 
+                asteroid.y - asteroid.radiusPx > maxY) {
+                continue;
+            }
+            
             // Dropshadow removed per requirements
             this.renderAsteroidBody(asteroid);
         }

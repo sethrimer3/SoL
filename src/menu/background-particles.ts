@@ -78,6 +78,8 @@ export class BackgroundParticleLayer {
     // Normalization factor for edge glow intensity scaled by particle count
     // Higher particle count requires higher normalization to maintain visual consistency
     private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
+    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
+    private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -86,6 +88,7 @@ export class BackgroundParticleLayer {
     private animationFrameId: number | null = null;
     private isActive: boolean = false;
     private lastColorChangeMs: number = 0;
+    private lastFrameTimeMs: number = 0;
     private edgeGlows: { top: number[]; right: number[]; bottom: number[]; left: number[] } = {
         top: [0, 0, 0],
         right: [0, 0, 0],
@@ -98,6 +101,8 @@ export class BackgroundParticleLayer {
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     // Cached gradients for particles to reduce per-frame allocation
     private particleGradientCache: Map<string, CanvasGradient> = new Map();
+    // Cached edge glow gradients to avoid per-frame gradient creation
+    private edgeGlowGradientCache: Map<string, CanvasGradient> = new Map();
     
     private readonly gradientColors = [
         [138, 43, 226],   // Blue Violet
@@ -215,6 +220,17 @@ export class BackgroundParticleLayer {
         }
         
         const nowMs = performance.now();
+        
+        // Throttle frame rate on low quality setting to reduce CPU load
+        if (this.graphicsQuality === 'low') {
+            const deltaMs = nowMs - this.lastFrameTimeMs;
+            
+            if (deltaMs < BackgroundParticleLayer.LOW_QUALITY_FRAME_TIME_MS) {
+                this.animationFrameId = requestAnimationFrame(() => this.animate());
+                return;
+            }
+            this.lastFrameTimeMs = nowMs;
+        }
         
         // Periodically change target colors for smooth transitions
         if (nowMs - this.lastColorChangeMs >= BackgroundParticleLayer.COLOR_CHANGE_INTERVAL_MS) {
@@ -421,9 +437,22 @@ export class BackgroundParticleLayer {
         const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
         const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
         if (topR + topG + topB > 0) {
-            const gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
-            gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
-            gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
+            // Vertical gradient from (0,0) to (0,glowHeight) - no canvas dimension dependency
+            const cacheKey = `top,${topR},${topG},${topB},${glowHeight}`;
+            let gradient = this.edgeGlowGradientCache.get(cacheKey);
+            if (!gradient) {
+                gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
+                gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
+                gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
+                // Limit cache to prevent memory growth
+                if (this.edgeGlowGradientCache.size >= 20) {
+                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
+                    if (firstKey) {
+                        this.edgeGlowGradientCache.delete(firstKey);
+                    }
+                }
+                this.edgeGlowGradientCache.set(cacheKey, gradient);
+            }
             this.context.fillStyle = gradient;
             this.context.fillRect(0, 0, width, glowHeight);
         }
@@ -433,9 +462,22 @@ export class BackgroundParticleLayer {
         const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
         const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
         if (bottomR + bottomG + bottomB > 0) {
-            const gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
-            gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
-            gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
+            // Vertical gradient - include height since gradient position depends on it
+            const cacheKey = `bottom,${bottomR},${bottomG},${bottomB},${glowHeight},${height}`;
+            let gradient = this.edgeGlowGradientCache.get(cacheKey);
+            if (!gradient) {
+                gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
+                gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
+                gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
+                // Consistent FIFO eviction
+                if (this.edgeGlowGradientCache.size >= 20) {
+                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
+                    if (firstKey) {
+                        this.edgeGlowGradientCache.delete(firstKey);
+                    }
+                }
+                this.edgeGlowGradientCache.set(cacheKey, gradient);
+            }
             this.context.fillStyle = gradient;
             this.context.fillRect(0, height - glowHeight, width, glowHeight);
         }
@@ -445,9 +487,22 @@ export class BackgroundParticleLayer {
         const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
         const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
         if (leftR + leftG + leftB > 0) {
-            const gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
-            gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
-            gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
+            // Horizontal gradient from (0,0) to (glowWidth,0) - no canvas dimension dependency
+            const cacheKey = `left,${leftR},${leftG},${leftB},${glowWidth}`;
+            let gradient = this.edgeGlowGradientCache.get(cacheKey);
+            if (!gradient) {
+                gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
+                gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
+                gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
+                // Consistent FIFO eviction
+                if (this.edgeGlowGradientCache.size >= 20) {
+                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
+                    if (firstKey) {
+                        this.edgeGlowGradientCache.delete(firstKey);
+                    }
+                }
+                this.edgeGlowGradientCache.set(cacheKey, gradient);
+            }
             this.context.fillStyle = gradient;
             this.context.fillRect(0, 0, glowWidth, height);
         }
@@ -457,9 +512,22 @@ export class BackgroundParticleLayer {
         const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
         const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
         if (rightR + rightG + rightB > 0) {
-            const gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
-            gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
-            gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
+            // Horizontal gradient - include width since gradient position depends on it
+            const cacheKey = `right,${rightR},${rightG},${rightB},${glowWidth},${width}`;
+            let gradient = this.edgeGlowGradientCache.get(cacheKey);
+            if (!gradient) {
+                gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
+                gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
+                gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
+                // Consistent FIFO eviction
+                if (this.edgeGlowGradientCache.size >= 20) {
+                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
+                    if (firstKey) {
+                        this.edgeGlowGradientCache.delete(firstKey);
+                    }
+                }
+                this.edgeGlowGradientCache.set(cacheKey, gradient);
+            }
             this.context.fillStyle = gradient;
             this.context.fillRect(width - glowWidth, 0, glowWidth, height);
         }

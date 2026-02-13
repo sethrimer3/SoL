@@ -22,6 +22,8 @@ export class ParticleMenuLayer {
     private static readonly ULTRA_BASE_HALO_ALPHA = 0.2;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MIN = 3.3;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
+    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
+    private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -33,6 +35,7 @@ export class ParticleMenuLayer {
     private isActive: boolean = false;
     private needsTargetRefresh: boolean = false;
     private lastTargetRefreshMs: number = 0;
+    private lastFrameTimeMs: number = 0;
     private targetRefreshContainer: HTMLElement | null = null;
     private densityMultiplier: number = 1;
     private desiredParticleCount: number = 0;
@@ -149,6 +152,18 @@ export class ParticleMenuLayer {
         }
 
         const nowMs = performance.now();
+        
+        // Throttle frame rate on low quality setting to reduce CPU load
+        if (this.graphicsQuality === 'low') {
+            const deltaMs = nowMs - this.lastFrameTimeMs;
+            
+            if (deltaMs < ParticleMenuLayer.LOW_QUALITY_FRAME_TIME_MS) {
+                this.animationFrameId = requestAnimationFrame(() => this.animate());
+                return;
+            }
+            this.lastFrameTimeMs = nowMs;
+        }
+        
         if (
             this.needsTargetRefresh
             && this.targetRefreshContainer
