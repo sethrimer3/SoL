@@ -63,18 +63,17 @@ type UltraSunEmberStatic = {
     speedOutward: number;
     outwardOffset: number;
     orbitAngle: number;
+    swirlSeedPhase: number;
     swirlSpeed: number;
     swirlAmplitudeOffset: number;
     swirlAmplitudeScale: number;
-    radiusScale: number;
-    radiusVariance: number;
+    radiusTotalScale: number;
+    arcBendSeedPhase: number;
     arcBendSpeed: number;
     arcBendAmplitudeOffset: number;
     arcBendAmplitudeScale: number;
-    sizeBase: number;
-    sizeVariance: number;
-    alphaBase: number;
-    alphaVariance: number;
+    sizeTotal: number;
+    alphaTotal: number;
     emberRed: number;
     emberGreen: number;
     emberBlue: number;
@@ -87,6 +86,7 @@ type UltraLightDustStatic = {
     driftXSpeed: number;
     driftYSpeed: number;
     size: number;
+    textureHalfSize: number;
     texture: HTMLCanvasElement;
 };
 
@@ -272,6 +272,7 @@ export class GameRenderer {
     private graphicsMenuScrollOffset = 0;
     private sunRayScreenPosA = new Vector2D(0, 0);
     private sunRayScreenPosB = new Vector2D(0, 0);
+    private ultraSunScreenPos = new Vector2D(0, 0);
     private sunRayScreenPosC = new Vector2D(0, 0);
     private sunRayScreenPosD = new Vector2D(0, 0);
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
@@ -4716,16 +4717,17 @@ export class GameRenderer {
 
             const particleCache = this.getOrCreateUltraSunParticleCache(sun);
 
-            const sunScreenPos = this.worldToScreen(sun.position);
+            this.worldToScreenCoords(sun.position.x, sun.position.y, this.ultraSunScreenPos);
+            const sunScreenPos = this.ultraSunScreenPos;
             const screenRadius = sun.radius * zoom;
 
             for (const ember of particleCache.emberStatics) {
                 const outwardT = (gameTimeSec * ember.speedOutward + ember.outwardOffset) % 1;
-                const swirl = Math.sin(gameTimeSec * ember.swirlSpeed + ember.seed * 0.37 + outwardT * 8.4)
+                const swirl = Math.sin(gameTimeSec * ember.swirlSpeed + ember.swirlSeedPhase + outwardT * 8.4)
                     * (ember.swirlAmplitudeOffset + outwardT * ember.swirlAmplitudeScale);
                 const curveAngle = ember.orbitAngle + swirl;
-                const radius = screenRadius * (0.35 + outwardT * (ember.radiusScale + ember.radiusVariance));
-                const arcBend = Math.sin(gameTimeSec * ember.arcBendSpeed + ember.seed * 0.61)
+                const radius = screenRadius * (0.35 + outwardT * ember.radiusTotalScale);
+                const arcBend = Math.sin(gameTimeSec * ember.arcBendSpeed + ember.arcBendSeedPhase)
                     * screenRadius * (ember.arcBendAmplitudeOffset + outwardT * ember.arcBendAmplitudeScale);
                 const curveSin = Math.sin(curveAngle);
                 const curveCos = Math.cos(curveAngle);
@@ -4733,10 +4735,10 @@ export class GameRenderer {
                 const tangentY = curveCos;
                 const x = sunScreenPos.x + curveCos * radius + tangentX * arcBend;
                 const y = sunScreenPos.y + curveSin * radius + tangentY * arcBend;
-                const size = (ember.sizeBase + ember.sizeVariance) * (1 - outwardT * 0.2);
+                const size = ember.sizeTotal * (1 - outwardT * 0.2);
                 const fadeIn = Math.min(1, outwardT * 6);
                 const fadeOut = Math.max(0, 1 - outwardT);
-                const alpha = (ember.alphaBase + ember.alphaVariance) * fadeIn * fadeOut * fadeOut;
+                const alpha = ember.alphaTotal * fadeIn * fadeOut * fadeOut;
 
                 const glowRadius = size * zoom * 1.4;
                 const emberBoundsRadius = glowRadius * 2.4;
@@ -4758,7 +4760,7 @@ export class GameRenderer {
             const dustStatic = dustStatics[dustIndex];
             const driftX = (gameTimeSec * dustStatic.driftXSpeed + dustStatic.seed) % viewportWidth;
             const driftY = (gameTimeSec * dustStatic.driftYSpeed + dustStatic.seed * 1.7) % viewportHeight;
-            const halfSize = dustStatic.texture.width * 0.5;
+            const halfSize = dustStatic.textureHalfSize;
 
             if (
                 driftX + halfSize < 0
@@ -4788,23 +4790,25 @@ export class GameRenderer {
             const emberRed = Math.floor(217 + fieryColorRoll * 38);
             const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
             const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
+            const radiusVariance = this.hashNormalized(seed + 7.3) * 1.9;
+            const sizeVariance = this.hashNormalized(seed + 17.1) * 1.1;
+            const alphaVariance = this.hashNormalized(seed + 19.9) * 0.2;
             emberStatics.push({
                 seed,
                 speedOutward: 0.06 + this.hashNormalized(seed + 2.2) * 0.08,
                 outwardOffset: this.hashNormalized(seed + 11.5) * 9.0,
                 orbitAngle: emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25,
+                swirlSeedPhase: seed * 0.37,
                 swirlSpeed: 2.2 + this.hashNormalized(seed + 4.4) * 3.1,
                 swirlAmplitudeOffset: 0.24,
                 swirlAmplitudeScale: 0.56,
-                radiusScale: 2.4,
-                radiusVariance: this.hashNormalized(seed + 7.3) * 1.9,
+                radiusTotalScale: 2.4 + radiusVariance,
+                arcBendSeedPhase: seed * 0.61,
                 arcBendSpeed: 3.1 + this.hashNormalized(seed + 9.7) * 2.6,
                 arcBendAmplitudeOffset: 0.04,
                 arcBendAmplitudeScale: 0.14,
-                sizeBase: 0.35,
-                sizeVariance: this.hashNormalized(seed + 17.1) * 1.1,
-                alphaBase: 0.06,
-                alphaVariance: this.hashNormalized(seed + 19.9) * 0.2,
+                sizeTotal: 0.35 + sizeVariance,
+                alphaTotal: 0.06 + alphaVariance,
                 emberRed,
                 emberGreen,
                 emberBlue,
@@ -4851,6 +4855,7 @@ export class GameRenderer {
                 driftXSpeed: 0.6 + this.hashNormalized(seed + 1.7) * 0.5,
                 driftYSpeed: 0.35 + this.hashNormalized(seed + 3.4) * 0.4,
                 size,
+                textureHalfSize: size * 16,
                 texture: this.getOrCreateUltraLightDustTexture(size, alpha)
             });
         }
