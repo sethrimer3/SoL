@@ -38,9 +38,16 @@ type AsteroidFacet = {
     baseShadeFactor: number;
 };
 
+type AsteroidInteriorPoint = {
+    position: Vector2D;
+    radial: number;
+    angle: number;
+};
+
 type AsteroidRenderCache = {
     facets: AsteroidFacet[];
     facetCount: number;
+    interiorPoints: AsteroidInteriorPoint[];
 };
 
 type SunRenderCache = {
@@ -4102,9 +4109,11 @@ export class GameRenderer {
         }
 
         const facets = this.generateAsteroidFacets(asteroid);
+        const interiorPoints = this.generateAsteroidInteriorPoints(asteroid);
         const generatedCache: AsteroidRenderCache = {
             facets,
-            facetCount: facets.length
+            facetCount: facets.length,
+            interiorPoints
         };
         this.asteroidRenderCache.set(asteroid, generatedCache);
         return generatedCache;
@@ -4121,7 +4130,32 @@ export class GameRenderer {
             asteroid.vertices.reduce((sum, vertex) => sum + vertex.y, 0) / asteroid.vertices.length
         );
 
+        const interiorPoints = this.generateAsteroidInteriorPoints(asteroid);
         const facets: AsteroidFacet[] = [];
+
+        if (interiorPoints.length > 0) {
+            for (let pointIndex = 0; pointIndex < interiorPoints.length; pointIndex++) {
+                const interiorPoint = interiorPoints[pointIndex].position;
+                for (let vertexIndex = 0; vertexIndex < asteroid.vertices.length; vertexIndex++) {
+                    const pointA = interiorPoint;
+                    const pointB = asteroid.vertices[vertexIndex];
+                    const pointC = asteroid.vertices[(vertexIndex + 1) % asteroid.vertices.length];
+
+                    const centroidLocal = new Vector2D(
+                        (pointA.x + pointB.x + pointC.x) / 3,
+                        (pointA.y + pointB.y + pointC.y) / 3
+                    );
+                    const baseShadeFactor = 0.88 + this.hashNormalized(
+                        asteroidSeed + pointIndex * 47.23 + vertexIndex * 19.79
+                    ) * 0.24;
+
+                    facets.push({ points: [pointA, pointB, pointC], centroidLocal, baseShadeFactor });
+                }
+            }
+
+            return facets;
+        }
+
         for (let facetIndex = 0; facetIndex < asteroid.vertices.length; facetIndex++) {
             const pointA = centerLocal;
             const pointB = asteroid.vertices[facetIndex];
@@ -4137,6 +4171,42 @@ export class GameRenderer {
         }
 
         return facets;
+    }
+
+    private generateAsteroidInteriorPoints(asteroid: Asteroid): AsteroidInteriorPoint[] {
+        if (asteroid.vertices.length < 3) {
+            return [];
+        }
+
+        const asteroidSeed = this.computeAsteroidSeed(asteroid);
+        const centerLocal = new Vector2D(
+            asteroid.vertices.reduce((sum, vertex) => sum + vertex.x, 0) / asteroid.vertices.length,
+            asteroid.vertices.reduce((sum, vertex) => sum + vertex.y, 0) / asteroid.vertices.length
+        );
+
+        const normalizedSizeRange = Math.max(1, Constants.ASTEROID_MAX_SIZE - Constants.ASTEROID_MIN_SIZE);
+        const sizeFactor = Math.min(1, Math.max(0, (asteroid.size - Constants.ASTEROID_MIN_SIZE) / normalizedSizeRange));
+        const maxInteriorPoints = Math.max(2, Math.min(5, Math.floor(asteroid.sides / 2) + 1));
+        const interiorPointCount = Math.max(2, Math.round(2 + sizeFactor * (maxInteriorPoints - 2)));
+
+        const interiorPoints: AsteroidInteriorPoint[] = [];
+        for (let pointIndex = 0; pointIndex < interiorPointCount; pointIndex++) {
+            const t = (pointIndex + 1) / (interiorPointCount + 1);
+            const angle = Math.PI * 2 * t + this.hashSigned(asteroidSeed + pointIndex * 13.17) * 0.55;
+            const radial = asteroid.size * (0.22 + this.hashNormalized(asteroidSeed + pointIndex * 23.41) * 0.33);
+            const interiorPosition = new Vector2D(
+                centerLocal.x + Math.cos(angle) * radial,
+                centerLocal.y + Math.sin(angle) * radial
+            );
+
+            interiorPoints.push({
+                position: interiorPosition,
+                radial,
+                angle
+            });
+        }
+
+        return interiorPoints;
     }
 
     private computeAsteroidSeed(asteroid: Asteroid): number {
