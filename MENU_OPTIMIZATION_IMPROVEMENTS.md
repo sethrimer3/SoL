@@ -224,7 +224,7 @@ this.context.restore();
 - **Loop invariant optimizations** most impactful with more stars
 - **Gradient caching** most beneficial with high particle counts
 - **Higher baseline performance cost** - more stars to render despite optimizations
-- **Expected improvement**: 8-15% better frame rates
+- **Expected improvement**: 8-15% better FPS
 
 ## Integration Notes
 

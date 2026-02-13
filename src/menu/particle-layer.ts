@@ -385,8 +385,8 @@ export class ParticleMenuLayer {
                     haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${alpha2})`);
                     haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
                     
-                    // FIFO (First-In-First-Out) eviction eliminates the delete+reinsert overhead
-                    // on cache hits that LRU required to maintain recency ordering
+                    // FIFO eviction when cache is full, eliminating the delete+reinsert overhead
+                    // that LRU required on cache hits to maintain recency ordering
                     if (this.haloGradientCache.size >= 100) {
                         const firstKey = this.haloGradientCache.keys().next().value;
                         if (firstKey) {
