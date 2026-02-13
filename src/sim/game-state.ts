@@ -4466,8 +4466,8 @@ export class GameState {
             
             // If we found a valid position, add the asteroid
             if (validPosition) {
-                // Random polygon sides (3-9)
-                const sides = rng.nextInt(3, 9);
+                // Random polygon sides for faceted low-poly silhouette (12-24)
+                const sides = rng.nextInt(12, 24);
                 this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
             }
         }
