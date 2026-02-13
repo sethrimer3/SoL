@@ -145,7 +145,8 @@ export const MAP_PLAYABLE_BOUNDARY = (MAP_SIZE / 2) - BORDER_FADE_WIDTH; // Unit
 // Countdown and mirror constants
 export const COUNTDOWN_DURATION = 3.0; // Countdown duration in seconds
 export const MIRROR_COUNTDOWN_DEPLOY_DISTANCE = 150; // Distance mirrors move from base during countdown
-export const MIRROR_MAX_HEALTH = 100;
+export const MIRROR_MAX_HEALTH = 200;
+export const MIRROR_DAMAGE_REDUCTION = 0.1; // 10% damage reduction from armor
 export const MIRROR_REGEN_PER_SEC = 2;
 
 // Marine unit constants
@@ -219,7 +220,8 @@ export const STELLAR_FORGE_MAX_HEALTH = 1000;
 export const STELLAR_FORGE_STARLING_DEFENSE = 5; // Flat damage reduction against starling attacks
 
 // Forge crunch constants (periodic event that spawns minions)
-export const FORGE_CRUNCH_INTERVAL = 10.0; // Seconds between crunches
+export const FORGE_CRUNCH_INTERVAL = 20.0; // Seconds between crunches
+export const FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING = 50; // Incoming light per second needed for 1 starling per crunch
 export const FORGE_CRUNCH_SUCK_DURATION = 0.8; // Duration of dust suction phase
 export const FORGE_CRUNCH_WAVE_DURATION = 1.2; // Duration of wave push phase
 export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
@@ -306,7 +308,8 @@ export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const STRIKER_TOWER_COST = 400; // Striker Tower (Velaris)
 export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
 export const SHIELD_TOWER_COST = 650; // Shield Tower (Radiant)
-export const HERO_UNIT_COST = 300;
+export const HERO_UNIT_BASE_COST = 3000;
+export const HERO_UNIT_COST_INCREMENT = 2000;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 export const STELLAR_FORGE_SOLAR_MIRROR_COST = 2000; // Cost to produce a solar mirror from the main stellar forge
 
