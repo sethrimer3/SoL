@@ -1133,7 +1133,7 @@ class GameController {
             .filter((index) => index >= 0);
 
         for (const mirror of this.selectedMirrors) {
-            mirror.setTarget(target);
+            mirror.setTarget(target, this.game);
         }
 
         this.moveOrderCounter++;
@@ -2881,7 +2881,7 @@ class GameController {
                 // If a mirror is selected and clicked elsewhere, move it
                 const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
                 if (selectedMirror && this.mirrorCommandMode !== 'warpgate') {
-                    selectedMirror.setTarget(worldPos);
+                    selectedMirror.setTarget(worldPos, this.game);
                     this.moveOrderCounter++;
                     selectedMirror.moveOrder = this.moveOrderCounter;
                     this.sendNetworkCommand('mirror_move', {
@@ -2940,7 +2940,7 @@ class GameController {
                         const mirrorIndices: number[] = [];
 
                         for (const mirror of this.selectedMirrors) {
-                            mirror.setTarget(lastWaypoint);
+                            mirror.setTarget(lastWaypoint, this.game);
                             mirror.moveOrder = this.moveOrderCounter;
                             mirror.isSelected = false;
                             const mirrorIndex = player.solarMirrors.indexOf(mirror);
@@ -3258,7 +3258,7 @@ class GameController {
                         if (player) {
                             const { mirror: closestMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
                             if (closestMirror && mirrorIndex >= 0) {
-                                closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                                closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y), this.game);
                                 closestMirror.moveOrder = this.moveOrderCounter;
                                 closestMirror.isSelected = false;
                                 this.sendNetworkCommand('mirror_move', {

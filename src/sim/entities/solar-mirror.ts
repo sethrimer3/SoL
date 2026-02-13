@@ -23,6 +23,10 @@ export class SolarMirror {
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
+    
+    // Pathfinding waypoints for obstacle avoidance
+    private waypoints: Vector2D[] = [];
+    private finalTarget: Vector2D | null = null;
 
     // Movement constants for mirrors (slower than Stellar Forge)
     private readonly MAX_SPEED = 50; // Pixels per second - slower than forge
@@ -213,10 +217,171 @@ export class SolarMirror {
     }
 
     /**
-     * Set target position for mirror movement
+     * Find obstacles blocking the direct path from start to end
+     * Returns the first blocking obstacle found, or null if path is clear
      */
-    setTarget(target: Vector2D): void {
-        this.targetPosition = target;
+    private findBlockingObstacle(
+        start: Vector2D,
+        end: Vector2D,
+        gameState: GameState | null
+    ): { type: 'asteroid' | 'building' | 'sun' | 'forge', obstacle: any } | null {
+        if (!gameState) return null;
+
+        const direction = new Vector2D(end.x - start.x, end.y - start.y);
+        const distance = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+        if (distance < 0.1) return null;
+        
+        direction.x /= distance;
+        direction.y /= distance;
+
+        // Check asteroids
+        for (const asteroid of gameState.asteroids) {
+            const ray = new LightRay(start, direction);
+            const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+            if (intersectionDist !== null && intersectionDist < distance) {
+                return { type: 'asteroid', obstacle: asteroid };
+            }
+        }
+
+        // Check buildings
+        for (const player of gameState.players) {
+            for (const building of player.buildings) {
+                if (this.isCircleBlockingRay(direction, distance, building.position, building.radius + 10)) {
+                    return { type: 'building', obstacle: building };
+                }
+            }
+            
+            // Check stellar forge
+            if (player.stellarForge) {
+                const forge = player.stellarForge;
+                if (this.isCircleBlockingRay(direction, distance, forge.position, forge.radius + 10)) {
+                    return { type: 'forge', obstacle: forge };
+                }
+            }
+        }
+
+        // Check suns
+        for (const sun of gameState.suns) {
+            if (this.isCircleBlockingRay(direction, distance, sun.position, sun.radius + 20)) {
+                return { type: 'sun', obstacle: sun };
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Generate waypoints to navigate around an obstacle
+     */
+    private generateWaypointsAroundObstacle(
+        start: Vector2D,
+        end: Vector2D,
+        obstacleInfo: { type: string, obstacle: any }
+    ): Vector2D[] {
+        const obstacle = obstacleInfo.obstacle;
+        let obstaclePos: Vector2D;
+        let obstacleRadius: number;
+
+        // Get obstacle position and radius
+        if (obstacleInfo.type === 'asteroid') {
+            obstaclePos = obstacle.position;
+            obstacleRadius = obstacle.size + 30; // Extra clearance
+        } else {
+            obstaclePos = obstacle.position;
+            obstacleRadius = obstacle.radius + 30; // Extra clearance
+        }
+
+        // Vector from obstacle to start
+        const toStartX = start.x - obstaclePos.x;
+        const toStartY = start.y - obstaclePos.y;
+        
+        // Vector from obstacle to end
+        const toEndX = end.x - obstaclePos.x;
+        const toEndY = end.y - obstaclePos.y;
+
+        // Calculate perpendicular offsets (left and right of obstacle)
+        const midX = (start.x + end.x) / 2;
+        const midY = (start.y + end.y) / 2;
+        const toMidX = midX - obstaclePos.x;
+        const toMidY = midY - obstaclePos.y;
+        const toMidDist = Math.sqrt(toMidX * toMidX + toMidY * toMidY);
+        
+        if (toMidDist < 0.1) return []; // Shouldn't happen, but safety check
+
+        // Get perpendicular direction
+        const perpX = -toMidY / toMidDist;
+        const perpY = toMidX / toMidDist;
+
+        // Create two candidate waypoints (left and right of obstacle)
+        const clearance = obstacleRadius * 1.2; // Extra margin
+        const waypoint1 = new Vector2D(
+            obstaclePos.x + perpX * clearance,
+            obstaclePos.y + perpY * clearance
+        );
+        const waypoint2 = new Vector2D(
+            obstaclePos.x - perpX * clearance,
+            obstaclePos.y - perpY * clearance
+        );
+
+        // Choose the waypoint that results in a shorter total path
+        const dist1 = start.distanceTo(waypoint1) + waypoint1.distanceTo(end);
+        const dist2 = start.distanceTo(waypoint2) + waypoint2.distanceTo(end);
+
+        return dist1 < dist2 ? [waypoint1] : [waypoint2];
+    }
+
+    /**
+     * Compute path with waypoints to avoid obstacles
+     */
+    private computePathWithWaypoints(target: Vector2D, gameState: GameState | null): void {
+        this.waypoints = [];
+        this.finalTarget = target;
+        
+        if (!gameState) {
+            this.targetPosition = target;
+            return;
+        }
+
+        let currentStart = this.position;
+        let currentEnd = target;
+        const maxIterations = 5; // Prevent infinite loops
+        let iteration = 0;
+
+        while (iteration < maxIterations) {
+            const blockingObstacle = this.findBlockingObstacle(currentStart, currentEnd, gameState);
+            
+            if (!blockingObstacle) {
+                // Path is clear to target
+                break;
+            }
+
+            // Generate waypoint to go around obstacle
+            const newWaypoints = this.generateWaypointsAroundObstacle(currentStart, currentEnd, blockingObstacle);
+            
+            if (newWaypoints.length > 0) {
+                this.waypoints.push(...newWaypoints);
+                currentStart = newWaypoints[newWaypoints.length - 1];
+            } else {
+                // Couldn't generate waypoint, just try direct path
+                break;
+            }
+            
+            iteration++;
+        }
+
+        // Set first waypoint or final target as current target
+        if (this.waypoints.length > 0) {
+            this.targetPosition = this.waypoints[0];
+        } else {
+            this.targetPosition = target;
+        }
+    }
+
+    /**
+     * Set target position for mirror movement with pathfinding
+     */
+    setTarget(target: Vector2D, gameState: GameState | null = null): void {
+        this.computePathWithWaypoints(target, gameState);
     }
 
     setLinkedStructure(structure: StellarForge | Building | WarpGate | null): void {
@@ -298,9 +463,13 @@ export class SolarMirror {
         if (!this.targetPosition) return;
 
         if (gameState) {
+            // Check if current target is inside an asteroid (shouldn't happen with pathfinding, but safety check)
             for (const asteroid of gameState.asteroids) {
                 if (asteroid.containsPoint(this.targetPosition)) {
+                    // Clear entire path if target is invalid
                     this.targetPosition = null;
+                    this.finalTarget = null;
+                    this.waypoints = [];
                     this.velocity = new Vector2D(0, 0);
                     return;
                 }
@@ -311,12 +480,34 @@ export class SolarMirror {
         const dy = this.targetPosition.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         
-        // If we're close enough to target, stop smoothly
+        // If we're close enough to current target (waypoint or final target)
         if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
-            this.position = this.targetPosition;
-            this.targetPosition = null;
-            this.velocity = new Vector2D(0, 0);
-            return;
+            // Check if there are more waypoints to navigate through
+            if (this.waypoints.length > 0) {
+                // Remove the waypoint we just reached
+                this.waypoints.shift();
+                
+                // Set next waypoint or final target
+                if (this.waypoints.length > 0) {
+                    this.targetPosition = this.waypoints[0];
+                } else if (this.finalTarget) {
+                    this.targetPosition = this.finalTarget;
+                    this.finalTarget = null;
+                } else {
+                    // Reached final destination
+                    this.position = this.targetPosition;
+                    this.targetPosition = null;
+                    this.velocity = new Vector2D(0, 0);
+                }
+                return;
+            } else {
+                // No more waypoints, reached final destination
+                this.position = this.targetPosition;
+                this.targetPosition = null;
+                this.finalTarget = null;
+                this.velocity = new Vector2D(0, 0);
+                return;
+            }
         }
         
         // Calculate desired direction
@@ -438,6 +629,20 @@ export class SolarMirror {
                 const dy = this.position.y - forge.position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
                 const minDist = forge.radius + 30;
+                if (dist < minDist + avoidanceRange) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+
+            // Check buildings
+            for (const building of player.buildings) {
+                const dx = this.position.x - building.position.x;
+                const dy = this.position.y - building.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = building.radius + 20;
                 if (dist < minDist + avoidanceRange) {
                     const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                     avoidX += (dx / dist) * avoidStrength;
