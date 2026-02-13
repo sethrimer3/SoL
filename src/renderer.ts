@@ -280,6 +280,7 @@ export class GameRenderer {
     private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
     private ultraLightDustTextureByKey = new Map<string, HTMLCanvasElement>();
     private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
+    private sunShadowQuadFrameCache = new WeakMap<Sun, ShadowQuad[]>();
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
@@ -910,7 +911,7 @@ export class GameRenderer {
 
         let hasShadowGeometry = false;
         for (const sun of game.suns) {
-            const shadowQuads = this.buildSunShadowQuads(sun, game);
+            const shadowQuads = this.getSunShadowQuadsCached(sun, game);
             for (const quad of shadowQuads) {
                 hasShadowGeometry = true;
                 this.ctx.moveTo(quad.sv1x, quad.sv1y);
@@ -4587,6 +4588,17 @@ export class GameRenderer {
         return quads;
     }
 
+    private getSunShadowQuadsCached(sun: Sun, game: GameState): ShadowQuad[] {
+        const cached = this.sunShadowQuadFrameCache.get(sun);
+        if (cached) {
+            return cached;
+        }
+
+        const generated = this.buildSunShadowQuads(sun, game);
+        this.sunShadowQuadFrameCache.set(sun, generated);
+        return generated;
+    }
+
     /**
      * Draw sun rays with raytracing (brightens field and casts shadows)
      */
@@ -4612,7 +4624,7 @@ export class GameRenderer {
 
             const sunScreenPos = this.worldToScreen(sun.position);
             const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
-            const shadowQuads = this.buildSunShadowQuads(sun, game);
+            const shadowQuads = this.getSunShadowQuadsCached(sun, game);
 
             // Create radial gradient centered on the sun
             const gradient = this.ctx.createRadialGradient(
@@ -5023,7 +5035,7 @@ export class GameRenderer {
         this.ctx.globalCompositeOperation = 'multiply';
 
         for (const sun of game.suns) {
-            const shadowQuads = this.buildSunShadowQuads(sun, game);
+            const shadowQuads = this.getSunShadowQuadsCached(sun, game);
             if (shadowQuads.length === 0) {
                 continue;
             }
@@ -10127,6 +10139,8 @@ export class GameRenderer {
      * Render the entire game state
      */
     render(game: GameState): void {
+        this.sunShadowQuadFrameCache = new WeakMap<Sun, ShadowQuad[]>();
+
         // Clear canvas with color scheme background
         this.ctx.fillStyle = this.colorScheme.background;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
