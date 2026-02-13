@@ -77,6 +77,16 @@ type UltraSunEmberStatic = {
     emberRed: number;
     emberGreen: number;
     emberBlue: number;
+    glowTexture: HTMLCanvasElement;
+    coreTexture: HTMLCanvasElement;
+};
+
+type UltraLightDustStatic = {
+    seed: number;
+    driftXSpeed: number;
+    driftYSpeed: number;
+    size: number;
+    alphaStyle: string;
 };
 
 type UltraSunParticleCache = {
@@ -268,6 +278,7 @@ export class GameRenderer {
     private ultraSunParticleCacheBySun = new WeakMap<Sun, UltraSunParticleCache>();
     private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
     private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
+    private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
@@ -4759,23 +4770,22 @@ export class GameRenderer {
                 const alpha = (ember.alphaBase + ember.alphaVariance) * fadeIn * fadeOut * fadeOut;
 
                 const glowRadius = size * this.zoom * 1.4;
-                this.drawUltraSunEmber(x, y, glowRadius, alpha, ember.emberRed, ember.emberGreen, ember.emberBlue);
+                this.drawUltraSunEmber(x, y, glowRadius, alpha, ember.glowTexture, ember.coreTexture);
             }
         }
 
         const dpr = window.devicePixelRatio || 1;
         const width = this.canvas.width / dpr;
         const height = this.canvas.height / dpr;
-        for (let dustIndex = 0; dustIndex < this.ULTRA_LIGHT_DUST_COUNT; dustIndex++) {
-            const seed = dustIndex * 31.91;
-            const driftX = (game.gameTime * (0.6 + this.hashNormalized(seed + 1.7) * 0.5) + seed) % width;
-            const driftY = (game.gameTime * (0.35 + this.hashNormalized(seed + 3.4) * 0.4) + seed * 1.7) % height;
-            const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
-            const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
+        const dustStatics = this.getOrCreateUltraLightDustStatics();
+        for (let dustIndex = 0; dustIndex < dustStatics.length; dustIndex += 1) {
+            const dustStatic = dustStatics[dustIndex];
+            const driftX = (game.gameTime * dustStatic.driftXSpeed + dustStatic.seed) % width;
+            const driftY = (game.gameTime * dustStatic.driftYSpeed + dustStatic.seed * 1.7) % height;
 
-            this.ctx.fillStyle = `rgba(255, 182, 112, ${alpha.toFixed(4)})`;
+            this.ctx.fillStyle = dustStatic.alphaStyle;
             this.ctx.beginPath();
-            this.ctx.arc(driftX, driftY, size, 0, Math.PI * 2);
+            this.ctx.arc(driftX, driftY, dustStatic.size, 0, Math.PI * 2);
             this.ctx.fill();
         }
 
@@ -4792,6 +4802,9 @@ export class GameRenderer {
         for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
             const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
             const fieryColorRoll = this.hashNormalized(seed + 23.7);
+            const emberRed = Math.floor(217 + fieryColorRoll * 38);
+            const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
+            const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
             emberStatics.push({
                 seed,
                 speedOutward: 0.06 + this.hashNormalized(seed + 2.2) * 0.08,
@@ -4809,9 +4822,11 @@ export class GameRenderer {
                 sizeVariance: this.hashNormalized(seed + 17.1) * 1.1,
                 alphaBase: 0.06,
                 alphaVariance: this.hashNormalized(seed + 19.9) * 0.2,
-                emberRed: Math.floor(217 + fieryColorRoll * 38),
-                emberGreen: Math.floor(71 + this.hashNormalized(seed + 29.2) * 107),
-                emberBlue: Math.floor(10 + this.hashNormalized(seed + 31.4) * 20)
+                emberRed,
+                emberGreen,
+                emberBlue,
+                glowTexture: this.getOrCreateUltraEmberGlowTexture(emberRed, emberGreen, emberBlue),
+                coreTexture: this.getOrCreateUltraEmberCoreTexture(emberRed, emberGreen, emberBlue)
             });
         }
 
@@ -4825,20 +4840,39 @@ export class GameRenderer {
         y: number,
         glowRadius: number,
         alpha: number,
-        emberRed: number,
-        emberGreen: number,
-        emberBlue: number
+        glowTexture: HTMLCanvasElement,
+        coreTexture: HTMLCanvasElement
     ): void {
-        const glowTexture = this.getOrCreateUltraEmberGlowTexture(emberRed, emberGreen, emberBlue);
-        const coreTexture = this.getOrCreateUltraEmberCoreTexture(emberRed, emberGreen, emberBlue);
-
         const glowSize = glowRadius * 4.8;
+        const glowHalfSize = glowSize * 0.5;
         this.ctx.globalAlpha = alpha;
-        this.ctx.drawImage(glowTexture, x - glowSize / 2, y - glowSize / 2, glowSize, glowSize);
+        this.ctx.drawImage(glowTexture, x - glowHalfSize, y - glowHalfSize, glowSize, glowSize);
 
         const coreSize = glowRadius / 1.4;
-        this.ctx.globalAlpha = alpha;
-        this.ctx.drawImage(coreTexture, x - coreSize / 2, y - coreSize / 2, coreSize, coreSize);
+        const coreHalfSize = coreSize * 0.5;
+        this.ctx.drawImage(coreTexture, x - coreHalfSize, y - coreHalfSize, coreSize, coreSize);
+    }
+
+    private getOrCreateUltraLightDustStatics(): UltraLightDustStatic[] {
+        if (this.ultraLightDustStatics) {
+            return this.ultraLightDustStatics;
+        }
+
+        const generatedStatics: UltraLightDustStatic[] = [];
+        for (let dustIndex = 0; dustIndex < this.ULTRA_LIGHT_DUST_COUNT; dustIndex += 1) {
+            const seed = dustIndex * 31.91;
+            const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
+            generatedStatics.push({
+                seed,
+                driftXSpeed: 0.6 + this.hashNormalized(seed + 1.7) * 0.5,
+                driftYSpeed: 0.35 + this.hashNormalized(seed + 3.4) * 0.4,
+                size: 0.8 + this.hashNormalized(seed + 5.2) * 2.5,
+                alphaStyle: `rgba(255, 182, 112, ${alpha.toFixed(4)})`
+            });
+        }
+
+        this.ultraLightDustStatics = generatedStatics;
+        return generatedStatics;
     }
 
     private getOrCreateUltraEmberGlowTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
