@@ -45,6 +45,9 @@ export class ParticleMenuLayer {
     private haloGradientCache: Map<string, CanvasGradient> = new Map();
     // Pre-formatted opacity strings to avoid toFixed() calls
     private cachedOpacityString: string = '';
+    // Cached canvas dimensions to avoid getBoundingRect() every frame
+    private cachedWidthPx: number = 0;
+    private cachedHeightPx: number = 0;
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -109,6 +112,9 @@ export class ParticleMenuLayer {
         this.canvas.width = Math.round(width * devicePixelRatio);
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        // Cache dimensions for rendering
+        this.cachedWidthPx = width;
+        this.cachedHeightPx = height;
     }
 
     public setMenuContentElement(element: HTMLElement): void {
@@ -332,9 +338,9 @@ export class ParticleMenuLayer {
     }
 
     private renderParticles(): void {
-        const rect = this.container.getBoundingClientRect();
-        const width = rect.width || window.innerWidth;
-        const height = rect.height || window.innerHeight;
+        // Use cached dimensions instead of querying DOM
+        const width = this.cachedWidthPx || window.innerWidth;
+        const height = this.cachedHeightPx || window.innerHeight;
         this.context.clearRect(0, 0, width, height);
         this.context.globalCompositeOperation = 'lighter';
         this.context.globalAlpha = this.particleOpacity;

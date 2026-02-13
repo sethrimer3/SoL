@@ -92,6 +92,12 @@ export class BackgroundParticleLayer {
         bottom: [0, 0, 0],
         left: [0, 0, 0]
     };
+    // Cached canvas dimensions to avoid DPR division every frame
+    private cachedWidthPx: number = 0;
+    private cachedHeightPx: number = 0;
+    private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
+    // Cached gradients for particles to reduce per-frame allocation
+    private particleGradientCache: Map<string, CanvasGradient> = new Map();
     
     private readonly gradientColors = [
         [138, 43, 226],   // Blue Violet
@@ -129,8 +135,9 @@ export class BackgroundParticleLayer {
     }
     
     private initializeParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        // Use cached dimensions or fallback
+        const width = this.cachedWidthPx || window.innerWidth;
+        const height = this.cachedHeightPx || window.innerHeight;
         const particleRadiusPx = this.getParticleRadiusPx();
 
         this.particles = [];
@@ -175,7 +182,14 @@ export class BackgroundParticleLayer {
         this.canvas.width = Math.round(width * devicePixelRatio);
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        // Cache dimensions for rendering
+        this.cachedWidthPx = width;
+        this.cachedHeightPx = height;
         this.updateParticleRadii();
+    }
+    
+    public setGraphicsQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
+        this.graphicsQuality = quality;
     }
     
     public start(): void {
@@ -225,8 +239,9 @@ export class BackgroundParticleLayer {
     }
     
     private updateParticles(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        // Use cached dimensions
+        const width = this.cachedWidthPx || window.innerWidth;
+        const height = this.cachedHeightPx || window.innerHeight;
         
         // Reset edge glows
         this.edgeGlows.top = [0, 0, 0];
@@ -378,16 +393,22 @@ export class BackgroundParticleLayer {
     }
     
     private render(): void {
-        const width = this.canvas.width / (window.devicePixelRatio || 1);
-        const height = this.canvas.height / (window.devicePixelRatio || 1);
+        // Use cached dimensions
+        const width = this.cachedWidthPx || window.innerWidth;
+        const height = this.cachedHeightPx || window.innerHeight;
         
         // Clear with black background
         this.context.fillStyle = '#000000';
         this.context.fillRect(0, 0, width, height);
         
+        // Apply blur filter based on quality (skip on low/medium quality)
+        const shouldApplyBlur = this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra';
+        
         // Draw edge glows first (under particles)
         this.context.globalCompositeOperation = 'screen';
-        this.context.filter = 'blur(40px)';
+        if (shouldApplyBlur) {
+            this.context.filter = 'blur(40px)';
+        }
         
         const glowHeight = 60;
         const glowWidth = 60;
@@ -443,27 +464,45 @@ export class BackgroundParticleLayer {
             this.context.fillRect(width - glowWidth, 0, glowWidth, height);
         }
         
-        // Draw particles with blur effect (reduced blur for better performance)
-        this.context.filter = 'blur(60px)';
+        // Draw particles with blur effect (only on high/ultra quality)
+        if (shouldApplyBlur) {
+            this.context.filter = 'blur(60px)';
+        }
         this.context.globalCompositeOperation = 'screen';
         
         for (const particle of this.particles) {
-            const gradient = this.context.createRadialGradient(
-                particle.x, particle.y, 0,
-                particle.x, particle.y, particle.radius
-            );
-            
             const r = Math.round(particle.colorR);
             const g = Math.round(particle.colorG);
             const b = Math.round(particle.colorB);
             
-            gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
-            gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+            // Cache gradients by color and radius
+            const cacheKey = `${r},${g},${b},${particle.radius}`;
+            let gradient = this.particleGradientCache.get(cacheKey);
             
+            if (!gradient) {
+                // Create gradient at origin (0, 0) for caching
+                gradient = this.context.createRadialGradient(0, 0, 0, 0, 0, particle.radius);
+                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
+                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+                
+                // Limit cache size to prevent memory growth
+                if (this.particleGradientCache.size >= 50) {
+                    const firstKey = this.particleGradientCache.keys().next().value;
+                    if (firstKey) {
+                        this.particleGradientCache.delete(firstKey);
+                    }
+                }
+                this.particleGradientCache.set(cacheKey, gradient);
+            }
+            
+            // Use translate to position the cached gradient
+            this.context.save();
+            this.context.translate(particle.x, particle.y);
             this.context.fillStyle = gradient;
             this.context.beginPath();
-            this.context.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+            this.context.arc(0, 0, particle.radius, 0, Math.PI * 2);
             this.context.fill();
+            this.context.restore();
         }
         
         this.context.filter = 'none';
