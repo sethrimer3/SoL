@@ -7,6 +7,7 @@ import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
+import { renderLensFlare } from './rendering/LensFlare';
 
 type ForgeFlameState = {
     warmth: number;
@@ -2606,100 +2607,24 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a subtle lens flare effect when a sun is visible on screen
+     * Draw cinematic lens flare for visible suns in screen space.
      */
     private drawLensFlare(sun: Sun): void {
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
-        
-        // Check if sun is within or near the viewport
+
         const dpr = window.devicePixelRatio || 1;
         const canvasWidth = this.canvas.width / dpr;
         const canvasHeight = this.canvas.height / dpr;
-        const centerX = canvasWidth / 2;
-        const centerY = canvasHeight / 2;
-        
-        // Calculate direction vector from screen center to sun
-        const dx = screenPos.x - centerX;
-        const dy = screenPos.y - centerY;
-        const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
-        
-        // Only draw lens flare if sun is reasonably visible
-        const maxDistance = Math.sqrt(canvasWidth * canvasWidth + canvasHeight * canvasHeight) / 2;
-        if (distanceFromCenter > maxDistance + screenRadius) {
-            this.ctx.restore();
-            return; // Sun is too far off screen
+        const maxDistance = Math.hypot(canvasWidth * 0.5, canvasHeight * 0.5);
+        const distanceFromCenter = Math.hypot(screenPos.x - canvasWidth * 0.5, screenPos.y - canvasHeight * 0.5);
+
+        // Skip expensive flare work when the sun is far outside the viewport envelope.
+        if (distanceFromCenter > maxDistance + screenRadius * 2) {
+            return;
         }
-        
-        // Draw multiple subtle flare spots at different positions along the sun-center axis
-        // offset: position multiplier along the axis (-1 = opposite side, 0 = center, 1 = sun)
-        // size: flare radius as a fraction of sun radius
-        // Extract base color and alpha from colorScheme.lensFlareHalo
-        const haloColorMatch = this.colorScheme.lensFlareHalo.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
-        const haloBaseColor = haloColorMatch 
-            ? `rgba(${haloColorMatch[1]}, ${haloColorMatch[2]}, ${haloColorMatch[3]}, `
-            : 'rgba(255, 240, 200, ';
-        
-        const flarePositions = [
-            { offset: -0.3, size: 0.4, alpha: 0.15 },
-            { offset: -0.5, size: 0.25, alpha: 0.12 },
-            { offset: 0.4, size: 0.3, alpha: 0.1 },
-            { offset: 0.7, size: 0.2, alpha: 0.08 }
-        ];
-        
-        for (const flare of flarePositions) {
-            // Calculate position along the sun-center line
-            const flareX = centerX + dx * flare.offset;
-            const flareY = centerY + dy * flare.offset;
-            const flareRadius = screenRadius * flare.size;
-            
-            // Draw flare spot with radial gradient
-            const flareGradient = this.ctx.createRadialGradient(
-                flareX, flareY, 0,
-                flareX, flareY, flareRadius
-            );
-            flareGradient.addColorStop(0, `${haloBaseColor}${flare.alpha})`);
-            flareGradient.addColorStop(0.5, `${haloBaseColor}${flare.alpha * 0.5})`);
-            flareGradient.addColorStop(1, `${haloBaseColor}0)`);
-            
-            this.ctx.fillStyle = flareGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(flareX, flareY, flareRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw subtle hexagonal starburst around the sun
-        this.ctx.save();
-        this.ctx.globalAlpha = 0.2;
-        this.ctx.strokeStyle = this.colorScheme.lensFlareHalo;
-        this.ctx.lineWidth = 2;
-        
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const rayLength = screenRadius * 1.5;
-            const startX = screenPos.x + Math.cos(angle) * screenRadius * 0.7;
-            const startY = screenPos.y + Math.sin(angle) * screenRadius * 0.7;
-            const endX = screenPos.x + Math.cos(angle) * rayLength;
-            const endY = screenPos.y + Math.sin(angle) * rayLength;
-            
-            // Create gradient for each ray - increase alpha for better visibility
-            const rayGradient = this.ctx.createLinearGradient(startX, startY, endX, endY);
-            const rayColor = haloBaseColor + '0.4)';
-            rayGradient.addColorStop(0, rayColor);
-            rayGradient.addColorStop(1, `${haloBaseColor}0)`);
-            
-            this.ctx.strokeStyle = rayGradient;
-            this.ctx.beginPath();
-            this.ctx.moveTo(startX, startY);
-            this.ctx.lineTo(endX, endY);
-            this.ctx.stroke();
-        }
-        
-        this.ctx.restore();
-        this.ctx.restore();
+
+        renderLensFlare(this.ctx, screenPos.x, screenPos.y, screenRadius, canvasWidth, canvasHeight);
     }
 
     /**
