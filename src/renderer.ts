@@ -86,7 +86,7 @@ type UltraLightDustStatic = {
     driftXSpeed: number;
     driftYSpeed: number;
     size: number;
-    alphaStyle: string;
+    texture: HTMLCanvasElement;
 };
 
 type UltraSunParticleCache = {
@@ -278,6 +278,7 @@ export class GameRenderer {
     private ultraSunParticleCacheBySun = new WeakMap<Sun, UltraSunParticleCache>();
     private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
     private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
+    private ultraLightDustTextureByKey = new Map<string, HTMLCanvasElement>();
     private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
@@ -4782,11 +4783,8 @@ export class GameRenderer {
             const dustStatic = dustStatics[dustIndex];
             const driftX = (game.gameTime * dustStatic.driftXSpeed + dustStatic.seed) % width;
             const driftY = (game.gameTime * dustStatic.driftYSpeed + dustStatic.seed * 1.7) % height;
-
-            this.ctx.fillStyle = dustStatic.alphaStyle;
-            this.ctx.beginPath();
-            this.ctx.arc(driftX, driftY, dustStatic.size, 0, Math.PI * 2);
-            this.ctx.fill();
+            const halfSize = dustStatic.texture.width * 0.5;
+            this.ctx.drawImage(dustStatic.texture, driftX - halfSize, driftY - halfSize);
         }
 
         this.ctx.restore();
@@ -4862,12 +4860,13 @@ export class GameRenderer {
         for (let dustIndex = 0; dustIndex < this.ULTRA_LIGHT_DUST_COUNT; dustIndex += 1) {
             const seed = dustIndex * 31.91;
             const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
+            const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
             generatedStatics.push({
                 seed,
                 driftXSpeed: 0.6 + this.hashNormalized(seed + 1.7) * 0.5,
                 driftYSpeed: 0.35 + this.hashNormalized(seed + 3.4) * 0.4,
-                size: 0.8 + this.hashNormalized(seed + 5.2) * 2.5,
-                alphaStyle: `rgba(255, 182, 112, ${alpha.toFixed(4)})`
+                size,
+                texture: this.getOrCreateUltraLightDustTexture(size, alpha)
             });
         }
 
@@ -4933,6 +4932,34 @@ export class GameRenderer {
         textureContext.fill();
 
         this.ultraEmberCoreTextureByColor.set(colorKey, textureCanvas);
+        return textureCanvas;
+    }
+
+    private getOrCreateUltraLightDustTexture(size: number, alpha: number): HTMLCanvasElement {
+        const color = '255,182,112';
+        const alphaRounded = alpha.toFixed(4);
+        const key = `${size.toFixed(2)}:${alphaRounded}`;
+        const cached = this.ultraLightDustTextureByKey.get(key);
+        if (cached) {
+            return cached;
+        }
+
+        const textureRadius = Math.max(1, Math.ceil(size + 1));
+        const textureSize = textureRadius * 2;
+        const textureCanvas = document.createElement('canvas');
+        textureCanvas.width = textureSize;
+        textureCanvas.height = textureSize;
+        const textureContext = textureCanvas.getContext('2d');
+        if (!textureContext) {
+            return textureCanvas;
+        }
+
+        textureContext.fillStyle = `rgba(${color}, ${alphaRounded})`;
+        textureContext.beginPath();
+        textureContext.arc(textureRadius, textureRadius, size, 0, Math.PI * 2);
+        textureContext.fill();
+
+        this.ultraLightDustTextureByKey.set(key, textureCanvas);
         return textureCanvas;
     }
 
