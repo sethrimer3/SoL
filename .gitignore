@@ -62,3 +62,4 @@ htmlcov/
 *.log
 test-mirrors.html
 test-pathfinding.js
+test-mirror-pathfinding-detailed.ts

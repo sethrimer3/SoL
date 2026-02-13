@@ -38,6 +38,16 @@ export class SolarMirror {
     private readonly ROTATION_SPEED_RAD_PER_SEC = Math.PI * 0.25; // Radians per second
     private readonly ROTATION_SNAP_THRESHOLD_RAD = 0.01; // Snap when nearly aligned
 
+    // Pathfinding constants
+    private readonly MAX_PATHFINDING_ITERATIONS = 5; // Maximum iterations for waypoint generation
+    private readonly ASTEROID_CLEARANCE = 30; // Extra clearance for asteroids
+    private readonly BUILDING_CLEARANCE = 10; // Extra clearance for buildings
+    private readonly SUN_CLEARANCE = 20; // Extra clearance for suns
+    private readonly FORGE_CLEARANCE = 10; // Extra clearance for stellar forges
+    private readonly WAYPOINT_CLEARANCE_MULTIPLIER = 1.2; // Multiplier for waypoint clearance
+    private readonly REACTIVE_AVOIDANCE_RANGE = 60; // Look ahead distance for reactive avoidance
+    private readonly REACTIVE_AVOIDANCE_BUILDING_CLEARANCE = 20; // Clearance for reactive building avoidance
+
     constructor(
         public position: Vector2D,
         public owner: Player
@@ -246,7 +256,7 @@ export class SolarMirror {
         // Check buildings
         for (const player of gameState.players) {
             for (const building of player.buildings) {
-                if (this.isCircleBlockingRay(direction, distance, building.position, building.radius + 10)) {
+                if (this.isCircleBlockingRay(direction, distance, building.position, building.radius + this.BUILDING_CLEARANCE)) {
                     return { type: 'building', obstacle: building };
                 }
             }
@@ -254,7 +264,7 @@ export class SolarMirror {
             // Check stellar forge
             if (player.stellarForge) {
                 const forge = player.stellarForge;
-                if (this.isCircleBlockingRay(direction, distance, forge.position, forge.radius + 10)) {
+                if (this.isCircleBlockingRay(direction, distance, forge.position, forge.radius + this.FORGE_CLEARANCE)) {
                     return { type: 'forge', obstacle: forge };
                 }
             }
@@ -262,7 +272,7 @@ export class SolarMirror {
 
         // Check suns
         for (const sun of gameState.suns) {
-            if (this.isCircleBlockingRay(direction, distance, sun.position, sun.radius + 20)) {
+            if (this.isCircleBlockingRay(direction, distance, sun.position, sun.radius + this.SUN_CLEARANCE)) {
                 return { type: 'sun', obstacle: sun };
             }
         }
@@ -285,10 +295,10 @@ export class SolarMirror {
         // Get obstacle position and radius
         if (obstacleInfo.type === 'asteroid') {
             obstaclePos = obstacle.position;
-            obstacleRadius = obstacle.size + 30; // Extra clearance
+            obstacleRadius = obstacle.size + this.ASTEROID_CLEARANCE;
         } else {
             obstaclePos = obstacle.position;
-            obstacleRadius = obstacle.radius + 30; // Extra clearance
+            obstacleRadius = obstacle.radius + this.BUILDING_CLEARANCE;
         }
 
         // Vector from obstacle to start
@@ -313,7 +323,7 @@ export class SolarMirror {
         const perpY = toMidX / toMidDist;
 
         // Create two candidate waypoints (left and right of obstacle)
-        const clearance = obstacleRadius * 1.2; // Extra margin
+        const clearance = obstacleRadius * this.WAYPOINT_CLEARANCE_MULTIPLIER;
         const waypoint1 = new Vector2D(
             obstaclePos.x + perpX * clearance,
             obstaclePos.y + perpY * clearance
@@ -344,7 +354,7 @@ export class SolarMirror {
 
         let currentStart = this.position;
         let currentEnd = target;
-        const maxIterations = 5; // Prevent infinite loops
+        const maxIterations = this.MAX_PATHFINDING_ITERATIONS;
         let iteration = 0;
 
         while (iteration < maxIterations) {
@@ -576,14 +586,14 @@ export class SolarMirror {
         let avoidX = 0;
         let avoidY = 0;
         let avoidCount = 0;
-        const avoidanceRange = 60; // Look ahead distance
+        const avoidanceRange = this.REACTIVE_AVOIDANCE_RANGE;
 
         // Check asteroids (approximate with radius)
         for (const asteroid of gameState.asteroids) {
             const dx = this.position.x - asteroid.position.x;
             const dy = this.position.y - asteroid.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const minDist = asteroid.size + 20;
+            const minDist = asteroid.size + this.ASTEROID_CLEARANCE;
             if (dist > 0 && dist < minDist + avoidanceRange) {
                 const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                 avoidX += (dx / dist) * avoidStrength;
@@ -597,7 +607,7 @@ export class SolarMirror {
             const dx = this.position.x - sun.position.x;
             const dy = this.position.y - sun.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const minDist = sun.radius + 30;
+            const minDist = sun.radius + this.SUN_CLEARANCE;
             if (dist < minDist + avoidanceRange) {
                 const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                 avoidX += (dx / dist) * avoidStrength;
@@ -628,7 +638,7 @@ export class SolarMirror {
                 const dx = this.position.x - forge.position.x;
                 const dy = this.position.y - forge.position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const minDist = forge.radius + 30;
+                const minDist = forge.radius + this.FORGE_CLEARANCE;
                 if (dist < minDist + avoidanceRange) {
                     const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                     avoidX += (dx / dist) * avoidStrength;
@@ -642,7 +652,7 @@ export class SolarMirror {
                 const dx = this.position.x - building.position.x;
                 const dy = this.position.y - building.position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const minDist = building.radius + 20;
+                const minDist = building.radius + this.REACTIVE_AVOIDANCE_BUILDING_CLEARANCE;
                 if (dist < minDist + avoidanceRange) {
                     const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                     avoidX += (dx / dist) * avoidStrength;
