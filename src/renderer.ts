@@ -261,6 +261,7 @@ export class GameRenderer {
     private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
+    private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -2024,6 +2025,30 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
+    private drawStructureShadeGlow(
+        entity: object,
+        screenPos: Vector2D,
+        renderedRadiusPx: number,
+        glowColor: string,
+        shouldGlowInShade: boolean,
+        visibilityAlpha: number = 1,
+        isSelected: boolean = false
+    ): void {
+        const shadeGlowAlpha = this.getShadeGlowAlpha(entity, shouldGlowInShade);
+        if (shadeGlowAlpha <= 0.01) {
+            return;
+        }
+
+        const selectionBoost = isSelected ? 0.16 : 0.06;
+        const shadeGlowBoost = 0.55 * shadeGlowAlpha;
+        this.drawCachedUnitGlow(
+            screenPos,
+            renderedRadiusPx * (this.ENTITY_SHADE_GLOW_SCALE + selectionBoost),
+            glowColor,
+            (0.9 + shadeGlowBoost) * visibilityAlpha
+        );
+    }
+
     private getOrCreateUnitGlowTexture(radiusPx: number, color: string): HTMLCanvasElement {
         const cacheKey = `${radiusPx}:${color}`;
         const cached = this.unitGlowRenderCache.get(cacheKey);
@@ -2624,6 +2649,7 @@ export class GameRenderer {
         let shouldDim = false;
         let displayColor = forgeColor;
         let visibilityAlpha = 1;
+        const isInShadow = !ladSun && game.isPointInShadow(forge.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
             visibilityAlpha = this.getEnemyVisibilityAlpha(forge, isVisible, game.gameTime);
@@ -2645,6 +2671,19 @@ export class GameRenderer {
 
         this.ctx.save();
         this.ctx.globalAlpha = visibilityAlpha;
+
+        const shouldGlowInShade = isEnemy
+            ? (isInShadow && visibilityAlpha > 0.01)
+            : isInShadow;
+        this.drawStructureShadeGlow(
+            forge,
+            screenPos,
+            size,
+            displayColor,
+            shouldGlowInShade,
+            visibilityAlpha,
+            forge.isSelected
+        );
 
         // Draw selection circle if selected
         if (forge.isSelected) {
@@ -3209,6 +3248,7 @@ export class GameRenderer {
         let shouldDim = false;
         let displayColor = mirrorColor;
         let visibilityAlpha = 1;
+        const isInShadow = !ladSun && game.isPointInShadow(mirror.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
             visibilityAlpha = this.getEnemyVisibilityAlpha(mirror, isVisible, game.gameTime);
@@ -3231,6 +3271,18 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(mirror.position);
         const mirrorSizeWorld = 14;
         const size = mirrorSizeWorld * this.zoom;
+        const shouldGlowInShade = isEnemy
+            ? (isInShadow && visibilityAlpha > 0.01)
+            : isInShadow;
+        this.drawStructureShadeGlow(
+            mirror,
+            screenPos,
+            size,
+            displayColor,
+            shouldGlowInShade,
+            visibilityAlpha,
+            mirror.isSelected
+        );
 
         this.drawAestheticSpriteShadow(mirror.position, screenPos, size * 0.95, game, {
             opacity: visibilityAlpha,
@@ -5006,6 +5058,8 @@ export class GameRenderer {
         const isSelected = this.selectedWarpGate === gate;
         const isVelarisGate = gate.owner.faction === Faction.VELARIS;
         const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
+        const isInShadow = !ladSun && game.isPointInShadow(gate.position);
+        this.drawStructureShadeGlow(gate, screenPos, maxRadius, displayColor, isInShadow, 1, isSelected);
 
         this.drawAestheticSpriteShadow(gate.position, screenPos, maxRadius * 0.9, game, {
             opacity: gate.isComplete ? 0.95 : 0.55,
@@ -5442,10 +5496,11 @@ export class GameRenderer {
             ? this.darkenColor(displayColor, Constants.SHADE_OPACITY)
             : displayColor;
         const glowAlphaScale = isSelected ? 1.3 : 1;
+        const renderedUnitRadius = heroSprite ? heroSpriteSize * 0.5 : size;
         const shadeGlowBoost = 0.55 * shadeGlowAlpha;
         this.drawCachedUnitGlow(
             screenPos,
-            size * (isSelected ? 2.25 : 1.95),
+            renderedUnitRadius * (this.ENTITY_SHADE_GLOW_SCALE + (isSelected ? 0.12 : 0.05)),
             glowColor,
             (glowAlphaScale + shadeGlowBoost) * visibilityAlpha
         );
@@ -6677,7 +6732,7 @@ export class GameRenderer {
         const shadeGlowBoost = 0.55 * shadeGlowAlpha;
         this.drawCachedUnitGlow(
             screenPos,
-            size * (isSelected ? 2.1 : 1.85),
+            size * (this.ENTITY_SHADE_GLOW_SCALE + (isSelected ? 0.12 : 0.04)),
             displayColor,
             (isSelected ? 1.2 : 1) + shadeGlowBoost
         );
@@ -7729,6 +7784,7 @@ export class GameRenderer {
         // Check visibility for enemy buildings
         let shouldDim = false;
         let displayColor = buildingColor;
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -7744,6 +7800,11 @@ export class GameRenderer {
                 }
             }
         }
+
+        const shouldGlowInShade = isEnemy
+            ? isInShadow
+            : isInShadow;
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, shouldGlowInShade, 1, building.isSelected);
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
@@ -7904,6 +7965,7 @@ export class GameRenderer {
         // Check visibility for enemy buildings
         let shouldDim = false;
         let displayColor = buildingColor;
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -7921,6 +7983,11 @@ export class GameRenderer {
         }
 
         // Draw build progress indicator if not complete
+        const shouldGlowInShade = isEnemy
+            ? isInShadow
+            : isInShadow;
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, shouldGlowInShade, 1, building.isSelected);
+
         if (!building.isComplete) {
             this.drawWarpGateProductionEffect(
                 screenPos,
@@ -8037,90 +8104,70 @@ export class GameRenderer {
                 buildingColor = '#000000';
             }
         }
-        
-        // Check visibility for enemy buildings
+
         let shouldDim = false;
         let displayColor = buildingColor;
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
-                return; // Don't draw invisible enemy buildings
+                return;
             }
-            
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(building.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-                }
+
+            if (!ladSun && isInShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
 
-        // Draw build progress indicator if not complete
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
+
         if (!building.isComplete) {
-            this.drawWarpGateProductionEffect(
-                screenPos,
-                radius,
-                game,
-                displayColor
-            );
+            this.drawWarpGateProductionEffect(screenPos, radius, game, displayColor);
 
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
             }
 
-            // Draw progress bar
             const barWidth = radius * 2;
             const barHeight = 4;
             const barX = screenPos.x - barWidth / 2;
             const barY = screenPos.y + radius + 5;
-            
+
             this.ctx.fillStyle = '#333333';
             this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
+
             this.ctx.fillStyle = '#FFD700';
             this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
 
-            // Reset alpha
             if (shouldDim) {
                 this.ctx.globalAlpha = 1.0;
             }
             return;
         }
 
-
-        // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
             this.drawLadAura(screenPos, radius, auraColor, ownerSide);
         }
 
         const isAurumFoundry = building.owner.faction === Faction.AURUM;
-        
         if (isAurumFoundry) {
-            // Draw Aurum foundry with moving triangles outline - slightly smaller
-            this.drawAurumFoundryOutline(
-                building,
-                screenPos,
-                radius * 0.85, // Slightly smaller than forge
-                displayColor,
-                game.gameTime
-            );
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-                this.drawFoundryButtons(building, screenPos);
-            }
-        } else if (isVelarisFoundry) {
-            this.drawVelarisFoundrySigil(building, screenPos, radius, displayColor, game.gameTime, shouldDim);
+            this.drawAurumFoundryOutline(building, screenPos, radius, displayColor, game.gameTime);
             if (building.isSelected) {
                 this.drawBuildingSelectionIndicator(screenPos, radius);
                 this.drawFoundryButtons(building, screenPos);
             }
         } else {
-            const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
-            const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
-            const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
+            const bottomSpritePath = isVelarisFoundry
+                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_bottom.png'
+                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
+            const middleSpritePath = isVelarisFoundry
+                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_middle.png'
+                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
+            const topSpritePath = isVelarisFoundry
+                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_top.png'
+                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
 
             const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
             const middleSprite = this.getTintedSprite(middleSpritePath, displayColor);
@@ -8131,30 +8178,21 @@ export class GameRenderer {
                 const spriteScale = (radius * 2) / referenceSprite.width;
                 const timeSec = game.gameTime;
                 const isProducing = Boolean(building.currentProduction);
-                
-                // Always spin at base speed, increase 2.5x when producing
-                // Smooth acceleration/deceleration based on production progress
-                const baseSpinSpeedRad = 0.2; // Base slow spin speed
+                const baseSpinSpeedRad = 0.2;
                 const producingMultiplier = 2.5;
-                const ACCELERATION_PHASE_DURATION = 0.2; // Accelerate during first 20% of production
-                
-                // Calculate speed multiplier with smooth acceleration/deceleration
-                // At start of production (progress=0): speed = 1.0
-                // At middle of production (progress=0.5): speed = 2.5
-                // At end of production (progress=1.0): speed = 2.5 (stays fast until production completes)
+                const ACCELERATION_PHASE_DURATION = 0.2;
+
                 let speedMultiplier = 1.0;
                 if (isProducing) {
-                    // Smooth acceleration in first 20% of production
                     if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
                         const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
                         const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
                         speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
                     } else {
-                        // Stay at full speed during most of production
                         speedMultiplier = producingMultiplier;
                     }
                 }
-                
+
                 const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
                 const bottomRotationRad = timeSec * spinSpeedRad;
                 const topRotationRad = -timeSec * spinSpeedRad;
@@ -8168,13 +8206,7 @@ export class GameRenderer {
                     this.ctx.save();
                     this.ctx.translate(screenPos.x, screenPos.y);
                     this.ctx.rotate(rotationRad);
-                    this.ctx.drawImage(
-                        sprite,
-                        -spriteWidth / 2,
-                        -spriteHeight / 2,
-                        spriteWidth,
-                        spriteHeight
-                    );
+                    this.ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
                     this.ctx.restore();
                 };
 
@@ -8182,7 +8214,6 @@ export class GameRenderer {
 
                 if (building.isSelected) {
                     this.drawBuildingSelectionIndicator(screenPos, radius);
-                    // Draw foundry production buttons when selected
                     this.drawFoundryButtons(building, screenPos);
                 }
 
@@ -8196,15 +8227,14 @@ export class GameRenderer {
             const barHeight = 4;
             const barX = screenPos.x - barWidth / 2;
             const barY = screenPos.y + radius + 5;
-            
+
             this.ctx.fillStyle = '#333333';
             this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
+
             this.ctx.fillStyle = '#4CAF50';
             this.ctx.fillRect(barX, barY, barWidth * building.productionProgress, barHeight);
         }
 
-        // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
     }
 
@@ -8232,6 +8262,7 @@ export class GameRenderer {
         // Check visibility for enemy buildings
         let shouldDim = false;
         let displayColor = buildingColor;
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
@@ -8246,6 +8277,8 @@ export class GameRenderer {
                 }
             }
         }
+
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
@@ -8485,20 +8518,20 @@ export class GameRenderer {
         // Check visibility for enemy buildings
         let shouldDim = false;
         let displayColor = buildingColor;
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && this.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
             if (!isVisible) {
                 return; // Don't draw invisible enemy buildings
             }
-            
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(building.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-                }
+
+            if (!ladSun && isInShadow) {
+                shouldDim = true;
+                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
+
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
 
         // Draw build progress indicator if not complete
         if (!building.isComplete) {
@@ -8613,6 +8646,9 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(building.position);
         const radius = building.radius * this.zoom;
         const displayColor = building.isComplete ? color : '#666666';
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        const isInShadow = !ladSun && game.isPointInShadow(building.position);
+        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
 
         // Draw shield radius if active
         if (building.shieldActive && building.isComplete) {
