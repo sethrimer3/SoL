@@ -179,3 +179,45 @@ export function createTextInput(currentValue: string, onChange: (value: string) 
 
     return input;
 }
+
+/**
+ * Create a percentage slider element
+ */
+export function createPercentSlider(currentValue: number, onChange: (value: number) => void): HTMLElement {
+    const container = document.createElement('div');
+    container.style.display = 'flex';
+    container.style.alignItems = 'center';
+    container.style.gap = '12px';
+    container.style.minWidth = '210px';
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = '100';
+    slider.step = '5';
+    slider.value = `${Math.max(0, Math.min(100, Math.round(currentValue / 5) * 5))}`;
+    slider.style.flex = '1';
+    slider.style.cursor = 'pointer';
+
+    const valueLabel = document.createElement('span');
+    valueLabel.style.minWidth = '52px';
+    valueLabel.style.textAlign = 'right';
+    valueLabel.style.fontSize = '20px';
+    valueLabel.style.color = '#FFFFFF';
+    valueLabel.style.fontWeight = '300';
+
+    const updateLabel = () => {
+        valueLabel.textContent = `${slider.value}%`;
+    };
+
+    slider.addEventListener('input', () => {
+        updateLabel();
+        onChange(parseInt(slider.value, 10));
+    });
+
+    updateLabel();
+    container.appendChild(slider);
+    container.appendChild(valueLabel);
+
+    return container;
+}

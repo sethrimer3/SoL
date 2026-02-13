@@ -46,6 +46,7 @@ export class GameAudioController {
     private starlingAttackCooldownRemainingSec = 0;
     private forgeCrunchCooldownRemainingSec = 0;
     private isSoundEnabled = true;
+    private soundVolume = 1;
     private audioContext: AudioContext | null = null;
 
     constructor() {
@@ -66,6 +67,10 @@ export class GameAudioController {
         if (!isEnabled) {
             this.stopAllAudio();
         }
+    }
+
+    setSoundVolume(volume: number): void {
+        this.soundVolume = Math.max(0, Math.min(1, volume));
     }
 
     update(game: GameState, deltaTimeSec: number, listenerView: AudioListenerView | null = null): void {
@@ -259,7 +264,7 @@ export class GameAudioController {
         const clampedVolume = Math.max(0, Math.min(1, volumeScale));
         const baseVolume = this.baseVolumeByElement.get(audio) ?? 1;
         const blend = this.loopBlendByElement.get(audio) ?? 1;
-        const finalVolume = Math.max(0, Math.min(1, clampedVolume * baseVolume * blend));
+        const finalVolume = Math.max(0, Math.min(1, clampedVolume * baseVolume * blend * this.soundVolume));
 
         if (nodes) {
             nodes.gainNode.gain.value = finalVolume;

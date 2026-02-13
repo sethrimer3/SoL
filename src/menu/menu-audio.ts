@@ -58,6 +58,7 @@ export class MenuAudioController {
     private animationFrameId: number | null = null;
     private hasInteractionUnlock = false;
     private isMusicEnabled = true;
+    private musicVolume = 1;
     private isVisible = false;
     private currentScreen: MenuScreenAudioState = 'main';
     private isMatchmakingSearching = false;
@@ -87,6 +88,12 @@ export class MenuAudioController {
 
     public setMusicEnabled(isMusicEnabled: boolean): void {
         this.isMusicEnabled = isMusicEnabled;
+        this.updateTargetVolumes();
+        this.ensurePlaybackState();
+    }
+
+    public setMusicVolume(volume: number): void {
+        this.musicVolume = Math.max(0, Math.min(1, volume));
         this.updateTargetVolumes();
         this.ensurePlaybackState();
     }
@@ -215,7 +222,7 @@ export class MenuAudioController {
             'sun-rumble-right': 0,
         };
 
-        if (!this.isMusicEnabled || !this.isVisible) {
+        if (!this.isMusicEnabled || !this.isVisible || this.musicVolume <= 0) {
             this.applyTargetVolumes(targetVolumesById);
             return;
         }
@@ -248,6 +255,10 @@ export class MenuAudioController {
         const rightGain = Math.max(0, Math.min(1, (1 + panValue) * 0.5));
         targetVolumesById['sun-rumble-left'] = rumbleTotalVolume * leftGain;
         targetVolumesById['sun-rumble-right'] = rumbleTotalVolume * rightGain;
+
+        for (const trackId of Object.keys(targetVolumesById) as TrackId[]) {
+            targetVolumesById[trackId] *= this.musicVolume;
+        }
 
         this.applyTargetVolumes(targetVolumesById);
     }

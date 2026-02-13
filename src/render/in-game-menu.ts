@@ -18,7 +18,9 @@ export type InGameMenuAction =
     | { type: 'healthDisplayMode'; mode: 'bar' | 'number' }
     | { type: 'fancyGraphics'; isEnabled: boolean }
     | { type: 'graphicsQuality'; quality: 'low' | 'medium' | 'high' | 'ultra' }
-    | { type: 'colorblindMode'; isEnabled: boolean };
+    | { type: 'colorblindMode'; isEnabled: boolean }
+    | { type: 'soundVolume'; volumePercent: number }
+    | { type: 'musicVolume'; volumePercent: number };
 
 export type InGameMenuLayout = {
     screenWidth: number;
