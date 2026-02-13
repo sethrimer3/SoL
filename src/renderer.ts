@@ -2208,6 +2208,10 @@ export class GameRenderer {
 
     /**
      * Get or create a cached radial gradient
+     * 
+     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
+     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
+     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
      */
     private getCachedRadialGradient(
         key: string,
@@ -2230,6 +2234,10 @@ export class GameRenderer {
 
     /**
      * Get or create a cached linear gradient
+     * 
+     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
+     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
+     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
      */
     private getCachedLinearGradient(
         key: string,
@@ -4806,8 +4814,8 @@ export class GameRenderer {
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        // Reduce blur on lower quality settings for performance
-        const blurAmount = this.graphicsQuality === 'high' ? 'blur(6px)' : 'blur(11px)';
+        // Reduce blur on non-ultra quality settings for performance
+        const blurAmount = this.graphicsQuality === 'ultra' ? 'blur(11px)' : 'blur(6px)';
         this.ctx.filter = blurAmount;
         this.ctx.globalAlpha = 0.4;
         const shaftSize = 1024 * shaftScale;
