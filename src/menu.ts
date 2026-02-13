@@ -376,6 +376,7 @@ export class MainMenu {
 
         this.contentElement = content;
         this.backgroundParticleLayer = new BackgroundParticleLayer(menu);
+        this.backgroundParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.atmosphereLayer = new MenuAtmosphereLayer(
             menu,
             this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
@@ -2685,6 +2686,7 @@ export class MainMenu {
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
+                this.backgroundParticleLayer?.setGraphicsQuality(value);
                 this.atmosphereLayer?.setGraphicsQuality(value);
                 this.menuParticleLayer?.setGraphicsQuality(value);
             },
