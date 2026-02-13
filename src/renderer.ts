@@ -36,19 +36,11 @@ type AurumShapeState = {
 type AsteroidFacet = {
     points: [Vector2D, Vector2D, Vector2D];
     centroidLocal: Vector2D;
-    baseShadeFactor: number;
-};
-
-type AsteroidInteriorPoint = {
-    position: Vector2D;
-    radial: number;
-    angle: number;
 };
 
 type AsteroidRenderCache = {
     facets: AsteroidFacet[];
     facetCount: number;
-    interiorPoints: AsteroidInteriorPoint[];
 };
 
 type SunRenderCache = {
@@ -4145,6 +4137,13 @@ export class GameRenderer {
         const rotationCos = Math.cos(asteroid.rotation);
         const rotationSin = Math.sin(asteroid.rotation);
 
+        const minProjection = -asteroid.size * 1.4;
+        const maxProjection = asteroid.size * 1.4;
+        const projectionSpan = Math.max(0.0001, maxProjection - minProjection);
+        const shadowHex = '#4A3218';
+        const midToneHex = '#C48A2C';
+        const lightHex = '#F6C65B';
+
         for (let i = 0; i < asteroidRenderCache.facets.length; i++) {
             const facet = asteroidRenderCache.facets[i];
             const worldA = this.rotateAndTranslateLocalPoint(facet.points[0], asteroid, rotationCos, rotationSin);
@@ -4152,21 +4151,23 @@ export class GameRenderer {
             const worldC = this.rotateAndTranslateLocalPoint(facet.points[2], asteroid, rotationCos, rotationSin);
 
             const centroidWorld = this.rotateAndTranslateLocalPoint(facet.centroidLocal, asteroid, rotationCos, rotationSin);
-            const normalWorld = new Vector2D(
+            const pseudoNormal = new Vector2D(
                 centroidWorld.x - asteroid.position.x,
                 centroidWorld.y - asteroid.position.y
             ).normalize();
+            const lambert = Math.max(0, pseudoNormal.x * lightDirection.x + pseudoNormal.y * lightDirection.y);
+            const projection = (centroidWorld.x - asteroid.position.x) * lightDirection.x
+                + (centroidWorld.y - asteroid.position.y) * lightDirection.y;
+            const normalizedProjection = Math.min(1, Math.max(0, (projection - minProjection) / projectionSpan));
+            const directionalBrightness = 0.35 + 0.65 * normalizedProjection;
+            const brightness = directionalBrightness * (0.8 + lambert * 0.2);
+            const coolShadowShift = Math.min(1, Math.max(0, 1 - brightness));
 
-            const diffuse = normalWorld.x * lightDirection.x + normalWorld.y * lightDirection.y;
-            const lightFacingFactor = Math.max(0, diffuse);
-            const shadowFacingFactor = Math.max(0, -diffuse);
-            const directionalShadeFactor = 1 + lightFacingFactor * 0.22 - shadowFacingFactor * 0.62;
-            const facetShadeFactor = Math.min(1.14, Math.max(0.3, facet.baseShadeFactor * directionalShadeFactor));
-            const facetColor = this.adjustColorBrightness(asteroidFill, facetShadeFactor);
-            const facetStrokeColor = this.adjustColorBrightness(
-                asteroidStroke,
-                Math.min(1.05, Math.max(0.24, facetShadeFactor - 0.12))
-            );
+            let facetColor = brightness < 0.56
+                ? this.interpolateHexColor(shadowHex, midToneHex, brightness / 0.56)
+                : this.interpolateHexColor(midToneHex, lightHex, (brightness - 0.56) / 0.44);
+            facetColor = this.interpolateHexColor(facetColor, '#35293D', coolShadowShift * 0.08);
+            const facetStrokeColor = this.adjustColorBrightness(facetColor, 0.8);
 
             const screenA = this.worldToScreen(worldA);
             const screenB = this.worldToScreen(worldB);
@@ -4295,11 +4296,9 @@ export class GameRenderer {
         }
 
         const facets = this.generateAsteroidFacets(asteroid);
-        const interiorPoints = this.generateAsteroidInteriorPoints(asteroid);
         const generatedCache: AsteroidRenderCache = {
             facets,
-            facetCount: facets.length,
-            interiorPoints
+            facetCount: facets.length
         };
         this.asteroidRenderCache.set(asteroid, generatedCache);
         return generatedCache;
@@ -4311,88 +4310,159 @@ export class GameRenderer {
         }
 
         const asteroidSeed = this.computeAsteroidSeed(asteroid);
-        const centerLocal = new Vector2D(
-            asteroid.vertices.reduce((sum, vertex) => sum + vertex.x, 0) / asteroid.vertices.length,
-            asteroid.vertices.reduce((sum, vertex) => sum + vertex.y, 0) / asteroid.vertices.length
-        );
-
-        const interiorPoints = this.generateAsteroidInteriorPoints(asteroid);
+        const interiorPoints = this.generateAsteroidInteriorPoints(asteroid, asteroidSeed);
+        const delaunayTriangles = this.generateDelaunayTriangles(asteroid.vertices, interiorPoints);
         const facets: AsteroidFacet[] = [];
 
-        if (interiorPoints.length > 0) {
-            for (let pointIndex = 0; pointIndex < interiorPoints.length; pointIndex++) {
-                const interiorPoint = interiorPoints[pointIndex].position;
-                for (let vertexIndex = 0; vertexIndex < asteroid.vertices.length; vertexIndex++) {
-                    const pointA = interiorPoint;
-                    const pointB = asteroid.vertices[vertexIndex];
-                    const pointC = asteroid.vertices[(vertexIndex + 1) % asteroid.vertices.length];
-
-                    const centroidLocal = new Vector2D(
-                        (pointA.x + pointB.x + pointC.x) / 3,
-                        (pointA.y + pointB.y + pointC.y) / 3
-                    );
-                    const baseShadeFactor = 0.88 + this.hashNormalized(
-                        asteroidSeed + pointIndex * 47.23 + vertexIndex * 19.79
-                    ) * 0.24;
-
-                    facets.push({ points: [pointA, pointB, pointC], centroidLocal, baseShadeFactor });
-                }
-            }
-
-            return facets;
-        }
-
-        for (let facetIndex = 0; facetIndex < asteroid.vertices.length; facetIndex++) {
-            const pointA = centerLocal;
-            const pointB = asteroid.vertices[facetIndex];
-            const pointC = asteroid.vertices[(facetIndex + 1) % asteroid.vertices.length];
-
+        for (let facetIndex = 0; facetIndex < delaunayTriangles.length; facetIndex++) {
+            const [pointA, pointB, pointC] = delaunayTriangles[facetIndex];
             const centroidLocal = new Vector2D(
                 (pointA.x + pointB.x + pointC.x) / 3,
                 (pointA.y + pointB.y + pointC.y) / 3
             );
-            const baseShadeFactor = 0.9 + this.hashNormalized(asteroidSeed + facetIndex * 31.37) * 0.2;
+            const signedAreaTwice = (pointB.x - pointA.x) * (pointC.y - pointA.y) - (pointB.y - pointA.y) * (pointC.x - pointA.x);
+            if (Math.abs(signedAreaTwice) <= 0.0001) {
+                continue;
+            }
 
-            facets.push({ points: [pointA, pointB, pointC], centroidLocal, baseShadeFactor });
+            if (signedAreaTwice > 0) {
+                facets.push({ points: [pointA, pointB, pointC], centroidLocal });
+            } else {
+                facets.push({ points: [pointA, pointC, pointB], centroidLocal });
+            }
         }
 
         return facets;
     }
 
-    private generateAsteroidInteriorPoints(asteroid: Asteroid): AsteroidInteriorPoint[] {
+    private generateAsteroidInteriorPoints(asteroid: Asteroid, asteroidSeed: number): Vector2D[] {
         if (asteroid.vertices.length < 3) {
             return [];
         }
 
-        const asteroidSeed = this.computeAsteroidSeed(asteroid);
         const centerLocal = new Vector2D(
             asteroid.vertices.reduce((sum, vertex) => sum + vertex.x, 0) / asteroid.vertices.length,
             asteroid.vertices.reduce((sum, vertex) => sum + vertex.y, 0) / asteroid.vertices.length
         );
+        const interiorPointCount = Math.max(3, Math.min(8, Math.round(asteroid.sides * 0.34)));
+        const interiorPoints: Vector2D[] = [];
 
-        const normalizedSizeRange = Math.max(1, Constants.ASTEROID_MAX_SIZE - Constants.ASTEROID_MIN_SIZE);
-        const sizeFactor = Math.min(1, Math.max(0, (asteroid.size - Constants.ASTEROID_MIN_SIZE) / normalizedSizeRange));
-        const maxInteriorPoints = Math.max(2, Math.min(5, Math.floor(asteroid.sides / 2) + 1));
-        const interiorPointCount = Math.max(2, Math.round(2 + sizeFactor * (maxInteriorPoints - 2)));
-
-        const interiorPoints: AsteroidInteriorPoint[] = [];
         for (let pointIndex = 0; pointIndex < interiorPointCount; pointIndex++) {
-            const t = (pointIndex + 1) / (interiorPointCount + 1);
-            const angle = Math.PI * 2 * t + this.hashSigned(asteroidSeed + pointIndex * 13.17) * 0.55;
-            const radial = asteroid.size * (0.22 + this.hashNormalized(asteroidSeed + pointIndex * 23.41) * 0.33);
-            const interiorPosition = new Vector2D(
-                centerLocal.x + Math.cos(angle) * radial,
-                centerLocal.y + Math.sin(angle) * radial
-            );
-
-            interiorPoints.push({
-                position: interiorPosition,
-                radial,
-                angle
-            });
+            const angle = this.hashNormalized(asteroidSeed + pointIndex * 19.91) * Math.PI * 2;
+            const radial = asteroid.size * (0.18 + this.hashNormalized(asteroidSeed + pointIndex * 29.47) * 0.46);
+            const jitterX = this.hashSigned(asteroidSeed + pointIndex * 37.13) * asteroid.size * 0.07;
+            const jitterY = this.hashSigned(asteroidSeed + pointIndex * 43.59) * asteroid.size * 0.07;
+            interiorPoints.push(new Vector2D(
+                centerLocal.x + Math.cos(angle) * radial + jitterX,
+                centerLocal.y + Math.sin(angle) * radial + jitterY
+            ));
         }
 
         return interiorPoints;
+    }
+
+    private generateDelaunayTriangles(boundaryPoints: Vector2D[], interiorPoints: Vector2D[]): [Vector2D, Vector2D, Vector2D][] {
+        const allPoints = [...boundaryPoints, ...interiorPoints];
+        if (allPoints.length < 3) {
+            return [];
+        }
+
+        const minX = allPoints.reduce((currentMin, point) => Math.min(currentMin, point.x), Infinity);
+        const minY = allPoints.reduce((currentMin, point) => Math.min(currentMin, point.y), Infinity);
+        const maxX = allPoints.reduce((currentMax, point) => Math.max(currentMax, point.x), -Infinity);
+        const maxY = allPoints.reduce((currentMax, point) => Math.max(currentMax, point.y), -Infinity);
+        const span = Math.max(maxX - minX, maxY - minY, 1);
+
+        const superPointA = new Vector2D(minX - span * 16, minY - span * 12);
+        const superPointB = new Vector2D(minX + span * 32, minY - span * 12);
+        const superPointC = new Vector2D(minX + span * 8, maxY + span * 30);
+        const vertexCount = allPoints.length;
+        const points = [...allPoints, superPointA, superPointB, superPointC];
+        const superPointAIndex = vertexCount;
+        const superPointBIndex = vertexCount + 1;
+        const superPointCIndex = vertexCount + 2;
+
+        let triangles: Array<[number, number, number]> = [[superPointAIndex, superPointBIndex, superPointCIndex]];
+
+        for (let pointIndex = 0; pointIndex < vertexCount; pointIndex++) {
+            const point = points[pointIndex];
+            const badTriangleIndices: number[] = [];
+
+            for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex++) {
+                const [indexA, indexB, indexC] = triangles[triangleIndex];
+                if (this.pointInsideCircumcircle(point, points[indexA], points[indexB], points[indexC])) {
+                    badTriangleIndices.push(triangleIndex);
+                }
+            }
+
+            const edgeCounts = new Map<string, { a: number; b: number; count: number }>();
+            for (let badIndexCursor = 0; badIndexCursor < badTriangleIndices.length; badIndexCursor++) {
+                const [indexA, indexB, indexC] = triangles[badTriangleIndices[badIndexCursor]];
+                const edges: Array<[number, number]> = [[indexA, indexB], [indexB, indexC], [indexC, indexA]];
+                for (let edgeIndex = 0; edgeIndex < edges.length; edgeIndex++) {
+                    const [edgeStart, edgeEnd] = edges[edgeIndex];
+                    const keyStart = Math.min(edgeStart, edgeEnd);
+                    const keyEnd = Math.max(edgeStart, edgeEnd);
+                    const edgeKey = `${keyStart}_${keyEnd}`;
+                    const existing = edgeCounts.get(edgeKey);
+                    if (existing) {
+                        existing.count += 1;
+                    } else {
+                        edgeCounts.set(edgeKey, { a: edgeStart, b: edgeEnd, count: 1 });
+                    }
+                }
+            }
+
+            const badIndexSet = new Set(badTriangleIndices);
+            const keptTriangles: Array<[number, number, number]> = [];
+            for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex++) {
+                if (!badIndexSet.has(triangleIndex)) {
+                    keptTriangles.push(triangles[triangleIndex]);
+                }
+            }
+            triangles = keptTriangles;
+
+            edgeCounts.forEach((edgeData) => {
+                if (edgeData.count === 1) {
+                    triangles.push([edgeData.a, edgeData.b, pointIndex]);
+                }
+            });
+        }
+
+        const isBoundaryTriangle = (triangle: [number, number, number]): boolean => {
+            return triangle[0] < boundaryPoints.length && triangle[1] < boundaryPoints.length && triangle[2] < boundaryPoints.length;
+        };
+
+        const facets: [Vector2D, Vector2D, Vector2D][] = [];
+        for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex++) {
+            const [indexA, indexB, indexC] = triangles[triangleIndex];
+            if (indexA >= vertexCount || indexB >= vertexCount || indexC >= vertexCount) {
+                continue;
+            }
+
+            if (isBoundaryTriangle([indexA, indexB, indexC])) {
+                continue;
+            }
+
+            facets.push([points[indexA], points[indexB], points[indexC]]);
+        }
+
+        return facets;
+    }
+
+    private pointInsideCircumcircle(testPoint: Vector2D, pointA: Vector2D, pointB: Vector2D, pointC: Vector2D): boolean {
+        const ax = pointA.x - testPoint.x;
+        const ay = pointA.y - testPoint.y;
+        const bx = pointB.x - testPoint.x;
+        const by = pointB.y - testPoint.y;
+        const cx = pointC.x - testPoint.x;
+        const cy = pointC.y - testPoint.y;
+
+        const determinant = (ax * ax + ay * ay) * (bx * cy - by * cx)
+            - (bx * bx + by * by) * (ax * cy - ay * cx)
+            + (cx * cx + cy * cy) * (ax * by - ay * bx);
+        const orientation = (pointB.x - pointA.x) * (pointC.y - pointA.y) - (pointB.y - pointA.y) * (pointC.x - pointA.x);
+        return orientation > 0 ? determinant > 0.000001 : determinant < -0.000001;
     }
 
     private computeAsteroidSeed(asteroid: Asteroid): number {
