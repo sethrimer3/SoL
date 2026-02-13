@@ -667,7 +667,10 @@ export class GameRenderer {
             return;
         }
 
-        this.ctx.clip();
+        // Exclude asteroid bodies from this shadow overlay pass so they are only
+        // darkened when occluded by other asteroids, never by their own shadow geometry.
+        this.appendAsteroidPolygonsToCurrentPath(game);
+        this.ctx.clip('evenodd');
         this.ctx.globalCompositeOperation = 'screen';
         this.ctx.globalAlpha = this.graphicsQuality === 'ultra' ? 0.82 : 0.68;
 
@@ -676,6 +679,25 @@ export class GameRenderer {
         const screenHeight = this.canvas.height / dpr;
         this.ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
         this.ctx.restore();
+    }
+
+    private appendAsteroidPolygonsToCurrentPath(game: GameState): void {
+        const sv = this.sunRayScreenPosA;
+
+        for (const asteroid of game.asteroids) {
+            const worldVertices = asteroid.getWorldVertices();
+            if (worldVertices.length === 0) {
+                continue;
+            }
+
+            this.worldToScreenCoords(worldVertices[0].x, worldVertices[0].y, sv);
+            this.ctx.moveTo(sv.x, sv.y);
+            for (let i = 1; i < worldVertices.length; i++) {
+                this.worldToScreenCoords(worldVertices[i].x, worldVertices[i].y, sv);
+                this.ctx.lineTo(sv.x, sv.y);
+            }
+            this.ctx.closePath();
+        }
     }
 
 
@@ -4451,7 +4473,10 @@ export class GameRenderer {
                 this.ctx.lineTo(quad.ss1x, quad.ss1y);
                 this.ctx.closePath();
             }
-            this.ctx.fill();
+
+            // Punch out asteroid silhouettes so this pass doesn't self-shadow the asteroid body.
+            this.appendAsteroidPolygonsToCurrentPath(game);
+            this.ctx.fill('evenodd');
         }
 
         this.ctx.restore();
