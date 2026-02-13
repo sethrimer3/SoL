@@ -4740,6 +4740,12 @@ export class GameRenderer {
             return;
         }
 
+        const gameTimeSec = game.gameTime;
+        const zoom = this.zoom;
+        const dpr = window.devicePixelRatio || 1;
+        const viewportWidth = this.canvas.width / dpr;
+        const viewportHeight = this.canvas.height / dpr;
+
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'lighter';
 
@@ -4751,39 +4757,58 @@ export class GameRenderer {
             const particleCache = this.getOrCreateUltraSunParticleCache(sun);
 
             const sunScreenPos = this.worldToScreen(sun.position);
-            const screenRadius = sun.radius * this.zoom;
+            const screenRadius = sun.radius * zoom;
 
             for (const ember of particleCache.emberStatics) {
-                const outwardT = (game.gameTime * ember.speedOutward + ember.outwardOffset) % 1;
-                const swirl = Math.sin(game.gameTime * ember.swirlSpeed + ember.seed * 0.37 + outwardT * 8.4)
+                const outwardT = (gameTimeSec * ember.speedOutward + ember.outwardOffset) % 1;
+                const swirl = Math.sin(gameTimeSec * ember.swirlSpeed + ember.seed * 0.37 + outwardT * 8.4)
                     * (ember.swirlAmplitudeOffset + outwardT * ember.swirlAmplitudeScale);
                 const curveAngle = ember.orbitAngle + swirl;
                 const radius = screenRadius * (0.35 + outwardT * (ember.radiusScale + ember.radiusVariance));
-                const arcBend = Math.sin(game.gameTime * ember.arcBendSpeed + ember.seed * 0.61)
+                const arcBend = Math.sin(gameTimeSec * ember.arcBendSpeed + ember.seed * 0.61)
                     * screenRadius * (ember.arcBendAmplitudeOffset + outwardT * ember.arcBendAmplitudeScale);
-                const tangentX = -Math.sin(curveAngle);
-                const tangentY = Math.cos(curveAngle);
-                const x = sunScreenPos.x + Math.cos(curveAngle) * radius + tangentX * arcBend;
-                const y = sunScreenPos.y + Math.sin(curveAngle) * radius + tangentY * arcBend;
+                const curveSin = Math.sin(curveAngle);
+                const curveCos = Math.cos(curveAngle);
+                const tangentX = -curveSin;
+                const tangentY = curveCos;
+                const x = sunScreenPos.x + curveCos * radius + tangentX * arcBend;
+                const y = sunScreenPos.y + curveSin * radius + tangentY * arcBend;
                 const size = (ember.sizeBase + ember.sizeVariance) * (1 - outwardT * 0.2);
                 const fadeIn = Math.min(1, outwardT * 6);
                 const fadeOut = Math.max(0, 1 - outwardT);
                 const alpha = (ember.alphaBase + ember.alphaVariance) * fadeIn * fadeOut * fadeOut;
 
-                const glowRadius = size * this.zoom * 1.4;
+                const glowRadius = size * zoom * 1.4;
+                const emberBoundsRadius = glowRadius * 2.4;
+                if (
+                    x + emberBoundsRadius < 0
+                    || x - emberBoundsRadius > viewportWidth
+                    || y + emberBoundsRadius < 0
+                    || y - emberBoundsRadius > viewportHeight
+                ) {
+                    continue;
+                }
+
                 this.drawUltraSunEmber(x, y, glowRadius, alpha, ember.glowTexture, ember.coreTexture);
             }
         }
 
-        const dpr = window.devicePixelRatio || 1;
-        const width = this.canvas.width / dpr;
-        const height = this.canvas.height / dpr;
         const dustStatics = this.getOrCreateUltraLightDustStatics();
         for (let dustIndex = 0; dustIndex < dustStatics.length; dustIndex += 1) {
             const dustStatic = dustStatics[dustIndex];
-            const driftX = (game.gameTime * dustStatic.driftXSpeed + dustStatic.seed) % width;
-            const driftY = (game.gameTime * dustStatic.driftYSpeed + dustStatic.seed * 1.7) % height;
+            const driftX = (gameTimeSec * dustStatic.driftXSpeed + dustStatic.seed) % viewportWidth;
+            const driftY = (gameTimeSec * dustStatic.driftYSpeed + dustStatic.seed * 1.7) % viewportHeight;
             const halfSize = dustStatic.texture.width * 0.5;
+
+            if (
+                driftX + halfSize < 0
+                || driftX - halfSize > viewportWidth
+                || driftY + halfSize < 0
+                || driftY - halfSize > viewportHeight
+            ) {
+                continue;
+            }
+
             this.ctx.drawImage(dustStatic.texture, driftX - halfSize, driftY - halfSize);
         }
 
