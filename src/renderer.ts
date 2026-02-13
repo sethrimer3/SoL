@@ -290,13 +290,24 @@ export class GameRenderer {
             flickerAmp: number,
             blurPx: number,
             chromaOffsetPx: number,
-            isChromatic: boolean
+            isChromatic: boolean,
+            spikeLengthPx: number,
+            spikeAlpha: number
         }>,
         parallaxFactor: number,
         brightnessScale: number,
         blurVariance: number
     }> = [];
     private readonly starColorTemperatureLut = this.createStarTemperatureLookup();
+    private readonly warmStarPalette: Array<[number, number, number]> = [
+        [255, 178, 26], // #FFB21A Brightest Orange
+        [255, 163, 26], // #FFA31A Bright Golden Orange
+        [255, 138, 20], // #FF8A14 Warm Amber
+        [255, 116, 18], // #FF7412 Rich Orange
+        [242, 92, 15],  // #F25C0F Deep Burning Orange
+        [217, 71, 12],  // #D9470C Dark Ember Orange
+        [183, 55, 10]   // #B7370A Deep Red-Orange
+    ];
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
     private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
     private starfieldCacheWidth = 0;
@@ -377,7 +388,9 @@ export class GameRenderer {
                 flickerAmp: number,
                 blurPx: number,
                 chromaOffsetPx: number,
-                isChromatic: boolean
+                isChromatic: boolean,
+                spikeLengthPx: number,
+                spikeAlpha: number
             }> = [];
 
             const grid = new Int32Array(gridSize * gridSize).fill(-1);
@@ -427,10 +440,10 @@ export class GameRenderer {
 
                 const baseSize = this.samplePowerLawSize(layerConfig.sizeRange[0], layerConfig.sizeRange[1], 1.85, seededRandom());
                 const luminance = 0.16 + Math.pow(seededRandom(), 2.1) * 0.84;
-                const kelvin = this.sampleStarTemperatureK(seededRandom());
-                const color = this.starColorTemperatureLut[Math.max(0, Math.min(this.starColorTemperatureLut.length - 1, Math.round((kelvin - 3000) / 50)))];
+                const color = this.sampleWarmStarColor(seededRandom());
                 const brightness = Math.min(1.4, (luminance * (0.85 + clusterBias * 0.45)) * layerConfig.brightnessScale);
                 const isChromatic = baseSize > 2.4 && brightness > 1.02 && seededRandom() > 0.55;
+                const hasSpike = baseSize > 1.35 && brightness > 0.82;
 
                 stars.push({
                     x,
@@ -444,7 +457,9 @@ export class GameRenderer {
                     flickerAmp: 0.008 + seededRandom() * 0.022,
                     blurPx: layerConfig.blurVariance * (0.18 + seededRandom() * 0.55),
                     chromaOffsetPx: isChromatic ? (0.12 + seededRandom() * 0.25) : 0,
-                    isChromatic
+                    isChromatic,
+                    spikeLengthPx: hasSpike ? baseSize * (2.8 + seededRandom() * 2.6) : 0,
+                    spikeAlpha: hasSpike ? (0.08 + seededRandom() * 0.16) : 0
                 });
 
                 grid[gy * gridSize + gx] = stars.length - 1;
@@ -471,6 +486,26 @@ export class GameRenderer {
             return warmWhiteBand;
         }
         return 6000 + Math.pow((randomSample - 0.82) / 0.18, 1.6) * 2600;
+    }
+
+    private sampleWarmStarColor(randomSample: number): [number, number, number] {
+        const paletteIndex = Math.floor(Math.pow(randomSample, 0.68) * this.warmStarPalette.length);
+        const clampedIndex = Math.max(0, Math.min(this.warmStarPalette.length - 1, paletteIndex));
+        const [baseR, baseG, baseB] = this.warmStarPalette[clampedIndex];
+
+        // Keep a small portion of stars neutral-hot so the field doesn't become fully monochrome.
+        if (randomSample > 0.86) {
+            const blend = (randomSample - 0.86) / 0.14;
+            const kelvin = this.sampleStarTemperatureK(randomSample);
+            const coolColor = this.starColorTemperatureLut[Math.max(0, Math.min(this.starColorTemperatureLut.length - 1, Math.round((kelvin - 3000) / 50)))];
+            return [
+                Math.round(baseR + (coolColor[0] - baseR) * blend),
+                Math.round(baseG + (coolColor[1] - baseG) * blend),
+                Math.round(baseB + (coolColor[2] - baseB) * blend)
+            ];
+        }
+
+        return [baseR, baseG, baseB];
     }
 
     private createStarTemperatureLookup(): Array<[number, number, number]> {
@@ -613,6 +648,18 @@ export class GameRenderer {
                         ctx.beginPath();
                         ctx.arc(wrappedX, wrappedY, Math.max(0.5, star.coreSize), 0, Math.PI * 2);
                         ctx.fill();
+
+                        if (star.spikeLengthPx > 0) {
+                            const spikeAlpha = Math.min(0.3, intensity * star.spikeAlpha);
+                            ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${spikeAlpha})`;
+                            ctx.lineWidth = Math.max(0.45, star.coreSize * 0.22);
+                            ctx.beginPath();
+                            ctx.moveTo(wrappedX - star.spikeLengthPx, wrappedY);
+                            ctx.lineTo(wrappedX + star.spikeLengthPx, wrappedY);
+                            ctx.moveTo(wrappedX, wrappedY - star.spikeLengthPx);
+                            ctx.lineTo(wrappedX, wrappedY + star.spikeLengthPx);
+                            ctx.stroke();
+                        }
 
                         if (star.isChromatic) {
                             const c = star.chromaOffsetPx;
