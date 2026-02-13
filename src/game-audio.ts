@@ -5,6 +5,9 @@ const FORGE_CHARGE_LEAD_TIME_SEC = 5;
 const STARLING_ATTACK_MIN_INTERVAL_SEC = 0.12;
 const FORGE_CRUNCH_MIN_INTERVAL_SEC = 0.35;
 const OFFSCREEN_VOLUME_FALLOFF_DISTANCE_FACTOR = 0.75;
+const LOOP_CROSSFADE_DURATION_SEC = 0.1;
+const MARINE_LOOP_BASE_VOLUME = 0.4;
+const GATLING_LOOP_BASE_VOLUME = 0.35;
 
 export type AudioListenerView = {
     cameraWorld: Vector2D;
@@ -18,10 +21,15 @@ type SpatialAudioNodes = {
     stereoPannerNode: StereoPannerNode | null;
 };
 
+type LoopPairState = {
+    active: HTMLAudioElement;
+    inactive: HTMLAudioElement;
+};
+
 export class GameAudioController {
     private readonly starlingAttackAudioByFaction = new Map<Faction, HTMLAudioElement>();
-    private readonly marineFiringLoopAudio: HTMLAudioElement;
-    private readonly gatlingTowerFiringLoopAudio: HTMLAudioElement;
+    private readonly marineFiringLoopState: LoopPairState;
+    private readonly gatlingTowerFiringLoopState: LoopPairState;
     private readonly forgeCrunchAudio: HTMLAudioElement;
     private readonly forgeChargeAudio: HTMLAudioElement;
     private readonly foundryPowerUpAudio: HTMLAudioElement;
@@ -31,6 +39,8 @@ export class GameAudioController {
     private readonly forgeWasCrunchingByForge = new WeakMap<object, boolean>();
     private readonly foundryWasUpgrading = new WeakMap<object, boolean>();
     private readonly spatialAudioNodesByElement = new WeakMap<HTMLAudioElement, SpatialAudioNodes>();
+    private readonly baseVolumeByElement = new WeakMap<HTMLAudioElement, number>();
+    private readonly loopBlendByElement = new WeakMap<HTMLAudioElement, number>();
 
     private marineLoopGraceRemainingSec = 0;
     private starlingAttackCooldownRemainingSec = 0;
@@ -43,8 +53,8 @@ export class GameAudioController {
         this.starlingAttackAudioByFaction.set(Faction.AURUM, this.createAudio('ASSETS/SFX/aurumSFX/starling_firing.mp3'));
         this.starlingAttackAudioByFaction.set(Faction.VELARIS, this.createAudio('ASSETS/SFX/velarisSFX/starling_firing.mp3'));
 
-        this.marineFiringLoopAudio = this.createAudio('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', true);
-        this.gatlingTowerFiringLoopAudio = this.createAudio('ASSETS/SFX/radiantSFX/gatling_firing.ogg', true);
+        this.marineFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', MARINE_LOOP_BASE_VOLUME);
+        this.gatlingTowerFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/gatling_firing.ogg', GATLING_LOOP_BASE_VOLUME);
         this.forgeCrunchAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_crunch.ogg');
         this.forgeChargeAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_charge.ogg');
         this.foundryPowerUpAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_up.ogg');
@@ -153,20 +163,22 @@ export class GameAudioController {
 
         if (didMarineFireThisFrame) {
             this.marineLoopGraceRemainingSec = 0.2;
-            this.applySpatialAudio(this.marineFiringLoopAudio, marineSoundSource, listenerView);
-            this.ensureLoopPlaying(this.marineFiringLoopAudio);
+            this.applySpatialAudioToLoopPair(this.marineFiringLoopState, marineSoundSource, listenerView);
+            this.ensureLoopPairPlaying(this.marineFiringLoopState);
+            this.updateLoopCrossfade(this.marineFiringLoopState);
         } else {
             this.marineLoopGraceRemainingSec = Math.max(0, this.marineLoopGraceRemainingSec - deltaTimeSec);
             if (this.marineLoopGraceRemainingSec <= 0) {
-                this.stopLoop(this.marineFiringLoopAudio);
+                this.stopLoopPair(this.marineFiringLoopState);
             }
         }
 
         if (didGatlingTowerFireThisFrame) {
-            this.applySpatialAudio(this.gatlingTowerFiringLoopAudio, gatlingSoundSource, listenerView);
-            this.ensureLoopPlaying(this.gatlingTowerFiringLoopAudio);
+            this.applySpatialAudioToLoopPair(this.gatlingTowerFiringLoopState, gatlingSoundSource, listenerView);
+            this.ensureLoopPairPlaying(this.gatlingTowerFiringLoopState);
+            this.updateLoopCrossfade(this.gatlingTowerFiringLoopState);
         } else {
-            this.stopLoop(this.gatlingTowerFiringLoopAudio);
+            this.stopLoopPair(this.gatlingTowerFiringLoopState);
         }
     }
 
@@ -182,7 +194,19 @@ export class GameAudioController {
         const audio = new Audio(this.resolveAssetPath(path));
         audio.loop = loop;
         audio.preload = 'auto';
+        this.baseVolumeByElement.set(audio, 1);
+        this.loopBlendByElement.set(audio, 1);
         return audio;
+    }
+
+    private createCrossfadeLoopPair(path: string, baseVolume: number): LoopPairState {
+        const primary = this.createAudio(path, false);
+        const secondary = this.createAudio(path, false);
+        this.baseVolumeByElement.set(primary, baseVolume);
+        this.baseVolumeByElement.set(secondary, baseVolume);
+        this.loopBlendByElement.set(primary, 1);
+        this.loopBlendByElement.set(secondary, 0);
+        return { active: primary, inactive: secondary };
     }
 
     private playOneShot(
@@ -233,9 +257,12 @@ export class GameAudioController {
         const nodes = this.ensureSpatialAudioNodes(audio);
         const clampedPan = Math.max(-1, Math.min(1, pan));
         const clampedVolume = Math.max(0, Math.min(1, volumeScale));
+        const baseVolume = this.baseVolumeByElement.get(audio) ?? 1;
+        const blend = this.loopBlendByElement.get(audio) ?? 1;
+        const finalVolume = Math.max(0, Math.min(1, clampedVolume * baseVolume * blend));
 
         if (nodes) {
-            nodes.gainNode.gain.value = clampedVolume;
+            nodes.gainNode.gain.value = finalVolume;
             if (nodes.stereoPannerNode) {
                 nodes.stereoPannerNode.pan.value = clampedPan;
             }
@@ -243,7 +270,16 @@ export class GameAudioController {
             return;
         }
 
-        audio.volume = clampedVolume;
+        audio.volume = finalVolume;
+    }
+
+    private applySpatialAudioToLoopPair(
+        loopPair: LoopPairState,
+        sourcePositionWorld: Vector2D | null,
+        listenerView: AudioListenerView | null
+    ): void {
+        this.applySpatialAudio(loopPair.active, sourcePositionWorld, listenerView);
+        this.applySpatialAudio(loopPair.inactive, sourcePositionWorld, listenerView);
     }
 
     private ensureSpatialAudioNodes(audio: HTMLAudioElement): SpatialAudioNodes | null {
@@ -298,6 +334,51 @@ export class GameAudioController {
         void audio.play().catch(() => undefined);
     }
 
+    private ensureLoopPairPlaying(loopPair: LoopPairState): void {
+        this.ensureLoopPlaying(loopPair.active);
+    }
+
+    private updateLoopCrossfade(loopPair: LoopPairState): void {
+        const active = loopPair.active;
+        const duration = active.duration;
+        if (!Number.isFinite(duration) || duration <= LOOP_CROSSFADE_DURATION_SEC) {
+            this.loopBlendByElement.set(active, 1);
+            this.loopBlendByElement.set(loopPair.inactive, 0);
+            return;
+        }
+
+        const crossfadeStart = duration - LOOP_CROSSFADE_DURATION_SEC;
+        if (active.currentTime < crossfadeStart) {
+            this.loopBlendByElement.set(active, 1);
+            this.loopBlendByElement.set(loopPair.inactive, 0);
+            if (!loopPair.inactive.paused) {
+                loopPair.inactive.pause();
+                loopPair.inactive.currentTime = 0;
+            }
+            return;
+        }
+
+        if (loopPair.inactive.paused) {
+            loopPair.inactive.currentTime = 0;
+            void loopPair.inactive.play().catch(() => undefined);
+        }
+
+        const progress = Math.max(0, Math.min(1, (active.currentTime - crossfadeStart) / LOOP_CROSSFADE_DURATION_SEC));
+        this.loopBlendByElement.set(active, 1 - progress);
+        this.loopBlendByElement.set(loopPair.inactive, progress);
+
+        if (progress >= 1) {
+            active.pause();
+            active.currentTime = 0;
+            this.loopBlendByElement.set(active, 0);
+
+            loopPair.active = loopPair.inactive;
+            loopPair.inactive = active;
+            this.loopBlendByElement.set(loopPair.active, 1);
+            this.loopBlendByElement.set(loopPair.inactive, 0);
+        }
+    }
+
     private stopLoop(audio: HTMLAudioElement): void {
         if (audio.paused) {
             return;
@@ -306,9 +387,16 @@ export class GameAudioController {
         audio.currentTime = 0;
     }
 
+    private stopLoopPair(loopPair: LoopPairState): void {
+        this.stopLoop(loopPair.active);
+        this.stopLoop(loopPair.inactive);
+        this.loopBlendByElement.set(loopPair.active, 1);
+        this.loopBlendByElement.set(loopPair.inactive, 0);
+    }
+
     private stopAllAudio(): void {
-        this.stopLoop(this.marineFiringLoopAudio);
-        this.stopLoop(this.gatlingTowerFiringLoopAudio);
+        this.stopLoopPair(this.marineFiringLoopState);
+        this.stopLoopPair(this.gatlingTowerFiringLoopState);
         this.stopLoop(this.forgeCrunchAudio);
         this.stopLoop(this.forgeChargeAudio);
         this.stopLoop(this.foundryPowerUpAudio);
