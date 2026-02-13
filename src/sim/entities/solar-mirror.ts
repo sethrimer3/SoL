@@ -31,7 +31,7 @@ export class SolarMirror {
     private readonly ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
     private readonly SLOW_RADIUS_PX = 60; // Distance to begin slow approach
     private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
-    private readonly ROTATION_SPEED_RAD_PER_SEC = Math.PI; // Radians per second
+    private readonly ROTATION_SPEED_RAD_PER_SEC = Math.PI * 0.25; // Radians per second
     private readonly ROTATION_SNAP_THRESHOLD_RAD = 0.01; // Snap when nearly aligned
 
     constructor(
