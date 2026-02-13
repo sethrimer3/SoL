@@ -4662,22 +4662,6 @@ export class GameRenderer {
             }
 
             if (shadowQuads.length > 0) {
-                this.ctx.save();
-                this.ctx.globalCompositeOperation = 'screen';
-                this.ctx.strokeStyle = 'rgba(255, 160, 74, 0.2)';
-                this.ctx.lineWidth = Math.max(1.25, 2.4 * this.zoom);
-                for (const quad of shadowQuads) {
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(quad.sv1x, quad.sv1y);
-                    this.ctx.lineTo(quad.ss1x, quad.ss1y);
-                    this.ctx.stroke();
-                    this.ctx.beginPath();
-                    this.ctx.moveTo(quad.sv2x, quad.sv2y);
-                    this.ctx.lineTo(quad.ss2x, quad.ss2y);
-                    this.ctx.stroke();
-                }
-                this.ctx.restore();
-
                 // Cut out any area occluded from this sun so the background remains visible through shadows.
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'destination-out';
@@ -5025,34 +5009,6 @@ export class GameRenderer {
             warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
             this.ctx.fillStyle = warmGradient;
             this.ctx.fillRect(0, 0, width, height);
-        }
-
-        this.ctx.restore();
-    }
-
-    private applyUltraShadowReinforcement(game: GameState): void {
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'multiply';
-
-        for (const sun of game.suns) {
-            const shadowQuads = this.getSunShadowQuadsCached(sun, game);
-            if (shadowQuads.length === 0) {
-                continue;
-            }
-
-            this.ctx.fillStyle = 'rgba(32, 30, 44, 0.8)';
-            this.ctx.beginPath();
-            for (const quad of shadowQuads) {
-                this.ctx.moveTo(quad.sv1x, quad.sv1y);
-                this.ctx.lineTo(quad.sv2x, quad.sv2y);
-                this.ctx.lineTo(quad.ss2x, quad.ss2y);
-                this.ctx.lineTo(quad.ss1x, quad.ss1y);
-                this.ctx.closePath();
-            }
-
-            // Punch out asteroid silhouettes so this pass doesn't self-shadow the asteroid body.
-            this.appendAsteroidPolygonsToCurrentPath(game);
-            this.ctx.fill('evenodd');
         }
 
         this.ctx.restore();
@@ -10198,7 +10154,6 @@ export class GameRenderer {
 
         if (this.graphicsQuality === 'ultra' && !ladSun) {
             this.applyUltraWarmCoolGrade(game);
-            this.applyUltraShadowReinforcement(game);
         }
 
         // Draw space dust particles on top of celestial environment layers.
