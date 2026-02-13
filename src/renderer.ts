@@ -3828,24 +3828,20 @@ export class GameRenderer {
         let lightAngle: number | null = null;
         let sunProximity = 0;
         if (isHighGraphics && game.suns.length > 0 && !ladSun) {
-            // Early return if too far from any sun to need lighting calculations
             const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
             let nearestSun: Sun | null = null;
             let nearestDistance = Infinity;
             
-            // Optimize: only search for nearest sun if we're potentially close enough
+            // Find the nearest sun
             for (const sun of game.suns) {
                 const distance = particle.position.distanceTo(sun.position);
                 if (distance < nearestDistance) {
                     nearestSun = sun;
                     nearestDistance = distance;
                 }
-                // Early exit if we found a very close sun
-                if (distance < maxDistance * 0.5) {
-                    break;
-                }
             }
 
+            // Only calculate lighting if close enough to nearest sun
             if (nearestSun && nearestDistance > 0 && nearestDistance < maxDistance) {
                 sunProximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
                 if (sunProximity > 0) {

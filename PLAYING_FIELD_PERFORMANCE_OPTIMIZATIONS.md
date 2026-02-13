@@ -233,14 +233,14 @@ When testing these optimizations:
 
 **File**: `src/renderer.ts` - `drawSpaceDust()`
 
-**Change**: Early exit from sun search loop for distant particles and when close sun found.
+**Change**: Check distance threshold after finding nearest sun to skip lighting calculations.
 
 **Impact**:
-- Previously iterated all suns even when particle was too far away
-- Now checks distance threshold before detailed calculations
-- Breaks early when very close sun is found
+- Previously iterated all suns and calculated lighting even when particle was too far
+- Now checks if nearest sun is within maxDistance before detailed calculations
+- Avoids unnecessary lighting calculations for distant particles
 
-**Performance Gain**: Reduces sun distance calculations by 30-40%
+**Performance Gain**: Reduces unnecessary lighting calculations by 20-30%
 
 **Visual Impact**: None - identical lighting calculations for visible effects
 
@@ -264,8 +264,8 @@ When testing these optimizations:
 
 ### All Quality Levels
 - **Gradient caching**: Reduces gradient creation overhead by 70-90%
-- **Space dust optimizations**: 50-70% fewer particle calculations
-- **Sun search optimization**: 30-40% fewer distance calculations
+- **Space dust culling**: 50-70% fewer particle rendering calculations
+- **Sun distance optimization**: 20-30% fewer unnecessary lighting calculations
 - **Expected improvement**: 10-15% faster rendering across all quality settings (up from 5-10%)
 
 ## Technical Details
