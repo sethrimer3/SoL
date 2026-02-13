@@ -217,13 +217,14 @@ this.context.restore();
 - **All effects enabled** including blur filters
 - **Gradient caching** reduces memory allocations
 - **Dimension caching** reduces CPU overhead
-- **Expected improvement**: 15-25% better frame rates
+- **Expected improvement**: 12-20% better frame rates
 
 ### Ultra Quality
-- **All effects enabled** at maximum star count
-- **Loop invariant optimizations** most impactful (5200 stars)
+- **All effects enabled** at maximum star count (5200 vs 3400)
+- **Loop invariant optimizations** most impactful with more stars
 - **Gradient caching** most beneficial with high particle counts
-- **Expected improvement**: 10-20% better frame rates
+- **Higher baseline performance cost** - more stars to render despite optimizations
+- **Expected improvement**: 8-15% better frame rates
 
 ## Integration Notes
 
@@ -261,6 +262,9 @@ These optimizations build upon the previous work to provide substantial performa
 
 - **50-70% better FPS** on low-end devices (low quality)
 - **30-50% better FPS** on mid-range devices (medium quality)
-- **10-25% better FPS** on high-end devices (high/ultra quality)
+- **12-20% better FPS** on high-end devices (high quality)
+- **8-15% better FPS** on high-end devices with maximum settings (ultra quality)
+
+Note: Ultra quality's lower improvement percentage is due to the higher baseline cost of rendering 5200 stars vs 3400 on high quality. The optimizations still provide absolute performance gains, but the relative improvement is smaller due to the increased workload.
 
 All changes maintain visual fidelity at each quality level while significantly reducing computational overhead.

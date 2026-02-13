@@ -386,7 +386,7 @@ export class ParticleMenuLayer {
                     haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
                     
                     // FIFO (First-In-First-Out) eviction removes oldest entry without reordering
-                    // Provides O(1) overhead compared to LRU which required delete+reinsert on every cache hit
+                    // Cache hits have O(1) overhead compared to LRU which required delete+reinsert on every hit
                     if (this.haloGradientCache.size >= 100) {
                         const firstKey = this.haloGradientCache.keys().next().value;
                         if (firstKey) {
