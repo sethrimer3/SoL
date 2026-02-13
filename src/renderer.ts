@@ -2269,23 +2269,27 @@ export class GameRenderer {
     private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
         const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
         const ringThickness = Math.max(1.5, this.zoom * 1.8);
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x,
-            screenPos.y,
-            Math.max(0, selectionRadius - ringThickness * 0.4),
-            screenPos.x,
-            screenPos.y,
-            selectionRadius + ringThickness * 2.4
+        
+        // Cache gradient by selection radius bucket to avoid per-frame creation
+        const radiusBucket = Math.round(selectionRadius / 5) * 5;
+        const cacheKey = `building-selection-${radiusBucket}`;
+        const gradient = this.getCachedRadialGradient(
+            cacheKey,
+            0, 0, Math.max(0, selectionRadius - ringThickness * 0.4),
+            0, 0, selectionRadius + ringThickness * 2.4,
+            [
+                { offset: 0, color: 'rgba(255, 215, 0, 0.95)' },
+                { offset: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
+                { offset: 1, color: 'rgba(255, 255, 255, 0)' }
+            ]
         );
-        gradient.addColorStop(0, 'rgba(255, 215, 0, 0.95)');
-        gradient.addColorStop(0.6, 'rgba(255, 255, 255, 0.85)');
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
 
         this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.strokeStyle = gradient;
         this.ctx.lineWidth = ringThickness;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, selectionRadius, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, selectionRadius, 0, Math.PI * 2);
         this.ctx.stroke();
         this.ctx.restore();
     }
@@ -2437,38 +2441,67 @@ export class GameRenderer {
     }
 
     private drawUltraSunBloom(screenPos: Vector2D, screenRadius: number): void {
+        // Skip expensive bloom rendering on low/medium quality
+        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
+            return;
+        }
+
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
+        
+        // Cache gradients to avoid creating them every frame
+        const radiusBucket = Math.round(screenRadius / 16) * 16;
+        
         for (let stepIndex = 0; stepIndex < this.ULTRA_SUN_BLOOM_STEPS; stepIndex++) {
             const stepT = stepIndex / Math.max(1, this.ULTRA_SUN_BLOOM_STEPS - 1);
             const radius = screenRadius * (1.15 + stepT * 2.65);
             const alpha = 0.2 * (1 - stepT);
-            const bloom = this.ctx.createRadialGradient(screenPos.x, screenPos.y, radius * 0.22, screenPos.x, screenPos.y, radius);
-            bloom.addColorStop(0, `rgba(255, 250, 225, ${Math.min(0.5, alpha * 2.2).toFixed(4)})`);
-            bloom.addColorStop(0.45, `rgba(255, 200, 115, ${alpha.toFixed(4)})`);
-            bloom.addColorStop(1, 'rgba(255, 140, 70, 0)');
+            
+            // Use cached gradient at origin, then translate
+            const cacheKey = `ultra-sun-bloom-${radiusBucket}-${stepIndex}`;
+            const innerRadius = radius * 0.22;
+            const bloom = this.getCachedRadialGradient(
+                cacheKey,
+                0, 0, innerRadius,
+                0, 0, radius,
+                [
+                    { offset: 0, color: `rgba(255, 250, 225, ${Math.min(0.5, alpha * 2.2).toFixed(4)})` },
+                    { offset: 0.45, color: `rgba(255, 200, 115, ${alpha.toFixed(4)})` },
+                    { offset: 1, color: 'rgba(255, 140, 70, 0)' }
+                ]
+            );
+            
+            this.ctx.save();
+            this.ctx.translate(screenPos.x, screenPos.y);
             this.ctx.fillStyle = bloom;
             this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+            this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
             this.ctx.fill();
+            this.ctx.restore();
         }
 
+        // Horizontal stretch gradient
         this.ctx.globalAlpha = 0.23;
-        this.ctx.beginPath();
-        this.ctx.ellipse(screenPos.x, screenPos.y, screenRadius * 2.9, screenRadius * 1.85, 0, 0, Math.PI * 2);
-        const horizontalStretch = this.ctx.createRadialGradient(
-            screenPos.x,
-            screenPos.y,
-            screenRadius * 0.3,
-            screenPos.x,
-            screenPos.y,
-            screenRadius * 2.9
+        const stretchCacheKey = `ultra-sun-bloom-stretch-${radiusBucket}`;
+        const horizontalStretch = this.getCachedRadialGradient(
+            stretchCacheKey,
+            0, 0, screenRadius * 0.3,
+            0, 0, screenRadius * 2.9,
+            [
+                { offset: 0, color: 'rgba(255, 242, 186, 0.42)' },
+                { offset: 0.4, color: 'rgba(255, 212, 120, 0.18)' },
+                { offset: 1, color: 'rgba(255, 170, 95, 0)' }
+            ]
         );
-        horizontalStretch.addColorStop(0, 'rgba(255, 242, 186, 0.42)');
-        horizontalStretch.addColorStop(0.4, 'rgba(255, 212, 120, 0.18)');
-        horizontalStretch.addColorStop(1, 'rgba(255, 170, 95, 0)');
+        
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
+        this.ctx.beginPath();
+        this.ctx.ellipse(0, 0, screenRadius * 2.9, screenRadius * 1.85, 0, 0, Math.PI * 2);
         this.ctx.fillStyle = horizontalStretch;
         this.ctx.fill();
+        this.ctx.restore();
+        
         this.ctx.restore();
     }
 
@@ -3766,6 +3799,14 @@ export class GameRenderer {
      */
     private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
         const screenPos = this.worldToScreen(particle.position);
+        
+        // Early viewport culling - skip particles that are far off-screen
+        const margin = 100; // pixels beyond viewport
+        if (screenPos.x < -margin || screenPos.x > this.canvas.width + margin ||
+            screenPos.y < -margin || screenPos.y > this.canvas.height + margin) {
+            return;
+        }
+        
         const baseSize = Constants.DUST_PARTICLE_SIZE * this.zoom;
         const ladSun = game.suns.find(s => s.type === 'lad');
 
@@ -3787,18 +3828,25 @@ export class GameRenderer {
         let lightAngle: number | null = null;
         let sunProximity = 0;
         if (isHighGraphics && game.suns.length > 0 && !ladSun) {
+            // Early return if too far from any sun to need lighting calculations
+            const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
             let nearestSun: Sun | null = null;
             let nearestDistance = Infinity;
+            
+            // Optimize: only search for nearest sun if we're potentially close enough
             for (const sun of game.suns) {
                 const distance = particle.position.distanceTo(sun.position);
                 if (distance < nearestDistance) {
                     nearestSun = sun;
                     nearestDistance = distance;
                 }
+                // Early exit if we found a very close sun
+                if (distance < maxDistance * 0.5) {
+                    break;
+                }
             }
 
-            if (nearestSun && nearestDistance > 0) {
-                const maxDistance = Constants.DUST_SHADOW_MAX_DISTANCE_PX;
+            if (nearestSun && nearestDistance > 0 && nearestDistance < maxDistance) {
                 sunProximity = Math.max(0, 1 - Math.min(1, nearestDistance / maxDistance));
                 if (sunProximity > 0) {
                     const dx = particle.position.x - nearestSun.position.x;
@@ -4111,6 +4159,11 @@ export class GameRenderer {
         opacity: number,
         alphaScale: number
     ): void {
+        // Skip expensive shadow trail rendering on low quality
+        if (this.graphicsQuality === 'low') {
+            return;
+        }
+        
         for (const sun of suns) {
             const dx = worldPos.x - sun.position.x;
             const dy = worldPos.y - sun.position.y;
