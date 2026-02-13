@@ -302,6 +302,20 @@ export class GameRenderer {
         brightnessScale: number,
         blurVariance: number
     }> = [];
+    private reworkedParallaxStarLayers: Array<{
+        stars: Array<{
+            x: number,
+            y: number,
+            sizePx: number,
+            haloScale: number,
+            brightness: number,
+            colorRgb: [number, number, number],
+            flickerHz: number,
+            phase: number,
+            hasChromaticAberration: boolean
+        }>,
+        parallaxFactor: number
+    }> = [];
     private readonly starColorTemperatureLut = this.createStarTemperatureLookup();
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
     private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
@@ -326,8 +340,8 @@ export class GameRenderer {
         this.starCoreCacheByTemperature = this.createStarCoreCacheByTemperature();
         this.starHaloCacheByTemperature = this.createStarHaloCacheByTemperature();
         
-        // Initialize star layers with random positions
-        this.initializeStarLayers();
+        // Initialize reworked in-game parallax stars (rendered directly behind asteroids).
+        this.initializeReworkedParallaxStarLayers();
 
         const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
@@ -342,6 +356,125 @@ export class GameRenderer {
                 `ASSETS/sprites/interface/movementPointAnimation/movementPoint_frame${frameIndex}.png`
             );
         }
+    }
+
+    private initializeReworkedParallaxStarLayers(): void {
+        let seed = 7331;
+        const seededRandom = () => {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            return seed / 4294967296;
+        };
+
+        const layerConfigs = [
+            { count: 320, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
+            { count: 220, parallaxFactor: 0.3, sizeMinPx: 1.0, sizeMaxPx: 2.5 },
+            { count: 140, parallaxFactor: 0.38, sizeMinPx: 1.2, sizeMaxPx: 2.9 },
+        ];
+        const orangeSunlightPalette: Array<[number, number, number]> = [
+            [255, 205, 126],
+            [255, 188, 104],
+            [255, 168, 83],
+            [255, 146, 66],
+        ];
+
+        for (const layerConfig of layerConfigs) {
+            const stars: Array<{
+                x: number,
+                y: number,
+                sizePx: number,
+                haloScale: number,
+                brightness: number,
+                colorRgb: [number, number, number],
+                flickerHz: number,
+                phase: number,
+                hasChromaticAberration: boolean
+            }> = [];
+
+            for (let i = 0; i < layerConfig.count; i++) {
+                const sizePx = layerConfig.sizeMinPx + seededRandom() * (layerConfig.sizeMaxPx - layerConfig.sizeMinPx);
+                const brightness = 0.48 + seededRandom() * 0.5;
+                const colorIndex = Math.min(orangeSunlightPalette.length - 1, Math.floor(seededRandom() * orangeSunlightPalette.length));
+
+                stars.push({
+                    x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
+                    y: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
+                    sizePx,
+                    haloScale: 3.6 + seededRandom() * 2.4,
+                    brightness,
+                    colorRgb: orangeSunlightPalette[colorIndex],
+                    flickerHz: 0.08 + seededRandom() * 0.1,
+                    phase: seededRandom() * Math.PI * 2,
+                    hasChromaticAberration: sizePx > 2.05 && brightness > 0.8 && seededRandom() > 0.45,
+                });
+            }
+
+            this.reworkedParallaxStarLayers.push({
+                stars,
+                parallaxFactor: layerConfig.parallaxFactor,
+            });
+        }
+    }
+
+    private drawReworkedParallaxStars(screenWidth: number, screenHeight: number): void {
+        const centerX = screenWidth * 0.5;
+        const centerY = screenHeight * 0.5;
+        const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
+        const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
+        const cameraX = this.parallaxCamera.x;
+        const cameraY = this.parallaxCamera.y;
+        const nowSeconds = performance.now() * 0.001;
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'lighter';
+
+        for (const layer of this.reworkedParallaxStarLayers) {
+            const parallaxX = cameraX * layer.parallaxFactor;
+            const parallaxY = cameraY * layer.parallaxFactor;
+            const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
+
+            for (const star of layer.stars) {
+                const screenX = centerX + (star.x - parallaxX);
+                const screenY = centerY + (star.y - parallaxY);
+                const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
+                const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
+
+                if (wrappedX < -140 || wrappedX > screenWidth + 140 || wrappedY < -140 || wrappedY > screenHeight + 140) {
+                    continue;
+                }
+
+                const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
+                const alpha = star.brightness * flicker * (0.5 + depthScale * 0.5);
+                const renderedSizePx = star.sizePx * (0.84 + depthScale * 0.62);
+                const cacheIndex = this.getTemperatureCacheIndex(star.colorRgb);
+
+                const haloRadiusPx = renderedSizePx * star.haloScale;
+                this.ctx.globalAlpha = alpha * (0.56 + depthScale * 0.44);
+                this.ctx.drawImage(
+                    this.starHaloCacheByTemperature[cacheIndex],
+                    wrappedX - haloRadiusPx,
+                    wrappedY - haloRadiusPx,
+                    haloRadiusPx * 2,
+                    haloRadiusPx * 2
+                );
+
+                const coreRadiusPx = renderedSizePx * 0.95;
+                this.ctx.globalAlpha = alpha;
+                this.ctx.drawImage(
+                    this.starCoreCacheByTemperature[cacheIndex],
+                    wrappedX - coreRadiusPx,
+                    wrappedY - coreRadiusPx,
+                    coreRadiusPx * 2,
+                    coreRadiusPx * 2
+                );
+
+                if (star.hasChromaticAberration) {
+                    this.renderStarChromaticAberration(wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb, this.ctx);
+                }
+            }
+        }
+
+        this.ctx.restore();
+        this.ctx.globalAlpha = 1;
     }
 
     private resizeCanvas(): void {
@@ -9793,16 +9926,13 @@ export class GameRenderer {
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
         
-        // Draw parallax starfield first (must be before drawShadowStarfieldOverlay)
+        // Draw camera-space values used by reworked parallax stars.
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
-        this.drawStarfield(screenWidth, screenHeight);
-        
-        this.drawShadowStarfieldOverlay(game);
 
         // Draw environment stack between shadow-star overlay and influence circles.
-        // Back -> Front: suns -> asteroids -> space dust.
+        // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
 
         if (ladSun) {
             this.drawLadSunRays(game, ladSun);
@@ -9828,6 +9958,9 @@ export class GameRenderer {
         for (const sun of game.suns) {
             this.drawLensFlare(sun);
         }
+
+        // Draw reworked parallax stars right behind asteroid silhouettes.
+        this.drawReworkedParallaxStars(screenWidth, screenHeight);
 
         // Draw asteroids (with culling - skip rendering beyond map bounds)
         for (const asteroid of game.asteroids) {
