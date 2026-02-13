@@ -174,14 +174,14 @@ this.context.restore();
 
 ### 7. Simplified Cache Eviction in ParticleMenuLayer (`src/menu/particle-layer.ts`)
 
-**Problem**: The LRU cache implementation used delete + re-insert on every cache hit to maintain ordering, adding O(n) overhead.
+**Problem**: The LRU cache implementation used delete + re-insert on every cache hit to maintain ordering, adding unnecessary overhead on frequent cache hits.
 
 **Solution**:
 - Removed LRU "touch" logic (delete + re-insert on cache hit)
 - Simplified to FIFO eviction (first-in-first-out)
-- Cache hits now have O(1) overhead instead of O(n)
+- Cache hits now only require a Map lookup instead of delete + reinsert operations
 
-**Impact**: Reduces cache overhead, especially when gradient cache has many entries. Simpler code, better performance.
+**Impact**: Reduces cache overhead on frequent cache hits. Simpler code, better performance with high cache hit rates.
 
 ## Performance Characteristics
 
@@ -190,14 +190,14 @@ this.context.restore();
 - **Arithmetic operations**: ~10,400+ redundant multiplications per frame (ultra quality)
 - **Canvas operations**: 480+ gradient creations per second
 - **Blur filters**: Applied unconditionally on all quality settings
-- **Cache overhead**: O(n) per hit due to LRU maintenance
+- **Cache overhead**: Delete + reinsert operations on every cache hit
 
 ### After Additional Optimizations
 - **DOM queries**: 0 per second during steady state (only on resize)
 - **Arithmetic operations**: Loop invariants computed once per frame
 - **Canvas operations**: Gradient creations only when colors/radii change
 - **Blur filters**: Skipped on low/medium quality (40-60% FPS improvement)
-- **Cache overhead**: O(1) per hit with FIFO eviction
+- **Cache overhead**: Simple Map lookup only on cache hits
 
 ## Quality Settings Impact
 
