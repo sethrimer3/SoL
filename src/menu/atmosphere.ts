@@ -356,6 +356,11 @@ export class MenuAtmosphereLayer {
         const sunParallaxDeltaX = sunCenter.x - sunParallaxOriginX;
         const sunParallaxDeltaY = sunCenter.y - sunParallaxOriginY;
 
+        // Pre-compute loop invariants for performance
+        const flickerTimeBase = (nowMs * 0.001) * Math.PI * 2;
+        const driftMultiplier = nowMs * MenuAtmosphereLayer.STAR_BASE_DRIFT_PX;
+        const shouldRenderChromaticAberration = this.graphicsQuality !== 'low';
+
         this.context.save();
         this.context.globalCompositeOperation = 'lighter';
 
@@ -367,10 +372,10 @@ export class MenuAtmosphereLayer {
             const parallaxOffsetY = sunParallaxDeltaY * parallaxScale;
 
             const flicker = 1 + MenuAtmosphereLayer.STAR_FLICKER_AMPLITUDE
-                * Math.sin(star.phase + (nowMs * 0.001) * Math.PI * 2 * star.flickerHz);
+                * Math.sin(star.phase + flickerTimeBase * star.flickerHz);
             const alpha = star.brightness * flicker * (0.4 + depthScale * 0.6);
 
-            const renderedX = (star.x + parallaxOffsetX + nowMs * MenuAtmosphereLayer.STAR_BASE_DRIFT_PX * depthScale) % this.widthPx;
+            const renderedX = (star.x + parallaxOffsetX + driftMultiplier * depthScale) % this.widthPx;
             const renderedY = (star.y + parallaxOffsetY) % this.heightPx;
             const sizePx = star.sizePx * (0.8 + depthScale * 0.6);
             const cacheIndex = this.getTemperatureCacheIndex(star.colorRgb);
@@ -397,7 +402,8 @@ export class MenuAtmosphereLayer {
                 coreRadiusPx * 2
             );
 
-            if (star.hasChromaticAberration) {
+            // Skip chromatic aberration on low quality for better performance
+            if (star.hasChromaticAberration && shouldRenderChromaticAberration) {
                 this.renderChromaticAberration(renderedX, renderedY, sizePx, alpha * 0.17, star.colorRgb);
             }
         }
