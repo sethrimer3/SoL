@@ -481,7 +481,7 @@ export class BackgroundParticleLayer {
             
             if (!gradient) {
                 // Create gradient at origin (0, 0) so it can be cached and reused
-                // Using translate to reposition avoids per-frame gradient allocations
+                // Using translate to reposition avoids creating new gradients per-frame
                 gradient = this.context.createRadialGradient(0, 0, 0, 0, 0, particle.radius);
                 gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
                 gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
