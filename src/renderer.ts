@@ -9697,7 +9697,11 @@ export class GameRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
         this.updateEnemyVisibilityFadeClock(game.gameTime);
 
-        // Draw parallax star layers before light treatment so star occlusion remains visible.
+        const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
+        this.drawShadowStarfieldOverlay(game);
+
+        // Draw environment stack between shadow-star overlay and influence circles.
+        // Back -> Front: parallax starfield -> suns -> asteroids -> space dust.
         const dpr = window.devicePixelRatio || 1;
         const screenWidth = this.canvas.width / dpr;
         const screenHeight = this.canvas.height / dpr;
@@ -9705,17 +9709,6 @@ export class GameRenderer {
 
         if (ladSun) {
             this.drawLadSunRays(game, ladSun);
-        }
-
-        const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
-
-        // Draw space dust particles (with culling)
-        for (const particle of game.spaceDust) {
-            // Only render particles within map boundaries
-            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
-                this.isWithinViewBounds(particle.position, 60)) {
-                this.drawSpaceDust(particle, game, viewingPlayerIndex);
-            }
         }
 
         // Draw suns
@@ -9753,7 +9746,14 @@ export class GameRenderer {
             this.applyUltraShadowReinforcement(game);
         }
 
-        this.drawShadowStarfieldOverlay(game);
+        // Draw space dust particles on top of celestial environment layers.
+        for (const particle of game.spaceDust) {
+            // Only render particles within map boundaries
+            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
+                this.isWithinViewBounds(particle.position, 60)) {
+                this.drawSpaceDust(particle, game, viewingPlayerIndex);
+            }
+        }
 
         // Draw influence circles (with proper handling of overlaps)
         const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
