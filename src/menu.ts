@@ -154,7 +154,7 @@ export class MainMenu {
             abilityDescription: 'Solar ricochet: beam bounces between multiple enemies'
         },
         {
-            id: 'radiant-influence-ball', name: 'Influence Ball', description: 'Deploys temporary influence zones', faction: Faction.RADIANT,
+            id: 'velaris-diplomat', name: 'Diplomat', description: 'Deploys temporary influence zones', faction: Faction.VELARIS,
             maxHealth: Constants.INFLUENCE_BALL_MAX_HEALTH, attackDamage: Constants.INFLUENCE_BALL_ATTACK_DAMAGE, attackSpeed: Constants.INFLUENCE_BALL_ATTACK_SPEED,
             attackRange: Constants.INFLUENCE_BALL_ATTACK_RANGE, attackIgnoresDefense: false, defense: 12, regen: 6,
             abilityDescription: 'Influence surge: expand an influence zone at target location'
@@ -166,13 +166,13 @@ export class MainMenu {
             abilityDescription: 'Deploy turret: places a turret on a nearby asteroid'
         },
         {
-            id: 'radiant-driller', name: 'Driller', description: 'Burrows through asteroids to flank', faction: Faction.RADIANT,
+            id: 'aurum-driller', name: 'Driller', description: 'Burrows through asteroids to flank', faction: Faction.AURUM,
             maxHealth: Constants.DRILLER_MAX_HEALTH, attackDamage: Constants.DRILLER_ATTACK_DAMAGE, attackSpeed: Constants.DRILLER_ATTACK_SPEED,
             attackRange: Constants.DRILLER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 16, regen: 3,
             abilityDescription: 'Drill charge: tunnels through an asteroid toward the target'
         },
         {
-            id: 'radiant-dagger', name: 'Dagger', description: 'Cloaked assassin with burst damage', faction: Faction.RADIANT,
+            id: 'velaris-dagger', name: 'Dagger', description: 'Cloaked assassin with burst damage', faction: Faction.VELARIS,
             maxHealth: Constants.DAGGER_MAX_HEALTH, attackDamage: Constants.DAGGER_ATTACK_DAMAGE, attackSpeed: Constants.DAGGER_ATTACK_SPEED,
             attackRange: Constants.DAGGER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 5, regen: 3,
             abilityDescription: 'Shadow strike: short-range burst attack, reveals Dagger for 8 seconds'
@@ -196,13 +196,13 @@ export class MainMenu {
             abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage'
         },
         {
-            id: 'radiant-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.RADIANT,
+            id: 'aurum-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.AURUM,
             maxHealth: Constants.PREIST_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
             attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
             abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles'
         },
         {
-            id: 'radiant-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.RADIANT,
+            id: 'aurum-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.AURUM,
             maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
             attackRange: 0, attackIgnoresDefense: false, defense: Constants.TANK_DEFENSE, regen: 3,
             abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles'
