@@ -2670,6 +2670,11 @@ export class GameRenderer {
      * Draw cinematic lens flare for visible suns in screen space.
      */
     private drawLensFlare(sun: Sun): void {
+        // Skip lens flare on low/medium quality for performance
+        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
+            return;
+        }
+
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
 
