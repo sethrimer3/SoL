@@ -59,6 +59,11 @@ export class MenuAtmosphereLayer {
     }[] = [];
     private readonly starCoreCacheByTemperature: HTMLCanvasElement[];
     private readonly starHaloCacheByTemperature: HTMLCanvasElement[];
+    // Cached gradients to avoid per-frame allocation
+    private sunWhiteHotCoreGradient: CanvasGradient | null = null;
+    private sunGlowGradient: CanvasGradient | null = null;
+    private sunPlasmaGradient: CanvasGradient | null = null;
+    private asteroidLightGradient: CanvasGradient | null = null;
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -124,6 +129,7 @@ export class MenuAtmosphereLayer {
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
         this.initializeStars();
+        this.initializeCachedGradients();
     }
 
     public destroy(): void {
@@ -150,6 +156,63 @@ export class MenuAtmosphereLayer {
             x: Math.max(0, Math.min(1, sunCenter.x / safeWidthPx)),
             y: Math.max(0, Math.min(1, sunCenter.y / safeHeightPx)),
         };
+    }
+
+    private initializeCachedGradients(): void {
+        const sunCenter = this.getSunCenter();
+
+        // Cache sun white hot core gradient
+        this.sunWhiteHotCoreGradient = this.context.createRadialGradient(
+            sunCenter.x,
+            sunCenter.y,
+            0,
+            sunCenter.x,
+            sunCenter.y,
+            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.48
+        );
+        this.sunWhiteHotCoreGradient.addColorStop(0, '#FFF8E6');
+        this.sunWhiteHotCoreGradient.addColorStop(0.65, '#FFF2B0');
+        this.sunWhiteHotCoreGradient.addColorStop(1, 'rgba(255, 210, 90, 0)');
+
+        // Cache sun glow gradient
+        this.sunGlowGradient = this.context.createRadialGradient(
+            sunCenter.x,
+            sunCenter.y,
+            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.35,
+            sunCenter.x,
+            sunCenter.y,
+            MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
+        );
+        this.sunGlowGradient.addColorStop(0, 'rgba(255, 214, 90, 0.95)');
+        this.sunGlowGradient.addColorStop(0.3, 'rgba(255, 179, 71, 0.65)');
+        this.sunGlowGradient.addColorStop(0.55, 'rgba(255, 158, 58, 0.45)');
+        this.sunGlowGradient.addColorStop(0.75, 'rgba(255, 122, 26, 0.28)');
+        this.sunGlowGradient.addColorStop(1, 'rgba(230, 92, 0, 0)');
+
+        // Cache sun plasma gradient (fallback when sprite not loaded)
+        this.sunPlasmaGradient = this.context.createRadialGradient(
+            sunCenter.x,
+            sunCenter.y,
+            0,
+            sunCenter.x,
+            sunCenter.y,
+            MenuAtmosphereLayer.SUN_RADIUS_PX
+        );
+        this.sunPlasmaGradient.addColorStop(0, '#FFD65A');
+        this.sunPlasmaGradient.addColorStop(0.55, '#FFB347');
+        this.sunPlasmaGradient.addColorStop(1, '#FF8C2E');
+
+        // Cache asteroid light gradient (same for all asteroids, positioned dynamically)
+        // We'll use a generic size and reposition it dynamically during render
+        const asteroidRadius = (MenuAtmosphereLayer.ASTEROID_MIN_RADIUS_PX + MenuAtmosphereLayer.ASTEROID_MAX_RADIUS_PX) / 2;
+        this.asteroidLightGradient = this.context.createLinearGradient(
+            -asteroidRadius,
+            -asteroidRadius,
+            asteroidRadius,
+            asteroidRadius
+        );
+        this.asteroidLightGradient.addColorStop(0, '#FFC46B');
+        this.asteroidLightGradient.addColorStop(1, '#1A2238');
     }
 
     private initializeAsteroids(): void {
@@ -542,46 +605,27 @@ export class MenuAtmosphereLayer {
         this.context.save();
         this.context.globalCompositeOperation = 'lighter';
 
-        const whiteHotCore = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
-            0,
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.48
-        );
-        whiteHotCore.addColorStop(0, '#FFF8E6');
-        whiteHotCore.addColorStop(0.65, '#FFF2B0');
-        whiteHotCore.addColorStop(1, 'rgba(255, 210, 90, 0)');
-        this.context.fillStyle = whiteHotCore;
-        this.context.beginPath();
-        this.context.arc(sunCenter.x, sunCenter.y, MenuAtmosphereLayer.SUN_RADIUS_PX * 0.52, 0, Math.PI * 2);
-        this.context.fill();
+        // Use cached white hot core gradient
+        if (this.sunWhiteHotCoreGradient) {
+            this.context.fillStyle = this.sunWhiteHotCoreGradient;
+            this.context.beginPath();
+            this.context.arc(sunCenter.x, sunCenter.y, MenuAtmosphereLayer.SUN_RADIUS_PX * 0.52, 0, Math.PI * 2);
+            this.context.fill();
+        }
 
-        const gradient = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_RADIUS_PX * 0.35,
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
-        );
-        gradient.addColorStop(0, 'rgba(255, 214, 90, 0.95)');
-        gradient.addColorStop(0.3, 'rgba(255, 179, 71, 0.65)');
-        gradient.addColorStop(0.55, 'rgba(255, 158, 58, 0.45)');
-        gradient.addColorStop(0.75, 'rgba(255, 122, 26, 0.28)');
-        gradient.addColorStop(1, 'rgba(230, 92, 0, 0)');
-
-        this.context.fillStyle = gradient;
-        this.context.beginPath();
-        this.context.arc(
-            sunCenter.x,
-            sunCenter.y,
-            MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX,
-            0,
-            Math.PI * 2
-        );
-        this.context.fill();
+        // Use cached sun glow gradient
+        if (this.sunGlowGradient) {
+            this.context.fillStyle = this.sunGlowGradient;
+            this.context.beginPath();
+            this.context.arc(
+                sunCenter.x,
+                sunCenter.y,
+                MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX,
+                0,
+                Math.PI * 2
+            );
+            this.context.fill();
+        }
 
         if (this.sunSprite.complete && this.sunSprite.naturalWidth > 0) {
             const diameterPx = MenuAtmosphereLayer.SUN_RADIUS_PX * 2;
@@ -592,19 +636,9 @@ export class MenuAtmosphereLayer {
                 diameterPx,
                 diameterPx
             );
-        } else {
-            const plasmaGradient = this.context.createRadialGradient(
-                sunCenter.x,
-                sunCenter.y,
-                0,
-                sunCenter.x,
-                sunCenter.y,
-                MenuAtmosphereLayer.SUN_RADIUS_PX
-            );
-            plasmaGradient.addColorStop(0, '#FFD65A');
-            plasmaGradient.addColorStop(0.55, '#FFB347');
-            plasmaGradient.addColorStop(1, '#FF8C2E');
-            this.context.fillStyle = plasmaGradient;
+        } else if (this.sunPlasmaGradient) {
+            // Use cached plasma gradient fallback
+            this.context.fillStyle = this.sunPlasmaGradient;
             this.context.beginPath();
             this.context.arc(
                 sunCenter.x,
@@ -658,24 +692,23 @@ export class MenuAtmosphereLayer {
     }
 
     private renderAsteroidBody(asteroid: MenuAsteroid): void {
-        const lightGradient = this.context.createLinearGradient(
-            asteroid.x - asteroid.radiusPx,
-            asteroid.y - asteroid.radiusPx,
-            asteroid.x + asteroid.radiusPx,
-            asteroid.y + asteroid.radiusPx
-        );
-        lightGradient.addColorStop(0, '#FFC46B');
-        lightGradient.addColorStop(1, '#1A2238');
-
-        this.context.fillStyle = lightGradient;
+        // Save context and apply transform for the gradient
+        this.context.save();
+        this.context.translate(asteroid.x, asteroid.y);
+        
+        // Use cached asteroid gradient
+        if (this.asteroidLightGradient) {
+            this.context.fillStyle = this.asteroidLightGradient;
+        }
+        
         this.context.beginPath();
         const basePoints = asteroid.points;
         for (let i = 0; i < basePoints.length; i++) {
             const point = basePoints[i];
             const angleRad = point.angleRad + asteroid.rotationRad;
             const radiusPx = asteroid.radiusPx * point.radiusScale;
-            const x = asteroid.x + Math.cos(angleRad) * radiusPx;
-            const y = asteroid.y + Math.sin(angleRad) * radiusPx;
+            const x = Math.cos(angleRad) * radiusPx;
+            const y = Math.sin(angleRad) * radiusPx;
             if (i === 0) {
                 this.context.moveTo(x, y);
             } else {
@@ -688,6 +721,8 @@ export class MenuAtmosphereLayer {
         this.context.strokeStyle = 'rgba(255, 196, 107, 0.35)';
         this.context.lineWidth = 1;
         this.context.stroke();
+        
+        this.context.restore();
     }
 
     private getSunCenter(): { x: number; y: number } {
