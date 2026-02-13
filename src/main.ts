@@ -5,6 +5,7 @@
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
+import { GameAudioController } from './game-audio';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
@@ -40,6 +41,7 @@ class GameController {
     private hasSeenFoundry: boolean = false;
     private hasActiveFoundry: boolean = false;
     private menu: MainMenu;
+    private gameAudioController: GameAudioController;
     private selectedUnits: Set<Unit> = new Set();
     private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
@@ -1486,6 +1488,7 @@ class GameController {
 
         // Create and show main menu
         this.menu = new MainMenu();
+        this.gameAudioController = new GameAudioController();
         this.menu.onStart((settings: GameSettings) => this.startNewGame(settings));
         this.showInfo = this.menu.getSettings().isBattleStatsInfoEnabled;
         this.renderer.showInfo = this.showInfo;
@@ -1633,6 +1636,8 @@ class GameController {
         this.showInfo = settings.isBattleStatsInfoEnabled;
         this.renderer.showInfo = this.showInfo;
 
+        this.gameAudioController.setSoundEnabled(settings.soundEnabled);
+
         // Start game loop
         this.start();
     }
@@ -1747,6 +1752,8 @@ class GameController {
         
         console.log(`[GameController] 4-player game initialized. Local player is index ${localPlayerIndex}. Starting game loop...`);
         
+        this.gameAudioController.setSoundEnabled(settings.soundEnabled);
+
         // Start game loop
         this.start();
     }
@@ -3865,6 +3872,7 @@ class GameController {
         
         if (this.game.isRunning) {
             this.game.update(deltaTime);
+            this.gameAudioController.update(this.game, deltaTime);
         }
 
         // Update warp gates (energy is transferred via game-state.ts mirror update)
@@ -3934,7 +3942,9 @@ class GameController {
 
                 // Update game state (deterministic simulation)
                 if (this.game.isRunning) {
-                    this.game.update(this.TICK_INTERVAL_MS / 1000);
+                    const tickDeltaTimeSec = this.TICK_INTERVAL_MS / 1000;
+                    this.game.update(tickDeltaTimeSec);
+                    this.gameAudioController.update(this.game, tickDeltaTimeSec);
                 }
 
                 this.tickAccumulator -= this.TICK_INTERVAL_MS;
