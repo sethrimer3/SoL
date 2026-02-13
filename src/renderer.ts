@@ -280,6 +280,7 @@ export class GameRenderer {
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
     private enemyVisibilityLastUpdateSec = Number.NaN;
     private enemyVisibilityFrameDeltaSec = 0;
+    private gradientCache = new Map<string, CanvasGradient>();
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
@@ -1401,7 +1402,7 @@ export class GameRenderer {
             return state;
         }
 
-        const count = this.VELARIS_FORGE_PARTICLE_COUNT;
+        const count = this.getQualityAdjustedParticleCount(this.VELARIS_FORGE_PARTICLE_COUNT);
         const positionsX = new Float32Array(count);
         const positionsY = new Float32Array(count);
         const velocitiesX = new Float32Array(count);
@@ -1649,6 +1650,11 @@ export class GameRenderer {
         minY: number,
         displayColor: string
     ): void {
+        // Skip expensive edge detection on low/medium quality for performance
+        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
+            return;
+        }
+
         const data = imageData.data;
 
         // Draw glowing outline where filled areas border empty areas
@@ -2181,6 +2187,67 @@ export class GameRenderer {
         }
 
         return color;
+    }
+
+    /**
+     * Get quality-adjusted particle count for ultra effects
+     */
+    private getQualityAdjustedParticleCount(baseCount: number): number {
+        switch (this.graphicsQuality) {
+            case 'low':
+                return Math.floor(baseCount * 0.25);
+            case 'medium':
+                return Math.floor(baseCount * 0.5);
+            case 'high':
+                return Math.floor(baseCount * 0.75);
+            case 'ultra':
+            default:
+                return baseCount;
+        }
+    }
+
+    /**
+     * Get or create a cached radial gradient
+     */
+    private getCachedRadialGradient(
+        key: string,
+        x0: number, y0: number, r0: number,
+        x1: number, y1: number, r1: number,
+        stops: Array<{offset: number, color: string}>
+    ): CanvasGradient {
+        const cached = this.gradientCache.get(key);
+        if (cached) {
+            return cached;
+        }
+
+        const gradient = this.ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
+        for (const stop of stops) {
+            gradient.addColorStop(stop.offset, stop.color);
+        }
+        this.gradientCache.set(key, gradient);
+        return gradient;
+    }
+
+    /**
+     * Get or create a cached linear gradient
+     */
+    private getCachedLinearGradient(
+        key: string,
+        x0: number, y0: number,
+        x1: number, y1: number,
+        stops: Array<{offset: number, color: string}>
+    ): CanvasGradient {
+        const cached = this.gradientCache.get(key);
+        if (cached) {
+            return cached;
+        }
+
+        const gradient = this.ctx.createLinearGradient(x0, y0, x1, y1);
+        for (const stop of stops) {
+            gradient.addColorStop(stop.offset, stop.color);
+        }
+        this.gradientCache.set(key, gradient);
+        return gradient;
     }
 
     /**
@@ -4734,7 +4801,9 @@ export class GameRenderer {
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        this.ctx.filter = 'blur(11px)';
+        // Reduce blur on lower quality settings for performance
+        const blurAmount = this.graphicsQuality === 'high' ? 'blur(6px)' : 'blur(11px)';
+        this.ctx.filter = blurAmount;
         this.ctx.globalAlpha = 0.4;
         const shaftSize = 1024 * shaftScale;
         this.ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
@@ -4854,7 +4923,8 @@ export class GameRenderer {
         }
 
         const emberStatics: UltraSunEmberStatic[] = [];
-        for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
+        const emberCount = this.getQualityAdjustedParticleCount(this.ULTRA_SOLAR_EMBER_COUNT);
+        for (let emberIndex = 0; emberIndex < emberCount; emberIndex++) {
             const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
             const fieryColorRoll = this.hashNormalized(seed + 23.7);
             const emberRed = Math.floor(217 + fieryColorRoll * 38);
@@ -4916,7 +4986,8 @@ export class GameRenderer {
         }
 
         const generatedStatics: UltraLightDustStatic[] = [];
-        for (let dustIndex = 0; dustIndex < this.ULTRA_LIGHT_DUST_COUNT; dustIndex += 1) {
+        const dustCount = this.getQualityAdjustedParticleCount(this.ULTRA_LIGHT_DUST_COUNT);
+        for (let dustIndex = 0; dustIndex < dustCount; dustIndex += 1) {
             const seed = dustIndex * 31.91;
             const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
             const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
