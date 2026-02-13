@@ -2148,18 +2148,21 @@ export class GameRenderer {
                 shaftContext.rotate(angle);
 
                 const softEdgeGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
-                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 246, 206, 0.16)' : 'rgba(255, 242, 190, 0.2)');
-                softEdgeGradient.addColorStop(0.2, isOuterLayer ? 'rgba(255, 215, 132, 0.18)' : 'rgba(255, 220, 138, 0.24)');
-                softEdgeGradient.addColorStop(1, 'rgba(255, 170, 85, 0)');
+                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                softEdgeGradient.addColorStop(0.16, isOuterLayer ? 'rgba(255, 138, 20, 0.4)' : 'rgba(255, 116, 18, 0.42)');
+                softEdgeGradient.addColorStop(0.46, isOuterLayer ? 'rgba(242, 92, 15, 0.28)' : 'rgba(217, 71, 12, 0.3)');
+                softEdgeGradient.addColorStop(0.78, 'rgba(183, 55, 10, 0.14)');
+                softEdgeGradient.addColorStop(1, 'rgba(183, 55, 10, 0)');
                 shaftContext.fillStyle = softEdgeGradient;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.5, 0, shaftLength * 0.52, shaftWidth * 0.5, 0, 0, Math.PI * 2);
                 shaftContext.fill();
 
                 const spineGradient = shaftContext.createLinearGradient(0, 0, shaftLength * 0.92, 0);
-                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 251, 232, 0.2)' : 'rgba(255, 250, 230, 0.32)');
-                spineGradient.addColorStop(0.5, isOuterLayer ? 'rgba(255, 229, 152, 0.18)' : 'rgba(255, 234, 160, 0.26)');
-                spineGradient.addColorStop(1, 'rgba(255, 198, 108, 0)');
+                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.46)' : 'rgba(255, 178, 26, 0.56)');
+                spineGradient.addColorStop(0.25, isOuterLayer ? 'rgba(255, 163, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                spineGradient.addColorStop(0.58, isOuterLayer ? 'rgba(255, 116, 18, 0.3)' : 'rgba(242, 92, 15, 0.36)');
+                spineGradient.addColorStop(1, 'rgba(217, 71, 12, 0)');
                 shaftContext.fillStyle = spineGradient;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.45, 0, shaftLength * 0.47, Math.max(2, shaftWidth * 0.13), 0, 0, Math.PI * 2);
@@ -4341,12 +4344,13 @@ export class GameRenderer {
         this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
         this.ctx.rotate(gameTimeSec * 0.01 + Math.sin(gameTimeSec * 0.05) * 0.015);
         this.ctx.globalCompositeOperation = 'lighter';
-        this.ctx.globalAlpha = 0.58;
+        this.ctx.filter = 'blur(11px)';
+        this.ctx.globalAlpha = 0.4;
         const shaftSize = 1024 * shaftScale;
         this.ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
 
         this.ctx.rotate(-gameTimeSec * 0.017);
-        this.ctx.globalAlpha = 0.45 + shimmerAlpha;
+        this.ctx.globalAlpha = Math.min(0.4, 0.32 + shimmerAlpha);
         const innerSize = shaftSize * 0.72;
         this.ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
@@ -4397,8 +4401,17 @@ export class GameRenderer {
                 const y = sunScreenPos.y + Math.sin(orbitAngle) * radius;
                 const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
                 const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.24) * (1 - outwardT * 0.45);
+                const fieryColorRoll = this.hashNormalized(seed + 23.7);
+                const emberRed = Math.floor(217 + fieryColorRoll * 38);
+                const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
+                const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
 
-                this.ctx.fillStyle = `rgba(255, ${Math.floor(126 + this.hashNormalized(seed + 23.7) * 64)}, ${Math.floor(36 + this.hashNormalized(seed + 29.2) * 42)}, ${alpha.toFixed(4)})`;
+                this.ctx.fillStyle = `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, ${(alpha * 0.34).toFixed(4)})`;
+                this.ctx.beginPath();
+                this.ctx.arc(x, y, size * this.zoom * 2.75, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.fillStyle = `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, ${alpha.toFixed(4)})`;
                 this.ctx.beginPath();
                 this.ctx.arc(x, y, size * this.zoom, 0, Math.PI * 2);
                 this.ctx.fill();
