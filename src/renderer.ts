@@ -347,12 +347,22 @@ export class GameRenderer {
             haloScale: number,
             brightness: number,
             colorRgb: [number, number, number],
+            colorIndex: number,
             flickerHz: number,
             phase: number,
             hasChromaticAberration: boolean
         }>,
         parallaxFactor: number
     }> = [];
+    private readonly cinematicOrangePaletteRgb: Array<[number, number, number]> = [
+        [255, 178, 26],
+        [255, 163, 26],
+        [255, 138, 20],
+        [255, 116, 18],
+        [242, 92, 15],
+        [217, 71, 12],
+        [183, 55, 10],
+    ];
     private readonly starColorTemperatureLut = this.createStarTemperatureLookup();
     private starfieldCacheCanvas: HTMLCanvasElement | null = null;
     private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
@@ -362,6 +372,8 @@ export class GameRenderer {
     private starfieldCacheCameraY = Number.NaN;
     private readonly starCoreCacheByTemperature: HTMLCanvasElement[];
     private readonly starHaloCacheByTemperature: HTMLCanvasElement[];
+    private readonly reworkedStarCoreCacheByPalette: HTMLCanvasElement[];
+    private readonly reworkedStarHaloCacheByPalette: HTMLCanvasElement[];
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -376,6 +388,8 @@ export class GameRenderer {
 
         this.starCoreCacheByTemperature = this.createStarCoreCacheByTemperature();
         this.starHaloCacheByTemperature = this.createStarHaloCacheByTemperature();
+        this.reworkedStarCoreCacheByPalette = this.createReworkedStarCoreCacheByPalette();
+        this.reworkedStarHaloCacheByPalette = this.createReworkedStarHaloCacheByPalette();
         
         // Initialize reworked in-game parallax stars (rendered directly behind asteroids).
         this.initializeReworkedParallaxStarLayers();
@@ -407,13 +421,6 @@ export class GameRenderer {
             { count: 1700, parallaxFactor: 0.3, sizeMinPx: 1.0, sizeMaxPx: 2.5 },
             { count: 1100, parallaxFactor: 0.38, sizeMinPx: 1.2, sizeMaxPx: 2.9 },
         ];
-        const orangeSunlightPalette: Array<[number, number, number]> = [
-            [255, 205, 126],
-            [255, 188, 104],
-            [255, 168, 83],
-            [255, 146, 66],
-        ];
-
         for (const layerConfig of layerConfigs) {
             const stars: Array<{
                 x: number,
@@ -422,6 +429,7 @@ export class GameRenderer {
                 haloScale: number,
                 brightness: number,
                 colorRgb: [number, number, number],
+                colorIndex: number,
                 flickerHz: number,
                 phase: number,
                 hasChromaticAberration: boolean
@@ -430,7 +438,7 @@ export class GameRenderer {
             for (let i = 0; i < layerConfig.count; i++) {
                 const sizePx = layerConfig.sizeMinPx + seededRandom() * (layerConfig.sizeMaxPx - layerConfig.sizeMinPx);
                 const brightness = 0.48 + seededRandom() * 0.5;
-                const colorIndex = Math.min(orangeSunlightPalette.length - 1, Math.floor(seededRandom() * orangeSunlightPalette.length));
+                const colorIndex = this.sampleReworkedParallaxPaletteIndex(seededRandom());
 
                 stars.push({
                     x: seededRandom() * Constants.STAR_WRAP_SIZE - Constants.STAR_WRAP_SIZE / 2,
@@ -438,7 +446,8 @@ export class GameRenderer {
                     sizePx,
                     haloScale: 3.6 + seededRandom() * 2.4,
                     brightness,
-                    colorRgb: orangeSunlightPalette[colorIndex],
+                    colorRgb: this.cinematicOrangePaletteRgb[colorIndex],
+                    colorIndex,
                     flickerHz: 0.08 + seededRandom() * 0.1,
                     phase: seededRandom() * Math.PI * 2,
                     hasChromaticAberration: sizePx > 2.05 && brightness > 0.8 && seededRandom() > 0.45,
@@ -450,6 +459,36 @@ export class GameRenderer {
                 parallaxFactor: layerConfig.parallaxFactor,
             });
         }
+    }
+
+    private sampleReworkedParallaxPaletteIndex(randomSample: number): number {
+        if (randomSample < 0.2) {
+            return 0;
+        }
+        if (randomSample < 0.36) {
+            return 1;
+        }
+        if (randomSample < 0.52) {
+            return 2;
+        }
+        if (randomSample < 0.68) {
+            return 3;
+        }
+        if (randomSample < 0.82) {
+            return 4;
+        }
+        if (randomSample < 0.92) {
+            return 5;
+        }
+        return 6;
+    }
+
+    private createReworkedStarCoreCacheByPalette(): HTMLCanvasElement[] {
+        return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarCoreCacheCanvas(colorRgb));
+    }
+
+    private createReworkedStarHaloCacheByPalette(): HTMLCanvasElement[] {
+        return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarHaloCacheCanvas(colorRgb));
     }
 
     private drawReworkedParallaxStars(screenWidth: number, screenHeight: number): void {
@@ -482,12 +521,12 @@ export class GameRenderer {
                 const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
                 const alpha = star.brightness * flicker * (0.5 + depthScale * 0.5);
                 const renderedSizePx = star.sizePx * (0.84 + depthScale * 0.62);
-                const cacheIndex = this.getTemperatureCacheIndex(star.colorRgb);
+                const cacheIndex = star.colorIndex;
 
                 const haloRadiusPx = renderedSizePx * star.haloScale;
                 this.ctx.globalAlpha = alpha * (0.56 + depthScale * 0.44);
                 this.ctx.drawImage(
-                    this.starHaloCacheByTemperature[cacheIndex],
+                    this.reworkedStarHaloCacheByPalette[cacheIndex],
                     wrappedX - haloRadiusPx,
                     wrappedY - haloRadiusPx,
                     haloRadiusPx * 2,
@@ -497,7 +536,7 @@ export class GameRenderer {
                 const coreRadiusPx = renderedSizePx * 0.95;
                 this.ctx.globalAlpha = alpha;
                 this.ctx.drawImage(
-                    this.starCoreCacheByTemperature[cacheIndex],
+                    this.reworkedStarCoreCacheByPalette[cacheIndex],
                     wrappedX - coreRadiusPx,
                     wrappedY - coreRadiusPx,
                     coreRadiusPx * 2,
