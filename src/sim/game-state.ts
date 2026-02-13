@@ -2226,7 +2226,7 @@ export class GameState {
             if (target) {
                 const distance = mirror.position.distanceTo(target);
                 if (distance > Constants.AI_MIRROR_REPOSITION_THRESHOLD_PX) {
-                    mirror.setTarget(target);
+                    mirror.setTarget(target, this);
                 }
             }
         }
@@ -3103,7 +3103,7 @@ export class GameState {
                     }
                 }
                 
-                player.solarMirrors[0].setTarget(leftTarget);
+                player.solarMirrors[0].setTarget(leftTarget, this);
             }
             
             if (player.solarMirrors.length >= 2) {
@@ -3128,7 +3128,7 @@ export class GameState {
                     }
                 }
                 
-                player.solarMirrors[1].setTarget(rightTarget);
+                player.solarMirrors[1].setTarget(rightTarget, this);
             }
         }
     }
@@ -5170,7 +5170,7 @@ export class GameState {
         for (const mirrorIndex of mirrorIndices ?? []) {
             const mirror = player.solarMirrors[mirrorIndex];
             if (mirror) {
-                mirror.setTarget(target);
+                mirror.setTarget(target, this);
                 if (typeof moveOrder === 'number') {
                     mirror.moveOrder = moveOrder;
                 }
