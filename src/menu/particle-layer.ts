@@ -44,7 +44,7 @@ export class ParticleMenuLayer {
     // Cache for gradient templates to avoid per-particle string allocation
     private haloGradientCache: Map<string, CanvasGradient> = new Map();
     // Pre-formatted opacity strings to avoid toFixed() calls
-    private cachedOpacityString: string = this.particleOpacity.toFixed(3);
+    private cachedOpacityString: string = '';
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -69,6 +69,9 @@ export class ParticleMenuLayer {
             throw new Error('Unable to create offscreen particle canvas context.');
         }
         this.offscreenContext = offscreenContext;
+
+        // Initialize cached opacity string after particleOpacity is set
+        this.cachedOpacityString = this.particleOpacity.toFixed(3);
 
         this.container.appendChild(this.canvas);
         // Defer initial resize to ensure container has layout dimensions
@@ -358,8 +361,11 @@ export class ParticleMenuLayer {
                 );
                 const haloRadiusPx = particle.sizePx * haloRadiusMultiplier;
                 
-                // Try to use cached gradient for this color+radius combination
-                const cacheKey = `${red},${green},${blue},${haloRadiusPx.toFixed(1)},${haloAlpha.toFixed(2)}`;
+                // Create cache key using rounded integers to avoid toFixed() calls
+                // Round radius and alpha to reduce cache key variations
+                const radiusKey = Math.round(haloRadiusPx * 10); // 0.1px precision
+                const alphaKey = Math.round(haloAlpha * 100); // 0.01 precision
+                const cacheKey = `${red},${green},${blue},${radiusKey},${alphaKey}`;
                 let haloGradient = this.haloGradientCache.get(cacheKey);
                 
                 if (!haloGradient) {
@@ -373,10 +379,12 @@ export class ParticleMenuLayer {
                     haloGradient.addColorStop(0.72, `rgba(${red}, ${green}, ${blue}, ${alpha2})`);
                     haloGradient.addColorStop(1, `rgba(${red}, ${green}, ${blue}, 0)`);
                     
-                    // Limit cache size to prevent memory bloat
-                    if (this.haloGradientCache.size > 100) {
-                        // Clear cache when it gets too large
-                        this.haloGradientCache.clear();
+                    // Implement simple LRU: remove first entry when cache is full
+                    if (this.haloGradientCache.size >= 100) {
+                        const firstKey = this.haloGradientCache.keys().next().value;
+                        if (firstKey) {
+                            this.haloGradientCache.delete(firstKey);
+                        }
                     }
                     this.haloGradientCache.set(cacheKey, haloGradient);
                 }

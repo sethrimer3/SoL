@@ -202,15 +202,9 @@ export class MenuAtmosphereLayer {
         this.sunPlasmaGradient.addColorStop(0.55, '#FFB347');
         this.sunPlasmaGradient.addColorStop(1, '#FF8C2E');
 
-        // Cache asteroid light gradient (same for all asteroids, positioned dynamically)
-        // We'll use a generic size and reposition it dynamically during render
-        const asteroidRadius = (MenuAtmosphereLayer.ASTEROID_MIN_RADIUS_PX + MenuAtmosphereLayer.ASTEROID_MAX_RADIUS_PX) / 2;
-        this.asteroidLightGradient = this.context.createLinearGradient(
-            -asteroidRadius,
-            -asteroidRadius,
-            asteroidRadius,
-            asteroidRadius
-        );
+        // Cache asteroid light gradient using normalized coordinates
+        // The gradient is created with -1 to 1 coordinates and will scale with context transforms
+        this.asteroidLightGradient = this.context.createLinearGradient(-1, -1, 1, 1);
         this.asteroidLightGradient.addColorStop(0, '#FFC46B');
         this.asteroidLightGradient.addColorStop(1, '#1A2238');
     }
@@ -695,8 +689,10 @@ export class MenuAtmosphereLayer {
         // Save context and apply transform for the gradient
         this.context.save();
         this.context.translate(asteroid.x, asteroid.y);
+        // Scale the context to match asteroid size so the normalized gradient scales correctly
+        this.context.scale(asteroid.radiusPx, asteroid.radiusPx);
         
-        // Use cached asteroid gradient
+        // Use cached asteroid gradient (now properly scaled)
         if (this.asteroidLightGradient) {
             this.context.fillStyle = this.asteroidLightGradient;
         }
@@ -706,9 +702,9 @@ export class MenuAtmosphereLayer {
         for (let i = 0; i < basePoints.length; i++) {
             const point = basePoints[i];
             const angleRad = point.angleRad + asteroid.rotationRad;
-            const radiusPx = asteroid.radiusPx * point.radiusScale;
-            const x = Math.cos(angleRad) * radiusPx;
-            const y = Math.sin(angleRad) * radiusPx;
+            const radiusScale = point.radiusScale;
+            const x = Math.cos(angleRad) * radiusScale;
+            const y = Math.sin(angleRad) * radiusScale;
             if (i === 0) {
                 this.context.moveTo(x, y);
             } else {
@@ -719,7 +715,7 @@ export class MenuAtmosphereLayer {
         this.context.fill();
 
         this.context.strokeStyle = 'rgba(255, 196, 107, 0.35)';
-        this.context.lineWidth = 1;
+        this.context.lineWidth = 1 / asteroid.radiusPx; // Scale lineWidth to maintain visual consistency
         this.context.stroke();
         
         this.context.restore();
