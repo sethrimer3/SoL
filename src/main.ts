@@ -3872,7 +3872,13 @@ class GameController {
         
         if (this.game.isRunning) {
             this.game.update(deltaTime);
-            this.gameAudioController.update(this.game, deltaTime);
+            const dpr = window.devicePixelRatio || 1;
+            this.gameAudioController.update(this.game, deltaTime, {
+                cameraWorld: this.renderer.camera,
+                zoom: this.renderer.zoom,
+                viewportWidthPx: this.renderer.canvas.width / dpr,
+                viewportHeightPx: this.renderer.canvas.height / dpr
+            });
         }
 
         // Update warp gates (energy is transferred via game-state.ts mirror update)
@@ -3944,7 +3950,13 @@ class GameController {
                 if (this.game.isRunning) {
                     const tickDeltaTimeSec = this.TICK_INTERVAL_MS / 1000;
                     this.game.update(tickDeltaTimeSec);
-                    this.gameAudioController.update(this.game, tickDeltaTimeSec);
+                    const dpr = window.devicePixelRatio || 1;
+                    this.gameAudioController.update(this.game, tickDeltaTimeSec, {
+                        cameraWorld: this.renderer.camera,
+                        zoom: this.renderer.zoom,
+                        viewportWidthPx: this.renderer.canvas.width / dpr,
+                        viewportHeightPx: this.renderer.canvas.height / dpr
+                    });
                 }
 
                 this.tickAccumulator -= this.TICK_INTERVAL_MS;
