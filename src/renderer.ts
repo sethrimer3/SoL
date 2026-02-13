@@ -3457,20 +3457,23 @@ export class GameRenderer {
             if (closestSun) {
                 const forge = mirror.owner.stellarForge;
                 const linkedStructure = mirror.getLinkedStructure(forge);
-                let reflectDir: Vector2D | null = null;
+                const sunDir = new Vector2D(
+                    closestSun.position.x - mirror.position.x,
+                    closestSun.position.y - mirror.position.y
+                ).normalize();
 
-                if (linkedStructure && mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)) {
-                    reflectDir = new Vector2D(
-                        linkedStructure.position.x - mirror.position.x,
-                        linkedStructure.position.y - mirror.position.y
-                    ).normalize();
-                } else {
-                    const sunDir = new Vector2D(
-                        closestSun.position.x - mirror.position.x,
-                        closestSun.position.y - mirror.position.y
-                    ).normalize();
-                    reflectDir = new Vector2D(-sunDir.x, -sunDir.y);
-                }
+                // Reflect incoming sunlight using mirror orientation so the visual beam always
+                // matches the current mirror angle, even when the linked target is blocked.
+                const incomingDir = new Vector2D(-sunDir.x, -sunDir.y);
+                const mirrorNormal = new Vector2D(
+                    Math.cos(mirror.reflectionAngle - Math.PI / 2),
+                    Math.sin(mirror.reflectionAngle - Math.PI / 2)
+                );
+                const normalDotIncoming = incomingDir.x * mirrorNormal.x + incomingDir.y * mirrorNormal.y;
+                const reflectDir = new Vector2D(
+                    incomingDir.x - 2 * normalDotIncoming * mirrorNormal.x,
+                    incomingDir.y - 2 * normalDotIncoming * mirrorNormal.y
+                ).normalize();
                 
                 // Draw reflected light beam (a few feet / ~100 units in front of mirror)
                 const beamLength = 100;
@@ -3480,9 +3483,51 @@ export class GameRenderer {
                         mirror.position.y + Math.cos(mirror.reflectionAngle) * velarisUnderlineOffsetWorld
                     )
                     : mirror.position;
+
+                const getCircleHitDistance = (center: Vector2D, radius: number): number | null => {
+                    const originToCenterX = beamStartWorld.x - center.x;
+                    const originToCenterY = beamStartWorld.y - center.y;
+                    const b = 2 * (reflectDir.x * originToCenterX + reflectDir.y * originToCenterY);
+                    const c = (originToCenterX * originToCenterX + originToCenterY * originToCenterY) - radius * radius;
+                    const discriminant = b * b - 4 * c;
+                    if (discriminant < 0) return null;
+                    const sqrtDiscriminant = Math.sqrt(discriminant);
+                    const t1 = (-b - sqrtDiscriminant) / 2;
+                    const t2 = (-b + sqrtDiscriminant) / 2;
+                    if (t1 > 0) return t1;
+                    if (t2 > 0) return t2;
+                    return null;
+                };
+
+                let visibleBeamLength = beamLength;
+                const beamRay = new LightRay(beamStartWorld, reflectDir);
+
+                for (const asteroid of game.asteroids) {
+                    const intersectionDist = beamRay.getIntersectionDistance(asteroid.getWorldVertices());
+                    if (intersectionDist !== null && intersectionDist > 0 && intersectionDist < visibleBeamLength) {
+                        visibleBeamLength = intersectionDist;
+                    }
+                }
+
+                for (const player of game.players) {
+                    for (const building of player.buildings) {
+                        const hitDist = getCircleHitDistance(building.position, building.radius);
+                        if (hitDist !== null && hitDist < visibleBeamLength) {
+                            visibleBeamLength = hitDist;
+                        }
+                    }
+
+                    if (player.stellarForge) {
+                        const hitDist = getCircleHitDistance(player.stellarForge.position, player.stellarForge.radius);
+                        if (hitDist !== null && hitDist < visibleBeamLength) {
+                            visibleBeamLength = hitDist;
+                        }
+                    }
+                }
+
                 const beamEnd = new Vector2D(
-                    beamStartWorld.x + reflectDir.x * beamLength,
-                    beamStartWorld.y + reflectDir.y * beamLength
+                    beamStartWorld.x + reflectDir.x * visibleBeamLength,
+                    beamStartWorld.y + reflectDir.y * visibleBeamLength
                 );
                 const beamStartScreen = this.worldToScreen(beamStartWorld);
                 const beamEndScreen = this.worldToScreen(beamEnd);
