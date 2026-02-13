@@ -9657,16 +9657,14 @@ export class GameRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
         this.updateEnemyVisibilityFadeClock(game.gameTime);
 
+        // Draw parallax star layers before light treatment so star occlusion remains visible.
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        this.drawStarfield(screenWidth, screenHeight);
+
         if (ladSun) {
             this.drawLadSunRays(game, ladSun);
-        }
-
-        // Draw parallax star layers
-        if (!ladSun) {
-            const dpr = window.devicePixelRatio || 1;
-            const screenWidth = this.canvas.width / dpr;
-            const screenHeight = this.canvas.height / dpr;
-            this.drawStarfield(screenWidth, screenHeight);
         }
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
@@ -9715,9 +9713,7 @@ export class GameRenderer {
             this.applyUltraShadowReinforcement(game);
         }
 
-        if (!ladSun) {
-            this.drawShadowStarfieldOverlay(game);
-        }
+        this.drawShadowStarfieldOverlay(game);
 
         // Draw influence circles (with proper handling of overlaps)
         const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
