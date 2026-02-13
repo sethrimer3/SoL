@@ -2655,8 +2655,11 @@ export class GameRenderer {
             const heroUnitType = isMirrorOption ? null : this.getHeroUnitType(heroName);
             const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
             const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
+            const buttonCost = isMirrorOption ? Constants.STELLAR_FORGE_SOLAR_MIRROR_COST : this.getHeroUnitCost(forge.owner);
             const isMirrorAffordable = forge.owner.energy >= Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
-            const isAvailable = isMirrorOption ? isMirrorAffordable : (heroUnitType ? !isHeroAlive && !isHeroProducing : false);
+            const isAvailable = isMirrorOption
+                ? isMirrorAffordable
+                : (heroUnitType ? (!isHeroAlive && !isHeroProducing && forge.owner.energy >= buttonCost) : false);
             const isHighlighted = this.highlightedButtonIndex === i;
 
             // Draw button background with highlight effect
@@ -2677,12 +2680,10 @@ export class GameRenderer {
             this.ctx.font = `${14 * this.zoom}px Doto`;
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            if (isMirrorOption) {
-                this.ctx.fillText('Mirror', buttonX, buttonY - 6 * this.zoom);
-                this.ctx.fillText('2000', buttonX, buttonY + 7 * this.zoom);
-            } else {
-                this.ctx.fillText(heroName, buttonX, buttonY);
-            }
+            const buttonLabel = isMirrorOption ? 'Mirror' : heroName;
+            this.ctx.fillText(buttonLabel, buttonX, buttonY);
+
+            this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, buttonCost, isAvailable);
 
             if (!isMirrorOption && isHeroProducing) {
                 this.drawHeroHourglass(buttonX, buttonY, buttonRadius);
@@ -2823,21 +2824,25 @@ export class GameRenderer {
         const buttonConfigs = [
             { 
                 label: 'Strafe',
+                cost: Constants.FOUNDRY_STRAFE_UPGRADE_COST,
                 available: foundry.canQueueStrafeUpgrade(),
                 index: 0
             },
             {
                 label: 'Blink',
+                cost: Constants.FOUNDRY_BLINK_UPGRADE_COST,
                 available: foundry.canQueueBlinkUpgrade(),
                 index: 1
             },
             {
                 label: 'Regen',
+                cost: Constants.FOUNDRY_REGEN_UPGRADE_COST,
                 available: foundry.canQueueRegenUpgrade(),
                 index: 2
             },
             {
                 label: '+1 ATK',
+                cost: Constants.FOUNDRY_ATTACK_UPGRADE_COST,
                 available: foundry.canQueueAttackUpgrade(),
                 index: 3
             }
@@ -2870,7 +2875,37 @@ export class GameRenderer {
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
             this.ctx.fillText(config.label, buttonX, buttonY);
+            this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, config.cost, config.available);
         }
+    }
+
+
+    private getHeroUnitCost(player: Player): number {
+        const aliveHeroCount = player.units.filter((unit) => unit.isHero).length;
+        return Constants.HERO_UNIT_BASE_COST + aliveHeroCount * Constants.HERO_UNIT_COST_INCREMENT;
+    }
+
+    private drawRadialButtonCostLabel(
+        buttonX: number,
+        buttonY: number,
+        radialX: number,
+        radialY: number,
+        buttonRadius: number,
+        cost: number,
+        isAvailable: boolean
+    ): void {
+        const radialLength = Math.hypot(radialX, radialY);
+        const directionX = radialLength > 0 ? radialX / radialLength : 0;
+        const directionY = radialLength > 0 ? radialY / radialLength : -1;
+        const costOffsetPx = buttonRadius + 10 * this.zoom;
+        const costX = buttonX + directionX * costOffsetPx;
+        const costY = buttonY + directionY * costOffsetPx;
+
+        this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
+        this.ctx.font = `${10 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(cost.toString(), costX, costY);
     }
 
     private getPseudoRandom(seed: number): number {
@@ -10207,16 +10242,14 @@ export class GameRenderer {
         const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
         const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - starlingCount);
 
-        // Calculate next crunch starling count based on pending energy and current rate
+        // Calculate next crunch starling count based on incoming energy rate
         const forge = player.stellarForge;
-        const pendingEnergy = forge?.pendingEnergy ?? 0;
-        const projectedEnergy = forge?.isReceivingLight
-            ? pendingEnergy + forge.incomingLightPerSec * Math.max(0, forge.crunchTimer)
-            : pendingEnergy;
-        const nextCrunchStarlings = Math.min(
-            Math.floor(projectedEnergy / Constants.STARLING_COST_PER_ENERGY),
-            availableStarlingSlots
-        );
+        const nextCrunchStarlings = forge
+            ? Math.min(
+                Math.floor(forge.incomingLightPerSec / Constants.FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING),
+                availableStarlingSlots
+            )
+            : 0;
         const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
         const starlingRateText = `${starlingSymbol} ${starlingCount}${starlingRateLabel}`;
         const maxStarlingsText = `${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`;

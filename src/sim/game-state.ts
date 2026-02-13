@@ -208,12 +208,13 @@ export class GameState {
                     if (energyForMinions > 0) {
                         const currentStarlingCount = this.getStarlingCountForPlayer(player);
                         const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
-                        // Calculate number of starlings to spawn based on energy
+                        // Calculate number of starlings to spawn based on incoming forge energy rate
                         const numStarlings = Math.min(
-                            Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY),
+                            Math.floor(player.stellarForge.incomingLightPerSec / Constants.FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING),
                             availableStarlingSlots
                         );
-                        const unusedEnergy = energyForMinions - numStarlings * Constants.STARLING_COST_PER_ENERGY;
+                        const usedEnergy = numStarlings * Constants.STARLING_COST_PER_ENERGY;
+                        const unusedEnergy = Math.max(0, energyForMinions - usedEnergy);
                         if (unusedEnergy > 0) {
                             player.stellarForge.addPendingEnergy(unusedEnergy);
                         }
@@ -963,11 +964,12 @@ export class GameState {
                         continue;
                     }
                     if (bullet.checkHit(mirror)) {
-                        mirror.health -= bullet.damage;
+                        const mirrorDamage = Math.max(1, Math.round(bullet.damage * (1 - Constants.MIRROR_DAMAGE_REDUCTION)));
+                        mirror.health -= mirrorDamage;
                         const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
                         this.addDamageNumber(
                             mirror.position,
-                            bullet.damage,
+                            mirrorDamage,
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health,
                             mirrorKey
@@ -1239,11 +1241,12 @@ export class GameState {
                         continue;
                     }
                     if (projectile.checkHit(mirror)) {
-                        mirror.health -= projectile.damage;
+                        const mirrorDamage = Math.max(1, Math.round(projectile.damage * (1 - Constants.MIRROR_DAMAGE_REDUCTION)));
+                        mirror.health -= mirrorDamage;
                         const mirrorKey = `mirror_${mirror.position.x}_${mirror.position.y}_${player.name}`;
                         this.addDamageNumber(
                             mirror.position,
-                            projectile.damage,
+                            mirrorDamage,
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health,
                             mirrorKey
@@ -1734,10 +1737,11 @@ export class GameState {
                 // Check solar mirrors
                 for (const mirror of player.solarMirrors) {
                     if (laser.checkHit(mirror)) {
-                        mirror.health -= laser.damage;
+                        const mirrorDamage = Math.max(1, Math.round(laser.damage * (1 - Constants.MIRROR_DAMAGE_REDUCTION)));
+                        mirror.health -= mirrorDamage;
                         this.damageNumbers.push(new DamageNumber(
                             mirror.position,
-                            laser.damage,
+                            mirrorDamage,
                             this.gameTime
                         ));
                     }
@@ -2566,13 +2570,19 @@ export class GameState {
             if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
                 continue;
             }
-            if (!player.spendEnergy(Constants.HERO_UNIT_COST)) {
+            if (!player.spendEnergy(this.getHeroUnitCost(player))) {
                 return;
             }
             player.stellarForge.enqueueHeroUnit(heroType);
             player.stellarForge.startHeroProductionIfIdle();
             return;
         }
+    }
+
+
+    private getHeroUnitCost(player: Player): number {
+        const aliveHeroCount = player.units.filter((unit) => unit.isHero).length;
+        return Constants.HERO_UNIT_BASE_COST + aliveHeroCount * Constants.HERO_UNIT_COST_INCREMENT;
     }
 
     private assignAiMirrorsToIncompleteBuilding(player: Player): void {
@@ -4976,10 +4986,23 @@ export class GameState {
 
     private executeHeroPurchaseCommand(player: Player, data: any): void {
         const { heroType } = data;
-        if (player.stellarForge) {
-            player.stellarForge.enqueueHeroUnit(heroType);
-            player.stellarForge.startHeroProductionIfIdle();
+        if (!player.stellarForge) {
+            return;
         }
+
+        const isHeroAlive = this.isHeroUnitAlive(player, heroType);
+        const isHeroQueuedOrProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType);
+        if (isHeroAlive || isHeroQueuedOrProducing) {
+            return;
+        }
+
+        const heroCost = this.getHeroUnitCost(player);
+        if (!player.spendEnergy(heroCost)) {
+            return;
+        }
+
+        player.stellarForge.enqueueHeroUnit(heroType);
+        player.stellarForge.startHeroProductionIfIdle();
     }
 
     private executeBuildingPurchaseCommand(player: Player, data: any): void {
