@@ -245,7 +245,7 @@ export class GameRenderer {
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
     private readonly ULTRA_SUN_BLOOM_STEPS = 4;
-    private readonly ULTRA_SOLAR_EMBER_COUNT = 96;
+    private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
     private readonly SHADE_GLOW_FADE_IN_SPEED_PER_SEC = 4.2;
@@ -4240,14 +4240,6 @@ export class GameRenderer {
         const occluders: ShadowOccluder[] = [];
 
         for (const player of game.players) {
-            for (const unit of player.units) {
-                if (unit instanceof Starling) {
-                    occluders.push({ position: unit.position, rotationRad: unit.rotation, sizeWorld: 8 * 0.3 * Constants.STARLING_SPRITE_SCALE_FACTOR });
-                } else if (unit.isHero) {
-                    occluders.push({ position: unit.position, rotationRad: unit.rotation, sizeWorld: 8 * this.HERO_SPRITE_SCALE });
-                }
-            }
-
             for (const mirror of player.solarMirrors) {
                 occluders.push({ position: mirror.position, rotationRad: mirror.reflectionAngle, sizeWorld: 14 * 2.4 });
             }
@@ -4356,17 +4348,15 @@ export class GameRenderer {
                 this.ctx.save();
                 this.ctx.globalCompositeOperation = 'destination-out';
                 this.ctx.fillStyle = 'rgba(0, 0, 0, 1)';
-                this.ctx.beginPath();
-
                 for (const quad of shadowQuads) {
+                    this.ctx.beginPath();
                     this.ctx.moveTo(quad.sv1x, quad.sv1y);
                     this.ctx.lineTo(quad.sv2x, quad.sv2y);
                     this.ctx.lineTo(quad.ss2x, quad.ss2y);
                     this.ctx.lineTo(quad.ss1x, quad.ss1y);
                     this.ctx.closePath();
+                    this.ctx.fill();
                 }
-
-                this.ctx.fill();
                 this.ctx.restore();
             }
 
@@ -4411,15 +4401,15 @@ export class GameRenderer {
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'destination-out';
         this.ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
-        this.ctx.beginPath();
         for (const quad of shadowQuads) {
+            this.ctx.beginPath();
             this.ctx.moveTo(quad.sv1x, quad.sv1y);
             this.ctx.lineTo(quad.sv2x, quad.sv2y);
             this.ctx.lineTo(quad.ss2x, quad.ss2y);
             this.ctx.lineTo(quad.ss1x, quad.ss1y);
             this.ctx.closePath();
+            this.ctx.fill();
         }
-        this.ctx.fill();
         this.ctx.restore();
     }
 
@@ -4441,21 +4431,34 @@ export class GameRenderer {
 
             for (let emberIndex = 0; emberIndex < this.ULTRA_SOLAR_EMBER_COUNT; emberIndex++) {
                 const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
-                const outwardT = (game.gameTime * (0.16 + this.hashNormalized(seed + 2.2) * 0.22) + this.hashNormalized(seed + 11.5) * 7.0) % 1;
+                const outwardT = (game.gameTime * (0.06 + this.hashNormalized(seed + 2.2) * 0.08) + this.hashNormalized(seed + 11.5) * 9.0) % 1;
                 const orbitAngle = emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25;
-                const radius = screenRadius * (0.4 + outwardT * (2.1 + this.hashNormalized(seed + 7.3) * 1.6));
-                const x = sunScreenPos.x + Math.cos(orbitAngle) * radius;
-                const y = sunScreenPos.y + Math.sin(orbitAngle) * radius;
-                const size = 0.7 + this.hashNormalized(seed + 17.1) * 2.2;
-                const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.24) * (1 - outwardT * 0.45);
+                const swirl = Math.sin(game.gameTime * (2.2 + this.hashNormalized(seed + 4.4) * 3.1) + seed * 0.37 + outwardT * 8.4) * (0.24 + outwardT * 0.56);
+                const curveAngle = orbitAngle + swirl;
+                const radius = screenRadius * (0.35 + outwardT * (2.4 + this.hashNormalized(seed + 7.3) * 1.9));
+                const arcBend = Math.sin(game.gameTime * (3.1 + this.hashNormalized(seed + 9.7) * 2.6) + seed * 0.61) * screenRadius * (0.04 + outwardT * 0.14);
+                const tangentX = -Math.sin(curveAngle);
+                const tangentY = Math.cos(curveAngle);
+                const x = sunScreenPos.x + Math.cos(curveAngle) * radius + tangentX * arcBend;
+                const y = sunScreenPos.y + Math.sin(curveAngle) * radius + tangentY * arcBend;
+                const size = (0.35 + this.hashNormalized(seed + 17.1) * 1.1) * (1 - outwardT * 0.2);
+                const fadeIn = Math.min(1, outwardT * 6);
+                const fadeOut = Math.max(0, 1 - outwardT);
+                const alpha = (0.06 + this.hashNormalized(seed + 19.9) * 0.2) * fadeIn * fadeOut * fadeOut;
                 const fieryColorRoll = this.hashNormalized(seed + 23.7);
                 const emberRed = Math.floor(217 + fieryColorRoll * 38);
                 const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
                 const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
 
-                this.ctx.fillStyle = `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, ${(alpha * 0.34).toFixed(4)})`;
+                const glowRadius = size * this.zoom * 1.4;
+                const glowGradient = this.ctx.createRadialGradient(x, y, 0, x, y, glowRadius * 2.4);
+                glowGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 28)}, ${Math.min(255, emberGreen + 28)}, ${Math.min(255, emberBlue + 14)}, ${(alpha * 0.9).toFixed(4)})`);
+                glowGradient.addColorStop(0.45, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, ${(alpha * 0.36).toFixed(4)})`);
+                glowGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
+
+                this.ctx.fillStyle = glowGradient;
                 this.ctx.beginPath();
-                this.ctx.arc(x, y, size * this.zoom * 2.75, 0, Math.PI * 2);
+                this.ctx.arc(x, y, glowRadius * 2.4, 0, Math.PI * 2);
                 this.ctx.fill();
 
                 this.ctx.fillStyle = `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, ${alpha.toFixed(4)})`;
