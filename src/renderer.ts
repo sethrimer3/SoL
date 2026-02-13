@@ -9792,6 +9792,13 @@ export class GameRenderer {
         this.updateEnemyVisibilityFadeClock(game.gameTime);
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
+        
+        // Draw parallax starfield first (must be before drawShadowStarfieldOverlay)
+        const dpr = window.devicePixelRatio || 1;
+        const screenWidth = this.canvas.width / dpr;
+        const screenHeight = this.canvas.height / dpr;
+        this.drawStarfield(screenWidth, screenHeight);
+        
         this.drawShadowStarfieldOverlay(game);
 
         // Draw environment stack between shadow-star overlay and influence circles.
@@ -10253,12 +10260,6 @@ export class GameRenderer {
         if (!game.isCountdownActive && !winner) {
             this.drawProductionProgress(game);
         }
-
-        // Troubleshooting: draw parallax stars at the very front for visibility verification.
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        this.drawStarfield(screenWidth, screenHeight);
         
         // Draw in-game menu overlay if open
         if (this.showInGameMenu && !winner) {
