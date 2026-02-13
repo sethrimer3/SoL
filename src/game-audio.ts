@@ -1,5 +1,5 @@
 import * as Constants from './constants';
-import { Faction, GameState, Marine, SubsidiaryFactory } from './game-core';
+import { Faction, GameState, GatlingTower, Marine, SubsidiaryFactory } from './game-core';
 
 const FORGE_CHARGE_LEAD_TIME_SEC = 5;
 const STARLING_ATTACK_MIN_INTERVAL_SEC = 0.12;
@@ -8,6 +8,7 @@ const FORGE_CRUNCH_MIN_INTERVAL_SEC = 0.35;
 export class GameAudioController {
     private readonly starlingAttackAudioByFaction = new Map<Faction, HTMLAudioElement>();
     private readonly marineFiringLoopAudio: HTMLAudioElement;
+    private readonly gatlingTowerFiringLoopAudio: HTMLAudioElement;
     private readonly forgeCrunchAudio: HTMLAudioElement;
     private readonly forgeChargeAudio: HTMLAudioElement;
     private readonly foundryPowerUpAudio: HTMLAudioElement;
@@ -27,7 +28,8 @@ export class GameAudioController {
         this.starlingAttackAudioByFaction.set(Faction.AURUM, this.createAudio('ASSETS/SFX/aurumSFX/starling_firing.mp3'));
         this.starlingAttackAudioByFaction.set(Faction.VELARIS, this.createAudio('ASSETS/SFX/velarisSFX/starling_firing.mp3'));
 
-        this.marineFiringLoopAudio = this.createAudio('ASSETS/SFX/radiantSFX/marine_firing.mp3', true);
+        this.marineFiringLoopAudio = this.createAudio('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', true);
+        this.gatlingTowerFiringLoopAudio = this.createAudio('ASSETS/SFX/radiantSFX/gatling_firing.ogg', true);
         this.forgeCrunchAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_crunch.ogg');
         this.forgeChargeAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_charge.ogg');
         this.foundryPowerUpAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_up.ogg');
@@ -47,6 +49,7 @@ export class GameAudioController {
 
         let didMarineFireThisFrame = false;
         let starlingFactionWithAttack: Faction | null = null;
+        let didGatlingTowerFireThisFrame = false;
 
         for (const player of game.players) {
             const forge = player.stellarForge;
@@ -75,6 +78,13 @@ export class GameAudioController {
             }
 
             for (const building of player.buildings) {
+                if (building instanceof GatlingTower && building.target) {
+                    const distanceToTarget = building.position.distanceTo(building.target.position);
+                    if (distanceToTarget <= building.attackRange + 1) {
+                        didGatlingTowerFireThisFrame = true;
+                    }
+                }
+
                 if (!(building instanceof SubsidiaryFactory)) {
                     continue;
                 }
@@ -129,6 +139,12 @@ export class GameAudioController {
                 this.stopLoop(this.marineFiringLoopAudio);
             }
         }
+
+        if (didGatlingTowerFireThisFrame) {
+            this.ensureLoopPlaying(this.gatlingTowerFiringLoopAudio);
+        } else {
+            this.stopLoop(this.gatlingTowerFiringLoopAudio);
+        }
     }
 
     private resolveAssetPath(path: string): string {
@@ -177,6 +193,7 @@ export class GameAudioController {
 
     private stopAllAudio(): void {
         this.stopLoop(this.marineFiringLoopAudio);
+        this.stopLoop(this.gatlingTowerFiringLoopAudio);
         this.stopLoop(this.forgeCrunchAudio);
         this.stopLoop(this.forgeChargeAudio);
         this.stopLoop(this.foundryPowerUpAudio);
