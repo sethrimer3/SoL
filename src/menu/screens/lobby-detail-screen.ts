@@ -4,6 +4,8 @@
  */
 
 import { Faction } from '../../sim/entities/player';
+import { MapConfig } from '../types';
+import { createMapPreviewCanvas } from '../map-preview';
 
 export interface LobbyPlayer {
     room_id: string;
@@ -36,7 +38,9 @@ export interface LobbyDetailScreenParams {
     onRemoveSlot: (playerId: string) => void;
     onToggleReady: () => void;
     onStartGame: () => void;
-    onCycleMap: () => Promise<string | null | void> | string | null | void;
+    availableMaps: MapConfig[];
+    selectedMapId: string;
+    onSelectMap: (mapId: string) => Promise<boolean> | boolean;
     onLeave: () => void;
     onRefresh: () => void;
     selectedMapName: string;
@@ -64,7 +68,9 @@ export function renderLobbyDetailScreen(
         onRemoveSlot,
         onToggleReady,
         onStartGame,
-        onCycleMap,
+        availableMaps,
+        selectedMapId,
+        onSelectMap,
         onLeave,
         onRefresh,
         selectedMapName,
@@ -195,19 +201,27 @@ export function renderLobbyDetailScreen(
         mapSelectionButton.style.opacity = '0.5';
         mapSelectionButton.style.cursor = 'not-allowed';
     } else {
-        mapSelectionButton.onclick = async () => {
-            mapSelectionButton.disabled = true;
-            mapSelectionButton.style.opacity = '0.7';
-
-            try {
-                const nextMapName = await onCycleMap();
-                if (typeof nextMapName === 'string' && nextMapName.length > 0) {
-                    mapSelectionLabel.textContent = `Map: ${nextMapName}`;
-                }
-            } finally {
-                mapSelectionButton.disabled = false;
-                mapSelectionButton.style.opacity = '1';
-            }
+        mapSelectionButton.onclick = () => {
+            renderLobbyMapPickerOverlay(container, {
+                maps: availableMaps,
+                selectedMapId,
+                createButton,
+                onSelectMap: async (mapId) => {
+                    mapSelectionButton.disabled = true;
+                    mapSelectionButton.style.opacity = '0.7';
+                    const wasUpdated = await onSelectMap(mapId);
+                    if (wasUpdated) {
+                        const selected = availableMaps.find((map) => map.id === mapId);
+                        if (selected) {
+                            mapSelectionLabel.textContent = `Map: ${selected.name}`;
+                        }
+                    }
+                    mapSelectionButton.disabled = false;
+                    mapSelectionButton.style.opacity = '1';
+                    return wasUpdated;
+                },
+                menuParticleLayer
+            });
         };
     }
     mapSelectionSection.appendChild(mapSelectionButton);
@@ -556,4 +570,114 @@ function renderSpectatorPanel(
     }
 
     return panel;
+}
+
+
+function renderLobbyMapPickerOverlay(
+    container: HTMLElement,
+    params: {
+        maps: MapConfig[];
+        selectedMapId: string;
+        onSelectMap: (mapId: string) => Promise<boolean>;
+        createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
+        menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
+    }
+): void {
+    const { maps, selectedMapId, onSelectMap, createButton, menuParticleLayer } = params;
+
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.right = '0';
+    overlay.style.bottom = '0';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.zIndex = '1200';
+
+    const modal = document.createElement('div');
+    modal.style.width = 'min(960px, 92vw)';
+    modal.style.maxHeight = '88vh';
+    modal.style.overflowY = 'auto';
+    modal.style.padding = '24px';
+    modal.style.backgroundColor = 'rgba(10, 16, 28, 0.95)';
+    modal.style.border = '2px solid rgba(255, 215, 0, 0.35)';
+    modal.style.borderRadius = '12px';
+    overlay.appendChild(modal);
+
+    const title = document.createElement('h3');
+    title.textContent = 'Select Lobby Map';
+    title.style.margin = '0 0 16px 0';
+    title.style.color = '#FFD700';
+    title.style.fontWeight = '300';
+    modal.appendChild(title);
+
+    const grid = document.createElement('div');
+    grid.style.display = 'grid';
+    grid.style.gridTemplateColumns = 'repeat(auto-fit, minmax(220px, 1fr))';
+    grid.style.gap = '12px';
+    modal.appendChild(grid);
+
+    for (const map of maps) {
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.style.border = map.id === selectedMapId ? '2px solid #FFD700' : '2px solid rgba(255, 255, 255, 0.2)';
+        card.style.background = 'rgba(255, 255, 255, 0.05)';
+        card.style.borderRadius = '10px';
+        card.style.padding = '10px';
+        card.style.cursor = 'pointer';
+        card.style.textAlign = 'left';
+
+        const preview = createMapPreviewCanvas(map, 200, 110);
+        preview.style.width = '100%';
+        preview.style.height = '110px';
+        preview.style.marginBottom = '8px';
+        card.appendChild(preview);
+
+        const name = document.createElement('div');
+        name.textContent = map.name;
+        name.style.color = '#F5F5F5';
+        name.style.fontSize = '16px';
+        name.style.marginBottom = '4px';
+        card.appendChild(name);
+
+        const stats = document.createElement('div');
+        stats.textContent = `${map.numSuns} suns • ${map.numAsteroids} asteroids • ${map.mapSize}px`;
+        stats.style.color = '#A0A0A0';
+        stats.style.fontSize = '12px';
+        card.appendChild(stats);
+
+        card.onclick = async () => {
+            for (const element of Array.from(grid.querySelectorAll('button'))) {
+                (element as HTMLButtonElement).disabled = true;
+            }
+            const changed = await onSelectMap(map.id);
+            if (changed) {
+                document.body.removeChild(overlay);
+            } else {
+                for (const element of Array.from(grid.querySelectorAll('button'))) {
+                    (element as HTMLButtonElement).disabled = false;
+                }
+            }
+        };
+
+        grid.appendChild(card);
+    }
+
+    const closeButton = createButton('CLOSE', () => {
+        document.body.removeChild(overlay);
+    }, '#666666');
+    closeButton.style.marginTop = '16px';
+    modal.appendChild(closeButton);
+
+    overlay.addEventListener('click', (event) => {
+        if (event.target === overlay) {
+            document.body.removeChild(overlay);
+        }
+    });
+
+    document.body.appendChild(overlay);
+    menuParticleLayer?.requestTargetRefresh(container);
 }

@@ -29,6 +29,7 @@ import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
 import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
+import { createMapPreviewCanvas } from './menu/map-preview';
 import { MenuAudioController } from './menu/menu-audio';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
@@ -1015,7 +1016,10 @@ export class MainMenu {
             {
                 id: 'maps',
                 name: 'MAPS',
-                description: 'Select map'
+                description: 'Select map',
+                subLabel: this.settings.selectedMap.name,
+                subLabelColor: '#FFD700',
+                previewMap: this.settings.selectedMap
             },
             {
                 id: 'settings',
@@ -2478,9 +2482,9 @@ export class MainMenu {
         const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
 
-        const dedicated2v2Maps = this.availableMaps.filter(map => map.id === '2v2-umbra' || map.id === '2v2-dual-umbra');
+        const lobbyMaps = this.availableMaps;
         const roomSelectedMapId = room.game_settings?.selectedMapId;
-        const selectedLobbyMap = dedicated2v2Maps.find(map => map.id === roomSelectedMapId) || dedicated2v2Maps[0] || this.settings.selectedMap;
+        const selectedLobbyMap = lobbyMaps.find(map => map.id === roomSelectedMapId) || this.settings.selectedMap || lobbyMaps[0];
         this.settings.selectedMap = selectedLobbyMap;
 
         renderLobbyDetailScreen(container, {
@@ -2657,16 +2661,20 @@ export class MainMenu {
                 });
                 window.dispatchEvent(event);
             },
-            onCycleMap: async () => {
-                if (!this.onlineNetworkManager || !isHost || dedicated2v2Maps.length === 0) return null;
+            availableMaps: lobbyMaps,
+            selectedMapId: selectedLobbyMap.id,
+            onSelectMap: async (mapId: string) => {
+                if (!this.onlineNetworkManager || !isHost) return false;
 
-                const currentIndex = dedicated2v2Maps.findIndex(map => map.id === this.settings.selectedMap.id);
-                const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
-                const nextMap = dedicated2v2Maps[(safeCurrentIndex + 1) % dedicated2v2Maps.length] || dedicated2v2Maps[0];
-                const success = await this.onlineNetworkManager.setLobbyMap(nextMap.id);
+                const mapToSelect = lobbyMaps.find((map) => map.id === mapId);
+                if (!mapToSelect) {
+                    return false;
+                }
+
+                const success = await this.onlineNetworkManager.setLobbyMap(mapToSelect.id);
                 if (success) {
-                    this.settings.selectedMap = nextMap;
-                    return nextMap.name;
+                    this.settings.selectedMap = mapToSelect;
+                    return true;
                 }
 
                 const networkError = this.onlineNetworkManager.getLastError();
@@ -2674,7 +2682,7 @@ export class MainMenu {
                     alert(`Failed to change map: ${networkError}`);
                 }
 
-                return null;
+                return false;
             },
             selectedMapName: selectedLobbyMap.name,
             onLeave: async () => {
@@ -4049,6 +4057,14 @@ class CarouselMenuView {
             
             // Add option description (only for center item)
             if (distance === 0) {
+                if (option.previewMap) {
+                    const mapPreview = createMapPreviewCanvas(option.previewMap, Math.round(size * 0.7), Math.round(size * 0.38));
+                    mapPreview.style.width = '100%';
+                    mapPreview.style.height = `${Math.max(56, size * 0.34)}px`;
+                    mapPreview.style.marginBottom = '10px';
+                    optionElement.appendChild(mapPreview);
+                }
+
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
                 descElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;

@@ -11,6 +11,7 @@ export interface MenuOption {
     subLabel?: string;
     subLabelColor?: string;
     icon?: string;
+    previewMap?: MapConfig;
 }
 
 export interface FactionCarouselOption {
