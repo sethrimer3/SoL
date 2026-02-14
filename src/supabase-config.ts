@@ -11,6 +11,8 @@ export interface SupabaseConfig {
     anonKey: string;
 }
 
+let hasLoggedMissingSupabaseCredentials = false;
+
 /**
  * Get Supabase configuration from environment or defaults
  * In production, these should be set via environment variables or build-time configuration
@@ -20,9 +22,10 @@ export function getSupabaseConfig(): SupabaseConfig {
     const url = process.env.SUPABASE_URL || '';
     const anonKey = process.env.SUPABASE_ANON_KEY || '';
 
-    if (!url || !anonKey) {
+    if ((!url || !anonKey) && !hasLoggedMissingSupabaseCredentials) {
         console.warn('Supabase credentials not configured. Online play will not be available.');
         console.warn('Set SUPABASE_URL and SUPABASE_ANON_KEY environment variables.');
+        hasLoggedMissingSupabaseCredentials = true;
     }
 
     return {

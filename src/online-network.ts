@@ -62,6 +62,7 @@ export interface CompactCommand {
  * Online Network Manager using Supabase Realtime
  */
 export class OnlineNetworkManager {
+    private static hasLoggedUnavailableSupabase = false;
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
     private localPlayerId: string;
@@ -84,7 +85,10 @@ export class OnlineNetworkManager {
      */
     private initializeSupabase(): void {
         if (!isSupabaseConfigured()) {
-            console.error('Supabase not configured. Online play unavailable.');
+            if (!OnlineNetworkManager.hasLoggedUnavailableSupabase) {
+                console.error('Supabase not configured. Online play unavailable.');
+                OnlineNetworkManager.hasLoggedUnavailableSupabase = true;
+            }
             return;
         }
 
