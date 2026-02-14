@@ -197,6 +197,12 @@ export class OnlineNetworkManager {
         return (supabaseError?.code === '42703' || joined.includes('does not exist')) && joined.includes(columnName.toLowerCase());
     }
 
+    private isRlsViolation(error: unknown): boolean {
+        const supabaseError = error as Partial<PostgrestError> & { details?: string };
+        const joined = `${supabaseError?.message || ''} ${supabaseError?.details || ''}`.toLowerCase();
+        return supabaseError?.code === '42501' || joined.includes('row-level security');
+    }
+
     /**
      * Create a new game room (host)
      */
@@ -938,6 +944,19 @@ export class OnlineNetworkManager {
                     is_ready: true,
                     faction: 'Radiant'
                 });
+            }
+
+            if (error && this.isRlsViolation(error)) {
+                const { error: rpcError } = await this.supabase.rpc('add_ai_player_to_room', {
+                    p_room_id: this.currentRoom.id,
+                    p_ai_player_id: aiPlayerId,
+                    p_team_id: teamId,
+                    p_ai_difficulty: 'normal',
+                    p_username: 'AI Player',
+                    p_faction: 'Radiant'
+                });
+
+                error = rpcError;
             }
 
             if (error) {
