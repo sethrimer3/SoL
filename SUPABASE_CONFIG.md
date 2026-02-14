@@ -75,7 +75,7 @@ module.exports = {
 4. Copy your:
    - Project URL (SUPABASE_URL)
    - Anon/Public key (SUPABASE_ANON_KEY)
-5. Run the database schema from `supabase-schema.sql` in SQL Editor
+5. Run the database schema from `supabase.sql` in SQL Editor
 
 ## Fallback Behavior
 

@@ -1,14 +1,15 @@
--- Supabase Complete Database Schema for SoL
--- Combines:
---   1) supabase-schema.sql (core lobby schema)
---   2) supabase-2v2-migration.sql (2v2/custom/matchmaking additions)
---   3) supabase-p2p-schema.sql (P2P signaling schema)
+-- Supabase Canonical Database Schema for SoL
 --
--- Run this file once in Supabase SQL Editor for a complete setup.
--- The statements are intended to be additive/idempotent where possible.
+-- ONE-STEP SETUP:
+--   1) Open Supabase Dashboard -> SQL Editor.
+--   2) Paste this entire file and run it once.
+--
+-- This is the single canonical schema source for lobby, matchmaking/2v2,
+-- AI RPC support, and P2P signaling.
+-- The statements are additive/idempotent where possible for safe re-runs.
 
 -- ============================================================================
--- SECTION 1: CORE LOBBY SCHEMA (supabase-schema.sql)
+-- SECTION 1: CORE LOBBY SCHEMA (supabase.sql)
 -- ============================================================================
 
 -- Enable UUID extension
@@ -136,7 +137,40 @@ BEGIN
 END;
 $$;
 
+-- Legacy-argument wrapper kept for compatibility with older clients that call
+-- add_ai_player_to_room(room_id, ai_player_id, team_id, ...).
+CREATE OR REPLACE FUNCTION add_ai_player_to_room(
+    room_id UUID,
+    ai_player_id TEXT,
+    team_id INTEGER DEFAULT NULL,
+    ai_difficulty TEXT DEFAULT 'normal',
+    username TEXT DEFAULT 'AI Player',
+    faction TEXT DEFAULT 'Radiant'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    PERFORM add_ai_player_to_room(
+        p_room_id => room_id,
+        p_ai_player_id => ai_player_id,
+        p_team_id => team_id,
+        p_ai_difficulty => ai_difficulty,
+        p_username => username,
+        p_faction => faction
+    );
+END;
+$$;
+
 -- RLS Policies for game_rooms
+DROP POLICY IF EXISTS "Anyone can view waiting rooms" ON game_rooms;
+DROP POLICY IF EXISTS "Players can view their room" ON game_rooms;
+DROP POLICY IF EXISTS "Anyone can create room" ON game_rooms;
+DROP POLICY IF EXISTS "Host can update room" ON game_rooms;
+DROP POLICY IF EXISTS "Host can delete room" ON game_rooms;
+
 CREATE POLICY "Anyone can view waiting rooms"
     ON game_rooms FOR SELECT
     USING (status = 'waiting');
@@ -158,6 +192,11 @@ CREATE POLICY "Host can delete room"
     USING (host_id = auth_player_id());
 
 -- RLS Policies for room_players
+DROP POLICY IF EXISTS "Players can view room members" ON room_players;
+DROP POLICY IF EXISTS "Anyone can join room" ON room_players;
+DROP POLICY IF EXISTS "Players can update self" ON room_players;
+DROP POLICY IF EXISTS "Players can leave" ON room_players;
+
 CREATE POLICY "Players can view room members"
     ON room_players FOR SELECT
     USING (is_room_member(room_id));
@@ -199,6 +238,9 @@ CREATE POLICY "Players can leave"
     );
 
 -- RLS Policies for game_states
+DROP POLICY IF EXISTS "Players can view game states" ON game_states;
+DROP POLICY IF EXISTS "Players can save game states" ON game_states;
+
 CREATE POLICY "Players can view game states"
     ON game_states FOR SELECT
     USING (is_room_member(room_id));
@@ -223,7 +265,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- SECTION 2: 2V2 / CUSTOM / MATCHMAKING MIGRATION (supabase-2v2-migration.sql)
+-- SECTION 2: 2V2 / CUSTOM / MATCHMAKING MIGRATION (supabase.sql)
 -- ============================================================================
 
 -- Add game_mode column to distinguish between 1v1, 2v2, and custom lobbies
@@ -266,6 +308,11 @@ CREATE INDEX IF NOT EXISTS idx_matchmaking_queue_status ON matchmaking_queue(sta
 
 ALTER TABLE matchmaking_queue ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Players can view queue" ON matchmaking_queue;
+DROP POLICY IF EXISTS "Players can join queue" ON matchmaking_queue;
+DROP POLICY IF EXISTS "Players can update own queue entry" ON matchmaking_queue;
+DROP POLICY IF EXISTS "Players can leave queue" ON matchmaking_queue;
+
 CREATE POLICY "Players can view queue"
     ON matchmaking_queue FOR SELECT
     USING (true);
@@ -293,6 +340,16 @@ BEGIN
     DELETE FROM matchmaking_queue
     WHERE status IN ('cancelled', 'matched')
     AND joined_at < NOW() - INTERVAL '30 minutes';
+
+    -- Clean up stale waiting rooms that no longer have any room_players rows.
+    DELETE FROM game_rooms gr
+    WHERE gr.status = 'waiting'
+      AND gr.created_at < NOW() - INTERVAL '10 minutes'
+      AND NOT EXISTS (
+          SELECT 1
+          FROM room_players rp
+          WHERE rp.room_id = gr.id
+      );
 END;
 $$ LANGUAGE plpgsql;
 
@@ -343,7 +400,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ============================================================================
--- SECTION 3: P2P SIGNALING SCHEMA (supabase-p2p-schema.sql)
+-- SECTION 3: P2P SIGNALING SCHEMA (supabase.sql)
 -- ============================================================================
 
 -- MATCHES TABLE

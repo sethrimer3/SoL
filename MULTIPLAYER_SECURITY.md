@@ -119,7 +119,7 @@ private readonly MAX_PAYLOAD_SIZE = 1024;
 -- For development only, use anonymous policies (commented in schema)
 ```
 
-**Files**: `supabase-p2p-schema.sql`
+**Files**: `supabase.sql`
 
 #### Data Exposure
 

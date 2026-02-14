@@ -28,7 +28,7 @@ SoL now supports online multiplayer using Supabase for fast, accurate RTS gamepl
 
 1. Create a free Supabase project at [supabase.com](https://supabase.com)
 2. Get your project URL and anon key from Settings > API
-3. Run the database schema from `supabase-schema.sql` in the SQL Editor
+3. Run the database schema from `supabase.sql` in the SQL Editor
 
 ### 2. Configuration
 
@@ -43,7 +43,7 @@ For production builds, configure these in your build environment or webpack conf
 
 ### 3. Database Schema
 
-The required database tables are defined in `supabase-schema.sql`:
+The required database tables are defined in `supabase.sql`:
 
 - `game_rooms`: Game lobbies and room state
 - `room_players`: Players in each room

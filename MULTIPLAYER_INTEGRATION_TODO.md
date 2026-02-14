@@ -21,7 +21,7 @@ These improvements provide better visibility into network health and enable earl
 
 ## ✅ Completed
 
-- [x] Supabase database schema (`supabase-p2p-schema.sql`)
+- [x] Supabase database schema (`supabase.sql`)
 - [x] Seeded RNG module (`seeded-random.ts`)
 - [x] Transport abstraction layer (`transport.ts`)
 - [x] P2P transport implementation (`p2p-transport.ts`)
@@ -220,7 +220,7 @@ node dist/test-multiplayer-determinism.js
 **Status: 📝 DOCUMENTED**
 
 **Prerequisites**:
-- Supabase project set up with `supabase-p2p-schema.sql`
+- Supabase project set up with `supabase.sql`
 - Environment variables configured (SUPABASE_URL, SUPABASE_ANON_KEY)
 - Project built with `npm run build`
 
@@ -593,7 +593,7 @@ console.log(`Packets received: ${stats.packetsReceived}`);
 To get multiplayer working quickly:
 
 1. **Database Setup** (5 min) ✅
-   - [x] Run `supabase-p2p-schema.sql` in Supabase SQL Editor
+   - [x] Run `supabase.sql` in Supabase SQL Editor
    - [x] Enable anonymous policies (comment section in schema)
 
 2. **Configuration** (2 min) ✅
@@ -638,7 +638,7 @@ Everything else can be Phase 2!
 - Architecture: `P2P_MULTIPLAYER_ARCHITECTURE.md`
 - Quick Start: `MULTIPLAYER_QUICKSTART.md`
 - Example: `src/multiplayer-example.ts`
-- Schema: `supabase-p2p-schema.sql`
+- Schema: `supabase.sql`
 
 ## Support
 
