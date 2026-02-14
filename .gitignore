@@ -34,6 +34,9 @@ yarn-error.log
 # Dist folder is deployed by GitHub Actions, not committed
 dist/
 build/**/*.js
+src/**/*.js
+test-*.js
+!webpack.config.js
 
 # Environment variables
 .env
