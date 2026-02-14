@@ -16,14 +16,9 @@ export interface SupabaseConfig {
  * In production, these should be set via environment variables or build-time configuration
  */
 export function getSupabaseConfig(): SupabaseConfig {
-    // Check for environment variables (webpack DefinePlugin or process.env)
-    const url = typeof process !== 'undefined' && process.env?.SUPABASE_URL 
-        ? process.env.SUPABASE_URL 
-        : '';
-    
-    const anonKey = typeof process !== 'undefined' && process.env?.SUPABASE_ANON_KEY 
-        ? process.env.SUPABASE_ANON_KEY 
-        : '';
+    // Values are injected at build time via webpack DefinePlugin
+    const url = process.env.SUPABASE_URL || '';
+    const anonKey = process.env.SUPABASE_ANON_KEY || '';
 
     if (!url || !anonKey) {
         console.warn('Supabase credentials not configured. Online play will not be available.');
