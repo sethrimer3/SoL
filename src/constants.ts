@@ -113,6 +113,10 @@ export const DUST_FADE_TO_NORMAL_DELAY_MS = 2000;
 export const DUST_FADE_TO_SLIGHT_DELAY_MS = 1000;
 export const DUST_GLOW_TRANSITION_SPEED_UP = 3.0;
 export const DUST_GLOW_TRANSITION_SPEED_DOWN = 0.5;
+export const DUST_ASTEROID_COLLISION_PADDING_PX = 1.5;
+export const DUST_ASTEROID_BOUNCE_RESTITUTION = 0.72;
+export const DUST_ASTEROID_TANGENTIAL_PUSH_MULTIPLIER = 0.28;
+export const DUST_ASTEROID_ROTATION_COLLISION_PUSH_MULTIPLIER = 0.5;
 
 // Star background parallax constants
 export const STAR_WRAP_SIZE = 4000; // Size of the star field wrapping area
