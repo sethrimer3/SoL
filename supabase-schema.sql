@@ -113,17 +113,36 @@ CREATE POLICY "Anyone can join room"
     ON room_players FOR INSERT
     WITH CHECK (
         player_id = auth_player_id()
+        OR (
+            slot_type = 'ai'
+            AND room_id IN (
+                SELECT id FROM game_rooms
+                WHERE host_id = auth_player_id()
+            )
+        )
     );
 
 -- Players can update their own record
 CREATE POLICY "Players can update self"
     ON room_players FOR UPDATE
-    USING (player_id = auth_player_id());
+    USING (
+        player_id = auth_player_id()
+        OR room_id IN (
+            SELECT id FROM game_rooms
+            WHERE host_id = auth_player_id()
+        )
+    );
 
 -- Players can leave (delete themselves)
 CREATE POLICY "Players can leave"
     ON room_players FOR DELETE
-    USING (player_id = auth_player_id());
+    USING (
+        player_id = auth_player_id()
+        OR room_id IN (
+            SELECT id FROM game_rooms
+            WHERE host_id = auth_player_id()
+        )
+    );
 
 -- RLS Policies for game_states
 -- Players in room can view game states
