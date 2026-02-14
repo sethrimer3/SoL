@@ -55,6 +55,7 @@ Thumbs.db
 .pytest_cache/
 .coverage
 htmlcov/
+test-binary-maps.ts
 
 # Temporary files
 /tmp/
