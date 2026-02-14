@@ -236,6 +236,22 @@ export class MainMenu {
             mapSize: 2500
         },
         {
+            id: 'binary-center',
+            name: 'Binary Center',
+            description: 'Two suns slowly orbit each other at the center of the map. Dynamic lighting creates shifting tactical opportunities.',
+            numSuns: 2,
+            numAsteroids: 12,
+            mapSize: 2500
+        },
+        {
+            id: 'binary-ring',
+            name: 'Binary Ring',
+            description: 'Two suns orbit around a dense asteroid field. Players spawn inside the field while suns circle the perimeter.',
+            numSuns: 2,
+            numAsteroids: 30,
+            mapSize: 3500
+        },
+        {
             id: 'asteroid-field',
             name: 'Asteroid Field',
             description: 'Dense asteroid field creates tactical challenges. Careful mirror placement is crucial.',

@@ -149,6 +149,11 @@ export class GameState {
             gate.resetEnergyReceipt();
         }
 
+        // Update suns (for orbital motion)
+        for (const sun of this.suns) {
+            sun.update(deltaTime);
+        }
+
         // Update asteroids
         for (const asteroid of this.asteroids) {
             asteroid.update(deltaTime);
@@ -4522,7 +4527,7 @@ export class GameState {
     /**
      * Initialize asteroids at random positions
      */
-    initializeAsteroids(count: number, width: number, height: number): void {
+    initializeAsteroids(count: number, width: number, height: number, exclusionZones?: Array<{ position: Vector2D, radius: number }>): void {
         this.asteroids = [];
         const maxAttempts = 50; // Maximum attempts to find a valid position
         const rng = getGameRNG();
@@ -4542,18 +4547,37 @@ export class GameState {
                 // Random size (30-80)
                 size = rng.nextFloat(Constants.ASTEROID_MIN_SIZE, 80);
                 
-                // Check if this position has enough gap from existing asteroids
-                // Gap must be at least the sum of both asteroid radii
                 validPosition = true;
+                
+                // Check if this position has enough gap from existing asteroids
+                // Gap must be at least the sum of both asteroid radii (accounting for rotation)
+                // Use size * 1.32 as maximum radius (from asteroid generation vertex radiusScale max)
+                const maxRadius = size * 1.32;
                 for (const asteroid of this.asteroids) {
                     const dx = x - asteroid.position.x;
                     const dy = y - asteroid.position.y;
                     const dist = Math.sqrt(dx * dx + dy * dy);
-                    const requiredGap = size + asteroid.size;
+                    const existingMaxRadius = asteroid.size * 1.32;
+                    const requiredGap = maxRadius + existingMaxRadius;
                     
                     if (dist < requiredGap) {
                         validPosition = false;
                         break;
+                    }
+                }
+                
+                // Check if this position is within any exclusion zones
+                if (validPosition && exclusionZones) {
+                    for (const zone of exclusionZones) {
+                        const dx = x - zone.position.x;
+                        const dy = y - zone.position.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        const requiredGap = maxRadius + zone.radius;
+                        
+                        if (dist < requiredGap) {
+                            validPosition = false;
+                            break;
+                        }
                     }
                 }
                 
@@ -5565,8 +5589,16 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
     // Initialize space dust particles
     game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, 2000, 2000, spaceDustPalette);
 
-    // Initialize random asteroids
-    game.initializeAsteroids(10, 2000, 2000);
+    // Create exclusion zones around stellar forge spawn positions
+    const exclusionZones = game.players
+        .filter(p => p.stellarForge)
+        .map(p => ({
+            position: p.stellarForge!.position,
+            radius: 250 // Exclusion zone radius around each base
+        }));
+
+    // Initialize random asteroids with exclusion zones
+    game.initializeAsteroids(10, 2000, 2000, exclusionZones);
     
     // Add two large strategic asteroids that cast shadows on the bases
     // Position them close to the sun to cast shadows toward bottom-left and top-right
