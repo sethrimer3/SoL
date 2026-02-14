@@ -2,6 +2,39 @@
 
 ## System Overview
 
+## Current TypeScript Runtime Architecture
+
+The active game shipped in browser is organized around a **single-process client runtime** with
+clear module boundaries:
+
+1. **Orchestration Layer (`src/main.ts`)**
+   - Owns the `GameController` (bootstrapping, input routing, pause/menu state, replay controls).
+   - Bridges simulation, renderer, menu, audio, and multiplayer services.
+
+2. **Simulation Layer (`src/game-core.ts` + `src/sim/**`)**
+   - Holds authoritative game state (`GameState`) and deterministic tick updates.
+   - Contains entities (players, units, buildings, projectiles, effects) and combat/economy rules.
+   - Uses seeded RNG (`src/seeded-random.ts`) to keep multiplayer/replay outcomes reproducible.
+
+3. **Rendering Layer (`src/renderer.ts` + `src/render/**`)**
+   - Draws a read-only view of state to HTML5 Canvas.
+   - Manages camera, quality settings, HUD/selection overlays, faction-specific visuals.
+
+4. **UI Layer (`src/menu/**`)**
+   - Handles menu screens (mode select, matchmaking, settings, lobbies, history).
+   - Encapsulates menu particles/atmosphere effects and UI helpers.
+
+5. **Networking Layer (`src/multiplayer-network.ts`, `src/p2p-transport.ts`, `src/transport.ts`)**
+   - Uses Supabase for matchmaking/signaling and WebRTC data channels for live command traffic.
+   - Synchronizes deterministic commands by tick (lockstep-style flow).
+
+6. **Replay/Verification Layer (`src/replay.ts`, `src/state-verification.ts`)**
+   - Records command streams + seed and replays them into a fresh deterministic game state.
+   - Supports desync detection through periodic state verification.
+
+This separation is intentional: gameplay correctness lives in simulation, rendering stays visual,
+and networking/replay move **commands** instead of full world snapshots.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         SoL RTS GAME                        │
