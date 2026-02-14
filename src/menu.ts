@@ -2463,6 +2463,17 @@ export class MainMenu {
                     await this.renderLobbyDetailScreen(this.contentElement);
                 }
             },
+            onAssignPlayerToTeam: async (playerId: string, teamId: number) => {
+                if (!this.onlineNetworkManager) return;
+                const slotUpdated = await this.onlineNetworkManager.setSlotType(playerId, 'player');
+                if (!slotUpdated) {
+                    return;
+                }
+                const teamUpdated = await this.onlineNetworkManager.setPlayerTeam(playerId, teamId);
+                if (teamUpdated) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
             onSetSlotType: async (playerId: string, slotType: 'player' | 'ai' | 'spectator') => {
                 if (!this.onlineNetworkManager) return;
                 const success = await this.onlineNetworkManager.setSlotType(playerId, slotType);

@@ -27,6 +27,7 @@ export interface LobbyDetailScreenParams {
     players: LobbyPlayer[];
     localPlayerId: string;
     onSetTeam: (playerId: string, teamId: number) => void;
+    onAssignPlayerToTeam: (playerId: string, teamId: number) => void;
     onSetSlotType: (playerId: string, slotType: 'player' | 'ai' | 'spectator') => void;
     onSetAIDifficulty: (playerId: string, difficulty: 'easy' | 'normal' | 'hard') => void;
     onSetFaction: (faction: Faction) => void;
@@ -52,6 +53,7 @@ export function renderLobbyDetailScreen(
         players,
         localPlayerId,
         onSetTeam,
+        onAssignPlayerToTeam,
         onSetSlotType,
         onSetAIDifficulty,
         onSetFaction,
@@ -100,15 +102,28 @@ export function renderLobbyDetailScreen(
     refreshButton.style.padding = '8px 16px';
     container.appendChild(refreshButton);
 
-    // Main content area - team slots
+    // Main content area - team slots + spectator roster
+    const lobbyLayout = document.createElement('div');
+    lobbyLayout.style.display = 'flex';
+    lobbyLayout.style.flexDirection = isCompactLayout ? 'column' : 'row';
+    lobbyLayout.style.gap = '20px';
+    lobbyLayout.style.width = '100%';
+    lobbyLayout.style.maxWidth = '1200px';
+    lobbyLayout.style.marginBottom = '30px';
+    container.appendChild(lobbyLayout);
+
     const teamsContainer = document.createElement('div');
     teamsContainer.style.display = 'flex';
     teamsContainer.style.flexDirection = isCompactLayout ? 'column' : 'row';
     teamsContainer.style.gap = '20px';
-    teamsContainer.style.width = '100%';
-    teamsContainer.style.maxWidth = '1000px';
-    teamsContainer.style.marginBottom = '30px';
-    container.appendChild(teamsContainer);
+    teamsContainer.style.flex = '1';
+    lobbyLayout.appendChild(teamsContainer);
+
+    const spectators = players.filter((player) => {
+        const isTeamPlayer = (player.slot_type === 'player' || player.slot_type === 'ai')
+            && (player.team_id === 0 || player.team_id === 1);
+        return !isTeamPlayer;
+    });
 
     // Team 0 and Team 1
     for (let teamId = 0; teamId <= 1; teamId++) {
@@ -130,13 +145,14 @@ export function renderLobbyDetailScreen(
         teamBox.appendChild(teamTitle);
 
         // Get players for this team
-        const teamPlayers = players.filter(p => p.team_id === teamId);
+        const teamPlayers = players.filter(p => (p.slot_type === 'player' || p.slot_type === 'ai') && p.team_id === teamId);
 
         // Render slots (2 slots per team)
         for (let slotIdx = 0; slotIdx < 2; slotIdx++) {
             const player = teamPlayers[slotIdx] || null;
             const slotDiv = renderSlot(player, teamId, slotIdx, isHost, localPlayerId, {
                 onSetTeam,
+                onAssignPlayerToTeam,
                 onSetSlotType,
                 onSetAIDifficulty,
                 onSetFaction,
@@ -148,6 +164,9 @@ export function renderLobbyDetailScreen(
             teamBox.appendChild(slotDiv);
         }
     }
+
+    const spectatorPanel = renderSpectatorPanel(spectators, isHost, localPlayerId);
+    lobbyLayout.appendChild(spectatorPanel);
 
     // Control buttons section
     const controlsSection = document.createElement('div');
@@ -210,10 +229,12 @@ export function renderLobbyDetailScreen(
     if (isHost) {
         infoText.innerHTML = `
             <strong style="color: #FFD700;">Host Controls:</strong><br>
+            • Drag spectators into empty team slots to assign players<br>
+            • Drag your own card to move yourself to another open slot<br>
             • Add AI players by clicking "Add AI" in empty slots<br>
             • Move players between teams by clicking team buttons<br>
             • Configure AI difficulty (Easy, Normal, Hard)<br>
-            • Start the game when all players are ready
+            • Start the game when all assigned players are ready
         `;
     } else {
         infoText.innerHTML = `
@@ -239,6 +260,7 @@ function renderSlot(
     localPlayerId: string,
     callbacks: {
         onSetTeam: (playerId: string, teamId: number) => void;
+        onAssignPlayerToTeam: (playerId: string, teamId: number) => void;
         onSetSlotType: (playerId: string, slotType: 'player' | 'ai' | 'spectator') => void;
         onSetAIDifficulty: (playerId: string, difficulty: 'easy' | 'normal' | 'hard') => void;
         onSetFaction: (faction: Faction) => void;
@@ -272,6 +294,23 @@ function renderSlot(
             addAIButton.style.fontSize = '14px';
             addAIButton.style.padding = '8px';
             slotDiv.appendChild(addAIButton);
+
+            slotDiv.style.border = '2px dashed rgba(255, 255, 255, 0.25)';
+            slotDiv.style.transition = 'border-color 0.15s ease';
+            slotDiv.addEventListener('dragover', (event) => {
+                event.preventDefault();
+                slotDiv.style.borderColor = 'rgba(102, 255, 178, 0.9)';
+            });
+            slotDiv.addEventListener('dragleave', () => {
+                slotDiv.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+            });
+            slotDiv.addEventListener('drop', (event) => {
+                event.preventDefault();
+                slotDiv.style.borderColor = 'rgba(255, 255, 255, 0.25)';
+                const draggedPlayerId = event.dataTransfer?.getData('text/player-id');
+                if (!draggedPlayerId) return;
+                callbacks.onAssignPlayerToTeam(draggedPlayerId, teamId);
+            });
         }
 
         return slotDiv;
@@ -279,6 +318,19 @@ function renderSlot(
 
     // Player or AI slot
     const isLocal = player.player_id === localPlayerId;
+    const canDragPlayerCard = isHost && player.slot_type === 'player';
+
+    if (canDragPlayerCard) {
+        slotDiv.draggable = true;
+        slotDiv.style.cursor = 'grab';
+        slotDiv.addEventListener('dragstart', (event) => {
+            event.dataTransfer?.setData('text/player-id', player.player_id);
+            event.dataTransfer!.effectAllowed = 'move';
+        });
+        slotDiv.addEventListener('dragend', () => {
+            slotDiv.style.cursor = 'grab';
+        });
+    }
     
     // Player name/type row
     const nameRow = document.createElement('div');
@@ -383,4 +435,58 @@ function renderSlot(
     }
 
     return slotDiv;
+}
+
+function renderSpectatorPanel(players: LobbyPlayer[], isHost: boolean, localPlayerId: string): HTMLElement {
+    const panel = document.createElement('div');
+    panel.style.width = '280px';
+    panel.style.flexShrink = '0';
+    panel.style.padding = '20px';
+    panel.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    panel.style.borderRadius = '10px';
+    panel.style.border = '3px solid rgba(180, 180, 180, 0.35)';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Spectators';
+    title.style.fontSize = '24px';
+    title.style.color = '#CCCCCC';
+    title.style.marginBottom = '15px';
+    title.style.textAlign = 'center';
+    panel.appendChild(title);
+
+    if (players.length === 0) {
+        const emptyText = document.createElement('div');
+        emptyText.textContent = 'No spectators waiting';
+        emptyText.style.color = '#777777';
+        emptyText.style.textAlign = 'center';
+        panel.appendChild(emptyText);
+        return panel;
+    }
+
+    for (const player of players) {
+        const entry = document.createElement('div');
+        entry.style.padding = '10px 12px';
+        entry.style.marginBottom = '8px';
+        entry.style.backgroundColor = 'rgba(255, 255, 255, 0.06)';
+        entry.style.border = '1px solid rgba(255, 255, 255, 0.15)';
+        entry.style.borderRadius = '6px';
+
+        const isLocal = player.player_id === localPlayerId;
+        entry.textContent = `${player.username}${player.is_host ? ' (Host)' : ''}${isLocal ? ' (You)' : ''}`;
+        entry.style.color = '#DDDDDD';
+        entry.style.fontSize = '14px';
+
+        if (isHost && player.slot_type !== 'ai') {
+            entry.draggable = true;
+            entry.style.cursor = 'grab';
+            entry.addEventListener('dragstart', (event) => {
+                event.dataTransfer?.setData('text/player-id', player.player_id);
+                event.dataTransfer!.effectAllowed = 'move';
+            });
+        }
+
+        panel.appendChild(entry);
+    }
+
+    return panel;
 }
