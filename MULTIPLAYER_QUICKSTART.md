@@ -19,7 +19,7 @@ This multiplayer implementation provides **deterministic P2P networking** with S
 Run the SQL schema in your Supabase project:
 ```bash
 # In Supabase SQL Editor, run:
-supabase-p2p-schema.sql
+supabase.sql
 ```
 
 This creates:
@@ -148,7 +148,7 @@ src/
 ├── multiplayer-network.ts     # High-level manager
 └── multiplayer-example.ts     # Integration example
 
-supabase-p2p-schema.sql        # Database schema
+supabase.sql        # Database schema
 P2P_MULTIPLAYER_ARCHITECTURE.md # Detailed documentation
 ```
 
@@ -402,7 +402,7 @@ if (currentTick % 100 === 0) {
 
 - [Full Architecture Documentation](./P2P_MULTIPLAYER_ARCHITECTURE.md)
 - [Integration Example](./src/multiplayer-example.ts)
-- [Database Schema](./supabase-p2p-schema.sql)
+- [Database Schema](./supabase.sql)
 - [Supabase Dashboard](https://supabase.com/dashboard)
 
 ## Support

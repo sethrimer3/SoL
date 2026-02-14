@@ -5,7 +5,7 @@
 ### Prerequisites
 
 1. Set up Supabase project and configure credentials
-2. Run the database schema from `supabase-schema.sql`
+2. Run the database schema from `supabase.sql`
 3. Build the project: `npm run build`
 4. Serve locally or deploy
 
@@ -139,7 +139,7 @@ console.log('Latency:', latency, 'ms');
 - Row Level Security (RLS) blocking access
 
 **Solution:**
-- Run `supabase-schema.sql` in Supabase SQL Editor
+- Run `supabase.sql` in Supabase SQL Editor
 - Verify credentials are correct
 - Check Supabase dashboard for errors
 - For development, may need to adjust RLS policies for anon access

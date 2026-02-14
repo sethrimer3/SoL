@@ -16,7 +16,7 @@ The backend implementation enables:
 
 ### 1. Database Layer
 
-**File**: `supabase-2v2-migration.sql`
+**File**: `supabase.sql`
 
 **Changes:**
 - Extended `game_rooms` table with `game_mode` column ('1v1', '2v2', 'custom')
@@ -164,7 +164,7 @@ The backend implementation enables:
 1. **Run Database Migration**
    ```bash
    # In Supabase SQL Editor
-   # Run contents of supabase-2v2-migration.sql
+   # Run contents of supabase.sql
    ```
 
 2. **Enable Anonymous Access** (Development)

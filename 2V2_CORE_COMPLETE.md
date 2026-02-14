@@ -303,7 +303,7 @@ assert(enemies.length === 2); // Should exclude teammate
 - `src/online-network.ts` - Custom lobbies and matchmaking
 - `src/menu.ts` - UI integration
 - `src/menu/screens/*.ts` - Lobby and matchmaking screens
-- `supabase-2v2-migration.sql` - Database schema
+- `supabase.sql` - Database schema
 
 ### Total Changes:
 - ~1,800 lines of code added/modified
@@ -320,7 +320,7 @@ assert(enemies.length === 2); // Should exclude teammate
 - ✅ No security vulnerabilities (CodeQL)
 
 **Deployment Requirements:**
-1. Run `supabase-2v2-migration.sql` on Supabase
+1. Run `supabase.sql` on Supabase
 2. Configure `SUPABASE_URL` and `SUPABASE_ANON_KEY`
 3. Build with `npm run build`
 4. Deploy `dist/` folder

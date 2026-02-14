@@ -6,7 +6,7 @@ This guide covers the backend implementation for 2v2 team-based gameplay, includ
 ## Database Setup
 
 ### Prerequisites
-- Supabase project with existing schema from `supabase-schema.sql`
+- Supabase project with existing schema from `supabase.sql`
 - Supabase URL and Anonymous Key configured
 - Row Level Security (RLS) policies enabled
 
@@ -14,14 +14,14 @@ This guide covers the backend implementation for 2v2 team-based gameplay, includ
 
 1. **Apply the 2v2 Migration**
    
-   Run `supabase-2v2-migration.sql` in your Supabase SQL Editor:
+   Run `supabase.sql` in your Supabase SQL Editor:
    
    ```bash
    # Using Supabase CLI
    supabase db push
 
    # Or manually in Supabase Dashboard > SQL Editor
-   # Copy and paste the contents of supabase-2v2-migration.sql
+   # Copy and paste the contents of supabase.sql
    ```
 
 2. **Verify Tables**

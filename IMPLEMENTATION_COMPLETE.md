@@ -59,7 +59,7 @@ This document summarizes the P2P multiplayer networking system implementation fo
 
 ### 2. Database Schema
 
-#### Supabase Schema (`supabase-p2p-schema.sql`)
+#### Supabase Schema (`supabase.sql`)
 - **Tables**:
   - `matches`: Match metadata and lifecycle
   - `match_players`: Players in each match
@@ -207,7 +207,7 @@ This document summarizes the P2P multiplayer networking system implementation fo
 4. `src/multiplayer-network.ts` - Network manager (19.0KB)
 5. `src/multiplayer-example.ts` - Integration example (14.5KB)
 6. `src/multiplayer.ts` - Central exports (1.6KB)
-7. `supabase-p2p-schema.sql` - Database schema (10.4KB)
+7. `supabase.sql` - Database schema (10.4KB)
 8. **Total source code**: ~78KB
 
 ### Documentation Files (4 files)
@@ -266,7 +266,7 @@ This document summarizes the P2P multiplayer networking system implementation fo
 
 #### Database Setup (5 minutes)
 - [ ] Create production Supabase project
-- [ ] Run `supabase-p2p-schema.sql` in SQL Editor
+- [ ] Run `supabase.sql` in SQL Editor
 - [ ] Enable anonymous policies (or configure Supabase Auth)
 - [ ] Set up cleanup cron job
 

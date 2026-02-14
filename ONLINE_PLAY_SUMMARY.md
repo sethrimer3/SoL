@@ -12,7 +12,7 @@ This implementation provides a complete framework for online multiplayer in SoL 
 - `src/supabase-config.ts` - Configuration management for Supabase
 - `src/online-network.ts` - Main OnlineNetworkManager implementation
 - `src/online-play-example.ts` - Integration examples
-- `supabase-schema.sql` - Database schema for rooms and players
+- `supabase.sql` - Database schema for rooms and players
 - `.env.example` - Environment variable template
 
 #### Files Modified
@@ -148,7 +148,7 @@ Execute in game tick order
    ```
 
 3. **Set Up Database**
-   - Run `supabase-schema.sql` in Supabase SQL Editor
+   - Run `supabase.sql` in Supabase SQL Editor
    - For anonymous access, uncomment alternative policies
 
 4. **Build**

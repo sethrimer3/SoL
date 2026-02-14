@@ -15,7 +15,7 @@
 
 3. **Set Up Database**
    - Open Supabase SQL Editor
-   - Run `supabase-schema.sql`
+   - Run `supabase.sql`
    - For anonymous access, uncomment alternative policies
 
 4. **Build**
@@ -127,7 +127,7 @@ manager.on(NetworkEvent.MESSAGE_RECEIVED, (message) => {
 - `src/online-network.ts` - Main implementation
 - `src/supabase-config.ts` - Configuration
 - `src/online-play-example.ts` - Integration examples
-- `supabase-schema.sql` - Database schema
+- `supabase.sql` - Database schema
 - `ONLINE_PLAY.md` - Full documentation
 - `SUPABASE_CONFIG.md` - Setup guide
 - `TESTING_ONLINE_PLAY.md` - Testing guide

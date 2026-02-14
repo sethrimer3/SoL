@@ -517,7 +517,7 @@ if (tickCounter % STATE_HASH_TICK_INTERVAL === 0) {
 - `p2p_match_players` - Players in each match
 - `p2p_signaling` - WebRTC signaling messages (offers, answers, ICE)
 
-See `supabase-p2p-schema.sql` for complete schema and RLS policies.
+See `supabase.sql` for complete schema and RLS policies.
 
 ### Security Considerations
 
