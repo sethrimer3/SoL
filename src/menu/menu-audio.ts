@@ -239,10 +239,10 @@ export class MenuAudioController {
         if (isLobbyOrSearching) {
             targetVolumesById['searching-for-match'] = 0.9;
         } else {
-            targetVolumesById['constant-piano'] = 0.65;
+            targetVolumesById['constant-piano'] = 0.65 / 3;
             targetVolumesById['main-menu'] = this.currentScreen === 'main' ? 0.62 : 0;
             targetVolumesById['faction-selection'] = this.currentScreen === 'faction-select' ? 0.75 : 0;
-            targetVolumesById['game-mode-selection'] = this.currentScreen === 'game-mode-select' ? 0.78 : 0;
+            targetVolumesById['game-mode-selection'] = this.currentScreen === 'game-mode-select' ? 0.78 / 2 : 0;
             targetVolumesById['ambient-1'] = this.currentScreen === 'settings' ? 0.6 : 0;
         }
 

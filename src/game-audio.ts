@@ -8,6 +8,7 @@ const OFFSCREEN_VOLUME_FALLOFF_DISTANCE_FACTOR = 0.75;
 const LOOP_CROSSFADE_DURATION_SEC = 0.1;
 const MARINE_LOOP_BASE_VOLUME = 0.4;
 const GATLING_LOOP_BASE_VOLUME = 0.35;
+const FORGE_CHARGE_BASE_VOLUME = 1 / 3;
 
 export type AudioListenerView = {
     cameraWorld: Vector2D;
@@ -58,6 +59,7 @@ export class GameAudioController {
         this.gatlingTowerFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/gatling_firing.ogg', GATLING_LOOP_BASE_VOLUME);
         this.forgeCrunchAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_crunch.ogg');
         this.forgeChargeAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_charge.ogg');
+        this.baseVolumeByElement.set(this.forgeChargeAudio, FORGE_CHARGE_BASE_VOLUME);
         this.foundryPowerUpAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_up.ogg');
         this.foundryPowerDownAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_down.ogg');
     }
@@ -90,7 +92,7 @@ export class GameAudioController {
                 const isCrunching = forge.currentCrunch !== null;
                 const wasCrunching = this.forgeWasCrunchingByForge.get(forge) === true;
                 if (isCrunching && !wasCrunching) {
-                    this.playOneShot(this.forgeCrunchAudio, forge.position, listenerView, true);
+                    this.playOneShot(this.forgeCrunchAudio, forge.position, listenerView);
                 }
                 this.forgeWasCrunchingByForge.set(forge, isCrunching);
 
