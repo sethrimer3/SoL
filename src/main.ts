@@ -2301,8 +2301,8 @@ class GameController {
                             case 'tab':
                                 this.renderer.setInGameMenuTab(menuAction.tab);
                                 break;
-                            case 'graphicsVariant':
-                                this.renderer.setGraphicsVariant(menuAction.key, menuAction.variant);
+                            case 'toggleRenderLayer':
+                                this.renderer.setRenderLayerEnabled(menuAction.layer, menuAction.isEnabled);
                                 break;
                             case 'damageDisplayMode':
                                 this.renderer.damageDisplayMode = menuAction.mode;

@@ -6,7 +6,7 @@ import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, S
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
-import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
+import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
 
 type ForgeFlameState = {
@@ -262,6 +262,22 @@ export class GameRenderer {
     private graphicsOptionByKey = new Map<GraphicKey, GraphicOption>();
     private graphicsVariantByKey = new Map<GraphicKey, GraphicVariant>();
     private graphicsMenuScrollOffset = 0;
+    private readonly renderLayerOptions: Array<{ key: RenderLayerKey; label: string }> = [
+        { key: 'suns', label: 'Suns' },
+        { key: 'stars', label: 'Stars' },
+        { key: 'asteroids', label: 'Asteroids' },
+        { key: 'spaceDust', label: 'Space Dust' },
+        { key: 'buildings', label: 'Buildings' },
+        { key: 'units', label: 'Units' },
+        { key: 'projectiles', label: 'Projectiles' }
+    ];
+    public isSunsLayerEnabled = true;
+    public isStarsLayerEnabled = true;
+    public isAsteroidsLayerEnabled = true;
+    public isSpaceDustLayerEnabled = true;
+    public isBuildingsLayerEnabled = true;
+    public isUnitsLayerEnabled = true;
+    public isProjectilesLayerEnabled = true;
     private sunRayScreenPosA = new Vector2D(0, 0);
     private sunRayScreenPosB = new Vector2D(0, 0);
     private ultraSunScreenPos = new Vector2D(0, 0);
@@ -1326,6 +1342,55 @@ export class GameRenderer {
 
     public setInGameMenuTab(tab: InGameMenuTab): void {
         this.inGameMenuTab = tab;
+    }
+
+    private isRenderLayerEnabled(layer: RenderLayerKey): boolean {
+        switch (layer) {
+            case 'suns':
+                return this.isSunsLayerEnabled;
+            case 'stars':
+                return this.isStarsLayerEnabled;
+            case 'asteroids':
+                return this.isAsteroidsLayerEnabled;
+            case 'spaceDust':
+                return this.isSpaceDustLayerEnabled;
+            case 'buildings':
+                return this.isBuildingsLayerEnabled;
+            case 'units':
+                return this.isUnitsLayerEnabled;
+            case 'projectiles':
+                return this.isProjectilesLayerEnabled;
+            default:
+                return true;
+        }
+    }
+
+    public setRenderLayerEnabled(layer: RenderLayerKey, isEnabled: boolean): void {
+        switch (layer) {
+            case 'suns':
+                this.isSunsLayerEnabled = isEnabled;
+                break;
+            case 'stars':
+                this.isStarsLayerEnabled = isEnabled;
+                break;
+            case 'asteroids':
+                this.isAsteroidsLayerEnabled = isEnabled;
+                break;
+            case 'spaceDust':
+                this.isSpaceDustLayerEnabled = isEnabled;
+                break;
+            case 'buildings':
+                this.isBuildingsLayerEnabled = isEnabled;
+                break;
+            case 'units':
+                this.isUnitsLayerEnabled = isEnabled;
+                break;
+            case 'projectiles':
+                this.isProjectilesLayerEnabled = isEnabled;
+                break;
+            default:
+                break;
+        }
     }
 
     private getGraphicAssetPath(key: GraphicKey): string | null {
@@ -10396,48 +10461,58 @@ export class GameRenderer {
         }
 
         // Draw suns
-        for (const sun of game.suns) {
-            if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
-                this.drawSun(sun, game.gameTime);
+        if (this.isSunsLayerEnabled) {
+            for (const sun of game.suns) {
+                if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
+                    this.drawSun(sun, game.gameTime);
+                }
             }
         }
 
         // Draw sun rays with raytracing (light and shadows)
-        if (!ladSun) {
+        if (this.isSunsLayerEnabled && !ladSun) {
             this.drawSunRays(game);
         }
 
-        if (this.graphicsQuality === 'ultra' && !ladSun) {
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
             this.drawUltraSunParticleLayers(game);
         }
 
         // Draw lens flare effects for visible suns
-        for (const sun of game.suns) {
-            this.drawLensFlare(sun);
-        }
-
-        // Draw reworked parallax stars right behind asteroid silhouettes.
-        this.drawReworkedParallaxStars(screenWidth, screenHeight);
-
-        // Draw asteroids (with culling - skip rendering beyond map bounds)
-        for (const asteroid of game.asteroids) {
-            // Only render asteroids within map boundaries
-            if (this.isWithinRenderBounds(asteroid.position, game.mapSize, asteroid.size) &&
-                this.isWithinViewBounds(asteroid.position, asteroid.size * 2)) {
-                this.drawAsteroid(asteroid, game.suns);
+        if (this.isSunsLayerEnabled) {
+            for (const sun of game.suns) {
+                this.drawLensFlare(sun);
             }
         }
 
-        if (this.graphicsQuality === 'ultra' && !ladSun) {
+        // Draw reworked parallax stars right behind asteroid silhouettes.
+        if (this.isStarsLayerEnabled) {
+            this.drawReworkedParallaxStars(screenWidth, screenHeight);
+        }
+
+        // Draw asteroids (with culling - skip rendering beyond map bounds)
+        if (this.isAsteroidsLayerEnabled) {
+            for (const asteroid of game.asteroids) {
+                // Only render asteroids within map boundaries
+                if (this.isWithinRenderBounds(asteroid.position, game.mapSize, asteroid.size) &&
+                    this.isWithinViewBounds(asteroid.position, asteroid.size * 2)) {
+                    this.drawAsteroid(asteroid, game.suns);
+                }
+            }
+        }
+
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
             this.applyUltraWarmCoolGrade(game);
         }
 
         // Draw space dust particles on top of celestial environment layers.
-        for (const particle of game.spaceDust) {
-            // Only render particles within map boundaries
-            if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
-                this.isWithinViewBounds(particle.position, 60)) {
-                this.drawSpaceDust(particle, game, viewingPlayerIndex);
+        if (this.isSpaceDustLayerEnabled) {
+            for (const particle of game.spaceDust) {
+                // Only render particles within map boundaries
+                if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
+                    this.isWithinViewBounds(particle.position, 60)) {
+                    this.drawSpaceDust(particle, game, viewingPlayerIndex);
+                }
             }
         }
 
@@ -10558,47 +10633,49 @@ export class GameRenderer {
         this.drawMergedStarlingRanges(game);
 
         // Draw units
-        for (const player of game.players) {
-            if (player.isDefeated()) continue;
-            
-            const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = this.isEnemyPlayer(player, game);
-            
-            for (const unit of player.units) {
-                const unitMargin = unit.isHero ? 120 : 60;
-                if (!this.isWithinViewBounds(unit.position, unitMargin)) {
-                    continue;
-                }
-                if (unit instanceof Grave) {
-                    this.drawGrave(unit, color, game, isEnemy);
-                } else if (unit instanceof Starling) {
-                    this.drawStarling(unit, color, game, isEnemy);
-                } else if (unit instanceof Ray) {
-                    this.drawRay(unit, color, game, isEnemy);
-                } else if (unit instanceof Nova) {
-                    this.drawNova(unit, color, game, isEnemy);
-                } else if (unit instanceof InfluenceBall) {
-                    this.drawInfluenceBall(unit, color, game, isEnemy);
-                } else if (unit instanceof TurretDeployer) {
-                    this.drawTurretDeployer(unit, color, game, isEnemy);
-                } else if (unit instanceof Driller) {
-                    this.drawDriller(unit, color, game, isEnemy);
-                } else if (unit instanceof Dagger) {
-                    this.drawDagger(unit, color, game, isEnemy);
-                } else if (unit instanceof Beam) {
-                    this.drawBeam(unit, color, game, isEnemy);
-                } else if (unit instanceof Spotlight) {
-                    this.drawSpotlight(unit, color, game, isEnemy);
-                } else if (unit instanceof Mortar) {
-                    this.drawMortar(unit, color, game, isEnemy);
-                } else if (unit instanceof Preist) {
-                    this.drawPreist(unit, color, game, isEnemy);
-                } else if (unit instanceof Tank) {
-                    this.drawTank(unit, color, game, isEnemy);
-                } else if (unit instanceof Sly) {
-                    this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Sly
-                } else {
-                    this.drawUnit(unit, color, game, isEnemy);
+        if (this.isUnitsLayerEnabled) {
+            for (const player of game.players) {
+                if (player.isDefeated()) continue;
+
+                const color = this.getLadPlayerColor(player, ladSun, game);
+                const isEnemy = this.isEnemyPlayer(player, game);
+
+                for (const unit of player.units) {
+                    const unitMargin = unit.isHero ? 120 : 60;
+                    if (!this.isWithinViewBounds(unit.position, unitMargin)) {
+                        continue;
+                    }
+                    if (unit instanceof Grave) {
+                        this.drawGrave(unit, color, game, isEnemy);
+                    } else if (unit instanceof Starling) {
+                        this.drawStarling(unit, color, game, isEnemy);
+                    } else if (unit instanceof Ray) {
+                        this.drawRay(unit, color, game, isEnemy);
+                    } else if (unit instanceof Nova) {
+                        this.drawNova(unit, color, game, isEnemy);
+                    } else if (unit instanceof InfluenceBall) {
+                        this.drawInfluenceBall(unit, color, game, isEnemy);
+                    } else if (unit instanceof TurretDeployer) {
+                        this.drawTurretDeployer(unit, color, game, isEnemy);
+                    } else if (unit instanceof Driller) {
+                        this.drawDriller(unit, color, game, isEnemy);
+                    } else if (unit instanceof Dagger) {
+                        this.drawDagger(unit, color, game, isEnemy);
+                    } else if (unit instanceof Beam) {
+                        this.drawBeam(unit, color, game, isEnemy);
+                    } else if (unit instanceof Spotlight) {
+                        this.drawSpotlight(unit, color, game, isEnemy);
+                    } else if (unit instanceof Mortar) {
+                        this.drawMortar(unit, color, game, isEnemy);
+                    } else if (unit instanceof Preist) {
+                        this.drawPreist(unit, color, game, isEnemy);
+                    } else if (unit instanceof Tank) {
+                        this.drawTank(unit, color, game, isEnemy);
+                    } else if (unit instanceof Sly) {
+                        this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Sly
+                    } else {
+                        this.drawUnit(unit, color, game, isEnemy);
+                    }
                 }
             }
         }
@@ -10607,171 +10684,156 @@ export class GameRenderer {
         this.drawStarlingMoveLines(game);
 
         // Draw buildings
-        for (const player of game.players) {
-            if (player.isDefeated()) continue;
-            
-            const color = this.getLadPlayerColor(player, ladSun, game);
-            const isEnemy = this.isEnemyPlayer(player, game);
-            
-            for (const building of player.buildings) {
-                if (!this.isWithinViewBounds(building.position, building.radius * 2)) {
-                    continue;
-                }
-                if (building instanceof Minigun || building instanceof GatlingTower) {
-                    this.drawMinigun(building, color, game, isEnemy);
-                } else if (building instanceof SpaceDustSwirler) {
-                    this.drawSpaceDustSwirler(building, color, game, isEnemy);
-                } else if (building instanceof SubsidiaryFactory) {
-                    this.drawSubsidiaryFactory(building, color, game, isEnemy);
-                } else if (building instanceof StrikerTower) {
-                    this.drawStrikerTower(building, color, game, isEnemy);
-                } else if (building instanceof LockOnLaserTower) {
-                    this.drawLockOnLaserTower(building, color, game, isEnemy);
-                } else if (building instanceof ShieldTower) {
-                    this.drawShieldTower(building, color, game, isEnemy);
-                }
-            }
-        }
+        if (this.isBuildingsLayerEnabled) {
+            for (const player of game.players) {
+                if (player.isDefeated()) continue;
 
-        // Draw muzzle flashes
-        for (const flash of game.muzzleFlashes) {
-            if (this.isWithinViewBounds(flash.position, 80)) {
-                this.drawMuzzleFlash(flash);
-            }
-        }
+                const color = this.getLadPlayerColor(player, ladSun, game);
+                const isEnemy = this.isEnemyPlayer(player, game);
 
-        // Draw bullet casings
-        for (const casing of game.bulletCasings) {
-            if (this.isWithinViewBounds(casing.position, 60)) {
-                this.drawBulletCasing(casing);
-            }
-        }
-
-        // Draw bouncing bullets
-        for (const bullet of game.bouncingBullets) {
-            if (this.isWithinViewBounds(bullet.position, 60)) {
-                this.drawBouncingBullet(bullet);
-            }
-        }
-
-        // Draw ability bullets
-        for (const bullet of game.abilityBullets) {
-            if (this.isWithinViewBounds(bullet.position, 80)) {
-                this.drawAbilityBullet(bullet);
-            }
-        }
-
-        // Draw minion projectiles
-        for (const projectile of game.minionProjectiles) {
-            if (this.isWithinViewBounds(projectile.position, 80)) {
-                this.drawMinionProjectile(projectile);
-            }
-        }
-        
-        // Draw mortar projectiles
-        for (const projectile of game.mortarProjectiles) {
-            if (this.isWithinViewBounds(projectile.position, 100)) {
-                this.drawMortarProjectile(projectile);
-            }
-        }
-        
-        // Draw laser beams
-        for (const laser of game.laserBeams) {
-            if (this.isWithinViewBounds(laser.startPos, 200) || this.isWithinViewBounds(laser.endPos, 200)) {
-                this.drawLaserBeam(laser);
-            }
-        }
-        
-        // Draw impact particles (only on high graphics quality)
-        if (this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') {
-            for (const particle of game.impactParticles) {
-                if (this.isWithinViewBounds(particle.position, 120)) {
-                    this.drawImpactParticle(particle);
+                for (const building of player.buildings) {
+                    if (!this.isWithinViewBounds(building.position, building.radius * 2)) {
+                        continue;
+                    }
+                    if (building instanceof Minigun || building instanceof GatlingTower) {
+                        this.drawMinigun(building, color, game, isEnemy);
+                    } else if (building instanceof SpaceDustSwirler) {
+                        this.drawSpaceDustSwirler(building, color, game, isEnemy);
+                    } else if (building instanceof SubsidiaryFactory) {
+                        this.drawSubsidiaryFactory(building, color, game, isEnemy);
+                    } else if (building instanceof StrikerTower) {
+                        this.drawStrikerTower(building, color, game, isEnemy);
+                    } else if (building instanceof LockOnLaserTower) {
+                        this.drawLockOnLaserTower(building, color, game, isEnemy);
+                    } else if (building instanceof ShieldTower) {
+                        this.drawShieldTower(building, color, game, isEnemy);
+                    }
                 }
             }
         }
-        
-        // Draw sparkle particles (regeneration effects)
-        for (const sparkle of game.sparkleParticles) {
-            if (this.isWithinViewBounds(sparkle.position, 50)) {
-                this.drawSparkleParticle(sparkle);
+
+        // Draw projectiles and effect particles
+        if (this.isProjectilesLayerEnabled) {
+            for (const flash of game.muzzleFlashes) {
+                if (this.isWithinViewBounds(flash.position, 80)) {
+                    this.drawMuzzleFlash(flash);
+                }
             }
-        }
-        
-        // Draw death particles (breaking apart effect)
-        for (const particle of game.deathParticles) {
-            if (this.isWithinViewBounds(particle.position, 100)) {
-                this.drawDeathParticle(particle, game);
+
+            for (const casing of game.bulletCasings) {
+                if (this.isWithinViewBounds(casing.position, 60)) {
+                    this.drawBulletCasing(casing);
+                }
             }
-        }
-        
-        // Draw striker tower explosions
-        for (const explosion of game.strikerTowerExplosions) {
-            if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
-                this.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp);
+
+            for (const bullet of game.bouncingBullets) {
+                if (this.isWithinViewBounds(bullet.position, 60)) {
+                    this.drawBouncingBullet(bullet);
+                }
             }
-        }
-        
-        // Draw influence zones
-        for (const zone of game.influenceZones) {
-            if (this.isWithinViewBounds(zone.position, zone.radius)) {
-                this.drawInfluenceZone(zone);
+
+            for (const bullet of game.abilityBullets) {
+                if (this.isWithinViewBounds(bullet.position, 80)) {
+                    this.drawAbilityBullet(bullet);
+                }
             }
-        }
-        
-        // Draw influence ball projectiles
-        for (const projectile of game.influenceBallProjectiles) {
-            if (this.isWithinViewBounds(projectile.position, 100)) {
-                this.drawInfluenceBallProjectile(projectile);
+
+            for (const projectile of game.minionProjectiles) {
+                if (this.isWithinViewBounds(projectile.position, 80)) {
+                    this.drawMinionProjectile(projectile);
+                }
             }
-        }
-        
-        // Draw crescent waves
-        for (const wave of game.crescentWaves) {
-            if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
-                this.drawCrescentWave(wave);
+
+            for (const projectile of game.mortarProjectiles) {
+                if (this.isWithinViewBounds(projectile.position, 100)) {
+                    this.drawMortarProjectile(projectile);
+                }
             }
-        }
-        
-        // Draw Nova bombs
-        for (const bomb of game.novaBombs) {
-            if (this.isWithinViewBounds(bomb.position, 100)) {
-                this.drawNovaBomb(bomb);
+
+            for (const laser of game.laserBeams) {
+                if (this.isWithinViewBounds(laser.startPos, 200) || this.isWithinViewBounds(laser.endPos, 200)) {
+                    this.drawLaserBeam(laser);
+                }
             }
-        }
-        
-        // Draw Nova scatter bullets
-        for (const bullet of game.novaScatterBullets) {
-            if (this.isWithinViewBounds(bullet.position, 100)) {
-                this.drawNovaScatterBullet(bullet);
+
+            if (this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') {
+                for (const particle of game.impactParticles) {
+                    if (this.isWithinViewBounds(particle.position, 120)) {
+                        this.drawImpactParticle(particle);
+                    }
+                }
             }
-        }
-        
-        // Draw Sticky Bombs
-        for (const bomb of game.stickyBombs) {
-            if (this.isWithinViewBounds(bomb.position, 100)) {
-                this.drawStickyBomb(bomb);
+
+            for (const sparkle of game.sparkleParticles) {
+                if (this.isWithinViewBounds(sparkle.position, 50)) {
+                    this.drawSparkleParticle(sparkle);
+                }
             }
-        }
-        
-        // Draw Sticky Lasers
-        for (const laser of game.stickyLasers) {
-            if (this.isWithinViewBounds(laser.startPosition, 600)) {
-                this.drawStickyLaser(laser);
+
+            for (const particle of game.deathParticles) {
+                if (this.isWithinViewBounds(particle.position, 100)) {
+                    this.drawDeathParticle(particle, game);
+                }
             }
-        }
-        
-        // Draw Disintegration Particles
-        for (const particle of game.disintegrationParticles) {
-            if (this.isWithinViewBounds(particle.position, 50)) {
-                this.drawDisintegrationParticle(particle);
+
+            for (const explosion of game.strikerTowerExplosions) {
+                if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
+                    this.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp);
+                }
             }
-        }
-        
-        // Draw deployed turrets
-        for (const turret of game.deployedTurrets) {
-            if (this.isWithinViewBounds(turret.position, Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * 2)) {
-                this.drawDeployedTurret(turret, game);
+
+            for (const zone of game.influenceZones) {
+                if (this.isWithinViewBounds(zone.position, zone.radius)) {
+                    this.drawInfluenceZone(zone);
+                }
+            }
+
+            for (const projectile of game.influenceBallProjectiles) {
+                if (this.isWithinViewBounds(projectile.position, 100)) {
+                    this.drawInfluenceBallProjectile(projectile);
+                }
+            }
+
+            for (const wave of game.crescentWaves) {
+                if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
+                    this.drawCrescentWave(wave);
+                }
+            }
+
+            for (const bomb of game.novaBombs) {
+                if (this.isWithinViewBounds(bomb.position, 100)) {
+                    this.drawNovaBomb(bomb);
+                }
+            }
+
+            for (const bullet of game.novaScatterBullets) {
+                if (this.isWithinViewBounds(bullet.position, 100)) {
+                    this.drawNovaScatterBullet(bullet);
+                }
+            }
+
+            for (const bomb of game.stickyBombs) {
+                if (this.isWithinViewBounds(bomb.position, 100)) {
+                    this.drawStickyBomb(bomb);
+                }
+            }
+
+            for (const laser of game.stickyLasers) {
+                if (this.isWithinViewBounds(laser.startPosition, 600)) {
+                    this.drawStickyLaser(laser);
+                }
+            }
+
+            for (const particle of game.disintegrationParticles) {
+                if (this.isWithinViewBounds(particle.position, 50)) {
+                    this.drawDisintegrationParticle(particle);
+                }
+            }
+
+            for (const turret of game.deployedTurrets) {
+                if (this.isWithinViewBounds(turret.position, Constants.DEPLOYED_TURRET_HEALTH_BAR_SIZE * 2)) {
+                    this.drawDeployedTurret(turret, game);
+                }
             }
         }
 
@@ -11181,7 +11243,7 @@ export class GameRenderer {
     }
 
     private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
-        return getGraphicsMenuMaxScroll(this.graphicsOptions.length, layout);
+        return getGraphicsMenuMaxScroll(this.renderLayerOptions.length, layout);
     }
 
     public handleInGameMenuScroll(screenX: number, screenY: number, deltaY: number): boolean {
@@ -11390,23 +11452,22 @@ export class GameRenderer {
             return null;
         }
 
-        const contentHeight = this.graphicsOptions.length * layout.graphicsRowHeight;
+        const contentHeight = this.renderLayerOptions.length * layout.graphicsRowHeight;
         const localY = screenY - layout.graphicsListY + this.graphicsMenuScrollOffset;
         if (localY < 0 || localY > contentHeight) {
             return null;
         }
         const rowIndex = Math.floor(localY / layout.graphicsRowHeight);
-        const option = this.graphicsOptions[rowIndex];
+        const option = this.renderLayerOptions[rowIndex];
         if (!option) {
             return null;
         }
 
-        const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+        const buttonAreaWidth = layout.graphicsButtonWidth * 2 + layout.graphicsButtonGap;
         const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
         const rowY = layout.graphicsListY + rowIndex * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
         const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
-        const variants: GraphicVariant[] = ['svg', 'png', 'stub'];
-        for (let i = 0; i < variants.length; i += 1) {
+        for (let i = 0; i < 2; i += 1) {
             const buttonX = buttonStartX + i * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
             const isWithinButton =
                 screenX >= buttonX &&
@@ -11414,7 +11475,7 @@ export class GameRenderer {
                 screenY >= buttonY &&
                 screenY <= buttonY + layout.graphicsButtonHeight;
             if (isWithinButton) {
-                return { type: 'graphicsVariant', key: option.key, variant: variants[i] };
+                return { type: 'toggleRenderLayer', layer: option.key, isEnabled: i === 0 };
             }
         }
 
@@ -11810,16 +11871,11 @@ export class GameRenderer {
             this.ctx.clip();
 
             const labelX = layout.graphicsListX + 8;
-            const buttonAreaWidth = layout.graphicsButtonWidth * 3 + layout.graphicsButtonGap * 2;
+            const buttonAreaWidth = layout.graphicsButtonWidth * 2 + layout.graphicsButtonGap;
             const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
-            const variants: Array<{ variant: GraphicVariant; label: string }> = [
-                { variant: 'svg', label: 'SVG' },
-                { variant: 'png', label: 'PNG' },
-                { variant: 'stub', label: 'Stub' }
-            ];
 
-            for (let i = 0; i < this.graphicsOptions.length; i += 1) {
-                const option = this.graphicsOptions[i];
+            for (let i = 0; i < this.renderLayerOptions.length; i += 1) {
+                const option = this.renderLayerOptions[i];
                 const rowY = layout.graphicsListY + i * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
                 if (rowY + layout.graphicsRowHeight < layout.graphicsListY || rowY > layout.graphicsListY + layout.graphicsListHeight) {
                     continue;
@@ -11831,29 +11887,23 @@ export class GameRenderer {
                 this.ctx.textAlign = 'left';
                 this.ctx.fillText(option.label, labelX, rowY + layout.graphicsRowHeight * 0.65);
 
-                const selectedVariant = this.getGraphicVariant(option.key);
+                const isEnabled = this.isRenderLayerEnabled(option.key);
                 const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
-                for (let j = 0; j < variants.length; j += 1) {
-                    const variant = variants[j];
+                const labels = ['ON', 'OFF'];
+                for (let j = 0; j < labels.length; j += 1) {
+                    const isOnButton = j === 0;
+                    const isSelected = isOnButton ? isEnabled : !isEnabled;
                     const buttonX = buttonStartX + j * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
-                    const isSelected = selectedVariant === variant.variant;
-                    const isAvailable =
-                        variant.variant === 'stub' ||
-                        (variant.variant === 'svg' && option.svgPath) ||
-                        (variant.variant === 'png' && option.pngPath);
                     this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-                    if (!isAvailable) {
-                        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.5)';
-                    }
                     this.ctx.fillRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
                     this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
                     this.ctx.lineWidth = 1.5;
                     this.ctx.strokeRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
-                    this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
+                    this.ctx.fillStyle = '#FFFFFF';
                     this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
                     this.ctx.textAlign = 'center';
                     this.ctx.fillText(
-                        variant.label,
+                        labels[j],
                         buttonX + layout.graphicsButtonWidth / 2,
                         buttonY + layout.graphicsButtonHeight * 0.68
                     );
