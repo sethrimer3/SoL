@@ -2658,19 +2658,23 @@ export class MainMenu {
                 window.dispatchEvent(event);
             },
             onCycleMap: async () => {
-                if (!this.onlineNetworkManager || !isHost) return;
-                const currentIndex = dedicated2v2Maps.findIndex(map => map.id === selectedLobbyMap.id);
-                const nextMap = dedicated2v2Maps[(currentIndex + 1) % dedicated2v2Maps.length] || selectedLobbyMap;
+                if (!this.onlineNetworkManager || !isHost || dedicated2v2Maps.length === 0) return null;
+
+                const currentIndex = dedicated2v2Maps.findIndex(map => map.id === this.settings.selectedMap.id);
+                const safeCurrentIndex = currentIndex >= 0 ? currentIndex : 0;
+                const nextMap = dedicated2v2Maps[(safeCurrentIndex + 1) % dedicated2v2Maps.length] || dedicated2v2Maps[0];
                 const success = await this.onlineNetworkManager.setLobbyMap(nextMap.id);
                 if (success) {
                     this.settings.selectedMap = nextMap;
-                    await this.renderLobbyDetailScreen(this.contentElement);
-                } else {
-                    const networkError = this.onlineNetworkManager.getLastError();
-                    if (networkError) {
-                        alert(`Failed to change map: ${networkError}`);
-                    }
+                    return nextMap.name;
                 }
+
+                const networkError = this.onlineNetworkManager.getLastError();
+                if (networkError) {
+                    alert(`Failed to change map: ${networkError}`);
+                }
+
+                return null;
             },
             selectedMapName: selectedLobbyMap.name,
             onLeave: async () => {

@@ -36,7 +36,7 @@ export interface LobbyDetailScreenParams {
     onRemoveSlot: (playerId: string) => void;
     onToggleReady: () => void;
     onStartGame: () => void;
-    onCycleMap: () => void;
+    onCycleMap: () => Promise<string | null | void> | string | null | void;
     onLeave: () => void;
     onRefresh: () => void;
     selectedMapName: string;
@@ -187,13 +187,28 @@ export function renderLobbyDetailScreen(
     mapSelectionLabel.style.color = '#D0D0D0';
     mapSelectionSection.appendChild(mapSelectionLabel);
 
-    const mapSelectionButton = createButton(isHost ? 'CHANGE MAP' : 'MAP LOCKED', onCycleMap, '#6A5ACD');
+    const mapSelectionButton = createButton(isHost ? 'CHANGE MAP' : 'MAP LOCKED', () => undefined, '#6A5ACD');
     mapSelectionButton.style.fontSize = '14px';
     mapSelectionButton.style.padding = '10px 18px';
     if (!isHost) {
         mapSelectionButton.disabled = true;
         mapSelectionButton.style.opacity = '0.5';
         mapSelectionButton.style.cursor = 'not-allowed';
+    } else {
+        mapSelectionButton.onclick = async () => {
+            mapSelectionButton.disabled = true;
+            mapSelectionButton.style.opacity = '0.7';
+
+            try {
+                const nextMapName = await onCycleMap();
+                if (typeof nextMapName === 'string' && nextMapName.length > 0) {
+                    mapSelectionLabel.textContent = `Map: ${nextMapName}`;
+                }
+            } finally {
+                mapSelectionButton.disabled = false;
+                mapSelectionButton.style.opacity = '1';
+            }
+        };
     }
     mapSelectionSection.appendChild(mapSelectionButton);
 
