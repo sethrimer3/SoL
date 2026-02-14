@@ -128,6 +128,18 @@ export class OnlineNetworkManager {
 
         const { data: signInData, error: signInError } = await this.supabase.auth.signInAnonymously();
         if (signInError || !signInData.user?.id) {
+            const isAnonymousProviderDisabled = signInError?.code === 'anonymous_provider_disabled';
+
+            if (isAnonymousProviderDisabled) {
+                // Some projects rely on anon-role RLS policies and do not require an Auth user session.
+                // In this mode we can safely use the local player identifier as the database identity.
+                this.databasePlayerId = this.localPlayerId;
+                console.warn(
+                    'Supabase anonymous auth is disabled. Falling back to local player identity for anon-role access.'
+                );
+                return this.databasePlayerId;
+            }
+
             this.setLastError('Failed to establish Supabase identity', signInError);
             console.error('Failed to establish Supabase identity:', signInError);
             return null;
