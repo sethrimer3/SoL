@@ -961,6 +961,82 @@ export class OnlineNetworkManager {
         }
     }
 
+
+    /**
+     * Refresh current room data from database
+     */
+    async refreshCurrentRoom(): Promise<GameRoom | null> {
+        if (!this.supabase || !this.currentRoom) return this.currentRoom;
+
+        try {
+            const { data, error } = await this.supabase
+                .from('game_rooms')
+                .select('*')
+                .eq('id', this.currentRoom.id)
+                .single();
+
+            if (error || !data) {
+                console.error('Failed to refresh room:', error);
+                return this.currentRoom;
+            }
+
+            this.currentRoom = data;
+            return this.currentRoom;
+        } catch (error) {
+            console.error('Error refreshing room:', error);
+            return this.currentRoom;
+        }
+    }
+
+    /**
+     * Set custom lobby map (host only)
+     */
+    async setLobbyMap(mapId: string): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to set lobby map');
+            return false;
+        }
+
+        try {
+            const nextSettings = {
+                ...(this.currentRoom.game_settings || {}),
+                selectedMapId: mapId
+            };
+
+            const { data, error } = await this.supabase
+                .from('game_rooms')
+                .update({ game_settings: nextSettings })
+                .eq('id', this.currentRoom.id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Failed to set lobby map:', error);
+                return false;
+            }
+
+            if (data) {
+                this.currentRoom = data;
+            }
+
+            if (this.channel) {
+                await this.channel.send({
+                    type: 'broadcast',
+                    event: 'player_event',
+                    payload: {
+                        type: 'map_changed',
+                        data: { mapId }
+                    }
+                });
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting lobby map:', error);
+            return false;
+        }
+    }
+
     /**
      * Check if user is host
      */

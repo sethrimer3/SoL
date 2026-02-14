@@ -36,8 +36,10 @@ export interface LobbyDetailScreenParams {
     onRemoveSlot: (playerId: string) => void;
     onToggleReady: () => void;
     onStartGame: () => void;
+    onCycleMap: () => void;
     onLeave: () => void;
     onRefresh: () => void;
+    selectedMapName: string;
     createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
     menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
 }
@@ -62,8 +64,10 @@ export function renderLobbyDetailScreen(
         onRemoveSlot,
         onToggleReady,
         onStartGame,
+        onCycleMap,
         onLeave,
         onRefresh,
+        selectedMapName,
         createButton,
         menuParticleLayer
     } = params;
@@ -167,6 +171,31 @@ export function renderLobbyDetailScreen(
 
     const spectatorPanel = renderSpectatorPanel(spectators, isHost, localPlayerId);
     lobbyLayout.appendChild(spectatorPanel);
+
+    // Map selector (between teams and lobby action buttons)
+    const mapSelectionSection = document.createElement('div');
+    mapSelectionSection.style.display = 'flex';
+    mapSelectionSection.style.justifyContent = 'center';
+    mapSelectionSection.style.alignItems = 'center';
+    mapSelectionSection.style.marginBottom = '16px';
+    mapSelectionSection.style.gap = '12px';
+    container.appendChild(mapSelectionSection);
+
+    const mapSelectionLabel = document.createElement('div');
+    mapSelectionLabel.textContent = `Map: ${selectedMapName}`;
+    mapSelectionLabel.style.fontSize = '16px';
+    mapSelectionLabel.style.color = '#D0D0D0';
+    mapSelectionSection.appendChild(mapSelectionLabel);
+
+    const mapSelectionButton = createButton(isHost ? 'CHANGE MAP' : 'MAP LOCKED', onCycleMap, '#6A5ACD');
+    mapSelectionButton.style.fontSize = '14px';
+    mapSelectionButton.style.padding = '10px 18px';
+    if (!isHost) {
+        mapSelectionButton.disabled = true;
+        mapSelectionButton.style.opacity = '0.5';
+        mapSelectionButton.style.cursor = 'not-allowed';
+    }
+    mapSelectionSection.appendChild(mapSelectionButton);
 
     // Control buttons section
     const controlsSection = document.createElement('div');
