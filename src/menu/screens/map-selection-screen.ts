@@ -4,6 +4,7 @@
  */
 
 import { MapConfig } from '../types';
+import { createMapPreviewCanvas } from '../map-preview';
 
 export interface MapSelectionScreenParams {
     availableMaps: MapConfig[];
@@ -70,6 +71,10 @@ export function renderMapSelectionScreen(
         mapCard.addEventListener('click', () => {
             onMapSelect(map);
         });
+
+        const mapPreview = createMapPreviewCanvas(map, isCompactLayout ? 200 : 260, isCompactLayout ? 116 : 140);
+        mapPreview.style.marginBottom = '14px';
+        mapCard.appendChild(mapPreview);
 
         // Map name
         const mapName = document.createElement('h3');
