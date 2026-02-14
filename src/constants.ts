@@ -221,7 +221,7 @@ export const STELLAR_FORGE_STARLING_DEFENSE = 5; // Flat damage reduction agains
 
 // Forge crunch constants (periodic event that spawns minions)
 export const FORGE_CRUNCH_INTERVAL = 20.0; // Seconds between crunches
-export const FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING = 50; // Incoming light per second needed for 1 starling per crunch
+export const FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING = 20; // Incoming light per second needed for 1 starling per crunch
 export const FORGE_CRUNCH_SUCK_DURATION = 0.8; // Duration of dust suction phase
 export const FORGE_CRUNCH_WAVE_DURATION = 1.2; // Duration of wave push phase
 export const FORGE_CRUNCH_SUCK_RADIUS = 250; // Radius of dust suction effect
