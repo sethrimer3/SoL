@@ -2,7 +2,7 @@
  * GameState - Main game state class containing the game loop and all game logic
  */
 
-import { Vector2D, LightRay } from './math';
+import { Vector2D, LightRay, applyKnockbackVelocity } from './math';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -153,6 +153,9 @@ export class GameState {
         for (const asteroid of this.asteroids) {
             asteroid.update(deltaTime);
         }
+
+        // Apply knockback to units and mirrors that collide with rotating asteroids
+        this.applyAsteroidRotationKnockback();
 
         if (!this.isCountdownActive) {
             this.updateAi(deltaTime);
@@ -4046,6 +4049,55 @@ export class GameState {
         }
 
         return false; // No collision
+    }
+
+    /**
+     * Apply knockback to units and solar mirrors when asteroids rotate and collide with them
+     * This prevents entities from getting stuck inside rotating asteroids
+     */
+    private applyAsteroidRotationKnockback(): void {
+        // Check each asteroid for collisions with units and solar mirrors
+        for (const asteroid of this.asteroids) {
+            // Check all players' units
+            for (const player of this.players) {
+                // Check units
+                for (const unit of player.units) {
+                    // Broad-phase check: skip if unit is definitely outside asteroid
+                    // Use 1.4x size as safety margin since asteroid vertices can extend up to 1.32x base size
+                    const distance = unit.position.distanceTo(asteroid.position);
+                    if (distance < asteroid.size * 1.4 + unit.collisionRadiusPx) {
+                        // Use precise polygon check
+                        if (asteroid.containsPoint(unit.position)) {
+                            // Apply knockback away from asteroid center
+                            applyKnockbackVelocity(
+                                unit.position,
+                                unit.knockbackVelocity,
+                                asteroid.position,
+                                Constants.ASTEROID_KNOCKBACK_INITIAL_VELOCITY
+                            );
+                        }
+                    }
+                }
+                
+                // Check solar mirrors
+                for (const mirror of player.solarMirrors) {
+                    // Broad-phase check: skip if mirror is definitely outside asteroid
+                    const distance = mirror.position.distanceTo(asteroid.position);
+                    if (distance < asteroid.size * 1.4 + Constants.SOLAR_MIRROR_COLLISION_RADIUS) {
+                        // Use precise polygon check
+                        if (asteroid.containsPoint(mirror.position)) {
+                            // Apply knockback away from asteroid center
+                            applyKnockbackVelocity(
+                                mirror.position,
+                                mirror.knockbackVelocity,
+                                asteroid.position,
+                                Constants.ASTEROID_KNOCKBACK_INITIAL_VELOCITY
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {

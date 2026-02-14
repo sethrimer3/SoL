@@ -3,7 +3,7 @@
  * Base class for all combat units (heroes and minions)
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
 import * as Constants from '../../constants';
 import type { Player } from './player';
 import type { Asteroid } from './asteroid';
@@ -28,6 +28,7 @@ export class Unit {
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
     velocity: Vector2D = new Vector2D(0, 0);
+    knockbackVelocity: Vector2D = new Vector2D(0, 0); // Knockback velocity from asteroid rotation
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
     stunDuration: number = 0; // Duration of stun effect in seconds
@@ -85,6 +86,14 @@ export class Unit {
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
+        // Apply knockback velocity from asteroid rotation
+        updateKnockbackMotion(
+            this.position,
+            this.knockbackVelocity,
+            deltaTime,
+            Constants.ASTEROID_KNOCKBACK_DECELERATION
+        );
+
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;

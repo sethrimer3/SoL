@@ -108,3 +108,79 @@ export class LightRay {
         return null;
     }
 }
+
+/**
+ * Apply knockback velocity to an entity from asteroid rotation collision
+ * @param entityPos Current entity position
+ * @param entityKnockbackVelocity Entity's knockback velocity vector to modify
+ * @param asteroidCenter Position of the asteroid center
+ * @param initialSpeed Initial knockback speed in pixels per second
+ */
+export function applyKnockbackVelocity(
+    entityPos: Vector2D,
+    entityKnockbackVelocity: Vector2D,
+    asteroidCenter: Vector2D,
+    initialSpeed: number
+): void {
+    // Calculate direction away from asteroid center
+    const directionX = entityPos.x - asteroidCenter.x;
+    const directionY = entityPos.y - asteroidCenter.y;
+    const distance = Math.sqrt(directionX * directionX + directionY * directionY);
+    
+    // Normalize direction (handle edge case where entity is exactly at asteroid center)
+    if (distance > 0.001) {
+        const normalizedX = directionX / distance;
+        const normalizedY = directionY / distance;
+        
+        // Set knockback velocity
+        entityKnockbackVelocity.x = normalizedX * initialSpeed;
+        entityKnockbackVelocity.y = normalizedY * initialSpeed;
+    } else {
+        // If at center, push in a random direction
+        const angle = Math.random() * Math.PI * 2;
+        entityKnockbackVelocity.x = Math.cos(angle) * initialSpeed;
+        entityKnockbackVelocity.y = Math.sin(angle) * initialSpeed;
+    }
+}
+
+/**
+ * Apply knockback deceleration to an entity and update its position
+ * @param position Entity position to update
+ * @param knockbackVelocity Entity's knockback velocity vector to update
+ * @param deltaTime Time elapsed since last update in seconds
+ * @param deceleration Deceleration rate in pixels per second squared
+ */
+export function updateKnockbackMotion(
+    position: Vector2D,
+    knockbackVelocity: Vector2D,
+    deltaTime: number,
+    deceleration: number
+): void {
+    if (knockbackVelocity.x === 0 && knockbackVelocity.y === 0) {
+        return;
+    }
+    
+    // Apply knockback movement
+    position.x += knockbackVelocity.x * deltaTime;
+    position.y += knockbackVelocity.y * deltaTime;
+    
+    // Apply deceleration to knockback velocity
+    const knockbackSpeed = Math.sqrt(
+        knockbackVelocity.x * knockbackVelocity.x +
+        knockbackVelocity.y * knockbackVelocity.y
+    );
+    
+    if (knockbackSpeed > 0) {
+        const decelerationAmount = deceleration * deltaTime;
+        const newSpeed = Math.max(0, knockbackSpeed - decelerationAmount);
+        const speedRatio = newSpeed / knockbackSpeed;
+        knockbackVelocity.x *= speedRatio;
+        knockbackVelocity.y *= speedRatio;
+        
+        // If knockback is very small, set to zero to avoid floating point issues
+        if (newSpeed < 0.1) {
+            knockbackVelocity.x = 0;
+            knockbackVelocity.y = 0;
+        }
+    }
+}
