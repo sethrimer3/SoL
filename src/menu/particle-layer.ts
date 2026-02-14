@@ -70,7 +70,7 @@ export class ParticleMenuLayer {
         this.context = context;
 
         this.offscreenCanvas = document.createElement('canvas');
-        const offscreenContext = this.offscreenCanvas.getContext('2d');
+        const offscreenContext = this.offscreenCanvas.getContext('2d', { willReadFrequently: true });
         if (!offscreenContext) {
             throw new Error('Unable to create offscreen particle canvas context.');
         }
