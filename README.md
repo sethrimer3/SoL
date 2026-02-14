@@ -145,7 +145,7 @@ P2P multiplayer uses Supabase for WebRTC signaling (match creation, joining) whi
 
 #### Prerequisites
 1. Create a free Supabase project at [supabase.com](https://supabase.com)
-2. Run the P2P schema: Execute `supabase-p2p-schema.sql` in your Supabase SQL Editor
+2. Run the complete schema: Execute `supabase-complete-schema.sql` in your Supabase SQL Editor
 3. Get your credentials from Settings > API in your Supabase dashboard
 
 #### Configuration
