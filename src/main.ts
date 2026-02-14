@@ -901,8 +901,8 @@ class GameController {
             return false;
         }
 
-        if (!player.spendEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST)) {
-            console.log('Not enough energy to forge a Solar Mirror');
+        if (player.stellarForge.incomingLightPerSec < Constants.STELLAR_FORGE_SOLAR_MIRROR_COST) {
+            console.log('Not enough incoming sunlight to forge a Solar Mirror');
             return false;
         }
 
@@ -928,7 +928,6 @@ class GameController {
         }
 
         if (!hasSpawnPosition) {
-            player.addEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST);
             console.log('No valid spawn point for new Solar Mirror');
             return false;
         }
@@ -2766,8 +2765,8 @@ class GameController {
                                     `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | energy=${player.energy.toFixed(1)}`
                                 );
                                 const heroCost = this.getHeroUnitCost(player);
-                                if (!player.spendEnergy(heroCost)) {
-                                    console.log(`Not enough energy to forge ${clickedHeroName} (cost ${heroCost})`);
+                                if (player.stellarForge.incomingLightPerSec < heroCost) {
+                                    console.log(`Not enough incoming sunlight to forge ${clickedHeroName} (requires ${heroCost})`);
                                 } else {
                                     player.stellarForge.enqueueHeroUnit(heroUnitType);
                                     player.stellarForge.startHeroProductionIfIdle();
@@ -3093,7 +3092,7 @@ class GameController {
                                     const heroUnitType = this.getHeroUnitType(selectedLabel);
                                     if (heroUnitType) {
                                         const heroCost = this.getHeroUnitCost(player);
-                                        if (player.spendEnergy(heroCost)) {
+                                        if (player.stellarForge.incomingLightPerSec >= heroCost) {
                                             player.stellarForge.enqueueHeroUnit(heroUnitType);
                                             player.stellarForge.startHeroProductionIfIdle();
                                             console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
@@ -3103,6 +3102,8 @@ class GameController {
 
                                             player.stellarForge.isSelected = false;
                                             this.selectedBase = null;
+                                        } else {
+                                            console.log(`Radial selection: Not enough incoming sunlight for ${selectedLabel} (requires ${heroCost})`);
                                         }
                                     }
                                 }
