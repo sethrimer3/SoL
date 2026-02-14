@@ -2,7 +2,7 @@
  * GameState - Main game state class containing the game loop and all game logic
  */
 
-import { Vector2D, LightRay, applyKnockbackFromPoint } from './math';
+import { Vector2D, LightRay, applyKnockbackVelocity } from './math';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -4070,7 +4070,7 @@ export class GameState {
                         // Use precise polygon check
                         if (asteroid.containsPoint(unit.position)) {
                             // Apply knockback away from asteroid center
-                            applyKnockbackFromPoint(
+                            applyKnockbackVelocity(
                                 unit.position,
                                 unit.knockbackVelocity,
                                 asteroid.position,
@@ -4084,12 +4084,11 @@ export class GameState {
                 for (const mirror of player.solarMirrors) {
                     // Check if mirror is inside or very close to the asteroid
                     const distance = mirror.position.distanceTo(asteroid.position);
-                    const mirrorRadius = 20; // Mirror has ~20 pixel radius
-                    if (distance < asteroid.size + mirrorRadius) {
+                    if (distance < asteroid.size + Constants.SOLAR_MIRROR_COLLISION_RADIUS) {
                         // Use precise polygon check
                         if (asteroid.containsPoint(mirror.position)) {
                             // Apply knockback away from asteroid center
-                            applyKnockbackFromPoint(
+                            applyKnockbackVelocity(
                                 mirror.position,
                                 mirror.knockbackVelocity,
                                 asteroid.position,

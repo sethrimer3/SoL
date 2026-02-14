@@ -2,7 +2,7 @@
  * Solar Mirror - Reflects light from suns to structures
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
 import * as Constants from '../../constants';
 import type { Sun } from './sun';
 import type { Player } from './player';
@@ -471,31 +471,12 @@ export class SolarMirror {
      */
     update(deltaTime: number, gameState: GameState | null = null): void {
         // Apply knockback velocity from asteroid rotation
-        if (this.knockbackVelocity.x !== 0 || this.knockbackVelocity.y !== 0) {
-            // Apply knockback movement
-            this.position.x += this.knockbackVelocity.x * deltaTime;
-            this.position.y += this.knockbackVelocity.y * deltaTime;
-            
-            // Apply deceleration to knockback velocity
-            const knockbackSpeed = Math.sqrt(
-                this.knockbackVelocity.x * this.knockbackVelocity.x +
-                this.knockbackVelocity.y * this.knockbackVelocity.y
-            );
-            
-            if (knockbackSpeed > 0) {
-                const deceleration = Constants.ASTEROID_KNOCKBACK_DECELERATION * deltaTime;
-                const newSpeed = Math.max(0, knockbackSpeed - deceleration);
-                const speedRatio = newSpeed / knockbackSpeed;
-                this.knockbackVelocity.x *= speedRatio;
-                this.knockbackVelocity.y *= speedRatio;
-                
-                // If knockback is very small, set to zero to avoid floating point issues
-                if (newSpeed < 0.1) {
-                    this.knockbackVelocity.x = 0;
-                    this.knockbackVelocity.y = 0;
-                }
-            }
-        }
+        updateKnockbackMotion(
+            this.position,
+            this.knockbackVelocity,
+            deltaTime,
+            Constants.ASTEROID_KNOCKBACK_DECELERATION
+        );
 
         if (!this.targetPosition) return;
 

@@ -144,17 +144,43 @@ export function applyKnockbackVelocity(
 }
 
 /**
- * Apply knockback to an entity from a specific point (asteroid rotation)
- * @param entityPos Current entity position
- * @param entityKnockbackVelocity Entity's knockback velocity vector to modify
- * @param knockbackSource Position to knock away from
- * @param initialSpeed Initial knockback speed in pixels per second
+ * Apply knockback deceleration to an entity and update its position
+ * @param position Entity position to update
+ * @param knockbackVelocity Entity's knockback velocity vector to update
+ * @param deltaTime Time elapsed since last update in seconds
+ * @param deceleration Deceleration rate in pixels per second squared
  */
-export function applyKnockbackFromPoint(
-    entityPos: Vector2D,
-    entityKnockbackVelocity: Vector2D,
-    knockbackSource: Vector2D,
-    initialSpeed: number
+export function updateKnockbackMotion(
+    position: Vector2D,
+    knockbackVelocity: Vector2D,
+    deltaTime: number,
+    deceleration: number
 ): void {
-    applyKnockbackVelocity(entityPos, entityKnockbackVelocity, knockbackSource, initialSpeed);
+    if (knockbackVelocity.x === 0 && knockbackVelocity.y === 0) {
+        return;
+    }
+    
+    // Apply knockback movement
+    position.x += knockbackVelocity.x * deltaTime;
+    position.y += knockbackVelocity.y * deltaTime;
+    
+    // Apply deceleration to knockback velocity
+    const knockbackSpeed = Math.sqrt(
+        knockbackVelocity.x * knockbackVelocity.x +
+        knockbackVelocity.y * knockbackVelocity.y
+    );
+    
+    if (knockbackSpeed > 0) {
+        const decelerationAmount = deceleration * deltaTime;
+        const newSpeed = Math.max(0, knockbackSpeed - decelerationAmount);
+        const speedRatio = newSpeed / knockbackSpeed;
+        knockbackVelocity.x *= speedRatio;
+        knockbackVelocity.y *= speedRatio;
+        
+        // If knockback is very small, set to zero to avoid floating point issues
+        if (newSpeed < 0.1) {
+            knockbackVelocity.x = 0;
+            knockbackVelocity.y = 0;
+        }
+    }
 }
