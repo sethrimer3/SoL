@@ -2168,6 +2168,10 @@ export class MainMenu {
                     this.startMenuTransition();
                     await this.renderLobbyDetailScreen(this.contentElement);
                 } else {
+                    const networkError = this.onlineNetworkManager.getLastError();
+                    if (networkError) {
+                        alert(`Online lobby error: ${networkError}`);
+                    }
                     this.offerOfflineAILobby(lobbyName);
                 }
             },

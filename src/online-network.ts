@@ -3,7 +3,7 @@
  * Implements fast, accurate RTS networking with minimal data transmission
  */
 
-import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, RealtimeChannel, PostgrestError } from '@supabase/supabase-js';
 import { getSupabaseConfig, isSupabaseConfigured } from './supabase-config';
 import { 
     GameCommand, 
@@ -71,6 +71,7 @@ export class OnlineNetworkManager {
     private connected: boolean = false;
     private commandQueue: GameCommand[] = [];
     private lastSyncTime: number = 0;
+    private lastErrorMessage: string | null = null;
     private readonly SYNC_INTERVAL_MS = 50; // 20 updates per second for RTS
 
     constructor(playerId: string) {
@@ -104,6 +105,47 @@ export class OnlineNetworkManager {
      */
     isAvailable(): boolean {
         return this.supabase !== null && isSupabaseConfigured();
+    }
+
+    /**
+     * Get the last network error message for UI feedback
+     */
+    getLastError(): string | null {
+        return this.lastErrorMessage;
+    }
+
+    /**
+     * Reset last network error
+     */
+    clearLastError(): void {
+        this.lastErrorMessage = null;
+    }
+
+    private setLastError(context: string, error: unknown): void {
+        const details = this.formatError(error);
+        this.lastErrorMessage = `${context}: ${details}`;
+    }
+
+    private formatError(error: unknown): string {
+        if (!error) return 'Unknown error';
+
+        const supabaseError = error as Partial<PostgrestError> & { details?: string; hint?: string };
+        const parts: string[] = [];
+
+        if (supabaseError.message) parts.push(supabaseError.message);
+        if (supabaseError.details) parts.push(supabaseError.details);
+        if (supabaseError.hint) parts.push(`Hint: ${supabaseError.hint}`);
+        if (supabaseError.code) parts.push(`Code: ${supabaseError.code}`);
+
+        if (parts.length > 0) return parts.join(' | ');
+        return String(error);
+    }
+
+    private isMissingColumnError(error: unknown, columnName: string): boolean {
+        const supabaseError = error as Partial<PostgrestError> & { details?: string };
+        const joined = `${supabaseError?.message || ''} ${supabaseError?.details || ''}`.toLowerCase();
+
+        return (supabaseError?.code === '42703' || joined.includes('does not exist')) && joined.includes(columnName.toLowerCase());
     }
 
     /**
@@ -866,15 +908,21 @@ export class OnlineNetworkManager {
      */
     async createCustomLobby(lobbyName: string, username: string): Promise<GameRoom | null> {
         if (!this.supabase) {
+            this.setLastError('Supabase not initialized', null);
             console.error('Supabase not initialized');
             return null;
         }
+
+        this.clearLastError();
 
         try {
             this.isHost = true;
 
             // Create room with 2v2 mode and 4 max players
-            const { data: room, error: roomError } = await this.supabase
+            let room: GameRoom | null = null;
+            let roomError: unknown = null;
+
+            const roomResult = await this.supabase
                 .from('game_rooms')
                 .insert([{
                     name: lobbyName,
@@ -892,7 +940,35 @@ export class OnlineNetworkManager {
                 .select()
                 .single();
 
-            if (roomError) {
+            room = roomResult.data as GameRoom | null;
+            roomError = roomResult.error;
+
+            // Backward compatibility for older schemas that don't include game_mode
+            if (roomError && this.isMissingColumnError(roomError, 'game_mode')) {
+                console.warn('game_mode column missing. Falling back to legacy lobby schema.');
+                const legacyRoomResult = await this.supabase
+                    .from('game_rooms')
+                    .insert([{
+                        name: lobbyName,
+                        host_id: this.localPlayerId,
+                        status: 'waiting',
+                        max_players: 4,
+                        game_settings: {
+                            teamConfig: {
+                                enabled: true,
+                                maxPlayersPerTeam: 2
+                            }
+                        }
+                    }])
+                    .select()
+                    .single();
+
+                room = legacyRoomResult.data as GameRoom | null;
+                roomError = legacyRoomResult.error;
+            }
+
+            if (roomError || !room) {
+                this.setLastError('Failed to create custom lobby', roomError);
                 console.error('Failed to create custom lobby:', roomError);
                 return null;
             }
@@ -900,7 +976,8 @@ export class OnlineNetworkManager {
             this.currentRoom = room;
 
             // Add host as player on team 0
-            const { error: playerError } = await this.supabase
+            let playerError: unknown = null;
+            const playerResult = await this.supabase
                 .from('room_players')
                 .insert([{
                     room_id: room.id,
@@ -912,7 +989,26 @@ export class OnlineNetworkManager {
                     slot_type: 'player'
                 }]);
 
+            playerError = playerResult.error;
+
+            // Backward compatibility for older schemas that don't include team/slot columns
+            if (playerError && (this.isMissingColumnError(playerError, 'team_id') || this.isMissingColumnError(playerError, 'slot_type'))) {
+                console.warn('team_id/slot_type columns missing. Falling back to legacy player schema.');
+                const legacyPlayerResult = await this.supabase
+                    .from('room_players')
+                    .insert([{
+                        room_id: room.id,
+                        player_id: this.localPlayerId,
+                        username: username,
+                        is_host: true,
+                        is_ready: false
+                    }]);
+
+                playerError = legacyPlayerResult.error;
+            }
+
             if (playerError) {
+                this.setLastError('Failed to add host player', playerError);
                 console.error('Failed to add host player:', playerError);
                 return null;
             }
@@ -923,6 +1019,7 @@ export class OnlineNetworkManager {
             console.log('Custom lobby created:', room.id);
             return room;
         } catch (error) {
+            this.setLastError('Error creating custom lobby', error);
             console.error('Error creating custom lobby:', error);
             return null;
         }
@@ -935,7 +1032,7 @@ export class OnlineNetworkManager {
         if (!this.supabase) return [];
 
         try {
-            const { data, error } = await this.supabase
+            let { data, error } = await this.supabase
                 .from('game_rooms')
                 .select('*')
                 .in('game_mode', ['2v2', 'custom'])
@@ -943,13 +1040,28 @@ export class OnlineNetworkManager {
                 .order('created_at', { ascending: false })
                 .limit(20);
 
+            if (error && this.isMissingColumnError(error, 'game_mode')) {
+                console.warn('game_mode column missing. Listing waiting lobbies without mode filter.');
+                const legacyResult = await this.supabase
+                    .from('game_rooms')
+                    .select('*')
+                    .eq('status', 'waiting')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
+
+                data = legacyResult.data;
+                error = legacyResult.error;
+            }
+
             if (error) {
+                this.setLastError('Failed to list custom lobbies', error);
                 console.error('Failed to list custom lobbies:', error);
                 return [];
             }
 
             return data || [];
         } catch (error) {
+            this.setLastError('Error listing custom lobbies', error);
             console.error('Error listing custom lobbies:', error);
             return [];
         }
