@@ -5300,11 +5300,9 @@ export class GameRenderer {
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.restore();
         
-        // Draw asteroid shadows - dark shadows on left (white) side, light shadows on right (dark) side
+        // Draw asteroid shadows - dark shadows on left (white) side, light shadows on right (dark) side.
+        // Each quad uses a directional gradient so shadow strength naturally fades with distance.
         this.ctx.save();
-        this.ctx.fillStyle = '#000000';
-        this.ctx.beginPath();
-        let hasLightSideShadow = false;
         const sunX = sun.position.x;
         const sunY = sun.position.y;
         const sv1 = this.sunRayScreenPosA;
@@ -5355,26 +5353,14 @@ export class GameRenderer {
                         this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
                         this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
-                        this.ctx.moveTo(sv1.x, sv1.y);
-                        this.ctx.lineTo(sv2.x, sv2.y);
-                        this.ctx.lineTo(ss2.x, ss2.y);
-                        this.ctx.lineTo(ss1.x, ss1.y);
-                        this.ctx.closePath();
-                        hasLightSideShadow = true;
+                        this.fillSoftShadowQuad(sv1, sv2, ss2, ss1, 'rgb(0, 0, 0)', 0.38, 0.14);
                     }
                 }
             }
         }
-
-        if (hasLightSideShadow) {
-            this.ctx.fill();
-        }
         this.ctx.restore();
 
         this.ctx.save();
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.beginPath();
-        let hasDarkSideShadow = false;
 
         for (const asteroid of game.asteroids) {
             const worldVertices = asteroid.getWorldVertices();
@@ -5419,21 +5405,43 @@ export class GameRenderer {
                         this.worldToScreenCoords(shadow1X, shadow1Y, ss1);
                         this.worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
-                        this.ctx.moveTo(sv1.x, sv1.y);
-                        this.ctx.lineTo(sv2.x, sv2.y);
-                        this.ctx.lineTo(ss2.x, ss2.y);
-                        this.ctx.lineTo(ss1.x, ss1.y);
-                        this.ctx.closePath();
-                        hasDarkSideShadow = true;
+                        this.fillSoftShadowQuad(sv1, sv2, ss2, ss1, 'rgb(255, 255, 255)', 0.36, 0.13);
                     }
                 }
             }
         }
-
-        if (hasDarkSideShadow) {
-            this.ctx.fill();
-        }
         this.ctx.restore();
+
+    }
+
+    private fillSoftShadowQuad(
+        nearA: { x: number; y: number },
+        nearB: { x: number; y: number },
+        farA: { x: number; y: number },
+        farB: { x: number; y: number },
+        color: string,
+        nearAlpha: number,
+        midAlpha: number
+    ): void {
+        const nearMidX = (nearA.x + nearB.x) * 0.5;
+        const nearMidY = (nearA.y + nearB.y) * 0.5;
+        const farMidX = (farA.x + farB.x) * 0.5;
+        const farMidY = (farA.y + farB.y) * 0.5;
+
+        const gradient = this.ctx.createLinearGradient(nearMidX, nearMidY, farMidX, farMidY);
+        const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
+        gradient.addColorStop(0, `${rgbaPrefix}, ${nearAlpha})`);
+        gradient.addColorStop(0.6, `${rgbaPrefix}, ${midAlpha})`);
+        gradient.addColorStop(1, `${rgbaPrefix}, 0)`);
+
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.moveTo(nearA.x, nearA.y);
+        this.ctx.lineTo(nearB.x, nearB.y);
+        this.ctx.lineTo(farA.x, farA.y);
+        this.ctx.lineTo(farB.x, farB.y);
+        this.ctx.closePath();
+        this.ctx.fill();
     }
 
     /**
