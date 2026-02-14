@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS room_players (
     UNIQUE(room_id, player_id)
 );
 
+-- Add team/custom slot support columns early so dependent functions can compile
+-- on a fresh database before the migration section runs.
+ALTER TABLE room_players
+ADD COLUMN IF NOT EXISTS team_id INTEGER,
+ADD COLUMN IF NOT EXISTS is_spectator BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS slot_type TEXT DEFAULT 'player' CHECK (slot_type IN ('player', 'ai', 'spectator', 'empty')),
+ADD COLUMN IF NOT EXISTS ai_difficulty TEXT CHECK (ai_difficulty IN ('easy', 'normal', 'hard')),
+ADD COLUMN IF NOT EXISTS player_color TEXT,
+ADD COLUMN IF NOT EXISTS mmr INTEGER DEFAULT 1000;
+
 -- Game State Table (optional, for persistence)
 CREATE TABLE IF NOT EXISTS game_states (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -55,7 +65,7 @@ CREATE INDEX IF NOT EXISTS idx_game_rooms_created_at ON game_rooms(created_at DE
 CREATE INDEX IF NOT EXISTS idx_room_players_room_id ON room_players(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_players_player_id ON room_players(player_id);
 CREATE INDEX IF NOT EXISTS idx_game_states_room_id ON game_states(room_id);
-CREATE INDEX IF NOT EXISTS idx_game_states_tick ON game_states(room_id, tick);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_game_states_room_tick ON game_states(room_id, tick);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE game_rooms ENABLE ROW LEVEL SECURITY;
@@ -90,12 +100,12 @@ $$;
 
 
 CREATE OR REPLACE FUNCTION add_ai_player_to_room(
-    p_room_id UUID,
-    p_ai_player_id TEXT,
-    p_team_id INTEGER DEFAULT NULL,
-    p_ai_difficulty TEXT DEFAULT 'normal',
-    p_username TEXT DEFAULT 'AI Player',
-    p_faction TEXT DEFAULT 'Radiant'
+    room_id UUID,
+    ai_player_id TEXT,
+    team_id INTEGER DEFAULT NULL,
+    ai_difficulty TEXT DEFAULT 'normal',
+    username TEXT DEFAULT 'AI Player',
+    faction TEXT DEFAULT 'Radiant'
 )
 RETURNS VOID
 LANGUAGE plpgsql
@@ -105,7 +115,7 @@ AS $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM game_rooms
-        WHERE id = p_room_id
+        WHERE id = room_id
           AND host_id = auth_player_id()
     ) THEN
         RAISE EXCEPTION 'Only room host can add AI players'
@@ -124,42 +134,15 @@ BEGIN
         faction
     )
     VALUES (
-        p_room_id,
-        p_ai_player_id,
-        p_username,
+        room_id,
+        ai_player_id,
+        username,
         FALSE,
         TRUE,
-        p_team_id,
+        team_id,
         'ai',
-        p_ai_difficulty,
-        p_faction
-    );
-END;
-$$;
-
--- Legacy-argument wrapper kept for compatibility with older clients that call
--- add_ai_player_to_room(room_id, ai_player_id, team_id, ...).
-CREATE OR REPLACE FUNCTION add_ai_player_to_room(
-    room_id UUID,
-    ai_player_id TEXT,
-    team_id INTEGER DEFAULT NULL,
-    ai_difficulty TEXT DEFAULT 'normal',
-    username TEXT DEFAULT 'AI Player',
-    faction TEXT DEFAULT 'Radiant'
-)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-    PERFORM add_ai_player_to_room(
-        p_room_id => room_id,
-        p_ai_player_id => ai_player_id,
-        p_team_id => team_id,
-        p_ai_difficulty => ai_difficulty,
-        p_username => username,
-        p_faction => faction
+        ai_difficulty,
+        faction
     );
 END;
 $$;
@@ -181,7 +164,7 @@ CREATE POLICY "Players can view their room"
 
 CREATE POLICY "Anyone can create room"
     ON game_rooms FOR INSERT
-    WITH CHECK (true);
+    WITH CHECK (host_id = auth_player_id());
 
 CREATE POLICY "Host can update room"
     ON game_rooms FOR UPDATE
@@ -278,12 +261,7 @@ CREATE INDEX IF NOT EXISTS idx_game_rooms_game_mode ON game_rooms(game_mode);
 
 -- Add team support columns to room_players
 ALTER TABLE room_players
-ADD COLUMN IF NOT EXISTS team_id INTEGER,
-ADD COLUMN IF NOT EXISTS is_spectator BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS slot_type TEXT DEFAULT 'player' CHECK (slot_type IN ('player', 'ai', 'spectator', 'empty')),
-ADD COLUMN IF NOT EXISTS ai_difficulty TEXT CHECK (ai_difficulty IN ('easy', 'normal', 'hard')),
-ADD COLUMN IF NOT EXISTS player_color TEXT,
-ADD COLUMN IF NOT EXISTS mmr INTEGER DEFAULT 1000;
+ADD COLUMN IF NOT EXISTS team_id INTEGER;
 
 CREATE INDEX IF NOT EXISTS idx_room_players_team_id ON room_players(room_id, team_id);
 CREATE INDEX IF NOT EXISTS idx_room_players_slot_type ON room_players(room_id, slot_type);
@@ -315,7 +293,7 @@ DROP POLICY IF EXISTS "Players can leave queue" ON matchmaking_queue;
 
 CREATE POLICY "Players can view queue"
     ON matchmaking_queue FOR SELECT
-    USING (true);
+    USING (player_id = auth_player_id());
 
 CREATE POLICY "Players can join queue"
     ON matchmaking_queue FOR INSERT
@@ -455,6 +433,18 @@ ALTER TABLE matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE match_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE signaling_messages ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Anyone can view open matches" ON matches;
+DROP POLICY IF EXISTS "Players can view their match" ON matches;
+DROP POLICY IF EXISTS "Anyone can create match" ON matches;
+DROP POLICY IF EXISTS "Host can update match" ON matches;
+DROP POLICY IF EXISTS "Host can delete match" ON matches;
+DROP POLICY IF EXISTS "Players can view match members" ON match_players;
+DROP POLICY IF EXISTS "Anyone can join match" ON match_players;
+DROP POLICY IF EXISTS "Players can update self" ON match_players;
+DROP POLICY IF EXISTS "Players can leave" ON match_players;
+DROP POLICY IF EXISTS "Players can view signaling messages" ON signaling_messages;
+DROP POLICY IF EXISTS "Players can send signaling messages" ON signaling_messages;
+
 CREATE POLICY "Anyone can view open matches"
     ON matches FOR SELECT
     USING (status = 'open');
@@ -470,7 +460,7 @@ CREATE POLICY "Players can view their match"
 
 CREATE POLICY "Anyone can create match"
     ON matches FOR INSERT
-    WITH CHECK (true);
+    WITH CHECK (host_player_id::text = auth_player_id());
 
 CREATE POLICY "Host can update match"
     ON matches FOR UPDATE
