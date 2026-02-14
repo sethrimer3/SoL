@@ -66,6 +66,7 @@ export class OnlineNetworkManager {
     private supabase: SupabaseClient | null = null;
     private channel: RealtimeChannel | null = null;
     private localPlayerId: string;
+    private databasePlayerId: string | null = null;
     private currentRoom: GameRoom | null = null;
     private eventListeners: Map<NetworkEvent, NetworkEventCallback[]> = new Map();
     private isHost: boolean = false;
@@ -102,6 +103,38 @@ export class OnlineNetworkManager {
         });
         
         console.log('Supabase client initialized');
+    }
+
+    private getDatabasePlayerId(): string {
+        return this.databasePlayerId ?? this.localPlayerId;
+    }
+
+    private async ensureDatabaseIdentity(): Promise<string | null> {
+        if (!this.supabase) return null;
+
+        if (this.databasePlayerId) {
+            return this.databasePlayerId;
+        }
+
+        const { data: userData, error: userError } = await this.supabase.auth.getUser();
+        if (userError) {
+            console.warn('Failed to fetch Supabase user, attempting anonymous auth:', userError);
+        }
+
+        if (userData.user?.id) {
+            this.databasePlayerId = userData.user.id;
+            return this.databasePlayerId;
+        }
+
+        const { data: signInData, error: signInError } = await this.supabase.auth.signInAnonymously();
+        if (signInError || !signInData.user?.id) {
+            this.setLastError('Failed to establish Supabase identity', signInError);
+            console.error('Failed to establish Supabase identity:', signInError);
+            return null;
+        }
+
+        this.databasePlayerId = signInData.user.id;
+        return this.databasePlayerId;
     }
 
     /**
@@ -162,6 +195,9 @@ export class OnlineNetworkManager {
         }
 
         try {
+            const databasePlayerId = await this.ensureDatabaseIdentity();
+            if (!databasePlayerId) return null;
+
             this.isHost = true;
 
             // Create room in database
@@ -169,7 +205,7 @@ export class OnlineNetworkManager {
                 .from('game_rooms')
                 .insert([{
                     name: roomName,
-                    host_id: this.localPlayerId,
+                    host_id: databasePlayerId,
                     status: 'waiting',
                     max_players: maxPlayers,
                     game_settings: {}
@@ -189,7 +225,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .insert([{
                     room_id: room.id,
-                    player_id: this.localPlayerId,
+                    player_id: databasePlayerId,
                     username: username,
                     is_host: true,
                     is_ready: true
@@ -221,6 +257,9 @@ export class OnlineNetworkManager {
         }
 
         try {
+            const databasePlayerId = await this.ensureDatabaseIdentity();
+            if (!databasePlayerId) return false;
+
             // Get room info
             const { data: room, error: roomError } = await this.supabase
                 .from('game_rooms')
@@ -263,7 +302,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .insert([{
                     room_id: roomId,
-                    player_id: this.localPlayerId,
+                    player_id: databasePlayerId,
                     username: username,
                     is_host: false,
                     is_ready: false
@@ -621,7 +660,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .update({ is_ready: ready })
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             if (error) {
                 console.error('Failed to set ready status:', error);
@@ -712,7 +751,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .delete()
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             // If host, delete room
             if (this.isHost) {
@@ -794,7 +833,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .select('is_ready')
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId)
+                .eq('player_id', this.getDatabasePlayerId())
                 .single();
 
             if (fetchError || !currentPlayer) {
@@ -808,7 +847,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .update({ is_ready: newReadyStatus })
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             if (error) {
                 console.error('Failed to toggle ready:', error);
@@ -920,6 +959,9 @@ export class OnlineNetworkManager {
         this.clearLastError();
 
         try {
+            const databasePlayerId = await this.ensureDatabaseIdentity();
+            if (!databasePlayerId) return null;
+
             this.isHost = true;
 
             // Create room with 2v2 mode and 4 max players
@@ -930,7 +972,7 @@ export class OnlineNetworkManager {
                 .from('game_rooms')
                 .insert([{
                     name: lobbyName,
-                    host_id: this.localPlayerId,
+                    host_id: databasePlayerId,
                     status: 'waiting',
                     max_players: 4,
                     game_mode: 'custom',
@@ -954,7 +996,7 @@ export class OnlineNetworkManager {
                     .from('game_rooms')
                     .insert([{
                         name: lobbyName,
-                        host_id: this.localPlayerId,
+                        host_id: databasePlayerId,
                         status: 'waiting',
                         max_players: 4,
                         game_settings: {
@@ -985,7 +1027,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .insert([{
                     room_id: room.id,
-                    player_id: this.localPlayerId,
+                    player_id: databasePlayerId,
                     username: username,
                     is_host: true,
                     is_ready: false,
@@ -1002,7 +1044,7 @@ export class OnlineNetworkManager {
                     .from('room_players')
                     .insert([{
                         room_id: room.id,
-                        player_id: this.localPlayerId,
+                        player_id: databasePlayerId,
                         username: username,
                         is_host: true,
                         is_ready: false
@@ -1192,7 +1234,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .update({ player_color: color })
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             if (error) {
                 console.error('Failed to set player color:', error);
@@ -1220,7 +1262,7 @@ export class OnlineNetworkManager {
                 .from('room_players')
                 .update({ faction: faction })
                 .eq('room_id', this.currentRoom.id)
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             if (error) {
                 console.error('Failed to set player faction:', error);
@@ -1251,7 +1293,7 @@ export class OnlineNetworkManager {
             const { error } = await this.supabase
                 .from('matchmaking_queue')
                 .insert([{
-                    player_id: this.localPlayerId,
+                    player_id: this.getDatabasePlayerId(),
                     username: username,
                     mmr: mmr,
                     game_mode: '2v2',
@@ -1285,7 +1327,7 @@ export class OnlineNetworkManager {
             const { error } = await this.supabase
                 .from('matchmaking_queue')
                 .delete()
-                .eq('player_id', this.localPlayerId);
+                .eq('player_id', this.getDatabasePlayerId());
 
             if (error) {
                 console.error('Failed to leave matchmaking queue:', error);
@@ -1310,7 +1352,7 @@ export class OnlineNetworkManager {
             const { data, error } = await this.supabase
                 .from('matchmaking_queue')
                 .select('*')
-                .eq('player_id', this.localPlayerId)
+                .eq('player_id', this.getDatabasePlayerId())
                 .eq('status', 'searching')
                 .single();
 
@@ -1337,7 +1379,7 @@ export class OnlineNetworkManager {
                 .select('*')
                 .eq('game_mode', '2v2')
                 .eq('status', 'searching')
-                .neq('player_id', this.localPlayerId)
+                .neq('player_id', this.getDatabasePlayerId())
                 .gte('mmr', mmr - 100)
                 .lte('mmr', mmr + 100)
                 .order('joined_at', { ascending: true })
