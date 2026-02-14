@@ -116,6 +116,84 @@ $$ LANGUAGE plpgsql;
 -- HELPER FUNCTIONS FOR 2v2
 -- ============================================================================
 
+-- RPC used by lobby hosts to add AI players while respecting RLS policies.
+-- This function mirrors the base schema so deployments that only ran this
+-- migration still expose the add_ai_player_to_room endpoint in PostgREST.
+CREATE OR REPLACE FUNCTION add_ai_player_to_room(
+    p_room_id UUID,
+    p_ai_player_id TEXT,
+    p_team_id INTEGER DEFAULT NULL,
+    p_ai_difficulty TEXT DEFAULT 'normal',
+    p_username TEXT DEFAULT 'AI Player',
+    p_faction TEXT DEFAULT 'Radiant'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM game_rooms
+        WHERE id = p_room_id
+          AND host_id = auth_player_id()
+    ) THEN
+        RAISE EXCEPTION 'Only room host can add AI players'
+            USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO room_players (
+        room_id,
+        player_id,
+        username,
+        is_host,
+        is_ready,
+        team_id,
+        slot_type,
+        ai_difficulty,
+        faction
+    )
+    VALUES (
+        p_room_id,
+        p_ai_player_id,
+        p_username,
+        FALSE,
+        TRUE,
+        p_team_id,
+        'ai',
+        p_ai_difficulty,
+        p_faction
+    );
+END;
+$$;
+
+-- Legacy-argument wrapper kept for compatibility with older clients that call
+-- add_ai_player_to_room(room_id, ai_player_id, team_id, ...).
+CREATE OR REPLACE FUNCTION add_ai_player_to_room(
+    room_id UUID,
+    ai_player_id TEXT,
+    team_id INTEGER DEFAULT NULL,
+    ai_difficulty TEXT DEFAULT 'normal',
+    username TEXT DEFAULT 'AI Player',
+    faction TEXT DEFAULT 'Radiant'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    PERFORM add_ai_player_to_room(
+        p_room_id => room_id,
+        p_ai_player_id => ai_player_id,
+        p_team_id => team_id,
+        p_ai_difficulty => ai_difficulty,
+        p_username => username,
+        p_faction => faction
+    );
+END;
+$$;
+
 -- Function to get available teams in a room
 CREATE OR REPLACE FUNCTION get_room_team_slots(p_room_id UUID)
 RETURNS TABLE(team_id INTEGER, slot_count BIGINT, player_count BIGINT) AS $$
