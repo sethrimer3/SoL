@@ -4325,6 +4325,10 @@ export class GameRenderer {
             this.ctx.lineTo(screenVertices[vertexIndex].x, screenVertices[vertexIndex].y);
         }
         this.ctx.closePath();
+        // Fill the full silhouette first so omitted edge facets do not reveal
+        // transparent triangle gaps around the asteroid perimeter.
+        this.ctx.fillStyle = asteroidFill;
+        this.ctx.fill();
         this.ctx.clip();
 
         const asteroidRenderCache = this.getAsteroidRenderCache(asteroid);
@@ -4628,8 +4632,8 @@ export class GameRenderer {
             });
         }
 
-        const isBoundaryTriangle = (triangle: [number, number, number]): boolean => {
-            return triangle[0] < boundaryPoints.length && triangle[1] < boundaryPoints.length && triangle[2] < boundaryPoints.length;
+        const hasBoundaryVertex = (triangle: [number, number, number]): boolean => {
+            return triangle[0] < boundaryPoints.length || triangle[1] < boundaryPoints.length || triangle[2] < boundaryPoints.length;
         };
 
         const facets: [Vector2D, Vector2D, Vector2D][] = [];
@@ -4639,7 +4643,9 @@ export class GameRenderer {
                 continue;
             }
 
-            if (isBoundaryTriangle([indexA, indexB, indexC])) {
+            // Keep all facet geometry away from the asteroid hull so the outer
+            // silhouette stays smooth instead of showing edge-connected triangles.
+            if (hasBoundaryVertex([indexA, indexB, indexC])) {
                 continue;
             }
 
