@@ -4632,20 +4632,10 @@ export class GameRenderer {
             });
         }
 
-        const hasBoundaryVertex = (triangle: [number, number, number]): boolean => {
-            return triangle[0] < boundaryPoints.length || triangle[1] < boundaryPoints.length || triangle[2] < boundaryPoints.length;
-        };
-
         const facets: [Vector2D, Vector2D, Vector2D][] = [];
         for (let triangleIndex = 0; triangleIndex < triangles.length; triangleIndex++) {
             const [indexA, indexB, indexC] = triangles[triangleIndex];
             if (indexA >= vertexCount || indexB >= vertexCount || indexC >= vertexCount) {
-                continue;
-            }
-
-            // Keep all facet geometry away from the asteroid hull so the outer
-            // silhouette stays smooth instead of showing edge-connected triangles.
-            if (hasBoundaryVertex([indexA, indexB, indexC])) {
                 continue;
             }
 
