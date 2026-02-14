@@ -2155,7 +2155,7 @@ export class MainMenu {
                 console.log('Creating lobby:', lobbyName);
                 
                 if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
-                    alert('Online networking not available. Please check your Supabase configuration.');
+                    this.offerOfflineAILobby(lobbyName);
                     return;
                 }
                 
@@ -2168,7 +2168,7 @@ export class MainMenu {
                     this.startMenuTransition();
                     await this.renderLobbyDetailScreen(this.contentElement);
                 } else {
-                    alert('Failed to create lobby. Please try again.');
+                    this.offerOfflineAILobby(lobbyName);
                 }
             },
             onJoinLobby: async (lobbyId: string) => {
@@ -2203,6 +2203,37 @@ export class MainMenu {
             createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer
         });
+    }
+
+    private offerOfflineAILobby(lobbyName: string): void {
+        const shouldCreateOfflineLobby = confirm(
+            'Unable to reach the online lobby server. Would you like to create an offline 2v2 lobby with AI allies and enemies instead?'
+        );
+
+        if (!shouldCreateOfflineLobby) {
+            return;
+        }
+
+        const playerFaction = this.settings.selectedFaction || Faction.RADIANT;
+        const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
+            [this.settings.username, playerFaction, 0, 'player', this.settings.difficulty, true],
+            ['AI Ally', playerFaction, 0, 'ai', this.settings.difficulty, false],
+            ['AI Enemy 1', Faction.AURUM, 1, 'ai', this.settings.difficulty, false],
+            ['AI Enemy 2', Faction.VELARIS, 1, 'ai', this.settings.difficulty, false]
+        ];
+
+        this.settings.gameMode = 'custom-lobby';
+        this.hide();
+
+        const event = new CustomEvent('start4PlayerGame', {
+            detail: {
+                playerConfigs,
+                settings: this.settings,
+                roomId: `offline-${Date.now()}-${lobbyName || 'lobby'}`
+            }
+        });
+
+        window.dispatchEvent(event);
     }
 
     private render2v2MatchmakingScreen(container: HTMLElement): void {
