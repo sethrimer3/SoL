@@ -251,6 +251,22 @@ export class MainMenu {
             mapSize: 3000
         },
         {
+            id: '2v2-umbra',
+            name: '2v2 Umbra Basin',
+            description: 'Dedicated 2v2 arena with one sun. Fixed giant asteroids cast consistent spawn shadows for all four players.',
+            numSuns: 1,
+            numAsteroids: 4,
+            mapSize: 2400
+        },
+        {
+            id: '2v2-dual-umbra',
+            name: '2v2 Dual Umbra',
+            description: 'Dedicated 2v2 arena with two suns. Symmetric asteroid cover creates consistent shadowed spawn lanes.',
+            numSuns: 2,
+            numAsteroids: 6,
+            mapSize: 2600
+        },
+        {
             id: 'lad',
             name: 'LaD',
             description: 'Light and Dark - A split battlefield with a dual sun. White light on one side, black "light" on the other. Units are invisible until they cross into enemy territory.',
@@ -2163,6 +2179,11 @@ export class MainMenu {
                 
                 if (room) {
                     console.log('Lobby created successfully:', room);
+                    const default2v2Map = this.availableMaps.find(map => map.id === '2v2-umbra');
+                    if (default2v2Map) {
+                        this.settings.selectedMap = default2v2Map;
+                        await this.onlineNetworkManager.setLobbyMap(default2v2Map.id);
+                    }
                     // Navigate to lobby detail screen
                     this.currentScreen = 'lobby-detail';
                     this.startMenuTransition();
@@ -2436,7 +2457,7 @@ export class MainMenu {
         }
 
         // Get current room and players
-        const room = this.onlineNetworkManager.getCurrentRoom();
+        const room = await this.onlineNetworkManager.refreshCurrentRoom() || this.onlineNetworkManager.getCurrentRoom();
         if (!room) {
             alert('Not in a lobby.');
             this.currentScreen = 'custom-lobby';
@@ -2448,6 +2469,11 @@ export class MainMenu {
         const players = await this.onlineNetworkManager.getRoomPlayers();
         const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
+
+        const dedicated2v2Maps = this.availableMaps.filter(map => map.id === '2v2-umbra' || map.id === '2v2-dual-umbra');
+        const roomSelectedMapId = room.game_settings?.selectedMapId;
+        const selectedLobbyMap = dedicated2v2Maps.find(map => map.id === roomSelectedMapId) || dedicated2v2Maps[0] || this.settings.selectedMap;
+        this.settings.selectedMap = selectedLobbyMap;
 
         renderLobbyDetailScreen(container, {
             roomId: room.id,
@@ -2621,6 +2647,17 @@ export class MainMenu {
                 });
                 window.dispatchEvent(event);
             },
+            onCycleMap: async () => {
+                if (!this.onlineNetworkManager || !isHost) return;
+                const currentIndex = dedicated2v2Maps.findIndex(map => map.id === selectedLobbyMap.id);
+                const nextMap = dedicated2v2Maps[(currentIndex + 1) % dedicated2v2Maps.length] || selectedLobbyMap;
+                const success = await this.onlineNetworkManager.setLobbyMap(nextMap.id);
+                if (success) {
+                    this.settings.selectedMap = nextMap;
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
+            selectedMapName: selectedLobbyMap.name,
             onLeave: async () => {
                 if (!this.onlineNetworkManager) return;
                 await this.onlineNetworkManager.leaveRoom();

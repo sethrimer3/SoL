@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
@@ -1676,13 +1676,69 @@ class GameController {
         
         // Clear existing suns and add based on map
         this.game.suns = [];
-        if (map.id === 'twin-suns') {
+        if (map.id === '2v2-dual-umbra') {
+            this.game.suns.push(new Sun(new Vector2D(-260, 0), 1.0, 100.0));
+            this.game.suns.push(new Sun(new Vector2D(260, 0), 1.0, 100.0));
+        } else if (map.id === 'twin-suns') {
             this.game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             this.game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
         } else if (map.id === 'lad') {
             this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0, 'lad'));
         } else {
             this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
+        }
+
+        if (map.id === '2v2-umbra' || map.id === '2v2-dual-umbra') {
+            const teamSpawns = {
+                0: [new Vector2D(-880, -520), new Vector2D(-880, 520)],
+                1: [new Vector2D(880, -520), new Vector2D(880, 520)]
+            };
+            const teamSlotIndex = { 0: 0, 1: 0 };
+
+            for (let i = 0; i < playerConfigs.length && i < this.game.players.length; i++) {
+                const [, , teamId] = playerConfigs[i];
+                const player = this.game.players[i];
+                const slotIndex = teamSlotIndex[teamId as 0 | 1] || 0;
+                const spawn = teamSpawns[teamId as 0 | 1][slotIndex] || teamSpawns[teamId as 0 | 1][0];
+                teamSlotIndex[teamId as 0 | 1] = slotIndex + 1;
+
+                if (player.stellarForge) {
+                    player.stellarForge.position = spawn;
+                }
+
+                const mirrorDistance = Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
+                if (player.solarMirrors.length >= 2) {
+                    player.solarMirrors[0].position = new Vector2D(spawn.x, spawn.y - mirrorDistance);
+                    player.solarMirrors[1].position = new Vector2D(spawn.x, spawn.y + mirrorDistance);
+                }
+            }
+
+            // Fixed large asteroid layout for consistent spawn shadows
+            this.game.asteroids = [];
+            const largeSize = Constants.STRATEGIC_ASTEROID_SIZE * 1.15;
+            if (map.id === '2v2-umbra') {
+                const asteroidPositions = [
+                    new Vector2D(-320, -220),
+                    new Vector2D(-320, 220),
+                    new Vector2D(320, -220),
+                    new Vector2D(320, 220)
+                ];
+                for (const pos of asteroidPositions) {
+                    this.game.asteroids.push(new Asteroid(pos, 7, largeSize));
+                }
+            } else {
+                const asteroidPositions = [
+                    new Vector2D(-520, -260),
+                    new Vector2D(-520, 260),
+                    new Vector2D(520, -260),
+                    new Vector2D(520, 260),
+                    new Vector2D(0, -220),
+                    new Vector2D(0, 220)
+                ];
+                for (const pos of asteroidPositions) {
+                    this.game.asteroids.push(new Asteroid(pos, 7, largeSize));
+                }
+            }
         }
         
         // Configure players based on lobby settings and find local player index
@@ -1781,7 +1837,10 @@ class GameController {
         // Clear existing suns and add new ones based on map
         game.suns = [];
         
-        if (map.id === 'twin-suns') {
+        if (map.id === '2v2-dual-umbra') {
+            game.suns.push(new Sun(new Vector2D(-260, 0), 1.0, 100.0));
+            game.suns.push(new Sun(new Vector2D(260, 0), 1.0, 100.0));
+        } else if (map.id === 'twin-suns') {
             // Two suns positioned diagonally
             game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
@@ -1839,11 +1898,38 @@ class GameController {
         // Clear only the random asteroids (first 10), keep the strategic ones (last 2)
         const strategicAsteroids = game.asteroids.slice(-2); // Keep last 2 strategic asteroids
         game.asteroids = [];
-        game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
-        
-        // For standard map, add strategic asteroids back
-        if (map.id === 'standard') {
-            game.asteroids.push(...strategicAsteroids);
+
+        if (map.id === '2v2-umbra') {
+            const largeSize = Constants.STRATEGIC_ASTEROID_SIZE * 1.15;
+            const asteroidPositions = [
+                new Vector2D(-320, -220),
+                new Vector2D(-320, 220),
+                new Vector2D(320, -220),
+                new Vector2D(320, 220)
+            ];
+            for (const pos of asteroidPositions) {
+                game.asteroids.push(new Asteroid(pos, 7, largeSize));
+            }
+        } else if (map.id === '2v2-dual-umbra') {
+            const largeSize = Constants.STRATEGIC_ASTEROID_SIZE * 1.15;
+            const asteroidPositions = [
+                new Vector2D(-520, -260),
+                new Vector2D(-520, 260),
+                new Vector2D(520, -260),
+                new Vector2D(520, 260),
+                new Vector2D(0, -220),
+                new Vector2D(0, 220)
+            ];
+            for (const pos of asteroidPositions) {
+                game.asteroids.push(new Asteroid(pos, 7, largeSize));
+            }
+        } else {
+            game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
+
+            // For standard map, add strategic asteroids back
+            if (map.id === 'standard') {
+                game.asteroids.push(...strategicAsteroids);
+            }
         }
         
         // Reinitialize space dust
