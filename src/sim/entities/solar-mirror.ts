@@ -20,6 +20,7 @@ export class SolarMirror {
     linkedStructure: StellarForge | Building | WarpGate | null = null;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
+    knockbackVelocity: Vector2D = new Vector2D(0, 0); // Velocity from asteroid rotation knockback
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
@@ -469,7 +470,26 @@ export class SolarMirror {
      * Update mirror position based on target and velocity with obstacle avoidance
      */
     update(deltaTime: number, gameState: GameState | null = null): void {
-        if (!this.targetPosition) return;
+        if (!this.targetPosition) {
+            // Still apply and decelerate knockback velocity even when not moving
+            this.position.x += this.knockbackVelocity.x * deltaTime;
+            this.position.y += this.knockbackVelocity.y * deltaTime;
+            
+            const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
+            if (knockbackSpeed > 0) {
+                const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
+                if (knockbackSpeed <= deceleration) {
+                    this.knockbackVelocity.x = 0;
+                    this.knockbackVelocity.y = 0;
+                } else {
+                    const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
+                    this.knockbackVelocity.x *= decelerationFactor;
+                    this.knockbackVelocity.y *= decelerationFactor;
+                }
+            }
+            
+            return;
+        }
 
         if (gameState) {
             // Check if current target is inside an asteroid (shouldn't happen with pathfinding, but safety check)
@@ -576,6 +596,24 @@ export class SolarMirror {
         // Update position
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
+        
+        // Apply knockback velocity from asteroid rotation
+        this.position.x += this.knockbackVelocity.x * deltaTime;
+        this.position.y += this.knockbackVelocity.y * deltaTime;
+        
+        // Decelerate knockback velocity
+        const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
+        if (knockbackSpeed > 0) {
+            const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
+            if (knockbackSpeed <= deceleration) {
+                this.knockbackVelocity.x = 0;
+                this.knockbackVelocity.y = 0;
+            } else {
+                const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
+                this.knockbackVelocity.x *= decelerationFactor;
+                this.knockbackVelocity.y *= decelerationFactor;
+            }
+        }
     }
 
     /**

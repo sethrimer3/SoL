@@ -153,6 +153,9 @@ export class GameState {
         for (const asteroid of this.asteroids) {
             asteroid.update(deltaTime);
         }
+        
+        // Apply knockback to units/mirrors stuck in rotating asteroids
+        this.applyAsteroidRotationKnockback();
 
         if (!this.isCountdownActive) {
             this.updateAi(deltaTime);
@@ -3992,6 +3995,69 @@ export class GameState {
                 return new Sly(spawnPosition, owner);
             default:
                 return null;
+        }
+    }
+
+    /**
+     * Apply knockback to units and mirrors that are inside rotating asteroids.
+     * This prevents them from getting stuck when asteroids rotate.
+     */
+    private applyAsteroidRotationKnockback(): void {
+        // Check all units from all players
+        for (const player of this.players) {
+            if (player.isDefeated()) continue;
+            
+            // Check each unit
+            for (const unit of player.units) {
+                for (const asteroid of this.asteroids) {
+                    if (asteroid.containsPoint(unit.position)) {
+                        // Unit is inside asteroid - apply knockback
+                        // Calculate direction from asteroid center to unit
+                        const dx = unit.position.x - asteroid.position.x;
+                        const dy = unit.position.y - asteroid.position.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance > 0) {
+                            // Normalize and apply knockback velocity
+                            const dirX = dx / distance;
+                            const dirY = dy / distance;
+                            unit.knockbackVelocity.x = dirX * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                            unit.knockbackVelocity.y = dirY * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                        } else {
+                            // Unit is exactly at asteroid center (rare), push in arbitrary direction
+                            unit.knockbackVelocity.x = Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                            unit.knockbackVelocity.y = 0;
+                        }
+                        
+                        // Only apply knockback from the first asteroid collision
+                        break;
+                    }
+                }
+            }
+            
+            // Check each solar mirror
+            for (const mirror of player.solarMirrors) {
+                for (const asteroid of this.asteroids) {
+                    if (asteroid.containsPoint(mirror.position)) {
+                        // Mirror is inside asteroid - apply knockback
+                        const dx = mirror.position.x - asteroid.position.x;
+                        const dy = mirror.position.y - asteroid.position.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
+                        
+                        if (distance > 0) {
+                            const dirX = dx / distance;
+                            const dirY = dy / distance;
+                            mirror.knockbackVelocity.x = dirX * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                            mirror.knockbackVelocity.y = dirY * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                        } else {
+                            mirror.knockbackVelocity.x = Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
+                            mirror.knockbackVelocity.y = 0;
+                        }
+                        
+                        break;
+                    }
+                }
+            }
         }
     }
 

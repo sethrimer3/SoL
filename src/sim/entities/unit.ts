@@ -28,6 +28,7 @@ export class Unit {
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
     velocity: Vector2D = new Vector2D(0, 0);
+    knockbackVelocity: Vector2D = new Vector2D(0, 0); // Velocity from asteroid rotation knockback
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
     stunDuration: number = 0; // Duration of stun effect in seconds
@@ -187,6 +188,29 @@ export class Unit {
         if (!this.rallyPoint) {
             this.velocity.x = 0;
             this.velocity.y = 0;
+            
+            // Still apply and decelerate knockback velocity even when not moving
+            this.position.x += this.knockbackVelocity.x * deltaTime;
+            this.position.y += this.knockbackVelocity.y * deltaTime;
+            
+            const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
+            if (knockbackSpeed > 0) {
+                const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
+                if (knockbackSpeed <= deceleration) {
+                    this.knockbackVelocity.x = 0;
+                    this.knockbackVelocity.y = 0;
+                } else {
+                    const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
+                    this.knockbackVelocity.x *= decelerationFactor;
+                    this.knockbackVelocity.y *= decelerationFactor;
+                }
+            }
+            
+            // Clamp position to playable map boundaries
+            const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+            this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
+            this.position.y = Math.max(-boundary, Math.min(boundary, this.position.y));
+            
             return;
         }
 
@@ -335,6 +359,24 @@ export class Unit {
         this.position.y += moveY;
         this.velocity.x = directionX * moveSpeed;
         this.velocity.y = directionY * moveSpeed;
+
+        // Apply knockback velocity from asteroid rotation
+        this.position.x += this.knockbackVelocity.x * deltaTime;
+        this.position.y += this.knockbackVelocity.y * deltaTime;
+        
+        // Decelerate knockback velocity
+        const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
+        if (knockbackSpeed > 0) {
+            const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
+            if (knockbackSpeed <= deceleration) {
+                this.knockbackVelocity.x = 0;
+                this.knockbackVelocity.y = 0;
+            } else {
+                const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
+                this.knockbackVelocity.x *= decelerationFactor;
+                this.knockbackVelocity.y *= decelerationFactor;
+            }
+        }
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
