@@ -2988,7 +2988,7 @@ export class GameRenderer {
             const isMirrorAffordable = forge.owner.energy >= Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
             const isAvailable = isMirrorOption
                 ? isMirrorAffordable
-                : (heroUnitType ? (!isHeroAlive && !isHeroProducing && forge.owner.energy >= buttonCost) : false);
+                : (heroUnitType ? forge.owner.energy >= buttonCost : false);
             const isHighlighted = this.highlightedButtonIndex === i;
 
             // Draw button background with highlight effect

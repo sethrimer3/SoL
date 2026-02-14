@@ -2762,28 +2762,20 @@ class GameController {
                         } else {
                             const heroUnitType = this.getHeroUnitType(clickedHeroName);
                             if (heroUnitType) {
-                                const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
-                                const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
                                 console.log(
-                                    `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | alive=${isHeroAlive} | producing=${isHeroProducing} | energy=${player.energy.toFixed(1)}`
+                                    `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | energy=${player.energy.toFixed(1)}`
                                 );
-                                if (isHeroAlive) {
-                                    console.log(`${clickedHeroName} is already active`);
-                                } else if (isHeroProducing) {
-                                    console.log(`${clickedHeroName} is already being produced`);
+                                const heroCost = this.getHeroUnitCost(player);
+                                if (!player.spendEnergy(heroCost)) {
+                                    console.log(`Not enough energy to forge ${clickedHeroName} (cost ${heroCost})`);
                                 } else {
-                                    const heroCost = this.getHeroUnitCost(player);
-                                    if (!player.spendEnergy(heroCost)) {
-                                        console.log(`Not enough energy to forge ${clickedHeroName} (cost ${heroCost})`);
-                                    } else {
-                                        player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                        player.stellarForge.startHeroProductionIfIdle();
-                                        console.log(`Queued hero ${clickedHeroName} for forging`);
-                                        didTriggerForgeAction = true;
-                                        this.sendNetworkCommand('hero_purchase', {
-                                            heroType: heroUnitType
-                                        });
-                                    }
+                                    player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                    player.stellarForge.startHeroProductionIfIdle();
+                                    console.log(`Queued hero ${clickedHeroName} for forging`);
+                                    didTriggerForgeAction = true;
+                                    this.sendNetworkCommand('hero_purchase', {
+                                        heroType: heroUnitType
+                                    });
                                 }
                             }
                         }
@@ -3100,22 +3092,17 @@ class GameController {
                                 } else {
                                     const heroUnitType = this.getHeroUnitType(selectedLabel);
                                     if (heroUnitType) {
-                                        const isHeroAlive = this.isHeroUnitAlive(player, heroUnitType);
-                                        const isHeroProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType);
+                                        const heroCost = this.getHeroUnitCost(player);
+                                        if (player.spendEnergy(heroCost)) {
+                                            player.stellarForge.enqueueHeroUnit(heroUnitType);
+                                            player.stellarForge.startHeroProductionIfIdle();
+                                            console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
+                                            this.sendNetworkCommand('hero_purchase', {
+                                                heroType: heroUnitType
+                                            });
 
-                                        if (!isHeroAlive && !isHeroProducing) {
-                                            const heroCost = this.getHeroUnitCost(player);
-                                            if (player.spendEnergy(heroCost)) {
-                                                player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                                player.stellarForge.startHeroProductionIfIdle();
-                                                console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
-                                                this.sendNetworkCommand('hero_purchase', {
-                                                    heroType: heroUnitType
-                                                });
-
-                                                player.stellarForge.isSelected = false;
-                                                this.selectedBase = null;
-                                            }
+                                            player.stellarForge.isSelected = false;
+                                            this.selectedBase = null;
                                         }
                                     }
                                 }

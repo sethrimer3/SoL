@@ -5042,12 +5042,6 @@ export class GameState {
             return;
         }
 
-        const isHeroAlive = this.isHeroUnitAlive(player, heroType);
-        const isHeroQueuedOrProducing = this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType);
-        if (isHeroAlive || isHeroQueuedOrProducing) {
-            return;
-        }
-
         const heroCost = this.getHeroUnitCost(player);
         if (!player.spendEnergy(heroCost)) {
             return;
