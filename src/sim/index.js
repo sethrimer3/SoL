@@ -1,6 +1,6 @@
 "use strict";
 /**
- * Entity module exports - All game entities
+ * Simulation module exports - Game simulation core
  */
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
@@ -17,15 +17,9 @@ var __exportStar = (this && this.__exportStar) || function(m, exports) {
     for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-__exportStar(require("./asteroid"), exports);
-__exportStar(require("./sun"), exports);
-__exportStar(require("./solar-mirror"), exports);
-__exportStar(require("./stellar-forge"), exports);
-__exportStar(require("./buildings"), exports);
-__exportStar(require("./player"), exports);
-__exportStar(require("./particles"), exports);
-__exportStar(require("./unit"), exports);
-__exportStar(require("./starling"), exports);
-__exportStar(require("./starling-merge-gate"), exports);
-__exportStar(require("./warp-gate"), exports);
-__exportStar(require("./damage-number"), exports);
+// Math primitives
+__exportStar(require("./math"), exports);
+// All entities
+__exportStar(require("./entities"), exports);
+// Game state
+__exportStar(require("./game-state"), exports);

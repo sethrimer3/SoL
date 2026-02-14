@@ -1,10 +1,46 @@
+"use strict";
 /**
  * Particle systems and effects for SoL game simulation
  */
-import { Vector2D } from '../math';
-import * as Constants from '../../constants';
-import { getGameRNG } from '../../seeded-random';
-export class SpaceDustParticle {
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DeathParticle = exports.SparkleParticle = exports.ImpactParticle = exports.LaserBeam = exports.MinionProjectile = exports.AbilityBullet = exports.BouncingBullet = exports.MuzzleFlash = exports.BulletCasing = exports.ForgeCrunch = exports.SpaceDustParticle = void 0;
+const math_1 = require("../math");
+const Constants = __importStar(require("../../constants"));
+const seeded_random_1 = require("../../seeded-random");
+class SpaceDustParticle {
     constructor(position, velocity, palette) {
         this.position = position;
         this.glowState = Constants.DUST_GLOW_STATE_NORMAL;
@@ -22,8 +58,8 @@ export class SpaceDustParticle {
             this.velocity = velocity;
         }
         else {
-            const rng = getGameRNG();
-            this.velocity = new Vector2D(rng.nextFloat(-1, 1), rng.nextFloat(-1, 1));
+            const rng = (0, seeded_random_1.getGameRNG)();
+            this.velocity = new math_1.Vector2D(rng.nextFloat(-1, 1), rng.nextFloat(-1, 1));
         }
     }
     /**
@@ -33,7 +69,7 @@ export class SpaceDustParticle {
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
         // Check if particle is moving significantly
-        const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        const speed = Math.sqrt(Math.pow(this.velocity.x, 2) + Math.pow(this.velocity.y, 2));
         if (speed > Constants.DUST_FAST_MOVEMENT_THRESHOLD) {
             // Fast movement - trigger full glow
             this.targetGlowState = Constants.DUST_GLOW_STATE_FULL;
@@ -78,7 +114,7 @@ export class SpaceDustParticle {
         // Apply friction to gradually slow down
         this.velocity.x *= 0.98;
         this.velocity.y *= 0.98;
-        const driftSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        const driftSpeed = Math.sqrt(Math.pow(this.velocity.x, 2) + Math.pow(this.velocity.y, 2));
         if (driftSpeed < Constants.DUST_MIN_VELOCITY) {
             if (driftSpeed === 0) {
                 this.velocity.x = Constants.DUST_MIN_VELOCITY;
@@ -171,7 +207,7 @@ export class SpaceDustParticle {
         }
     }
     static generateBaseColor(palette) {
-        const rng = getGameRNG();
+        const rng = (0, seeded_random_1.getGameRNG)();
         if (palette && palette.neutral.length > 0) {
             const paletteRoll = rng.next();
             const useAccent = paletteRoll > 0.7 && palette.accent.length > 0;
@@ -201,11 +237,12 @@ export class SpaceDustParticle {
         return `#${((red << 16) | (green << 8) | blue).toString(16).padStart(6, '0')}`;
     }
 }
+exports.SpaceDustParticle = SpaceDustParticle;
 /**
  * Forge crunch effect - periodic event that sucks in dust then pushes it out
  * Used when the forge "crunches" to spawn minions
  */
-export class ForgeCrunch {
+class ForgeCrunch {
     constructor(position) {
         this.position = position;
         this.phase = 'idle';
@@ -256,17 +293,18 @@ export class ForgeCrunch {
         return 1.0 - (this.phaseTimer / totalDuration);
     }
 }
+exports.ForgeCrunch = ForgeCrunch;
 /**
  * Bullet casing that ejects from weapons and interacts with space dust
  */
-export class BulletCasing {
+class BulletCasing {
     constructor(position, velocity) {
         this.position = position;
         this.rotation = 0;
         this.lifetime = 0;
         this.maxLifetime = Constants.BULLET_CASING_LIFETIME;
         this.velocity = velocity;
-        const rng = getGameRNG();
+        const rng = (0, seeded_random_1.getGameRNG)();
         this.rotationSpeed = rng.nextFloat(-5, 5); // Random spin
     }
     /**
@@ -295,10 +333,11 @@ export class BulletCasing {
         this.velocity.y += force.y * Constants.CASING_COLLISION_DAMPING;
     }
 }
+exports.BulletCasing = BulletCasing;
 /**
  * Muzzle flash effect when firing
  */
-export class MuzzleFlash {
+class MuzzleFlash {
     constructor(position, angle) {
         this.position = position;
         this.angle = angle;
@@ -318,10 +357,11 @@ export class MuzzleFlash {
         return this.lifetime >= this.maxLifetime;
     }
 }
+exports.MuzzleFlash = MuzzleFlash;
 /**
  * Bouncing bullet that appears when hitting an enemy
  */
-export class BouncingBullet {
+class BouncingBullet {
     constructor(position, velocity) {
         this.position = position;
         this.lifetime = 0;
@@ -348,10 +388,11 @@ export class BouncingBullet {
         return this.lifetime >= this.maxLifetime;
     }
 }
+exports.BouncingBullet = BouncingBullet;
 /**
  * Ability bullet for special attacks
  */
-export class AbilityBullet {
+class AbilityBullet {
     constructor(position, velocity, owner, damage = Constants.MARINE_ABILITY_BULLET_DAMAGE) {
         this.position = position;
         this.owner = owner;
@@ -361,7 +402,7 @@ export class AbilityBullet {
         this.maxRange = Infinity; // Optional max range in pixels (default: no limit)
         this.hitRadiusPx = 10;
         this.velocity = velocity;
-        this.startPosition = new Vector2D(position.x, position.y);
+        this.startPosition = new math_1.Vector2D(position.x, position.y);
     }
     /**
      * Update bullet position
@@ -394,10 +435,11 @@ export class AbilityBullet {
         return distance < this.hitRadiusPx; // Hit radius
     }
 }
+exports.AbilityBullet = AbilityBullet;
 /**
  * Minion projectile fired by Starlings
  */
-export class MinionProjectile {
+class MinionProjectile {
     constructor(position, velocity, owner, damage, maxRangePx = Constants.STARLING_PROJECTILE_MAX_RANGE_PX) {
         this.position = position;
         this.owner = owner;
@@ -421,10 +463,11 @@ export class MinionProjectile {
         return distance < Constants.STARLING_PROJECTILE_HIT_RADIUS_PX;
     }
 }
+exports.MinionProjectile = MinionProjectile;
 /**
  * Laser beam fired by Starlings (instant hit-scan weapon)
  */
-export class LaserBeam {
+class LaserBeam {
     constructor(startPos, endPos, owner, damage, widthPx = Constants.STARLING_LASER_WIDTH_PX) {
         this.startPos = startPos;
         this.endPos = endPos;
@@ -439,10 +482,11 @@ export class LaserBeam {
         return this.lifetime >= this.maxLifetime;
     }
 }
+exports.LaserBeam = LaserBeam;
 /**
  * Impact particle spawned at laser beam endpoint
  */
-export class ImpactParticle {
+class ImpactParticle {
     constructor(position, velocity, maxLifetime, faction) {
         this.position = position;
         this.velocity = velocity;
@@ -459,10 +503,11 @@ export class ImpactParticle {
         return this.lifetime >= this.maxLifetime;
     }
 }
+exports.ImpactParticle = ImpactParticle;
 /**
  * Sparkle particle for regenerating units/structures
  */
-export class SparkleParticle {
+class SparkleParticle {
     constructor(position, velocity, maxLifetime, color, size = 2) {
         this.position = position;
         this.velocity = velocity;
@@ -487,19 +532,20 @@ export class SparkleParticle {
         return this.lifetime >= this.maxLifetime;
     }
 }
+exports.SparkleParticle = SparkleParticle;
 /**
  * Death particle - represents a piece of a destroyed unit/structure
  * Flies apart from the death location and fades over time
  */
-export class DeathParticle {
+class DeathParticle {
     constructor(position, velocity, rotation, spriteFragment, fadeStartTime) {
         this.lifetime = 0;
         this.spriteFragment = null;
         this.opacity = 1.0;
-        this.position = new Vector2D(position.x, position.y);
+        this.position = new math_1.Vector2D(position.x, position.y);
         this.velocity = velocity;
         this.rotation = rotation;
-        const rng = getGameRNG();
+        const rng = (0, seeded_random_1.getGameRNG)();
         this.rotationSpeed = rng.nextFloat(-2, 2); // Random rotation speed
         this.spriteFragment = spriteFragment;
         this.fadeStartTime = fadeStartTime;
@@ -529,10 +575,25 @@ export class DeathParticle {
             this.opacity = Math.max(0, DeathParticle.STABLE_OPACITY * (1 - fadeProgress));
         }
     }
+    bounce(normalX, normalY, restitution, tangentialDamping) {
+        const dot = this.velocity.x * normalX + this.velocity.y * normalY;
+        if (dot >= 0) {
+            return;
+        }
+        const tangentX = -normalY;
+        const tangentY = normalX;
+        const tangentDot = this.velocity.x * tangentX + this.velocity.y * tangentY;
+        const reflectedNormal = -dot * restitution;
+        const dampedTangent = tangentDot * tangentialDamping;
+        this.velocity.x = normalX * reflectedNormal + tangentX * dampedTangent;
+        this.velocity.y = normalY * reflectedNormal + tangentY * dampedTangent;
+        this.rotationSpeed *= 0.96;
+    }
     shouldDespawn() {
         return this.lifetime >= this.fadeStartTime + DeathParticle.FINAL_FADE_DURATION;
     }
 }
+exports.DeathParticle = DeathParticle;
 DeathParticle.VELOCITY_DAMPING = 0.98; // Particles slow down to 98% of velocity each frame
 DeathParticle.INITIAL_FADE_DURATION = 0.5; // Fade from 100% to 30% over 0.5 seconds
 DeathParticle.OPACITY_DROP = 0.7; // Drop from 100% to 30% (70% reduction)

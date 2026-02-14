@@ -1,14 +1,50 @@
+"use strict";
 /**
  * Starling minion unit for SoL game
  * Basic minion unit that follows paths and attacks enemies
  */
-import { Vector2D } from '../math';
-import * as Constants from '../../constants';
-import { Unit } from './unit';
-import { LaserBeam } from './particles';
-import { StellarForge } from './stellar-forge';
-import { getGameRNG } from '../../seeded-random';
-export class Starling extends Unit {
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Starling = void 0;
+const math_1 = require("../math");
+const Constants = __importStar(require("../../constants"));
+const unit_1 = require("./unit");
+const particles_1 = require("./particles");
+const stellar_forge_1 = require("./stellar-forge");
+const seeded_random_1 = require("../../seeded-random");
+class Starling extends unit_1.Unit {
     constructor(position, owner, assignedPath = []) {
         super(position, owner, Constants.STARLING_MAX_HEALTH, Constants.STARLING_ATTACK_RANGE, Constants.STARLING_ATTACK_DAMAGE, Constants.STARLING_ATTACK_SPEED, Constants.STARLING_BLINK_COOLDOWN_SEC, Constants.STARLING_COLLISION_RADIUS_PX);
         this.explorationTarget = null;
@@ -21,7 +57,7 @@ export class Starling extends Unit {
         this.hasReachedFinalWaypoint = false; // True when starling reaches the last waypoint
         this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
         this.spriteLevel = 1; // Sprite level (1-4)
-        this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.assignedPath = assignedPath.map((waypoint) => new math_1.Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
     }
     /**
@@ -60,7 +96,7 @@ export class Starling extends Unit {
         }
     }
     setPath(path) {
-        this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.assignedPath = path.map((waypoint) => new math_1.Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
         this.currentPathWaypointIndex = 0;
         this.hasManualOrder = true;
@@ -123,6 +159,7 @@ export class Starling extends Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(gameState, enemies) {
+        var _a, _b;
         if (this.hasManualOrder) {
             return;
         }
@@ -130,14 +167,14 @@ export class Starling extends Unit {
         if (this.assignedPath.length > 0) {
             // Follow the base's path
             const targetWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-            const rallyTarget = this.getStandoffPointForWaypoint(gameState, targetWaypoint) ?? targetWaypoint;
+            const rallyTarget = (_a = this.getStandoffPointForWaypoint(gameState, targetWaypoint)) !== null && _a !== void 0 ? _a : targetWaypoint;
             // Check if we've reached the current waypoint
             if (this.position.distanceTo(rallyTarget) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
                 // Move to next waypoint if there is one
                 if (this.currentPathWaypointIndex < this.assignedPath.length - 1) {
                     this.currentPathWaypointIndex++;
                     const nextWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-                    this.rallyPoint = this.getStandoffPointForWaypoint(gameState, nextWaypoint) ?? nextWaypoint;
+                    this.rallyPoint = (_b = this.getStandoffPointForWaypoint(gameState, nextWaypoint)) !== null && _b !== void 0 ? _b : nextWaypoint;
                 }
                 else {
                     // We've reached the end of the path, stay here (pile up)
@@ -159,7 +196,7 @@ export class Starling extends Unit {
             let targetRadiusPx = null;
             // 1. Try to target enemy base if visible
             for (const enemy of enemies) {
-                if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
+                if (enemy instanceof stellar_forge_1.StellarForge && enemy.owner !== this.owner) {
                     // Check if enemy base is visible (not in shadow)
                     if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
                         targetPosition = enemy.position;
@@ -189,10 +226,10 @@ export class Starling extends Unit {
                 if (this.explorationTimer <= 0 || !this.explorationTarget ||
                     this.position.distanceTo(this.explorationTarget) < Constants.UNIT_ARRIVAL_THRESHOLD) {
                     // Pick a random position in shadow
-                    const rng = getGameRNG();
+                    const rng = (0, seeded_random_1.getGameRNG)();
                     const angle = rng.nextAngle();
                     const distance = rng.nextFloat(300, 800);
-                    this.explorationTarget = new Vector2D(this.position.x + Math.cos(angle) * distance, this.position.y + Math.sin(angle) * distance);
+                    this.explorationTarget = new math_1.Vector2D(this.position.x + Math.cos(angle) * distance, this.position.y + Math.sin(angle) * distance);
                     this.explorationTimer = Constants.STARLING_EXPLORATION_CHANGE_INTERVAL;
                 }
                 targetPosition = this.explorationTarget;
@@ -300,13 +337,51 @@ export class Starling extends Unit {
         if (this.target && this.attackCooldown <= 0) {
             const distance = this.position.distanceTo(this.target.position);
             if (distance <= this.attackRange) {
-                this.attack(this.target);
-                this.attackCooldown = 1.0 / this.attackSpeed;
+                // Check if target is in frontal arc when moving
+                if (this.canShootTarget(this.target)) {
+                    this.attack(this.target);
+                    this.attackCooldown = 1.0 / this.attackSpeed;
+                }
             }
         }
     }
     getAttackDamage() {
         return this.attackDamage + (this.owner.hasAttackUpgrade ? Constants.STARLING_ATTACK_UPGRADE_BONUS : 0);
+    }
+    /**
+     * Check if starling can shoot a target based on frontal arc when moving
+     * Returns true if:
+     * - Starling is stationary (velocity ~= 0), OR
+     * - Target is within 180-degree frontal arc in the direction of movement
+     */
+    canShootTarget(target) {
+        // Calculate velocity magnitude
+        const velocityMagnitude = Math.sqrt(this.velocity.x * this.velocity.x +
+            this.velocity.y * this.velocity.y);
+        // If stationary (velocity very small), can shoot in any direction
+        const stationaryThreshold = 1.0; // pixels per second
+        if (velocityMagnitude < stationaryThreshold) {
+            return true;
+        }
+        // Moving - check if target is in frontal arc
+        // Calculate normalized velocity direction
+        const velocityDirX = this.velocity.x / velocityMagnitude;
+        const velocityDirY = this.velocity.y / velocityMagnitude;
+        // Calculate direction to target
+        const toTargetX = target.position.x - this.position.x;
+        const toTargetY = target.position.y - this.position.y;
+        const toTargetDist = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
+        if (toTargetDist <= 0) {
+            return true; // Target is at same position
+        }
+        const toTargetDirX = toTargetX / toTargetDist;
+        const toTargetDirY = toTargetY / toTargetDist;
+        // Calculate dot product to get angle between directions
+        // dot = cos(angle)
+        const dotProduct = velocityDirX * toTargetDirX + velocityDirY * toTargetDirY;
+        // For 180-degree arc, we need cos(angle) >= 0
+        // This means angle is within ±90 degrees from movement direction
+        return dotProduct >= 0;
     }
     attack(target) {
         const attackDamage = this.getAttackDamage();
@@ -317,14 +392,14 @@ export class Starling extends Unit {
             return;
         }
         let finalDamage = attackDamage;
-        if (target instanceof StellarForge) {
+        if (target instanceof stellar_forge_1.StellarForge) {
             finalDamage = Math.max(0, attackDamage - Constants.STELLAR_FORGE_STARLING_DEFENSE);
         }
         // Create laser beam for visual effect
-        const laserBeam = new LaserBeam(new Vector2D(this.position.x, this.position.y), new Vector2D(target.position.x, target.position.y), this.owner, finalDamage);
+        const laserBeam = new particles_1.LaserBeam(new math_1.Vector2D(this.position.x, this.position.y), new math_1.Vector2D(target.position.x, target.position.y), this.owner, finalDamage);
         this.lastShotLasers.push(laserBeam);
         // Deal instant damage to target
-        if (target instanceof StellarForge) {
+        if (target instanceof stellar_forge_1.StellarForge) {
             target.health -= finalDamage;
         }
         else if ('takeDamage' in target) {
@@ -335,3 +410,4 @@ export class Starling extends Unit {
         }
     }
 }
+exports.Starling = Starling;
