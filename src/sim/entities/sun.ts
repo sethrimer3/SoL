@@ -52,13 +52,8 @@ export class Sun {
     update(deltaTime: number): void {
         if (this.orbitCenter && this.orbitSpeed !== 0) {
             this.orbitAngle += this.orbitSpeed * deltaTime;
-            // Keep angle in range [0, 2π)
-            while (this.orbitAngle >= Math.PI * 2) {
-                this.orbitAngle -= Math.PI * 2;
-            }
-            while (this.orbitAngle < 0) {
-                this.orbitAngle += Math.PI * 2;
-            }
+            // Keep angle in range [0, 2π) using modulo
+            this.orbitAngle = ((this.orbitAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
             this.updatePositionFromOrbit();
         }
     }
