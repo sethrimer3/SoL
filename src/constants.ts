@@ -308,10 +308,10 @@ export const SUBSIDIARY_FACTORY_COST = 1000; // Workshop/Foundry
 export const STRIKER_TOWER_COST = 400; // Striker Tower (Velaris)
 export const LOCKON_TOWER_COST = 600; // Lock-on Laser Tower (Velaris)
 export const SHIELD_TOWER_COST = 650; // Shield Tower (Radiant)
-export const HERO_UNIT_BASE_COST = 3000;
-export const HERO_UNIT_COST_INCREMENT = 2000;
+export const HERO_UNIT_BASE_COST = 300;
+export const HERO_UNIT_COST_INCREMENT = 200;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
-export const STELLAR_FORGE_SOLAR_MIRROR_COST = 2000; // Cost to produce a solar mirror from the main stellar forge
+export const STELLAR_FORGE_SOLAR_MIRROR_COST = 500; // Required incoming sunlight/sec to produce a solar mirror from the main stellar forge
 
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade

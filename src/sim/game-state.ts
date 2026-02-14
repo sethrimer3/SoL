@@ -2406,7 +2406,7 @@ export class GameState {
             return;
         }
 
-        if (!player.spendEnergy(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST)) {
+        if (player.stellarForge.incomingLightPerSec < Constants.STELLAR_FORGE_SOLAR_MIRROR_COST) {
             return;
         }
 
@@ -2573,7 +2573,7 @@ export class GameState {
             if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
                 continue;
             }
-            if (!player.spendEnergy(this.getHeroUnitCost(player))) {
+            if (player.stellarForge.incomingLightPerSec < this.getHeroUnitCost(player)) {
                 return;
             }
             player.stellarForge.enqueueHeroUnit(heroType);
@@ -5043,7 +5043,7 @@ export class GameState {
         }
 
         const heroCost = this.getHeroUnitCost(player);
-        if (!player.spendEnergy(heroCost)) {
+        if (player.stellarForge.incomingLightPerSec < heroCost) {
             return;
         }
 
@@ -5108,7 +5108,7 @@ export class GameState {
     }
 
     private executeMirrorPurchaseCommand(player: Player, data: any): void {
-        const cost = typeof data?.cost === 'number' ? data.cost : Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
+        const requiredIncomingLight = typeof data?.cost === 'number' ? data.cost : Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
         const positionX = typeof data?.positionX === 'number' ? data.positionX : player.stellarForge?.position.x;
         const positionY = typeof data?.positionY === 'number' ? data.positionY : player.stellarForge?.position.y;
 
@@ -5116,7 +5116,7 @@ export class GameState {
             return;
         }
 
-        if (!player.spendEnergy(cost)) {
+        if (!player.stellarForge || player.stellarForge.incomingLightPerSec < requiredIncomingLight) {
             return;
         }
 
