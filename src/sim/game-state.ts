@@ -276,20 +276,23 @@ export class GameState {
                     // If mirror has knockback velocity, check if it's moving away from asteroids
                     let allowMovement = false;
                     if (hasKnockback) {
-                        // Check if new position is further from asteroid centers than old position
+                        // Only check asteroids that the mirror is actually inside
                         for (const asteroid of this.asteroids) {
-                            const oldDist = Math.sqrt(
-                                (oldMirrorPos.x - asteroid.position.x) ** 2 +
-                                (oldMirrorPos.y - asteroid.position.y) ** 2
-                            );
-                            const newDist = Math.sqrt(
-                                (mirror.position.x - asteroid.position.x) ** 2 +
-                                (mirror.position.y - asteroid.position.y) ** 2
-                            );
-                            // If moving away from at least one asteroid, allow the movement
-                            if (newDist > oldDist) {
-                                allowMovement = true;
-                                break;
+                            if (asteroid.containsPoint(mirror.position)) {
+                                // Check if new position is further from this asteroid than old position
+                                const oldDist = Math.sqrt(
+                                    (oldMirrorPos.x - asteroid.position.x) ** 2 +
+                                    (oldMirrorPos.y - asteroid.position.y) ** 2
+                                );
+                                const newDist = Math.sqrt(
+                                    (mirror.position.x - asteroid.position.x) ** 2 +
+                                    (mirror.position.y - asteroid.position.y) ** 2
+                                );
+                                // If moving away from this asteroid, allow the movement
+                                if (newDist > oldDist) {
+                                    allowMovement = true;
+                                    break;
+                                }
                             }
                         }
                     }
@@ -4023,6 +4026,28 @@ export class GameState {
     }
 
     /**
+     * Helper to apply knockback to an entity if it's inside any asteroid
+     * @returns true if knockback was applied
+     */
+    private applyKnockbackToEntityIfInAsteroid(
+        entity: { position: Vector2D; knockbackVelocity: Vector2D }
+    ): void {
+        for (const asteroid of this.asteroids) {
+            if (asteroid.containsPoint(entity.position)) {
+                // Entity is inside asteroid - apply knockback
+                applyKnockbackFromPoint(
+                    entity.position,
+                    asteroid.position,
+                    entity.knockbackVelocity,
+                    Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY
+                );
+                // Only apply knockback from the first asteroid collision
+                break;
+            }
+        }
+    }
+
+    /**
      * Apply knockback to units and mirrors that are inside rotating asteroids.
      * This prevents them from getting stuck when asteroids rotate.
      */
@@ -4031,37 +4056,14 @@ export class GameState {
         for (const player of this.players) {
             if (player.isDefeated()) continue;
             
-            // Check each unit
+            // Apply knockback to all units
             for (const unit of player.units) {
-                for (const asteroid of this.asteroids) {
-                    if (asteroid.containsPoint(unit.position)) {
-                        // Unit is inside asteroid - apply knockback
-                        applyKnockbackFromPoint(
-                            unit.position,
-                            asteroid.position,
-                            unit.knockbackVelocity,
-                            Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY
-                        );
-                        // Only apply knockback from the first asteroid collision
-                        break;
-                    }
-                }
+                this.applyKnockbackToEntityIfInAsteroid(unit);
             }
             
-            // Check each solar mirror
+            // Apply knockback to all solar mirrors
             for (const mirror of player.solarMirrors) {
-                for (const asteroid of this.asteroids) {
-                    if (asteroid.containsPoint(mirror.position)) {
-                        // Mirror is inside asteroid - apply knockback
-                        applyKnockbackFromPoint(
-                            mirror.position,
-                            asteroid.position,
-                            mirror.knockbackVelocity,
-                            Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY
-                        );
-                        break;
-                    }
-                }
+                this.applyKnockbackToEntityIfInAsteroid(mirror);
             }
         }
     }
