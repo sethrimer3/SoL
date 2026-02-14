@@ -8,15 +8,28 @@ import type { Sun } from './sun';
 import type { GameState } from '../game-state';
 import { getGameRNG } from '../../seeded-random';
 
+type ForgeProductionType = 'hero' | 'mirror';
+
+interface ForgeProductionItem {
+    productionType: ForgeProductionType;
+    costEnergy: number;
+    heroUnitType?: string;
+    spawnPosition?: Vector2D;
+}
+
 export class StellarForge {
     health: number = Constants.STELLAR_FORGE_MAX_HEALTH;
     maxHealth: number = Constants.STELLAR_FORGE_MAX_HEALTH;
     isReceivingLight: boolean = false;
     incomingLightPerSec: number = 0; // Track incoming light energy per second
     unitQueue: string[] = [];
+    mirrorQueueCount: number = 0;
     heroProductionUnitType: string | null = null;
     heroProductionRemainingSec: number = 0;
     heroProductionDurationSec: number = 0;
+    private productionQueue: ForgeProductionItem[] = [];
+    private activeProduction: ForgeProductionItem | null = null;
+    private activeProductionProgressEnergy: number = 0;
     isSelected: boolean = false;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
@@ -79,40 +92,91 @@ export class StellarForge {
         return true;
     }
 
-    enqueueHeroUnit(unitType: string): void {
+    enqueueHeroUnit(unitType: string, costEnergy: number): void {
         this.unitQueue.push(unitType);
+        this.productionQueue.push({
+            productionType: 'hero',
+            heroUnitType: unitType,
+            costEnergy
+        });
     }
 
-    startHeroProductionIfIdle(): void {
-        if (this.heroProductionUnitType || this.unitQueue.length === 0) {
-            return;
-        }
-        const nextUnitType = this.unitQueue.shift();
-        if (!nextUnitType) {
-            return;
-        }
-        this.heroProductionUnitType = nextUnitType;
-        this.heroProductionDurationSec = Constants.HERO_PRODUCTION_TIME_SEC;
-        this.heroProductionRemainingSec = Constants.HERO_PRODUCTION_TIME_SEC;
+    enqueueMirror(costEnergy: number, spawnPosition: Vector2D): void {
+        this.mirrorQueueCount++;
+        this.productionQueue.push({
+            productionType: 'mirror',
+            costEnergy,
+            spawnPosition: new Vector2D(spawnPosition.x, spawnPosition.y)
+        });
     }
 
-    advanceHeroProduction(deltaTime: number): string | null {
-        this.startHeroProductionIfIdle();
-        if (!this.heroProductionUnitType) {
-            return null;
+    private startProductionIfIdle(): void {
+        if (this.activeProduction || this.productionQueue.length === 0) {
+            return;
         }
-        if (!this.canProduceUnits()) {
-            return null;
+        const nextProduction = this.productionQueue.shift();
+        if (!nextProduction) {
+            return;
         }
-        this.heroProductionRemainingSec = Math.max(0, this.heroProductionRemainingSec - deltaTime);
-        if (this.heroProductionRemainingSec > 0) {
-            return null;
+        this.activeProduction = nextProduction;
+        this.activeProductionProgressEnergy = 0;
+
+        if (nextProduction.productionType === 'hero') {
+            const nextUnitType = this.unitQueue.shift() ?? nextProduction.heroUnitType;
+            this.heroProductionUnitType = nextUnitType ?? null;
+            this.heroProductionDurationSec = nextProduction.costEnergy;
+            this.heroProductionRemainingSec = nextProduction.costEnergy;
         }
-        const completedUnitType = this.heroProductionUnitType;
-        this.heroProductionUnitType = null;
-        this.heroProductionDurationSec = 0;
-        this.heroProductionRemainingSec = 0;
-        return completedUnitType;
+    }
+
+    hasQueuedProduction(): boolean {
+        return this.activeProduction !== null || this.productionQueue.length > 0;
+    }
+
+    advanceProductionByEnergy(energyAmount: number): ForgeProductionItem[] {
+        const completedItems: ForgeProductionItem[] = [];
+
+        if (energyAmount <= 0 || this.health <= 0) {
+            return completedItems;
+        }
+
+        let remainingEnergy = energyAmount;
+        while (remainingEnergy > 0) {
+            this.startProductionIfIdle();
+            if (!this.activeProduction) {
+                this.pendingEnergy += remainingEnergy;
+                break;
+            }
+
+            const energyNeeded = Math.max(0, this.activeProduction.costEnergy - this.activeProductionProgressEnergy);
+            const energyToApply = Math.min(remainingEnergy, energyNeeded);
+            this.activeProductionProgressEnergy += energyToApply;
+            remainingEnergy -= energyToApply;
+
+            if (this.activeProduction.productionType === 'hero') {
+                this.heroProductionDurationSec = this.activeProduction.costEnergy;
+                this.heroProductionRemainingSec = Math.max(0, this.activeProduction.costEnergy - this.activeProductionProgressEnergy);
+            }
+
+            if (this.activeProductionProgressEnergy + 1e-6 < this.activeProduction.costEnergy) {
+                continue;
+            }
+
+            const completedItem = this.activeProduction;
+            completedItems.push(completedItem);
+            if (completedItem.productionType === 'hero') {
+                this.heroProductionUnitType = null;
+                this.heroProductionDurationSec = 0;
+                this.heroProductionRemainingSec = 0;
+            } else {
+                this.mirrorQueueCount = Math.max(0, this.mirrorQueueCount - 1);
+            }
+
+            this.activeProduction = null;
+            this.activeProductionProgressEnergy = 0;
+        }
+
+        return completedItems;
     }
 
     /**

@@ -211,9 +211,8 @@ export class GameState {
                     if (energyForMinions > 0) {
                         const currentStarlingCount = this.getStarlingCountForPlayer(player);
                         const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
-                        // Calculate number of starlings to spawn based on incoming forge energy rate
                         const numStarlings = Math.min(
-                            Math.floor(player.stellarForge.incomingLightPerSec / Constants.FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING),
+                            Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY),
                             availableStarlingSlots
                         );
                         const usedEnergy = numStarlings * Constants.STARLING_COST_PER_ENERGY;
@@ -241,22 +240,6 @@ export class GameState {
                     }
                 }
 
-                if (!this.isCountdownActive) {
-                    const completedHeroType = player.stellarForge.advanceHeroProduction(deltaTime);
-                    if (completedHeroType) {
-                        const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
-                        const spawnPosition = new Vector2D(
-                            player.stellarForge.position.x,
-                            player.stellarForge.position.y + spawnRadius
-                        );
-                        const heroUnit = this.createHeroUnit(completedHeroType, spawnPosition, player);
-                        if (heroUnit) {
-                            player.units.push(heroUnit);
-                            player.unitsCreated++;
-                            console.log(`${player.name} forged hero ${completedHeroType}`);
-                        }
-                    }
-                }
             }
 
             for (const building of player.buildings) {
@@ -303,9 +286,30 @@ export class GameState {
                     if (linkedStructure instanceof StellarForge &&
                         player.stellarForge &&
                         mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
-                        // Add to player's energy for building/heroes AND to forge's pending energy pool for starling spawns
+                        const completedForgeItems = player.stellarForge.advanceProductionByEnergy(energyGenerated);
+                        for (const completedItem of completedForgeItems) {
+                            if (completedItem.productionType === 'hero' && completedItem.heroUnitType) {
+                                const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
+                                const spawnPosition = new Vector2D(
+                                    player.stellarForge.position.x,
+                                    player.stellarForge.position.y + spawnRadius
+                                );
+                                const heroUnit = this.createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
+                                if (heroUnit) {
+                                    player.units.push(heroUnit);
+                                    player.unitsCreated++;
+                                    console.log(`${player.name} forged hero ${completedItem.heroUnitType}`);
+                                }
+                            } else if (completedItem.productionType === 'mirror' && completedItem.spawnPosition) {
+                                player.solarMirrors.push(new SolarMirror(
+                                    new Vector2D(completedItem.spawnPosition.x, completedItem.spawnPosition.y),
+                                    player
+                                ));
+                            }
+                        }
+
+                        // Add to player's spendable energy pool (non-forge actions)
                         player.addEnergy(energyGenerated);
-                        player.stellarForge.addPendingEnergy(energyGenerated);
                     } else if (linkedStructure instanceof Building &&
                                mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
                         linkedStructure.isReceivingLight = true;
@@ -2406,13 +2410,8 @@ export class GameState {
             return;
         }
 
-        if (player.stellarForge.incomingLightPerSec < Constants.STELLAR_FORGE_SOLAR_MIRROR_COST) {
-            return;
-        }
-
         const spawnPosition = this.findMirrorSpawnPositionNearForge(player.stellarForge);
-        const mirror = new SolarMirror(spawnPosition, player);
-        player.solarMirrors.push(mirror);
+        player.stellarForge.enqueueMirror(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST, spawnPosition);
 
         this.assignAiMirrorsToIncompleteBuilding(player);
     }
@@ -2573,11 +2572,7 @@ export class GameState {
             if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
                 continue;
             }
-            if (player.stellarForge.incomingLightPerSec < this.getHeroUnitCost(player)) {
-                return;
-            }
-            player.stellarForge.enqueueHeroUnit(heroType);
-            player.stellarForge.startHeroProductionIfIdle();
+            player.stellarForge.enqueueHeroUnit(heroType, this.getHeroUnitCost(player));
             return;
         }
     }
@@ -5043,12 +5038,7 @@ export class GameState {
         }
 
         const heroCost = this.getHeroUnitCost(player);
-        if (player.stellarForge.incomingLightPerSec < heroCost) {
-            return;
-        }
-
-        player.stellarForge.enqueueHeroUnit(heroType);
-        player.stellarForge.startHeroProductionIfIdle();
+        player.stellarForge.enqueueHeroUnit(heroType, heroCost);
     }
 
     private executeBuildingPurchaseCommand(player: Player, data: any): void {
@@ -5116,11 +5106,11 @@ export class GameState {
             return;
         }
 
-        if (!player.stellarForge || player.stellarForge.incomingLightPerSec < requiredIncomingLight) {
+        if (!player.stellarForge) {
             return;
         }
 
-        player.solarMirrors.push(new SolarMirror(new Vector2D(positionX, positionY), player));
+        player.stellarForge.enqueueMirror(requiredIncomingLight, new Vector2D(positionX, positionY));
     }
 
     private executeStrikerTowerStartCountdownCommand(player: Player, data: any): void {
