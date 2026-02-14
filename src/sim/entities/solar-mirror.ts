@@ -20,6 +20,7 @@ export class SolarMirror {
     linkedStructure: StellarForge | Building | WarpGate | null = null;
     targetPosition: Vector2D | null = null;
     velocity: Vector2D = new Vector2D(0, 0);
+    knockbackVelocity: Vector2D = new Vector2D(0, 0); // Knockback velocity from asteroid rotation
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
@@ -469,6 +470,33 @@ export class SolarMirror {
      * Update mirror position based on target and velocity with obstacle avoidance
      */
     update(deltaTime: number, gameState: GameState | null = null): void {
+        // Apply knockback velocity from asteroid rotation
+        if (this.knockbackVelocity.x !== 0 || this.knockbackVelocity.y !== 0) {
+            // Apply knockback movement
+            this.position.x += this.knockbackVelocity.x * deltaTime;
+            this.position.y += this.knockbackVelocity.y * deltaTime;
+            
+            // Apply deceleration to knockback velocity
+            const knockbackSpeed = Math.sqrt(
+                this.knockbackVelocity.x * this.knockbackVelocity.x +
+                this.knockbackVelocity.y * this.knockbackVelocity.y
+            );
+            
+            if (knockbackSpeed > 0) {
+                const deceleration = Constants.ASTEROID_KNOCKBACK_DECELERATION * deltaTime;
+                const newSpeed = Math.max(0, knockbackSpeed - deceleration);
+                const speedRatio = newSpeed / knockbackSpeed;
+                this.knockbackVelocity.x *= speedRatio;
+                this.knockbackVelocity.y *= speedRatio;
+                
+                // If knockback is very small, set to zero to avoid floating point issues
+                if (newSpeed < 0.1) {
+                    this.knockbackVelocity.x = 0;
+                    this.knockbackVelocity.y = 0;
+                }
+            }
+        }
+
         if (!this.targetPosition) return;
 
         if (gameState) {

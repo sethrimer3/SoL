@@ -395,6 +395,10 @@ export const PATH_WAYPOINT_ARRIVAL_MULTIPLIER = 2; // Multiplier for waypoint ar
 export const MIN_WAYPOINT_DISTANCE = 50; // Minimum distance between path waypoints in pixels
 export const UNIT_PATH_DRAW_RADIUS = 50; // Maximum distance from unit to initiate path drawing (pixels)
 
+// Asteroid rotation knockback constants
+export const ASTEROID_KNOCKBACK_INITIAL_VELOCITY = 80; // Initial knockback velocity in pixels per second
+export const ASTEROID_KNOCKBACK_DECELERATION = 200; // Knockback deceleration in pixels per second squared
+
 // Deterministic state hash cadence
 export const STATE_HASH_TICK_INTERVAL = 30; // Update state hash every 30 ticks
 

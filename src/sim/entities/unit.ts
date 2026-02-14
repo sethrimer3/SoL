@@ -28,6 +28,7 @@ export class Unit {
     collisionRadiusPx: number;
     rotation: number = 0; // Current facing angle in radians
     velocity: Vector2D = new Vector2D(0, 0);
+    knockbackVelocity: Vector2D = new Vector2D(0, 0); // Knockback velocity from asteroid rotation
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
     stunDuration: number = 0; // Duration of stun effect in seconds
@@ -85,6 +86,33 @@ export class Unit {
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
+        // Apply knockback velocity from asteroid rotation
+        if (this.knockbackVelocity.x !== 0 || this.knockbackVelocity.y !== 0) {
+            // Apply knockback movement
+            this.position.x += this.knockbackVelocity.x * deltaTime;
+            this.position.y += this.knockbackVelocity.y * deltaTime;
+            
+            // Apply deceleration to knockback velocity
+            const knockbackSpeed = Math.sqrt(
+                this.knockbackVelocity.x * this.knockbackVelocity.x +
+                this.knockbackVelocity.y * this.knockbackVelocity.y
+            );
+            
+            if (knockbackSpeed > 0) {
+                const deceleration = Constants.ASTEROID_KNOCKBACK_DECELERATION * deltaTime;
+                const newSpeed = Math.max(0, knockbackSpeed - deceleration);
+                const speedRatio = newSpeed / knockbackSpeed;
+                this.knockbackVelocity.x *= speedRatio;
+                this.knockbackVelocity.y *= speedRatio;
+                
+                // If knockback is very small, set to zero to avoid floating point issues
+                if (newSpeed < 0.1) {
+                    this.knockbackVelocity.x = 0;
+                    this.knockbackVelocity.y = 0;
+                }
+            }
+        }
+
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
