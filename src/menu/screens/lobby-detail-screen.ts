@@ -169,7 +169,7 @@ export function renderLobbyDetailScreen(
         }
     }
 
-    const spectatorPanel = renderSpectatorPanel(spectators, isHost, localPlayerId);
+    const spectatorPanel = renderSpectatorPanel(spectators, isHost, localPlayerId, onSetSlotType);
     lobbyLayout.appendChild(spectatorPanel);
 
     // Map selector (between teams and lobby action buttons)
@@ -466,7 +466,12 @@ function renderSlot(
     return slotDiv;
 }
 
-function renderSpectatorPanel(players: LobbyPlayer[], isHost: boolean, localPlayerId: string): HTMLElement {
+function renderSpectatorPanel(
+    players: LobbyPlayer[],
+    isHost: boolean,
+    localPlayerId: string,
+    onSetSlotType: (playerId: string, slotType: 'player' | 'ai' | 'spectator') => void
+): HTMLElement {
     const panel = document.createElement('div');
     panel.style.width = '280px';
     panel.style.flexShrink = '0';
@@ -482,6 +487,24 @@ function renderSpectatorPanel(players: LobbyPlayer[], isHost: boolean, localPlay
     title.style.marginBottom = '15px';
     title.style.textAlign = 'center';
     panel.appendChild(title);
+
+    if (isHost) {
+        panel.style.borderStyle = 'dashed';
+        panel.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            panel.style.borderColor = 'rgba(170, 170, 170, 0.9)';
+        });
+        panel.addEventListener('dragleave', () => {
+            panel.style.borderColor = 'rgba(180, 180, 180, 0.35)';
+        });
+        panel.addEventListener('drop', (event) => {
+            event.preventDefault();
+            panel.style.borderColor = 'rgba(180, 180, 180, 0.35)';
+            const draggedPlayerId = event.dataTransfer?.getData('text/player-id');
+            if (!draggedPlayerId) return;
+            onSetSlotType(draggedPlayerId, 'spectator');
+        });
+    }
 
     if (players.length === 0) {
         const emptyText = document.createElement('div');

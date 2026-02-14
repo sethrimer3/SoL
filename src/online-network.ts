@@ -329,6 +329,7 @@ export class OnlineNetworkManager {
             await this.subscribeToRoom(roomId);
 
             console.log('Joined room:', roomId);
+            this.clearLastError();
             return true;
         } catch (error) {
             console.error('Error joining room:', error);
@@ -901,32 +902,55 @@ export class OnlineNetworkManager {
     async addAIPlayer(aiPlayerId: string, teamId: number): Promise<boolean> {
         if (!this.supabase || !this.isHost || !this.currentRoom) {
             console.error('Not authorized to add AI');
+            this.setLastError('Not authorized to add AI', null);
             return false;
         }
 
         try {
-            const { error } = await this.supabase
-                .from('room_players')
-                .insert([{
+            const insertWithFields = async (fields: Record<string, unknown>): Promise<PostgrestError | null> => {
+                const { error } = await this.supabase!
+                    .from('room_players')
+                    .insert([fields]);
+                return error;
+            };
+
+            const fullInsert = {
+                room_id: this.currentRoom.id,
+                player_id: aiPlayerId,
+                username: 'AI Player',
+                is_host: false,
+                is_ready: true,
+                team_id: teamId,
+                slot_type: 'ai',
+                ai_difficulty: 'normal',
+                faction: 'Radiant'
+            };
+
+            let error = await insertWithFields(fullInsert);
+
+            // Backward compatibility for deployments that still use the legacy schema
+            if (error && (this.isMissingColumnError(error, 'slot_type') || this.isMissingColumnError(error, 'ai_difficulty') || this.isMissingColumnError(error, 'team_id'))) {
+                error = await insertWithFields({
                     room_id: this.currentRoom.id,
                     player_id: aiPlayerId,
-                    username: `AI Player`,
+                    username: 'AI Player',
                     is_host: false,
                     is_ready: true,
-                    team_id: teamId,
-                    slot_type: 'ai',
-                    ai_difficulty: 'normal',
-                    faction: 'RADIANT'
-                }]);
+                    faction: 'Radiant'
+                });
+            }
 
             if (error) {
+                this.setLastError('Failed to add AI player', error);
                 console.error('Failed to add AI player:', error);
                 return false;
             }
 
+            this.clearLastError();
             console.log('AI player added');
             return true;
         } catch (error) {
+            this.setLastError('Error adding AI player', error);
             console.error('Error adding AI player:', error);
             return false;
         }
@@ -994,6 +1018,7 @@ export class OnlineNetworkManager {
     async setLobbyMap(mapId: string): Promise<boolean> {
         if (!this.supabase || !this.isHost || !this.currentRoom) {
             console.error('Not authorized to set lobby map');
+            this.setLastError('Not authorized to set lobby map', null);
             return false;
         }
 
@@ -1011,6 +1036,7 @@ export class OnlineNetworkManager {
                 .single();
 
             if (error) {
+                this.setLastError('Failed to set lobby map', error);
                 console.error('Failed to set lobby map:', error);
                 return false;
             }
@@ -1030,8 +1056,10 @@ export class OnlineNetworkManager {
                 });
             }
 
+            this.clearLastError();
             return true;
         } catch (error) {
+            this.setLastError('Error setting lobby map', error);
             console.error('Error setting lobby map:', error);
             return false;
         }
