@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config({ quiet: true });
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 
@@ -51,8 +50,8 @@ module.exports = {
     // Inject environment variables at build time
     new CopyStaticAssetsPlugin(),
     new webpack.DefinePlugin({
-      'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL),
-      'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY)
+      'process.env.SUPABASE_URL': JSON.stringify(DEFAULT_SUPABASE_URL),
+      'process.env.SUPABASE_ANON_KEY': JSON.stringify(DEFAULT_SUPABASE_ANON_KEY)
     }),
   ],
 };
