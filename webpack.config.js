@@ -4,6 +4,9 @@ require('dotenv').config({ quiet: true });
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const webpack = require('webpack');
 
+const DEFAULT_SUPABASE_URL = 'https://ixweicxojgtcpajnfrww.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4d2VpY3hvamd0Y3Bham5mcnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1OTU4MzEsImV4cCI6MjA4NjE3MTgzMX0.ZuChgOFQf-ouThReLwlqAj3ZzcvZF8r0b78bu_CQcVc';
+
 
 class CopyStaticAssetsPlugin {
   apply(compiler) {
@@ -48,8 +51,8 @@ module.exports = {
     // Inject environment variables at build time
     new CopyStaticAssetsPlugin(),
     new webpack.DefinePlugin({
-      'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || ''),
-      'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || '')
+      'process.env.SUPABASE_URL': JSON.stringify(process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL),
+      'process.env.SUPABASE_ANON_KEY': JSON.stringify(process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY)
     }),
   ],
 };
