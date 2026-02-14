@@ -51,6 +51,31 @@ ALTER TABLE game_rooms ENABLE ROW LEVEL SECURITY;
 ALTER TABLE room_players ENABLE ROW LEVEL SECURITY;
 ALTER TABLE game_states ENABLE ROW LEVEL SECURITY;
 
+-- Helper functions for JWT and room membership checks.
+-- SECURITY DEFINER prevents recursive RLS evaluation when checking room_players membership.
+CREATE OR REPLACE FUNCTION auth_player_id()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT current_setting('request.jwt.claims', true)::json->>'sub';
+$$;
+
+CREATE OR REPLACE FUNCTION is_room_member(target_room_id UUID, target_player_id TEXT DEFAULT auth_player_id())
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM room_players rp
+        WHERE rp.room_id = target_room_id
+          AND rp.player_id = target_player_id
+    );
+$$;
+
 -- RLS Policies for game_rooms
 -- Anyone can read waiting rooms
 CREATE POLICY "Anyone can view waiting rooms"
@@ -60,12 +85,7 @@ CREATE POLICY "Anyone can view waiting rooms"
 -- Players in a room can view their room
 CREATE POLICY "Players can view their room"
     ON game_rooms FOR SELECT
-    USING (
-        id IN (
-            SELECT room_id FROM room_players 
-            WHERE player_id = current_setting('request.jwt.claims', true)::json->>'sub'
-        )
-    );
+    USING (is_room_member(id));
 
 -- Anyone can create a room
 CREATE POLICY "Anyone can create room"
@@ -75,51 +95,41 @@ CREATE POLICY "Anyone can create room"
 -- Only host can update room
 CREATE POLICY "Host can update room"
     ON game_rooms FOR UPDATE
-    USING (host_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (host_id = auth_player_id());
 
 -- Host can delete room
 CREATE POLICY "Host can delete room"
     ON game_rooms FOR DELETE
-    USING (host_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (host_id = auth_player_id());
 
 -- RLS Policies for room_players
 -- Players in room can view all players in that room
 CREATE POLICY "Players can view room members"
     ON room_players FOR SELECT
-    USING (
-        room_id IN (
-            SELECT room_id FROM room_players 
-            WHERE player_id = current_setting('request.jwt.claims', true)::json->>'sub'
-        )
-    );
+    USING (is_room_member(room_id));
 
 -- Anyone can join a room (insert themselves)
 CREATE POLICY "Anyone can join room"
     ON room_players FOR INSERT
     WITH CHECK (
-        player_id = current_setting('request.jwt.claims', true)::json->>'sub'
+        player_id = auth_player_id()
     );
 
 -- Players can update their own record
 CREATE POLICY "Players can update self"
     ON room_players FOR UPDATE
-    USING (player_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (player_id = auth_player_id());
 
 -- Players can leave (delete themselves)
 CREATE POLICY "Players can leave"
     ON room_players FOR DELETE
-    USING (player_id = current_setting('request.jwt.claims', true)::json->>'sub');
+    USING (player_id = auth_player_id());
 
 -- RLS Policies for game_states
 -- Players in room can view game states
 CREATE POLICY "Players can view game states"
     ON game_states FOR SELECT
-    USING (
-        room_id IN (
-            SELECT room_id FROM room_players 
-            WHERE player_id = current_setting('request.jwt.claims', true)::json->>'sub'
-        )
-    );
+    USING (is_room_member(room_id));
 
 -- Only host can insert game states
 CREATE POLICY "Host can insert game states"
@@ -127,7 +137,7 @@ CREATE POLICY "Host can insert game states"
     WITH CHECK (
         room_id IN (
             SELECT id FROM game_rooms 
-            WHERE host_id = current_setting('request.jwt.claims', true)::json->>'sub'
+            WHERE host_id = auth_player_id()
         )
     );
 
