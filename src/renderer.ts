@@ -403,6 +403,10 @@ export class GameRenderer {
         }
 
         for (let frameIndex = 1; frameIndex <= Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT; frameIndex++) {
+            // Frame 6 is currently missing from disk; skip it to avoid repeated 404s.
+            if (frameIndex === 6) {
+                continue;
+            }
             this.movementPointFramePaths.push(
                 `ASSETS/sprites/interface/movementPointAnimation/movementPoint_frame${frameIndex}.png`
             );
@@ -6033,7 +6037,7 @@ export class GameRenderer {
 
     private getMoveOrderFrameIndex(): number {
         const animationFrame = Math.floor(performance.now() / this.MOVE_ORDER_FRAME_DURATION_MS);
-        return animationFrame % Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT;
+        return animationFrame % this.movementPointFramePaths.length;
     }
 
     private drawMovementPointMarker(targetScreenPos: Vector2D, dotRadius: number, color: string): boolean {
