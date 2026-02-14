@@ -4325,6 +4325,10 @@ export class GameRenderer {
             this.ctx.lineTo(screenVertices[vertexIndex].x, screenVertices[vertexIndex].y);
         }
         this.ctx.closePath();
+        // Fill the full silhouette first so omitted edge facets do not reveal
+        // transparent triangle gaps around the asteroid perimeter.
+        this.ctx.fillStyle = asteroidFill;
+        this.ctx.fill();
         this.ctx.clip();
 
         const asteroidRenderCache = this.getAsteroidRenderCache(asteroid);
