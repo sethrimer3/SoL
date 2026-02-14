@@ -413,9 +413,9 @@ class MultiplayerMenuUI {
  * Example initialization
  */
 function initializeGame() {
-    // Get Supabase credentials from environment or config
-    const SUPABASE_URL = process.env.SUPABASE_URL || '';
-    const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+    // Use hard-coded Supabase credentials
+    const SUPABASE_URL = 'https://ixweicxojgtcpajnfrww.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4d2VpY3hvamd0Y3Bham5mcnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1OTU4MzEsImV4cCI6MjA4NjE3MTgzMX0.ZuChgOFQf-ouThReLwlqAj3ZzcvZF8r0b78bu_CQcVc';
     
     // Generate or retrieve player ID
     const playerId = localStorage.getItem('playerId') || generateUUID();
