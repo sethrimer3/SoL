@@ -2,16 +2,15 @@
  * In-game menu types and layout functions
  */
 
-import { GraphicKey, GraphicVariant } from './graphics-options';
-
 export type InGameMenuTab = 'main' | 'options' | 'graphics';
+export type RenderLayerKey = 'suns' | 'stars' | 'asteroids' | 'spaceDust' | 'buildings' | 'units' | 'projectiles';
 
 export type InGameMenuAction =
     | { type: 'resume' }
     | { type: 'toggleInfo' }
     | { type: 'surrender' }
     | { type: 'tab'; tab: InGameMenuTab }
-    | { type: 'graphicsVariant'; key: GraphicKey; variant: GraphicVariant }
+    | { type: 'toggleRenderLayer'; layer: RenderLayerKey; isEnabled: boolean }
     | { type: 'offscreenIndicatorOpacity'; opacityPercent: number }
     | { type: 'infoBoxOpacity'; opacityPercent: number }
     | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
