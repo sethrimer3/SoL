@@ -2,7 +2,7 @@
  * GameState - Main game state class containing the game loop and all game logic
  */
 
-import { Vector2D, LightRay } from './math';
+import { Vector2D, LightRay, applyKnockbackFromPoint } from './math';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -271,7 +271,7 @@ export class GameState {
                 mirror.update(deltaTime, this); // Update mirror movement with gameState
                 
                 // Check collision for mirror - but allow knockback movement to escape
-                const hasKnockback = Math.sqrt(mirror.knockbackVelocity.x ** 2 + mirror.knockbackVelocity.y ** 2) > 0;
+                const hasKnockback = mirror.knockbackVelocity.x !== 0 || mirror.knockbackVelocity.y !== 0;
                 if (this.checkCollision(mirror.position, 20, mirror)) {
                     // If mirror has knockback velocity, check if it's moving away from asteroids
                     let allowMovement = false;
@@ -4036,23 +4036,12 @@ export class GameState {
                 for (const asteroid of this.asteroids) {
                     if (asteroid.containsPoint(unit.position)) {
                         // Unit is inside asteroid - apply knockback
-                        // Calculate direction from asteroid center to unit
-                        const dx = unit.position.x - asteroid.position.x;
-                        const dy = unit.position.y - asteroid.position.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance > 0) {
-                            // Normalize and apply knockback velocity
-                            const dirX = dx / distance;
-                            const dirY = dy / distance;
-                            unit.knockbackVelocity.x = dirX * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                            unit.knockbackVelocity.y = dirY * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                        } else {
-                            // Unit is exactly at asteroid center (rare), push in arbitrary direction
-                            unit.knockbackVelocity.x = Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                            unit.knockbackVelocity.y = 0;
-                        }
-                        
+                        applyKnockbackFromPoint(
+                            unit.position,
+                            asteroid.position,
+                            unit.knockbackVelocity,
+                            Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY
+                        );
                         // Only apply knockback from the first asteroid collision
                         break;
                     }
@@ -4064,20 +4053,12 @@ export class GameState {
                 for (const asteroid of this.asteroids) {
                     if (asteroid.containsPoint(mirror.position)) {
                         // Mirror is inside asteroid - apply knockback
-                        const dx = mirror.position.x - asteroid.position.x;
-                        const dy = mirror.position.y - asteroid.position.y;
-                        const distance = Math.sqrt(dx * dx + dy * dy);
-                        
-                        if (distance > 0) {
-                            const dirX = dx / distance;
-                            const dirY = dy / distance;
-                            mirror.knockbackVelocity.x = dirX * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                            mirror.knockbackVelocity.y = dirY * Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                        } else {
-                            mirror.knockbackVelocity.x = Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY;
-                            mirror.knockbackVelocity.y = 0;
-                        }
-                        
+                        applyKnockbackFromPoint(
+                            mirror.position,
+                            asteroid.position,
+                            mirror.knockbackVelocity,
+                            Constants.ASTEROID_ROTATION_KNOCKBACK_VELOCITY
+                        );
                         break;
                     }
                 }

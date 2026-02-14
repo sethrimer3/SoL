@@ -108,3 +108,65 @@ export class LightRay {
         return null;
     }
 }
+
+/**
+ * Apply and decelerate knockback velocity to a position
+ * @param position Entity position to update
+ * @param knockbackVelocity Knockback velocity to apply and decelerate
+ * @param deltaTime Time step in seconds
+ * @param deceleration Deceleration rate in units/sec²
+ */
+export function applyKnockbackVelocity(
+    position: Vector2D,
+    knockbackVelocity: Vector2D,
+    deltaTime: number,
+    deceleration: number
+): void {
+    // Apply knockback to position
+    position.x += knockbackVelocity.x * deltaTime;
+    position.y += knockbackVelocity.y * deltaTime;
+    
+    // Decelerate knockback velocity
+    const knockbackSpeed = Math.sqrt(knockbackVelocity.x ** 2 + knockbackVelocity.y ** 2);
+    if (knockbackSpeed > 0) {
+        const decelerationAmount = deceleration * deltaTime;
+        if (knockbackSpeed <= decelerationAmount) {
+            knockbackVelocity.x = 0;
+            knockbackVelocity.y = 0;
+        } else {
+            const decelerationFactor = (knockbackSpeed - decelerationAmount) / knockbackSpeed;
+            knockbackVelocity.x *= decelerationFactor;
+            knockbackVelocity.y *= decelerationFactor;
+        }
+    }
+}
+
+/**
+ * Calculate and apply knockback to an entity that's inside an obstacle
+ * @param entityPos Entity position
+ * @param obstaclePos Obstacle center position
+ * @param knockbackVelocity Velocity vector to set
+ * @param knockbackSpeed Initial knockback speed
+ */
+export function applyKnockbackFromPoint(
+    entityPos: Vector2D,
+    obstaclePos: Vector2D,
+    knockbackVelocity: Vector2D,
+    knockbackSpeed: number
+): void {
+    const dx = entityPos.x - obstaclePos.x;
+    const dy = entityPos.y - obstaclePos.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance > 0) {
+        // Normalize and apply knockback velocity
+        const dirX = dx / distance;
+        const dirY = dy / distance;
+        knockbackVelocity.x = dirX * knockbackSpeed;
+        knockbackVelocity.y = dirY * knockbackSpeed;
+    } else {
+        // Entity is exactly at obstacle center (rare), push in arbitrary direction
+        knockbackVelocity.x = knockbackSpeed;
+        knockbackVelocity.y = 0;
+    }
+}

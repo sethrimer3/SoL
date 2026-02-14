@@ -3,7 +3,7 @@
  * Base class for all combat units (heroes and minions)
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D, LightRay, applyKnockbackVelocity } from '../math';
 import * as Constants from '../../constants';
 import type { Player } from './player';
 import type { Asteroid } from './asteroid';
@@ -190,21 +190,12 @@ export class Unit {
             this.velocity.y = 0;
             
             // Still apply and decelerate knockback velocity even when not moving
-            this.position.x += this.knockbackVelocity.x * deltaTime;
-            this.position.y += this.knockbackVelocity.y * deltaTime;
-            
-            const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
-            if (knockbackSpeed > 0) {
-                const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
-                if (knockbackSpeed <= deceleration) {
-                    this.knockbackVelocity.x = 0;
-                    this.knockbackVelocity.y = 0;
-                } else {
-                    const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
-                    this.knockbackVelocity.x *= decelerationFactor;
-                    this.knockbackVelocity.y *= decelerationFactor;
-                }
-            }
+            applyKnockbackVelocity(
+                this.position,
+                this.knockbackVelocity,
+                deltaTime,
+                Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION
+            );
             
             // Clamp position to playable map boundaries
             const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
@@ -361,22 +352,12 @@ export class Unit {
         this.velocity.y = directionY * moveSpeed;
 
         // Apply knockback velocity from asteroid rotation
-        this.position.x += this.knockbackVelocity.x * deltaTime;
-        this.position.y += this.knockbackVelocity.y * deltaTime;
-        
-        // Decelerate knockback velocity
-        const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
-        if (knockbackSpeed > 0) {
-            const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
-            if (knockbackSpeed <= deceleration) {
-                this.knockbackVelocity.x = 0;
-                this.knockbackVelocity.y = 0;
-            } else {
-                const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
-                this.knockbackVelocity.x *= decelerationFactor;
-                this.knockbackVelocity.y *= decelerationFactor;
-            }
-        }
+        applyKnockbackVelocity(
+            this.position,
+            this.knockbackVelocity,
+            deltaTime,
+            Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION
+        );
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;

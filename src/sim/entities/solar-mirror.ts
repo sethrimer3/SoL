@@ -2,7 +2,7 @@
  * Solar Mirror - Reflects light from suns to structures
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D, LightRay, applyKnockbackVelocity } from '../math';
 import * as Constants from '../../constants';
 import type { Sun } from './sun';
 import type { Player } from './player';
@@ -472,21 +472,12 @@ export class SolarMirror {
     update(deltaTime: number, gameState: GameState | null = null): void {
         if (!this.targetPosition) {
             // Still apply and decelerate knockback velocity even when not moving
-            this.position.x += this.knockbackVelocity.x * deltaTime;
-            this.position.y += this.knockbackVelocity.y * deltaTime;
-            
-            const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
-            if (knockbackSpeed > 0) {
-                const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
-                if (knockbackSpeed <= deceleration) {
-                    this.knockbackVelocity.x = 0;
-                    this.knockbackVelocity.y = 0;
-                } else {
-                    const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
-                    this.knockbackVelocity.x *= decelerationFactor;
-                    this.knockbackVelocity.y *= decelerationFactor;
-                }
-            }
+            applyKnockbackVelocity(
+                this.position,
+                this.knockbackVelocity,
+                deltaTime,
+                Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION
+            );
             
             return;
         }
@@ -598,22 +589,12 @@ export class SolarMirror {
         this.position.y += this.velocity.y * deltaTime;
         
         // Apply knockback velocity from asteroid rotation
-        this.position.x += this.knockbackVelocity.x * deltaTime;
-        this.position.y += this.knockbackVelocity.y * deltaTime;
-        
-        // Decelerate knockback velocity
-        const knockbackSpeed = Math.sqrt(this.knockbackVelocity.x ** 2 + this.knockbackVelocity.y ** 2);
-        if (knockbackSpeed > 0) {
-            const deceleration = Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION * deltaTime;
-            if (knockbackSpeed <= deceleration) {
-                this.knockbackVelocity.x = 0;
-                this.knockbackVelocity.y = 0;
-            } else {
-                const decelerationFactor = (knockbackSpeed - deceleration) / knockbackSpeed;
-                this.knockbackVelocity.x *= decelerationFactor;
-                this.knockbackVelocity.y *= decelerationFactor;
-            }
-        }
+        applyKnockbackVelocity(
+            this.position,
+            this.knockbackVelocity,
+            deltaTime,
+            Constants.ASTEROID_ROTATION_KNOCKBACK_DECELERATION
+        );
     }
 
     /**
