@@ -758,19 +758,40 @@ export class OnlineNetworkManager {
         if (!this.supabase || !this.currentRoom) return;
 
         try {
+            if (this.isHost) {
+                // Mark lobby as finished before cleanup so it no longer appears as joinable,
+                // even if a subsequent delete is blocked by policy/network issues.
+                const { error: finishError } = await this.supabase
+                    .from('game_rooms')
+                    .update({ status: 'finished' })
+                    .eq('id', this.currentRoom.id);
+
+                if (finishError) {
+                    console.warn('Failed to mark room as finished while leaving:', finishError);
+                }
+            }
+
             // Remove player from room
-            await this.supabase
+            const { error: removePlayerError } = await this.supabase
                 .from('room_players')
                 .delete()
                 .eq('room_id', this.currentRoom.id)
                 .eq('player_id', this.getDatabasePlayerId());
 
+            if (removePlayerError) {
+                console.warn('Failed to remove player while leaving room:', removePlayerError);
+            }
+
             // If host, delete room
             if (this.isHost) {
-                await this.supabase
+                const { error: deleteRoomError } = await this.supabase
                     .from('game_rooms')
                     .delete()
                     .eq('id', this.currentRoom.id);
+
+                if (deleteRoomError) {
+                    console.warn('Failed to delete room while leaving:', deleteRoomError);
+                }
             }
 
             // Unsubscribe from channel
