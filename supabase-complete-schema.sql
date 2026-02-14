@@ -87,6 +87,55 @@ AS $$
     );
 $$;
 
+
+CREATE OR REPLACE FUNCTION add_ai_player_to_room(
+    p_room_id UUID,
+    p_ai_player_id TEXT,
+    p_team_id INTEGER DEFAULT NULL,
+    p_ai_difficulty TEXT DEFAULT 'normal',
+    p_username TEXT DEFAULT 'AI Player',
+    p_faction TEXT DEFAULT 'Radiant'
+)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM game_rooms
+        WHERE id = p_room_id
+          AND host_id = auth_player_id()
+    ) THEN
+        RAISE EXCEPTION 'Only room host can add AI players'
+            USING ERRCODE = '42501';
+    END IF;
+
+    INSERT INTO room_players (
+        room_id,
+        player_id,
+        username,
+        is_host,
+        is_ready,
+        team_id,
+        slot_type,
+        ai_difficulty,
+        faction
+    )
+    VALUES (
+        p_room_id,
+        p_ai_player_id,
+        p_username,
+        FALSE,
+        TRUE,
+        p_team_id,
+        'ai',
+        p_ai_difficulty,
+        p_faction
+    );
+END;
+$$;
+
 -- RLS Policies for game_rooms
 CREATE POLICY "Anyone can view waiting rooms"
     ON game_rooms FOR SELECT
