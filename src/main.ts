@@ -1682,6 +1682,34 @@ class GameController {
         } else if (map.id === 'twin-suns') {
             this.game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             this.game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else if (map.id === 'binary-center') {
+            // Two suns orbiting each other at map center
+            // Orbit center at (0, 0), orbit radius 150, very slow orbit speed
+            const orbitCenter = new Vector2D(0, 0);
+            const orbitRadius = 150;
+            const orbitSpeed = 0.05; // Radians per second (very slow)
+            this.game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, 0 // Start at angle 0
+            ));
+            this.game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, Math.PI // Start at angle π (opposite side)
+            ));
+        } else if (map.id === 'binary-ring') {
+            // Two suns orbiting on the outside of the map
+            // Orbit center at (0, 0), large orbit radius, slow orbit speed
+            const orbitCenter = new Vector2D(0, 0);
+            const orbitRadius = 1400; // Outside the asteroid field
+            const orbitSpeed = 0.08; // Radians per second
+            this.game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, 0 // Start at angle 0
+            ));
+            this.game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, Math.PI // Start at angle π (opposite side)
+            ));
         } else if (map.id === 'lad') {
             this.game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0, 'lad'));
         } else {
@@ -1844,6 +1872,32 @@ class GameController {
             // Two suns positioned diagonally
             game.suns.push(new Sun(new Vector2D(-300, -300), 1.0, 100.0));
             game.suns.push(new Sun(new Vector2D(300, 300), 1.0, 100.0));
+        } else if (map.id === 'binary-center') {
+            // Two suns orbiting each other at map center
+            const orbitCenter = new Vector2D(0, 0);
+            const orbitRadius = 150;
+            const orbitSpeed = 0.05; // Radians per second (very slow)
+            game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, 0
+            ));
+            game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, Math.PI
+            ));
+        } else if (map.id === 'binary-ring') {
+            // Two suns orbiting on the outside of the map
+            const orbitCenter = new Vector2D(0, 0);
+            const orbitRadius = 1400;
+            const orbitSpeed = 0.08; // Radians per second
+            game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, 0
+            ));
+            game.suns.push(new Sun(
+                new Vector2D(0, 0), 1.0, 100.0, 'normal',
+                orbitCenter, orbitRadius, orbitSpeed, Math.PI
+            ));
         } else if (map.id === 'test-level') {
             // Single sun at center for test level
             game.suns.push(new Sun(new Vector2D(0, 0), 1.0, 100.0));
@@ -1924,7 +1978,15 @@ class GameController {
                 game.asteroids.push(new Asteroid(pos, 7, largeSize));
             }
         } else {
-            game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize);
+            // Create exclusion zones around stellar forge spawn positions
+            const exclusionZones = game.players
+                .filter(p => p.stellarForge)
+                .map(p => ({
+                    position: p.stellarForge!.position,
+                    radius: 250 // Exclusion zone radius around each base
+                }));
+            
+            game.initializeAsteroids(map.numAsteroids, map.mapSize, map.mapSize, exclusionZones);
 
             // For standard map, add strategic asteroids back
             if (map.id === 'standard') {
