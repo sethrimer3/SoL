@@ -180,7 +180,7 @@ for (let i = 0; i < playerConfigs.length; i++) {
 **Database:**
 - Uses existing `game_rooms` table
 - Uses existing `room_players` table with team fields
-- Relies on `supabase-2v2-migration.sql` being applied
+- Relies on `supabase.sql` being applied
 
 ## Usage Flow
 
@@ -301,7 +301,7 @@ Future tests should cover:
 
 ### Prerequisites
 1. Supabase project configured
-2. `supabase-2v2-migration.sql` applied to database
+2. `supabase.sql` applied to database
 3. Environment variables set:
    - `SUPABASE_URL`
    - `SUPABASE_ANON_KEY`

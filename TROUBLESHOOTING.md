@@ -83,7 +83,7 @@ This guide helps resolve common issues when playing SoL in multiplayer mode.
    - Verify Supabase project is running
 
 3. **Schema Not Applied**
-   - Ensure `supabase-p2p-schema.sql` was run in Supabase SQL Editor
+   - Ensure `supabase.sql` was run in Supabase SQL Editor
    - Check that tables exist: `p2p_matches`, `p2p_match_players`, `p2p_signaling`
    - Verify RLS policies are enabled
 

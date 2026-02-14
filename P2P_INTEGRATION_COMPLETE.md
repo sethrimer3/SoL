@@ -143,7 +143,7 @@ SUPABASE_ANON_KEY=your-anon-public-key-here
 
 ### Prerequisites
 1. Create a Supabase project at [supabase.com](https://supabase.com)
-2. Run `supabase-p2p-schema.sql` in SQL Editor
+2. Run `supabase.sql` in SQL Editor
 3. Get your credentials from Settings > API
 
 ### Test Setup
