@@ -901,11 +901,6 @@ class GameController {
             return false;
         }
 
-        if (player.stellarForge.incomingLightPerSec < Constants.STELLAR_FORGE_SOLAR_MIRROR_COST) {
-            console.log('Not enough incoming sunlight to forge a Solar Mirror');
-            return false;
-        }
-
         const mirrorRadiusPx = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
         const spawnDistancePx = player.stellarForge.radius + Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
         let spawnPosition = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
@@ -932,8 +927,7 @@ class GameController {
             return false;
         }
 
-        const mirror = new SolarMirror(spawnPosition, player);
-        player.solarMirrors.push(mirror);
+        player.stellarForge.enqueueMirror(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST, spawnPosition);
         this.sendNetworkCommand('mirror_purchase', {
             positionX: spawnPosition.x,
             positionY: spawnPosition.y,
@@ -2765,17 +2759,12 @@ class GameController {
                                     `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | energy=${player.energy.toFixed(1)}`
                                 );
                                 const heroCost = this.getHeroUnitCost(player);
-                                if (player.stellarForge.incomingLightPerSec < heroCost) {
-                                    console.log(`Not enough incoming sunlight to forge ${clickedHeroName} (requires ${heroCost})`);
-                                } else {
-                                    player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                    player.stellarForge.startHeroProductionIfIdle();
-                                    console.log(`Queued hero ${clickedHeroName} for forging`);
-                                    didTriggerForgeAction = true;
-                                    this.sendNetworkCommand('hero_purchase', {
-                                        heroType: heroUnitType
-                                    });
-                                }
+                                player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                console.log(`Queued hero ${clickedHeroName} for forging`);
+                                didTriggerForgeAction = true;
+                                this.sendNetworkCommand('hero_purchase', {
+                                    heroType: heroUnitType
+                                });
                             }
                         }
 
@@ -3092,19 +3081,14 @@ class GameController {
                                     const heroUnitType = this.getHeroUnitType(selectedLabel);
                                     if (heroUnitType) {
                                         const heroCost = this.getHeroUnitCost(player);
-                                        if (player.stellarForge.incomingLightPerSec >= heroCost) {
-                                            player.stellarForge.enqueueHeroUnit(heroUnitType);
-                                            player.stellarForge.startHeroProductionIfIdle();
-                                            console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
-                                            this.sendNetworkCommand('hero_purchase', {
-                                                heroType: heroUnitType
-                                            });
+                                        player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                        console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
+                                        this.sendNetworkCommand('hero_purchase', {
+                                            heroType: heroUnitType
+                                        });
 
-                                            player.stellarForge.isSelected = false;
-                                            this.selectedBase = null;
-                                        } else {
-                                            console.log(`Radial selection: Not enough incoming sunlight for ${selectedLabel} (requires ${heroCost})`);
-                                        }
+                                        player.stellarForge.isSelected = false;
+                                        this.selectedBase = null;
                                     }
                                 }
                             }
