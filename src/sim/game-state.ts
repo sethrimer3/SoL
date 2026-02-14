@@ -1815,6 +1815,7 @@ export class GameState {
         for (const particle of this.spaceDust) {
             // Update particle position
             particle.update(deltaTime);
+            this.resolveDustAsteroidCollision(particle, deltaTime);
 
             // Check for influence from player bases
             let closestInfluence: { color: string, distance: number } | null = null;
@@ -1926,6 +1927,54 @@ export class GameState {
                 if (building instanceof SpaceDustSwirler) {
                     building.applyDustSwirl(this.spaceDust, deltaTime);
                 }
+            }
+        }
+    }
+
+    private resolveDustAsteroidCollision(particle: SpaceDustParticle, deltaTime: number): void {
+        const collisionPaddingPx = Constants.DUST_ASTEROID_COLLISION_PADDING_PX;
+        const restitution = Constants.DUST_ASTEROID_BOUNCE_RESTITUTION;
+        const tangentialPushMultiplier = Constants.DUST_ASTEROID_TANGENTIAL_PUSH_MULTIPLIER;
+        const rotationCollisionPushMultiplier = Constants.DUST_ASTEROID_ROTATION_COLLISION_PUSH_MULTIPLIER;
+
+        for (let asteroidIndex = 0; asteroidIndex < this.asteroids.length; asteroidIndex++) {
+            const asteroid = this.asteroids[asteroidIndex];
+            const dx = particle.position.x - asteroid.position.x;
+            const dy = particle.position.y - asteroid.position.y;
+            const distanceSq = dx * dx + dy * dy;
+            const collisionRadius = asteroid.size + collisionPaddingPx;
+            const collisionRadiusSq = collisionRadius * collisionRadius;
+
+            if (distanceSq > collisionRadiusSq) {
+                continue;
+            }
+
+            const distance = Math.sqrt(distanceSq);
+            const normalX = distance > 0.0001 ? dx / distance : 1;
+            const normalY = distance > 0.0001 ? dy / distance : 0;
+            const penetrationDepth = collisionRadius - distance;
+
+            if (penetrationDepth > 0) {
+                particle.position.x += normalX * penetrationDepth;
+                particle.position.y += normalY * penetrationDepth;
+            }
+
+            const normalVelocity = particle.velocity.x * normalX + particle.velocity.y * normalY;
+            if (normalVelocity < 0) {
+                particle.velocity.x -= (1 + restitution) * normalVelocity * normalX;
+                particle.velocity.y -= (1 + restitution) * normalVelocity * normalY;
+            }
+
+            const tangentialDirectionX = -normalY;
+            const tangentialDirectionY = normalX;
+            const tangentialSpeed = asteroid.rotationSpeed * collisionRadius;
+            particle.velocity.x += tangentialDirectionX * tangentialSpeed * tangentialPushMultiplier * deltaTime;
+            particle.velocity.y += tangentialDirectionY * tangentialSpeed * tangentialPushMultiplier * deltaTime;
+
+            if (penetrationDepth > 0) {
+                const collisionPushSpeed = Math.abs(tangentialSpeed) * rotationCollisionPushMultiplier;
+                particle.velocity.x += normalX * collisionPushSpeed;
+                particle.velocity.y += normalY * collisionPushSpeed;
             }
         }
     }
