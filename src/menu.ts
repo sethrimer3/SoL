@@ -2445,7 +2445,15 @@ export class MainMenu {
     }
 
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
-        this.clearMenu();
+        if (this.carouselMenu) {
+            this.carouselMenu.destroy();
+            this.carouselMenu = null;
+        }
+        if (this.factionCarousel) {
+            this.factionCarousel.destroy();
+            this.factionCarousel = null;
+        }
+        container.innerHTML = '';
         this.setMenuParticleDensity(1.6);
 
         if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
@@ -2541,11 +2549,13 @@ export class MainMenu {
                     if (success) {
                         await this.renderLobbyDetailScreen(this.contentElement);
                     } else {
-                        alert('Failed to add AI player');
+                        const networkError = this.onlineNetworkManager.getLastError();
+                        alert(networkError ? `Failed to add AI player: ${networkError}` : 'Failed to add AI player');
                     }
                 } catch (error) {
                     console.error('Error adding AI:', error);
-                    alert('Failed to add AI player');
+                    const networkError = this.onlineNetworkManager.getLastError();
+                    alert(networkError ? `Failed to add AI player: ${networkError}` : 'Failed to add AI player');
                 }
             },
             onRemoveSlot: async (playerId: string) => {
@@ -2655,6 +2665,11 @@ export class MainMenu {
                 if (success) {
                     this.settings.selectedMap = nextMap;
                     await this.renderLobbyDetailScreen(this.contentElement);
+                } else {
+                    const networkError = this.onlineNetworkManager.getLastError();
+                    if (networkError) {
+                        alert(`Failed to change map: ${networkError}`);
+                    }
                 }
             },
             selectedMapName: selectedLobbyMap.name,
