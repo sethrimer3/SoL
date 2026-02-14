@@ -203,6 +203,12 @@ export class OnlineNetworkManager {
         return supabaseError?.code === '42501' || joined.includes('row-level security');
     }
 
+    private isFunctionNotFoundError(error: unknown, functionName: string): boolean {
+        const supabaseError = error as Partial<PostgrestError> & { details?: string };
+        const joined = `${supabaseError?.message || ''} ${supabaseError?.details || ''}`.toLowerCase();
+        return supabaseError?.code === 'PGRST202' && joined.includes(functionName.toLowerCase());
+    }
+
     /**
      * Create a new game room (host)
      */
@@ -947,14 +953,31 @@ export class OnlineNetworkManager {
             }
 
             if (error && this.isRlsViolation(error)) {
-                const { error: rpcError } = await this.supabase.rpc('add_ai_player_to_room', {
+                const rpcPayloadWithPrefixedArgs = {
                     p_room_id: this.currentRoom.id,
                     p_ai_player_id: aiPlayerId,
                     p_team_id: teamId,
                     p_ai_difficulty: 'normal',
                     p_username: 'AI Player',
                     p_faction: 'Radiant'
-                });
+                };
+
+                let { error: rpcError } = await this.supabase.rpc('add_ai_player_to_room', rpcPayloadWithPrefixedArgs);
+
+                // Compatibility fallback for deployments where the SQL function uses legacy arg names
+                if (rpcError && this.isFunctionNotFoundError(rpcError, 'add_ai_player_to_room')) {
+                    const rpcPayloadLegacyArgs = {
+                        room_id: this.currentRoom.id,
+                        ai_player_id: aiPlayerId,
+                        team_id: teamId,
+                        ai_difficulty: 'normal',
+                        username: 'AI Player',
+                        faction: 'Radiant'
+                    };
+
+                    const legacyRpcResult = await this.supabase.rpc('add_ai_player_to_room', rpcPayloadLegacyArgs);
+                    rpcError = legacyRpcResult.error;
+                }
 
                 error = rpcError;
             }
@@ -1062,6 +1085,11 @@ export class OnlineNetworkManager {
 
             if (data) {
                 this.currentRoom = data;
+            } else if (this.currentRoom) {
+                this.currentRoom = {
+                    ...this.currentRoom,
+                    game_settings: nextSettings
+                };
             }
 
             if (this.channel) {
