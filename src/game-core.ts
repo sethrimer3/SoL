@@ -19,6 +19,7 @@ import { createDrillerHero } from './heroes/driller';
 import { createGraveHero } from './heroes/grave';
 import { createInfluenceBallHero } from './heroes/influence-ball';
 import { createMarineHero } from './heroes/marine';
+import { createMothershipHero } from './heroes/mothership';
 import { createMortarHero } from './heroes/mortar';
 import { createNovaHero } from './heroes/nova';
 import { createPreistHero } from './heroes/preist';
@@ -45,6 +46,16 @@ import {
 
 // Instantiate hero classes using factories
 const { Marine } = createMarineHero({
+    Unit,
+    Vector2D,
+    Constants,
+    MuzzleFlash,
+    BulletCasing,
+    BouncingBullet,
+    AbilityBullet
+});
+
+const { Mothership, MiniMothership } = createMothershipHero({
     Unit,
     Vector2D,
     Constants,
@@ -170,6 +181,8 @@ const { Blink, BlinkShockwave } = createBlinkHero({
 // Export hero classes and their related types
 export {
     Marine,
+    Mothership,
+    MiniMothership,
     Grave,
     GraveProjectile,
     GraveSmallParticle,

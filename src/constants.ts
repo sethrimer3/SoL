@@ -159,6 +159,12 @@ export const MARINE_ATTACK_RANGE = 300;
 export const MARINE_ATTACK_DAMAGE = 10;
 export const MARINE_ATTACK_SPEED = 5; // Attacks per second (fast shooting)
 
+// Mothership unit constants (Radiant hero)
+export const MOTHERSHIP_MAX_HEALTH = 100;
+export const MOTHERSHIP_ATTACK_RANGE = 300;
+export const MOTHERSHIP_ATTACK_DAMAGE = 10;
+export const MOTHERSHIP_ATTACK_SPEED = 2.5; // Attacks per second (half as fast as Marine)
+
 // Grave unit constants
 export const GRAVE_MAX_HEALTH = 150;
 export const GRAVE_ATTACK_RANGE = 400;
@@ -420,6 +426,21 @@ export const MARINE_ABILITY_BULLET_SPEED = 500; // Speed of ability bullets
 export const MARINE_ABILITY_BULLET_LIFETIME = 1.0; // Lifetime of ability bullets
 export const MARINE_ABILITY_SPREAD_ANGLE = (10 * Math.PI) / 180; // 10 degrees in radians
 export const MARINE_ABILITY_BULLET_DAMAGE = 5; // Damage per ability bullet
+
+// Mothership ability constants
+export const MOTHERSHIP_ABILITY_COOLDOWN = 8.0; // 8 seconds
+export const MOTHERSHIP_MINI_COUNT = 3; // Number of mini-motherships spawned
+export const MOTHERSHIP_MINI_FORMATION_RADIUS = 50; // Distance from mothership in triangle formation
+export const MOTHERSHIP_MINI_SPEED = 150; // Movement speed (pixels per second)
+export const MOTHERSHIP_MINI_LIFETIME = 12.0; // Maximum lifetime before auto-explosion (seconds)
+export const MOTHERSHIP_MINI_HEALTH = 50; // Health (same as starlings)
+export const MOTHERSHIP_MINI_ATTACK_RANGE = 120; // Attack range (same as starlings)
+export const MOTHERSHIP_MINI_ATTACK_DAMAGE = 5; // Damage per shot (same as starlings)
+export const MOTHERSHIP_MINI_ATTACK_SPEED = 2; // Attacks per second (same as starlings)
+export const MOTHERSHIP_MINI_COLLISION_RADIUS = 8; // Collision radius for environment/structures
+export const MOTHERSHIP_MINI_EXPLOSION_RADIUS = 80; // Splash damage radius
+export const MOTHERSHIP_MINI_EXPLOSION_DAMAGE = 30; // Damage at explosion center
+export const MOTHERSHIP_MINI_EXPLOSION_FALLOFF = 0.3; // Minimum damage multiplier at edge (30%)
 
 // UI constants
 export const UI_BACKGROUND_COLOR = '#000011'; // Dark blue-black background for UI
