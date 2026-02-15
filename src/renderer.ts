@@ -6014,6 +6014,10 @@ export class GameRenderer {
 
         this.drawHealthDisplay(screenPos, unit.health, unit.maxHealth, size, -size - 8);
 
+        if (unit.isHero && !isEnemy) {
+            this.drawAbilityCooldownBar(screenPos, size, unit, '#FFD700', size * 1.8, size * 5.5);
+        }
+
         // Show stun indicator if unit is stunned
         if (unit.isStunned()) {
             this.ctx.fillStyle = '#FFFF00';
@@ -7268,27 +7272,44 @@ export class GameRenderer {
         // Draw health bar/number if damaged
         this.drawHealthDisplay(screenPos, starling.health, starling.maxHealth, size, -size * 6 - 10);
 
-        if (!isEnemy && starling.owner.hasBlinkUpgrade && starling.abilityCooldownTime > 0) {
-            const barWidth = size * 8;
-            const barHeight = Math.max(2, 3 * this.zoom);
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + size * 3.5;
-            const cooldownPercent = Math.max(
-                0,
-                Math.min(1, 1 - (starling.abilityCooldown / starling.abilityCooldownTime))
-            );
-
-            // Hide the bar entirely once blink is fully recharged.
-            if (cooldownPercent < 1) {
-                this.ctx.fillStyle = '#222';
-                this.ctx.fillRect(barX, barY, barWidth, barHeight);
-                this.ctx.fillStyle = '#00B4FF';
-                this.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
-            }
+        if (!isEnemy && starling.owner.hasBlinkUpgrade) {
+            this.drawAbilityCooldownBar(screenPos, size, starling, '#00B4FF', size * 3.5, size * 8);
         }
         
         // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
         // to show only a single line from the closest starling when multiple are selected
+    }
+
+    private drawAbilityCooldownBar(
+        screenPos: Vector2D,
+        size: number,
+        unit: Unit,
+        fillColor: string,
+        yOffset: number,
+        barWidth: number
+    ): void {
+        if (unit.abilityCooldownTime <= 0) {
+            return;
+        }
+
+        const cooldownPercent = Math.max(
+            0,
+            Math.min(1, 1 - (unit.abilityCooldown / unit.abilityCooldownTime))
+        );
+
+        // Hide the bar entirely once the ability is fully recharged.
+        if (cooldownPercent >= 1) {
+            return;
+        }
+
+        const barHeight = Math.max(2, 3 * this.zoom);
+        const barX = screenPos.x - barWidth / 2;
+        const barY = screenPos.y + yOffset;
+
+        this.ctx.fillStyle = '#222';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        this.ctx.fillStyle = fillColor;
+        this.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
     }
 
     private drawVelarisStarlingParticles(
