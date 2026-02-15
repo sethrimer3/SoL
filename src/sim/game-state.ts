@@ -1885,7 +1885,8 @@ export class GameState {
                     // Create damage number
                     this.damageNumbers.push(new DamageNumber(
                         new Vector2D(target.position.x, target.position.y),
-                        Math.round(damage)
+                        Math.round(damage),
+                        this.gameTime
                     ));
                 }
             }
