@@ -612,6 +612,47 @@ export const STICKY_BOMB_LASER_ANGLE = (45 * Math.PI) / 180; // 45 degree angle 
 export const STICKY_BOMB_LASER_RANGE = 500; // Maximum range for lasers
 export const STICKY_BOMB_LASER_DURATION = 0.15; // How long lasers stay visible (seconds)
 
+// Radiant hero constants (orb-based laser field hero)
+export const RADIANT_MAX_HEALTH = 120;
+export const RADIANT_ABILITY_COOLDOWN = 4.0;
+export const RADIANT_ORB_SPEED_MULTIPLIER = 3.0; // Multiplier for arrow length to orb speed
+export const RADIANT_ORB_MAX_SPEED = 600;
+export const RADIANT_ORB_DECELERATION = 150; // px/s^2
+export const RADIANT_ORB_BOUNCE_DAMPING = 0.7; // Velocity multiplier on bounce
+export const RADIANT_ORB_MIN_RANGE = 100; // Minimum connection range when stopped
+export const RADIANT_ORB_MAX_RANGE = 400; // Maximum connection range at full speed
+export const RADIANT_MAX_ORBS = 3;
+export const RADIANT_LASER_DAMAGE_PER_SEC = 80; // Damage for crossing laser
+export const RADIANT_ORB_RADIUS = 15; // Visual radius of orb
+
+// Velaris hero constants (orb-based light-blocking hero)
+export const VELARIS_HERO_MAX_HEALTH = 120;
+export const VELARIS_HERO_ABILITY_COOLDOWN = 4.0;
+export const VELARIS_ORB_SPEED_MULTIPLIER = 3.0;
+export const VELARIS_ORB_MAX_SPEED = 600;
+export const VELARIS_ORB_DECELERATION = 150;
+export const VELARIS_ORB_BOUNCE_DAMPING = 0.7;
+export const VELARIS_ORB_MIN_RANGE = 100;
+export const VELARIS_ORB_MAX_RANGE = 400;
+export const VELARIS_MAX_ORBS = 3;
+export const VELARIS_ORB_RADIUS = 15;
+export const VELARIS_PARTICLE_SPEED = 200; // Speed of particles between orbs
+
+// Aurum hero constants (orb-based shield field hero)
+export const AURUM_HERO_MAX_HEALTH = 120;
+export const AURUM_HERO_ABILITY_COOLDOWN = 5.0;
+export const AURUM_ORB_SPEED_MULTIPLIER = 3.0;
+export const AURUM_ORB_MAX_SPEED = 600;
+export const AURUM_ORB_DECELERATION = 150;
+export const AURUM_ORB_BOUNCE_DAMPING = 0.7;
+export const AURUM_ORB_MIN_RANGE = 100;
+export const AURUM_ORB_MAX_RANGE = 400;
+export const AURUM_MAX_ORBS = 4;
+export const AURUM_ORB_MAX_HEALTH = 200; // Orbs can take damage
+export const AURUM_ORB_RADIUS = 15;
+export const AURUM_SHIELD_OFFSET = 25; // Distance from orb center where shield starts
+export const AURUM_SHIELD_HIT_DURATION = 0.3; // Duration of hit flash effect
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy
