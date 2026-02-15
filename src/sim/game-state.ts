@@ -295,8 +295,14 @@ export class GameState {
                 const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
                 mirror.updateReflectionAngle(linkedStructure, this.suns, this.asteroids, deltaTime);
                 
+                // Check if light path is blocked by Velaris orb fields
+                const isBlockedByVelarisField = this.isLightBlockedByVelarisField(
+                    mirror.position,
+                    linkedStructure ? linkedStructure.position : mirror.position
+                );
+                
                 // Generate energy and apply to linked structure
-                if (mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
+                if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
                     const energyGenerated = mirror.generateEnergy(deltaTime);
                     
                     if (linkedStructure instanceof StellarForge &&
@@ -5358,6 +5364,63 @@ export class GameState {
             lineStart.x + t * dx,
             lineStart.y + t * dy
         );
+    }
+
+    /**
+     * Check if a line segment (light path) is blocked by Velaris orb light-blocking fields
+     */
+    private isLightBlockedByVelarisField(start: Vector2D, end: Vector2D): boolean {
+        // Check all pairs of Velaris orbs
+        for (let i = 0; i < this.velarisOrbs.length; i++) {
+            for (let j = i + 1; j < this.velarisOrbs.length; j++) {
+                const orb1 = this.velarisOrbs[i];
+                const orb2 = this.velarisOrbs[j];
+                
+                // Only check orbs from the same owner
+                if (orb1.owner !== orb2.owner) continue;
+                
+                const distance = orb1.position.distanceTo(orb2.position);
+                const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                
+                if (distance <= maxRange) {
+                    // Check if light path intersects this orb field
+                    if (this.lineSegmentsIntersect(start, end, orb1.position, orb2.position)) {
+                        return true; // Light is blocked
+                    }
+                }
+            }
+        }
+        
+        return false; // Light is not blocked
+    }
+
+    /**
+     * Check if two line segments intersect
+     */
+    private lineSegmentsIntersect(
+        p1: Vector2D, p2: Vector2D,
+        p3: Vector2D, p4: Vector2D
+    ): boolean {
+        const d1x = p2.x - p1.x;
+        const d1y = p2.y - p1.y;
+        const d2x = p4.x - p3.x;
+        const d2y = p4.y - p3.y;
+        
+        const denominator = d1x * d2y - d1y * d2x;
+        
+        // Lines are parallel
+        if (Math.abs(denominator) < 0.0001) {
+            return false;
+        }
+        
+        const d3x = p1.x - p3.x;
+        const d3y = p1.y - p3.y;
+        
+        const t1 = (d3x * d2y - d3y * d2x) / denominator;
+        const t2 = (d3x * d1y - d3y * d1x) / denominator;
+        
+        // Check if intersection point is within both line segments
+        return t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1;
     }
 
     private executeUnitAbilityCommand(player: Player, data: any): void {
