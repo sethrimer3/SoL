@@ -1843,13 +1843,12 @@ export class GameState {
             }
             
             // If exploded, create explosion
-            if (mini.exploded && !mini.shouldDespawn) {
+            if (mini.exploded) {
                 this.miniMothershipExplosions.push({
                     position: new Vector2D(mini.position.x, mini.position.y),
                     owner: mini.owner,
                     timestamp: this.gameTime
                 });
-                mini.shouldDespawn = true;
             }
         }
         

@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly } from './game-core';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
@@ -194,6 +194,7 @@ class GameController {
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
+            case 'Mothership':
             case 'Grave':
             case 'Ray':
             case 'Dagger':
@@ -215,6 +216,8 @@ class GameController {
         switch (heroUnitType) {
             case 'Marine':
                 return unit instanceof Marine;
+            case 'Mothership':
+                return unit instanceof Mothership;
             case 'Grave':
                 return unit instanceof Grave;
             case 'Ray':

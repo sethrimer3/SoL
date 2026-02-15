@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3108,6 +3108,7 @@ export class GameRenderer {
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
+            case 'Mothership':
             case 'Grave':
             case 'Ray':
             case 'Dagger':
@@ -3129,6 +3130,8 @@ export class GameRenderer {
         switch (heroUnitType) {
             case 'Marine':
                 return unit instanceof Marine;
+            case 'Mothership':
+                return unit instanceof Mothership;
             case 'Grave':
                 return unit instanceof Grave;
             case 'Ray':
