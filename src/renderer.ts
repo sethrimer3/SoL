@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3115,6 +3115,7 @@ export class GameRenderer {
             case 'Beam':
             case 'Driller':
             case 'Spotlight':
+            case 'Splendor':
             case 'Sly':
             case 'Shadow':
             case 'Chrono':
@@ -3152,6 +3153,8 @@ export class GameRenderer {
                 return unit instanceof Beam;
             case 'Spotlight':
                 return unit instanceof Spotlight;
+            case 'Splendor':
+                return unit instanceof Splendor;
             case 'Mortar':
                 return unit instanceof Mortar;
             case 'Preist':
@@ -6893,6 +6896,66 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, Constants.VELARIS_ORB_RADIUS, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+
+
+    private drawSplendorSunSphere(sphere: InstanceType<typeof SplendorSunSphere>): void {
+        const screenPos = this.worldToScreen(sphere.position);
+        this.ctx.save();
+        this.ctx.globalAlpha = 0.9;
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, Constants.SPLENDOR_SUN_SPHERE_RADIUS, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = '#FFF59D';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+
+    private drawSplendorSunlightZone(zone: InstanceType<typeof SplendorSunlightZone>): void {
+        const screenPos = this.worldToScreen(zone.position);
+        this.ctx.save();
+        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.12)';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, zone.radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.strokeStyle = 'rgba(255, 235, 59, 0.55)';
+        this.ctx.lineWidth = 2;
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+
+    private drawSplendorLaserSegment(segment: InstanceType<typeof SplendorLaserSegment>): void {
+        const startScreen = this.worldToScreen(segment.startPos);
+        const endScreen = this.worldToScreen(segment.endPos);
+        this.ctx.save();
+        this.ctx.strokeStyle = 'rgba(255, 245, 157, 0.9)';
+        this.ctx.lineWidth = Constants.SPLENDOR_LASER_WIDTH_PX * 0.35;
+        this.ctx.beginPath();
+        this.ctx.moveTo(startScreen.x, startScreen.y);
+        this.ctx.lineTo(endScreen.x, endScreen.y);
+        this.ctx.stroke();
+        this.ctx.restore();
+    }
+
+    private drawSplendorChargeEffect(splendor: InstanceType<typeof Splendor>): void {
+        if (!splendor.isChargingAttack()) {
+            return;
+        }
+        const chargeDirection = splendor.getChargeDirection();
+        const nosePos = new Vector2D(
+            splendor.position.x + chargeDirection.x * Constants.SPLENDOR_LASER_NOSE_OFFSET,
+            splendor.position.y + chargeDirection.y * Constants.SPLENDOR_LASER_NOSE_OFFSET
+        );
+        const screenPos = this.worldToScreen(nosePos);
+        const radius = 4 + 8 * splendor.getChargeProgress();
+        this.ctx.save();
+        this.ctx.fillStyle = 'rgba(255, 236, 128, 0.85)';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.restore();
     }
 
     private drawAurumOrb(orb: InstanceType<typeof AurumOrb>): void {
@@ -11458,6 +11521,9 @@ export class GameRenderer {
                         this.drawChronoHero(unit, color, game, isEnemy);
                     } else if (unit instanceof AurumHero) {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for AurumHero
+                    } else if (unit instanceof Splendor) {
+                        this.drawUnit(unit, color, game, isEnemy);
+                        this.drawSplendorChargeEffect(unit);
                     } else if (unit instanceof Shadow) {
                         this.drawShadow(unit, color, game, isEnemy);
                     } else {
@@ -11740,6 +11806,24 @@ export class GameRenderer {
             for (const hit of game.aurumShieldHits) {
                 if (this.isWithinViewBounds(hit.position, 100)) {
                     this.drawAurumShieldHit(hit);
+                }
+            }
+
+            for (const sphere of game.splendorSunSpheres) {
+                if (this.isWithinViewBounds(sphere.position, Constants.SPLENDOR_SUN_SPHERE_RADIUS * 4)) {
+                    this.drawSplendorSunSphere(sphere);
+                }
+            }
+
+            for (const zone of game.splendorSunlightZones) {
+                if (this.isWithinViewBounds(zone.position, zone.radius + 40)) {
+                    this.drawSplendorSunlightZone(zone);
+                }
+            }
+
+            for (const segment of game.splendorLaserSegments) {
+                if (this.isWithinViewBounds(segment.startPos, 150) || this.isWithinViewBounds(segment.endPos, 150)) {
+                    this.drawSplendorLaserSegment(segment);
                 }
             }
 
@@ -12142,6 +12226,7 @@ export class GameRenderer {
             'dagger': 'Dagger',
             'beam': 'Beam',
             'spotlight': 'Spotlight',
+            'splendor': 'Splendor',
             'solar-mirror': 'Solar Mirror',
             'strafe-upgrade': 'Strafe Upgrade',
             'regen-upgrade': 'Regen Upgrade',

@@ -202,6 +202,13 @@ export class MainMenu {
             attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
             abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles'
         },
+
+        {
+            id: 'aurum-splendor', name: 'Splendor', description: 'Sunlight laser caster with bouncing sun sphere', faction: Faction.AURUM,
+            maxHealth: Constants.SPLENDOR_MAX_HEALTH, attackDamage: Constants.SPLENDOR_ATTACK_DAMAGE, attackSpeed: Constants.SPLENDOR_ATTACK_SPEED,
+            attackRange: Constants.SPLENDOR_ATTACK_RANGE, attackIgnoresDefense: true, defense: 12, regen: 4,
+            abilityDescription: 'Sun sphere: throw a bouncing sunlight orb that explodes into a radiant light zone'
+        },
         {
             id: 'aurum-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.AURUM,
             maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,

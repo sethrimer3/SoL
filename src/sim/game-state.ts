@@ -79,7 +79,11 @@ import {
     ShadowDecoy,
     ShadowDecoyParticle,
     Chrono,
-    ChronoFreezeCircle
+    ChronoFreezeCircle,
+    Splendor,
+    SplendorSunSphere,
+    SplendorSunlightZone,
+    SplendorLaserSegment
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -119,6 +123,9 @@ export class GameState {
     shadowDecoys: InstanceType<typeof ShadowDecoy>[] = [];
     shadowDecoyParticles: InstanceType<typeof ShadowDecoyParticle>[] = [];
     chronoFreezeCircles: InstanceType<typeof ChronoFreezeCircle>[] = [];
+    splendorSunSpheres: InstanceType<typeof SplendorSunSphere>[] = [];
+    splendorSunlightZones: InstanceType<typeof SplendorSunlightZone>[] = [];
+    splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[] = [];
     miniMotherships: InstanceType<typeof MiniMothership>[] = [];
     miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
@@ -496,6 +503,11 @@ export class GameState {
                     
                     unit.update(deltaTime, enemies, allUnits, this.asteroids);
 
+                    if (unit.isHero && unit.owner.faction === Faction.AURUM && this.isUnitInSunlight(unit)) {
+                        unit.position.x += unit.velocity.x * deltaTime * (Constants.AURUM_HERO_SUNLIGHT_SPEED_MULTIPLIER - 1);
+                        unit.position.y += unit.velocity.y * deltaTime * (Constants.AURUM_HERO_SUNLIGHT_SPEED_MULTIPLIER - 1);
+                    }
+
                     // Apply shield blocking from enemy ShieldTowers (not allied ones)
                     for (const enemyPlayer of this.players) {
                         // Skip own units and teammates
@@ -702,6 +714,18 @@ export class GameState {
                     }
                 }
                 
+                // Handle Splendor sunlight spheres and laser visuals
+                if (unit instanceof Splendor) {
+                    const sphere = unit.getAndClearSunSphere();
+                    if (sphere) {
+                        this.splendorSunSpheres.push(sphere);
+                    }
+                    const laserSegment = unit.getAndClearLaserSegment();
+                    if (laserSegment) {
+                        this.splendorLaserSegments.push(laserSegment);
+                    }
+                }
+
                 // Handle Aurum orbs
                 if (unit instanceof AurumHero) {
                     const orb = unit.getAndClearOrb();
@@ -2254,6 +2278,27 @@ export class GameState {
             }
         }
         this.aurumShieldHits = this.aurumShieldHits.filter(hit => hit.getProgress() < 1.0);
+
+        for (const sphere of this.splendorSunSpheres) {
+            sphere.update(deltaTime, this.asteroids, this.getSplendorSphereObstacles());
+            if (sphere.shouldExplode) {
+                this.splendorSunlightZones.push(new SplendorSunlightZone(
+                    new Vector2D(sphere.position.x, sphere.position.y),
+                    sphere.owner
+                ));
+            }
+        }
+        this.splendorSunSpheres = this.splendorSunSpheres.filter((sphere) => !sphere.shouldExplode);
+
+        for (const zone of this.splendorSunlightZones) {
+            zone.update(deltaTime);
+        }
+        this.splendorSunlightZones = this.splendorSunlightZones.filter((zone) => !zone.isExpired());
+
+        for (const segment of this.splendorLaserSegments) {
+            segment.update(deltaTime);
+        }
+        this.splendorLaserSegments = this.splendorLaserSegments.filter((segment) => !segment.isExpired());
         
         // Update Dash slashes
         for (const slash of this.dashSlashes) {
@@ -3514,7 +3559,7 @@ export class GameState {
             case Faction.RADIANT:
                 return ['Marine', 'Mothership', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
             case Faction.AURUM:
-                return ['Driller', 'AurumHero', 'Dash', 'Blink'];
+                return ['Driller', 'AurumHero', 'Dash', 'Blink', 'Splendor'];
             case Faction.VELARIS:
                 return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono'];
             default:
@@ -3566,6 +3611,8 @@ export class GameState {
                 return unit instanceof Dash;
             case 'Blink':
                 return unit instanceof Blink;
+            case 'Splendor':
+                return unit instanceof Splendor;
             case 'Shadow':
                 return unit instanceof Shadow;
             default:
@@ -3832,11 +3879,49 @@ export class GameState {
         }
     }
 
+    private isUnitInSunlight(unit: Unit): boolean {
+        if (!this.isPointInShadow(unit.position)) {
+            return true;
+        }
+
+        for (const zone of this.splendorSunlightZones) {
+            if (zone.owner === unit.owner && zone.containsPoint(unit.position)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private getSplendorSphereObstacles(): { position: Vector2D; radius: number }[] {
+        const obstacles: { position: Vector2D; radius: number }[] = [];
+
+        for (const player of this.players) {
+            if (player.stellarForge) {
+                obstacles.push({ position: player.stellarForge.position, radius: player.stellarForge.radius });
+            }
+            for (const building of player.buildings) {
+                obstacles.push({ position: building.position, radius: building.radius });
+            }
+            for (const mirror of player.solarMirrors) {
+                obstacles.push({ position: mirror.position, radius: Constants.SOLAR_MIRROR_COLLISION_RADIUS });
+            }
+        }
+
+        return obstacles;
+    }
+
     /**
      * Check if a point is in shadow cast by asteroids from all suns
      * Returns true if the point is in shadow from all light sources
      */
     isPointInShadow(point: Vector2D): boolean {
+        for (const zone of this.splendorSunlightZones) {
+            if (zone.containsPoint(point)) {
+                return false;
+            }
+        }
+
         // If no suns, everything is in shadow
         if (this.suns.length === 0) return true;
         
@@ -3895,6 +3980,13 @@ export class GameState {
         // If not in shadow, always visible
         if (!inShadow) {
             return true;
+        }
+
+        // Splendor sunlight zones also reveal objects
+        for (const zone of this.splendorSunlightZones) {
+            if (zone.containsPoint(objectPos)) {
+                return true;
+            }
         }
         
         // In shadow - check proximity to player units (using their line of sight)
@@ -4703,6 +4795,8 @@ export class GameState {
                 return new Dash(spawnPosition, owner);
             case 'Blink':
                 return new Blink(spawnPosition, owner);
+            case 'Splendor':
+                return new Splendor(spawnPosition, owner);
             case 'Shadow':
                 return new Shadow(spawnPosition, owner);
             default:
