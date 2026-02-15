@@ -2068,8 +2068,7 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             unit.position,
                             Constants.DASH_SLASH_DAMAGE,
-                            this.gameTime,
-                            this.getPlayerImpactColor(slash.owner)
+                            this.gameTime
                         ));
                     }
                 }
@@ -2082,8 +2081,7 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             building.position,
                             Constants.DASH_SLASH_DAMAGE,
-                            this.gameTime,
-                            this.getPlayerImpactColor(slash.owner)
+                            this.gameTime
                         ));
                     }
                 }
@@ -2115,8 +2113,7 @@ export class GameState {
                         this.damageNumbers.push(new DamageNumber(
                             unit.position,
                             Constants.BLINK_SHOCKWAVE_DAMAGE,
-                            this.gameTime,
-                            this.getPlayerImpactColor(shockwave.owner)
+                            this.gameTime
                         ));
                     }
                 }
