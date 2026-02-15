@@ -27,6 +27,9 @@ import { createSpotlightHero } from './heroes/spotlight';
 import { createTankHero } from './heroes/tank';
 import { createTurretDeployerHero } from './heroes/turret-deployer';
 import { createSlyHero } from './heroes/sly';
+import { createRadiantHero } from './heroes/radiant';
+import { createVelarisHero } from './heroes/velaris-hero';
+import { createAurumHero } from './heroes/aurum-hero';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -132,6 +135,24 @@ const { Sly, StickyBomb, StickyLaser, DisintegrationParticle } = createSlyHero({
     Constants
 });
 
+const { Radiant, RadiantOrb } = createRadiantHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
+const { VelarisHero, VelarisOrb } = createVelarisHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
+const { AurumHero, AurumOrb, AurumShieldHit } = createAurumHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -162,5 +183,12 @@ export {
     Sly,
     StickyBomb,
     StickyLaser,
-    DisintegrationParticle
+    DisintegrationParticle,
+    Radiant,
+    RadiantOrb,
+    VelarisHero,
+    VelarisOrb,
+    AurumHero,
+    AurumOrb,
+    AurumShieldHit
 };

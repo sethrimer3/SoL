@@ -61,7 +61,14 @@ import {
     Sly,
     StickyBomb,
     StickyLaser,
-    DisintegrationParticle
+    DisintegrationParticle,
+    Radiant,
+    RadiantOrb,
+    VelarisHero,
+    VelarisOrb,
+    AurumHero,
+    AurumOrb,
+    AurumShieldHit
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -92,6 +99,10 @@ export class GameState {
     stickyBombs: InstanceType<typeof StickyBomb>[] = [];
     stickyLasers: InstanceType<typeof StickyLaser>[] = [];
     disintegrationParticles: InstanceType<typeof DisintegrationParticle>[] = [];
+    radiantOrbs: InstanceType<typeof RadiantOrb>[] = [];
+    velarisOrbs: InstanceType<typeof VelarisOrb>[] = [];
+    aurumOrbs: InstanceType<typeof AurumOrb>[] = [];
+    aurumShieldHits: InstanceType<typeof AurumShieldHit>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
@@ -606,6 +617,57 @@ export class GameState {
                     }
                 }
                 
+                // Handle Radiant orbs
+                if (unit instanceof Radiant) {
+                    const orb = unit.getAndClearOrb();
+                    if (orb) {
+                        this.radiantOrbs.push(orb);
+                        // Remove oldest orb if we have more than max
+                        if (this.radiantOrbs.filter(o => o.owner === unit.owner).length > Constants.RADIANT_MAX_ORBS) {
+                            const ownerOrbs = this.radiantOrbs.filter(o => o.owner === unit.owner);
+                            const oldestOrb = ownerOrbs[0];
+                            const index = this.radiantOrbs.indexOf(oldestOrb);
+                            if (index > -1) {
+                                this.radiantOrbs.splice(index, 1);
+                            }
+                        }
+                    }
+                }
+                
+                // Handle Velaris orbs
+                if (unit instanceof VelarisHero) {
+                    const orb = unit.getAndClearOrb();
+                    if (orb) {
+                        this.velarisOrbs.push(orb);
+                        // Remove oldest orb if we have more than max
+                        if (this.velarisOrbs.filter(o => o.owner === unit.owner).length > Constants.VELARIS_MAX_ORBS) {
+                            const ownerOrbs = this.velarisOrbs.filter(o => o.owner === unit.owner);
+                            const oldestOrb = ownerOrbs[0];
+                            const index = this.velarisOrbs.indexOf(oldestOrb);
+                            if (index > -1) {
+                                this.velarisOrbs.splice(index, 1);
+                            }
+                        }
+                    }
+                }
+                
+                // Handle Aurum orbs
+                if (unit instanceof AurumHero) {
+                    const orb = unit.getAndClearOrb();
+                    if (orb) {
+                        this.aurumOrbs.push(orb);
+                        // Remove oldest orb if we have more than max
+                        if (this.aurumOrbs.filter(o => o.owner === unit.owner).length > Constants.AURUM_MAX_ORBS) {
+                            const ownerOrbs = this.aurumOrbs.filter(o => o.owner === unit.owner);
+                            const oldestOrb = ownerOrbs[0];
+                            const index = this.aurumOrbs.indexOf(oldestOrb);
+                            if (index > -1) {
+                                this.aurumOrbs.splice(index, 1);
+                            }
+                        }
+                    }
+                }
+                
                 // Handle Ray beam updates
                 if (unit instanceof Ray) {
                     unit.updateBeamSegments(deltaTime);
@@ -885,6 +947,62 @@ export class GameState {
                 if (isBlocked) break;
             }
             if (isBlocked) continue;
+            
+            // Check if projectile is blocked by Aurum shields
+            let blockedByAurum = false;
+            for (const player of this.players) {
+                // Skip friendly fire
+                if (player === bullet.owner) continue;
+                
+                // Check all Aurum orbs for this player
+                const playerAurumOrbs = this.aurumOrbs.filter(orb => orb.owner === player);
+                
+                // Check if projectile crosses any shield field
+                for (let i = 0; i < playerAurumOrbs.length; i++) {
+                    for (let j = i + 1; j < playerAurumOrbs.length; j++) {
+                        const orb1 = playerAurumOrbs[i];
+                        const orb2 = playerAurumOrbs[j];
+                        
+                        const distance = orb1.position.distanceTo(orb2.position);
+                        const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                        
+                        if (distance <= maxRange) {
+                            // Calculate distance from bullet to shield line
+                            const distSq = this.pointToLineSegmentDistanceSquared(
+                                bullet.position,
+                                orb1.position,
+                                orb2.position
+                            );
+                            
+                            // Shield starts offset from orbs
+                            const shieldOffset = Constants.AURUM_SHIELD_OFFSET;
+                            const distToOrb1 = bullet.position.distanceTo(orb1.position);
+                            const distToOrb2 = bullet.position.distanceTo(orb2.position);
+                            
+                            // Only block if not too close to orbs (leave them vulnerable)
+                            if (distToOrb1 > shieldOffset && distToOrb2 > shieldOffset) {
+                                const shieldWidth = 10; // Shield field width in pixels
+                                if (distSq < shieldWidth * shieldWidth) {
+                                    // Create shield hit effect
+                                    const closestPoint = this.getClosestPointOnLineSegment(
+                                        bullet.position,
+                                        orb1.position,
+                                        orb2.position
+                                    );
+                                    this.aurumShieldHits.push(new AurumShieldHit(closestPoint, player));
+                                    
+                                    blockedByAurum = true;
+                                    bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (blockedByAurum) break;
+                }
+                if (blockedByAurum) break;
+            }
+            if (blockedByAurum) continue;
             
             // Check if projectile is blocked by ShieldTower shields
             let blockedByShield = false;
@@ -1219,6 +1337,28 @@ export class GameState {
                 if (wasAbsorbed) break;
             }
             if (wasAbsorbed) continue;
+
+            // Check hits on Aurum orbs (they can take damage)
+            let hitOrb = false;
+            for (const orb of this.aurumOrbs) {
+                // Don't hit own orbs
+                if (orb.owner === projectile.owner) continue;
+                
+                const distance = projectile.position.distanceTo(orb.position);
+                if (distance < Constants.AURUM_ORB_RADIUS) {
+                    const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : Constants.DEFAULT_PROJECTILE_DAMAGE;
+                    orb.takeDamage(projectileDamage);
+                    this.damageNumbers.push(new DamageNumber(
+                        orb.position,
+                        projectileDamage,
+                        this.gameTime
+                    ));
+                    projectile.distanceTraveledPx = projectile.maxRangePx; // Mark for removal
+                    hitOrb = true;
+                    break;
+                }
+            }
+            if (hitOrb) continue;
 
             let hasHit = false;
 
@@ -1777,6 +1917,75 @@ export class GameState {
             particle.update(deltaTime);
         }
         this.disintegrationParticles = this.disintegrationParticles.filter(particle => !particle.shouldDespawn());
+        
+        // Update Radiant orbs
+        for (const orb of this.radiantOrbs) {
+            orb.update(deltaTime, this.asteroids);
+        }
+        // Remove stopped orbs
+        this.radiantOrbs = this.radiantOrbs.filter(orb => !orb.isStopped());
+        
+        // Apply laser damage between Radiant orbs
+        for (let i = 0; i < this.radiantOrbs.length; i++) {
+            for (let j = i + 1; j < this.radiantOrbs.length; j++) {
+                const orb1 = this.radiantOrbs[i];
+                const orb2 = this.radiantOrbs[j];
+                
+                // Only connect orbs from same owner
+                if (orb1.owner !== orb2.owner) continue;
+                
+                const distance = orb1.position.distanceTo(orb2.position);
+                const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                
+                if (distance <= maxRange) {
+                    // There's a laser between these orbs - check for units crossing it
+                    for (const player of this.players) {
+                        if (player === orb1.owner) continue; // Don't damage own units
+                        
+                        for (const unit of player.units) {
+                            // Calculate distance from unit to line segment between orbs
+                            const lineDistSq = this.pointToLineSegmentDistanceSquared(
+                                unit.position,
+                                orb1.position,
+                                orb2.position
+                            );
+                            
+                            const laserWidth = 5; // Laser field width in pixels
+                            if (lineDistSq < laserWidth * laserWidth) {
+                                const damage = Constants.RADIANT_LASER_DAMAGE_PER_SEC * deltaTime;
+                                unit.health -= damage;
+                                this.damageNumbers.push(new DamageNumber(
+                                    unit.position,
+                                    damage,
+                                    this.gameTime
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Update Velaris orbs
+        for (const orb of this.velarisOrbs) {
+            orb.update(deltaTime, this.asteroids);
+        }
+        this.velarisOrbs = this.velarisOrbs.filter(orb => !orb.isStopped());
+        
+        // Update Aurum orbs
+        for (const orb of this.aurumOrbs) {
+            orb.update(deltaTime, this.asteroids);
+        }
+        // Remove destroyed or stopped orbs
+        this.aurumOrbs = this.aurumOrbs.filter(orb => !orb.isDestroyed() && !orb.isStopped());
+        
+        // Update Aurum shield hits
+        for (const hit of this.aurumShieldHits) {
+            if (hit.update(deltaTime)) {
+                // Mark for removal
+            }
+        }
+        this.aurumShieldHits = this.aurumShieldHits.filter(hit => hit.getProgress() < 1.0);
         
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];
@@ -2885,11 +3094,11 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight'];
+                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
             case Faction.AURUM:
-                return ['Driller'];
+                return ['Driller', 'AurumHero'];
             case Faction.VELARIS:
-                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer'];
+                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero'];
             default:
                 return [];
         }
@@ -2921,6 +3130,16 @@ export class GameState {
                 return unit instanceof Tank;
             case 'Spotlight':
                 return unit instanceof Spotlight;
+            case 'Nova':
+                return unit instanceof Nova;
+            case 'Sly':
+                return unit instanceof Sly;
+            case 'Radiant':
+                return unit instanceof Radiant;
+            case 'VelarisHero':
+                return unit instanceof VelarisHero;
+            case 'AurumHero':
+                return unit instanceof AurumHero;
             default:
                 return false;
         }
@@ -4042,6 +4261,12 @@ export class GameState {
                 return new Nova(spawnPosition, owner);
             case 'Sly':
                 return new Sly(spawnPosition, owner);
+            case 'Radiant':
+                return new Radiant(spawnPosition, owner);
+            case 'VelarisHero':
+                return new VelarisHero(spawnPosition, owner);
+            case 'AurumHero':
+                return new AurumHero(spawnPosition, owner);
             default:
                 return null;
         }
@@ -5072,6 +5297,67 @@ export class GameState {
             return target.radius;
         }
         return 0;
+    }
+
+    /**
+     * Calculate squared distance from point to line segment
+     * Used for laser field collision detection
+     */
+    private pointToLineSegmentDistanceSquared(
+        point: Vector2D,
+        lineStart: Vector2D,
+        lineEnd: Vector2D
+    ): number {
+        const dx = lineEnd.x - lineStart.x;
+        const dy = lineEnd.y - lineStart.y;
+        const lengthSq = dx * dx + dy * dy;
+        
+        if (lengthSq === 0) {
+            // Line segment is a point
+            const px = point.x - lineStart.x;
+            const py = point.y - lineStart.y;
+            return px * px + py * py;
+        }
+        
+        // Calculate projection parameter
+        const t = Math.max(0, Math.min(1, 
+            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
+        ));
+        
+        // Calculate closest point on line segment
+        const closestX = lineStart.x + t * dx;
+        const closestY = lineStart.y + t * dy;
+        
+        // Return squared distance
+        const distX = point.x - closestX;
+        const distY = point.y - closestY;
+        return distX * distX + distY * distY;
+    }
+
+    /**
+     * Get closest point on line segment to a given point
+     */
+    private getClosestPointOnLineSegment(
+        point: Vector2D,
+        lineStart: Vector2D,
+        lineEnd: Vector2D
+    ): Vector2D {
+        const dx = lineEnd.x - lineStart.x;
+        const dy = lineEnd.y - lineStart.y;
+        const lengthSq = dx * dx + dy * dy;
+        
+        if (lengthSq === 0) {
+            return new Vector2D(lineStart.x, lineStart.y);
+        }
+        
+        const t = Math.max(0, Math.min(1, 
+            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
+        ));
+        
+        return new Vector2D(
+            lineStart.x + t * dx,
+            lineStart.y + t * dy
+        );
     }
 
     private executeUnitAbilityCommand(player: Player, data: any): void {
