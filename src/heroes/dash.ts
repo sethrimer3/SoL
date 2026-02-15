@@ -9,72 +9,7 @@ type DashHeroDeps = {
 export const createDashHero = (deps: DashHeroDeps) => {
     const { Unit, Vector2D, Constants } = deps;
 
-    /**
-     * Dash slash effect - represents the hero during a dash
-     * The hero becomes invincible during the dash and damages all units it passes through
-     */
-    class DashSlash {
-        lifetime: number = 0;
-        distanceTraveled: number = 0;
-        affectedUnits: Set<Unit> = new Set(); // Track which units have been damaged
-        bounceCount: number = 0;
-        
-        constructor(
-            public position: Vector2D,
-            public velocity: Vector2D,
-            public targetDistance: number, // How far the dash should go
-            public owner: Player,
-            public heroUnit: any // Reference to the hero unit
-        ) {}
-
-        update(deltaTime: number): void {
-            const moveDistance = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2) * deltaTime;
-            this.position.x += this.velocity.x * deltaTime;
-            this.position.y += this.velocity.y * deltaTime;
-            this.distanceTraveled += moveDistance;
-            this.lifetime += deltaTime;
-        }
-
-        shouldDespawn(): boolean {
-            return this.distanceTraveled >= this.targetDistance;
-        }
-
-        /**
-         * Bounce off a surface with given normal direction
-         */
-        bounce(normalX: number, normalY: number): void {
-            // Reflect velocity using normal vector
-            const dotProduct = this.velocity.x * normalX + this.velocity.y * normalY;
-            this.velocity.x = this.velocity.x - 2 * dotProduct * normalX;
-            this.velocity.y = this.velocity.y - 2 * dotProduct * normalY;
-
-            this.bounceCount++;
-        }
-
-        /**
-         * Check if a unit is within the slash hitbox
-         */
-        isUnitInSlash(unit: Unit): boolean {
-            const distance = this.position.distanceTo(unit.position);
-            return distance < Constants.DASH_SLASH_RADIUS;
-        }
-
-        /**
-         * Get current direction as normalized vector
-         */
-        getDirection(): Vector2D {
-            const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
-            if (speed > 0) {
-                return new Vector2D(this.velocity.x / speed, this.velocity.y / speed);
-            }
-            return new Vector2D(1, 0);
-        }
-    }
-
-    /**
-     * Dash hero - rapidly dashes through enemies dealing damage
-     * Invincible during dash, vulnerable during cooldown
-     */
+    // Forward declaration for type checking
     class Dash extends Unit {
         private dashSlashToCreate: DashSlash | null = null;
         private isDashing: boolean = false;
@@ -93,16 +28,10 @@ export const createDashHero = (deps: DashHeroDeps) => {
             this.isHero = true;
         }
 
-        /**
-         * Dash hero doesn't attack normally
-         */
         attack(target: any): void {
             // Dash hero doesn't have normal attacks
         }
 
-        /**
-         * Override update to handle dash state
-         */
         update(
             deltaTime: number,
             enemies: any[],
@@ -156,10 +85,6 @@ export const createDashHero = (deps: DashHeroDeps) => {
             }
         }
 
-        /**
-         * Use special ability: Dash Slash
-         * Dashes in the direction and distance of the arrow drawn by the player
-         */
         useAbility(direction: Vector2D): boolean {
             if (!super.useAbility(direction)) {
                 return false;
@@ -194,38 +119,88 @@ export const createDashHero = (deps: DashHeroDeps) => {
             return true;
         }
 
-        /**
-         * Get and clear pending dash slash
-         */
         getAndClearDashSlash(): DashSlash | null {
             const slash = this.dashSlashToCreate;
             this.dashSlashToCreate = null;
             return slash;
         }
 
-        /**
-         * Set dashing state
-         */
         setDashing(isDashing: boolean, dashSlash: DashSlash | null = null): void {
             this.isDashing = isDashing;
             this.currentDashSlash = dashSlash;
         }
 
-        /**
-         * Check if hero is currently dashing (and thus invincible)
-         */
         isDashingNow(): boolean {
             return this.isDashing;
         }
 
-        /**
-         * Override takeDamage to make invincible during dash
-         */
         takeDamage(damage: number): void {
             if (!this.isDashing) {
                 super.takeDamage(damage);
             }
             // If dashing, take no damage (invincible)
+        }
+    }
+
+    /**
+     * Dash slash effect - represents the hero during a dash
+     * The hero becomes invincible during the dash and damages all units it passes through
+     */
+    class DashSlash {
+        lifetime: number = 0;
+        distanceTraveled: number = 0;
+        affectedUnits: Set<Unit> = new Set(); // Track which units have been damaged
+        bounceCount: number = 0;
+        
+        constructor(
+            public position: Vector2D,
+            public velocity: Vector2D,
+            public targetDistance: number, // How far the dash should go
+            public owner: Player,
+            public heroUnit: Dash // Reference to the hero unit
+        ) {}
+
+        update(deltaTime: number): void {
+            const moveDistance = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2) * deltaTime;
+            this.position.x += this.velocity.x * deltaTime;
+            this.position.y += this.velocity.y * deltaTime;
+            this.distanceTraveled += moveDistance;
+            this.lifetime += deltaTime;
+        }
+
+        shouldDespawn(): boolean {
+            return this.distanceTraveled >= this.targetDistance;
+        }
+
+        /**
+         * Bounce off a surface with given normal direction
+         */
+        bounce(normalX: number, normalY: number): void {
+            // Reflect velocity using normal vector
+            const dotProduct = this.velocity.x * normalX + this.velocity.y * normalY;
+            this.velocity.x = this.velocity.x - 2 * dotProduct * normalX;
+            this.velocity.y = this.velocity.y - 2 * dotProduct * normalY;
+
+            this.bounceCount++;
+        }
+
+        /**
+         * Check if a unit is within the slash hitbox
+         */
+        isUnitInSlash(unit: Unit): boolean {
+            const distance = this.position.distanceTo(unit.position);
+            return distance < Constants.DASH_SLASH_RADIUS;
+        }
+
+        /**
+         * Get current direction as normalized vector
+         */
+        getDirection(): Vector2D {
+            const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+            if (speed > 0) {
+                return new Vector2D(this.velocity.x / speed, this.velocity.y / speed);
+            }
+            return new Vector2D(1, 0);
         }
     }
 

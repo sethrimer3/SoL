@@ -29,7 +29,7 @@ export const createBlinkHero = (deps: BlinkHeroDeps) => {
 
         shouldDespawn(): boolean {
             // Shockwave is instantaneous, despawn after first frame
-            return this.lifetime > 0.05; // Small window to ensure units are hit
+            return this.lifetime > Constants.BLINK_SHOCKWAVE_HIT_WINDOW;
         }
 
         /**

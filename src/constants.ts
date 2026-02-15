@@ -674,6 +674,7 @@ export const BLINK_SHOCKWAVE_MAX_RADIUS = 180; // Maximum shockwave radius (at m
 export const BLINK_SHOCKWAVE_DAMAGE = 20; // Damage dealt by shockwave
 export const BLINK_STUN_DURATION = 1.0; // Stun duration in seconds
 export const BLINK_SHOCKWAVE_VISUAL_DURATION = 0.4; // Duration of visual effect in seconds
+export const BLINK_SHOCKWAVE_HIT_WINDOW = 0.05; // Time window for shockwave hit detection in seconds
 
 // AI Strategy types
 export enum AIStrategy {
