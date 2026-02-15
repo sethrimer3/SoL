@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3108,6 +3108,7 @@ export class GameRenderer {
     private getHeroUnitType(heroName: string): string | null {
         switch (heroName) {
             case 'Marine':
+            case 'Mothership':
             case 'Grave':
             case 'Ray':
             case 'Dagger':
@@ -3129,6 +3130,8 @@ export class GameRenderer {
         switch (heroUnitType) {
             case 'Marine':
                 return unit instanceof Marine;
+            case 'Mothership':
+                return unit instanceof Mothership;
             case 'Grave':
                 return unit instanceof Grave;
             case 'Ray':
@@ -6330,6 +6333,90 @@ export class GameRenderer {
             this.ctx.globalAlpha = 0.3;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x - size * 0.3, screenPos.y - size * 0.3, size * 0.4, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a mini-mothership (small autonomous units spawned by Mothership)
+     */
+    private drawMiniMothership(mini: any): void {
+        const screenPos = this.worldToScreen(mini.position);
+        const size = 8 * this.zoom; // Small unit size
+        const color = this.getFactionColor(mini.owner.faction);
+        
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw main body (triangle shape pointing in movement direction)
+        this.ctx.globalAlpha = 1.0;
+        this.ctx.fillStyle = color;
+        this.ctx.beginPath();
+        
+        // Calculate angle from velocity
+        const angle = Math.atan2(mini.velocity.y, mini.velocity.x);
+        
+        // Draw triangle
+        const tipX = screenPos.x + Math.cos(angle) * size;
+        const tipY = screenPos.y + Math.sin(angle) * size;
+        const leftX = screenPos.x + Math.cos(angle + 2.5) * size * 0.6;
+        const leftY = screenPos.y + Math.sin(angle + 2.5) * size * 0.6;
+        const rightX = screenPos.x + Math.cos(angle - 2.5) * size * 0.6;
+        const rightY = screenPos.y + Math.sin(angle - 2.5) * size * 0.6;
+        
+        this.ctx.moveTo(tipX, tipY);
+        this.ctx.lineTo(leftX, leftY);
+        this.ctx.lineTo(rightX, rightY);
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Draw inner highlight
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.globalAlpha = 0.6;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+    
+    /**
+     * Draw a mini-mothership explosion (splash damage effect)
+     */
+    private drawMiniMothershipExplosion(explosion: any, age: number): void {
+        const screenPos = this.worldToScreen(explosion.position);
+        const maxRadius = Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS * this.zoom;
+        const color = this.getFactionColor(explosion.owner.faction);
+        
+        // Animation duration
+        const duration = 0.5; // 0.5 seconds
+        const progress = Math.min(age / duration, 1.0);
+        
+        // Expanding ring effect
+        const radius = maxRadius * progress;
+        const alpha = (1.0 - progress) * 0.7;
+        
+        // Draw outer ring
+        this.ctx.strokeStyle = color;
+        this.ctx.globalAlpha = alpha;
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw inner flash (only in first half)
+        if (progress < 0.5) {
+            const flashAlpha = (0.5 - progress) * 2 * 0.5;
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = flashAlpha;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, maxRadius * 0.3 * (1 - progress * 2), 0, Math.PI * 2);
             this.ctx.fill();
         }
         
@@ -11174,6 +11261,21 @@ export class GameRenderer {
             for (const projectile of game.mortarProjectiles) {
                 if (this.isWithinViewBounds(projectile.position, 100)) {
                     this.drawMortarProjectile(projectile);
+                }
+            }
+
+            // Draw mini-motherships
+            for (const mini of game.miniMotherships) {
+                if (this.isWithinViewBounds(mini.position, 50)) {
+                    this.drawMiniMothership(mini);
+                }
+            }
+
+            // Draw mini-mothership explosions
+            for (const explosion of game.miniMothershipExplosions) {
+                const age = game.gameTime - explosion.timestamp;
+                if (age < 0.5 && this.isWithinViewBounds(explosion.position, Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS * 2)) {
+                    this.drawMiniMothershipExplosion(explosion, age);
                 }
             }
 

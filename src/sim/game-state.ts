@@ -34,6 +34,8 @@ import {
 } from './entities/particles';
 import {
     Marine,
+    Mothership,
+    MiniMothership,
     Grave,
     GraveProjectile,
     GraveBlackHole,
@@ -109,6 +111,8 @@ export class GameState {
     aurumShieldHits: InstanceType<typeof AurumShieldHit>[] = [];
     dashSlashes: InstanceType<typeof DashSlash>[] = [];
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[] = [];
+    miniMotherships: InstanceType<typeof MiniMothership>[] = [];
+    miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
@@ -551,6 +555,24 @@ export class GameState {
                     if (effects.bouncingBullet) {
                         this.bouncingBullets.push(effects.bouncingBullet);
                     }
+                }
+
+                // If unit is a Mothership, collect its effects
+                if (unit instanceof Mothership) {
+                    const effects = unit.getAndClearLastShotEffects();
+                    if (effects.muzzleFlash) {
+                        this.muzzleFlashes.push(effects.muzzleFlash);
+                    }
+                    if (effects.casing) {
+                        this.bulletCasings.push(effects.casing);
+                    }
+                    if (effects.bouncingBullet) {
+                        this.bouncingBullets.push(effects.bouncingBullet);
+                    }
+                    
+                    // Collect spawned mini-motherships
+                    const minis = unit.getAndClearMiniMotherships();
+                    this.miniMotherships.push(...minis);
                 }
 
                 // Collect ability effects from all units
@@ -1768,6 +1790,112 @@ export class GameState {
             }
         }
         this.novaScatterBullets = this.novaScatterBullets.filter(bullet => !bullet.shouldDespawn());
+        
+        // Update Mini-Motherships
+        for (const mini of this.miniMotherships) {
+            // Collect enemy targets for AI targeting
+            const enemyTargets: CombatTarget[] = [];
+            for (const player of this.players) {
+                if (player === mini.owner) continue;
+                
+                // Add enemy units
+                for (const unit of player.units) {
+                    enemyTargets.push(unit);
+                }
+                
+                // Add enemy buildings
+                for (const building of player.buildings) {
+                    enemyTargets.push(building);
+                }
+                
+                // Add enemy forge
+                if (player.stellarForge) {
+                    enemyTargets.push(player.stellarForge);
+                }
+            }
+            
+            // Update mini-mothership (movement, targeting, attacking)
+            mini.update(deltaTime, enemyTargets);
+            
+            // Collect shot effects
+            const effects = mini.getAndClearLastShotEffects();
+            if (effects.muzzleFlash) {
+                this.muzzleFlashes.push(effects.muzzleFlash);
+            }
+            if (effects.casing) {
+                this.bulletCasings.push(effects.casing);
+            }
+            if (effects.bouncingBullet) {
+                this.bouncingBullets.push(effects.bouncingBullet);
+            }
+            
+            // Check collision with environment
+            const allBuildings: any[] = [];
+            for (const player of this.players) {
+                allBuildings.push(...player.buildings);
+                if (player.stellarForge) {
+                    allBuildings.push(player.stellarForge);
+                }
+            }
+            
+            if (mini.checkCollision(Constants.MAP_PLAYABLE_BOUNDARY, this.asteroids, allBuildings)) {
+                mini.explode();
+            }
+            
+            // If exploded, create explosion
+            if (mini.exploded) {
+                this.miniMothershipExplosions.push({
+                    position: new Vector2D(mini.position.x, mini.position.y),
+                    owner: mini.owner,
+                    timestamp: this.gameTime
+                });
+            }
+        }
+        
+        // Apply splash damage from mini-mothership explosions
+        for (const explosion of this.miniMothershipExplosions) {
+            const allTargets: CombatTarget[] = [];
+            for (const player of this.players) {
+                // Add all units
+                for (const unit of player.units) {
+                    allTargets.push(unit);
+                }
+                
+                // Add all buildings
+                for (const building of player.buildings) {
+                    allTargets.push(building);
+                }
+                
+                // Add forge
+                if (player.stellarForge) {
+                    allTargets.push(player.stellarForge);
+                }
+            }
+            
+            // Apply splash damage to all targets in range (friendly and enemy)
+            for (const target of allTargets) {
+                const distance = explosion.position.distanceTo(target.position);
+                if (distance <= Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS) {
+                    // Calculate damage with falloff
+                    const damageMultiplier = 1.0 - (distance / Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS) * (1.0 - Constants.MOTHERSHIP_MINI_EXPLOSION_FALLOFF);
+                    const damage = Constants.MOTHERSHIP_MINI_EXPLOSION_DAMAGE * damageMultiplier;
+                    target.health -= damage;
+                    
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        new Vector2D(target.position.x, target.position.y),
+                        Math.round(damage),
+                        this.gameTime
+                    ));
+                }
+            }
+        }
+        
+        // Clean up old explosions (older than 1 second)
+        this.miniMothershipExplosions = this.miniMothershipExplosions.filter(exp => this.gameTime - exp.timestamp < 1.0);
+        
+        // Remove despawned mini-motherships
+        this.miniMotherships = this.miniMotherships.filter(mini => !mini.shouldDespawn);
         
         // Update Sticky Bombs
         for (const bomb of this.stickyBombs) {
@@ -3230,7 +3358,7 @@ export class GameState {
     private getAiHeroTypesForFaction(faction: Faction): string[] {
         switch (faction) {
             case Faction.RADIANT:
-                return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
+                return ['Marine', 'Mothership', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
             case Faction.AURUM:
                 return ['Driller', 'AurumHero', 'Dash', 'Blink'];
             case Faction.VELARIS:
@@ -3244,6 +3372,8 @@ export class GameState {
         switch (heroUnitType) {
             case 'Marine':
                 return unit instanceof Marine;
+            case 'Mothership':
+                return unit instanceof Mothership;
             case 'Grave':
                 return unit instanceof Grave;
             case 'Ray':
@@ -4375,6 +4505,8 @@ export class GameState {
         switch (unitType) {
             case 'Marine':
                 return new Marine(spawnPosition, owner);
+            case 'Mothership':
+                return new Mothership(spawnPosition, owner);
             case 'Grave':
                 return new Grave(spawnPosition, owner);
             case 'Ray':
