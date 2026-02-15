@@ -3,6 +3,8 @@ import { Faction, GameState, GatlingTower, Marine, SubsidiaryFactory, Vector2D }
 
 const FORGE_CHARGE_LEAD_TIME_SEC = 5;
 const STARLING_ATTACK_MIN_INTERVAL_SEC = 0.12;
+const STARLING_ATTACK_MAX_SIMULTANEOUS = 4;
+const STARLING_ATTACK_BASE_VOLUME = 1 / 3;
 const FORGE_CRUNCH_MIN_INTERVAL_SEC = 0.35;
 const OFFSCREEN_VOLUME_FALLOFF_DISTANCE_FACTOR = 0.75;
 const LOOP_CROSSFADE_DURATION_SEC = 0.1;
@@ -28,7 +30,7 @@ type LoopPairState = {
 };
 
 export class GameAudioController {
-    private readonly starlingAttackAudioByFaction = new Map<Faction, HTMLAudioElement>();
+    private readonly starlingAttackAudioPoolByFaction = new Map<Faction, HTMLAudioElement[]>();
     private readonly marineFiringLoopState: LoopPairState;
     private readonly gatlingTowerFiringLoopState: LoopPairState;
     private readonly forgeCrunchAudio: HTMLAudioElement;
@@ -51,9 +53,18 @@ export class GameAudioController {
     private audioContext: AudioContext | null = null;
 
     constructor() {
-        this.starlingAttackAudioByFaction.set(Faction.RADIANT, this.createAudio('ASSETS/SFX/radiantSFX/starling_firing.mp3'));
-        this.starlingAttackAudioByFaction.set(Faction.AURUM, this.createAudio('ASSETS/SFX/aurumSFX/starling_firing.mp3'));
-        this.starlingAttackAudioByFaction.set(Faction.VELARIS, this.createAudio('ASSETS/SFX/velarisSFX/starling_firing.mp3'));
+        this.starlingAttackAudioPoolByFaction.set(
+            Faction.RADIANT,
+            this.createOneShotPool('ASSETS/SFX/radiantSFX/starling_firing.mp3', STARLING_ATTACK_MAX_SIMULTANEOUS, STARLING_ATTACK_BASE_VOLUME)
+        );
+        this.starlingAttackAudioPoolByFaction.set(
+            Faction.AURUM,
+            this.createOneShotPool('ASSETS/SFX/aurumSFX/starling_firing.mp3', STARLING_ATTACK_MAX_SIMULTANEOUS, STARLING_ATTACK_BASE_VOLUME)
+        );
+        this.starlingAttackAudioPoolByFaction.set(
+            Faction.VELARIS,
+            this.createOneShotPool('ASSETS/SFX/velarisSFX/starling_firing.mp3', STARLING_ATTACK_MAX_SIMULTANEOUS, STARLING_ATTACK_BASE_VOLUME)
+        );
 
         this.marineFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', MARINE_LOOP_BASE_VOLUME);
         this.gatlingTowerFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/gatling_firing.ogg', GATLING_LOOP_BASE_VOLUME);
@@ -161,9 +172,8 @@ export class GameAudioController {
         }
 
         if (starlingFactionWithAttack && this.starlingAttackCooldownRemainingSec <= 0) {
-            const starlingAudio = this.starlingAttackAudioByFaction.get(starlingFactionWithAttack);
-            if (starlingAudio) {
-                this.playOneShot(starlingAudio, starlingSoundSource, listenerView);
+            const starlingAudioPool = this.starlingAttackAudioPoolByFaction.get(starlingFactionWithAttack);
+            if (starlingAudioPool && this.playOneShotFromPool(starlingAudioPool, starlingSoundSource, listenerView)) {
                 this.starlingAttackCooldownRemainingSec = STARLING_ATTACK_MIN_INTERVAL_SEC;
             }
         }
@@ -216,6 +226,14 @@ export class GameAudioController {
         return { active: primary, inactive: secondary };
     }
 
+    private createOneShotPool(path: string, maxSimultaneous: number, baseVolume: number): HTMLAudioElement[] {
+        return Array.from({ length: maxSimultaneous }, () => {
+            const audio = this.createAudio(path, false);
+            this.baseVolumeByElement.set(audio, baseVolume);
+            return audio;
+        });
+    }
+
     private playOneShot(
         audio: HTMLAudioElement,
         sourcePositionWorld: Vector2D | null,
@@ -258,6 +276,20 @@ export class GameAudioController {
         const offscreenVolumeScale = 1 / (1 + offscreenDistanceFactor);
 
         this.applySpatialMix(audio, pan, offscreenVolumeScale);
+    }
+
+    private playOneShotFromPool(
+        audioPool: HTMLAudioElement[],
+        sourcePositionWorld: Vector2D | null,
+        listenerView: AudioListenerView | null
+    ): boolean {
+        const availableAudio = audioPool.find((audio) => audio.paused || audio.ended);
+        if (!availableAudio) {
+            return false;
+        }
+
+        this.playOneShot(availableAudio, sourcePositionWorld, listenerView);
+        return true;
     }
 
     private applySpatialMix(audio: HTMLAudioElement, pan: number, volumeScale: number): void {
@@ -408,8 +440,10 @@ export class GameAudioController {
         this.stopLoop(this.forgeChargeAudio);
         this.stopLoop(this.foundryPowerUpAudio);
         this.stopLoop(this.foundryPowerDownAudio);
-        for (const audio of this.starlingAttackAudioByFaction.values()) {
-            this.stopLoop(audio);
+        for (const pool of this.starlingAttackAudioPoolByFaction.values()) {
+            for (const audio of pool) {
+                this.stopLoop(audio);
+            }
         }
     }
 }
