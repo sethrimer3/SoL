@@ -30,6 +30,8 @@ import { createSlyHero } from './heroes/sly';
 import { createRadiantHero } from './heroes/radiant';
 import { createVelarisHero } from './heroes/velaris-hero';
 import { createAurumHero } from './heroes/aurum-hero';
+import { createDashHero } from './heroes/dash';
+import { createBlinkHero } from './heroes/blink';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -153,6 +155,18 @@ const { AurumHero, AurumOrb, AurumShieldHit } = createAurumHero({
     Constants
 });
 
+const { Dash, DashSlash } = createDashHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
+const { Blink, BlinkShockwave } = createBlinkHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -190,5 +204,9 @@ export {
     VelarisOrb,
     AurumHero,
     AurumOrb,
-    AurumShieldHit
+    AurumShieldHit,
+    Dash,
+    DashSlash,
+    Blink,
+    BlinkShockwave
 };

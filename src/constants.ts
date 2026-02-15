@@ -653,6 +653,28 @@ export const AURUM_ORB_RADIUS = 15;
 export const AURUM_SHIELD_OFFSET = 25; // Distance from orb center where shield starts
 export const AURUM_SHIELD_HIT_DURATION = 0.3; // Duration of hit flash effect
 
+// Dash hero constants (Aurum faction - rapid dash attack)
+export const DASH_MAX_HEALTH = 110;
+export const DASH_ABILITY_COOLDOWN = 3.0; // Quick cooldown
+export const DASH_SPEED = 800; // Very fast dash speed (pixels per second)
+export const DASH_DISTANCE_MULTIPLIER = 1.5; // Multiplier for arrow length to dash distance
+export const DASH_MIN_DISTANCE = 100; // Minimum dash distance
+export const DASH_MAX_DISTANCE = 500; // Maximum dash distance
+export const DASH_SLASH_RADIUS = 30; // Radius around dash position that damages units
+export const DASH_SLASH_DAMAGE = 40; // Damage dealt to units hit by dash
+
+// Blink hero constants (Aurum faction - teleport with shockwave)
+export const BLINK_MAX_HEALTH = 100;
+export const BLINK_ABILITY_COOLDOWN = 6.0; // Moderate cooldown
+export const BLINK_DISTANCE_MULTIPLIER = 1.5; // Multiplier for arrow length to blink distance
+export const BLINK_MIN_DISTANCE = 80; // Minimum blink distance
+export const BLINK_MAX_DISTANCE = 400; // Maximum blink distance
+export const BLINK_SHOCKWAVE_MIN_RADIUS = 60; // Minimum shockwave radius (at max blink distance)
+export const BLINK_SHOCKWAVE_MAX_RADIUS = 180; // Maximum shockwave radius (at min blink distance)
+export const BLINK_SHOCKWAVE_DAMAGE = 20; // Damage dealt by shockwave
+export const BLINK_STUN_DURATION = 1.0; // Stun duration in seconds
+export const BLINK_SHOCKWAVE_VISUAL_DURATION = 0.4; // Duration of visual effect in seconds
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy
