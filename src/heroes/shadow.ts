@@ -64,8 +64,9 @@ export const createShadowHero = (deps: ShadowHeroDeps) => {
 
         /**
          * Check collision with boundaries, asteroids, or structures
+         * @param structures - Array of objects with position and radius properties (buildings, forge, etc.)
          */
-        checkCollision(boundary: number, asteroids: Asteroid[], structures: any[]): boolean {
+        checkCollision(boundary: number, asteroids: Asteroid[], structures: Array<{ position: Vector2D; radius: number }>): boolean {
             // Check map boundaries
             if (this.position.x <= -boundary || this.position.x >= boundary ||
                 this.position.y <= -boundary || this.position.y >= boundary) {

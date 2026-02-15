@@ -474,9 +474,11 @@ export class GameState {
                 }
                 
                 // Add enemy shadow decoys as targetable entities
+                // Note: Decoys have position, health, and owner properties compatible with CombatTarget,
+                // but can't be added to the union type without creating circular dependencies
                 for (const decoy of this.shadowDecoys) {
                     if (decoy.owner === otherPlayer && !decoy.shouldDespawn) {
-                        enemies.push(decoy as any); // Cast to any to satisfy CombatTarget interface
+                        enemies.push(decoy as any);
                     }
                 }
             }
@@ -1923,7 +1925,7 @@ export class GameState {
             decoy.update(deltaTime);
             
             // Check collision with environment
-            const allBuildings: any[] = [];
+            const allBuildings: Array<{ position: Vector2D; radius: number }> = [];
             for (const player of this.players) {
                 allBuildings.push(...player.buildings);
                 if (player.stellarForge) {
