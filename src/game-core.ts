@@ -35,6 +35,7 @@ import { createDashHero } from './heroes/dash';
 import { createBlinkHero } from './heroes/blink';
 import { createShadowHero } from './heroes/shadow';
 import { createChronoHero } from './heroes/chrono';
+import { createSplendorHero } from './heroes/splendor';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -192,6 +193,12 @@ const { Chrono, ChronoFreezeCircle } = createChronoHero({
     Constants
 });
 
+const { Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment } = createSplendorHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -240,5 +247,9 @@ export {
     ShadowDecoy,
     ShadowDecoyParticle,
     Chrono,
-    ChronoFreezeCircle
+    ChronoFreezeCircle,
+    Splendor,
+    SplendorSunSphere,
+    SplendorSunlightZone,
+    SplendorLaserSegment
 };

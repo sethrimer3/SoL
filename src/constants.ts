@@ -686,6 +686,28 @@ export const AURUM_ORB_MAX_HEALTH = 200; // Orbs can take damage
 export const AURUM_ORB_RADIUS = 15;
 export const AURUM_SHIELD_OFFSET = 25; // Distance from orb center where shield starts
 export const AURUM_SHIELD_HIT_DURATION = 0.3; // Duration of hit flash effect
+export const AURUM_HERO_SUNLIGHT_SPEED_MULTIPLIER = 1.5;
+
+// Splendor hero constants (Aurum sunlight laser hero)
+export const SPLENDOR_MAX_HEALTH = 130;
+export const SPLENDOR_ATTACK_RANGE = 380;
+export const SPLENDOR_ATTACK_DAMAGE = 35;
+export const SPLENDOR_ATTACK_SPEED = 0.9;
+export const SPLENDOR_ABILITY_COOLDOWN = 8.0;
+export const SPLENDOR_CHARGE_TIME_SEC = 0.5;
+export const SPLENDOR_LASER_WIDTH_PX = 22;
+export const SPLENDOR_LASER_NOSE_OFFSET = 22;
+export const SPLENDOR_LASER_VISUAL_DURATION_SEC = 0.12;
+
+export const SPLENDOR_SUN_SPHERE_RADIUS = 16;
+export const SPLENDOR_SUN_SPHERE_SPEED_MULTIPLIER = 3.0;
+export const SPLENDOR_SUN_SPHERE_MAX_SPEED = 650;
+export const SPLENDOR_SUN_SPHERE_DECELERATION = 140;
+export const SPLENDOR_SUN_SPHERE_BOUNCE_DAMPING = 0.74;
+export const SPLENDOR_SUN_SPHERE_STOP_SPEED_PX_PER_SEC = 40;
+export const SPLENDOR_SUN_SPHERE_MAX_LIFETIME_SEC = 6.0;
+export const SPLENDOR_SUNLIGHT_ZONE_RADIUS = 220;
+export const SPLENDOR_SUNLIGHT_ZONE_DURATION_SEC = 8.0;
 
 // Dash hero constants (Aurum faction - rapid dash attack)
 export const DASH_MAX_HEALTH = 110;
