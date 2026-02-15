@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -6714,6 +6714,9 @@ export class GameRenderer {
     /**
      * Draw an influence ball projectile
      */
+    /**
+     * Draw an influence ball projectile
+     */
     private drawInfluenceBallProjectile(projectile: InstanceType<typeof InfluenceBallProjectile>): void {
         const screenPos = this.worldToScreen(projectile.position);
         const size = 12 * this.zoom;
@@ -6735,6 +6738,277 @@ export class GameRenderer {
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
         this.ctx.fill();
+    }
+
+    private drawRadiantOrb(orb: InstanceType<typeof RadiantOrb>): void {
+        const screenPos = this.worldToScreen(orb.position);
+        const color = this.getFactionColor(orb.owner.faction);
+        
+        // Draw range circle (fades with velocity)
+        const currentRange = orb.getRange();
+        const speedRatio = orb.getCurrentSpeed() / Constants.RADIANT_ORB_MAX_SPEED;
+        
+        this.ctx.globalAlpha = speedRatio * 0.3;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw orb core
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, Constants.RADIANT_ORB_RADIUS
+        );
+        gradient.addColorStop(0, '#FFFFFF');
+        gradient.addColorStop(0.4, color);
+        gradient.addColorStop(1, `${color}88`);
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, Constants.RADIANT_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    private drawVelarisOrb(orb: InstanceType<typeof VelarisOrb>): void {
+        const screenPos = this.worldToScreen(orb.position);
+        const color = this.getFactionColor(orb.owner.faction);
+        
+        // Draw range circle (fades with velocity)
+        const currentRange = orb.getRange();
+        const speedRatio = orb.getCurrentSpeed() / Constants.VELARIS_ORB_MAX_SPEED;
+        
+        this.ctx.globalAlpha = speedRatio * 0.3;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw orb core with darker appearance
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, Constants.VELARIS_ORB_RADIUS
+        );
+        gradient.addColorStop(0, '#444444');
+        gradient.addColorStop(0.4, color);
+        gradient.addColorStop(1, `${color}66`);
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, Constants.VELARIS_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.fill();
+    }
+
+    private drawAurumOrb(orb: InstanceType<typeof AurumOrb>): void {
+        const screenPos = this.worldToScreen(orb.position);
+        const color = this.getFactionColor(orb.owner.faction);
+        
+        // Draw range circle (fades with velocity)
+        const currentRange = orb.getRange();
+        const speedRatio = orb.getCurrentSpeed() / Constants.AURUM_ORB_MAX_SPEED;
+        
+        this.ctx.globalAlpha = speedRatio * 0.3;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw orb core
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, Constants.AURUM_ORB_RADIUS
+        );
+        gradient.addColorStop(0, '#FFD700'); // Golden
+        gradient.addColorStop(0.4, color);
+        gradient.addColorStop(1, `${color}88`);
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, Constants.AURUM_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw health bar
+        const healthRatio = orb.health / orb.maxHealth;
+        const barWidth = 30;
+        const barHeight = 4;
+        const barX = screenPos.x - barWidth / 2;
+        const barY = screenPos.y - Constants.AURUM_ORB_RADIUS - 10;
+        
+        // Background
+        this.ctx.fillStyle = '#333333';
+        this.ctx.fillRect(barX, barY, barWidth, barHeight);
+        
+        // Health
+        this.ctx.fillStyle = healthRatio > 0.5 ? '#00FF00' : healthRatio > 0.25 ? '#FFFF00' : '#FF0000';
+        this.ctx.fillRect(barX, barY, barWidth * healthRatio, barHeight);
+        
+        // Border
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 1;
+        this.ctx.strokeRect(barX, barY, barWidth, barHeight);
+    }
+
+    private drawRadiantLaserField(orb1: InstanceType<typeof RadiantOrb>, orb2: InstanceType<typeof RadiantOrb>): void {
+        const screenPos1 = this.worldToScreen(orb1.position);
+        const screenPos2 = this.worldToScreen(orb2.position);
+        const color = this.getFactionColor(orb1.owner.faction);
+        
+        // Draw laser beam
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 3;
+        this.ctx.globalAlpha = 0.6;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos1.x, screenPos1.y);
+        this.ctx.lineTo(screenPos2.x, screenPos2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw glow effect
+        const gradient = this.ctx.createLinearGradient(
+            screenPos1.x, screenPos1.y,
+            screenPos2.x, screenPos2.y
+        );
+        gradient.addColorStop(0, `${color}80`);
+        gradient.addColorStop(0.5, `${color}40`);
+        gradient.addColorStop(1, `${color}80`);
+        
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = 8;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos1.x, screenPos1.y);
+        this.ctx.lineTo(screenPos2.x, screenPos2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+    }
+
+    private drawVelarisLightBlockingField(orb1: InstanceType<typeof VelarisOrb>, orb2: InstanceType<typeof VelarisOrb>, gameTime: number): void {
+        const screenPos1 = this.worldToScreen(orb1.position);
+        const screenPos2 = this.worldToScreen(orb2.position);
+        const color = this.getFactionColor(orb1.owner.faction);
+        
+        // Draw dark laser
+        this.ctx.strokeStyle = '#000000';
+        this.ctx.lineWidth = 4;
+        this.ctx.globalAlpha = 0.8;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos1.x, screenPos1.y);
+        this.ctx.lineTo(screenPos2.x, screenPos2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw colored outline
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 1;
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(screenPos1.x, screenPos1.y);
+        this.ctx.lineTo(screenPos2.x, screenPos2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw particles moving back and forth
+        const distance = orb1.position.distanceTo(orb2.position);
+        const particleCount = Math.floor(distance / 50);
+        
+        for (let i = 0; i < particleCount; i++) {
+            const baseT = i / particleCount;
+            // Oscillate position with time
+            const t = baseT + (Math.sin(gameTime * 2 + i) * 0.1);
+            const clampedT = Math.max(0, Math.min(1, t));
+            
+            const px = orb1.position.x + (orb2.position.x - orb1.position.x) * clampedT;
+            const py = orb1.position.y + (orb2.position.y - orb1.position.y) * clampedT;
+            const screenPos = this.worldToScreen(new Vector2D(px, py));
+            
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = 0.7;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, 3, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.globalAlpha = 1;
+        }
+    }
+
+    private drawAurumShieldField(orb1: InstanceType<typeof AurumOrb>, orb2: InstanceType<typeof AurumOrb>): void {
+        const screenPos1 = this.worldToScreen(orb1.position);
+        const screenPos2 = this.worldToScreen(orb2.position);
+        const color = this.getFactionColor(orb1.owner.faction);
+        
+        // Calculate offset direction (perpendicular to line between orbs)
+        const dx = orb2.position.x - orb1.position.x;
+        const dy = orb2.position.y - orb1.position.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        
+        if (dist === 0) return;
+        
+        const ndx = dx / dist;
+        const ndy = dy / dist;
+        
+        // Calculate points offset from orbs (to leave them vulnerable)
+        const offset = Constants.AURUM_SHIELD_OFFSET;
+        const p1x = orb1.position.x + ndx * offset;
+        const p1y = orb1.position.y + ndy * offset;
+        const p2x = orb2.position.x - ndx * offset;
+        const p2y = orb2.position.y - ndy * offset;
+        
+        const sp1 = this.worldToScreen(new Vector2D(p1x, p1y));
+        const sp2 = this.worldToScreen(new Vector2D(p2x, p2y));
+        
+        // Draw translucent shield
+        const gradient = this.ctx.createLinearGradient(sp1.x, sp1.y, sp2.x, sp2.y);
+        gradient.addColorStop(0, `${color}40`);
+        gradient.addColorStop(0.5, `${color}60`);
+        gradient.addColorStop(1, `${color}40`);
+        
+        this.ctx.strokeStyle = gradient;
+        this.ctx.lineWidth = 12;
+        this.ctx.globalAlpha = 0.5;
+        this.ctx.beginPath();
+        this.ctx.moveTo(sp1.x, sp1.y);
+        this.ctx.lineTo(sp2.x, sp2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+        
+        // Draw shield edges
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.globalAlpha = 0.7;
+        this.ctx.beginPath();
+        this.ctx.moveTo(sp1.x, sp1.y);
+        this.ctx.lineTo(sp2.x, sp2.y);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
+    }
+
+    private drawAurumShieldHit(hit: InstanceType<typeof AurumShieldHit>): void {
+        const screenPos = this.worldToScreen(hit.position);
+        const color = this.getFactionColor(hit.owner.faction);
+        const progress = hit.getProgress();
+        
+        // Flash effect
+        const radius = 20 + progress * 30;
+        const alpha = 1 - progress;
+        
+        this.ctx.globalAlpha = alpha * 0.7;
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Wave effect
+        this.ctx.globalAlpha = alpha * 0.4;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1;
     }
     
     /**
@@ -10697,6 +10971,12 @@ export class GameRenderer {
                         this.drawTank(unit, color, game, isEnemy);
                     } else if (unit instanceof Sly) {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Sly
+                    } else if (unit instanceof Radiant) {
+                        this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Radiant
+                    } else if (unit instanceof VelarisHero) {
+                        this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for VelarisHero
+                    } else if (unit instanceof AurumHero) {
+                        this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for AurumHero
                     } else {
                         this.drawUnit(unit, color, game, isEnemy);
                     }
@@ -10851,6 +11131,85 @@ export class GameRenderer {
             for (const particle of game.disintegrationParticles) {
                 if (this.isWithinViewBounds(particle.position, 50)) {
                     this.drawDisintegrationParticle(particle);
+                }
+            }
+
+            // Draw Radiant orbs and laser fields
+            for (const orb of game.radiantOrbs) {
+                if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
+                    this.drawRadiantOrb(orb);
+                }
+            }
+            
+            // Draw Radiant laser fields
+            for (let i = 0; i < game.radiantOrbs.length; i++) {
+                for (let j = i + 1; j < game.radiantOrbs.length; j++) {
+                    const orb1 = game.radiantOrbs[i];
+                    const orb2 = game.radiantOrbs[j];
+                    
+                    if (orb1.owner !== orb2.owner) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
+                    const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                    
+                    if (distance <= maxRange) {
+                        this.drawRadiantLaserField(orb1, orb2);
+                    }
+                }
+            }
+            
+            // Draw Velaris orbs and light-blocking fields
+            for (const orb of game.velarisOrbs) {
+                if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
+                    this.drawVelarisOrb(orb);
+                }
+            }
+            
+            // Draw Velaris light-blocking fields
+            for (let i = 0; i < game.velarisOrbs.length; i++) {
+                for (let j = i + 1; j < game.velarisOrbs.length; j++) {
+                    const orb1 = game.velarisOrbs[i];
+                    const orb2 = game.velarisOrbs[j];
+                    
+                    if (orb1.owner !== orb2.owner) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
+                    const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                    
+                    if (distance <= maxRange) {
+                        this.drawVelarisLightBlockingField(orb1, orb2, game.gameTime);
+                    }
+                }
+            }
+            
+            // Draw Aurum orbs and shield fields
+            for (const orb of game.aurumOrbs) {
+                if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
+                    this.drawAurumOrb(orb);
+                }
+            }
+            
+            // Draw Aurum shield fields
+            for (let i = 0; i < game.aurumOrbs.length; i++) {
+                for (let j = i + 1; j < game.aurumOrbs.length; j++) {
+                    const orb1 = game.aurumOrbs[i];
+                    const orb2 = game.aurumOrbs[j];
+                    
+                    if (orb1.owner !== orb2.owner) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
+                    const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+                    
+                    if (distance <= maxRange) {
+                        this.drawAurumShieldField(orb1, orb2);
+                    }
+                }
+            }
+            
+            // Draw Aurum shield hit effects
+            for (const hit of game.aurumShieldHits) {
+                if (this.isWithinViewBounds(hit.position, 100)) {
+                    this.drawAurumShieldHit(hit);
                 }
             }
 
