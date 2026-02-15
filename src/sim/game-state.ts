@@ -472,6 +472,13 @@ export class GameState {
                 if (otherPlayer.stellarForge) {
                     enemies.push(otherPlayer.stellarForge);
                 }
+                
+                // Add enemy shadow decoys as targetable entities
+                for (const decoy of this.shadowDecoys) {
+                    if (decoy.owner === otherPlayer && !decoy.shouldDespawn) {
+                        enemies.push(decoy as any); // Cast to any to satisfy CombatTarget interface
+                    }
+                }
             }
 
             // Update each unit (only after countdown)
@@ -1960,31 +1967,6 @@ export class GameState {
                         Math.round(bullet.damage),
                         this.gameTime
                     ));
-                }
-            }
-            
-            // Check damage from enemy units' attacks (they will auto-target decoys)
-            for (const player of this.players) {
-                if (player === decoy.owner) continue;
-                
-                for (const unit of player.units) {
-                    if (!unit.target || unit.attackCooldown > 0) continue;
-                    
-                    const distanceToDecoy = unit.position.distanceTo(decoy.position);
-                    // If unit is in range of decoy and attacking
-                    if (distanceToDecoy <= unit.attackRange) {
-                        // Check if unit would hit the decoy (simplified - just distance check)
-                        if (Math.random() < 0.3) { // 30% chance per frame when in range
-                            decoy.takeDamage(unit.attackDamage);
-                            
-                            // Create damage number
-                            this.damageNumbers.push(new DamageNumber(
-                                new Vector2D(decoy.position.x, decoy.position.y),
-                                Math.round(unit.attackDamage),
-                                this.gameTime
-                            ));
-                        }
-                    }
                 }
             }
             
