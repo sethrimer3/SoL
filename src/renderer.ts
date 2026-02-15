@@ -7278,10 +7278,13 @@ export class GameRenderer {
                 Math.min(1, 1 - (starling.abilityCooldown / starling.abilityCooldownTime))
             );
 
-            this.ctx.fillStyle = '#222';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            this.ctx.fillStyle = '#00B4FF';
-            this.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
+            // Hide the bar entirely once blink is fully recharged.
+            if (cooldownPercent < 1) {
+                this.ctx.fillStyle = '#222';
+                this.ctx.fillRect(barX, barY, barWidth, barHeight);
+                this.ctx.fillStyle = '#00B4FF';
+                this.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
+            }
         }
         
         // Note: Move order lines for starlings are drawn separately in drawStarlingMoveLines()
