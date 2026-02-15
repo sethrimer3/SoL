@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -7081,6 +7081,129 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a dash slash effect - moving projectile trail
+     */
+    private drawDashSlash(slash: InstanceType<typeof DashSlash>): void {
+        const screenPos = this.worldToScreen(slash.position);
+        const color = this.getFactionColor(slash.owner.faction);
+        
+        this.ctx.save();
+        
+        // Draw slash trail with glow effect
+        const slashRadius = Constants.DASH_SLASH_RADIUS * this.zoom;
+        
+        // Create gradient for slash glow
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, slashRadius * 2
+        );
+        gradient.addColorStop(0, `${color}ff`);
+        gradient.addColorStop(0.5, `${color}aa`);
+        gradient.addColorStop(1, `${color}00`);
+        
+        // Draw slash core
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = 0.9;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, slashRadius * 2, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw bright center
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.globalAlpha = 0.8;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, slashRadius * 0.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw motion blur trail in the direction of movement
+        const direction = slash.getDirection();
+        const trailLength = slashRadius * 4;
+        
+        for (let i = 0; i < 5; i++) {
+            const alpha = 0.3 * (1 - i / 5);
+            const offset = (trailLength * i) / 5;
+            const trailX = screenPos.x - direction.x * offset;
+            const trailY = screenPos.y - direction.y * offset;
+            
+            this.ctx.fillStyle = color;
+            this.ctx.globalAlpha = alpha;
+            this.ctx.beginPath();
+            this.ctx.arc(trailX, trailY, slashRadius * (1 - i / 5), 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Draw a blink shockwave effect - expanding circle with visual progress
+     */
+    private drawBlinkShockwave(shockwave: InstanceType<typeof BlinkShockwave>): void {
+        const screenPos = this.worldToScreen(shockwave.position);
+        const color = this.getFactionColor(shockwave.owner.faction);
+        const progress = shockwave.getVisualProgress();
+        
+        this.ctx.save();
+        
+        // Draw expanding shockwave ring
+        const currentRadius = shockwave.radius * progress * this.zoom;
+        const maxRadius = shockwave.radius * this.zoom;
+        
+        // Draw outer glow
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, currentRadius * 0.8,
+            screenPos.x, screenPos.y, currentRadius * 1.5
+        );
+        gradient.addColorStop(0, `${color}88`);
+        gradient.addColorStop(0.5, `${color}44`);
+        gradient.addColorStop(1, `${color}00`);
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = 1 - progress * 0.5;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRadius * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw shockwave ring
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 4 * this.zoom;
+        this.ctx.globalAlpha = 0.9 * (1 - progress);
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw inner bright ring
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.globalAlpha = 0.8 * (1 - progress);
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, currentRadius * 0.95, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw radial lines emanating from center
+        const numLines = 16;
+        for (let i = 0; i < numLines; i++) {
+            const angle = (Math.PI * 2 * i) / numLines;
+            const startRadius = currentRadius * 0.3;
+            const endRadius = currentRadius;
+            const startX = screenPos.x + Math.cos(angle) * startRadius;
+            const startY = screenPos.y + Math.sin(angle) * startRadius;
+            const endX = screenPos.x + Math.cos(angle) * endRadius;
+            const endY = screenPos.y + Math.sin(angle) * endRadius;
+            
+            this.ctx.strokeStyle = color;
+            this.ctx.lineWidth = 2 * this.zoom;
+            this.ctx.globalAlpha = 0.4 * (1 - progress);
+            this.ctx.beginPath();
+            this.ctx.moveTo(startX, startY);
+            this.ctx.lineTo(endX, endY);
+            this.ctx.stroke();
+        }
+        
+        this.ctx.restore();
+    }
+    
+    /**
      * Draw a deployed turret
      */
     private drawDeployedTurret(turret: InstanceType<typeof DeployedTurret>, game: GameState): void {
@@ -11101,6 +11224,18 @@ export class GameRenderer {
             for (const wave of game.crescentWaves) {
                 if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
                     this.drawCrescentWave(wave);
+                }
+            }
+
+            for (const slash of game.dashSlashes) {
+                if (this.isWithinViewBounds(slash.position, Constants.DASH_SLASH_RADIUS * 4)) {
+                    this.drawDashSlash(slash);
+                }
+            }
+
+            for (const shockwave of game.blinkShockwaves) {
+                if (this.isWithinViewBounds(shockwave.position, shockwave.radius * 2)) {
+                    this.drawBlinkShockwave(shockwave);
                 }
             }
 

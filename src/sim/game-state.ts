@@ -68,7 +68,11 @@ import {
     VelarisOrb,
     AurumHero,
     AurumOrb,
-    AurumShieldHit
+    AurumShieldHit,
+    Dash,
+    DashSlash,
+    Blink,
+    BlinkShockwave
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -103,6 +107,8 @@ export class GameState {
     velarisOrbs: InstanceType<typeof VelarisOrb>[] = [];
     aurumOrbs: InstanceType<typeof AurumOrb>[] = [];
     aurumShieldHits: InstanceType<typeof AurumShieldHit>[] = [];
+    dashSlashes: InstanceType<typeof DashSlash>[] = [];
+    blinkShockwaves: InstanceType<typeof BlinkShockwave>[] = [];
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
@@ -671,6 +677,24 @@ export class GameState {
                                 this.aurumOrbs.splice(index, 1);
                             }
                         }
+                    }
+                }
+                
+                // Handle Dash slashes
+                if (unit instanceof Dash) {
+                    const slash = unit.getAndClearDashSlash();
+                    if (slash) {
+                        this.dashSlashes.push(slash);
+                        // Mark unit as dashing
+                        unit.setDashing(true, slash);
+                    }
+                }
+                
+                // Handle Blink shockwaves
+                if (unit instanceof Blink) {
+                    const shockwave = unit.getAndClearShockwave();
+                    if (shockwave) {
+                        this.blinkShockwaves.push(shockwave);
                     }
                 }
                 
@@ -1993,6 +2017,112 @@ export class GameState {
         }
         this.aurumShieldHits = this.aurumShieldHits.filter(hit => hit.getProgress() < 1.0);
         
+        // Update Dash slashes
+        for (const slash of this.dashSlashes) {
+            slash.update(deltaTime);
+            
+            // Bounce off asteroids
+            for (const asteroid of this.asteroids) {
+                if (asteroid.containsPoint(slash.position)) {
+                    // Calculate bounce direction (reflect off normal)
+                    const dx = slash.position.x - asteroid.position.x;
+                    const dy = slash.position.y - asteroid.position.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 0) {
+                        const normalX = dx / dist;
+                        const normalY = dy / dist;
+                        slash.bounce(normalX, normalY);
+                        
+                        // Push slash out of asteroid
+                        const pushDist = asteroid.size + 5 - dist;
+                        if (pushDist > 0) {
+                            slash.position.x += normalX * pushDist;
+                            slash.position.y += normalY * pushDist;
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            // Bounce off map edges
+            const mapEdge = this.mapSize / 2;
+            if (slash.position.x <= -mapEdge || slash.position.x >= mapEdge) {
+                const normalX = slash.position.x <= -mapEdge ? 1 : -1;
+                slash.bounce(normalX, 0);
+                slash.position.x = Math.max(-mapEdge, Math.min(mapEdge, slash.position.x));
+            }
+            if (slash.position.y <= -mapEdge || slash.position.y >= mapEdge) {
+                const normalY = slash.position.y <= -mapEdge ? 1 : -1;
+                slash.bounce(0, normalY);
+                slash.position.y = Math.max(-mapEdge, Math.min(mapEdge, slash.position.y));
+            }
+            
+            // Damage units that haven't been hit yet
+            for (const player of this.players) {
+                if (player === slash.owner) continue; // Don't damage own units
+                
+                for (const unit of player.units) {
+                    if (!slash.affectedUnits.has(unit) && slash.isUnitInSlash(unit)) {
+                        unit.takeDamage(Constants.DASH_SLASH_DAMAGE);
+                        slash.affectedUnits.add(unit);
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            Constants.DASH_SLASH_DAMAGE,
+                            this.gameTime
+                        ));
+                    }
+                }
+                
+                // Damage structures
+                for (const building of player.buildings) {
+                    if (!slash.affectedUnits.has(building as any) && slash.position.distanceTo(building.position) < Constants.DASH_SLASH_RADIUS) {
+                        building.takeDamage(Constants.DASH_SLASH_DAMAGE);
+                        slash.affectedUnits.add(building as any);
+                        this.damageNumbers.push(new DamageNumber(
+                            building.position,
+                            Constants.DASH_SLASH_DAMAGE,
+                            this.gameTime
+                        ));
+                    }
+                }
+            }
+        }
+        
+        // Remove finished dash slashes and update hero dashing state
+        this.dashSlashes = this.dashSlashes.filter(slash => {
+            const shouldDespawn = slash.shouldDespawn();
+            if (shouldDespawn && slash.heroUnit instanceof Dash) {
+                slash.heroUnit.setDashing(false);
+            }
+            return !shouldDespawn;
+        });
+        
+        // Update Blink shockwaves
+        for (const shockwave of this.blinkShockwaves) {
+            shockwave.update(deltaTime);
+            
+            // Stun and damage units that haven't been hit yet
+            for (const player of this.players) {
+                if (player === shockwave.owner) continue; // Don't affect own units
+                
+                for (const unit of player.units) {
+                    if (!shockwave.affectedUnits.has(unit) && shockwave.isUnitInShockwave(unit)) {
+                        unit.takeDamage(Constants.BLINK_SHOCKWAVE_DAMAGE);
+                        unit.applyStun(Constants.BLINK_STUN_DURATION);
+                        shockwave.affectedUnits.add(unit);
+                        this.damageNumbers.push(new DamageNumber(
+                            unit.position,
+                            Constants.BLINK_SHOCKWAVE_DAMAGE,
+                            this.gameTime
+                        ));
+                    }
+                }
+            }
+        }
+        
+        // Remove expired shockwaves
+        this.blinkShockwaves = this.blinkShockwaves.filter(shockwave => !shockwave.shouldDespawn());
+        
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];
         for (const player of this.players) {
@@ -3102,7 +3232,7 @@ export class GameState {
             case Faction.RADIANT:
                 return ['Marine', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
             case Faction.AURUM:
-                return ['Driller', 'AurumHero'];
+                return ['Driller', 'AurumHero', 'Dash', 'Blink'];
             case Faction.VELARIS:
                 return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero'];
             default:
@@ -3146,6 +3276,10 @@ export class GameState {
                 return unit instanceof VelarisHero;
             case 'AurumHero':
                 return unit instanceof AurumHero;
+            case 'Dash':
+                return unit instanceof Dash;
+            case 'Blink':
+                return unit instanceof Blink;
             default:
                 return false;
         }
@@ -4273,6 +4407,10 @@ export class GameState {
                 return new VelarisHero(spawnPosition, owner);
             case 'AurumHero':
                 return new AurumHero(spawnPosition, owner);
+            case 'Dash':
+                return new Dash(spawnPosition, owner);
+            case 'Blink':
+                return new Blink(spawnPosition, owner);
             default:
                 return null;
         }
