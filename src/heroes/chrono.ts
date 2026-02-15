@@ -73,10 +73,12 @@ export const createChronoHero = (deps: ChronoDeps) => {
          * Override attack to freeze target instead of dealing damage
          */
         attack(target: CombatTarget): void {
+            // Only units can be frozen (not buildings)
             if ('stunDuration' in target && typeof target.stunDuration === 'number') {
                 // Apply freeze (using stun duration) to units
-                (target as any).stunDuration = Math.max(
-                    (target as any).stunDuration || 0,
+                const unit = target as Unit;
+                unit.stunDuration = Math.max(
+                    unit.stunDuration,
                     Constants.CHRONO_FREEZE_DURATION
                 );
             }
