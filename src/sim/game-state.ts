@@ -1952,7 +1952,7 @@ export class GameState {
                 const distance = decoy.position.distanceTo(bullet.position);
                 if (distance < Constants.SHADOW_DECOY_COLLISION_RADIUS) {
                     decoy.takeDamage(bullet.damage);
-                    bullet.despawn = true;
+                    bullet.lifetime = bullet.maxLifetime; // Mark for removal
                     
                     // Create damage number
                     this.damageNumbers.push(new DamageNumber(
