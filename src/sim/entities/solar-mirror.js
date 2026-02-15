@@ -1,9 +1,45 @@
+"use strict";
 /**
  * Solar Mirror - Reflects light from suns to structures
  */
-import { Vector2D, LightRay } from '../math';
-import * as Constants from '../../constants';
-export class SolarMirror {
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.SolarMirror = void 0;
+const math_1 = require("../math");
+const Constants = __importStar(require("../../constants"));
+class SolarMirror {
     constructor(position, owner) {
         this.position = position;
         this.owner = owner;
@@ -13,10 +49,14 @@ export class SolarMirror {
         this.isSelected = false;
         this.linkedStructure = null;
         this.targetPosition = null;
-        this.velocity = new Vector2D(0, 0);
+        this.velocity = new math_1.Vector2D(0, 0);
+        this.knockbackVelocity = new math_1.Vector2D(0, 0); // Knockback velocity from asteroid rotation
         this.reflectionAngle = 0; // Angle in radians for the flat surface rotation
         this.closestSunDistance = Infinity; // Distance to closest visible sun
         this.moveOrder = 0; // Movement order indicator (0 = no order)
+        // Pathfinding waypoints for obstacle avoidance
+        this.waypoints = [];
+        this.finalTarget = null;
         // Movement constants for mirrors (slower than Stellar Forge)
         this.MAX_SPEED = 50; // Pixels per second - slower than forge
         this.ACCELERATION = 25; // Pixels per second squared
@@ -24,16 +64,24 @@ export class SolarMirror {
         this.ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
         this.SLOW_RADIUS_PX = 60; // Distance to begin slow approach
         this.AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
-        this.ROTATION_SPEED_RAD_PER_SEC = Math.PI; // Radians per second
+        this.ROTATION_SPEED_RAD_PER_SEC = Math.PI * 0.25; // Radians per second
         this.ROTATION_SNAP_THRESHOLD_RAD = 0.01; // Snap when nearly aligned
+        // Pathfinding constants
+        this.MAX_PATHFINDING_ITERATIONS = 5; // Maximum iterations for waypoint generation
+        this.ASTEROID_CLEARANCE = 20; // Extra clearance for asteroids (matches original reactive avoidance)
+        this.BUILDING_CLEARANCE = 20; // Extra clearance for buildings (matches original reactive avoidance)
+        this.SUN_CLEARANCE = 30; // Extra clearance for suns (matches original reactive avoidance)
+        this.FORGE_CLEARANCE = 30; // Extra clearance for stellar forges (matches original reactive avoidance)
+        this.WAYPOINT_CLEARANCE_MULTIPLIER = 1.2; // Multiplier for waypoint clearance
+        this.REACTIVE_AVOIDANCE_RANGE = 60; // Look ahead distance for reactive avoidance
     }
     /**
      * Check if ray from mirror to target is blocked by asteroids
      * Helper method to avoid code duplication
      */
     isPathClear(target, asteroids = []) {
-        const direction = new Vector2D(target.x - this.position.x, target.y - this.position.y).normalize();
-        const ray = new LightRay(this.position, direction);
+        const direction = new math_1.Vector2D(target.x - this.position.x, target.y - this.position.y).normalize();
+        const ray = new math_1.LightRay(this.position, direction);
         const distance = this.position.distanceTo(target);
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
@@ -77,9 +125,9 @@ export class SolarMirror {
         return this.hasLineOfSightToStructure(forge, asteroids, players);
     }
     hasLineOfSightToStructure(structure, asteroids = [], players = []) {
-        const direction = new Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
+        const direction = new math_1.Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
         const distanceToStructure = this.position.distanceTo(structure.position);
-        const ray = new LightRay(this.position, direction);
+        const ray = new math_1.LightRay(this.position, direction);
         for (const asteroid of asteroids) {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
             if (intersectionDist !== null && intersectionDist < distanceToStructure) {
@@ -155,10 +203,136 @@ export class SolarMirror {
         return baseGenerationRatePerSec * this.efficiency * distanceMultiplier;
     }
     /**
-     * Set target position for mirror movement
+     * Find obstacles blocking the direct path from start to end
+     * Returns the first blocking obstacle found, or null if path is clear
      */
-    setTarget(target) {
-        this.targetPosition = target;
+    findBlockingObstacle(start, end, gameState) {
+        if (!gameState)
+            return null;
+        const direction = new math_1.Vector2D(end.x - start.x, end.y - start.y);
+        const distance = Math.sqrt(direction.x * direction.x + direction.y * direction.y);
+        if (distance < 0.1)
+            return null;
+        direction.x /= distance;
+        direction.y /= distance;
+        // Check asteroids
+        for (const asteroid of gameState.asteroids) {
+            const ray = new math_1.LightRay(start, direction);
+            const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
+            if (intersectionDist !== null && intersectionDist < distance) {
+                return { type: 'asteroid', obstacle: asteroid };
+            }
+        }
+        // Check buildings
+        for (const player of gameState.players) {
+            for (const building of player.buildings) {
+                if (this.isCircleBlockingRay(direction, distance, building.position, building.radius + this.BUILDING_CLEARANCE)) {
+                    return { type: 'building', obstacle: building };
+                }
+            }
+            // Check stellar forge
+            if (player.stellarForge) {
+                const forge = player.stellarForge;
+                if (this.isCircleBlockingRay(direction, distance, forge.position, forge.radius + this.FORGE_CLEARANCE)) {
+                    return { type: 'forge', obstacle: forge };
+                }
+            }
+        }
+        // Check suns
+        for (const sun of gameState.suns) {
+            if (this.isCircleBlockingRay(direction, distance, sun.position, sun.radius + this.SUN_CLEARANCE)) {
+                return { type: 'sun', obstacle: sun };
+            }
+        }
+        return null;
+    }
+    /**
+     * Generate waypoints to navigate around an obstacle
+     */
+    generateWaypointsAroundObstacle(start, end, obstacleInfo) {
+        const obstacle = obstacleInfo.obstacle;
+        let obstaclePos;
+        let obstacleRadius;
+        // Get obstacle position and radius
+        if (obstacleInfo.type === 'asteroid') {
+            obstaclePos = obstacle.position;
+            obstacleRadius = obstacle.size + this.ASTEROID_CLEARANCE;
+        }
+        else {
+            obstaclePos = obstacle.position;
+            obstacleRadius = obstacle.radius + this.BUILDING_CLEARANCE;
+        }
+        // Vector from obstacle to start
+        const toStartX = start.x - obstaclePos.x;
+        const toStartY = start.y - obstaclePos.y;
+        // Vector from obstacle to end
+        const toEndX = end.x - obstaclePos.x;
+        const toEndY = end.y - obstaclePos.y;
+        // Calculate perpendicular offsets (left and right of obstacle)
+        const midX = (start.x + end.x) / 2;
+        const midY = (start.y + end.y) / 2;
+        const toMidX = midX - obstaclePos.x;
+        const toMidY = midY - obstaclePos.y;
+        const toMidDist = Math.sqrt(toMidX * toMidX + toMidY * toMidY);
+        if (toMidDist < 0.1)
+            return []; // Shouldn't happen, but safety check
+        // Get perpendicular direction
+        const perpX = -toMidY / toMidDist;
+        const perpY = toMidX / toMidDist;
+        // Create two candidate waypoints (left and right of obstacle)
+        const clearance = obstacleRadius * this.WAYPOINT_CLEARANCE_MULTIPLIER;
+        const waypoint1 = new math_1.Vector2D(obstaclePos.x + perpX * clearance, obstaclePos.y + perpY * clearance);
+        const waypoint2 = new math_1.Vector2D(obstaclePos.x - perpX * clearance, obstaclePos.y - perpY * clearance);
+        // Choose the waypoint that results in a shorter total path
+        const dist1 = start.distanceTo(waypoint1) + waypoint1.distanceTo(end);
+        const dist2 = start.distanceTo(waypoint2) + waypoint2.distanceTo(end);
+        return dist1 < dist2 ? [waypoint1] : [waypoint2];
+    }
+    /**
+     * Compute path with waypoints to avoid obstacles
+     */
+    computePathWithWaypoints(target, gameState) {
+        this.waypoints = [];
+        this.finalTarget = target;
+        if (!gameState) {
+            this.targetPosition = target;
+            return;
+        }
+        let currentStart = this.position;
+        let currentEnd = target;
+        const maxIterations = this.MAX_PATHFINDING_ITERATIONS;
+        let iteration = 0;
+        while (iteration < maxIterations) {
+            const blockingObstacle = this.findBlockingObstacle(currentStart, currentEnd, gameState);
+            if (!blockingObstacle) {
+                // Path is clear to target
+                break;
+            }
+            // Generate waypoint to go around obstacle
+            const newWaypoints = this.generateWaypointsAroundObstacle(currentStart, currentEnd, blockingObstacle);
+            if (newWaypoints.length > 0) {
+                this.waypoints.push(...newWaypoints);
+                currentStart = newWaypoints[newWaypoints.length - 1];
+            }
+            else {
+                // Couldn't generate waypoint, just try direct path
+                break;
+            }
+            iteration++;
+        }
+        // Set first waypoint or final target as current target
+        if (this.waypoints.length > 0) {
+            this.targetPosition = this.waypoints[0];
+        }
+        else {
+            this.targetPosition = target;
+        }
+    }
+    /**
+     * Set target position for mirror movement with pathfinding
+     */
+    setTarget(target, gameState = null) {
+        this.computePathWithWaypoints(target, gameState);
     }
     setLinkedStructure(structure) {
         this.linkedStructure = structure;
@@ -181,8 +355,8 @@ export class SolarMirror {
         this.closestSunDistance = this.position.distanceTo(closestSun.position);
         // Calculate the reflection angle as if reflecting light from sun to forge
         // The mirror surface should be perpendicular to the bisector of sun-mirror-forge angle
-        const sunDirection = new Vector2D(closestSun.position.x - this.position.x, closestSun.position.y - this.position.y).normalize();
-        const forgeDirection = new Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
+        const sunDirection = new math_1.Vector2D(closestSun.position.x - this.position.x, closestSun.position.y - this.position.y).normalize();
+        const forgeDirection = new math_1.Vector2D(structure.position.x - this.position.x, structure.position.y - this.position.y).normalize();
         // The bisector direction (average of both directions)
         const bisectorX = sunDirection.x + forgeDirection.x;
         const bisectorY = sunDirection.y + forgeDirection.y;
@@ -216,13 +390,19 @@ export class SolarMirror {
      * Update mirror position based on target and velocity with obstacle avoidance
      */
     update(deltaTime, gameState = null) {
+        // Apply knockback velocity from asteroid rotation
+        (0, math_1.updateKnockbackMotion)(this.position, this.knockbackVelocity, deltaTime, Constants.ASTEROID_KNOCKBACK_DECELERATION);
         if (!this.targetPosition)
             return;
         if (gameState) {
+            // Check if current target is inside an asteroid (shouldn't happen with pathfinding, but safety check)
             for (const asteroid of gameState.asteroids) {
                 if (asteroid.containsPoint(this.targetPosition)) {
+                    // Clear entire path if target is invalid
                     this.targetPosition = null;
-                    this.velocity = new Vector2D(0, 0);
+                    this.finalTarget = null;
+                    this.waypoints = [];
+                    this.velocity = new math_1.Vector2D(0, 0);
                     return;
                 }
             }
@@ -230,12 +410,36 @@ export class SolarMirror {
         const dx = this.targetPosition.x - this.position.x;
         const dy = this.targetPosition.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
-        // If we're close enough to target, stop smoothly
+        // If we're close enough to current target (waypoint or final target)
         if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
-            this.position = this.targetPosition;
-            this.targetPosition = null;
-            this.velocity = new Vector2D(0, 0);
-            return;
+            // Check if there are more waypoints to navigate through
+            if (this.waypoints.length > 0) {
+                // Remove the waypoint we just reached
+                this.waypoints.shift();
+                // Set next waypoint or final target
+                if (this.waypoints.length > 0) {
+                    this.targetPosition = this.waypoints[0];
+                }
+                else if (this.finalTarget) {
+                    this.targetPosition = this.finalTarget;
+                    this.finalTarget = null;
+                }
+                else {
+                    // Reached final destination
+                    this.position = this.targetPosition;
+                    this.targetPosition = null;
+                    this.velocity = new math_1.Vector2D(0, 0);
+                }
+                return;
+            }
+            else {
+                // No more waypoints, reached final destination
+                this.position = this.targetPosition;
+                this.targetPosition = null;
+                this.finalTarget = null;
+                this.velocity = new math_1.Vector2D(0, 0);
+                return;
+            }
         }
         // Calculate desired direction
         let directionX = dx / distanceToTarget;
@@ -300,13 +504,13 @@ export class SolarMirror {
         let avoidX = 0;
         let avoidY = 0;
         let avoidCount = 0;
-        const avoidanceRange = 60; // Look ahead distance
+        const avoidanceRange = this.REACTIVE_AVOIDANCE_RANGE;
         // Check asteroids (approximate with radius)
         for (const asteroid of gameState.asteroids) {
             const dx = this.position.x - asteroid.position.x;
             const dy = this.position.y - asteroid.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const minDist = asteroid.size + 20;
+            const minDist = asteroid.size + this.ASTEROID_CLEARANCE;
             if (dist > 0 && dist < minDist + avoidanceRange) {
                 const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                 avoidX += (dx / dist) * avoidStrength;
@@ -319,7 +523,7 @@ export class SolarMirror {
             const dx = this.position.x - sun.position.x;
             const dy = this.position.y - sun.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
-            const minDist = sun.radius + 30;
+            const minDist = sun.radius + this.SUN_CLEARANCE;
             if (dist < minDist + avoidanceRange) {
                 const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                 avoidX += (dx / dist) * avoidStrength;
@@ -349,7 +553,20 @@ export class SolarMirror {
                 const dx = this.position.x - forge.position.x;
                 const dy = this.position.y - forge.position.y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const minDist = forge.radius + 30;
+                const minDist = forge.radius + this.FORGE_CLEARANCE;
+                if (dist < minDist + avoidanceRange) {
+                    const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
+                    avoidX += (dx / dist) * avoidStrength;
+                    avoidY += (dy / dist) * avoidStrength;
+                    avoidCount++;
+                }
+            }
+            // Check buildings
+            for (const building of player.buildings) {
+                const dx = this.position.x - building.position.x;
+                const dy = this.position.y - building.position.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const minDist = building.radius + this.BUILDING_CLEARANCE;
                 if (dist < minDist + avoidanceRange) {
                     const avoidStrength = (minDist + avoidanceRange - dist) / avoidanceRange;
                     avoidX += (dx / dist) * avoidStrength;
@@ -361,7 +578,7 @@ export class SolarMirror {
         if (avoidCount > 0) {
             const length = Math.sqrt(avoidX * avoidX + avoidY * avoidY);
             if (length > 0) {
-                return new Vector2D(avoidX / length, avoidY / length);
+                return new math_1.Vector2D(avoidX / length, avoidY / length);
             }
         }
         return null;
@@ -380,3 +597,4 @@ export class SolarMirror {
         return distance < Constants.MIRROR_CLICK_RADIUS_PX; // Match the rendering size
     }
 }
+exports.SolarMirror = SolarMirror;
