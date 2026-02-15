@@ -1,13 +1,49 @@
+"use strict";
 /**
  * Unit base class for SoL game
  * Base class for all combat units (heroes and minions)
  */
-import { Vector2D } from '../math';
-import * as Constants from '../../constants';
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.Unit = void 0;
+const math_1 = require("../math");
+const Constants = __importStar(require("../../constants"));
 /**
  * Base class for all units in the game
  */
-export class Unit {
+class Unit {
     constructor(position, owner, maxHealth, attackRange, attackDamage, attackSpeed, // attacks per second
     abilityCooldownTime = 5.0, // Default ability cooldown time
     collisionRadiusPx = Constants.UNIT_RADIUS_PX) {
@@ -27,20 +63,24 @@ export class Unit {
         this.moveOrder = 0; // Movement order indicator (0 = no order)
         this.isSelected = false; // Selection state for UI
         this.rotation = 0; // Current facing angle in radians
-        this.velocity = new Vector2D(0, 0);
+        this.velocity = new math_1.Vector2D(0, 0);
+        this.knockbackVelocity = new math_1.Vector2D(0, 0); // Knockback velocity from asteroid rotation
         this.waypoints = []; // Path waypoints to follow
         this.currentWaypointIndex = 0; // Current waypoint in path
         this.stunDuration = 0; // Duration of stun effect in seconds
+        this.isFrozen = false; // Flag to mark unit as frozen (immune to damage, can't be targeted)
         this.health = maxHealth;
         this.maxHealth = maxHealth;
         this.collisionRadiusPx = collisionRadiusPx;
+        // Line of sight is 20% more than attack range
+        this.lineOfSight = attackRange * Constants.UNIT_LINE_OF_SIGHT_MULTIPLIER;
     }
     setManualTarget(target, rallyPoint) {
         this.manualTarget = target;
         this.target = target;
         this.clearMovementOrders();
         if (rallyPoint) {
-            this.rallyPoint = new Vector2D(rallyPoint.x, rallyPoint.y);
+            this.rallyPoint = new math_1.Vector2D(rallyPoint.x, rallyPoint.y);
         }
     }
     clearManualTarget() {
@@ -61,6 +101,8 @@ export class Unit {
      * Update unit logic
      */
     update(deltaTime, enemies, allUnits, asteroids = []) {
+        // Apply knockback velocity from asteroid rotation
+        (0, math_1.updateKnockbackMotion)(this.position, this.knockbackVelocity, deltaTime, Constants.ASTEROID_KNOCKBACK_DECELERATION);
         // Update attack cooldown
         if (this.attackCooldown > 0) {
             this.attackCooldown -= deltaTime;
@@ -122,7 +164,7 @@ export class Unit {
      * Set a path for the unit to follow through multiple waypoints
      */
     setPath(waypoints) {
-        this.waypoints = waypoints.map(wp => new Vector2D(wp.x, wp.y));
+        this.waypoints = waypoints.map(wp => new math_1.Vector2D(wp.x, wp.y));
         this.currentWaypointIndex = 0;
         if (this.waypoints.length > 0) {
             this.rallyPoint = this.waypoints[0];
@@ -134,10 +176,10 @@ export class Unit {
         const distance = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
         const minDistance = targetRadiusPx + this.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
         if (distance <= 0) {
-            return new Vector2D(targetPosition.x + minDistance, targetPosition.y);
+            return new math_1.Vector2D(targetPosition.x + minDistance, targetPosition.y);
         }
         const scale = minDistance / distance;
-        return new Vector2D(targetPosition.x + offsetX * scale, targetPosition.y + offsetY * scale);
+        return new math_1.Vector2D(targetPosition.x + offsetX * scale, targetPosition.y + offsetY * scale);
     }
     moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids = []) {
         if (!this.rallyPoint) {
@@ -305,6 +347,9 @@ export class Unit {
         for (const enemy of enemies) {
             if ('health' in enemy && enemy.health <= 0)
                 continue;
+            // Skip frozen units
+            if (enemy instanceof Unit && enemy.isFrozen)
+                continue;
             const distance = this.position.distanceTo(enemy.position);
             if (distance < minDistance) {
                 minDistance = distance;
@@ -361,6 +406,9 @@ export class Unit {
      * Take damage
      */
     takeDamage(amount) {
+        // Frozen units are invulnerable
+        if (this.isFrozen)
+            return;
         this.health -= amount;
     }
     /**
@@ -370,3 +418,4 @@ export class Unit {
         return this.health <= 0;
     }
 }
+exports.Unit = Unit;

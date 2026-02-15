@@ -1,8 +1,44 @@
-import { Vector2D } from '../math';
-import * as Constants from '../../constants';
-import { ForgeCrunch } from './particles';
-import { getGameRNG } from '../../seeded-random';
-export class StellarForge {
+"use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.StellarForge = void 0;
+const math_1 = require("../math");
+const Constants = __importStar(require("../../constants"));
+const particles_1 = require("./particles");
+const seeded_random_1 = require("../../seeded-random");
+class StellarForge {
     constructor(position, owner) {
         this.position = position;
         this.owner = owner;
@@ -11,12 +47,16 @@ export class StellarForge {
         this.isReceivingLight = false;
         this.incomingLightPerSec = 0; // Track incoming light energy per second
         this.unitQueue = [];
+        this.mirrorQueueCount = 0;
         this.heroProductionUnitType = null;
         this.heroProductionRemainingSec = 0;
         this.heroProductionDurationSec = 0;
+        this.productionQueue = [];
+        this.activeProduction = null;
+        this.activeProductionProgressEnergy = 0;
         this.isSelected = false;
         this.targetPosition = null;
-        this.velocity = new Vector2D(0, 0);
+        this.velocity = new math_1.Vector2D(0, 0);
         this.baseMaxSpeed = 50; // base pixels per second (at 100 light/sec, speed is doubled to 100 px/sec)
         this.acceleration = 30; // pixels per second^2
         this.deceleration = 50; // pixels per second^2
@@ -30,21 +70,21 @@ export class StellarForge {
         this.moveOrder = 0; // Movement order indicator (0 = no order)
         this.rotation = 0; // Current rotation angle in radians
         // Initialize crunch timer with random offset to stagger crunches
-        const rng = getGameRNG();
+        const rng = (0, seeded_random_1.getGameRNG)();
         this.crunchTimer = rng.nextFloat(0, Constants.FORGE_CRUNCH_INTERVAL);
     }
     /**
      * Set the path for minions to follow
      */
     setMinionPath(waypoints) {
-        this.minionPath = waypoints.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
+        this.minionPath = waypoints.map((waypoint) => new math_1.Vector2D(waypoint.x, waypoint.y));
     }
     /**
      * Initialize default path to enemy base position
      */
     initializeDefaultPath(enemyBasePosition) {
         // Create a path from this base to the enemy base
-        this.minionPath = [new Vector2D(enemyBasePosition.x, enemyBasePosition.y)];
+        this.minionPath = [new math_1.Vector2D(enemyBasePosition.x, enemyBasePosition.y)];
     }
     /**
      * Check if forge can produce units (needs light)
@@ -66,38 +106,79 @@ export class StellarForge {
         this.unitQueue.push(unitType);
         return true;
     }
-    enqueueHeroUnit(unitType) {
+    enqueueHeroUnit(unitType, costEnergy) {
         this.unitQueue.push(unitType);
+        this.productionQueue.push({
+            productionType: 'hero',
+            heroUnitType: unitType,
+            costEnergy
+        });
     }
-    startHeroProductionIfIdle() {
-        if (this.heroProductionUnitType || this.unitQueue.length === 0) {
+    enqueueMirror(costEnergy, spawnPosition) {
+        this.mirrorQueueCount++;
+        this.productionQueue.push({
+            productionType: 'mirror',
+            costEnergy,
+            spawnPosition: new math_1.Vector2D(spawnPosition.x, spawnPosition.y)
+        });
+    }
+    startProductionIfIdle() {
+        if (this.activeProduction || this.productionQueue.length === 0) {
             return;
         }
-        const nextUnitType = this.unitQueue.shift();
-        if (!nextUnitType) {
+        const nextProduction = this.productionQueue.shift();
+        if (!nextProduction) {
             return;
         }
-        this.heroProductionUnitType = nextUnitType;
-        this.heroProductionDurationSec = Constants.HERO_PRODUCTION_TIME_SEC;
-        this.heroProductionRemainingSec = Constants.HERO_PRODUCTION_TIME_SEC;
+        this.activeProduction = nextProduction;
+        this.activeProductionProgressEnergy = 0;
+        if (nextProduction.productionType === 'hero') {
+            const nextUnitType = this.unitQueue.shift() ?? nextProduction.heroUnitType;
+            this.heroProductionUnitType = nextUnitType ?? null;
+            this.heroProductionDurationSec = nextProduction.costEnergy;
+            this.heroProductionRemainingSec = nextProduction.costEnergy;
+        }
     }
-    advanceHeroProduction(deltaTime) {
-        this.startHeroProductionIfIdle();
-        if (!this.heroProductionUnitType) {
-            return null;
+    hasQueuedProduction() {
+        return this.activeProduction !== null || this.productionQueue.length > 0;
+    }
+    advanceProductionByEnergy(energyAmount) {
+        const completedItems = [];
+        if (energyAmount <= 0 || this.health <= 0) {
+            return completedItems;
         }
-        if (!this.canProduceUnits()) {
-            return null;
+        let remainingEnergy = energyAmount;
+        while (remainingEnergy > 0) {
+            this.startProductionIfIdle();
+            if (!this.activeProduction) {
+                this.pendingEnergy += remainingEnergy;
+                break;
+            }
+            const energyNeeded = Math.max(0, this.activeProduction.costEnergy - this.activeProductionProgressEnergy);
+            const energyToApply = Math.min(remainingEnergy, energyNeeded);
+            this.activeProductionProgressEnergy += energyToApply;
+            remainingEnergy -= energyToApply;
+            if (this.activeProduction.productionType === 'hero') {
+                this.heroProductionDurationSec = this.activeProduction.costEnergy;
+                this.heroProductionRemainingSec = Math.max(0, this.activeProduction.costEnergy - this.activeProductionProgressEnergy);
+            }
+            if (this.activeProductionProgressEnergy + 1e-6 < this.activeProduction.costEnergy) {
+                continue;
+            }
+            const completedItem = this.activeProduction;
+            completedItems.push(completedItem);
+            if (completedItem.productionType === 'hero') {
+                this.heroProductionUnitType = null;
+                this.heroProductionDurationSec = 0;
+                this.heroProductionRemainingSec = 0;
+            }
+            else {
+                this.mirrorQueueCount = Math.max(0, this.mirrorQueueCount - 1);
+            }
+            this.activeProduction = null;
+            this.activeProductionProgressEnergy = 0;
         }
-        this.heroProductionRemainingSec = Math.max(0, this.heroProductionRemainingSec - deltaTime);
-        if (this.heroProductionRemainingSec > 0) {
-            return null;
-        }
-        const completedUnitType = this.heroProductionUnitType;
-        this.heroProductionUnitType = null;
-        this.heroProductionDurationSec = 0;
-        this.heroProductionRemainingSec = 0;
-        return completedUnitType;
+        return completedItems;
     }
     /**
      * Update whether forge is receiving light from mirrors and calculate incoming light energy
@@ -268,7 +349,7 @@ export class StellarForge {
         if (avoidCount > 0) {
             const length = Math.sqrt(avoidX * avoidX + avoidY * avoidY);
             if (length > 0) {
-                return new Vector2D(avoidX / length, avoidY / length);
+                return new math_1.Vector2D(avoidX / length, avoidY / length);
             }
         }
         return null;
@@ -280,7 +361,7 @@ export class StellarForge {
     shouldCrunch() {
         if (this.crunchTimer <= 0 && this.health > 0 && this.isReceivingLight) {
             this.crunchTimer = Constants.FORGE_CRUNCH_INTERVAL;
-            this.currentCrunch = new ForgeCrunch(new Vector2D(this.position.x, this.position.y));
+            this.currentCrunch = new particles_1.ForgeCrunch(new math_1.Vector2D(this.position.x, this.position.y));
             this.currentCrunch.start();
             // Rotate forge by 1/6 turn (60 degrees = π/3 radians)
             this.rotation += Math.PI / 3;
@@ -311,7 +392,7 @@ export class StellarForge {
      * Set movement target
      */
     setTarget(target) {
-        this.targetPosition = new Vector2D(target.x, target.y);
+        this.targetPosition = new math_1.Vector2D(target.x, target.y);
     }
     /**
      * Toggle selection state
@@ -327,3 +408,4 @@ export class StellarForge {
         return distance <= this.radius;
     }
 }
+exports.StellarForge = StellarForge;
