@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3116,6 +3116,7 @@ export class GameRenderer {
             case 'Driller':
             case 'Spotlight':
             case 'Sly':
+            case 'Shadow':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -3156,6 +3157,8 @@ export class GameRenderer {
                 return unit instanceof Preist;
             case 'Sly':
                 return unit instanceof Sly;
+            case 'Shadow':
+                return unit instanceof Shadow;
             default:
                 return false;
         }
@@ -8699,6 +8702,166 @@ export class GameRenderer {
     }
 
     /**
+     * Draw Shadow hero (Velaris faction) with beam attack visualization
+     */
+    private drawShadow(shadow: InstanceType<typeof Shadow>, color: string, game: GameState, isEnemy: boolean): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && this.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(shadow.position, this.viewingPlayer);
+            if (!isVisible) {
+                return; // Don't draw invisible enemy units
+            }
+            
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(shadow.position);
+                if (inShadow) {
+                    shouldDim = false;
+                    displayColor = color;
+                }
+            }
+        }
+        
+        // Draw base unit
+        this.drawUnit(shadow, displayColor, game, isEnemy);
+        
+        // Draw beam if Shadow is attacking a target
+        const beamTarget = shadow.getBeamTarget();
+        if (beamTarget) {
+            const startScreen = this.worldToScreen(shadow.position);
+            const endScreen = this.worldToScreen(beamTarget.position);
+            
+            // Calculate beam opacity based on damage multiplier
+            const multiplier = shadow.currentDamageMultiplier || 1.0;
+            const beamAlpha = 0.3 + (multiplier / Constants.SHADOW_BEAM_MAX_MULTIPLIER) * 0.5; // 0.3 to 0.8
+            
+            // Draw beam with increasing intensity
+            this.ctx.strokeStyle = displayColor;
+            this.ctx.globalAlpha = beamAlpha;
+            this.ctx.lineWidth = 3 * this.zoom;
+            this.ctx.lineCap = 'round';
+            this.ctx.beginPath();
+            this.ctx.moveTo(startScreen.x, startScreen.y);
+            this.ctx.lineTo(endScreen.x, endScreen.y);
+            this.ctx.stroke();
+            
+            // Add glow effect for higher multipliers
+            if (multiplier > 2.0) {
+                this.ctx.globalAlpha = (multiplier - 2.0) / 3.0 * 0.3; // 0 to 0.3 as multiplier goes from 2x to 5x
+                this.ctx.lineWidth = 8 * this.zoom;
+                this.ctx.beginPath();
+                this.ctx.moveTo(startScreen.x, startScreen.y);
+                this.ctx.lineTo(endScreen.x, endScreen.y);
+                this.ctx.stroke();
+            }
+            
+            this.ctx.globalAlpha = 1.0;
+            
+            // Display damage multiplier if > 1x
+            if (multiplier > 1.1) {
+                const textPos = this.worldToScreen(shadow.position);
+                this.ctx.save();
+                this.ctx.font = `bold ${12 * this.zoom}px Arial`;
+                this.ctx.fillStyle = displayColor;
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(`${multiplier.toFixed(1)}x`, textPos.x, textPos.y - 25 * this.zoom);
+                this.ctx.restore();
+            }
+        }
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a shadow decoy
+     */
+    private drawShadowDecoy(decoy: InstanceType<typeof ShadowDecoy>): void {
+        const screenPos = this.worldToScreen(decoy.position);
+        const size = 12 * this.zoom;
+        const color = this.getFactionColor(decoy.owner.faction);
+        
+        // Set opacity based on decoy's current opacity
+        this.ctx.globalAlpha = decoy.opacity;
+        
+        // Draw outer glow
+        this.ctx.fillStyle = color;
+        this.ctx.globalAlpha = decoy.opacity * 0.3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw main body
+        this.ctx.globalAlpha = decoy.opacity;
+        this.ctx.fillStyle = color;
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2 * this.zoom;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        // Draw shadow-like effect (darker center)
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+        this.ctx.globalAlpha = decoy.opacity * 0.5;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 0.6, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw health bar
+        this.ctx.globalAlpha = decoy.opacity;
+        const healthBarWidth = 24 * this.zoom;
+        const healthBarHeight = 3 * this.zoom;
+        const healthBarY = screenPos.y + size + 8 * this.zoom;
+        
+        // Background
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.fillRect(
+            screenPos.x - healthBarWidth / 2,
+            healthBarY,
+            healthBarWidth,
+            healthBarHeight
+        );
+        
+        // Health
+        const healthRatio = Math.max(0, decoy.health / decoy.maxHealth);
+        this.ctx.fillStyle = healthRatio > 0.5 ? '#00FF00' : healthRatio > 0.25 ? '#FFFF00' : '#FF0000';
+        this.ctx.fillRect(
+            screenPos.x - healthBarWidth / 2,
+            healthBarY,
+            healthBarWidth * healthRatio,
+            healthBarHeight
+        );
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
+     * Draw a shadow decoy particle
+     */
+    private drawShadowDecoyParticle(particle: InstanceType<typeof ShadowDecoyParticle>): void {
+        const screenPos = this.worldToScreen(particle.position);
+        const size = particle.size * this.zoom;
+        const opacity = particle.getOpacity();
+        
+        this.ctx.globalAlpha = opacity;
+        this.ctx.fillStyle = '#8B00FF'; // Purple/shadow color
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Add slight glow
+        this.ctx.globalAlpha = opacity * 0.5;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    /**
      * Draw warp gate effect for buildings that are warping in.
      */
     private drawWarpGateProductionEffect(
@@ -11187,6 +11350,8 @@ export class GameRenderer {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for VelarisHero
                     } else if (unit instanceof AurumHero) {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for AurumHero
+                    } else if (unit instanceof Shadow) {
+                        this.drawShadow(unit, color, game, isEnemy);
                     } else {
                         this.drawUnit(unit, color, game, isEnemy);
                     }
@@ -11268,6 +11433,20 @@ export class GameRenderer {
             for (const mini of game.miniMotherships) {
                 if (this.isWithinViewBounds(mini.position, 50)) {
                     this.drawMiniMothership(mini);
+                }
+            }
+
+            // Draw shadow decoys
+            for (const decoy of game.shadowDecoys) {
+                if (this.isWithinViewBounds(decoy.position, 50)) {
+                    this.drawShadowDecoy(decoy);
+                }
+            }
+
+            // Draw shadow decoy particles
+            for (const particle of game.shadowDecoyParticles) {
+                if (this.isWithinViewBounds(particle.position, 50)) {
+                    this.drawShadowDecoyParticle(particle);
                 }
             }
 

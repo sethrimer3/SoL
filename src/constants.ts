@@ -697,6 +697,26 @@ export const BLINK_STUN_DURATION = 1.0; // Stun duration in seconds
 export const BLINK_SHOCKWAVE_VISUAL_DURATION = 0.4; // Duration of visual effect in seconds
 export const BLINK_SHOCKWAVE_HIT_WINDOW = 0.05; // Time window for shockwave hit detection in seconds
 
+// Shadow hero constants (Velaris faction - beam attack with decoy)
+export const SHADOW_MAX_HEALTH = 100;
+export const SHADOW_ATTACK_RANGE = 200;
+export const SHADOW_ATTACK_DAMAGE = 15; // Base damage per attack
+export const SHADOW_ATTACK_SPEED = 10.0; // Very fast attack speed for "constant beam" effect
+export const SHADOW_ABILITY_COOLDOWN = 8.0; // 8 second cooldown for decoy
+export const SHADOW_COLLISION_RADIUS_PX = 15;
+export const SHADOW_BEAM_MULTIPLIER_PER_SECOND = 0.8; // Increases by 0.8 per second (reaches 5x in 5 seconds)
+export const SHADOW_BEAM_MAX_MULTIPLIER = 5.0; // Maximum 5x damage multiplier
+export const SHADOW_DECOY_HEALTH_MULTIPLIER = 3.0; // Decoy has 3x hero health
+export const SHADOW_DECOY_SPEED_MULTIPLIER = 2.5; // Multiplier for arrow length to speed
+export const SHADOW_DECOY_MAX_SPEED = 400; // Maximum decoy speed
+export const SHADOW_DECOY_COLLISION_RADIUS = 15; // Collision radius for decoy
+export const SHADOW_DECOY_HIT_OPACITY = 0.75; // Opacity when hit
+export const SHADOW_DECOY_FADE_SPEED = 1.0; // Fade speed per second (75% -> 100% in 0.25 seconds)
+export const SHADOW_DECOY_PARTICLE_COUNT = 30; // Number of particles on despawn
+export const SHADOW_DECOY_PARTICLE_SPEED = 200; // Speed of despawn particles
+export const SHADOW_DECOY_PARTICLE_LIFETIME = 1.5; // Lifetime of particles in seconds
+export const SHADOW_DECOY_PARTICLE_SIZE = 3; // Size of particles
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy

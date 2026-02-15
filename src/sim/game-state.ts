@@ -74,7 +74,10 @@ import {
     Dash,
     DashSlash,
     Blink,
-    BlinkShockwave
+    BlinkShockwave,
+    Shadow,
+    ShadowDecoy,
+    ShadowDecoyParticle
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -111,6 +114,8 @@ export class GameState {
     aurumShieldHits: InstanceType<typeof AurumShieldHit>[] = [];
     dashSlashes: InstanceType<typeof DashSlash>[] = [];
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[] = [];
+    shadowDecoys: InstanceType<typeof ShadowDecoy>[] = [];
+    shadowDecoyParticles: InstanceType<typeof ShadowDecoyParticle>[] = [];
     miniMotherships: InstanceType<typeof MiniMothership>[] = [];
     miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
@@ -467,6 +472,15 @@ export class GameState {
                 if (otherPlayer.stellarForge) {
                     enemies.push(otherPlayer.stellarForge);
                 }
+                
+                // Add enemy shadow decoys as targetable entities
+                // Note: Decoys have position, health, and owner properties compatible with CombatTarget,
+                // but can't be added to the union type without creating circular dependencies
+                for (const decoy of this.shadowDecoys) {
+                    if (decoy.owner === otherPlayer && !decoy.shouldDespawn) {
+                        enemies.push(decoy as any);
+                    }
+                }
             }
 
             // Update each unit (only after countdown)
@@ -717,6 +731,14 @@ export class GameState {
                     const shockwave = unit.getAndClearShockwave();
                     if (shockwave) {
                         this.blinkShockwaves.push(shockwave);
+                    }
+                }
+                
+                // Handle Shadow decoys
+                if (unit instanceof Shadow) {
+                    const decoy = unit.getAndClearDecoy();
+                    if (decoy) {
+                        this.shadowDecoys.push(decoy);
                     }
                 }
                 
@@ -1896,6 +1918,83 @@ export class GameState {
         
         // Remove despawned mini-motherships
         this.miniMotherships = this.miniMotherships.filter(mini => !mini.shouldDespawn);
+        
+        // Update Shadow Decoys
+        for (const decoy of this.shadowDecoys) {
+            // Update decoy
+            decoy.update(deltaTime);
+            
+            // Check collision with environment
+            const allBuildings: Array<{ position: Vector2D; radius: number }> = [];
+            for (const player of this.players) {
+                allBuildings.push(...player.buildings);
+                if (player.stellarForge) {
+                    allBuildings.push(player.stellarForge);
+                }
+            }
+            
+            if (decoy.checkCollision(Constants.MAP_PLAYABLE_BOUNDARY, this.asteroids, allBuildings)) {
+                decoy.shouldDespawn = true;
+                
+                // Create swarm of erratic particles
+                const rng = getGameRNG();
+                for (let i = 0; i < Constants.SHADOW_DECOY_PARTICLE_COUNT; i++) {
+                    const angle = rng.nextFloat(0, Math.PI * 2);
+                    const speed = rng.nextFloat(Constants.SHADOW_DECOY_PARTICLE_SPEED * 0.5, Constants.SHADOW_DECOY_PARTICLE_SPEED * 1.5);
+                    const velocity = new Vector2D(
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed
+                    );
+                    this.shadowDecoyParticles.push(new ShadowDecoyParticle(decoy.position, velocity));
+                }
+            }
+        }
+        
+        // Shadow decoys can take damage from projectiles and attacks
+        for (const decoy of this.shadowDecoys) {
+            if (decoy.shouldDespawn) continue;
+            
+            // Check damage from ability bullets
+            for (const bullet of this.abilityBullets) {
+                if (bullet.owner === decoy.owner) continue; // Don't damage own decoys
+                
+                const distance = decoy.position.distanceTo(bullet.position);
+                if (distance < Constants.SHADOW_DECOY_COLLISION_RADIUS) {
+                    decoy.takeDamage(bullet.damage);
+                    bullet.lifetime = bullet.maxLifetime; // Mark for removal
+                    
+                    // Create damage number
+                    this.damageNumbers.push(new DamageNumber(
+                        new Vector2D(decoy.position.x, decoy.position.y),
+                        Math.round(bullet.damage),
+                        this.gameTime
+                    ));
+                }
+            }
+            
+            // If decoy died, create despawn particles
+            if (decoy.shouldDespawn && decoy.health <= 0) {
+                const rng = getGameRNG();
+                for (let i = 0; i < Constants.SHADOW_DECOY_PARTICLE_COUNT; i++) {
+                    const angle = rng.nextFloat(0, Math.PI * 2);
+                    const speed = rng.nextFloat(Constants.SHADOW_DECOY_PARTICLE_SPEED * 0.5, Constants.SHADOW_DECOY_PARTICLE_SPEED * 1.5);
+                    const velocity = new Vector2D(
+                        Math.cos(angle) * speed,
+                        Math.sin(angle) * speed
+                    );
+                    this.shadowDecoyParticles.push(new ShadowDecoyParticle(decoy.position, velocity));
+                }
+            }
+        }
+        
+        // Remove despawned decoys
+        this.shadowDecoys = this.shadowDecoys.filter(decoy => !decoy.shouldDespawn);
+        
+        // Update shadow decoy particles
+        for (const particle of this.shadowDecoyParticles) {
+            particle.update(deltaTime);
+        }
+        this.shadowDecoyParticles = this.shadowDecoyParticles.filter(p => !p.shouldDespawn());
         
         // Update Sticky Bombs
         for (const bomb of this.stickyBombs) {
@@ -3362,7 +3461,7 @@ export class GameState {
             case Faction.AURUM:
                 return ['Driller', 'AurumHero', 'Dash', 'Blink'];
             case Faction.VELARIS:
-                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero'];
+                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow'];
             default:
                 return [];
         }
@@ -3410,6 +3509,8 @@ export class GameState {
                 return unit instanceof Dash;
             case 'Blink':
                 return unit instanceof Blink;
+            case 'Shadow':
+                return unit instanceof Shadow;
             default:
                 return false;
         }
@@ -4543,6 +4644,8 @@ export class GameState {
                 return new Dash(spawnPosition, owner);
             case 'Blink':
                 return new Blink(spawnPosition, owner);
+            case 'Shadow':
+                return new Shadow(spawnPosition, owner);
             default:
                 return null;
         }
