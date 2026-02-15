@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -3117,6 +3117,7 @@ export class GameRenderer {
             case 'Spotlight':
             case 'Sly':
             case 'Shadow':
+            case 'Chrono':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -3159,6 +3160,8 @@ export class GameRenderer {
                 return unit instanceof Sly;
             case 'Shadow':
                 return unit instanceof Shadow;
+            case 'Chrono':
+                return unit instanceof Chrono;
             default:
                 return false;
         }
@@ -7294,6 +7297,109 @@ export class GameRenderer {
     }
     
     /**
+     * Draw a Chrono freeze circle - persistent circle that freezes units
+     */
+    private drawChronoFreezeCircle(freezeCircle: InstanceType<typeof ChronoFreezeCircle>): void {
+        const screenPos = this.worldToScreen(freezeCircle.position);
+        const color = this.getFactionColor(freezeCircle.owner.faction);
+        const progress = freezeCircle.getVisualProgress();
+        const radius = freezeCircle.radius * this.zoom;
+        
+        this.ctx.save();
+        
+        // Pulsing effect
+        const pulsePhase = (progress * 8) % 1.0;
+        const pulse = 0.85 + Math.sin(pulsePhase * Math.PI * 2) * 0.15;
+        
+        // Draw outer glow with ice blue tint
+        const gradient = this.ctx.createRadialGradient(
+            screenPos.x, screenPos.y, 0,
+            screenPos.x, screenPos.y, radius * 1.2
+        );
+        gradient.addColorStop(0, `#88DDFF44`);
+        gradient.addColorStop(0.7, `#4499CC22`);
+        gradient.addColorStop(1, `#4499CC00`);
+        
+        this.ctx.fillStyle = gradient;
+        this.ctx.globalAlpha = pulse * 0.6;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Draw main freeze circle with icy effect
+        this.ctx.strokeStyle = '#88DDFF';
+        this.ctx.lineWidth = 3 * this.zoom;
+        this.ctx.globalAlpha = 0.8 * pulse;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw inner circle
+        this.ctx.strokeStyle = '#AAEEFF';
+        this.ctx.lineWidth = 1.5 * this.zoom;
+        this.ctx.globalAlpha = 0.6 * pulse;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.95, 0, Math.PI * 2);
+        this.ctx.stroke();
+        
+        // Draw crystalline pattern
+        const numRays = 12;
+        this.ctx.strokeStyle = '#CCFFFF';
+        this.ctx.lineWidth = 1 * this.zoom;
+        this.ctx.globalAlpha = 0.4 * pulse;
+        for (let i = 0; i < numRays; i++) {
+            const angle = (Math.PI * 2 * i) / numRays;
+            const x1 = screenPos.x + Math.cos(angle) * radius * 0.3;
+            const y1 = screenPos.y + Math.sin(angle) * radius * 0.3;
+            const x2 = screenPos.x + Math.cos(angle) * radius;
+            const y2 = screenPos.y + Math.sin(angle) * radius;
+            
+            this.ctx.beginPath();
+            this.ctx.moveTo(x1, y1);
+            this.ctx.lineTo(x2, y2);
+            this.ctx.stroke();
+        }
+        
+        this.ctx.restore();
+    }
+    
+    /**
+     * Draw Chrono hero with hourglass icon
+     */
+    private drawChronoHero(chrono: Unit, color: string, game: GameState, isEnemy: boolean): void {
+        // Draw the base unit
+        this.drawUnit(chrono, color, game, isEnemy);
+        
+        // Add hourglass icon above the hero
+        const screenPos = this.worldToScreen(chrono.position);
+        const iconY = screenPos.y - 25 * this.zoom;
+        
+        this.ctx.save();
+        this.ctx.fillStyle = '#88DDFF';
+        this.ctx.strokeStyle = '#FFFFFF';
+        this.ctx.lineWidth = 1;
+        this.ctx.globalAlpha = 0.8;
+        
+        // Draw simple hourglass
+        const size = 8 * this.zoom;
+        this.ctx.beginPath();
+        // Top triangle
+        this.ctx.moveTo(screenPos.x - size/2, iconY - size/2);
+        this.ctx.lineTo(screenPos.x + size/2, iconY - size/2);
+        this.ctx.lineTo(screenPos.x, iconY);
+        this.ctx.closePath();
+        // Bottom triangle
+        this.ctx.moveTo(screenPos.x, iconY);
+        this.ctx.lineTo(screenPos.x - size/2, iconY + size/2);
+        this.ctx.lineTo(screenPos.x + size/2, iconY + size/2);
+        this.ctx.closePath();
+        this.ctx.fill();
+        this.ctx.stroke();
+        
+        this.ctx.restore();
+    }
+    
+    /**
      * Draw a deployed turret
      */
     private drawDeployedTurret(turret: InstanceType<typeof DeployedTurret>, game: GameState): void {
@@ -11348,6 +11454,8 @@ export class GameRenderer {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for Radiant
                     } else if (unit instanceof VelarisHero) {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for VelarisHero
+                    } else if (unit instanceof Chrono) {
+                        this.drawChronoHero(unit, color, game, isEnemy);
                     } else if (unit instanceof AurumHero) {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for AurumHero
                     } else if (unit instanceof Shadow) {
@@ -11517,6 +11625,12 @@ export class GameRenderer {
             for (const shockwave of game.blinkShockwaves) {
                 if (this.isWithinViewBounds(shockwave.position, shockwave.radius * 2)) {
                     this.drawBlinkShockwave(shockwave);
+                }
+            }
+
+            for (const freezeCircle of game.chronoFreezeCircles) {
+                if (this.isWithinViewBounds(freezeCircle.position, freezeCircle.radius * 2)) {
+                    this.drawChronoFreezeCircle(freezeCircle);
                 }
             }
 

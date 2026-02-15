@@ -659,6 +659,19 @@ export const VELARIS_MAX_ORBS = 3;
 export const VELARIS_ORB_RADIUS = 15;
 export const VELARIS_PARTICLE_SPEED = 200; // Speed of particles between orbs
 
+// Chrono hero constants
+export const CHRONO_MAX_HEALTH = 100;
+export const CHRONO_ATTACK_RANGE = 400;
+export const CHRONO_ATTACK_DAMAGE = 0; // Doesn't do damage, just freezes
+export const CHRONO_ATTACK_SPEED = 1.0; // 1 attack per second
+export const CHRONO_FREEZE_DURATION = 1.0; // Freeze duration in seconds
+export const CHRONO_ABILITY_BASE_COOLDOWN = 5.0; // Base cooldown for ability
+export const CHRONO_ABILITY_MIN_RADIUS = 50; // Minimum circle radius
+export const CHRONO_ABILITY_MAX_RADIUS = 300; // Maximum circle radius
+export const CHRONO_ABILITY_RADIUS_MULTIPLIER = 2.0; // Arrow length to radius conversion
+export const CHRONO_ABILITY_COOLDOWN_PER_RADIUS = 0.02; // Additional cooldown per unit of radius
+export const CHRONO_FREEZE_CIRCLE_DURATION = 3.0; // How long the freeze circle lasts
+
 // Aurum hero constants (orb-based shield field hero)
 export const AURUM_HERO_MAX_HEALTH = 120;
 export const AURUM_HERO_ABILITY_COOLDOWN = 5.0;

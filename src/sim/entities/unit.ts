@@ -32,6 +32,7 @@ export class Unit {
     protected waypoints: Vector2D[] = []; // Path waypoints to follow
     protected currentWaypointIndex: number = 0; // Current waypoint in path
     stunDuration: number = 0; // Duration of stun effect in seconds
+    isFrozen: boolean = false; // Flag to mark unit as frozen (immune to damage, can't be targeted)
     lineOfSight: number; // Line of sight range (calculated from attack range)
     
     constructor(
@@ -380,6 +381,8 @@ export class Unit {
 
         for (const enemy of enemies) {
             if ('health' in enemy && enemy.health <= 0) continue;
+            // Skip frozen units
+            if ('isFrozen' in enemy && (enemy as any).isFrozen) continue;
             
             const distance = this.position.distanceTo(enemy.position);
             if (distance < minDistance) {
@@ -446,6 +449,8 @@ export class Unit {
      * Take damage
      */
     takeDamage(amount: number): void {
+        // Frozen units are invulnerable
+        if (this.isFrozen) return;
         this.health -= amount;
     }
 

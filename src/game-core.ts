@@ -34,6 +34,7 @@ import { createAurumHero } from './heroes/aurum-hero';
 import { createDashHero } from './heroes/dash';
 import { createBlinkHero } from './heroes/blink';
 import { createShadowHero } from './heroes/shadow';
+import { createChronoHero } from './heroes/chrono';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -185,6 +186,12 @@ const { Shadow, ShadowDecoy, ShadowDecoyParticle } = createShadowHero({
     Constants
 });
 
+const { Chrono, ChronoFreezeCircle } = createChronoHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -231,5 +238,7 @@ export {
     BlinkShockwave,
     Shadow,
     ShadowDecoy,
-    ShadowDecoyParticle
+    ShadowDecoyParticle,
+    Chrono,
+    ChronoFreezeCircle
 };

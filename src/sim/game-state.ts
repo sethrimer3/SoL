@@ -77,7 +77,9 @@ import {
     BlinkShockwave,
     Shadow,
     ShadowDecoy,
-    ShadowDecoyParticle
+    ShadowDecoyParticle,
+    Chrono,
+    ChronoFreezeCircle
 } from '../game-core';
 
 import { Faction } from './entities/player';
@@ -116,6 +118,7 @@ export class GameState {
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[] = [];
     shadowDecoys: InstanceType<typeof ShadowDecoy>[] = [];
     shadowDecoyParticles: InstanceType<typeof ShadowDecoyParticle>[] = [];
+    chronoFreezeCircles: InstanceType<typeof ChronoFreezeCircle>[] = [];
     miniMotherships: InstanceType<typeof MiniMothership>[] = [];
     miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
@@ -739,6 +742,14 @@ export class GameState {
                     const decoy = unit.getAndClearDecoy();
                     if (decoy) {
                         this.shadowDecoys.push(decoy);
+                    }
+                }
+                
+                // Handle Chrono freeze circles
+                if (unit instanceof Chrono) {
+                    const freezeCircle = unit.getAndClearFreezeCircle();
+                    if (freezeCircle) {
+                        this.chronoFreezeCircles.push(freezeCircle);
                     }
                 }
                 
@@ -2350,6 +2361,49 @@ export class GameState {
         // Remove expired shockwaves
         this.blinkShockwaves = this.blinkShockwaves.filter(shockwave => !shockwave.shouldDespawn());
         
+        // First, clear all frozen flags
+        for (const player of this.players) {
+            for (const unit of player.units) {
+                unit.isFrozen = false;
+            }
+        }
+        
+        // Update Chrono freeze circles
+        for (const freezeCircle of this.chronoFreezeCircles) {
+            freezeCircle.update(deltaTime);
+            
+            // Freeze all units within the circle
+            for (const player of this.players) {
+                for (const unit of player.units) {
+                    if (freezeCircle.isPositionInCircle(unit.position)) {
+                        if (!freezeCircle.affectedUnits.has(unit)) {
+                            freezeCircle.affectedUnits.add(unit);
+                        }
+                        // Mark unit as frozen (invulnerable, can't be targeted)
+                        unit.isFrozen = true;
+                        // Keep units frozen while in circle (using stun to prevent movement/attacking)
+                        unit.stunDuration = Math.max(unit.stunDuration, 0.1);
+                    }
+                }
+                
+                // Freeze buildings (prevent them from attacking)
+                for (const building of player.buildings) {
+                    if (freezeCircle.isPositionInCircle(building.position)) {
+                        if (!freezeCircle.affectedBuildings.has(building)) {
+                            freezeCircle.affectedBuildings.add(building);
+                        }
+                        // Buildings are "frozen" by preventing them from attacking
+                        if ('attackCooldown' in building) {
+                            (building as any).attackCooldown = Math.max((building as any).attackCooldown || 0, 0.1);
+                        }
+                    }
+                }
+            }
+        }
+        
+        // Remove expired freeze circles
+        this.chronoFreezeCircles = this.chronoFreezeCircles.filter(circle => !circle.shouldDespawn());
+        
         // Update deployed turrets
         const allUnitsAndStructures: CombatTarget[] = [];
         for (const player of this.players) {
@@ -3461,7 +3515,7 @@ export class GameState {
             case Faction.AURUM:
                 return ['Driller', 'AurumHero', 'Dash', 'Blink'];
             case Faction.VELARIS:
-                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow'];
+                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono'];
             default:
                 return [];
         }
@@ -3503,6 +3557,8 @@ export class GameState {
                 return unit instanceof Radiant;
             case 'VelarisHero':
                 return unit instanceof VelarisHero;
+            case 'Chrono':
+                return unit instanceof Chrono;
             case 'AurumHero':
                 return unit instanceof AurumHero;
             case 'Dash':
@@ -4638,6 +4694,8 @@ export class GameState {
                 return new Radiant(spawnPosition, owner);
             case 'VelarisHero':
                 return new VelarisHero(spawnPosition, owner);
+            case 'Chrono':
+                return new Chrono(spawnPosition, owner);
             case 'AurumHero':
                 return new AurumHero(spawnPosition, owner);
             case 'Dash':
