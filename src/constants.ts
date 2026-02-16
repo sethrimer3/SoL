@@ -3,7 +3,9 @@
  */
 
 // Influence and particle constants
-export const INFLUENCE_RADIUS = 300;
+export const INFLUENCE_RADIUS = 225;
+export const BUILDING_INFLUENCE_RADIUS_MULTIPLIER = 0.75;
+export const INFLUENCE_RADIUS_ANIMATION_SPEED_PER_SEC = 0.35;
 export const PLAYER_1_COLOR = '#0066FF';
 export const PLAYER_2_COLOR = '#FF0000';
 

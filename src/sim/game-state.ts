@@ -152,6 +152,82 @@ export class GameState {
     private readonly dustSpatialHash: Map<number, number[]> = new Map();
     private readonly dustSpatialHashKeys: number[] = [];
 
+    private getInfluenceRadiusForSource(source: StellarForge | Building): number {
+        if (source instanceof StellarForge || source instanceof SubsidiaryFactory) {
+            return Constants.INFLUENCE_RADIUS;
+        }
+        return Constants.INFLUENCE_RADIUS * Constants.BUILDING_INFLUENCE_RADIUS_MULTIPLIER;
+    }
+
+    private isInfluenceSourceActive(source: StellarForge | Building): boolean {
+        if (source.health <= 0) {
+            return false;
+        }
+        if (source instanceof StellarForge) {
+            return source.isReceivingLight;
+        }
+        return true;
+    }
+
+    public isPointWithinPlayerInfluence(player: Player, point: Vector2D): boolean {
+        if (player.isDefeated()) {
+            return false;
+        }
+
+        const forge = player.stellarForge;
+        if (forge && this.isInfluenceSourceActive(forge)) {
+            const distanceToForge = forge.position.distanceTo(point);
+            if (distanceToForge <= this.getInfluenceRadiusForSource(forge)) {
+                return true;
+            }
+        }
+
+        for (const building of player.buildings) {
+            if (!this.isInfluenceSourceActive(building)) {
+                continue;
+            }
+            const distanceToBuilding = building.position.distanceTo(point);
+            if (distanceToBuilding <= this.getInfluenceRadiusForSource(building)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private getClosestInfluenceAtPoint(point: Vector2D): { playerIndex: number; distance: number; radius: number } | null {
+        let closestInfluence: { playerIndex: number; distance: number; radius: number } | null = null;
+
+        for (let i = 0; i < this.players.length; i++) {
+            const player = this.players[i];
+            if (player.isDefeated()) {
+                continue;
+            }
+
+            const forge = player.stellarForge;
+            if (forge && this.isInfluenceSourceActive(forge)) {
+                const radius = this.getInfluenceRadiusForSource(forge);
+                const distance = point.distanceTo(forge.position);
+                if (distance < radius && (!closestInfluence || distance < closestInfluence.distance)) {
+                    closestInfluence = { playerIndex: i, distance, radius };
+                }
+            }
+
+            for (const building of player.buildings) {
+                if (!this.isInfluenceSourceActive(building)) {
+                    continue;
+                }
+                const radius = this.getInfluenceRadiusForSource(building);
+                const distance = point.distanceTo(building.position);
+                if (distance < radius && (!closestInfluence || distance < closestInfluence.distance)) {
+                    closestInfluence = { playerIndex: i, distance, radius };
+                }
+            }
+        }
+
+        return closestInfluence;
+    }
+
     /**
      * Update game state
      */
@@ -380,8 +456,7 @@ export class GameState {
                 }
 
                 if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
-                    const distanceToForge = player.stellarForge.position.distanceTo(mirror.position);
-                    if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
+                    if (this.isPointWithinPlayerInfluence(player, mirror.position)) {
                         mirror.health = Math.min(
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
@@ -949,8 +1024,7 @@ export class GameState {
                     if (building.isComplete) continue; // Skip completed buildings
                 
                 // Check if building is inside player's influence (near stellar forge)
-                const isInInfluence = player.stellarForge && 
-                                     building.position.distanceTo(player.stellarForge.position) <= Constants.INFLUENCE_RADIUS;
+                const isInInfluence = this.isPointWithinPlayerInfluence(player, building.position);
                 
                 if (isInInfluence && player.stellarForge) {
                     // Building inside influence: take energy from forge
@@ -2494,27 +2568,14 @@ export class GameState {
             particle.update(deltaTime);
             this.resolveDustAsteroidCollision(particle, deltaTime);
 
-            // Check for influence from player bases
-            let closestInfluence: { color: string, distance: number } | null = null;
-
-            for (let i = 0; i < this.players.length; i++) {
-                const player = this.players[i];
-                if (player.stellarForge && !player.isDefeated()) {
-                    const distance = particle.position.distanceTo(player.stellarForge.position);
-                    
-                    if (distance < Constants.INFLUENCE_RADIUS) {
-                        const color = i === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                        if (!closestInfluence || distance < closestInfluence.distance) {
-                            closestInfluence = { color, distance };
-                        }
-                    }
-                }
-            }
+            // Check for influence from player structures
+            const closestInfluence = this.getClosestInfluenceAtPoint(particle.position);
 
             // Update particle color based on influence
             if (closestInfluence) {
-                const blendFactor = 1.0 - (closestInfluence.distance / Constants.INFLUENCE_RADIUS);
-                particle.updateColor(closestInfluence.color, blendFactor);
+                const color = closestInfluence.playerIndex === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
+                const blendFactor = 1.0 - (closestInfluence.distance / closestInfluence.radius);
+                particle.updateColor(color, blendFactor);
             } else {
                 particle.updateColor(null, 0);
             }
@@ -3999,11 +4060,8 @@ export class GameState {
         }
         
         // In shadow - check if within player's influence
-        if (player.stellarForge) {
-            const distanceToForge = player.stellarForge.position.distanceTo(objectPos);
-            if (distanceToForge <= Constants.INFLUENCE_RADIUS) {
-                return true;
-            }
+        if (this.isPointWithinPlayerInfluence(player, objectPos)) {
+            return true;
         }
 
         if (this.isObjectRevealedBySpotlight(objectPos, player)) {
