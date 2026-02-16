@@ -102,6 +102,12 @@ type ShadowQuad = {
     ss2y: number;
 };
 
+type InfluenceRenderCircle = {
+    position: Vector2D;
+    radius: number;
+    color: string;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -294,8 +300,10 @@ export class GameRenderer {
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
+    private influenceRadiusBySource = new WeakMap<object, number>();
     private enemyVisibilityLastUpdateSec = Number.NaN;
     private enemyVisibilityFrameDeltaSec = 0;
+    private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
@@ -3877,7 +3885,7 @@ export class GameRenderer {
         // Check if mirror is regenerating (within influence radius of forge and below max health)
         const forge = mirror.owner.stellarForge;
         const isRegenerating = !!(forge && mirror.health < this.MIRROR_MAX_HEALTH &&
-            mirror.position.distanceTo(forge.position) <= Constants.INFLUENCE_RADIUS);
+            game.isPointWithinPlayerInfluence(mirror.owner, mirror.position));
         // Use player color based on whether this is the viewing player or enemy
         const playerColorToUse = (this.viewingPlayer && mirror.owner === this.viewingPlayer) 
             ? this.playerColor 
@@ -4327,9 +4335,28 @@ export class GameRenderer {
 
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
-            if (player.stellarForge && !player.isDefeated()) {
-                const distance = position.distanceTo(player.stellarForge.position);
-                if (distance < Constants.INFLUENCE_RADIUS && distance < closestDistance) {
+            if (player.isDefeated()) {
+                continue;
+            }
+
+            const influenceSources: Array<{ position: Vector2D; radius: number }> = [];
+            if (player.stellarForge && player.stellarForge.isReceivingLight && player.stellarForge.health > 0) {
+                influenceSources.push({ position: player.stellarForge.position, radius: Constants.INFLUENCE_RADIUS });
+            }
+            for (const building of player.buildings) {
+                if (building.health <= 0) {
+                    continue;
+                }
+                const isFoundry = building instanceof SubsidiaryFactory;
+                const radius = isFoundry
+                    ? Constants.INFLUENCE_RADIUS
+                    : Constants.INFLUENCE_RADIUS * Constants.BUILDING_INFLUENCE_RADIUS_MULTIPLIER;
+                influenceSources.push({ position: building.position, radius });
+            }
+
+            for (const source of influenceSources) {
+                const distance = position.distanceTo(source.position);
+                if (distance < source.radius && distance < closestDistance) {
                     closestDistance = distance;
                     closestIndex = i;
                 }
@@ -5527,6 +5554,148 @@ export class GameRenderer {
         this.ctx.globalAlpha = 0.3;
         this.ctx.beginPath();
         this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
+        this.ctx.stroke();
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    private getInfluenceTargetRadius(source: StellarForge | Building): number {
+        if (source instanceof StellarForge || source instanceof SubsidiaryFactory) {
+            return Constants.INFLUENCE_RADIUS;
+        }
+        return Constants.INFLUENCE_RADIUS * Constants.BUILDING_INFLUENCE_RADIUS_MULTIPLIER;
+    }
+
+    private isInfluenceSourceActive(source: StellarForge | Building): boolean {
+        if (source.health <= 0) {
+            return false;
+        }
+        if (source instanceof StellarForge) {
+            return source.isReceivingLight;
+        }
+        return true;
+    }
+
+    private updateInfluenceRadius(source: StellarForge | Building, deltaTimeSec: number): number {
+        const targetRadius = this.isInfluenceSourceActive(source)
+            ? this.getInfluenceTargetRadius(source)
+            : 0;
+        const currentRadius = this.influenceRadiusBySource.get(source) ?? 0;
+        const interpolationFactor = Math.min(1, deltaTimeSec * Constants.INFLUENCE_RADIUS_ANIMATION_SPEED_PER_SEC);
+        const nextRadius = currentRadius + (targetRadius - currentRadius) * interpolationFactor;
+        this.influenceRadiusBySource.set(source, nextRadius);
+        return nextRadius;
+    }
+
+    private drawMergedInfluenceOutlines(circles: Array<{ position: Vector2D; radius: number }>, color: string): void {
+        this.ctx.strokeStyle = color;
+        this.ctx.lineWidth = 2;
+        this.ctx.globalAlpha = 0.3;
+        this.ctx.beginPath();
+
+        const twoPi = Math.PI * 2;
+        const coverageEpsilonWorld = 0.5;
+        const coverageEpsilonSq = coverageEpsilonWorld * coverageEpsilonWorld;
+        const dpr = window.devicePixelRatio || 1;
+        const centerX = (this.canvas.width / dpr) / 2;
+        const centerY = (this.canvas.height / dpr) / 2;
+        const cameraX = this.camera.x;
+        const cameraY = this.camera.y;
+        const zoom = this.zoom;
+        const targetStepPx = 8;
+
+        for (let i = 0; i < circles.length; i++) {
+            const circle = circles[i];
+            if (!this.isWithinViewBounds(circle.position, circle.radius)) {
+                continue;
+            }
+
+            const originX = circle.position.x;
+            const originY = circle.position.y;
+            const radiusWorld = circle.radius;
+            let isFullyCovered = false;
+            let needsSampling = false;
+
+            for (let j = 0; j < circles.length; j++) {
+                if (i === j) continue;
+                const other = circles[j];
+                const dx = other.position.x - originX;
+                const dy = other.position.y - originY;
+                const distanceSq = dx * dx + dy * dy;
+                const otherRadius = other.radius;
+                if (distanceSq <= 0.0001) {
+                    if (radiusWorld <= otherRadius) {
+                        isFullyCovered = true;
+                        break;
+                    }
+                    continue;
+                }
+
+                const distance = Math.sqrt(distanceSq);
+                if (distance + radiusWorld <= otherRadius - coverageEpsilonWorld) {
+                    isFullyCovered = true;
+                    break;
+                }
+
+                const radiusDiff = Math.abs(radiusWorld - otherRadius);
+                if (distance < radiusWorld + otherRadius - coverageEpsilonWorld &&
+                    distance > radiusDiff + coverageEpsilonWorld) {
+                    needsSampling = true;
+                }
+            }
+
+            if (isFullyCovered) {
+                continue;
+            }
+
+            const screenCenterX = centerX + (originX - cameraX) * zoom;
+            const screenCenterY = centerY + (originY - cameraY) * zoom;
+            const radiusScreen = radiusWorld * zoom;
+
+            if (!needsSampling) {
+                this.ctx.moveTo(screenCenterX + radiusScreen, screenCenterY);
+                this.ctx.arc(screenCenterX, screenCenterY, radiusScreen, 0, twoPi);
+                continue;
+            }
+
+            const stepRad = Math.min(0.25, Math.max(0.02, targetStepPx / Math.max(radiusScreen, 1)));
+            let isDrawing = false;
+            for (let angle = 0; angle <= twoPi + stepRad; angle += stepRad) {
+                const clampedAngle = angle > twoPi ? twoPi : angle;
+                const cosAngle = Math.cos(clampedAngle);
+                const sinAngle = Math.sin(clampedAngle);
+                const worldX = originX + cosAngle * radiusWorld;
+                const worldY = originY + sinAngle * radiusWorld;
+
+                let isCovered = false;
+                for (let j = 0; j < circles.length; j++) {
+                    if (i === j) continue;
+                    const other = circles[j];
+                    const dx = worldX - other.position.x;
+                    const dy = worldY - other.position.y;
+                    const distanceSq = dx * dx + dy * dy;
+                    const otherRadiusSq = other.radius * other.radius;
+                    if (distanceSq <= otherRadiusSq - coverageEpsilonSq) {
+                        isCovered = true;
+                        break;
+                    }
+                }
+
+                if (isCovered) {
+                    isDrawing = false;
+                    continue;
+                }
+
+                const screenX = centerX + (worldX - cameraX) * zoom;
+                const screenY = centerY + (worldY - cameraY) * zoom;
+                if (!isDrawing) {
+                    this.ctx.moveTo(screenX, screenY);
+                    isDrawing = true;
+                } else {
+                    this.ctx.lineTo(screenX, screenY);
+                }
+            }
+        }
+
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
     }
@@ -11356,24 +11525,40 @@ export class GameRenderer {
             }
         }
 
-        // Draw influence circles (with proper handling of overlaps)
-        const influenceCircles: Array<{position: Vector2D, radius: number, color: string}> = [];
+        // Draw influence circles (animated and merged by player color)
+        const influenceCircles: InfluenceRenderCircle[] = [];
+        const influenceDeltaTimeSec = Number.isNaN(this.influenceRadiusLastUpdateSec)
+            ? 0
+            : Math.max(0, game.gameTime - this.influenceRadiusLastUpdateSec);
+        this.influenceRadiusLastUpdateSec = game.gameTime;
+
         for (let i = 0; i < game.players.length; i++) {
             const player = game.players[i];
             if (viewingPlayerIndex !== null && i !== viewingPlayerIndex) {
                 continue;
             }
-            if (player.stellarForge && !player.isDefeated()) {
-                const color = i === 0 ? this.playerColor : this.enemyColor;
-                influenceCircles.push({
-                    position: player.stellarForge.position,
-                    radius: Constants.INFLUENCE_RADIUS,
-                    color: color
-                });
+            if (player.isDefeated()) {
+                continue;
+            }
+
+            const color = i === 0 ? this.playerColor : this.enemyColor;
+            const forge = player.stellarForge;
+            if (forge) {
+                const forgeRadius = this.updateInfluenceRadius(forge, influenceDeltaTimeSec);
+                if (forgeRadius > 0.5) {
+                    influenceCircles.push({ position: forge.position, radius: forgeRadius, color });
+                }
+            }
+
+            for (const building of player.buildings) {
+                const buildingRadius = this.updateInfluenceRadius(building, influenceDeltaTimeSec);
+                if (buildingRadius > 0.5) {
+                    influenceCircles.push({ position: building.position, radius: buildingRadius, color });
+                }
             }
         }
-        
-        // Draw influence circles grouped by color to handle overlaps
+
+        // Draw influence circles grouped by color to render only outer merged outlines.
         const circlesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
         for (const circle of influenceCircles) {
             if (!circlesByColor.has(circle.color)) {
@@ -11381,46 +11566,9 @@ export class GameRenderer {
             }
             circlesByColor.get(circle.color)!.push({position: circle.position, radius: circle.radius});
         }
-        
-        // Draw each color group
+
         for (const [color, circles] of circlesByColor) {
-            if (circles.length === 1) {
-                // Single circle, draw normally
-                if (this.isWithinViewBounds(circles[0].position, circles[0].radius)) {
-                    this.drawInfluenceCircle(circles[0].position, circles[0].radius, color);
-                }
-            } else {
-                // Multiple circles of same color
-                // To get union effect, we'll use a temporary canvas
-                this.ctx.save();
-                
-                // Create path with all circles
-                this.ctx.beginPath();
-                for (const circle of circles) {
-                    if (!this.isWithinViewBounds(circle.position, circle.radius)) {
-                        continue;
-                    }
-                    const screenPos = this.worldToScreen(circle.position);
-                    const screenRadius = circle.radius * this.zoom;
-                    this.ctx.moveTo(screenPos.x + screenRadius, screenPos.y);
-                    this.ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
-                }
-                
-                // Fill with transparent color first to create union
-                this.ctx.globalCompositeOperation = 'source-over';
-                this.ctx.fillStyle = color;
-                this.ctx.globalAlpha = 0.05;
-                this.ctx.fill();
-                
-                // Now stroke the outer boundary
-                // This approach still shows inner boundaries, so let's just draw each circle
-                this.ctx.globalAlpha = 0.3;
-                this.ctx.strokeStyle = color;
-                this.ctx.lineWidth = 2;
-                this.ctx.stroke();
-                
-                this.ctx.restore();
-            }
+            this.drawMergedInfluenceOutlines(circles, color);
         }
 
         // Draw connections first (so they appear behind structures)

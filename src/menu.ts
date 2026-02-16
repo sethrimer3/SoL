@@ -117,6 +117,8 @@ export class MainMenu {
     private mainScreenRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
     private visibilityHandler: (() => void) | null = null;
+    private blurHandler: (() => void) | null = null;
+    private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
     private isMatchmakingSearching = false;
     
@@ -368,7 +370,7 @@ export class MainMenu {
         document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
         this.visibilityHandler = () => {
-            if (document.hidden) {
+            if (document.hidden || !document.hasFocus()) {
                 this.menuAudioController.setVisible(false);
                 this.pauseMenuAnimations();
                 return;
@@ -376,7 +378,19 @@ export class MainMenu {
             this.menuAudioController.setVisible(true);
             this.resumeMenuAnimations();
         };
+        this.blurHandler = () => {
+            this.menuAudioController.setVisible(false);
+            this.pauseMenuAnimations();
+        };
+        this.focusHandler = () => {
+            if (!document.hidden) {
+                this.menuAudioController.setVisible(true);
+                this.resumeMenuAnimations();
+            }
+        };
         document.addEventListener('visibilitychange', this.visibilityHandler);
+        window.addEventListener('blur', this.blurHandler);
+        window.addEventListener('focus', this.focusHandler);
         
         // Start menu animations on initial load
         this.resumeMenuAnimations();
@@ -3301,6 +3315,14 @@ export class MainMenu {
         if (this.visibilityHandler) {
             document.removeEventListener('visibilitychange', this.visibilityHandler);
             this.visibilityHandler = null;
+        }
+        if (this.blurHandler) {
+            window.removeEventListener('blur', this.blurHandler);
+            this.blurHandler = null;
+        }
+        if (this.focusHandler) {
+            window.removeEventListener('focus', this.focusHandler);
+            this.focusHandler = null;
         }
         this.backgroundParticleLayer?.destroy();
         this.atmosphereLayer?.destroy();
