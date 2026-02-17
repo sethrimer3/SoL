@@ -33,8 +33,8 @@ const TRACK_PATH_BY_ID: Record<TrackId, string> = {
     'game-mode-selection': 'ASSETS/music/Music_Gamemode_Selection.ogg',
     'ambient-1': 'ASSETS/music/Music_Ambient_1.ogg',
     'searching-for-match': 'ASSETS/music/Music_Searching_For_Match.ogg',
-    'sun-rumble-left': 'ASSETS/SFX/SoL_Ambient_Sun_Rumble.mp3',
-    'sun-rumble-right': 'ASSETS/SFX/SoL_Ambient_Sun_Rumble.mp3',
+    'sun-rumble-left': 'ASSETS/SFX/environment/SoL_Ambient_Sun_Rumble.mp3',
+    'sun-rumble-right': 'ASSETS/SFX/environment/SoL_Ambient_Sun_Rumble.mp3',
 };
 
 interface AudioTrack {
@@ -48,9 +48,8 @@ interface AudioTrack {
     isCrossfadeActive: boolean;
 }
 
-const LOOP_DURATION_SEC = 26;
 const LOOP_CROSSFADE_DURATION_SEC = 2;
-const LOOP_CROSSFADE_START_SEC = LOOP_DURATION_SEC - LOOP_CROSSFADE_DURATION_SEC;
+const FALLBACK_LOOP_DURATION_SEC = 26;
 
 export class MenuAudioController {
     private readonly resolveAssetPath: (path: string) => string;
@@ -165,8 +164,8 @@ export class MenuAudioController {
         return tracksById;
     }
 
-    private isCrossfadeTrack(trackId: TrackId): boolean {
-        return trackId !== 'sun-rumble-left' && trackId !== 'sun-rumble-right';
+    private isCrossfadeTrack(_trackId: TrackId): boolean {
+        return true;
     }
 
 
@@ -249,7 +248,7 @@ export class MenuAudioController {
         const screenCenterDistance = Math.hypot(this.sunCenterNormalizedX - 0.5, this.sunCenterNormalizedY - 0.5);
         const normalizedDistance = Math.max(0, Math.min(1, screenCenterDistance / 0.7071));
         const centerPresence = 1 - normalizedDistance;
-        const rumbleTotalVolume = 0.01 + 0.18 * (this.sunFocusLevel * 0.7 + centerPresence * 0.3);
+        const rumbleTotalVolume = 0.008 + 0.24 * (this.sunFocusLevel * 0.8 + centerPresence * 0.2);
         const panValue = Math.max(-1, Math.min(1, (this.sunCenterNormalizedX - 0.5) * 2));
         const leftGain = Math.max(0, Math.min(1, (1 - panValue) * 0.5));
         const rightGain = Math.max(0, Math.min(1, (1 + panValue) * 0.5));
@@ -364,10 +363,9 @@ export class MenuAudioController {
                 continue;
             }
 
-            const crossfadeProgress = Math.max(
-                0,
-                Math.min(1, (track.element.currentTime - LOOP_CROSSFADE_START_SEC) / LOOP_CROSSFADE_DURATION_SEC)
-            );
+            const loopDurationSec = this.getTrackLoopDurationSec(track);
+            const crossfadeStartSec = loopDurationSec - LOOP_CROSSFADE_DURATION_SEC;
+            const crossfadeProgress = Math.max(0, Math.min(1, (track.element.currentTime - crossfadeStartSec) / LOOP_CROSSFADE_DURATION_SEC));
             track.element.volume = track.smoothedVolume * (1 - crossfadeProgress);
             track.crossfadeElement.volume = track.smoothedVolume * crossfadeProgress;
         }
@@ -381,14 +379,17 @@ export class MenuAudioController {
                 continue;
             }
 
-            if (!track.isCrossfadeActive && track.element.currentTime >= LOOP_CROSSFADE_START_SEC) {
+            const loopDurationSec = this.getTrackLoopDurationSec(track);
+            const crossfadeStartSec = loopDurationSec - LOOP_CROSSFADE_DURATION_SEC;
+
+            if (!track.isCrossfadeActive && track.element.currentTime >= crossfadeStartSec) {
                 track.isCrossfadeActive = true;
                 crossfadeElement.currentTime = 0;
                 crossfadeElement.volume = 0;
                 void crossfadeElement.play().catch(() => undefined);
             }
 
-            if (track.isCrossfadeActive && track.element.currentTime >= LOOP_DURATION_SEC) {
+            if (track.isCrossfadeActive && track.element.currentTime >= loopDurationSec) {
                 track.element.pause();
                 track.element.currentTime = 0;
                 track.element.volume = 0;
@@ -399,5 +400,13 @@ export class MenuAudioController {
                 track.isCrossfadeActive = false;
             }
         }
+    }
+
+    private getTrackLoopDurationSec(track: AudioTrack): number {
+        const durationSec = track.element.duration;
+        if (!Number.isFinite(durationSec) || durationSec <= LOOP_CROSSFADE_DURATION_SEC) {
+            return FALLBACK_LOOP_DURATION_SEC;
+        }
+        return durationSec;
     }
 }
