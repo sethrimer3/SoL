@@ -6,11 +6,21 @@ This document provides guidance for incrementally refactoring large monolithic f
 
 The SoL codebase has several large monolithic files that contain multiple responsibilities.
 
-**Baseline measurements (at start of refactoring, February 2026)**:
-- **renderer.ts** (9,344 LOC): Rendering engine with ~60 draw methods
-- **game-state.ts** (5,171 LOC): Core simulation and game logic  
-- **menu.ts** (4,665 LOC → 4,544 LOC after initial refactoring): Menu system with 16+ screen renderers
-- **main.ts** (3,667 LOC): Game controller with input handling
+**Current measurements (February 17, 2026)**:
+- **renderer.ts** (13,658 LOC): Rendering engine with ~60 draw methods
+- **game-state.ts** (6,681 LOC): Core simulation and game logic  
+- **menu.ts** (4,156 LOC): Menu system with 16+ screen renderers
+- **main.ts** (4,252 LOC): Game controller with input handling
+- **TOTAL**: 28,747 LOC across 4 files
+
+**Target state (after complete refactoring)**:
+- **renderer.ts**: 13,658 → ~3,558 LOC (74% reduction)
+- **game-state.ts**: 6,681 → ~4,331 LOC (35% reduction)
+- **menu.ts**: 4,156 → ~2,856 LOC (31% reduction)
+- **main.ts**: 4,252 → ~1,452 LOC (66% reduction)
+- **TOTAL**: 28,747 → ~12,197 LOC (58% reduction)
+
+**See REFACTOR_PLAN.md for comprehensive refactoring plan.**
 
 *Note: These numbers will decrease as refactoring progresses. Check git history for current state.*
 
@@ -310,24 +320,46 @@ import { Camera, GraphicOptions } from './render';
 
 ### Lines of Code by File
 
-| File | Original | Current | Target | Progress |
-|------|----------|---------|--------|----------|
-| renderer.ts | 9,344 | 9,344 | 6,000 | 0% → 36% |
-| game-state.ts | 5,171 | 5,171 | 3,500 | 0% → 32% |
-| menu.ts | 4,665 | 4,544 | 3,000 | 3% → 36% |
-| main.ts | 3,667 | 3,667 | 2,500 | 0% → 32% |
+| File | Original (Feb 2026) | Current | Target | Progress |
+|------|---------------------|---------|--------|----------|
+| renderer.ts | 13,658 | 13,658 | 3,558 | 0% → 74% |
+| game-state.ts | 6,681 | 6,681 | 4,331 | 0% → 35% |
+| menu.ts | 4,156 | 4,156 | 2,856 | 0% → 31% |
+| main.ts | 4,252 | 4,252 | 1,452 | 0% → 66% |
+| **TOTAL** | **28,747** | **28,747** | **12,197** | **0% → 58%** |
 
-### Extraction Progress
+### Planned Extractions
 
-- ✅ Camera module (150 LOC)
-- ✅ UI Helpers (181 LOC)  
-- 🎯 Menu screens (~1,200 LOC)
-- 🎯 Faction renderers (~1,400 LOC)
-- 🎯 Entity renderers (~2,300 LOC)
-- 🎯 Game state systems (~3,400 LOC)
-- 🎯 Input handling (~1,900 LOC)
+See **REFACTOR_PLAN.md** for comprehensive details on all planned extractions.
 
-**Total Extracted**: 331 LOC / ~11,000 LOC (3%)
+**Phase 1 - Menu System** (~1,300 LOC):
+- 🎯 Menu screen renderers (~900 LOC)
+- 🎯 LAN lobby manager (~250 LOC)
+- 🎯 Player profile manager (~150 LOC)
+
+**Phase 2 - Renderer System** (~10,100 LOC):
+- 🎯 Starfield & background (~600 LOC)
+- 🎯 Sun rendering (~800 LOC)
+- 🎯 Asteroid rendering (~400 LOC)
+- 🎯 Building renderers (~1,600 LOC)
+- 🎯 Unit renderers (~2,200 LOC)
+- 🎯 Projectile renderers (~1,500 LOC)
+- 🎯 Faction renderers (~1,500 LOC)
+- 🎯 UI/HUD renderer (~1,500 LOC)
+
+**Phase 3 - Game State Systems** (~2,350 LOC):
+- 🎯 Command processor (~600 LOC)
+- 🎯 Vision system (~250 LOC)
+- 🎯 AI system (~900 LOC)
+- 🎯 Physics system (~400 LOC)
+- 🎯 Particle system (~200 LOC)
+
+**Phase 4 - Main Controller** (~2,800 LOC):
+- 🎯 Input controller (~1,800 LOC)
+- 🎯 Selection manager (~400 LOC)
+- 🎯 Warp gate manager (~600 LOC)
+
+**Total Planned Extractions**: 16,550 LOC (58% reduction)
 
 ## Questions?
 
