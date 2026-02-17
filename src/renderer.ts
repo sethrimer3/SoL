@@ -2927,23 +2927,19 @@ export class GameRenderer {
                 // Add viewport culling margin to prevent pop-in
                 const viewportMargin = 100;
                 
-                // Filter waypoints to only those visible or connected to visible segments
-                const visibleWaypoints: Vector2D[] = [];
-                let hasVisibleWaypoint = false;
-                
-                for (const waypoint of forge.minionPath) {
-                    if (this.isWithinViewBounds(waypoint, viewportMargin)) {
-                        visibleWaypoints.push(waypoint);
-                        hasVisibleWaypoint = true;
-                    } else if (hasVisibleWaypoint) {
-                        // Include first waypoint outside view if previous was visible
-                        visibleWaypoints.push(waypoint);
-                        break;
+                // Check if forge or any waypoint is visible
+                let hasVisibleElement = this.isWithinViewBounds(forge.position, viewportMargin);
+                if (!hasVisibleElement) {
+                    for (const waypoint of forge.minionPath) {
+                        if (this.isWithinViewBounds(waypoint, viewportMargin)) {
+                            hasVisibleElement = true;
+                            break;
+                        }
                     }
                 }
                 
-                // Only draw if there are visible waypoints or forge is visible
-                if (visibleWaypoints.length > 0 || this.isWithinViewBounds(forge.position, viewportMargin)) {
+                // Only draw if something is visible
+                if (hasVisibleElement) {
                     this.ctx.strokeStyle = '#FFFF00'; // Yellow path
                     this.ctx.lineWidth = 3;
                     this.ctx.setLineDash([10, 5]); // Dashed line
@@ -2953,7 +2949,8 @@ export class GameRenderer {
                     const startScreen = this.worldToScreen(forge.position);
                     this.ctx.moveTo(startScreen.x, startScreen.y);
                     
-                    // Draw line through all waypoints (still use full path for continuity)
+                    // Draw line through all waypoints for visual continuity
+                    // (We need the full path even if some waypoints are off-screen to avoid gaps)
                     for (const waypoint of forge.minionPath) {
                         const waypointScreen = this.worldToScreen(waypoint);
                         this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
