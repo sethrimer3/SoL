@@ -609,17 +609,30 @@ export class GameRenderer {
         // Get device pixel ratio for high-DPI displays (retina, mobile, etc.)
         const dpr = window.devicePixelRatio || 1;
         
-        // Set canvas physical size to match display size * device pixel ratio
-        this.canvas.width = window.innerWidth * dpr;
-        this.canvas.height = window.innerHeight * dpr;
+        // Apply resolution scaling based on quality setting
+        // Low quality: 0.75x resolution (56% pixel count)
+        // Medium quality: 0.9x resolution (81% pixel count)
+        // High/Ultra: Full resolution
+        let resolutionScale = 1.0;
+        if (this.graphicsQuality === 'low') {
+            resolutionScale = 0.75;
+        } else if (this.graphicsQuality === 'medium') {
+            resolutionScale = 0.9;
+        }
+        
+        const effectiveDpr = dpr * resolutionScale;
+        
+        // Set canvas physical size to match display size * effective DPR
+        this.canvas.width = window.innerWidth * effectiveDpr;
+        this.canvas.height = window.innerHeight * effectiveDpr;
         
         // Set canvas CSS size to match window size
         this.canvas.style.width = `${window.innerWidth}px`;
         this.canvas.style.height = `${window.innerHeight}px`;
         
-        // Reset transform and scale the context to match device pixel ratio
+        // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        this.ctx.scale(dpr, dpr);
+        this.ctx.scale(effectiveDpr, effectiveDpr);
     }
 
     /**
@@ -4376,7 +4389,10 @@ export class GameRenderer {
 
             this.ctx.save();
             this.ctx.globalCompositeOperation = 'multiply';
-            this.ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+            // Skip expensive blur filter on low quality
+            if (this.graphicsQuality !== 'low') {
+                this.ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+            }
 
             const shadowLayers = 3;
             for (let i = 0; i < shadowLayers; i++) {

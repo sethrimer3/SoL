@@ -757,6 +757,12 @@ class GameController {
             return false;
         }
 
+        // Check if the position is within the player's influence field
+        if (!this.game.isPointWithinPlayerInfluence(player, worldPos)) {
+            console.log('Cannot place warp gate outside influence field');
+            return false;
+        }
+
         if (!this.canCreateWarpGateFromSelectedMirrors(worldPos)) {
             return false;
         }
