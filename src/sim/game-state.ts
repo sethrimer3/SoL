@@ -3492,21 +3492,21 @@ export class GameState {
 
         switch (buildType) {
             case 'subsidiaryFactory':
-                placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player);
+                placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player, threat?.enemy.position);
                 if (placement && player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
                     player.buildings.push(new SubsidiaryFactory(placement, player));
                     didBuildStructure = true;
                 }
                 break;
             case 'swirler':
-                placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player);
+                placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player, threat?.enemy.position);
                 if (placement && player.spendEnergy(Constants.SWIRLER_COST)) {
                     player.buildings.push(new SpaceDustSwirler(placement, player));
                     didBuildStructure = true;
                 }
                 break;
             case 'minigun':
-                placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player);
+                placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player, threat?.enemy.position);
                 if (placement && player.spendEnergy(Constants.MINIGUN_COST)) {
                     player.buildings.push(new Minigun(placement, player));
                     didBuildStructure = true;
@@ -3545,20 +3545,145 @@ export class GameState {
         return bestMirror ? bestMirror.position : player.stellarForge.position;
     }
 
-    private findAiStructurePlacement(anchor: Vector2D, radiusPx: number, player: Player): Vector2D | null {
+    private findAiStructurePlacement(
+        anchor: Vector2D,
+        radiusPx: number,
+        player: Player,
+        threatPosition?: Vector2D
+    ): Vector2D | null {
+        const preferredTarget = threatPosition ?? this.getEnemyForgeForPlayer(player)?.position ?? anchor;
+        const preferredDirection = Math.atan2(preferredTarget.y - anchor.y, preferredTarget.x - anchor.x);
+        const activeInfluenceSources = this.getActiveInfluenceSourcesForPlayer(player);
+
+        let bestCandidate: Vector2D | null = null;
+        let bestScore = -Infinity;
+
+        for (const source of activeInfluenceSources) {
+            const directionToTarget = Math.atan2(
+                preferredTarget.y - source.position.y,
+                preferredTarget.x - source.position.x
+            );
+
+            // Candidate distances intentionally hug the influence edge first to keep expanding territory.
+            const distanceAttempts = [
+                source.radius - radiusPx - 8,
+                source.radius - radiusPx - 28,
+                source.radius - radiusPx - 52
+            ];
+
+            for (const candidateDistance of distanceAttempts) {
+                if (candidateDistance <= radiusPx) {
+                    continue;
+                }
+
+                for (let i = 0; i < 12; i++) {
+                    const angleRad = directionToTarget + (Math.PI / 6) * i;
+                    const candidate = new Vector2D(
+                        source.position.x + Math.cos(angleRad) * candidateDistance,
+                        source.position.y + Math.sin(angleRad) * candidateDistance
+                    );
+
+                    if (!this.isPointWithinPlayerInfluence(player, candidate)) {
+                        continue;
+                    }
+                    if (this.checkCollision(candidate, radiusPx)) {
+                        continue;
+                    }
+
+                    const score = this.scoreAiStructurePlacement(candidate, player, preferredTarget, source.radius, threatPosition);
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestCandidate = candidate;
+                    }
+                }
+            }
+        }
+
+        if (bestCandidate) {
+            return bestCandidate;
+        }
+
+        // Fallback ring search around anchor if influence-edge search was blocked by collisions.
         const baseAngleRad = player.buildings.length * Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD;
         const distancePx = Constants.AI_STRUCTURE_PLACEMENT_DISTANCE_PX + radiusPx;
         for (let i = 0; i < 8; i++) {
-            const angleRad = baseAngleRad + Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD * i;
+            const angleRad = baseAngleRad + Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD * i + preferredDirection;
             const candidate = new Vector2D(
                 anchor.x + Math.cos(angleRad) * distancePx,
                 anchor.y + Math.sin(angleRad) * distancePx
             );
+            if (!this.isPointWithinPlayerInfluence(player, candidate)) {
+                continue;
+            }
             if (!this.checkCollision(candidate, radiusPx)) {
                 return candidate;
             }
         }
         return null;
+    }
+
+    private getActiveInfluenceSourcesForPlayer(player: Player): { position: Vector2D; radius: number }[] {
+        const sources: { position: Vector2D; radius: number }[] = [];
+
+        if (player.stellarForge && this.isInfluenceSourceActive(player.stellarForge)) {
+            sources.push({
+                position: player.stellarForge.position,
+                radius: this.getInfluenceRadiusForSource(player.stellarForge)
+            });
+        }
+
+        for (const building of player.buildings) {
+            if (!this.isInfluenceSourceActive(building)) {
+                continue;
+            }
+            sources.push({
+                position: building.position,
+                radius: this.getInfluenceRadiusForSource(building)
+            });
+        }
+
+        return sources;
+    }
+
+    private scoreAiStructurePlacement(
+        candidate: Vector2D,
+        player: Player,
+        preferredTarget: Vector2D,
+        sourceRadius: number,
+        threatPosition?: Vector2D
+    ): number {
+        const forgePosition = player.stellarForge?.position;
+        const distanceToForge = forgePosition ? candidate.distanceTo(forgePosition) : 0;
+        const distanceToTarget = candidate.distanceTo(preferredTarget);
+
+        let nearestEdgeSlack = sourceRadius;
+        for (const source of this.getActiveInfluenceSourcesForPlayer(player)) {
+            const distanceToSource = candidate.distanceTo(source.position);
+            if (distanceToSource <= source.radius) {
+                nearestEdgeSlack = Math.min(nearestEdgeSlack, source.radius - distanceToSource);
+            }
+        }
+
+        const edgeExpansionScore = -nearestEdgeSlack * 3.0;
+        const territorialScore = distanceToForge * 0.25;
+        const targetScore = threatPosition ? -distanceToTarget * 0.35 : -distanceToTarget * 0.12;
+
+        const shadeWeight = this.getAiShadePlacementWeight(player.aiDifficulty);
+        const shadeScore = this.isPointInShadow(candidate) ? shadeWeight : 0;
+
+        return edgeExpansionScore + territorialScore + targetScore + shadeScore;
+    }
+
+    private getAiShadePlacementWeight(difficulty: Constants.AIDifficulty): number {
+        switch (difficulty) {
+            case Constants.AIDifficulty.HARD:
+                return 120;
+            case Constants.AIDifficulty.NORMAL:
+                return 45;
+            case Constants.AIDifficulty.EASY:
+            default:
+                return 10;
+        }
     }
 
     private findAiThreat(
