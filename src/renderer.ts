@@ -827,10 +827,16 @@ export class GameRenderer {
             ctx.globalCompositeOperation = 'source-over';
             ctx.clearRect(0, 0, screenWidth, screenHeight);
 
-            const nebulaGradient = ctx.createLinearGradient(0, 0, screenWidth, screenHeight);
-            nebulaGradient.addColorStop(0, 'rgba(54, 38, 90, 0.035)');
-            nebulaGradient.addColorStop(0.5, 'rgba(28, 50, 92, 0.025)');
-            nebulaGradient.addColorStop(1, 'rgba(72, 34, 58, 0.03)');
+            // Cache nebula gradient by screen dimensions to avoid recreation on every camera move
+            const nebulaKey = `nebula-${screenWidth}-${screenHeight}`;
+            let nebulaGradient = this.gradientCache.get(nebulaKey) as CanvasGradient | undefined;
+            if (!nebulaGradient) {
+                nebulaGradient = ctx.createLinearGradient(0, 0, screenWidth, screenHeight);
+                nebulaGradient.addColorStop(0, 'rgba(54, 38, 90, 0.035)');
+                nebulaGradient.addColorStop(0.5, 'rgba(28, 50, 92, 0.025)');
+                nebulaGradient.addColorStop(1, 'rgba(72, 34, 58, 0.03)');
+                this.gradientCache.set(nebulaKey, nebulaGradient);
+            }
             ctx.fillStyle = nebulaGradient;
             ctx.fillRect(0, 0, screenWidth, screenHeight);
 
@@ -2049,6 +2055,10 @@ export class GameRenderer {
             const distance = unit.position.distanceTo(position);
             if (distance < minDistance) {
                 minDistance = distance;
+                // Early exit if we're already very close (optimization)
+                if (minDistance < 10) {
+                    return 1.0;
+                }
             }
         }
 
@@ -2057,6 +2067,9 @@ export class GameRenderer {
             const distance = player.stellarForge.position.distanceTo(position);
             if (distance < minDistance) {
                 minDistance = distance;
+                if (minDistance < 10) {
+                    return 1.0;
+                }
             }
         }
 
@@ -2065,6 +2078,9 @@ export class GameRenderer {
             const distance = building.position.distanceTo(position);
             if (distance < minDistance) {
                 minDistance = distance;
+                if (minDistance < 10) {
+                    return 1.0;
+                }
             }
         }
 
@@ -5451,9 +5467,16 @@ export class GameRenderer {
 
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'multiply';
-        const coolVignette = this.ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
-        coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
-        coolVignette.addColorStop(1, 'rgba(138, 155, 210, 0.94)');
+        
+        // Cache cool vignette gradient by screen dimensions
+        const coolKey = `cool-vignette-${Math.round(width / 50)}-${Math.round(height / 50)}`;
+        let coolVignette = this.gradientCache.get(coolKey) as CanvasGradient | undefined;
+        if (!coolVignette) {
+            coolVignette = this.ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
+            coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            coolVignette.addColorStop(1, 'rgba(138, 155, 210, 0.94)');
+            this.gradientCache.set(coolKey, coolVignette);
+        }
         this.ctx.fillStyle = coolVignette;
         this.ctx.fillRect(0, 0, width, height);
 
@@ -5463,12 +5486,25 @@ export class GameRenderer {
                 continue;
             }
             const sunScreenPos = this.worldToScreen(sun.position);
-            const warmGradient = this.ctx.createRadialGradient(sunScreenPos.x, sunScreenPos.y, 0, sunScreenPos.x, sunScreenPos.y, Math.max(width, height) * 0.45);
-            warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');
-            warmGradient.addColorStop(0.34, 'rgba(255, 148, 62, 0.18)');
-            warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
+            
+            // Cache warm gradient by screen size (position-independent, applied per sun)
+            const maxDimension = Math.max(width, height);
+            const warmKey = `warm-gradient-${Math.round(maxDimension / 100)}`;
+            let warmGradient = this.gradientCache.get(warmKey) as CanvasGradient | undefined;
+            if (!warmGradient) {
+                warmGradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, maxDimension * 0.45);
+                warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');
+                warmGradient.addColorStop(0.34, 'rgba(255, 148, 62, 0.18)');
+                warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
+                this.gradientCache.set(warmKey, warmGradient);
+            }
+            
+            // Use translate to position the cached gradient
+            this.ctx.save();
+            this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
             this.ctx.fillStyle = warmGradient;
-            this.ctx.fillRect(0, 0, width, height);
+            this.ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, width, height);
+            this.ctx.restore();
         }
 
         this.ctx.restore();
@@ -11176,6 +11212,11 @@ export class GameRenderer {
      */
     private drawDamageNumbers(game: GameState): void {
         for (const damageNumber of game.damageNumbers) {
+            // Viewport culling: skip off-screen damage numbers
+            if (!this.isWithinViewBounds(damageNumber.position, 100)) {
+                continue;
+            }
+            
             const screenPos = this.worldToScreen(damageNumber.position);
             const opacity = damageNumber.getOpacity(game.gameTime);
             
