@@ -316,8 +316,9 @@ export class GameRenderer {
     
     // Gradient caching bucket sizes for performance optimization
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
-    private readonly BLOOM_RADIUS_SCALE_FACTOR = 1.1; // Bloom radius is 10% larger than ambient for softer edges
+    private readonly SUN_RAY_BLOOM_RADIUS_MULTIPLIER = 1.1; // Bloom radius is 10% larger than ambient for softer edges
     private readonly SHAFT_LENGTH_BUCKET_SIZE = 50; // px - bucket size for sun shaft gradient caching
+    private readonly SHAFT_CACHE_KEY_LAYER_OFFSET = 10; // Multiplier to ensure layer flag doesn't collide with length bucket values
     
     // Sun shaft gradient cache persisted across texture generations
     private sunShaftGradientCache = new Map<number, {softEdge: CanvasGradient, spine: CanvasGradient}>();
@@ -2667,9 +2668,6 @@ export class GameRenderer {
             shaftContext.globalCompositeOperation = 'lighter';
             const shaftCount = isOuterLayer ? 32 : 20;
             
-            // Use instance-level cache key to include layer type
-            const layerKey = isOuterLayer ? 'outer' : 'inner';
-            
             for (let shaftIndex = 0; shaftIndex < shaftCount; shaftIndex++) {
                 const angle = (Math.PI * 2 * shaftIndex) / shaftCount + this.hashSigned(shaftIndex * 7.1 + (isOuterLayer ? 3 : 11)) * 0.09;
                 const shaftLength = (isOuterLayer ? 430 : 320) + this.hashNormalized(shaftIndex * 17.9) * (isOuterLayer ? 300 : 220);
@@ -2679,7 +2677,7 @@ export class GameRenderer {
                 const lengthBucket = Math.round(shaftLength / this.SHAFT_LENGTH_BUCKET_SIZE) * this.SHAFT_LENGTH_BUCKET_SIZE;
                 
                 // Create cache key that includes layer type and length bucket
-                const cacheKey = lengthBucket * 10 + (isOuterLayer ? 1 : 0);
+                const cacheKey = lengthBucket * this.SHAFT_CACHE_KEY_LAYER_OFFSET + (isOuterLayer ? 1 : 0);
                 
                 let gradients = this.sunShaftGradientCache.get(cacheKey);
                 if (!gradients) {
@@ -5024,7 +5022,7 @@ export class GameRenderer {
             this.ctx.restore();
 
             if (this.isFancyGraphicsEnabled) {
-                const bloomRadiusBucket = Math.round((maxRadius * this.BLOOM_RADIUS_SCALE_FACTOR) / this.SUN_RAY_RADIUS_BUCKET_SIZE) * this.SUN_RAY_RADIUS_BUCKET_SIZE;
+                const bloomRadiusBucket = Math.round((maxRadius * this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER) / this.SUN_RAY_RADIUS_BUCKET_SIZE) * this.SUN_RAY_RADIUS_BUCKET_SIZE;
                 const bloomCacheKey = `sun-ray-bloom-${bloomRadiusBucket}`;
                 const bloomGradient = this.getCachedRadialGradient(
                     bloomCacheKey,
