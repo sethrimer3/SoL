@@ -310,6 +310,7 @@ export class GameRenderer {
     private enemyVisibilityFrameDeltaSec = 0;
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
+    private shadowGradientColorStops = new Map<string, string[]>();
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
@@ -2923,41 +2924,63 @@ export class GameRenderer {
             
             // Draw minion path if it exists
             if (forge.minionPath.length > 0) {
-                this.ctx.strokeStyle = '#FFFF00'; // Yellow path
-                this.ctx.lineWidth = 3;
-                this.ctx.setLineDash([10, 5]); // Dashed line
-                this.ctx.beginPath();
+                // Add viewport culling margin to prevent pop-in
+                const viewportMargin = 100;
                 
-                // Start from the forge position
-                const startScreen = this.worldToScreen(forge.position);
-                this.ctx.moveTo(startScreen.x, startScreen.y);
-                
-                // Draw line through all waypoints
-                for (const waypoint of forge.minionPath) {
-                    const waypointScreen = this.worldToScreen(waypoint);
-                this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
+                // Check if forge or any waypoint is visible
+                let hasVisibleElement = this.isWithinViewBounds(forge.position, viewportMargin);
+                if (!hasVisibleElement) {
+                    for (const waypoint of forge.minionPath) {
+                        if (this.isWithinViewBounds(waypoint, viewportMargin)) {
+                            hasVisibleElement = true;
+                            break;
+                        }
+                    }
                 }
                 
-                this.ctx.stroke();
-                this.ctx.setLineDash([]); // Reset to solid line
-                
-                // Draw waypoint markers
-                this.ctx.fillStyle = '#FFFF00';
-                for (let i = 0; i < forge.minionPath.length; i++) {
-                    const waypoint = forge.minionPath[i];
-                    const waypointScreen = this.worldToScreen(waypoint);
+                // Only draw if something is visible
+                if (hasVisibleElement) {
+                    this.ctx.strokeStyle = '#FFFF00'; // Yellow path
+                    this.ctx.lineWidth = 3;
+                    this.ctx.setLineDash([10, 5]); // Dashed line
                     this.ctx.beginPath();
-                    this.ctx.arc(waypointScreen.x, waypointScreen.y, 5, 0, Math.PI * 2);
-                    this.ctx.fill();
                     
-                    // Draw number for waypoint
-                    if (i === forge.minionPath.length - 1) {
-                        // Last waypoint gets special marker
-                        this.ctx.strokeStyle = '#FFFF00';
-                        this.ctx.lineWidth = 2;
+                    // Start from the forge position
+                    const startScreen = this.worldToScreen(forge.position);
+                    this.ctx.moveTo(startScreen.x, startScreen.y);
+                    
+                    // Draw line through all waypoints for visual continuity
+                    // (We need the full path even if some waypoints are off-screen to avoid gaps)
+                    for (const waypoint of forge.minionPath) {
+                        const waypointScreen = this.worldToScreen(waypoint);
+                        this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
+                    }
+                    
+                    this.ctx.stroke();
+                    this.ctx.setLineDash([]); // Reset to solid line
+                    
+                    // Draw waypoint markers only for visible waypoints
+                    this.ctx.fillStyle = '#FFFF00';
+                    for (let i = 0; i < forge.minionPath.length; i++) {
+                        const waypoint = forge.minionPath[i];
+                        if (!this.isWithinViewBounds(waypoint, viewportMargin)) {
+                            continue;
+                        }
+                        
+                        const waypointScreen = this.worldToScreen(waypoint);
                         this.ctx.beginPath();
-                        this.ctx.arc(waypointScreen.x, waypointScreen.y, 8, 0, Math.PI * 2);
-                        this.ctx.stroke();
+                        this.ctx.arc(waypointScreen.x, waypointScreen.y, 5, 0, Math.PI * 2);
+                        this.ctx.fill();
+                        
+                        // Draw number for waypoint
+                        if (i === forge.minionPath.length - 1) {
+                            // Last waypoint gets special marker
+                            this.ctx.strokeStyle = '#FFFF00';
+                            this.ctx.lineWidth = 2;
+                            this.ctx.beginPath();
+                            this.ctx.arc(waypointScreen.x, waypointScreen.y, 8, 0, Math.PI * 2);
+                            this.ctx.stroke();
+                        }
                     }
                 }
             }
@@ -3748,22 +3771,29 @@ export class GameRenderer {
 
                 const underlineY = size * 0.45;
                 const underlineLength = wordWidth + glyphTargetSize * 0.6;
-                const particleRadius = Math.max(1, size * 0.08);
-                this.ctx.fillStyle = `rgba(255, 255, 220, 0.85)`;
-                for (let i = 0; i < this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT; i++) {
-                    const t = this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT > 1
-                        ? i / (this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT - 1)
-                        : 0.5;
-                    const driftSeed = glyphSeedBase + i * 2.7;
-                    const driftX = Math.sin(mirrorTimeSec * this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED + driftSeed)
-                        * particleRadius * 0.6;
-                    const driftY = Math.cos(mirrorTimeSec * (this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED * 0.8) + driftSeed)
-                        * particleRadius * 0.4;
-                    const particleX = (t - 0.5) * underlineLength + driftX;
-                    const particleY = underlineY + driftY;
-                    this.ctx.beginPath();
-                    this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
-                    this.ctx.fill();
+                
+                // Skip particles on low quality, reduce on medium
+                if (this.graphicsQuality !== 'low') {
+                    const particleCount = this.graphicsQuality === 'medium' 
+                        ? Math.ceil(this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT * 0.5)
+                        : this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT;
+                    const particleRadius = Math.max(1, size * 0.08);
+                    this.ctx.fillStyle = `rgba(255, 255, 220, 0.85)`;
+                    for (let i = 0; i < particleCount; i++) {
+                        const t = particleCount > 1
+                            ? i / (particleCount - 1)
+                            : 0.5;
+                        const driftSeed = glyphSeedBase + i * 2.7;
+                        const driftX = Math.sin(mirrorTimeSec * this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED + driftSeed)
+                            * particleRadius * 0.6;
+                        const driftY = Math.cos(mirrorTimeSec * (this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED * 0.8) + driftSeed)
+                            * particleRadius * 0.4;
+                        const particleX = (t - 0.5) * underlineLength + driftX;
+                        const particleY = underlineY + driftY;
+                        this.ctx.beginPath();
+                        this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
                 }
 
                 selectionWidth = underlineLength + glyphTargetSize;
@@ -3772,43 +3802,54 @@ export class GameRenderer {
                 const cloudRadius = size * 0.9;
                 const cloudDriftRadius = Math.max(1, size * 0.12);
                 const twoPi = Math.PI * 2;
-                for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT; i++) {
-                    const seed = glyphSeedBase + i * 12.7;
-                    const angle = this.getPseudoRandom(seed) * twoPi;
-                    const radius = this.getPseudoRandom(seed + 7.3) * cloudRadius;
-                    const driftAngle = mirrorTimeSec * 0.2 + this.getPseudoRandom(seed + 5.1) * twoPi;
-                    const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * cloudDriftRadius;
-                    const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * cloudDriftRadius;
-                    const spriteIndex = Math.floor(this.getPseudoRandom(seed + 9.6) * this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length);
-                    const spritePath = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[spriteIndex];
-                    const drewSprite = this.drawVelarisGraphemeSprite(
-                        spritePath,
-                        offsetX,
-                        offsetY,
-                        glyphTargetSize,
-                        glyphColor
-                    );
-                    if (!drewSprite) {
-                        this.ctx.fillStyle = glyphColor;
+                
+                // Skip expensive cloud rendering on low quality, reduce on medium
+                if (this.graphicsQuality !== 'low') {
+                    const glyphCount = this.graphicsQuality === 'medium'
+                        ? Math.ceil(this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT * 0.5)
+                        : this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT;
+                    
+                    for (let i = 0; i < glyphCount; i++) {
+                        const seed = glyphSeedBase + i * 12.7;
+                        const angle = this.getPseudoRandom(seed) * twoPi;
+                        const radius = this.getPseudoRandom(seed + 7.3) * cloudRadius;
+                        const driftAngle = mirrorTimeSec * 0.2 + this.getPseudoRandom(seed + 5.1) * twoPi;
+                        const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * cloudDriftRadius;
+                        const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * cloudDriftRadius;
+                        const spriteIndex = Math.floor(this.getPseudoRandom(seed + 9.6) * this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length);
+                        const spritePath = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[spriteIndex];
+                        const drewSprite = this.drawVelarisGraphemeSprite(
+                            spritePath,
+                            offsetX,
+                            offsetY,
+                            glyphTargetSize,
+                            glyphColor
+                        );
+                        if (!drewSprite) {
+                            this.ctx.fillStyle = glyphColor;
+                            this.ctx.beginPath();
+                            this.ctx.arc(offsetX, offsetY, glyphTargetSize * 0.2, 0, Math.PI * 2);
+                            this.ctx.fill();
+                        }
+                    }
+
+                    const particleCount = this.graphicsQuality === 'medium'
+                        ? Math.ceil(this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT * 0.5)
+                        : this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT;
+                    const particleRadius = Math.max(1, size * 0.07);
+                    this.ctx.fillStyle = `rgba(255, 255, 210, 0.6)`;
+                    for (let i = 0; i < particleCount; i++) {
+                        const seed = glyphSeedBase + i * 9.4;
+                        const angle = this.getPseudoRandom(seed + 1.1) * twoPi;
+                        const radius = this.getPseudoRandom(seed + 4.7) * cloudRadius;
+                        const driftAngle = mirrorTimeSec * 0.25 + this.getPseudoRandom(seed + 6.4) * twoPi;
+                        const driftRadius = cloudDriftRadius * 0.75;
+                        const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * driftRadius;
+                        const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * driftRadius;
                         this.ctx.beginPath();
-                        this.ctx.arc(offsetX, offsetY, glyphTargetSize * 0.2, 0, Math.PI * 2);
+                        this.ctx.arc(offsetX, offsetY, particleRadius, 0, Math.PI * 2);
                         this.ctx.fill();
                     }
-                }
-
-                const particleRadius = Math.max(1, size * 0.07);
-                this.ctx.fillStyle = `rgba(255, 255, 210, 0.6)`;
-                for (let i = 0; i < this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT; i++) {
-                    const seed = glyphSeedBase + i * 9.4;
-                    const angle = this.getPseudoRandom(seed + 1.1) * twoPi;
-                    const radius = this.getPseudoRandom(seed + 4.7) * cloudRadius;
-                    const driftAngle = mirrorTimeSec * 0.25 + this.getPseudoRandom(seed + 6.4) * twoPi;
-                    const driftRadius = cloudDriftRadius * 0.75;
-                    const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * driftRadius;
-                    const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * driftRadius;
-                    this.ctx.beginPath();
-                    this.ctx.arc(offsetX, offsetY, particleRadius, 0, Math.PI * 2);
-                    this.ctx.fill();
                 }
 
                 selectionWidth = size * 2;
@@ -3844,10 +3885,17 @@ export class GameRenderer {
 
         if (!drewSprite) {
             // Draw flat reflective surface (rectangle)
-            const surfaceGradient = this.ctx.createLinearGradient(0, -surfaceThickness / 2, 0, surfaceThickness / 2);
-            surfaceGradient.addColorStop(0, '#FFFFFF');
-            surfaceGradient.addColorStop(0.5, '#E0E0E0');
-            surfaceGradient.addColorStop(1, '#C0C0C0');
+            // Cache surface gradient by thickness
+            const thicknessBucket = Math.round(surfaceThickness / 5) * 5;
+            const gradientKey = `mirror-surface-${thicknessBucket}`;
+            let surfaceGradient = this.gradientCache.get(gradientKey);
+            if (!surfaceGradient) {
+                surfaceGradient = this.ctx.createLinearGradient(0, -thicknessBucket / 2, 0, thicknessBucket / 2);
+                surfaceGradient.addColorStop(0, '#FFFFFF');
+                surfaceGradient.addColorStop(0.5, '#E0E0E0');
+                surfaceGradient.addColorStop(1, '#C0C0C0');
+                this.gradientCache.set(gradientKey, surfaceGradient);
+            }
 
             this.ctx.fillStyle = surfaceGradient;
             this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
@@ -5459,7 +5507,15 @@ export class GameRenderer {
         const ss1 = this.sunRayScreenPosC;
         const ss2 = this.sunRayScreenPosD;
 
+        // Add viewport culling margin for shadows
+        const shadowViewportMargin = 300; // Shadows can extend beyond asteroids
+        
         for (const asteroid of game.asteroids) {
+            // Skip off-screen asteroids
+            if (!this.isWithinViewBounds(asteroid.position, shadowViewportMargin)) {
+                continue;
+            }
+            
             const worldVertices = asteroid.getWorldVertices();
             const vertexCount = worldVertices.length;
 
@@ -5512,6 +5568,11 @@ export class GameRenderer {
         this.ctx.save();
 
         for (const asteroid of game.asteroids) {
+            // Skip off-screen asteroids (use same culling margin)
+            if (!this.isWithinViewBounds(asteroid.position, shadowViewportMargin)) {
+                continue;
+            }
+            
             const worldVertices = asteroid.getWorldVertices();
             const vertexCount = worldVertices.length;
 
@@ -5577,11 +5638,27 @@ export class GameRenderer {
         const farMidX = (farA.x + farB.x) * 0.5;
         const farMidY = (farA.y + farB.y) * 0.5;
 
+        // Cache key based on alpha values and color (gradient parameters)
+        // Length varies but alpha composition is consistent
+        const gradientKey = `shadow-gradient-${color}-${nearAlpha}-${midAlpha}`;
+        
+        // Check if we have the color stop configuration cached
+        let colorStops = this.shadowGradientColorStops.get(gradientKey);
+        if (!colorStops) {
+            const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
+            colorStops = [
+                `${rgbaPrefix}, ${nearAlpha})`,
+                `${rgbaPrefix}, ${midAlpha})`,
+                `${rgbaPrefix}, 0)`
+            ];
+            this.shadowGradientColorStops.set(gradientKey, colorStops);
+        }
+        
+        // Create gradient at actual position (avoids complex transforms)
         const gradient = this.ctx.createLinearGradient(nearMidX, nearMidY, farMidX, farMidY);
-        const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
-        gradient.addColorStop(0, `${rgbaPrefix}, ${nearAlpha})`);
-        gradient.addColorStop(0.6, `${rgbaPrefix}, ${midAlpha})`);
-        gradient.addColorStop(1, `${rgbaPrefix}, 0)`);
+        gradient.addColorStop(0, colorStops[0]);
+        gradient.addColorStop(0.6, colorStops[1]);
+        gradient.addColorStop(1, colorStops[2]);
 
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
