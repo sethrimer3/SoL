@@ -310,6 +310,7 @@ export class GameRenderer {
     private enemyVisibilityFrameDeltaSec = 0;
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
+    private shadowGradientColorStops = new Map<string, string[]>();
 
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
@@ -5509,7 +5510,15 @@ export class GameRenderer {
         const ss1 = this.sunRayScreenPosC;
         const ss2 = this.sunRayScreenPosD;
 
+        // Add viewport culling margin for shadows
+        const shadowViewportMargin = 300; // Shadows can extend beyond asteroids
+        
         for (const asteroid of game.asteroids) {
+            // Skip off-screen asteroids
+            if (!this.isWithinViewBounds(asteroid.position, shadowViewportMargin)) {
+                continue;
+            }
+            
             const worldVertices = asteroid.getWorldVertices();
             const vertexCount = worldVertices.length;
 
@@ -5562,6 +5571,11 @@ export class GameRenderer {
         this.ctx.save();
 
         for (const asteroid of game.asteroids) {
+            // Skip off-screen asteroids (use same culling margin)
+            if (!this.isWithinViewBounds(asteroid.position, shadowViewportMargin)) {
+                continue;
+            }
+            
             const worldVertices = asteroid.getWorldVertices();
             const vertexCount = worldVertices.length;
 
@@ -5627,11 +5641,27 @@ export class GameRenderer {
         const farMidX = (farA.x + farB.x) * 0.5;
         const farMidY = (farA.y + farB.y) * 0.5;
 
+        // Cache key based on alpha values and color (gradient parameters)
+        // Length varies but alpha composition is consistent
+        const gradientKey = `shadow-gradient-${color}-${nearAlpha}-${midAlpha}`;
+        
+        // Check if we have the color stop configuration cached
+        let colorStops = this.shadowGradientColorStops.get(gradientKey);
+        if (!colorStops) {
+            const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
+            colorStops = [
+                `${rgbaPrefix}, ${nearAlpha})`,
+                `${rgbaPrefix}, ${midAlpha})`,
+                `${rgbaPrefix}, 0)`
+            ];
+            this.shadowGradientColorStops.set(gradientKey, colorStops);
+        }
+        
+        // Create gradient at actual position (avoids complex transforms)
         const gradient = this.ctx.createLinearGradient(nearMidX, nearMidY, farMidX, farMidY);
-        const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
-        gradient.addColorStop(0, `${rgbaPrefix}, ${nearAlpha})`);
-        gradient.addColorStop(0.6, `${rgbaPrefix}, ${midAlpha})`);
-        gradient.addColorStop(1, `${rgbaPrefix}, 0)`);
+        gradient.addColorStop(0, colorStops[0]);
+        gradient.addColorStop(0.6, colorStops[1]);
+        gradient.addColorStop(1, colorStops[2]);
 
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
