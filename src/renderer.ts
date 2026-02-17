@@ -5503,7 +5503,7 @@ export class GameRenderer {
             this.ctx.save();
             this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
             this.ctx.fillStyle = warmGradient;
-            this.ctx.fillRect(-width, -height, width * 2, height * 2);
+            this.ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, width, height);
             this.ctx.restore();
         }
 
