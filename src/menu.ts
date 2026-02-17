@@ -18,6 +18,7 @@ import {
     createTextInput 
 } from './menu/ui-helpers';
 import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { PlayerProfileManager } from './menu/player-profile-manager';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -91,6 +92,7 @@ export class MainMenu {
     private testLevelButton: HTMLButtonElement | null = null;
     private ladButton: HTMLButtonElement | null = null;
     private lanLobbyManager: LanLobbyManager = new LanLobbyManager(); // LAN lobby discovery manager
+    private playerProfileManager: PlayerProfileManager = new PlayerProfileManager(); // Player profile manager
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
@@ -328,14 +330,14 @@ export class MainMenu {
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
             graphicsQuality: 'ultra', // Default to ultra graphics
-            username: this.getOrGenerateUsername(), // Load or generate username
+            username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
         // Initialize online network manager for custom lobbies and matchmaking
-        const playerId = this.getOrGeneratePlayerId();
+        const playerId = this.playerProfileManager.getOrGeneratePlayerId();
         this.onlineNetworkManager = new OnlineNetworkManager(playerId);
         
         this.menuElement = this.createMenuElement();
@@ -638,52 +640,6 @@ export class MainMenu {
     /**
      * Generate a random username in the format "player#XXXX"
      */
-    private generateRandomUsername(): string {
-        const randomNumber = Math.floor(Math.random() * 10000);
-        return `player#${randomNumber.toString().padStart(4, '0')}`;
-    }
-
-    /**
-     * Get username from localStorage or generate a new one
-     */
-    private getOrGenerateUsername(): string {
-        const storedUsername = localStorage.getItem('sol_username');
-        if (storedUsername && storedUsername.trim() !== '') {
-            return storedUsername;
-        }
-        const newUsername = this.generateRandomUsername();
-        localStorage.setItem('sol_username', newUsername);
-        return newUsername;
-    }
-
-    /**
-     * Get or generate a unique player ID for online play
-     */
-    private getOrGeneratePlayerId(): string {
-        const storedPlayerId = localStorage.getItem('sol_player_id');
-        if (storedPlayerId && storedPlayerId.trim() !== '') {
-            return storedPlayerId;
-        }
-        // Generate a UUID using crypto API if available, otherwise fallback
-        let newPlayerId: string;
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            newPlayerId = crypto.randomUUID();
-        } else {
-            // Fallback for older browsers
-            newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        }
-        localStorage.setItem('sol_player_id', newPlayerId);
-        return newPlayerId;
-    }
-
-    /**
-     * Save username to localStorage
-     */
-    private saveUsername(username: string): void {
-        localStorage.setItem('sol_username', username);
-        this.settings.username = username;
-    }
-
     private async clearPlayerDataAndCache(): Promise<void> {
         localStorage.clear();
         sessionStorage.clear();
@@ -2699,7 +2655,8 @@ export class MainMenu {
                 this.settings.difficulty = value;
             },
             onUsernameChange: (value) => {
-                this.saveUsername(value);
+                this.playerProfileManager.saveUsername(value);
+                this.settings.username = value;
             },
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
@@ -2988,21 +2945,6 @@ export class MainMenu {
         return button;
     }
 
-    /**
-     * Validate and sanitize username
-     */
-    private validateUsername(username: string): string {
-        // Trim and limit length
-        let sanitized = username.trim().substring(0, 20);
-        
-        // If empty or invalid, generate random username
-        if (sanitized.length < 1) {
-            return this.generateRandomUsername();
-        }
-        
-        return sanitized;
-    }
-
     private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
         const input = document.createElement('input');
         input.type = 'text';
@@ -3022,7 +2964,7 @@ export class MainMenu {
 
         // Update on blur instead of every keystroke for efficiency
         input.addEventListener('blur', () => {
-            const validatedValue = this.validateUsername(input.value);
+            const validatedValue = this.playerProfileManager.validateUsername(input.value);
             input.value = validatedValue;
             input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
             onChange(validatedValue);
