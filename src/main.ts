@@ -2250,16 +2250,16 @@ class GameController {
                         const dragDeltaY = y - this.selectionStartScreen.y;
                         const dragLengthPx = Math.sqrt(dragDeltaX * dragDeltaX + dragDeltaY * dragDeltaY);
                         if (dragLengthPx > 0) {
-                            this.renderer.buildingAbilityArrowDirection = new Vector2D(
+                            this.renderer.setBuildingAbilityArrowDirection(new Vector2D(
                                 dragDeltaX / dragLengthPx,
                                 dragDeltaY / dragLengthPx
-                            );
+                            ));
                         } else {
-                            this.renderer.buildingAbilityArrowDirection = null;
+                            this.renderer.setBuildingAbilityArrowDirection(null);
                         }
                         this.renderer.buildingAbilityArrowLengthPx = dragLengthPx;
                     } else {
-                        this.renderer.buildingAbilityArrowDirection = null;
+                        this.renderer.setBuildingAbilityArrowDirection(null);
                         this.renderer.buildingAbilityArrowLengthPx = 0;
                     }
                     
@@ -3444,7 +3444,7 @@ class GameController {
             this.renderer.abilityArrowDirection = null;
             this.renderer.abilityArrowLengthPx = 0;
             this.renderer.buildingAbilityArrowStart = null;
-            this.renderer.buildingAbilityArrowDirection = null;
+            this.renderer.setBuildingAbilityArrowDirection(null);
             this.renderer.buildingAbilityArrowLengthPx = 0;
             this.renderer.highlightedButtonIndex = -1;
             this.endHold();

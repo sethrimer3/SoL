@@ -127,6 +127,7 @@ export class GameRenderer {
     public buildingAbilityArrowStart: Vector2D | null = null; // Arrow start for building ability casting
     public buildingAbilityArrowDirection: Vector2D | null = null; // Arrow direction for building ability casting
     public buildingAbilityArrowLengthPx: number = 0; // Arrow length for building ability casting
+    private buildingAbilityArrowAngle: number = 0; // Cached angle for building ability arrow
     public highlightedButtonIndex: number = -1; // Index of highlighted production button (-1 = none)
     public selectedUnits: Set<Unit> = new Set();
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
@@ -1129,6 +1130,19 @@ export class GameRenderer {
                worldPos.x <= this.viewMaxX + margin &&
                worldPos.y >= this.viewMinY - margin &&
                worldPos.y <= this.viewMaxY + margin;
+    }
+
+    /**
+     * Check if screen position is within viewport bounds
+     */
+    private isScreenPosWithinViewBounds(screenPos: { x: number; y: number }, margin: number = 0): boolean {
+        const dpr = window.devicePixelRatio || 1;
+        const viewportWidth = this.canvas.width / dpr;
+        const viewportHeight = this.canvas.height / dpr;
+        return screenPos.x >= -margin &&
+               screenPos.x <= viewportWidth + margin &&
+               screenPos.y >= -margin &&
+               screenPos.y <= viewportHeight + margin;
     }
 
     /**
@@ -2383,6 +2397,12 @@ export class GameRenderer {
      * Draw the universal unit/structure selection ring.
      */
     private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
+        // Viewport culling: skip if off-screen with margin for selection ring
+        const margin = radius + 20;
+        if (!this.isScreenPosWithinViewBounds(screenPos, margin)) {
+            return;
+        }
+
         const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
         const ringThickness = Math.max(1.5, this.zoom * 1.8);
         
@@ -8380,7 +8400,16 @@ export class GameRenderer {
         const timeScale = this.VELARIS_STARLING_CLOUD_TIME_SCALE
             + (polygonTimeScale - this.VELARIS_STARLING_CLOUD_TIME_SCALE) * state.shapeBlend;
         const scaledTimeSec = timeSec * timeScale;
-        const particleCount = this.VELARIS_STARLING_PARTICLE_COUNT;
+        
+        // Apply quality gates to particle count
+        let particleCount = this.VELARIS_STARLING_PARTICLE_COUNT;
+        if (this.graphicsQuality === 'low') {
+            // Skip particles entirely on low quality
+            return;
+        } else if (this.graphicsQuality === 'medium') {
+            // Reduce particle count by 50% on medium quality
+            particleCount = Math.floor(particleCount / 2);
+        }
 
         if (isInactive) {
             const graphemeIndex = Math.floor(
@@ -9394,6 +9423,12 @@ export class GameRenderer {
         game: GameState,
         displayColor: string
     ): void {
+        // Viewport culling: skip if off-screen with margin for effect radius
+        const margin = radius + 50;
+        if (!this.isScreenPosWithinViewBounds(screenPos, margin)) {
+            return;
+        }
+
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_bottom.png';
         const topSpritePath = 'ASSETS/sprites/RADIANT/structures/warpGate_top.png';
         const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
@@ -10537,19 +10572,27 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(position);
         const radius = Constants.GRAVE_SMALL_PARTICLE_SPLASH_RADIUS * this.zoom;
 
-        // Draw expanding circle for explosion
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, radius
-        );
-        gradient.addColorStop(0, 'rgba(255, 150, 50, 0.6)');
-        gradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
-        gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+        // Cache explosion gradient by radius bucket (10px increments)
+        const radiusBucket = Math.round(radius / 10) * 10;
+        const cacheKey = `explosion-${radiusBucket}`;
+        let gradient = this.gradientCache.get(cacheKey);
+        
+        if (!gradient) {
+            gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, radiusBucket);
+            gradient.addColorStop(0, 'rgba(255, 150, 50, 0.6)');
+            gradient.addColorStop(0.5, 'rgba(255, 100, 0, 0.4)');
+            gradient.addColorStop(1, 'rgba(255, 50, 0, 0)');
+            this.gradientCache.set(cacheKey, gradient);
+        }
 
+        // Use translate to position cached gradient
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
+        this.ctx.restore();
     }
 
     /**
@@ -10842,8 +10885,8 @@ export class GameRenderer {
         this.ctx.lineTo(arrowEndX, arrowEndY);
         this.ctx.stroke();
 
-        // Draw arrowhead
-        const angle = Math.atan2(this.buildingAbilityArrowDirection.y, this.buildingAbilityArrowDirection.x);
+        // Draw arrowhead using cached angle (calculated when direction is set)
+        const angle = this.buildingAbilityArrowAngle;
         const arrowHeadLength = 20;
         const arrowHeadAngle = Math.PI / 6; // 30 degrees
 
@@ -10866,6 +10909,17 @@ export class GameRenderer {
         this.ctx.arc(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y, 8, 0, Math.PI * 2);
         this.ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
         this.ctx.fill();
+    }
+
+    /**
+     * Set building ability arrow direction and cache angle calculation
+     */
+    setBuildingAbilityArrowDirection(direction: Vector2D | null): void {
+        this.buildingAbilityArrowDirection = direction;
+        if (direction) {
+            // Cache angle calculation to avoid expensive Math.atan2 every frame
+            this.buildingAbilityArrowAngle = Math.atan2(direction.y, direction.x);
+        }
     }
 
     /**
