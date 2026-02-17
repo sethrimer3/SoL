@@ -535,6 +535,11 @@ export class GameRenderer {
             const parallaxX = cameraX * layer.parallaxFactor;
             const parallaxY = cameraY * layer.parallaxFactor;
             const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
+            
+            // Pre-compute depth-based alpha and size multipliers
+            const depthAlpha = 0.5 + depthScale * 0.5;
+            const depthSizeMultiplier = 0.84 + depthScale * 0.62;
+            const haloAlphaMultiplier = 0.56 + depthScale * 0.44;
 
             for (const star of layer.stars) {
                 const screenX = centerX + (star.x - parallaxX);
@@ -547,12 +552,12 @@ export class GameRenderer {
                 }
 
                 const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
-                const alpha = star.brightness * flicker * (0.5 + depthScale * 0.5);
-                const renderedSizePx = star.sizePx * (0.84 + depthScale * 0.62);
+                const alpha = star.brightness * flicker * depthAlpha;
+                const renderedSizePx = star.sizePx * depthSizeMultiplier;
                 const cacheIndex = star.colorIndex;
 
                 const haloRadiusPx = renderedSizePx * star.haloScale;
-                this.ctx.globalAlpha = alpha * (0.56 + depthScale * 0.44);
+                this.ctx.globalAlpha = alpha * haloAlphaMultiplier;
                 this.ctx.drawImage(
                     this.reworkedStarHaloCacheByPalette[cacheIndex],
                     wrappedX - haloRadiusPx,
@@ -571,7 +576,8 @@ export class GameRenderer {
                     coreRadiusPx * 2
                 );
 
-                if (star.hasChromaticAberration) {
+                // Only render chromatic aberration on medium+ quality
+                if (star.hasChromaticAberration && this.graphicsQuality !== 'low') {
                     this.renderStarChromaticAberration(wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb, this.ctx);
                 }
             }
@@ -2652,30 +2658,46 @@ export class GameRenderer {
             shaftContext.translate(shaftCenterX, shaftCenterY);
             shaftContext.globalCompositeOperation = 'lighter';
             const shaftCount = isOuterLayer ? 32 : 20;
+            
+            // Pre-cache gradients for common shaft lengths to avoid re-creating them
+            const cachedGradients = new Map<number, {softEdge: CanvasGradient, spine: CanvasGradient}>();
+            
             for (let shaftIndex = 0; shaftIndex < shaftCount; shaftIndex++) {
                 const angle = (Math.PI * 2 * shaftIndex) / shaftCount + this.hashSigned(shaftIndex * 7.1 + (isOuterLayer ? 3 : 11)) * 0.09;
                 const shaftLength = (isOuterLayer ? 430 : 320) + this.hashNormalized(shaftIndex * 17.9) * (isOuterLayer ? 300 : 220);
                 const shaftWidth = (isOuterLayer ? 22 : 16) + this.hashNormalized(shaftIndex * 9.3 + 4.7) * (isOuterLayer ? 48 : 26);
+                
+                // Bucket shaft length to reduce unique gradients (50px buckets)
+                const lengthBucket = Math.round(shaftLength / 50) * 50;
+                
+                let gradients = cachedGradients.get(lengthBucket);
+                if (!gradients) {
+                    const softEdgeGradient = shaftContext.createLinearGradient(0, 0, lengthBucket, 0);
+                    softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                    softEdgeGradient.addColorStop(0.16, isOuterLayer ? 'rgba(255, 138, 20, 0.4)' : 'rgba(255, 116, 18, 0.42)');
+                    softEdgeGradient.addColorStop(0.46, isOuterLayer ? 'rgba(242, 92, 15, 0.28)' : 'rgba(217, 71, 12, 0.3)');
+                    softEdgeGradient.addColorStop(0.78, 'rgba(183, 55, 10, 0.14)');
+                    softEdgeGradient.addColorStop(1, 'rgba(183, 55, 10, 0)');
+                    
+                    const spineGradient = shaftContext.createLinearGradient(0, 0, lengthBucket * 0.92, 0);
+                    spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.46)' : 'rgba(255, 178, 26, 0.56)');
+                    spineGradient.addColorStop(0.25, isOuterLayer ? 'rgba(255, 163, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
+                    spineGradient.addColorStop(0.58, isOuterLayer ? 'rgba(255, 116, 18, 0.3)' : 'rgba(242, 92, 15, 0.36)');
+                    spineGradient.addColorStop(1, 'rgba(217, 71, 12, 0)');
+                    
+                    gradients = { softEdge: softEdgeGradient, spine: spineGradient };
+                    cachedGradients.set(lengthBucket, gradients);
+                }
+                
                 shaftContext.save();
                 shaftContext.rotate(angle);
 
-                const softEdgeGradient = shaftContext.createLinearGradient(0, 0, shaftLength, 0);
-                softEdgeGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
-                softEdgeGradient.addColorStop(0.16, isOuterLayer ? 'rgba(255, 138, 20, 0.4)' : 'rgba(255, 116, 18, 0.42)');
-                softEdgeGradient.addColorStop(0.46, isOuterLayer ? 'rgba(242, 92, 15, 0.28)' : 'rgba(217, 71, 12, 0.3)');
-                softEdgeGradient.addColorStop(0.78, 'rgba(183, 55, 10, 0.14)');
-                softEdgeGradient.addColorStop(1, 'rgba(183, 55, 10, 0)');
-                shaftContext.fillStyle = softEdgeGradient;
+                shaftContext.fillStyle = gradients.softEdge;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.5, 0, shaftLength * 0.52, shaftWidth * 0.5, 0, 0, Math.PI * 2);
                 shaftContext.fill();
 
-                const spineGradient = shaftContext.createLinearGradient(0, 0, shaftLength * 0.92, 0);
-                spineGradient.addColorStop(0, isOuterLayer ? 'rgba(255, 178, 26, 0.46)' : 'rgba(255, 178, 26, 0.56)');
-                spineGradient.addColorStop(0.25, isOuterLayer ? 'rgba(255, 163, 26, 0.42)' : 'rgba(255, 163, 26, 0.48)');
-                spineGradient.addColorStop(0.58, isOuterLayer ? 'rgba(255, 116, 18, 0.3)' : 'rgba(242, 92, 15, 0.36)');
-                spineGradient.addColorStop(1, 'rgba(217, 71, 12, 0)');
-                shaftContext.fillStyle = spineGradient;
+                shaftContext.fillStyle = gradients.spine;
                 shaftContext.beginPath();
                 shaftContext.ellipse(shaftLength * 0.45, 0, shaftLength * 0.47, Math.max(2, shaftWidth * 0.13), 0, 0, Math.PI * 2);
                 shaftContext.fill();
@@ -4968,34 +4990,47 @@ export class GameRenderer {
             const maxRadius = Math.max(this.canvas.width, this.canvas.height) * 2;
             const shadowQuads = this.getSunShadowQuadsCached(sun, game);
 
-            // Create radial gradient centered on the sun
-            const gradient = this.ctx.createRadialGradient(
-                sunScreenPos.x, sunScreenPos.y, 0,
-                sunScreenPos.x, sunScreenPos.y, maxRadius
+            // Create cached radial gradient centered on the sun
+            const radiusBucket = Math.round(maxRadius / 500) * 500;
+            const cacheKey = `sun-ray-ambient-${radiusBucket}`;
+            const gradient = this.getCachedRadialGradient(
+                cacheKey,
+                0, 0, 0,
+                0, 0, radiusBucket,
+                [
+                    { offset: 0, color: 'rgba(255, 192, 96, 0.42)' },
+                    { offset: 0.18, color: 'rgba(255, 166, 70, 0.28)' },
+                    { offset: 0.42, color: 'rgba(255, 140, 56, 0.16)' },
+                    { offset: 1, color: 'rgba(255, 120, 45, 0)' }
+                ]
             );
 
-            // Use warmer color scheme and brighter shade edges for cinematic lighting
-            gradient.addColorStop(0, 'rgba(255, 192, 96, 0.42)');
-            gradient.addColorStop(0.18, 'rgba(255, 166, 70, 0.28)');
-            gradient.addColorStop(0.42, 'rgba(255, 140, 56, 0.16)');
-            gradient.addColorStop(1, 'rgba(255, 120, 45, 0)');
+            this.ctx.save();
+            this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
 
             this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, this.canvas.width, this.canvas.height);
+            this.ctx.restore();
 
             if (this.isFancyGraphicsEnabled) {
-                const bloomGradient = this.ctx.createRadialGradient(
-                    sunScreenPos.x, sunScreenPos.y, 0,
-                    sunScreenPos.x, sunScreenPos.y, maxRadius * 1.1
+                const bloomRadiusBucket = Math.round((maxRadius * 1.1) / 500) * 500;
+                const bloomCacheKey = `sun-ray-bloom-${bloomRadiusBucket}`;
+                const bloomGradient = this.getCachedRadialGradient(
+                    bloomCacheKey,
+                    0, 0, 0,
+                    0, 0, bloomRadiusBucket,
+                    [
+                        { offset: 0, color: 'rgba(255, 232, 178, 0.68)' },
+                        { offset: 0.16, color: 'rgba(255, 190, 104, 0.44)' },
+                        { offset: 0.38, color: 'rgba(255, 146, 74, 0.24)' },
+                        { offset: 1, color: 'rgba(255, 122, 58, 0)' }
+                    ]
                 );
-                bloomGradient.addColorStop(0, 'rgba(255, 232, 178, 0.68)');
-                bloomGradient.addColorStop(0.16, 'rgba(255, 190, 104, 0.44)');
-                bloomGradient.addColorStop(0.38, 'rgba(255, 146, 74, 0.24)');
-                bloomGradient.addColorStop(1, 'rgba(255, 122, 58, 0)');
                 this.ctx.save();
+                this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
                 this.ctx.globalCompositeOperation = 'screen';
                 this.ctx.fillStyle = bloomGradient;
-                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, this.canvas.width, this.canvas.height);
                 this.ctx.restore();
             }
 
@@ -7021,19 +7056,26 @@ export class GameRenderer {
         this.ctx.stroke();
         this.ctx.globalAlpha = 1;
         
-        // Draw orb core
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, Constants.RADIANT_ORB_RADIUS
+        // Draw orb core with cached gradient
+        const cacheKey = `radiant-orb-${color}-${Constants.RADIANT_ORB_RADIUS}`;
+        const gradient = this.getCachedRadialGradient(
+            cacheKey,
+            0, 0, 0,
+            0, 0, Constants.RADIANT_ORB_RADIUS,
+            [
+                { offset: 0, color: '#FFFFFF' },
+                { offset: 0.4, color: color },
+                { offset: 1, color: `${color}88` }
+            ]
         );
-        gradient.addColorStop(0, '#FFFFFF');
-        gradient.addColorStop(0.4, color);
-        gradient.addColorStop(1, `${color}88`);
         
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, Constants.RADIANT_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, Constants.RADIANT_ORB_RADIUS, 0, Math.PI * 2);
         this.ctx.fill();
+        this.ctx.restore();
     }
 
     private drawVelarisOrb(orb: InstanceType<typeof VelarisOrb>): void {
@@ -7052,19 +7094,26 @@ export class GameRenderer {
         this.ctx.stroke();
         this.ctx.globalAlpha = 1;
         
-        // Draw orb core with darker appearance
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, Constants.VELARIS_ORB_RADIUS
+        // Draw orb core with darker appearance and cached gradient
+        const cacheKey = `velaris-orb-${color}-${Constants.VELARIS_ORB_RADIUS}`;
+        const gradient = this.getCachedRadialGradient(
+            cacheKey,
+            0, 0, 0,
+            0, 0, Constants.VELARIS_ORB_RADIUS,
+            [
+                { offset: 0, color: '#444444' },
+                { offset: 0.4, color: color },
+                { offset: 1, color: `${color}66` }
+            ]
         );
-        gradient.addColorStop(0, '#444444');
-        gradient.addColorStop(0.4, color);
-        gradient.addColorStop(1, `${color}66`);
         
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, Constants.VELARIS_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, Constants.VELARIS_ORB_RADIUS, 0, Math.PI * 2);
         this.ctx.fill();
+        this.ctx.restore();
     }
 
 
@@ -7143,19 +7192,26 @@ export class GameRenderer {
         this.ctx.stroke();
         this.ctx.globalAlpha = 1;
         
-        // Draw orb core
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, Constants.AURUM_ORB_RADIUS
+        // Draw orb core with cached gradient
+        const cacheKey = `aurum-orb-${color}-${Constants.AURUM_ORB_RADIUS}`;
+        const gradient = this.getCachedRadialGradient(
+            cacheKey,
+            0, 0, 0,
+            0, 0, Constants.AURUM_ORB_RADIUS,
+            [
+                { offset: 0, color: '#FFD700' }, // Golden
+                { offset: 0.4, color: color },
+                { offset: 1, color: `${color}88` }
+            ]
         );
-        gradient.addColorStop(0, '#FFD700'); // Golden
-        gradient.addColorStop(0.4, color);
-        gradient.addColorStop(1, `${color}88`);
         
+        this.ctx.save();
+        this.ctx.translate(screenPos.x, screenPos.y);
         this.ctx.fillStyle = gradient;
         this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, Constants.AURUM_ORB_RADIUS, 0, Math.PI * 2);
+        this.ctx.arc(0, 0, Constants.AURUM_ORB_RADIUS, 0, Math.PI * 2);
         this.ctx.fill();
+        this.ctx.restore();
         
         // Draw health bar
         const healthRatio = orb.health / orb.maxHealth;
