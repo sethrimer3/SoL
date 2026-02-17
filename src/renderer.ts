@@ -142,6 +142,8 @@ export class GameRenderer {
     public isWarpGatePlacementMode: boolean = false;
     public canCreateWarpGateFromMirrors: boolean = false;
     public isSelectedMirrorInSunlight: boolean = false;
+    public warpGatePreviewWorldPos: Vector2D | null = null; // Position where warp gate would be placed
+    public isWarpGatePreviewValid: boolean = false; // Whether the preview position is valid
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -609,17 +611,30 @@ export class GameRenderer {
         // Get device pixel ratio for high-DPI displays (retina, mobile, etc.)
         const dpr = window.devicePixelRatio || 1;
         
-        // Set canvas physical size to match display size * device pixel ratio
-        this.canvas.width = window.innerWidth * dpr;
-        this.canvas.height = window.innerHeight * dpr;
+        // Apply resolution scaling based on quality setting
+        // Low quality: 0.75x resolution (56% pixel count)
+        // Medium quality: 0.9x resolution (81% pixel count)
+        // High/Ultra: Full resolution
+        let resolutionScale = 1.0;
+        if (this.graphicsQuality === 'low') {
+            resolutionScale = 0.75;
+        } else if (this.graphicsQuality === 'medium') {
+            resolutionScale = 0.9;
+        }
+        
+        const effectiveDpr = dpr * resolutionScale;
+        
+        // Set canvas physical size to match display size * effective DPR
+        this.canvas.width = window.innerWidth * effectiveDpr;
+        this.canvas.height = window.innerHeight * effectiveDpr;
         
         // Set canvas CSS size to match window size
         this.canvas.style.width = `${window.innerWidth}px`;
         this.canvas.style.height = `${window.innerHeight}px`;
         
-        // Reset transform and scale the context to match device pixel ratio
+        // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        this.ctx.scale(dpr, dpr);
+        this.ctx.scale(effectiveDpr, effectiveDpr);
     }
 
     /**
@@ -4376,7 +4391,10 @@ export class GameRenderer {
 
             this.ctx.save();
             this.ctx.globalCompositeOperation = 'multiply';
-            this.ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+            // Skip expensive blur filter on low quality
+            if (this.graphicsQuality !== 'low') {
+                this.ctx.filter = `blur(${blurPx.toFixed(2)}px)`;
+            }
 
             const shadowLayers = 3;
             for (let i = 0; i < shadowLayers; i++) {
@@ -6243,6 +6261,46 @@ export class GameRenderer {
         // Reset text alignment
         this.ctx.textAlign = 'left';
         this.ctx.textBaseline = 'alphabetic';
+    }
+
+    private drawWarpGatePlacementPreview(game: GameState): void {
+        if (!this.isWarpGatePlacementMode || !this.warpGatePreviewWorldPos) {
+            return;
+        }
+
+        const screenPos = this.worldToScreen(this.warpGatePreviewWorldPos);
+        const radius = Constants.WARP_GATE_RADIUS * this.zoom;
+
+        this.ctx.save();
+
+        // Draw the preview circle with color based on validity
+        if (this.isWarpGatePreviewValid) {
+            // Valid placement - cyan color
+            this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+        } else {
+            // Invalid placement - red color
+            this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+        }
+
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw a pulsing effect for valid placement
+        if (this.isWarpGatePreviewValid) {
+            const pulse = 0.3 + 0.2 * Math.sin(game.gameTime * 4);
+            this.ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius + 10 * this.zoom, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+
+        this.ctx.restore();
     }
 
     /**
@@ -12241,6 +12299,9 @@ export class GameRenderer {
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);
+
+        // Draw warp gate placement preview if in placement mode
+        this.drawWarpGatePlacementPreview(game);
 
         // Draw UI
         this.drawUI(game);

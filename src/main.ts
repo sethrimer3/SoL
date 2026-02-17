@@ -757,6 +757,12 @@ class GameController {
             return false;
         }
 
+        // Check if the position is within the player's influence field
+        if (!this.game.isPointWithinPlayerInfluence(player, worldPos)) {
+            console.log('Cannot place warp gate outside influence field');
+            return false;
+        }
+
         if (!this.canCreateWarpGateFromSelectedMirrors(worldPos)) {
             return false;
         }
@@ -3461,6 +3467,9 @@ class GameController {
             const screenPos = getCanvasPosition(e.clientX, e.clientY);
             lastMouseX = screenPos.x;
             lastMouseY = screenPos.y;
+            // Store on window for access in render method
+            (window as any).__lastMouseX = lastMouseX;
+            (window as any).__lastMouseY = lastMouseY;
             moveDrag(screenPos.x, screenPos.y, false);
         });
 
@@ -3504,6 +3513,9 @@ class GameController {
             if (e.touches.length === 1 && isMouseDown) {
                 e.preventDefault();
                 const touchPos = getCanvasPosition(e.touches[0].clientX, e.touches[0].clientY);
+                // Store on window for access in render method
+                (window as any).__lastMouseX = touchPos.x;
+                (window as any).__lastMouseY = touchPos.y;
                 moveDrag(touchPos.x, touchPos.y, false);
             } else if (e.touches.length === 2) {
                 e.preventDefault();
@@ -4166,6 +4178,30 @@ class GameController {
             this.renderer.canCreateWarpGateFromMirrors = canCreateWarpGate;
             this.renderer.isWarpGatePlacementMode = this.mirrorCommandMode === 'warpgate'
                 && canCreateWarpGate;
+            
+            // Update warp gate placement preview if in placement mode
+            if (this.renderer.isWarpGatePlacementMode) {
+                const player = this.getLocalPlayer();
+                if (player) {
+                    // Get the current mouse position in world coordinates
+                    // Note: lastMouseX and lastMouseY are defined in the setupInput method's closure
+                    // We need to convert screen to world coordinates
+                    const worldPos = this.renderer.screenToWorld(
+                        (window as any).__lastMouseX || 0,
+                        (window as any).__lastMouseY || 0
+                    );
+                    this.renderer.warpGatePreviewWorldPos = worldPos;
+                    
+                    // Check if the position is valid (within influence field and has line of sight)
+                    const withinInfluence = this.game.isPointWithinPlayerInfluence(player, worldPos);
+                    const hasLineOfSight = this.canCreateWarpGateFromSelectedMirrors(worldPos);
+                    this.renderer.isWarpGatePreviewValid = withinInfluence && hasLineOfSight;
+                }
+            } else {
+                this.renderer.warpGatePreviewWorldPos = null;
+                this.renderer.isWarpGatePreviewValid = false;
+            }
+            
             this.renderer.render(this.game);
         }
     }
