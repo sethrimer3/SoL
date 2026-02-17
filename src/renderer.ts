@@ -142,6 +142,8 @@ export class GameRenderer {
     public isWarpGatePlacementMode: boolean = false;
     public canCreateWarpGateFromMirrors: boolean = false;
     public isSelectedMirrorInSunlight: boolean = false;
+    public warpGatePreviewWorldPos: Vector2D | null = null; // Position where warp gate would be placed
+    public isWarpGatePreviewValid: boolean = false; // Whether the preview position is valid
     private tapEffects: Array<{position: Vector2D, progress: number}> = [];
     private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
@@ -6261,6 +6263,46 @@ export class GameRenderer {
         this.ctx.textBaseline = 'alphabetic';
     }
 
+    private drawWarpGatePlacementPreview(game: GameState): void {
+        if (!this.isWarpGatePlacementMode || !this.warpGatePreviewWorldPos) {
+            return;
+        }
+
+        const screenPos = this.worldToScreen(this.warpGatePreviewWorldPos);
+        const radius = Constants.WARP_GATE_RADIUS * this.zoom;
+
+        this.ctx.save();
+
+        // Draw the preview circle with color based on validity
+        if (this.isWarpGatePreviewValid) {
+            // Valid placement - cyan color
+            this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
+            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+        } else {
+            // Invalid placement - red color
+            this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
+        }
+
+        this.ctx.lineWidth = 3;
+        this.ctx.beginPath();
+        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.stroke();
+
+        // Draw a pulsing effect for valid placement
+        if (this.isWarpGatePreviewValid) {
+            const pulse = 0.3 + 0.2 * Math.sin(game.gameTime * 4);
+            this.ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
+            this.ctx.lineWidth = 2;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, radius + 10 * this.zoom, 0, Math.PI * 2);
+            this.ctx.stroke();
+        }
+
+        this.ctx.restore();
+    }
+
     /**
      * Draw a unit
      */
@@ -12257,6 +12299,9 @@ export class GameRenderer {
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);
+
+        // Draw warp gate placement preview if in placement mode
+        this.drawWarpGatePlacementPreview(game);
 
         // Draw UI
         this.drawUI(game);
