@@ -318,10 +318,10 @@ export class GameRenderer {
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
     private readonly SUN_RAY_BLOOM_RADIUS_MULTIPLIER = 1.1; // Bloom radius is 10% larger than ambient for softer edges
     private readonly SHAFT_LENGTH_BUCKET_SIZE = 50; // px - bucket size for sun shaft gradient caching
-    private readonly SHAFT_CACHE_KEY_LAYER_OFFSET = 10; // Multiplier to ensure layer flag doesn't collide with length bucket values
     
     // Sun shaft gradient cache persisted across texture generations
-    private sunShaftGradientCache = new Map<number, {softEdge: CanvasGradient, spine: CanvasGradient}>();
+    // Using string keys for clarity and to avoid potential numeric key collisions
+    private sunShaftGradientCache = new Map<string, {softEdge: CanvasGradient, spine: CanvasGradient}>();
     private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
@@ -2676,8 +2676,8 @@ export class GameRenderer {
                 // Bucket shaft length to reduce unique gradients using named constant
                 const lengthBucket = Math.round(shaftLength / this.SHAFT_LENGTH_BUCKET_SIZE) * this.SHAFT_LENGTH_BUCKET_SIZE;
                 
-                // Create cache key that includes layer type and length bucket
-                const cacheKey = lengthBucket * this.SHAFT_CACHE_KEY_LAYER_OFFSET + (isOuterLayer ? 1 : 0);
+                // Create string-based cache key to avoid numeric collisions
+                const cacheKey = `${lengthBucket}-${isOuterLayer ? 'outer' : 'inner'}`;
                 
                 let gradients = this.sunShaftGradientCache.get(cacheKey);
                 if (!gradients) {
