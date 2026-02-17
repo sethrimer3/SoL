@@ -108,6 +108,11 @@ type InfluenceRenderCircle = {
     color: string;
 };
 
+type ShaftGradientPair = {
+    softEdge: CanvasGradient;
+    spine: CanvasGradient;
+};
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -318,10 +323,12 @@ export class GameRenderer {
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
     private readonly SUN_RAY_BLOOM_RADIUS_MULTIPLIER = 1.1; // Bloom radius is 10% larger than ambient for softer edges
     private readonly SHAFT_LENGTH_BUCKET_SIZE = 50; // px - bucket size for sun shaft gradient caching
+    private readonly SHAFT_LAYER_OUTER = 'outer'; // Cache key identifier for outer shaft layer
+    private readonly SHAFT_LAYER_INNER = 'inner'; // Cache key identifier for inner shaft layer
     
     // Sun shaft gradient cache persisted across texture generations
     // Using string keys for clarity and to avoid potential numeric key collisions
-    private sunShaftGradientCache = new Map<string, {softEdge: CanvasGradient, spine: CanvasGradient}>();
+    private sunShaftGradientCache = new Map<string, ShaftGradientPair>();
     private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly UNIT_GLOW_ALPHA = 0.2;
@@ -2677,7 +2684,8 @@ export class GameRenderer {
                 const lengthBucket = Math.round(shaftLength / this.SHAFT_LENGTH_BUCKET_SIZE) * this.SHAFT_LENGTH_BUCKET_SIZE;
                 
                 // Create string-based cache key to avoid numeric collisions
-                const cacheKey = `${lengthBucket}-${isOuterLayer ? 'outer' : 'inner'}`;
+                const layerType = isOuterLayer ? this.SHAFT_LAYER_OUTER : this.SHAFT_LAYER_INNER;
+                const cacheKey = `${lengthBucket}-${layerType}`;
                 
                 let gradients = this.sunShaftGradientCache.get(cacheKey);
                 if (!gradients) {
