@@ -84,9 +84,11 @@ export class Starling extends Unit {
         this.assignedPath = path.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
         this.currentPathWaypointIndex = 0;
-        this.hasManualOrder = true;
+        // Path-following is resolved by updateAI; manual mode would skip that logic and freeze movement.
+        this.hasManualOrder = false;
         this.hasReachedFinalWaypoint = false;
-        this.rallyPoint = null; // Clear rally point when following a path
+        this.clearManualTarget();
+        this.rallyPoint = null; // updateAI will set this to the current waypoint on the next tick
     }
 
     private tryBlinkToward(target: Vector2D): void {
