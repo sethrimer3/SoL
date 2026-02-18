@@ -250,6 +250,7 @@ export class GameRenderer {
     public isUnitsLayerEnabled = true;
     public isProjectilesLayerEnabled = true;
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
+    private ultraSunParticleCacheBySun = new WeakMap<Sun, any>();
     private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
     private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
     private ultraLightDustTextureByKey = new Map<string, HTMLCanvasElement>();
