@@ -11,6 +11,7 @@ import { renderLensFlare } from './rendering/LensFlare';
 import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
+import { getFactionColor, getVelarisGraphemeSpritePath } from './render/faction-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -1147,16 +1148,7 @@ export class GameRenderer {
      * Get faction color
      */
     private getFactionColor(faction: Faction): string {
-        switch (faction) {
-            case Faction.RADIANT:
-                return '#FFD700'; // Gold
-            case Faction.AURUM:
-                return '#DAA520'; // Goldenrod
-            case Faction.VELARIS:
-                return '#9C27B0'; // Purple
-            default:
-                return '#FFFFFF';
-        }
+        return getFactionColor(faction);
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
@@ -1288,15 +1280,7 @@ export class GameRenderer {
     }
 
     private getVelarisGraphemeSpritePath(letter: string): string | null {
-        if (!letter) {
-            return null;
-        }
-        const upper = letter.toUpperCase();
-        const index = upper.charCodeAt(0) - 65;
-        if (index < 0 || index >= this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length) {
-            return null;
-        }
-        return this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[index];
+        return getVelarisGraphemeSpritePath(letter, this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS);
     }
 
     private getGraphemeMaskData(spritePath: string): ImageData | null {
