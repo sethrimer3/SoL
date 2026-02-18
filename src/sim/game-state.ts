@@ -7,6 +7,7 @@ import { VisionSystem } from './systems/vision-system';
 import { CommandProcessor } from './systems/command-processor';
 import { AISystem, AIContext } from './systems/ai-system';
 import { PhysicsSystem, PhysicsContext } from './systems/physics-system';
+import { ParticleSystem, ParticleContext } from './systems/particle-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -91,7 +92,7 @@ import {
 } from '../game-core';
 
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -262,7 +263,7 @@ export class GameState implements AIContext, PhysicsContext {
                 if (destroyedMirrors.length > 0) {
                     const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
                     for (const mirror of destroyedMirrors) {
-                        this.createDeathParticlesForMirror(mirror, color);
+                        ParticleSystem.createDeathParticlesForMirror(this, mirror, color);
                     }
                 }
                 player.solarMirrors = player.solarMirrors.filter(mirror => mirror.health > 0);
@@ -920,7 +921,7 @@ export class GameState implements AIContext, PhysicsContext {
             for (const deadUnit of deadUnits) {
                 // Create death particles for visual effect
                 const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                this.createDeathParticles(deadUnit, color);
+                ParticleSystem.createDeathParticles(this, deadUnit, color);
             }
             player.unitsLost += deadUnits.length;
             player.units = player.units.filter(unit => !unit.isDead());
@@ -1032,7 +1033,7 @@ export class GameState implements AIContext, PhysicsContext {
             for (const building of destroyedBuildings) {
                 // Create death particles for visual effect
                 const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                this.createDeathParticles(building, color);
+                ParticleSystem.createDeathParticles(this, building, color);
             }
             player.buildings = player.buildings.filter(building => !building.isDestroyed());
         }
@@ -1645,19 +1646,11 @@ export class GameState implements AIContext, PhysicsContext {
         this.laserBeams = this.laserBeams.filter(laser => !laser.update(deltaTime));
         
         // Update impact particles (visual effects only)
-        for (const particle of this.impactParticles) {
-            particle.update(deltaTime);
-        }
-        this.impactParticles = this.impactParticles.filter(particle => !particle.shouldDespawn());
-        
         // Update sparkle particles (regeneration visual effects)
-        for (const sparkle of this.sparkleParticles) {
-            sparkle.update(deltaTime);
-        }
-        this.sparkleParticles = this.sparkleParticles.filter(sparkle => !sparkle.shouldDespawn());
-        
         // Update death particles (breaking apart effect)
-        this.updateDeathParticles(deltaTime);
+        // Update disintegration particles
+        // Update shadow decoy particles
+        ParticleSystem.updateVisualEffectParticles(this, deltaTime);
         
         // Clean up old striker tower explosions (keep for 1 second)
         this.strikerTowerExplosions = this.strikerTowerExplosions.filter(
@@ -2080,12 +2073,6 @@ export class GameState implements AIContext, PhysicsContext {
         // Remove despawned decoys
         this.shadowDecoys = this.shadowDecoys.filter(decoy => !decoy.shouldDespawn);
         
-        // Update shadow decoy particles
-        for (const particle of this.shadowDecoyParticles) {
-            particle.update(deltaTime);
-        }
-        this.shadowDecoyParticles = this.shadowDecoyParticles.filter(p => !p.shouldDespawn());
-        
         // Update Sticky Bombs
         for (const bomb of this.stickyBombs) {
             bomb.update(deltaTime);
@@ -2258,12 +2245,6 @@ export class GameState implements AIContext, PhysicsContext {
             }
         }
         this.stickyLasers = this.stickyLasers.filter(laser => !laser.shouldDespawn());
-        
-        // Update disintegration particles
-        for (const particle of this.disintegrationParticles) {
-            particle.update(deltaTime);
-        }
-        this.disintegrationParticles = this.disintegrationParticles.filter(particle => !particle.shouldDespawn());
         
         // Update Radiant orbs
         for (const orb of this.radiantOrbs) {
@@ -2531,11 +2512,7 @@ export class GameState implements AIContext, PhysicsContext {
         this.deployedTurrets = this.deployedTurrets.filter(turret => !turret.isDead());
 
         // Update damage numbers
-        for (const damageNumber of this.damageNumbers) {
-            damageNumber.update(deltaTime);
-        }
-        // Remove expired damage numbers
-        this.damageNumbers = this.damageNumbers.filter(dn => !dn.isExpired(this.gameTime));
+        ParticleSystem.updateDamageNumbers(this, deltaTime);
     }
 
     /**
@@ -4165,144 +4142,6 @@ export class GameState implements AIContext, PhysicsContext {
      */
     executeCommands(commands: P2PGameCommand[]): void {
         CommandProcessor.executeCommands(commands, this);
-    }
-
-    /**
-     * Create death particles for an entity that has just died
-     * @param entity - The unit or building that died
-     * @param color - The player color to tint particles
-     */
-    private createDeathParticles(entity: Unit | Building, color: string): void {
-        const approximateRadiusPx = entity instanceof Building
-            ? entity.radius
-            : Math.max(entity.collisionRadiusPx, entity.isHero ? Constants.HERO_BUTTON_RADIUS_PX * 0.8 : entity.collisionRadiusPx);
-        this.spawnDeathParticles(entity.position, color, approximateRadiusPx, entity instanceof Unit && entity.isHero);
-    }
-
-    private createDeathParticlesForMirror(mirror: SolarMirror, color: string): void {
-        this.spawnDeathParticles(mirror.position, color, Constants.MIRROR_CLICK_RADIUS_PX, false);
-    }
-
-    private spawnDeathParticles(position: Vector2D, color: string, approximateRadiusPx: number, isHero: boolean): void {
-        const rng = getGameRNG();
-        const radiusFactor = Math.max(0.6, approximateRadiusPx / Constants.UNIT_RADIUS_PX);
-        const sizeFactor = Math.max(0.85, Math.min(3.2, radiusFactor));
-
-        const baseMinCount = isHero ? 14 : 6;
-        const baseMaxCount = isHero ? 24 : 12;
-        const particleCount = Math.max(
-            4,
-            Math.round(rng.nextInt(baseMinCount, baseMaxCount) * (0.8 + sizeFactor * 0.75))
-        );
-        const baseSize = Math.max(2.2, (6 + approximateRadiusPx * 0.28) * Constants.DEATH_PARTICLE_SIZE_SCALE);
-
-        const fadeStartTime = rng.nextFloat(5, 15);
-
-        for (let i = 0; i < particleCount; i++) {
-            const angle = (Math.PI * 2 * i) / particleCount + rng.nextFloat(-0.25, 0.25);
-            const speed = rng.nextFloat(48, 155) * (0.7 + sizeFactor * 0.25);
-
-            const velocity = new Vector2D(
-                Math.cos(angle) * speed,
-                Math.sin(angle) * speed
-            );
-
-            const fragment = document.createElement('canvas');
-            const size = rng.nextFloat(baseSize, baseSize * 2.0);
-            fragment.width = size;
-            fragment.height = size;
-            const ctx = fragment.getContext('2d');
-            if (ctx) {
-                ctx.fillStyle = color;
-                ctx.fillRect(0, 0, size, size);
-            }
-
-            const particle = new DeathParticle(
-                new Vector2D(position.x, position.y),
-                velocity,
-                rng.nextAngle(),
-                fragment,
-                fadeStartTime
-            );
-
-            this.deathParticles.push(particle);
-        }
-    }
-
-    private updateDeathParticles(deltaTime: number): void {
-        const collisionTargets: Array<{ position: Vector2D; radius: number }> = [];
-
-        for (const asteroid of this.asteroids) {
-            collisionTargets.push({ position: asteroid.position, radius: asteroid.size });
-        }
-
-        for (const player of this.players) {
-            if (player.stellarForge && !player.isDefeated()) {
-                collisionTargets.push({ position: player.stellarForge.position, radius: player.stellarForge.radius });
-            }
-            for (const building of player.buildings) {
-                if (!building.isDestroyed()) {
-                    collisionTargets.push({ position: building.position, radius: building.radius });
-                }
-            }
-            for (const mirror of player.solarMirrors) {
-                if (mirror.health > 0) {
-                    collisionTargets.push({ position: mirror.position, radius: Constants.MIRROR_CLICK_RADIUS_PX });
-                }
-            }
-            for (const unit of player.units) {
-                if (!unit.isDead()) {
-                    collisionTargets.push({ position: unit.position, radius: unit.collisionRadiusPx });
-                }
-            }
-        }
-
-        const mapHalf = this.mapSize / 2;
-
-        for (const deathParticle of this.deathParticles) {
-            deathParticle.update(deltaTime);
-
-            const particleRadius = Math.max(0.75, ((deathParticle.spriteFragment?.width ?? 2) * 0.5));
-
-            if (deathParticle.position.x - particleRadius < -mapHalf) {
-                deathParticle.position.x = -mapHalf + particleRadius;
-                deathParticle.bounce(1, 0, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
-            } else if (deathParticle.position.x + particleRadius > mapHalf) {
-                deathParticle.position.x = mapHalf - particleRadius;
-                deathParticle.bounce(-1, 0, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
-            }
-
-            if (deathParticle.position.y - particleRadius < -mapHalf) {
-                deathParticle.position.y = -mapHalf + particleRadius;
-                deathParticle.bounce(0, 1, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
-            } else if (deathParticle.position.y + particleRadius > mapHalf) {
-                deathParticle.position.y = mapHalf - particleRadius;
-                deathParticle.bounce(0, -1, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
-            }
-
-            for (const target of collisionTargets) {
-                const collisionDist = target.radius + particleRadius;
-                const dx = deathParticle.position.x - target.position.x;
-                const dy = deathParticle.position.y - target.position.y;
-                const distSq = dx * dx + dy * dy;
-
-                if (distSq < collisionDist * collisionDist && distSq > 0) {
-                    const dist = Math.sqrt(distSq);
-                    const nx = dx / dist;
-                    const ny = dy / dist;
-
-                    const overlap = collisionDist - dist;
-                    deathParticle.position.x += nx * overlap;
-                    deathParticle.position.y += ny * overlap;
-
-                    deathParticle.bounce(nx, ny, Constants.DEATH_PARTICLE_BOUNCE_RESTITUTION, Constants.DEATH_PARTICLE_BOUNCE_TANGENTIAL_DAMPING);
-                }
-            }
-        }
-
-        this.deathParticles = this.deathParticles.filter(
-            deathParticle => deathParticle.lifetime < deathParticle.fadeStartTime + 1.0 // Keep for 1 second after fade starts
-        );
     }
 
     getCombatTargetRadiusPx(target: CombatTarget): number {
