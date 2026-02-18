@@ -2,7 +2,10 @@
   "compilerOptions": {
     "target": "ES2015",
     "module": "ES2015",
-    "lib": ["ES2015", "DOM"],
+    "lib": [
+      "ES2015",
+      "DOM"
+    ],
     "outDir": "./dist",
     "strict": true,
     "esModuleInterop": true,
@@ -11,6 +14,12 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": [
+    "src/**/*",
+    "Supabase/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
 }

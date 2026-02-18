@@ -36,7 +36,7 @@ import { MenuAudioController } from './menu/menu-audio';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
 import { OnlineNetworkManager } from './online-network';
-import { getSupabaseConfig } from './supabase-config';
+import { getSupabaseConfig } from '../Supabase/supabase-config';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { 
     getMatchHistory, 
