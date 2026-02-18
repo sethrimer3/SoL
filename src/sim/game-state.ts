@@ -3,6 +3,7 @@
  */
 
 import { Vector2D, LightRay, applyKnockbackVelocity } from './math';
+import { VisionSystem } from './systems/vision-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -153,46 +154,15 @@ export class GameState {
     private readonly dustSpatialHashKeys: number[] = [];
 
     private getInfluenceRadiusForSource(source: StellarForge | Building): number {
-        if (source instanceof StellarForge || source instanceof SubsidiaryFactory) {
-            return Constants.INFLUENCE_RADIUS;
-        }
-        return Constants.INFLUENCE_RADIUS * Constants.BUILDING_INFLUENCE_RADIUS_MULTIPLIER;
+        return VisionSystem.getInfluenceRadiusForSource(source);
     }
 
     private isInfluenceSourceActive(source: StellarForge | Building): boolean {
-        if (source.health <= 0) {
-            return false;
-        }
-        if (source instanceof StellarForge) {
-            return source.isReceivingLight;
-        }
-        return true;
+        return VisionSystem.isInfluenceSourceActive(source);
     }
 
     public isPointWithinPlayerInfluence(player: Player, point: Vector2D): boolean {
-        if (player.isDefeated()) {
-            return false;
-        }
-
-        const forge = player.stellarForge;
-        if (forge && this.isInfluenceSourceActive(forge)) {
-            const distanceToForge = forge.position.distanceTo(point);
-            if (distanceToForge <= this.getInfluenceRadiusForSource(forge)) {
-                return true;
-            }
-        }
-
-        for (const building of player.buildings) {
-            if (!this.isInfluenceSourceActive(building)) {
-                continue;
-            }
-            const distanceToBuilding = building.position.distanceTo(point);
-            if (distanceToBuilding <= this.getInfluenceRadiusForSource(building)) {
-                return true;
-            }
-        }
-
-        return false;
+        return VisionSystem.isPointWithinPlayerInfluence(player, point);
     }
 
     private getClosestInfluenceAtPoint(point: Vector2D): { playerIndex: number; distance: number; radius: number } | null {
@@ -4066,17 +4036,13 @@ export class GameState {
     }
 
     private isUnitInSunlight(unit: Unit): boolean {
-        if (!this.isPointInShadow(unit.position)) {
-            return true;
-        }
-
-        for (const zone of this.splendorSunlightZones) {
-            if (zone.owner === unit.owner && zone.containsPoint(unit.position)) {
-                return true;
-            }
-        }
-
-        return false;
+        return VisionSystem.isUnitInSunlight(
+            unit.position,
+            unit.owner,
+            this.suns,
+            this.asteroids,
+            this.splendorSunlightZones
+        );
     }
 
     private getSplendorSphereObstacles(): { position: Vector2D; radius: number }[] {
@@ -4102,40 +4068,12 @@ export class GameState {
      * Returns true if the point is in shadow from all light sources
      */
     isPointInShadow(point: Vector2D): boolean {
-        for (const zone of this.splendorSunlightZones) {
-            if (zone.containsPoint(point)) {
-                return false;
-            }
-        }
-
-        // If no suns, everything is in shadow
-        if (this.suns.length === 0) return true;
-        
-        // Point must have line of sight to at least one sun to not be in shadow
-        for (const sun of this.suns) {
-            const direction = new Vector2D(
-                sun.position.x - point.x,
-                sun.position.y - point.y
-            ).normalize();
-            
-            const ray = new LightRay(point, direction);
-            const distanceToSun = point.distanceTo(sun.position);
-            
-            let hasLineOfSight = true;
-            for (const asteroid of this.asteroids) {
-                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-                if (intersectionDist !== null && intersectionDist < distanceToSun) {
-                    hasLineOfSight = false;
-                    break;
-                }
-            }
-            
-            if (hasLineOfSight) {
-                return false; // Can see at least one sun, not in shadow
-            }
-        }
-        
-        return true; // Cannot see any sun, in shadow
+        return VisionSystem.isPointInShadow(
+            point,
+            this.suns,
+            this.asteroids,
+            this.splendorSunlightZones
+        );
     }
 
     /**
@@ -4146,54 +4084,14 @@ export class GameState {
      * - They are in shadow but within player's influence radius
      */
     isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget): boolean {
-        // Special LaD (Light and Dark) visibility logic
-        const ladSun = this.suns.find(s => s.type === 'lad');
-        if (ladSun) {
-            return this.isObjectVisibleInLadMode(objectPos, player, object, ladSun);
-        }
-        
-        // Special case: if object is a Dagger unit and is cloaked
-        if (object && object instanceof Dagger) {
-            // Dagger is only visible to enemies if not cloaked
-            if (object.isCloakedToEnemies() && object.owner !== player) {
-                return false; // Cloaked Daggers are invisible to enemies
-            }
-        }
-        
-        // Check if object is in shadow
-        const inShadow = this.isPointInShadow(objectPos);
-        
-        // If not in shadow, always visible
-        if (!inShadow) {
-            return true;
-        }
-
-        // Splendor sunlight zones also reveal objects
-        for (const zone of this.splendorSunlightZones) {
-            if (zone.containsPoint(objectPos)) {
-                return true;
-            }
-        }
-        
-        // In shadow - check proximity to player units (using their line of sight)
-        for (const unit of player.units) {
-            const distance = unit.position.distanceTo(objectPos);
-            const visibilityRange = unit.lineOfSight || Constants.VISIBILITY_PROXIMITY_RANGE;
-            if (distance <= visibilityRange) {
-                return true;
-            }
-        }
-        
-        // In shadow - check if within player's influence
-        if (this.isPointWithinPlayerInfluence(player, objectPos)) {
-            return true;
-        }
-
-        if (this.isObjectRevealedBySpotlight(objectPos, player)) {
-            return true;
-        }
-        
-        return false; // Not visible: in shadow and not within proximity or influence range
+        return VisionSystem.isObjectVisibleToPlayer(
+            objectPos,
+            player,
+            this.suns,
+            this.asteroids,
+            this.splendorSunlightZones,
+            object
+        );
     }
 
     /**
@@ -4201,48 +4099,22 @@ export class GameState {
      * Public so it can be used by the renderer
      */
     getLadSide(position: Vector2D, ladSun: Sun): 'light' | 'dark' {
-        return position.x < ladSun.position.x ? 'light' : 'dark';
+        return VisionSystem.getLadSide(position, ladSun);
     }
 
     /**
      * Check visibility in LaD (Light and Dark) mode
      * Units are invisible to the enemy until they cross into enemy territory
      */
+    /**
+     * Check visibility in LaD (Light and Dark) mode
+     * Units are invisible to the enemy until they cross into enemy territory
+     */
     private isObjectVisibleInLadMode(objectPos: Vector2D, player: Player, object: CombatTarget | undefined, ladSun: Sun): boolean {
-        // Special case: if object is a Dagger unit and is cloaked
-        if (object && object instanceof Dagger) {
-            if (object.isCloakedToEnemies() && object.owner !== player) {
-                return false;
-            }
-        }
-        
-        // Determine which side each player is on based on their forge position
-        // Default to 'light' if forge is not yet initialized (early game state)
-        const playerSide = player.stellarForge 
-            ? this.getLadSide(player.stellarForge.position, ladSun)
-            : 'light';
-        
-        // Determine which side the object is on
-        const objectSide = this.getLadSide(objectPos, ladSun);
-        
-        // If object has an owner
-        if (object && 'owner' in object && object.owner) {
-            const objectOwner = object.owner as Player;
-            // Own units are always visible
-            if (objectOwner === player) {
-                return true;
-            }
-            
-            // Enemy units are only visible if they're on the player's side
-            if (objectSide === playerSide) {
-                return true;
-            }
-
-            return this.isObjectRevealedBySpotlight(objectPos, player);
-        }
-        
-        // Non-owned objects (buildings, etc.) use default visibility
-        return true;
+        // Delegate to VisionSystem
+        // Note: This method is kept as a private wrapper but now delegates to VisionSystem
+        // which handles the actual logic. This maintains compatibility with existing code.
+        return VisionSystem.isObjectVisibleToPlayer(objectPos, player, this.suns, this.asteroids, this.splendorSunlightZones, object);
     }
     
     /**
@@ -4466,50 +4338,21 @@ export class GameState {
         return targets;
     }
 
+    /**
+     * Check if a position is within a spotlight's cone
+     */
     private isPositionInSpotlightCone(
         spotlight: InstanceType<typeof Spotlight>,
         position: Vector2D,
         rangePx: number
     ): boolean {
-        const direction = spotlight.spotlightDirection;
-        if (!direction) {
-            return false;
-        }
-
-        const dx = position.x - spotlight.position.x;
-        const dy = position.y - spotlight.position.y;
-        const distanceSq = dx * dx + dy * dy;
-        if (distanceSq > rangePx * rangePx) {
-            return false;
-        }
-
-        const facingAngle = Math.atan2(direction.y, direction.x);
-        const angleToTarget = Math.atan2(dy, dx);
-        let angleDiff = angleToTarget - facingAngle;
-        while (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-        while (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-        return Math.abs(angleDiff) <= Constants.SPOTLIGHT_CONE_ANGLE_RAD / 2;
+        // Delegate to VisionSystem (kept for compatibility)
+        return VisionSystem['isPositionInSpotlightCone'](spotlight, position, rangePx);
     }
 
     private isObjectRevealedBySpotlight(objectPos: Vector2D, player: Player): boolean {
-        for (const unit of player.units) {
-            if (!(unit instanceof Spotlight)) {
-                continue;
-            }
-            if (!unit.isSpotlightActive() || !unit.spotlightDirection) {
-                continue;
-            }
-            const effectiveRangePx = unit.spotlightRangePx * unit.spotlightLengthFactor;
-            if (effectiveRangePx <= 0) {
-                continue;
-            }
-            if (this.isPositionInSpotlightCone(unit, objectPos, effectiveRangePx)) {
-                return true;
-            }
-        }
-
-        return false;
+        // Delegate to VisionSystem (kept for compatibility)
+        return VisionSystem['isObjectRevealedBySpotlight'](objectPos, player);
     }
     
     /**
@@ -6079,28 +5922,7 @@ export class GameState {
      * Check if a line segment (light path) is blocked by Velaris orb light-blocking fields
      */
     private isLightBlockedByVelarisField(start: Vector2D, end: Vector2D): boolean {
-        // Check all pairs of Velaris orbs
-        for (let i = 0; i < this.velarisOrbs.length; i++) {
-            for (let j = i + 1; j < this.velarisOrbs.length; j++) {
-                const orb1 = this.velarisOrbs[i];
-                const orb2 = this.velarisOrbs[j];
-                
-                // Only check orbs from the same owner
-                if (orb1.owner !== orb2.owner) continue;
-                
-                const distance = orb1.position.distanceTo(orb2.position);
-                const maxRange = Math.min(orb1.getRange(), orb2.getRange());
-                
-                if (distance <= maxRange) {
-                    // Check if light path intersects this orb field
-                    if (this.lineSegmentsIntersect(start, end, orb1.position, orb2.position)) {
-                        return true; // Light is blocked
-                    }
-                }
-            }
-        }
-        
-        return false; // Light is not blocked
+        return VisionSystem.isLightBlockedByVelarisField(start, end, this.velarisOrbs);
     }
 
     /**
@@ -6110,26 +5932,7 @@ export class GameState {
         p1: Vector2D, p2: Vector2D,
         p3: Vector2D, p4: Vector2D
     ): boolean {
-        const d1x = p2.x - p1.x;
-        const d1y = p2.y - p1.y;
-        const d2x = p4.x - p3.x;
-        const d2y = p4.y - p3.y;
-        
-        const denominator = d1x * d2y - d1y * d2x;
-        
-        // Lines are parallel
-        if (Math.abs(denominator) < 0.0001) {
-            return false;
-        }
-        
-        const d3x = p1.x - p3.x;
-        const d3y = p1.y - p3.y;
-        
-        const t1 = (d3x * d2y - d3y * d2x) / denominator;
-        const t2 = (d3x * d1y - d3y * d1x) / denominator;
-        
-        // Check if intersection point is within both line segments
-        return t1 >= 0 && t1 <= 1 && t2 >= 0 && t2 <= 1;
+        return VisionSystem.lineSegmentsIntersect(p1, p2, p3, p4);
     }
 
     private executeUnitAbilityCommand(player: Player, data: any): void {

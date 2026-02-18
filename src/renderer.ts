@@ -8,6 +8,11 @@ import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
+import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
+import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
+import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
+import { getFactionColor, getVelarisGraphemeSpritePath } from './render/faction-utilities';
+import { resolveAssetPath } from './render/asset-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -767,44 +772,11 @@ export class GameRenderer {
     }
 
     private valueNoise2D(x: number, y: number): number {
-        const ix = Math.floor(x);
-        const iy = Math.floor(y);
-        const fx = x - ix;
-        const fy = y - iy;
-
-        const smooth = (v: number) => v * v * (3 - 2 * v);
-        const hash = (hx: number, hy: number) => {
-            let n = hx * 374761393 + hy * 668265263;
-            n = (n ^ (n >> 13)) * 1274126177;
-            n ^= n >> 16;
-            return (n >>> 0) / 4294967295;
-        };
-        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-        const v00 = hash(ix, iy);
-        const v10 = hash(ix + 1, iy);
-        const v01 = hash(ix, iy + 1);
-        const v11 = hash(ix + 1, iy + 1);
-        const ux = smooth(fx);
-        const uy = smooth(fy);
-
-        return lerp(lerp(v00, v10, ux), lerp(v01, v11, ux), uy);
+        return valueNoise2D(x, y);
     }
 
     private fractalNoise2D(x: number, y: number, octaves: number): number {
-        let amplitude = 0.5;
-        let frequency = 1;
-        let value = 0;
-        let norm = 0;
-
-        for (let i = 0; i < octaves; i++) {
-            value += this.valueNoise2D(x * frequency, y * frequency) * amplitude;
-            norm += amplitude;
-            frequency *= 2;
-            amplitude *= 0.5;
-        }
-
-        return value / Math.max(0.0001, norm);
+        return fractalNoise2D(x, y, octaves);
     }
 
 
@@ -1177,16 +1149,7 @@ export class GameRenderer {
      * Get faction color
      */
     private getFactionColor(faction: Faction): string {
-        switch (faction) {
-            case Faction.RADIANT:
-                return '#FFD700'; // Gold
-            case Faction.AURUM:
-                return '#DAA520'; // Goldenrod
-            case Faction.VELARIS:
-                return '#9C27B0'; // Purple
-            default:
-                return '#FFFFFF';
-        }
+        return getFactionColor(faction);
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
@@ -1318,15 +1281,7 @@ export class GameRenderer {
     }
 
     private getVelarisGraphemeSpritePath(letter: string): string | null {
-        if (!letter) {
-            return null;
-        }
-        const upper = letter.toUpperCase();
-        const index = upper.charCodeAt(0) - 65;
-        if (index < 0 || index >= this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length) {
-            return null;
-        }
-        return this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[index];
+        return getVelarisGraphemeSpritePath(letter, this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS);
     }
 
     private getGraphemeMaskData(spritePath: string): ImageData | null {
@@ -1391,11 +1346,7 @@ export class GameRenderer {
     }
 
     private resolveAssetPath(path: string): string {
-        if (!path.startsWith('ASSETS/')) {
-            return path;
-        }
-        const isDistBuild = window.location.pathname.includes('/dist/');
-        return isDistBuild ? `../${path}` : path;
+        return resolveAssetPath(path);
     }
 
     private getGraphicVariant(key: GraphicKey): GraphicVariant {
@@ -2015,57 +1966,14 @@ export class GameRenderer {
      * Darken a color by a given factor (0-1, where 0 is black and 1 is original color)
      */
     private darkenColor(color: string, factor: number): string {
-        // Clamp factor to valid range [0, 1]
-        const clampedFactor = Math.max(0, Math.min(1, factor));
-        
-        // Parse hex color (handle both #RGB and #RRGGBB formats)
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            // Convert #RGB to #RRGGBB
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Apply darkening factor and clamp to valid RGB range
-        const newR = Math.floor(Math.min(255, r * clampedFactor));
-        const newG = Math.floor(Math.min(255, g * clampedFactor));
-        const newB = Math.floor(Math.min(255, b * clampedFactor));
-        
-        // Convert back to hex
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return darkenColor(color, factor);
     }
 
     /**
      * Adjust color brightness by a given factor (1.0 is original color, >1.0 is brighter, <1.0 is darker)
      */
     private adjustColorBrightness(color: string, factor: number): string {
-        // Parse hex color (handle both #RGB and #RRGGBB formats)
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            // Convert #RGB to #RRGGBB
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Apply brightening factor and clamp to valid RGB range
-        const newR = Math.floor(Math.min(255, r * factor));
-        const newG = Math.floor(Math.min(255, g * factor));
-        const newB = Math.floor(Math.min(255, b * factor));
-        
-        // Convert back to hex
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return adjustColorBrightness(color, factor);
     }
 
     /**
@@ -2147,33 +2055,7 @@ export class GameRenderer {
      * Used for solar mirrors to make them slightly brighter and paler than player color
      */
     private brightenAndPaleColor(color: string): string {
-        // Parse hex color
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Brighten: move towards white by 20%
-        const brightenFactor = 0.2;
-        const brightenedR = r + (255 - r) * brightenFactor;
-        const brightenedG = g + (255 - g) * brightenFactor;
-        const brightenedB = b + (255 - b) * brightenFactor;
-        
-        // Pale (desaturate): move towards average (gray) by 15%
-        const avg = (brightenedR + brightenedG + brightenedB) / 3;
-        const paleFactor = 0.15;
-        const newR = Math.floor(brightenedR + (avg - brightenedR) * paleFactor);
-        const newG = Math.floor(brightenedG + (avg - brightenedG) * paleFactor);
-        const newB = Math.floor(brightenedB + (avg - brightenedB) * paleFactor);
-        
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return brightenAndPaleColor(color);
     }
 
     /**
@@ -3212,42 +3094,11 @@ export class GameRenderer {
     }
 
     private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
-        if (buttonCount <= 0) {
-            return [];
-        }
-        const positions: Array<{ x: number; y: number }> = [];
-        const startAngleRad = -Math.PI / 2;
-        const stepAngleRad = (Math.PI * 2) / buttonCount;
-
-        for (let i = 0; i < buttonCount; i++) {
-            const angleRad = startAngleRad + stepAngleRad * i;
-            positions.push({ x: Math.cos(angleRad), y: Math.sin(angleRad) });
-        }
-        return positions;
+        return getRadialButtonOffsets(buttonCount);
     }
 
     private getHeroUnitType(heroName: string): string | null {
-        switch (heroName) {
-            case 'Marine':
-            case 'Mothership':
-            case 'Grave':
-            case 'Ray':
-            case 'Dagger':
-            case 'Beam':
-            case 'Driller':
-            case 'Spotlight':
-            case 'Splendor':
-            case 'Sly':
-            case 'Shadow':
-            case 'Chrono':
-                return heroName;
-            case 'Influence Ball':
-                return 'InfluenceBall';
-            case 'Turret Deployer':
-                return 'TurretDeployer';
-            default:
-                return null;
-        }
+        return getHeroUnitType(heroName);
     }
 
     private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
@@ -3411,8 +3262,7 @@ export class GameRenderer {
 
 
     private getHeroUnitCost(player: Player): number {
-        const aliveHeroCount = player.units.filter((unit) => unit.isHero).length;
-        return Constants.HERO_UNIT_BASE_COST + aliveHeroCount * Constants.HERO_UNIT_COST_INCREMENT;
+        return getHeroUnitCost(player);
     }
 
     private drawRadialButtonCostLabel(
