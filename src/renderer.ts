@@ -12,6 +12,7 @@ import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './rend
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 import { getFactionColor, getVelarisGraphemeSpritePath } from './render/faction-utilities';
+import { resolveAssetPath } from './render/asset-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -1345,11 +1346,7 @@ export class GameRenderer {
     }
 
     private resolveAssetPath(path: string): string {
-        if (!path.startsWith('ASSETS/')) {
-            return path;
-        }
-        const isDistBuild = window.location.pathname.includes('/dist/');
-        return isDistBuild ? `../${path}` : path;
+        return resolveAssetPath(path);
     }
 
     private getGraphicVariant(key: GraphicKey): GraphicVariant {
