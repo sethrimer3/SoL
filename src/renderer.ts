@@ -9,6 +9,7 @@ import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
 import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
+import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -2016,57 +2017,14 @@ export class GameRenderer {
      * Darken a color by a given factor (0-1, where 0 is black and 1 is original color)
      */
     private darkenColor(color: string, factor: number): string {
-        // Clamp factor to valid range [0, 1]
-        const clampedFactor = Math.max(0, Math.min(1, factor));
-        
-        // Parse hex color (handle both #RGB and #RRGGBB formats)
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            // Convert #RGB to #RRGGBB
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Apply darkening factor and clamp to valid RGB range
-        const newR = Math.floor(Math.min(255, r * clampedFactor));
-        const newG = Math.floor(Math.min(255, g * clampedFactor));
-        const newB = Math.floor(Math.min(255, b * clampedFactor));
-        
-        // Convert back to hex
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return darkenColor(color, factor);
     }
 
     /**
      * Adjust color brightness by a given factor (1.0 is original color, >1.0 is brighter, <1.0 is darker)
      */
     private adjustColorBrightness(color: string, factor: number): string {
-        // Parse hex color (handle both #RGB and #RRGGBB formats)
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            // Convert #RGB to #RRGGBB
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Apply brightening factor and clamp to valid RGB range
-        const newR = Math.floor(Math.min(255, r * factor));
-        const newG = Math.floor(Math.min(255, g * factor));
-        const newB = Math.floor(Math.min(255, b * factor));
-        
-        // Convert back to hex
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return adjustColorBrightness(color, factor);
     }
 
     /**
@@ -2148,33 +2106,7 @@ export class GameRenderer {
      * Used for solar mirrors to make them slightly brighter and paler than player color
      */
     private brightenAndPaleColor(color: string): string {
-        // Parse hex color
-        let hex = color.replace('#', '');
-        if (hex.length === 3) {
-            hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-        }
-        
-        const r = parseInt(hex.substring(0, 2), 16) || 0;
-        const g = parseInt(hex.substring(2, 4), 16) || 0;
-        const b = parseInt(hex.substring(4, 6), 16) || 0;
-        
-        // Brighten: move towards white by 20%
-        const brightenFactor = 0.2;
-        const brightenedR = r + (255 - r) * brightenFactor;
-        const brightenedG = g + (255 - g) * brightenFactor;
-        const brightenedB = b + (255 - b) * brightenFactor;
-        
-        // Pale (desaturate): move towards average (gray) by 15%
-        const avg = (brightenedR + brightenedG + brightenedB) / 3;
-        const paleFactor = 0.15;
-        const newR = Math.floor(brightenedR + (avg - brightenedR) * paleFactor);
-        const newG = Math.floor(brightenedG + (avg - brightenedG) * paleFactor);
-        const newB = Math.floor(brightenedB + (avg - brightenedB) * paleFactor);
-        
-        return '#' + 
-               newR.toString(16).padStart(2, '0') +
-               newG.toString(16).padStart(2, '0') +
-               newB.toString(16).padStart(2, '0');
+        return brightenAndPaleColor(color);
     }
 
     /**
