@@ -5,7 +5,7 @@
 
 import { OnlineNetworkManager } from './online-network';
 import { NetworkEvent, MessageType, GameCommand } from './network';
-import { isSupabaseConfigured } from './supabase-config';
+import { isSupabaseConfigured } from '../Supabase/supabase-config';
 
 /**
  * Example: Setting up online multiplayer in your game

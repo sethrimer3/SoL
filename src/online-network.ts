@@ -4,7 +4,7 @@
  */
 
 import { createClient, SupabaseClient, RealtimeChannel, PostgrestError } from '@supabase/supabase-js';
-import { getSupabaseConfig, isSupabaseConfigured } from './supabase-config';
+import { getSupabaseConfig, isSupabaseConfigured } from '../Supabase/supabase-config';
 import { 
     GameCommand, 
     NetworkMessage, 
