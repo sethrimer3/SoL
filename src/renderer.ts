@@ -8,6 +8,7 @@ import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
+import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -3212,42 +3213,11 @@ export class GameRenderer {
     }
 
     private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
-        if (buttonCount <= 0) {
-            return [];
-        }
-        const positions: Array<{ x: number; y: number }> = [];
-        const startAngleRad = -Math.PI / 2;
-        const stepAngleRad = (Math.PI * 2) / buttonCount;
-
-        for (let i = 0; i < buttonCount; i++) {
-            const angleRad = startAngleRad + stepAngleRad * i;
-            positions.push({ x: Math.cos(angleRad), y: Math.sin(angleRad) });
-        }
-        return positions;
+        return getRadialButtonOffsets(buttonCount);
     }
 
     private getHeroUnitType(heroName: string): string | null {
-        switch (heroName) {
-            case 'Marine':
-            case 'Mothership':
-            case 'Grave':
-            case 'Ray':
-            case 'Dagger':
-            case 'Beam':
-            case 'Driller':
-            case 'Spotlight':
-            case 'Splendor':
-            case 'Sly':
-            case 'Shadow':
-            case 'Chrono':
-                return heroName;
-            case 'Influence Ball':
-                return 'InfluenceBall';
-            case 'Turret Deployer':
-                return 'TurretDeployer';
-            default:
-                return null;
-        }
+        return getHeroUnitType(heroName);
     }
 
     private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
@@ -3411,8 +3381,7 @@ export class GameRenderer {
 
 
     private getHeroUnitCost(player: Player): number {
-        const aliveHeroCount = player.units.filter((unit) => unit.isHero).length;
-        return Constants.HERO_UNIT_BASE_COST + aliveHeroCount * Constants.HERO_UNIT_COST_INCREMENT;
+        return getHeroUnitCost(player);
     }
 
     private drawRadialButtonCostLabel(
