@@ -10,6 +10,7 @@ import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGr
 import { renderLensFlare } from './rendering/LensFlare';
 import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
+import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -769,44 +770,11 @@ export class GameRenderer {
     }
 
     private valueNoise2D(x: number, y: number): number {
-        const ix = Math.floor(x);
-        const iy = Math.floor(y);
-        const fx = x - ix;
-        const fy = y - iy;
-
-        const smooth = (v: number) => v * v * (3 - 2 * v);
-        const hash = (hx: number, hy: number) => {
-            let n = hx * 374761393 + hy * 668265263;
-            n = (n ^ (n >> 13)) * 1274126177;
-            n ^= n >> 16;
-            return (n >>> 0) / 4294967295;
-        };
-        const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-
-        const v00 = hash(ix, iy);
-        const v10 = hash(ix + 1, iy);
-        const v01 = hash(ix, iy + 1);
-        const v11 = hash(ix + 1, iy + 1);
-        const ux = smooth(fx);
-        const uy = smooth(fy);
-
-        return lerp(lerp(v00, v10, ux), lerp(v01, v11, ux), uy);
+        return valueNoise2D(x, y);
     }
 
     private fractalNoise2D(x: number, y: number, octaves: number): number {
-        let amplitude = 0.5;
-        let frequency = 1;
-        let value = 0;
-        let norm = 0;
-
-        for (let i = 0; i < octaves; i++) {
-            value += this.valueNoise2D(x * frequency, y * frequency) * amplitude;
-            norm += amplitude;
-            frequency *= 2;
-            amplitude *= 0.5;
-        }
-
-        return value / Math.max(0.0001, norm);
+        return fractalNoise2D(x, y, octaves);
     }
 
 
