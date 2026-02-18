@@ -324,9 +324,16 @@ import { Camera, GraphicOptions } from './render';
 |------|---------------------|---------|--------|----------|
 | renderer.ts | 13,658 | 13,658 | 3,558 | 0% → 74% |
 | game-state.ts | 6,681 | 6,681 | 4,331 | 0% → 35% |
-| menu.ts | 4,156 | 4,156 | 2,856 | 0% → 31% |
+| menu.ts | 4,156 | 4,000 | 2,856 | **3.8%** → 31% |
 | main.ts | 4,252 | 4,252 | 1,452 | 0% → 66% |
-| **TOTAL** | **28,747** | **28,747** | **12,197** | **0% → 58%** |
+| **TOTAL** | **28,747** | **28,591** | **12,197** | **0.5% → 58%** |
+
+### Completed Extractions
+
+**Phase 1 - Menu System** (Completed):
+- ✅ Menu screen renderers (~2,736 LOC extracted to `src/menu/screens/`)
+- ✅ LAN Lobby Manager (151 LOC extracted to `src/menu/lan-lobby-manager.ts`)
+- ✅ Player Profile Manager (74 LOC extracted to `src/menu/player-profile-manager.ts`)
 
 ### Planned Extractions
 

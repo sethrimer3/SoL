@@ -8,3 +8,5 @@ export * from './atmosphere';
 export * from './particle-layer';
 export * from './color-schemes';
 export * from './ui-helpers';
+export * from './lan-lobby-manager';
+export * from './player-profile-manager';

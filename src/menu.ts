@@ -17,6 +17,8 @@ import {
     createColorPicker, 
     createTextInput 
 } from './menu/ui-helpers';
+import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { PlayerProfileManager } from './menu/player-profile-manager';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -75,22 +77,6 @@ export interface GameSettings {
     multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
 
-interface LanLobbyEntry {
-    hostPlayerId: string;
-    lobbyName: string;
-    hostUsername: string;
-    connectionCode: string;
-    maxPlayerCount: number;
-    playerCount: number;
-    lastSeenMs: number;
-    createdMs: number;
-}
-
-const LAN_LOBBY_STORAGE_KEY = 'sol-lan-lobbies';
-const LAN_LOBBY_EXPIRY_MS = 15000;
-const LAN_LOBBY_REFRESH_MS = 2000;
-const LAN_LOBBY_HEARTBEAT_MS = 5000;
-
 export class MainMenu {
     private menuElement: HTMLElement;
     private contentElement!: HTMLElement;
@@ -105,8 +91,8 @@ export class MainMenu {
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
     private ladButton: HTMLButtonElement | null = null;
-    private lanServerListTimeout: number | null = null; // Track timeout for cleanup
-    private lanLobbyHeartbeatTimeout: number | null = null; // Track heartbeat for LAN lobbies
+    private lanLobbyManager: LanLobbyManager = new LanLobbyManager(); // LAN lobby discovery manager
+    private playerProfileManager: PlayerProfileManager = new PlayerProfileManager(); // Player profile manager
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
@@ -344,14 +330,14 @@ export class MainMenu {
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
             graphicsQuality: 'ultra', // Default to ultra graphics
-            username: this.getOrGenerateUsername(), // Load or generate username
+            username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
         // Initialize online network manager for custom lobbies and matchmaking
-        const playerId = this.getOrGeneratePlayerId();
+        const playerId = this.playerProfileManager.getOrGeneratePlayerId();
         this.onlineNetworkManager = new OnlineNetworkManager(playerId);
         
         this.menuElement = this.createMenuElement();
@@ -654,52 +640,6 @@ export class MainMenu {
     /**
      * Generate a random username in the format "player#XXXX"
      */
-    private generateRandomUsername(): string {
-        const randomNumber = Math.floor(Math.random() * 10000);
-        return `player#${randomNumber.toString().padStart(4, '0')}`;
-    }
-
-    /**
-     * Get username from localStorage or generate a new one
-     */
-    private getOrGenerateUsername(): string {
-        const storedUsername = localStorage.getItem('sol_username');
-        if (storedUsername && storedUsername.trim() !== '') {
-            return storedUsername;
-        }
-        const newUsername = this.generateRandomUsername();
-        localStorage.setItem('sol_username', newUsername);
-        return newUsername;
-    }
-
-    /**
-     * Get or generate a unique player ID for online play
-     */
-    private getOrGeneratePlayerId(): string {
-        const storedPlayerId = localStorage.getItem('sol_player_id');
-        if (storedPlayerId && storedPlayerId.trim() !== '') {
-            return storedPlayerId;
-        }
-        // Generate a UUID using crypto API if available, otherwise fallback
-        let newPlayerId: string;
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            newPlayerId = crypto.randomUUID();
-        } else {
-            // Fallback for older browsers
-            newPlayerId = 'player_' + Date.now() + '_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        }
-        localStorage.setItem('sol_player_id', newPlayerId);
-        return newPlayerId;
-    }
-
-    /**
-     * Save username to localStorage
-     */
-    private saveUsername(username: string): void {
-        localStorage.setItem('sol_username', username);
-        this.settings.username = username;
-    }
-
     private async clearPlayerDataAndCache(): Promise<void> {
         localStorage.clear();
         sessionStorage.clear();
@@ -751,14 +691,7 @@ export class MainMenu {
             this.contentElement.style.justifyContent = 'center';
         }
         // Clear any pending timeouts
-        if (this.lanServerListTimeout !== null) {
-            clearTimeout(this.lanServerListTimeout);
-            this.lanServerListTimeout = null;
-        }
-        if (this.lanLobbyHeartbeatTimeout !== null) {
-            clearTimeout(this.lanLobbyHeartbeatTimeout);
-            this.lanLobbyHeartbeatTimeout = null;
-        }
+        this.lanLobbyManager.cleanup();
         this.setTestLevelButtonVisible(false);
         this.setLadButtonVisible(false);
         this.updateAtmosphereOpacityForCurrentScreen();
@@ -798,80 +731,9 @@ export class MainMenu {
         this.atmosphereLayer?.setOpacity(targetOpacity);
     }
 
-    private loadLanLobbyEntries(): LanLobbyEntry[] {
-        const storedValue = localStorage.getItem(LAN_LOBBY_STORAGE_KEY);
-        if (!storedValue) {
-            return [];
-        }
-        try {
-            const parsedValue = JSON.parse(storedValue) as LanLobbyEntry[];
-            if (!Array.isArray(parsedValue)) {
-                return [];
-            }
-            return parsedValue;
-        } catch (error) {
-            console.warn('Failed to parse LAN lobby list from storage:', error);
-            return [];
-        }
-    }
-
-    private persistLanLobbyEntries(entries: LanLobbyEntry[]): void {
-        localStorage.setItem(LAN_LOBBY_STORAGE_KEY, JSON.stringify(entries));
-    }
-
-    private pruneLanLobbyEntries(entries: LanLobbyEntry[], nowMs: number): LanLobbyEntry[] {
-        const prunedEntries = entries.filter((entry) => nowMs - entry.lastSeenMs <= LAN_LOBBY_EXPIRY_MS);
-        if (prunedEntries.length !== entries.length) {
-            this.persistLanLobbyEntries(prunedEntries);
-        }
-        return prunedEntries;
-    }
-
-    private registerLanLobbyEntry(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
-        const nowMs = Date.now();
-        const entries = this.loadLanLobbyEntries();
-        const updatedEntries = entries.filter((existingEntry) => existingEntry.hostPlayerId !== entry.hostPlayerId);
-        const existingEntry = entries.find((existingEntry) => existingEntry.hostPlayerId === entry.hostPlayerId);
-        updatedEntries.push({
-            ...entry,
-            createdMs: existingEntry?.createdMs ?? nowMs,
-            lastSeenMs: nowMs
-        });
-        this.persistLanLobbyEntries(updatedEntries);
-    }
-
-    private unregisterLanLobbyEntry(hostPlayerId: string): void {
-        const entries = this.loadLanLobbyEntries();
-        const updatedEntries = entries.filter((entry) => entry.hostPlayerId !== hostPlayerId);
-        if (updatedEntries.length !== entries.length) {
-            this.persistLanLobbyEntries(updatedEntries);
-        }
-    }
-
-    private startLanLobbyHeartbeat(entry: Omit<LanLobbyEntry, 'lastSeenMs' | 'createdMs'>): void {
-        if (this.lanLobbyHeartbeatTimeout !== null) {
-            clearTimeout(this.lanLobbyHeartbeatTimeout);
-            this.lanLobbyHeartbeatTimeout = null;
-        }
-        const heartbeat = () => {
-            this.registerLanLobbyEntry(entry);
-            this.lanLobbyHeartbeatTimeout = window.setTimeout(heartbeat, LAN_LOBBY_HEARTBEAT_MS);
-        };
-        heartbeat();
-    }
-
-    private stopLanLobbyHeartbeat(): void {
-        if (this.lanLobbyHeartbeatTimeout !== null) {
-            clearTimeout(this.lanLobbyHeartbeatTimeout);
-            this.lanLobbyHeartbeatTimeout = null;
-        }
-    }
-
     private renderLanLobbyList(listContainer: HTMLElement): void {
         listContainer.innerHTML = '';
-        const nowMs = Date.now();
-        const entries = this.pruneLanLobbyEntries(this.loadLanLobbyEntries(), nowMs)
-            .sort((left, right) => right.lastSeenMs - left.lastSeenMs);
+        const entries = this.lanLobbyManager.getFreshLobbies();
 
         if (entries.length === 0) {
             const emptyState = document.createElement('p');
@@ -945,13 +807,9 @@ export class MainMenu {
     }
 
     private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
-        if (this.lanServerListTimeout !== null) {
-            clearTimeout(this.lanServerListTimeout);
-        }
-        this.lanServerListTimeout = window.setTimeout(() => {
+        this.lanLobbyManager.scheduleRefresh(() => {
             this.renderLanLobbyList(listContainer);
-            this.scheduleLanLobbyListRefresh(listContainer);
-        }, LAN_LOBBY_REFRESH_MS);
+        });
     }
 
     private async joinLanLobbyWithCode(code: string): Promise<void> {
@@ -1284,7 +1142,7 @@ export class MainMenu {
         this.setMenuParticleDensity(1.6);
         const screenWidth = window.innerWidth;
         const isCompactLayout = screenWidth < 600;
-        this.startLanLobbyHeartbeat({
+        this.lanLobbyManager.startHeartbeat({
             hostPlayerId: hostPlayerId,
             lobbyName: lobby.name,
             hostUsername: lobby.players.find((player) => player.isHost)?.username ?? this.settings.username,
@@ -1412,7 +1270,7 @@ export class MainMenu {
                         data: lobby
                     });
                     const hostPlayer = lobby.players.find((player) => player.isHost);
-                    this.registerLanLobbyEntry({
+                    this.lanLobbyManager.registerEntry({
                         hostPlayerId: hostPlayerId,
                         lobbyName: lobby.name,
                         hostUsername: hostPlayer?.username ?? this.settings.username,
@@ -1449,8 +1307,8 @@ export class MainMenu {
 
             // Notify peers that game is starting
             this.networkManager.startGame();
-            this.unregisterLanLobbyEntry(hostPlayerId);
-            this.stopLanLobbyHeartbeat();
+            this.lanLobbyManager.unregisterEntry(hostPlayerId);
+            this.lanLobbyManager.stopHeartbeat();
 
             // Set game mode to LAN
             this.settings.gameMode = 'lan';
@@ -1474,8 +1332,8 @@ export class MainMenu {
                 this.networkManager.disconnect();
                 this.networkManager = null;
             }
-            this.unregisterLanLobbyEntry(hostPlayerId);
-            this.stopLanLobbyHeartbeat();
+            this.lanLobbyManager.unregisterEntry(hostPlayerId);
+            this.lanLobbyManager.stopHeartbeat();
             this.currentScreen = 'lan';
             this.startMenuTransition();
             this.renderLANScreen(this.contentElement);
@@ -2797,7 +2655,8 @@ export class MainMenu {
                 this.settings.difficulty = value;
             },
             onUsernameChange: (value) => {
-                this.saveUsername(value);
+                this.playerProfileManager.saveUsername(value);
+                this.settings.username = value;
             },
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
@@ -3086,21 +2945,6 @@ export class MainMenu {
         return button;
     }
 
-    /**
-     * Validate and sanitize username
-     */
-    private validateUsername(username: string): string {
-        // Trim and limit length
-        let sanitized = username.trim().substring(0, 20);
-        
-        // If empty or invalid, generate random username
-        if (sanitized.length < 1) {
-            return this.generateRandomUsername();
-        }
-        
-        return sanitized;
-    }
-
     private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
         const input = document.createElement('input');
         input.type = 'text';
@@ -3120,7 +2964,7 @@ export class MainMenu {
 
         // Update on blur instead of every keystroke for efficiency
         input.addEventListener('blur', () => {
-            const validatedValue = this.validateUsername(input.value);
+            const validatedValue = this.playerProfileManager.validateUsername(input.value);
             input.value = validatedValue;
             input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
             onChange(validatedValue);
