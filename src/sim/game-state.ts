@@ -5,6 +5,8 @@
 import { Vector2D, LightRay, applyKnockbackVelocity } from './math';
 import { VisionSystem } from './systems/vision-system';
 import { CommandProcessor } from './systems/command-processor';
+import { AISystem, AIContext } from './systems/ai-system';
+import { PhysicsSystem, PhysicsContext } from './systems/physics-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -89,7 +91,7 @@ import {
 } from '../game-core';
 
 import { Faction } from './entities/player';
-export class GameState {
+export class GameState implements AIContext, PhysicsContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -151,14 +153,14 @@ export class GameState {
     // Collision resolution constants
     private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
     private readonly PUSH_MULTIPLIER = 15; // Multiplier for push strength calculation
-    private readonly dustSpatialHash: Map<number, number[]> = new Map();
-    private readonly dustSpatialHashKeys: number[] = [];
+    readonly dustSpatialHash: Map<number, number[]> = new Map();
+    readonly dustSpatialHashKeys: number[] = [];
 
-    private getInfluenceRadiusForSource(source: StellarForge | Building): number {
+    getInfluenceRadiusForSource(source: StellarForge | Building): number {
         return VisionSystem.getInfluenceRadiusForSource(source);
     }
 
-    private isInfluenceSourceActive(source: StellarForge | Building): boolean {
+    isInfluenceSourceActive(source: StellarForge | Building): boolean {
         return VisionSystem.isInfluenceSourceActive(source);
     }
 
@@ -243,7 +245,7 @@ export class GameState {
         }
 
         // Apply knockback to units and mirrors that collide with rotating asteroids
-        this.applyAsteroidRotationKnockback();
+        PhysicsSystem.applyAsteroidRotationKnockback(this);
 
         if (!this.isCountdownActive) {
             this.updateAi(deltaTime);
@@ -283,7 +285,8 @@ export class GameState {
                         player.stellarForge.velocity = new Vector2D(0, 0);
                     }
 
-                    this.applyDustPushFromMovingEntity(
+                    PhysicsSystem.applyDustPushFromMovingEntity(
+                        this,
                         player.stellarForge.position,
                         player.stellarForge.velocity,
                         Constants.FORGE_DUST_PUSH_RADIUS_PX,
@@ -348,7 +351,8 @@ export class GameState {
                     mirror.velocity = new Vector2D(0, 0);
                 }
 
-                this.applyDustPushFromMovingEntity(
+                PhysicsSystem.applyDustPushFromMovingEntity(
+                    this,
                     mirror.position,
                     mirror.velocity,
                     Constants.MIRROR_DUST_PUSH_RADIUS_PX,
@@ -590,7 +594,8 @@ export class GameState {
                     }
 
                     if (unit instanceof Starling) {
-                        this.applyDustPushFromMovingEntity(
+                        PhysicsSystem.applyDustPushFromMovingEntity(
+                            this,
                             unit.position,
                             unit.velocity,
                             Constants.STARLING_DUST_PUSH_RADIUS_PX,
@@ -606,7 +611,8 @@ export class GameState {
                             if (projectile.isAttacking) {
                                 // Attacking projectiles push dust as they fly
                                 const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
-                                this.applyFluidForceFromMovingObject(
+                                PhysicsSystem.applyFluidForceFromMovingObject(
+                                    this,
                                     projectile.position,
                                     projectile.velocity,
                                     Constants.GRAVE_PROJECTILE_EFFECT_RADIUS,
@@ -829,7 +835,8 @@ export class GameState {
                     
                     // Apply fluid forces from active beam segments
                     for (const segment of unit.getBeamSegments()) {
-                        this.applyFluidForceFromBeam(
+                        PhysicsSystem.applyFluidForceFromBeam(
+                            this,
                             segment.startPos,
                             segment.endPos,
                             Constants.BEAM_EFFECT_RADIUS,
@@ -1031,8 +1038,8 @@ export class GameState {
         }
 
         if (!this.isCountdownActive) {
-            this.resolveUnitCollisions(allUnits);
-            this.resolveUnitObstacleCollisions(allUnits);
+            PhysicsSystem.resolveUnitCollisions(allUnits);
+            PhysicsSystem.resolveUnitObstacleCollisions(this, allUnits);
         }
 
         this.stateHashTickCounter += 1;
@@ -1184,7 +1191,8 @@ export class GameState {
             
             // Apply fluid-like force to space dust particles
             const bulletSpeed = Math.sqrt(bullet.velocity.x ** 2 + bullet.velocity.y ** 2);
-            this.applyFluidForceFromMovingObject(
+            PhysicsSystem.applyFluidForceFromMovingObject(
+                this,
                 bullet.position,
                 bullet.velocity,
                 Constants.ABILITY_BULLET_EFFECT_RADIUS,
@@ -1463,7 +1471,8 @@ export class GameState {
             
             // Apply fluid-like force to space dust particles
             const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
-            this.applyFluidForceFromMovingObject(
+            PhysicsSystem.applyFluidForceFromMovingObject(
+                this,
                 projectile.position,
                 projectile.velocity,
                 Constants.MINION_PROJECTILE_EFFECT_RADIUS,
@@ -1664,7 +1673,8 @@ export class GameState {
             
             // Apply fluid-like force to space dust particles
             const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
-            this.applyFluidForceFromMovingObject(
+            PhysicsSystem.applyFluidForceFromMovingObject(
+                this,
                 projectile.position,
                 projectile.velocity,
                 Constants.INFLUENCE_BALL_EFFECT_RADIUS,
@@ -2532,12 +2542,12 @@ export class GameState {
      * Update space dust particles with physics and color influences
      */
     private updateSpaceDust(deltaTime: number): void {
-        this.applyDustRepulsion(deltaTime);
+        PhysicsSystem.applyDustRepulsion(this, deltaTime);
 
         for (const particle of this.spaceDust) {
             // Update particle position
             particle.update(deltaTime);
-            this.resolveDustAsteroidCollision(particle, deltaTime);
+            PhysicsSystem.resolveDustAsteroidCollision(this, particle, deltaTime);
 
             // Check for influence from player structures
             const closestInfluence = this.getClosestInfluenceAtPoint(particle.position);
@@ -2640,140 +2650,8 @@ export class GameState {
         }
     }
 
-    private resolveDustAsteroidCollision(particle: SpaceDustParticle, deltaTime: number): void {
-        const collisionPaddingPx = Constants.DUST_ASTEROID_COLLISION_PADDING_PX;
-        const restitution = Constants.DUST_ASTEROID_BOUNCE_RESTITUTION;
-        const tangentialPushMultiplier = Constants.DUST_ASTEROID_TANGENTIAL_PUSH_MULTIPLIER;
-        const rotationCollisionPushMultiplier = Constants.DUST_ASTEROID_ROTATION_COLLISION_PUSH_MULTIPLIER;
-
-        for (let asteroidIndex = 0; asteroidIndex < this.asteroids.length; asteroidIndex++) {
-            const asteroid = this.asteroids[asteroidIndex];
-            const dx = particle.position.x - asteroid.position.x;
-            const dy = particle.position.y - asteroid.position.y;
-            const distanceSq = dx * dx + dy * dy;
-            const collisionRadius = asteroid.size + collisionPaddingPx;
-            const collisionRadiusSq = collisionRadius * collisionRadius;
-
-            if (distanceSq > collisionRadiusSq) {
-                continue;
-            }
-
-            const distance = Math.sqrt(distanceSq);
-            const normalX = distance > 0.0001 ? dx / distance : 1;
-            const normalY = distance > 0.0001 ? dy / distance : 0;
-            const penetrationDepth = collisionRadius - distance;
-
-            if (penetrationDepth > 0) {
-                particle.position.x += normalX * penetrationDepth;
-                particle.position.y += normalY * penetrationDepth;
-            }
-
-            const normalVelocity = particle.velocity.x * normalX + particle.velocity.y * normalY;
-            if (normalVelocity < 0) {
-                particle.velocity.x -= (1 + restitution) * normalVelocity * normalX;
-                particle.velocity.y -= (1 + restitution) * normalVelocity * normalY;
-            }
-
-            const tangentialDirectionX = -normalY;
-            const tangentialDirectionY = normalX;
-            const tangentialSpeed = asteroid.rotationSpeed * collisionRadius;
-            particle.velocity.x += tangentialDirectionX * tangentialSpeed * tangentialPushMultiplier * deltaTime;
-            particle.velocity.y += tangentialDirectionY * tangentialSpeed * tangentialPushMultiplier * deltaTime;
-
-            if (penetrationDepth > 0) {
-                const collisionPushSpeed = Math.abs(tangentialSpeed) * rotationCollisionPushMultiplier;
-                particle.velocity.x += normalX * collisionPushSpeed;
-                particle.velocity.y += normalY * collisionPushSpeed;
-            }
-        }
-    }
-
-    private applyDustRepulsion(deltaTime: number): void {
-        const cellSize = Constants.DUST_REPULSION_CELL_SIZE_PX;
-        const repulsionRadiusPx = Constants.DUST_REPULSION_RADIUS_PX;
-        const repulsionRadiusSq = repulsionRadiusPx * repulsionRadiusPx;
-        const repulsionStrength = Constants.DUST_REPULSION_STRENGTH;
-
-        for (let i = 0; i < this.dustSpatialHashKeys.length; i++) {
-            const key = this.dustSpatialHashKeys[i];
-            const bucket = this.dustSpatialHash.get(key);
-            if (bucket) {
-                bucket.length = 0;
-            }
-        }
-        this.dustSpatialHashKeys.length = 0;
-
-        for (let i = 0; i < this.spaceDust.length; i++) {
-            const particle = this.spaceDust[i];
-            const cellX = Math.floor(particle.position.x / cellSize);
-            const cellY = Math.floor(particle.position.y / cellSize);
-            const key = (cellX << 16) ^ (cellY & 0xffff);
-            let bucket = this.dustSpatialHash.get(key);
-            if (!bucket) {
-                bucket = [];
-                this.dustSpatialHash.set(key, bucket);
-            }
-            if (bucket.length === 0) {
-                this.dustSpatialHashKeys.push(key);
-            }
-            bucket.push(i);
-        }
-
-        for (let i = 0; i < this.spaceDust.length; i++) {
-            const particle = this.spaceDust[i];
-            const cellX = Math.floor(particle.position.x / cellSize);
-            const cellY = Math.floor(particle.position.y / cellSize);
-            let forceX = 0;
-            let forceY = 0;
-
-            for (let offsetY = -1; offsetY <= 1; offsetY++) {
-                for (let offsetX = -1; offsetX <= 1; offsetX++) {
-                    const neighborKey = ((cellX + offsetX) << 16) ^ ((cellY + offsetY) & 0xffff);
-                    const bucket = this.dustSpatialHash.get(neighborKey);
-                    if (!bucket) {
-                        continue;
-                    }
-
-                    for (let j = 0; j < bucket.length; j++) {
-                        const neighborIndex = bucket[j];
-                        if (neighborIndex === i) {
-                            continue;
-                        }
-                        const neighbor = this.spaceDust[neighborIndex];
-                        const dx = particle.position.x - neighbor.position.x;
-                        const dy = particle.position.y - neighbor.position.y;
-                        const distSq = dx * dx + dy * dy;
-                        if (distSq > 0 && distSq < repulsionRadiusSq) {
-                            const dist = Math.sqrt(distSq);
-                            const proximity = 1 - dist / repulsionRadiusPx;
-                            const strength = proximity * proximity * repulsionStrength;
-                            forceX += (dx / dist) * strength;
-                            forceY += (dy / dist) * strength;
-                        }
-                    }
-                }
-            }
-
-            if (forceX !== 0 || forceY !== 0) {
-                particle.velocity.x += forceX * deltaTime;
-                particle.velocity.y += forceY * deltaTime;
-            }
-        }
-    }
-
     private updateAi(deltaTime: number): void {
-        for (const player of this.players) {
-            if (!player.isAi || player.isDefeated()) {
-                continue;
-            }
-
-            const enemies = this.getEnemiesForPlayer(player);
-            this.updateAiMirrorsForPlayer(player);
-            this.updateAiMirrorPurchaseForPlayer(player);
-            this.updateAiDefenseForPlayer(player, enemies);
-            this.updateAiHeroProductionForPlayer(player);
-            this.updateAiStructuresForPlayer(player, enemies);
-        }
+        AISystem.updateAi(deltaTime, this);
     }
 
     private updateStarlingMergeGatesForPlayer(player: Player, deltaTime: number): void {
@@ -2892,7 +2770,7 @@ export class GameState {
         gate.assignedStarlings.length = 0;
     }
 
-    private getEnemiesForPlayer(player: Player): CombatTarget[] {
+    getEnemiesForPlayer(player: Player): CombatTarget[] {
         const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
             // Skip self
@@ -2935,770 +2813,12 @@ export class GameState {
         return count;
     }
 
-    private updateAiMirrorsForPlayer(player: Player): void {
-        if (this.gameTime < player.aiNextMirrorCommandSec) {
-            return;
-        }
-        player.aiNextMirrorCommandSec = this.gameTime + Constants.AI_MIRROR_COMMAND_INTERVAL_SEC;
-
-        if (!player.stellarForge || player.solarMirrors.length === 0) {
-            return;
-        }
-
-        const sun = this.getClosestSunToPoint(player.stellarForge.position);
-        if (!sun) {
-            return;
-        }
-
-        // Determine mirror distance based on AI strategy
-        let radiusFromSun: number;
-        switch (player.aiStrategy) {
-            case Constants.AIStrategy.AGGRESSIVE:
-                radiusFromSun = sun.radius + Constants.AI_MIRROR_AGGRESSIVE_DISTANCE_PX;
-                break;
-            case Constants.AIStrategy.DEFENSIVE:
-                radiusFromSun = sun.radius + Constants.AI_MIRROR_DEFENSIVE_DISTANCE_PX;
-                break;
-            case Constants.AIStrategy.ECONOMIC:
-                radiusFromSun = sun.radius + Constants.AI_MIRROR_ECONOMIC_DISTANCE_PX;
-                break;
-            case Constants.AIStrategy.WAVES:
-                radiusFromSun = sun.radius + Constants.AI_MIRROR_WAVES_DISTANCE_PX;
-                break;
-            default:
-                radiusFromSun = sun.radius + Constants.AI_MIRROR_SUN_DISTANCE_PX;
-        }
-
-        const mirrorCount = player.solarMirrors.length;
-        const baseAngleRad = Math.atan2(
-            player.stellarForge.position.y - sun.position.y,
-            player.stellarForge.position.x - sun.position.x
-        );
-        const startAngleRad = baseAngleRad - (Constants.AI_MIRROR_ARC_SPACING_RAD * (mirrorCount - 1)) / 2;
-
-        for (let i = 0; i < mirrorCount; i++) {
-            const mirror = player.solarMirrors[i];
-            const angleRad = startAngleRad + Constants.AI_MIRROR_ARC_SPACING_RAD * i;
-            
-            // Try to find a valid position for the mirror
-            const target = this.findValidMirrorPosition(
-                sun,
-                angleRad,
-                radiusFromSun,
-                player.stellarForge
-            );
-            
-            if (target) {
-                const distance = mirror.position.distanceTo(target);
-                if (distance > Constants.AI_MIRROR_REPOSITION_THRESHOLD_PX) {
-                    mirror.setTarget(target, this);
-                }
-            }
-        }
-        
-        // For hard difficulty, position defensive units near mirrors
-        if (player.aiDifficulty === Constants.AIDifficulty.HARD) {
-            this.positionGuardsNearMirrors(player);
-        }
-    }
-
-    /**
-     * Find a valid mirror position that avoids asteroids and has line of sight to sun and base
-     */
-    private findValidMirrorPosition(
-        sun: Sun,
-        preferredAngle: number,
-        preferredRadius: number,
-        stellarForge: StellarForge
-    ): Vector2D | null {
-        const mirrorRadius = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
-        
-        // Try multiple radius and angle combinations to find a valid position
-        // The search pattern varies both closer/farther and left/right from preferred position
-        for (let radiusAttempt = 0; radiusAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; radiusAttempt++) {
-            // Vary radius: starts closer (-60), then moves through preferred (0) to farther (+60)
-            // This explores positions both closer to sun and farther from sun
-            const radius = preferredRadius + (radiusAttempt * Constants.AI_MIRROR_RADIUS_VARIATION_STEP_PX) - Constants.AI_MIRROR_RADIUS_VARIATION_OFFSET_PX;
-            
-            for (let angleAttempt = 0; angleAttempt < Constants.AI_MIRROR_PLACEMENT_ATTEMPTS; angleAttempt++) {
-                // Vary angle: starts left (-0.6 rad), then moves through preferred (0) to right (+0.6 rad)
-                // This explores positions in an arc around the preferred angle
-                const angleDelta = (angleAttempt * Constants.AI_MIRROR_ANGLE_VARIATION_STEP_RAD) - Constants.AI_MIRROR_ANGLE_VARIATION_OFFSET_RAD;
-                const angle = preferredAngle + angleDelta;
-                
-                const candidate = new Vector2D(
-                    sun.position.x + Math.cos(angle) * radius,
-                    sun.position.y + Math.sin(angle) * radius
-                );
-                
-                // Check if position is valid (not in asteroid)
-                if (this.checkCollision(candidate, mirrorRadius)) {
-                    continue;
-                }
-                
-                // Check if mirror would have line of sight to sun
-                if (!this.hasLineOfSight(candidate, sun.position, mirrorRadius)) {
-                    continue;
-                }
-                
-                // Check if mirror would have line of sight to forge
-                if (!this.hasLineOfSight(candidate, stellarForge.position, mirrorRadius)) {
-                    continue;
-                }
-                
-                // Found a valid position
-                return candidate;
-            }
-        }
-        
-        // No valid position found
-        return null;
-    }
-
-    /**
-     * Check if there's a clear line of sight between two points
-     */
-    private hasLineOfSight(from: Vector2D, to: Vector2D, objectRadius: number = 0): boolean {
-        const direction = new Vector2D(
-            to.x - from.x,
-            to.y - from.y
-        ).normalize();
-        
-        const ray = new LightRay(from, direction);
-        const distance = from.distanceTo(to);
-        
-        for (const asteroid of this.asteroids) {
-            const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-            if (intersectionDist !== null && intersectionDist < distance - objectRadius) {
-                return false; // Path is blocked
-            }
-        }
-        
-        return true; // Path is clear
-    }
-
-    /**
-     * Check if a unit is eligible to be a guard (hero or starling)
-     */
-    private isGuardEligible(unit: Unit): boolean {
-        return unit.isHero || unit instanceof Starling;
-    }
-
-    /**
-     * Position defensive units near mirrors for hard difficulty AI
-     */
-    private positionGuardsNearMirrors(player: Player): void {
-        // Only run this occasionally to avoid excessive computation
-        // Check every 5 seconds to reassess mirror guard positions
-        const guardCheckInterval = 5.0;
-        const timeSinceLastDefense = this.gameTime - (player.aiNextDefenseCommandSec - Constants.AI_DEFENSE_COMMAND_INTERVAL_SEC);
-        if (timeSinceLastDefense < guardCheckInterval) {
-            return;
-        }
-        
-        // Find unguarded mirrors (mirrors without nearby defensive units)
-        for (const mirror of player.solarMirrors) {
-            let hasNearbyGuard = false;
-            const guardRadius = Constants.AI_MIRROR_GUARD_DISTANCE_PX;
-            
-            // Check if there's already a unit or building near this mirror
-            for (const unit of player.units) {
-                if (this.isGuardEligible(unit)) {
-                    const distance = unit.position.distanceTo(mirror.position);
-                    if (distance < guardRadius * 2) {
-                        hasNearbyGuard = true;
-                        break;
-                    }
-                }
-            }
-            
-            if (!hasNearbyGuard) {
-                for (const building of player.buildings) {
-                    const distance = building.position.distanceTo(mirror.position);
-                    if (distance < guardRadius * 2) {
-                        hasNearbyGuard = true;
-                        break;
-                    }
-                }
-            }
-            
-            // If mirror is unguarded, set rally points for some units to guard it
-            if (!hasNearbyGuard) {
-                let guardsAssigned = 0;
-                const maxGuards = 2; // Assign up to 2 units per mirror
-                
-                for (const unit of player.units) {
-                    if (guardsAssigned >= maxGuards) break;
-                    
-                    // Assign starlings or hero units to guard
-                    if (this.isGuardEligible(unit)) {
-                        // Check if unit is far from mirror (to avoid reassigning guards constantly)
-                        const distance = unit.position.distanceTo(mirror.position);
-                        if (distance > guardRadius * 3) {
-                            // Set rally point near mirror
-                            const guardPos = new Vector2D(
-                                mirror.position.x,
-                                mirror.position.y
-                            );
-                            
-                            if (unit.isHero) {
-                                unit.rallyPoint = guardPos;
-                            } else if (unit instanceof Starling) {
-                                unit.setManualRallyPoint(guardPos);
-                            }
-                            guardsAssigned++;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private updateAiMirrorPurchaseForPlayer(player: Player): void {
-        if (this.gameTime < player.aiNextMirrorPurchaseCommandSec) {
-            return;
-        }
-        player.aiNextMirrorPurchaseCommandSec = this.gameTime + Constants.AI_MIRROR_PURCHASE_INTERVAL_SEC;
-
-        if (!player.stellarForge) {
-            return;
-        }
-
-        if (player.solarMirrors.length >= Constants.AI_MAX_MIRRORS) {
-            return;
-        }
-
-        const spawnPosition = this.findMirrorSpawnPositionNearForge(player.stellarForge);
-        player.stellarForge.enqueueMirror(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST, spawnPosition);
-
-        this.assignAiMirrorsToIncompleteBuilding(player);
-    }
-
-    private updateAiDefenseForPlayer(
-        player: Player,
-        enemies: CombatTarget[]
-    ): void {
-        if (this.gameTime < player.aiNextDefenseCommandSec) {
-            return;
-        }
-        player.aiNextDefenseCommandSec = this.gameTime + Constants.AI_DEFENSE_COMMAND_INTERVAL_SEC;
-
-        const threat = this.findAiThreat(player, enemies);
-
-        if (threat) {
-            const threatPosition = threat.enemy.position;
-            for (const unit of player.units) {
-                if (unit.isHero) {
-                    unit.rallyPoint = new Vector2D(threatPosition.x, threatPosition.y);
-                } else if (unit instanceof Starling) {
-                    unit.setManualRallyPoint(new Vector2D(threatPosition.x, threatPosition.y));
-                }
-            }
-            return;
-        }
-
-        if (!player.stellarForge) {
-            return;
-        }
-
-        // Strategy-based defense behavior
-        if (player.aiStrategy === Constants.AIStrategy.WAVES) {
-            // Waves strategy: Accumulate units at base until reaching threshold
-            const unitCount = player.units.length;
-            const waveThreshold = Constants.AI_WAVES_ATTACK_THRESHOLD;
-            
-            if (unitCount >= waveThreshold) {
-                // Send all units to attack enemy base
-                const enemyForge = this.getEnemyForgeForPlayer(player);
-                if (enemyForge) {
-                    for (const unit of player.units) {
-                        if (unit.isHero || unit instanceof Starling) {
-                            unit.rallyPoint = new Vector2D(enemyForge.position.x, enemyForge.position.y);
-                            if (unit instanceof Starling) {
-                                unit.setManualRallyPoint(new Vector2D(enemyForge.position.x, enemyForge.position.y));
-                            }
-                        }
-                    }
-                    return;
-                }
-            } else {
-                // Accumulate at base
-                for (const unit of player.units) {
-                    if (unit.isHero) {
-                        unit.rallyPoint = new Vector2D(
-                            player.stellarForge.position.x,
-                            player.stellarForge.position.y
-                        );
-                    } else if (unit instanceof Starling) {
-                        unit.setManualRallyPoint(new Vector2D(
-                            player.stellarForge.position.x,
-                            player.stellarForge.position.y
-                        ));
-                    }
-                }
-                return;
-            }
-        } else if (player.aiStrategy === Constants.AIStrategy.AGGRESSIVE) {
-            // Aggressive strategy: Always push to enemy base
-            const enemyForge = this.getEnemyForgeForPlayer(player);
-            if (enemyForge) {
-                for (const unit of player.units) {
-                    if (unit.isHero) {
-                        unit.rallyPoint = new Vector2D(enemyForge.position.x, enemyForge.position.y);
-                    } else if (unit instanceof Starling) {
-                        unit.setManualRallyPoint(new Vector2D(enemyForge.position.x, enemyForge.position.y));
-                    }
-                }
-                return;
-            }
-        }
-
-        // Default behavior (for ECONOMIC and DEFENSIVE): Defend mirrors and base
-        const mirrorCount = player.solarMirrors.length;
-        let mirrorIndex = 0;
-
-        for (const unit of player.units) {
-            if (unit.isHero) {
-                unit.rallyPoint = new Vector2D(
-                    player.stellarForge.position.x,
-                    player.stellarForge.position.y
-                );
-            } else if (unit instanceof Starling) {
-                if (mirrorIndex < mirrorCount) {
-                    const mirror = player.solarMirrors[mirrorIndex];
-                    unit.setManualRallyPoint(new Vector2D(mirror.position.x, mirror.position.y));
-                    mirrorIndex += 1;
-                } else {
-                    unit.setManualRallyPoint(new Vector2D(
-                        player.stellarForge.position.x,
-                        player.stellarForge.position.y
-                    ));
-                }
-            }
-        }
-    }
-    
-    private getEnemyForgeForPlayer(player: Player): StellarForge | null {
-        for (const otherPlayer of this.players) {
-            // Skip self and defeated players
-            if (otherPlayer === player || otherPlayer.isDefeated()) continue;
-            
-            // Skip teammates in team games (3+ players)
-            if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
-                continue;
-            }
-            
-            if (otherPlayer.stellarForge) {
-                return otherPlayer.stellarForge;
-            }
-        }
-        return null;
-    }
-
-    private updateAiHeroProductionForPlayer(player: Player): void {
-        if (this.gameTime < player.aiNextHeroCommandSec) {
-            return;
-        }
-        
-        // Strategy-based hero production intervals
-        let heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
-        switch (player.aiStrategy) {
-            case Constants.AIStrategy.AGGRESSIVE:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_AGGRESSIVE_HERO_MULTIPLIER;
-                break;
-            case Constants.AIStrategy.ECONOMIC:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_ECONOMIC_HERO_MULTIPLIER;
-                break;
-            case Constants.AIStrategy.WAVES:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC * Constants.AI_WAVES_HERO_MULTIPLIER;
-                break;
-            default:
-                heroProductionInterval = Constants.AI_HERO_COMMAND_INTERVAL_SEC;
-        }
-        
-        player.aiNextHeroCommandSec = this.gameTime + heroProductionInterval;
-
-        if (!player.stellarForge || !player.stellarForge.canProduceUnits()) {
-            return;
-        }
-
-        const heroTypes = this.getAiHeroTypesForFaction(player.faction);
-        for (const heroType of heroTypes) {
-            if (this.isHeroUnitAlive(player, heroType)) {
-                continue;
-            }
-            if (this.isHeroUnitQueuedOrProducing(player.stellarForge, heroType)) {
-                continue;
-            }
-            player.stellarForge.enqueueHeroUnit(heroType, this.getHeroUnitCost(player));
-            return;
-        }
-    }
-
-
     getHeroUnitCost(player: Player): number {
         const aliveHeroCount = player.units.filter((unit) => unit.isHero).length;
         return Constants.HERO_UNIT_BASE_COST + aliveHeroCount * Constants.HERO_UNIT_COST_INCREMENT;
     }
 
-    private assignAiMirrorsToIncompleteBuilding(player: Player): void {
-        const incompleteBuilding = player.buildings.find((building) => !building.isComplete && !building.isDestroyed());
-        if (!incompleteBuilding) {
-            return;
-        }
-
-        for (const mirror of player.solarMirrors) {
-            if (mirror.linkedStructure !== null && mirror.linkedStructure !== player.stellarForge) {
-                continue;
-            }
-            mirror.setLinkedStructure(incompleteBuilding);
-        }
-    }
-
-    private findMirrorSpawnPositionNearForge(stellarForge: StellarForge): Vector2D {
-        const baseRadiusPx = stellarForge.radius + Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE;
-        const mirrorRadiusPx = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
-        const angleStepRad = Math.PI / 6;
-
-        for (let ringIndex = 0; ringIndex < 4; ringIndex++) {
-            const ringRadiusPx = baseRadiusPx + ringIndex * (mirrorRadiusPx + 12);
-            for (let angleIndex = 0; angleIndex < 12; angleIndex++) {
-                const angleRad = angleStepRad * angleIndex;
-                const candidate = new Vector2D(
-                    stellarForge.position.x + Math.cos(angleRad) * ringRadiusPx,
-                    stellarForge.position.y + Math.sin(angleRad) * ringRadiusPx
-                );
-                if (!this.checkCollision(candidate, mirrorRadiusPx)) {
-                    return candidate;
-                }
-            }
-        }
-
-        return new Vector2D(stellarForge.position.x, stellarForge.position.y);
-    }
-
-    private updateAiStructuresForPlayer(
-        player: Player,
-        enemies: CombatTarget[]
-    ): void {
-        if (this.gameTime < player.aiNextStructureCommandSec) {
-            return;
-        }
-        player.aiNextStructureCommandSec = this.gameTime + Constants.AI_STRUCTURE_COMMAND_INTERVAL_SEC;
-
-        if (!player.stellarForge) {
-            return;
-        }
-
-        const minigunCount = player.buildings.filter((building) => building instanceof Minigun).length;
-        const swirlerCount = player.buildings.filter((building) => building instanceof SpaceDustSwirler).length;
-        const hasSubsidiaryFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-
-        let buildType: 'minigun' | 'swirler' | 'subsidiaryFactory' | null = null;
-        
-        // Strategy-based building priorities
-        // Note: Radiant-specific buildings (minigun, swirler) are only available to Radiant faction
-        const canBuildRadiantStructures = player.faction === Faction.RADIANT;
-        
-        switch (player.aiStrategy) {
-            case Constants.AIStrategy.ECONOMIC:
-                // Economic: Build factory first, then minimal defenses
-                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
-                    buildType = 'subsidiaryFactory';
-                } else if (canBuildRadiantStructures && minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
-                    buildType = 'swirler';
-                }
-                break;
-                
-            case Constants.AIStrategy.DEFENSIVE:
-                // Defensive: Prioritize defenses heavily
-                if (canBuildRadiantStructures && swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
-                    buildType = 'swirler';
-                } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                } else if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
-                    buildType = 'subsidiaryFactory';
-                } else if (canBuildRadiantStructures && minigunCount < 5 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                }
-                break;
-                
-            case Constants.AIStrategy.AGGRESSIVE:
-                // Aggressive: Build factory early, skip most defenses
-                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
-                    buildType = 'subsidiaryFactory';
-                } else if (canBuildRadiantStructures && minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                }
-                break;
-                
-            case Constants.AIStrategy.WAVES:
-                // Waves: Balanced approach with factory priority
-                if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
-                    buildType = 'subsidiaryFactory';
-                } else if (canBuildRadiantStructures && minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
-                    buildType = 'swirler';
-                } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
-                    buildType = 'minigun';
-                }
-                break;
-        }
-
-        if (!buildType) {
-            return;
-        }
-
-        const threat = this.findAiThreat(player, enemies);
-        const anchor = threat?.guardPoint ?? this.getAiStructureAnchor(player);
-        if (!anchor) {
-            return;
-        }
-
-        let placement: Vector2D | null = null;
-        let didBuildStructure = false;
-
-        switch (buildType) {
-            case 'subsidiaryFactory':
-                placement = this.findAiStructurePlacement(anchor, Constants.SUBSIDIARY_FACTORY_RADIUS, player, threat?.enemy.position);
-                if (placement && player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
-                    player.buildings.push(new SubsidiaryFactory(placement, player));
-                    didBuildStructure = true;
-                }
-                break;
-            case 'swirler':
-                placement = this.findAiStructurePlacement(anchor, Constants.SWIRLER_RADIUS, player, threat?.enemy.position);
-                if (placement && player.spendEnergy(Constants.SWIRLER_COST)) {
-                    player.buildings.push(new SpaceDustSwirler(placement, player));
-                    didBuildStructure = true;
-                }
-                break;
-            case 'minigun':
-                placement = this.findAiStructurePlacement(anchor, Constants.MINIGUN_RADIUS, player, threat?.enemy.position);
-                if (placement && player.spendEnergy(Constants.MINIGUN_COST)) {
-                    player.buildings.push(new Minigun(placement, player));
-                    didBuildStructure = true;
-                }
-                break;
-        }
-
-        if (didBuildStructure) {
-            this.assignAiMirrorsToIncompleteBuilding(player);
-        }
-    }
-
-    private getAiStructureAnchor(player: Player): Vector2D | null {
-        if (!player.stellarForge) {
-            return null;
-        }
-
-        if (player.solarMirrors.length === 0 || this.suns.length === 0) {
-            return player.stellarForge.position;
-        }
-
-        let bestMirror: SolarMirror | null = null;
-        let bestDistance = Infinity;
-        for (const mirror of player.solarMirrors) {
-            const closestSun = mirror.getClosestSun(this.suns);
-            if (!closestSun) {
-                continue;
-            }
-            const distance = mirror.position.distanceTo(closestSun.position);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                bestMirror = mirror;
-            }
-        }
-
-        return bestMirror ? bestMirror.position : player.stellarForge.position;
-    }
-
-    private findAiStructurePlacement(
-        anchor: Vector2D,
-        radiusPx: number,
-        player: Player,
-        threatPosition?: Vector2D
-    ): Vector2D | null {
-        const preferredTarget = threatPosition ?? this.getEnemyForgeForPlayer(player)?.position ?? anchor;
-        const preferredDirection = Math.atan2(preferredTarget.y - anchor.y, preferredTarget.x - anchor.x);
-        const activeInfluenceSources = this.getActiveInfluenceSourcesForPlayer(player);
-
-        let bestCandidate: Vector2D | null = null;
-        let bestScore = -Infinity;
-
-        for (const source of activeInfluenceSources) {
-            const directionToTarget = Math.atan2(
-                preferredTarget.y - source.position.y,
-                preferredTarget.x - source.position.x
-            );
-
-            // Candidate distances intentionally hug the influence edge first to keep expanding territory.
-            const distanceAttempts = [
-                source.radius - radiusPx - 8,
-                source.radius - radiusPx - 28,
-                source.radius - radiusPx - 52
-            ];
-
-            for (const candidateDistance of distanceAttempts) {
-                if (candidateDistance <= radiusPx) {
-                    continue;
-                }
-
-                for (let i = 0; i < 12; i++) {
-                    const angleRad = directionToTarget + (Math.PI / 6) * i;
-                    const candidate = new Vector2D(
-                        source.position.x + Math.cos(angleRad) * candidateDistance,
-                        source.position.y + Math.sin(angleRad) * candidateDistance
-                    );
-
-                    if (!this.isPointWithinPlayerInfluence(player, candidate)) {
-                        continue;
-                    }
-                    if (this.checkCollision(candidate, radiusPx)) {
-                        continue;
-                    }
-
-                    const score = this.scoreAiStructurePlacement(candidate, player, preferredTarget, source.radius, threatPosition);
-                    if (score > bestScore) {
-                        bestScore = score;
-                        bestCandidate = candidate;
-                    }
-                }
-            }
-        }
-
-        if (bestCandidate) {
-            return bestCandidate;
-        }
-
-        // Fallback ring search around anchor if influence-edge search was blocked by collisions.
-        const baseAngleRad = player.buildings.length * Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD;
-        const distancePx = Constants.AI_STRUCTURE_PLACEMENT_DISTANCE_PX + radiusPx;
-        for (let i = 0; i < 8; i++) {
-            const angleRad = baseAngleRad + Constants.AI_STRUCTURE_PLACEMENT_ANGLE_STEP_RAD * i + preferredDirection;
-            const candidate = new Vector2D(
-                anchor.x + Math.cos(angleRad) * distancePx,
-                anchor.y + Math.sin(angleRad) * distancePx
-            );
-            if (!this.isPointWithinPlayerInfluence(player, candidate)) {
-                continue;
-            }
-            if (!this.checkCollision(candidate, radiusPx)) {
-                return candidate;
-            }
-        }
-        return null;
-    }
-
-    private getActiveInfluenceSourcesForPlayer(player: Player): { position: Vector2D; radius: number }[] {
-        const sources: { position: Vector2D; radius: number }[] = [];
-
-        if (player.stellarForge && this.isInfluenceSourceActive(player.stellarForge)) {
-            sources.push({
-                position: player.stellarForge.position,
-                radius: this.getInfluenceRadiusForSource(player.stellarForge)
-            });
-        }
-
-        for (const building of player.buildings) {
-            if (!this.isInfluenceSourceActive(building)) {
-                continue;
-            }
-            sources.push({
-                position: building.position,
-                radius: this.getInfluenceRadiusForSource(building)
-            });
-        }
-
-        return sources;
-    }
-
-    private scoreAiStructurePlacement(
-        candidate: Vector2D,
-        player: Player,
-        preferredTarget: Vector2D,
-        sourceRadius: number,
-        threatPosition?: Vector2D
-    ): number {
-        const forgePosition = player.stellarForge?.position;
-        const distanceToForge = forgePosition ? candidate.distanceTo(forgePosition) : 0;
-        const distanceToTarget = candidate.distanceTo(preferredTarget);
-
-        let nearestEdgeSlack = sourceRadius;
-        for (const source of this.getActiveInfluenceSourcesForPlayer(player)) {
-            const distanceToSource = candidate.distanceTo(source.position);
-            if (distanceToSource <= source.radius) {
-                nearestEdgeSlack = Math.min(nearestEdgeSlack, source.radius - distanceToSource);
-            }
-        }
-
-        const edgeExpansionScore = -nearestEdgeSlack * 3.0;
-        const territorialScore = distanceToForge * 0.25;
-        const targetScore = threatPosition ? -distanceToTarget * 0.35 : -distanceToTarget * 0.12;
-
-        const shadeWeight = this.getAiShadePlacementWeight(player.aiDifficulty);
-        const shadeScore = this.isPointInShadow(candidate) ? shadeWeight : 0;
-
-        return edgeExpansionScore + territorialScore + targetScore + shadeScore;
-    }
-
-    private getAiShadePlacementWeight(difficulty: Constants.AIDifficulty): number {
-        switch (difficulty) {
-            case Constants.AIDifficulty.HARD:
-                return 120;
-            case Constants.AIDifficulty.NORMAL:
-                return 45;
-            case Constants.AIDifficulty.EASY:
-            default:
-                return 10;
-        }
-    }
-
-    private findAiThreat(
-        player: Player,
-        enemies: CombatTarget[]
-    ): { enemy: CombatTarget; guardPoint: Vector2D } | null {
-        if (!player.stellarForge) {
-            return null;
-        }
-
-        const guardPoints: Vector2D[] = [player.stellarForge.position];
-        for (const mirror of player.solarMirrors) {
-            guardPoints.push(mirror.position);
-        }
-
-        let closestThreat: CombatTarget | null = null;
-        let closestGuardPoint: Vector2D | null = null;
-        let closestDistanceSq = Infinity;
-        const defenseRadiusSq = Constants.AI_DEFENSE_RADIUS_PX * Constants.AI_DEFENSE_RADIUS_PX;
-
-        for (const guardPoint of guardPoints) {
-            for (const enemy of enemies) {
-                if ('health' in enemy && enemy.health <= 0) {
-                    continue;
-                }
-                const dx = enemy.position.x - guardPoint.x;
-                const dy = enemy.position.y - guardPoint.y;
-                const distanceSq = dx * dx + dy * dy;
-                if (distanceSq <= defenseRadiusSq && distanceSq < closestDistanceSq) {
-                    closestDistanceSq = distanceSq;
-                    closestThreat = enemy;
-                    closestGuardPoint = guardPoint;
-                }
-            }
-        }
-
-        if (!closestThreat || !closestGuardPoint) {
-            return null;
-        }
-
-        return { enemy: closestThreat, guardPoint: closestGuardPoint };
-    }
-
-    private getClosestSunToPoint(point: Vector2D): Sun | null {
+    getClosestSunToPoint(point: Vector2D): Sun | null {
         let closestSun: Sun | null = null;
         let closestDistance = Infinity;
         for (const sun of this.suns) {
@@ -3709,244 +2829,6 @@ export class GameState {
             }
         }
         return closestSun;
-    }
-
-    private getAiHeroTypesForFaction(faction: Faction): string[] {
-        switch (faction) {
-            case Faction.RADIANT:
-                return ['Marine', 'Mothership', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
-            case Faction.AURUM:
-                return ['Driller', 'AurumHero', 'Dash', 'Blink', 'Splendor'];
-            case Faction.VELARIS:
-                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono'];
-            default:
-                return [];
-        }
-    }
-
-    private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
-        switch (heroUnitType) {
-            case 'Marine':
-                return unit instanceof Marine;
-            case 'Mothership':
-                return unit instanceof Mothership;
-            case 'Grave':
-                return unit instanceof Grave;
-            case 'Ray':
-                return unit instanceof Ray;
-            case 'InfluenceBall':
-                return unit instanceof InfluenceBall;
-            case 'TurretDeployer':
-                return unit instanceof TurretDeployer;
-            case 'Driller':
-                return unit instanceof Driller;
-            case 'Dagger':
-                return unit instanceof Dagger;
-            case 'Beam':
-                return unit instanceof Beam;
-            case 'Mortar':
-                return unit instanceof Mortar;
-            case 'Preist':
-                return unit instanceof Preist;
-            case 'Tank':
-                return unit instanceof Tank;
-            case 'Spotlight':
-                return unit instanceof Spotlight;
-            case 'Nova':
-                return unit instanceof Nova;
-            case 'Sly':
-                return unit instanceof Sly;
-            case 'Radiant':
-                return unit instanceof Radiant;
-            case 'VelarisHero':
-                return unit instanceof VelarisHero;
-            case 'Chrono':
-                return unit instanceof Chrono;
-            case 'AurumHero':
-                return unit instanceof AurumHero;
-            case 'Dash':
-                return unit instanceof Dash;
-            case 'Blink':
-                return unit instanceof Blink;
-            case 'Splendor':
-                return unit instanceof Splendor;
-            case 'Shadow':
-                return unit instanceof Shadow;
-            default:
-                return false;
-        }
-    }
-
-    private isHeroUnitAlive(player: Player, heroUnitType: string): boolean {
-        return player.units.some((unit) => this.isHeroUnitOfType(unit, heroUnitType));
-    }
-
-    private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
-    }
-
-    private applyDustPushFromMovingEntity(
-        position: Vector2D,
-        velocity: Vector2D,
-        radiusPx: number,
-        forceMultiplier: number,
-        impactColor: string | null,
-        deltaTime: number
-    ): void {
-        const speed = Math.sqrt(velocity.x ** 2 + velocity.y ** 2);
-        if (speed <= 0) {
-            return;
-        }
-        const effectiveSpeed = Math.max(speed, Constants.DUST_PUSH_MIN_EFFECTIVE_SPEED_PX_PER_SEC);
-        this.applyFluidForceFromMovingObject(
-            position,
-            velocity,
-            radiusPx,
-            effectiveSpeed * forceMultiplier,
-            impactColor,
-            deltaTime
-        );
-    }
-
-    /**
-     * Apply fluid-like forces to particles from a moving object (projectile)
-     * Particles closer to the object get pushed more, with falloff based on distance
-     * 
-     * @param position - World position of the moving object (pixels)
-     * @param velocity - Velocity vector of the moving object (pixels/second)
-     * @param radius - Effect radius in pixels (particles beyond this distance are not affected)
-     * @param strength - Base force strength (higher values create stronger displacement)
-     * @param deltaTime - Time delta in seconds for frame-independent physics
-     */
-    private applyFluidForceFromMovingObject(
-        position: Vector2D,
-        velocity: Vector2D,
-        radius: number,
-        strength: number,
-        impactColor: string | null,
-        deltaTime: number
-    ): void {
-        for (const particle of this.spaceDust) {
-            const distance = particle.position.distanceTo(position);
-            
-            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
-                // Calculate direction from object to particle
-                const directionToParticle = new Vector2D(
-                    particle.position.x - position.x,
-                    particle.position.y - position.y
-                ).normalize();
-                
-                // Combine forward motion with radial push
-                const velocityNorm = velocity.normalize();
-                
-                // Mix of forward push and radial displacement (like fluid being displaced)
-                const forwardComponent = Constants.FLUID_FORWARD_COMPONENT;
-                const radialComponent = Constants.FLUID_RADIAL_COMPONENT;
-                
-                const pushDirection = new Vector2D(
-                    velocityNorm.x * forwardComponent + directionToParticle.x * radialComponent,
-                    velocityNorm.y * forwardComponent + directionToParticle.y * radialComponent
-                );
-                
-                // Force falls off with distance (inverse square for more realistic fluid behavior)
-                const distanceFactor = 1.0 - (distance / radius);
-                const forceMagnitude = strength * distanceFactor * distanceFactor;
-
-                if (impactColor) {
-                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
-                    if (impactStrength > 0) {
-                        particle.applyImpactColor(impactColor, impactStrength);
-                    }
-                }
-                
-                particle.applyForce(new Vector2D(
-                    pushDirection.x * forceMagnitude * deltaTime,
-                    pushDirection.y * forceMagnitude * deltaTime
-                ));
-            }
-        }
-    }
-
-    /**
-     * Apply fluid-like forces to particles from a beam segment
-     * Creates a line-based displacement field along the beam
-     * 
-     * @param startPos - Starting position of the beam segment (pixels)
-     * @param endPos - Ending position of the beam segment (pixels)
-     * @param radius - Effect radius around the beam line in pixels
-     * @param strength - Base force strength (higher values create stronger displacement)
-     * @param deltaTime - Time delta in seconds for frame-independent physics
-     */
-    private applyFluidForceFromBeam(
-        startPos: Vector2D,
-        endPos: Vector2D,
-        radius: number,
-        strength: number,
-        impactColor: string | null,
-        deltaTime: number
-    ): void {
-        // Calculate beam direction
-        const beamLength = startPos.distanceTo(endPos);
-        if (beamLength < Constants.FLUID_MIN_DISTANCE) return;
-        
-        const beamDirection = new Vector2D(
-            endPos.x - startPos.x,
-            endPos.y - startPos.y
-        ).normalize();
-        
-        for (const particle of this.spaceDust) {
-            // Find closest point on line segment to particle
-            const toParticle = new Vector2D(
-                particle.position.x - startPos.x,
-                particle.position.y - startPos.y
-            );
-            
-            // Project particle position onto beam line
-            const projection = toParticle.x * beamDirection.x + toParticle.y * beamDirection.y;
-            const clampedProjection = Math.max(0, Math.min(beamLength, projection));
-            
-            // Closest point on beam to particle
-            const closestPoint = new Vector2D(
-                startPos.x + beamDirection.x * clampedProjection,
-                startPos.y + beamDirection.y * clampedProjection
-            );
-            
-            const distance = particle.position.distanceTo(closestPoint);
-            
-            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
-                // Direction from beam to particle (perpendicular push)
-                const directionToParticle = new Vector2D(
-                    particle.position.x - closestPoint.x,
-                    particle.position.y - closestPoint.y
-                ).normalize();
-                
-                // Combine beam direction with radial push
-                // Particles along beam get pushed forward and outward
-                const alongBeamComponent = Constants.BEAM_ALONG_COMPONENT;
-                const perpendicularComponent = Constants.BEAM_PERPENDICULAR_COMPONENT;
-                
-                const pushDirection = new Vector2D(
-                    beamDirection.x * alongBeamComponent + directionToParticle.x * perpendicularComponent,
-                    beamDirection.y * alongBeamComponent + directionToParticle.y * perpendicularComponent
-                );
-                
-                // Force falls off with distance from beam
-                const distanceFactor = 1.0 - (distance / radius);
-                const forceMagnitude = strength * distanceFactor * distanceFactor;
-
-                if (impactColor) {
-                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
-                    if (impactStrength > 0) {
-                        particle.applyImpactColor(impactColor, impactStrength);
-                    }
-                }
-                
-                particle.applyForce(new Vector2D(
-                    pushDirection.x * forceMagnitude * deltaTime,
-                    pushDirection.y * forceMagnitude * deltaTime
-                ));
-            }
-        }
     }
 
     private getPlayerImpactColor(player: Player): string {
@@ -4587,192 +3469,6 @@ export class GameState {
         }
     }
 
-    private resolveUnitCollisions(allUnits: Unit[]): void {
-        for (let i = 0; i < allUnits.length; i++) {
-            const unitA = allUnits[i];
-            if (unitA.isDead()) {
-                continue;
-            }
-
-            for (let j = i + 1; j < allUnits.length; j++) {
-                const unitB = allUnits[j];
-                if (unitB.isDead()) {
-                    continue;
-                }
-
-                let deltaX = unitB.position.x - unitA.position.x;
-                let deltaY = unitB.position.y - unitA.position.y;
-                let distanceSq = deltaX * deltaX + deltaY * deltaY;
-
-                if (distanceSq === 0) {
-                    deltaX = i % 2 === 0 ? 1 : -1;
-                    deltaY = 0;
-                    distanceSq = 1;
-                }
-
-                const minDistance = unitA.collisionRadiusPx + unitB.collisionRadiusPx;
-                const minDistanceSq = minDistance * minDistance;
-                if (distanceSq < minDistanceSq) {
-                    const distance = Math.sqrt(distanceSq);
-                    const overlap = minDistance - distance;
-                    const pushX = (deltaX / distance) * overlap;
-                    const pushY = (deltaY / distance) * overlap;
-
-                    if (unitA.isHero && !unitB.isHero) {
-                        unitB.position.x += pushX;
-                        unitB.position.y += pushY;
-                    } else if (!unitA.isHero && unitB.isHero) {
-                        unitA.position.x -= pushX;
-                        unitA.position.y -= pushY;
-                    } else {
-                        unitA.position.x -= pushX * 0.5;
-                        unitA.position.y -= pushY * 0.5;
-                        unitB.position.x += pushX * 0.5;
-                        unitB.position.y += pushY * 0.5;
-                    }
-                }
-            }
-        }
-    }
-
-    private resolveUnitObstacleCollisions(allUnits: Unit[]): void {
-        for (const unit of allUnits) {
-            if (unit.isDead()) {
-                continue;
-            }
-
-            const oldPosition = new Vector2D(unit.position.x, unit.position.y);
-
-            if (this.checkCollision(unit.position, unit.collisionRadiusPx)) {
-                // Smooth collision: Find the nearest obstacle and push away from it gently
-                let pushX = 0;
-                let pushY = 0;
-                let pushCount = 0;
-
-                // Check all obstacles and accumulate push directions
-                // Suns no longer block movement
-
-                // Check asteroids
-                for (const asteroid of this.asteroids) {
-                    const dx = unit.position.x - asteroid.position.x;
-                    const dy = unit.position.y - asteroid.position.y;
-                    const distSq = dx * dx + dy * dy;
-                    const minDist = asteroid.size + unit.collisionRadiusPx + Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
-                    const minDistSq = minDist * minDist;
-                    if (distSq < minDistSq || asteroid.containsPoint(unit.position)) {
-                        const dist = Math.sqrt(distSq) || 1;
-                        const pushStrength = (minDist - dist) / minDist;
-                        pushX += (dx / dist) * pushStrength;
-                        pushY += (dy / dist) * pushStrength;
-                        pushCount++;
-                    }
-                }
-
-                // Check stellar forges
-                for (const player of this.players) {
-                    if (player.stellarForge) {
-                        const forge = player.stellarForge;
-                        const dx = unit.position.x - forge.position.x;
-                        const dy = unit.position.y - forge.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = forge.radius + unit.collisionRadiusPx;
-                        if (dist < minDist) {
-                            const pushStrength = (minDist - dist) / minDist;
-                            pushX += (dx / dist) * pushStrength;
-                            pushY += (dy / dist) * pushStrength;
-                            pushCount++;
-                        }
-                    }
-                }
-
-                // Check solar mirrors
-                for (const player of this.players) {
-                    for (const mirror of player.solarMirrors) {
-                        if (mirror.owner === unit.owner) continue;
-                        const dx = unit.position.x - mirror.position.x;
-                        const dy = unit.position.y - mirror.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = 20 + unit.collisionRadiusPx;
-                        if (dist < minDist) {
-                            const pushStrength = (minDist - dist) / minDist;
-                            pushX += (dx / dist) * pushStrength;
-                            pushY += (dy / dist) * pushStrength;
-                            pushCount++;
-                        }
-                    }
-                }
-
-                // Check buildings
-                for (const player of this.players) {
-                    for (const building of player.buildings) {
-                        const dx = unit.position.x - building.position.x;
-                        const dy = unit.position.y - building.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = building.radius + unit.collisionRadiusPx;
-                        if (dist < minDist) {
-                            const pushStrength = (minDist - dist) / minDist;
-                            pushX += (dx / dist) * pushStrength;
-                            pushY += (dy / dist) * pushStrength;
-                            pushCount++;
-                        }
-                    }
-                }
-
-                // Apply smooth push away from obstacles
-                if (pushCount > 0) {
-                    const pushLength = Math.sqrt(pushX * pushX + pushY * pushY);
-                    if (pushLength > 0) {
-                        // Normalize and apply gentle push
-                        const pushDistance = Math.min(this.MAX_PUSH_DISTANCE, pushLength * this.PUSH_MULTIPLIER);
-                        unit.position.x = oldPosition.x + (pushX / pushLength) * pushDistance;
-                        unit.position.y = oldPosition.y + (pushY / pushLength) * pushDistance;
-                    }
-                }
-
-                // If still in collision after push, stop the unit
-                if (this.checkCollision(unit.position, unit.collisionRadiusPx)) {
-                    unit.position = oldPosition;
-                    if (unit.rallyPoint && this.checkCollision(unit.rallyPoint, unit.collisionRadiusPx)) {
-                        unit.rallyPoint = null;
-                    }
-                }
-            }
-
-            this.clampUnitOutsideStructures(unit);
-        }
-    }
-
-    private clampUnitOutsideStructures(unit: Unit): void {
-        for (const player of this.players) {
-            if (player.stellarForge) {
-                this.pushUnitOutsideCircle(unit, player.stellarForge.position, player.stellarForge.radius);
-            }
-
-            for (const building of player.buildings) {
-                this.pushUnitOutsideCircle(unit, building.position, building.radius);
-            }
-        }
-    }
-
-    private pushUnitOutsideCircle(unit: Unit, center: Vector2D, radius: number): void {
-        const minDistance = radius + unit.collisionRadiusPx + Constants.UNIT_STRUCTURE_STANDOFF_PX;
-        const offsetX = unit.position.x - center.x;
-        const offsetY = unit.position.y - center.y;
-        const distanceSq = offsetX * offsetX + offsetY * offsetY;
-        const minDistanceSq = minDistance * minDistance;
-
-        if (distanceSq < minDistanceSq) {
-            const distance = Math.sqrt(distanceSq);
-            if (distance > 0) {
-                const scale = minDistance / distance;
-                unit.position.x = center.x + offsetX * scale;
-                unit.position.y = center.y + offsetY * scale;
-            } else {
-                unit.position.x = center.x + minDistance;
-                unit.position.y = center.y;
-            }
-        }
-    }
 
     /**
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
@@ -4836,103 +3532,13 @@ export class GameState {
         unitRadius: number = Constants.UNIT_RADIUS_PX,
         ignoredObject: SolarMirror | StellarForge | Building | null = null
     ): boolean {
-        // Suns no longer block movement or placement
-
-        // Check collision with asteroids
-        for (const asteroid of this.asteroids) {
-            if (asteroid.containsPoint(position)) {
-                return true; // Inside asteroid
-            }
-        }
-
-        // Check collision with all players' buildings
-        for (const player of this.players) {
-            // Check collision with stellar forge
-            if (player.stellarForge) {
-                if (player.stellarForge === ignoredObject) {
-                    continue;
-                }
-                const distance = position.distanceTo(player.stellarForge.position);
-                if (distance < player.stellarForge.radius + unitRadius) {
-                    return true; // Collision with forge
-                }
-            }
-
-            // Check collision with solar mirrors (using approximate radius)
-            for (const mirror of player.solarMirrors) {
-                if (mirror === ignoredObject) {
-                    continue;
-                }
-                const distance = position.distanceTo(mirror.position);
-                if (distance < 20 + unitRadius) { // Mirror has ~20 pixel radius
-                    return true; // Collision with mirror
-                }
-            }
-
-            // Check collision with buildings
-            for (const building of player.buildings) {
-                if (building === ignoredObject) {
-                    continue;
-                }
-                const distance = position.distanceTo(building.position);
-                if (distance < building.radius + unitRadius) {
-                    return true; // Collision with building
-                }
-            }
-        }
-
-        return false; // No collision
+        return PhysicsSystem.checkCollision(this, position, unitRadius, ignoredObject);
     }
 
     /**
      * Apply knockback to units and solar mirrors when asteroids rotate and collide with them
      * This prevents entities from getting stuck inside rotating asteroids
      */
-    private applyAsteroidRotationKnockback(): void {
-        // Check each asteroid for collisions with units and solar mirrors
-        for (const asteroid of this.asteroids) {
-            // Check all players' units
-            for (const player of this.players) {
-                // Check units
-                for (const unit of player.units) {
-                    // Broad-phase check: skip if unit is definitely outside asteroid
-                    // Use 1.4x size as safety margin since asteroid vertices can extend up to 1.32x base size
-                    const distance = unit.position.distanceTo(asteroid.position);
-                    if (distance < asteroid.size * 1.4 + unit.collisionRadiusPx) {
-                        // Use precise polygon check
-                        if (asteroid.containsPoint(unit.position)) {
-                            // Apply knockback away from asteroid center
-                            applyKnockbackVelocity(
-                                unit.position,
-                                unit.knockbackVelocity,
-                                asteroid.position,
-                                Constants.ASTEROID_KNOCKBACK_INITIAL_VELOCITY
-                            );
-                        }
-                    }
-                }
-                
-                // Check solar mirrors
-                for (const mirror of player.solarMirrors) {
-                    // Broad-phase check: skip if mirror is definitely outside asteroid
-                    const distance = mirror.position.distanceTo(asteroid.position);
-                    if (distance < asteroid.size * 1.4 + Constants.SOLAR_MIRROR_COLLISION_RADIUS) {
-                        // Use precise polygon check
-                        if (asteroid.containsPoint(mirror.position)) {
-                            // Apply knockback away from asteroid center
-                            applyKnockbackVelocity(
-                                mirror.position,
-                                mirror.knockbackVelocity,
-                                asteroid.position,
-                                Constants.ASTEROID_KNOCKBACK_INITIAL_VELOCITY
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {
         let totalLight = 0;
 
