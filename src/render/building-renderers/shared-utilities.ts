@@ -51,6 +51,7 @@ export interface BuildingRendererContext {
     canvasWidth: number;
     canvasHeight: number;
     viewingPlayer: any | null; // Player or null for spectator mode
+    highlightedButtonIndex: number; // Index of highlighted production button (-1 = none)
     
     // Coordinate transformation
     worldToScreen(worldPos: Vector2D): Vector2D;
