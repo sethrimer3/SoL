@@ -48,6 +48,9 @@ export interface BuildingRendererContext {
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     playerColor: string;
     enemyColor: string;
+    canvasWidth: number;
+    canvasHeight: number;
+    viewingPlayer: any | null; // Player or null for spectator mode
     
     // Coordinate transformation
     worldToScreen(worldPos: Vector2D): Vector2D;
@@ -82,13 +85,25 @@ export interface BuildingRendererContext {
         screenPos: Vector2D,
         size: number,
         game: any,
-        options: { opacity: number; widthScale: number; particleCount: number; particleSpread: number }
+        options: { isBuilding?: boolean; direction?: string; opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
     ): void;
     drawBuildingSelectionIndicator(screenPos: Vector2D, radius: number): void;
     drawHealthDisplay(screenPos: Vector2D, currentHealth: number, maxHealth: number, size: number, yOffset: number): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
+    drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: any, color: string): void;
     
     // Viewport culling
     isWithinViewBounds(worldPos: Vector2D, margin?: number): boolean;
+    
+    // Velaris faction helpers
+    getVelarisGraphemeSpritePath(letter: string): string | null;
+    getGraphemeMaskData(path: string): ImageData | null;
+    drawVelarisGraphemeSprite(path: string, x: number, y: number, size: number, color: string): void;
+    
+    // Edge detection for Aurum faction
+    detectAndDrawEdges(imageData: ImageData, width: number, height: number, offsetX: number, offsetY: number, color: string): void;
+    
+    // Pseudo-random generator (deterministic)
+    getPseudoRandom(seed: number): number;
 }
