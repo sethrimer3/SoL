@@ -202,6 +202,30 @@ export class MainMenu {
             maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
             attackRange: 0, attackIgnoresDefense: false, defense: Constants.TANK_DEFENSE, regen: 3,
             abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles'
+        },
+        {
+            id: 'velaris-chrono', name: 'Chrono', description: 'Area-control specialist that freezes units over time', faction: Faction.VELARIS,
+            maxHealth: Constants.CHRONO_MAX_HEALTH, attackDamage: Constants.CHRONO_ATTACK_DAMAGE, attackSpeed: Constants.CHRONO_ATTACK_SPEED,
+            attackRange: Constants.CHRONO_ATTACK_RANGE, attackIgnoresDefense: true, defense: 10, regen: 3,
+            abilityDescription: 'Temporal freeze field: project a circular zone that repeatedly freezes enemies inside'
+        },
+        {
+            id: 'velaris-shadow', name: 'Shadow', description: 'Beam duelist that deploys a mobile decoy', faction: Faction.VELARIS,
+            maxHealth: Constants.SHADOW_MAX_HEALTH, attackDamage: Constants.SHADOW_ATTACK_DAMAGE, attackSpeed: Constants.SHADOW_ATTACK_SPEED,
+            attackRange: Constants.SHADOW_ATTACK_RANGE, attackIgnoresDefense: false, defense: 6, regen: 3,
+            abilityDescription: 'Decoy projection: launch a durable decoy that distracts enemies and emits particles on despawn'
+        },
+        {
+            id: 'aurum-dash', name: 'Dash', description: 'Burst skirmisher with a high-speed slash dash', faction: Faction.AURUM,
+            maxHealth: Constants.DASH_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: Constants.DASH_MAX_DISTANCE, attackIgnoresDefense: false, defense: 10, regen: 4,
+            abilityDescription: 'Dash slash: rapidly traverse distance and damage enemies near the destination'
+        },
+        {
+            id: 'aurum-blink', name: 'Blink', description: 'Teleporter that emits a stun shockwave on arrival', faction: Faction.AURUM,
+            maxHealth: Constants.BLINK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
+            attackRange: Constants.BLINK_MAX_DISTANCE, attackIgnoresDefense: false, defense: 8, regen: 4,
+            abilityDescription: 'Blink shockwave: teleport to target location and release an area stun pulse'
         }
     ];
     
