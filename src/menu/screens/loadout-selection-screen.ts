@@ -265,12 +265,13 @@ export function renderLoadoutSelectionScreen(
         selectButton.style.fontSize = '24px';
         selectButton.style.padding = '10px 20px';
         selectButton.style.marginTop = '10px';
-        selectButton.style.backgroundColor = isSelected ? '#FF3333' : '#00FF88';
-        selectButton.style.color = '#000000';
+        selectButton.style.backgroundColor = isSelected ? '#B22222' : '#0E8A45';
+        selectButton.style.color = '#FFFFFF';
         selectButton.style.border = 'none';
         selectButton.style.borderRadius = '5px';
         selectButton.style.cursor = canSelect ? 'pointer' : 'not-allowed';
-        selectButton.style.fontWeight = 'bold';
+        selectButton.style.fontFamily = '"Doto", Arial, sans-serif';
+        selectButton.style.fontWeight = '500';
         selectButton.style.width = '100%';
         selectButton.style.transition = 'all 0.3s';
         selectButton.disabled = !canSelect;
@@ -278,12 +279,12 @@ export function renderLoadoutSelectionScreen(
         if (canSelect) {
             selectButton.addEventListener('mouseenter', () => {
                 selectButton.style.transform = 'scale(1.05)';
-                selectButton.style.backgroundColor = isSelected ? '#FF5555' : '#00FFAA';
+                selectButton.style.backgroundColor = isSelected ? '#8B1A1A' : '#0A6F37';
             });
 
             selectButton.addEventListener('mouseleave', () => {
                 selectButton.style.transform = 'scale(1)';
-                selectButton.style.backgroundColor = isSelected ? '#FF3333' : '#00FF88';
+                selectButton.style.backgroundColor = isSelected ? '#B22222' : '#0E8A45';
             });
 
             selectButton.addEventListener('click', () => {
