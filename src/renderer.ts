@@ -16,6 +16,10 @@ import { resolveAssetPath } from './render/asset-utilities';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
 import { AsteroidRenderer } from './render/asteroid-renderer';
+import { ForgeRenderer } from './render/building-renderers/forge-renderer';
+import { FoundryRenderer } from './render/building-renderers/foundry-renderer';
+import { TowerRenderer } from './render/building-renderers/tower-renderer';
+import type { BuildingRendererContext } from './render/building-renderers/shared-utilities';
 
 type ForgeFlameState = {
     warmth: number;
@@ -40,8 +44,6 @@ type AurumShapeState = {
     }>;
     lastGameTime: number;
 };
-
-
 
 type UltraLightDustStatic = {
     seed: number;
@@ -257,7 +259,6 @@ export class GameRenderer {
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
 
-
     private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
@@ -302,6 +303,9 @@ export class GameRenderer {
     private readonly starfieldRenderer: StarfieldRenderer;
     private readonly sunRenderer: SunRenderer;
     private readonly asteroidRenderer: AsteroidRenderer;
+    private readonly forgeRenderer: ForgeRenderer;
+    private readonly foundryRenderer: FoundryRenderer;
+    private readonly towerRenderer: TowerRenderer;
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -322,6 +326,11 @@ export class GameRenderer {
 
         // Initialize asteroid renderer
         this.asteroidRenderer = new AsteroidRenderer();
+
+        // Initialize building renderers
+        this.forgeRenderer = new ForgeRenderer();
+        this.foundryRenderer = new FoundryRenderer();
+        this.towerRenderer = new TowerRenderer();
 
         const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
@@ -371,7 +380,6 @@ export class GameRenderer {
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
     }
-
 
     /**
      * Convert world coordinates to screen coordinates
@@ -913,99 +921,6 @@ export class GameRenderer {
         }
     }
 
-    private drawVelarisForgeScript(
-        forge: StellarForge,
-        screenPos: Vector2D,
-        size: number,
-        displayColor: string,
-        gameTime: number,
-        shouldDim: boolean
-    ): void {
-        const scriptScale = size * this.VELARIS_FORGE_SCRIPT_SCALE;
-        const mainGraphemePath = this.getVelarisGraphemeSpritePath(this.VELARIS_FORGE_MAIN_GRAPHEME_LETTER);
-        const graphemeMask = mainGraphemePath ? this.getGraphemeMaskData(mainGraphemePath) : null;
-        const state = this.getVelarisForgeScriptState(forge, gameTime);
-        const deltaTimeSec = Math.min(0.05, Math.max(0, gameTime - state.lastGameTime));
-        state.lastGameTime = gameTime;
-        this.updateVelarisForgeParticles(state, deltaTimeSec, graphemeMask);
-
-        const particleRadius = Math.max(1, this.VELARIS_FORGE_PARTICLE_RADIUS_PX * this.zoom);
-        const baseAlpha = shouldDim ? 0.45 : 0.75;
-        const outlineAlpha = shouldDim ? 0.5 : 0.8;
-        const graphemeSize = scriptScale * this.VELARIS_FORGE_MAIN_GRAPHEME_SCALE;
-
-        if (mainGraphemePath) {
-            this.ctx.save();
-            this.ctx.globalAlpha = outlineAlpha;
-            this.drawVelarisGraphemeSprite(
-                mainGraphemePath,
-                screenPos.x,
-                screenPos.y,
-                graphemeSize,
-                displayColor
-            );
-            this.ctx.restore();
-        }
-
-        this.ctx.save();
-        this.ctx.globalAlpha = baseAlpha;
-        this.ctx.fillStyle = displayColor;
-        const count = state.positionsX.length;
-        for (let i = 0; i < count; i++) {
-            const x = screenPos.x + state.positionsX[i] * graphemeSize;
-            const y = screenPos.y + state.positionsY[i] * graphemeSize;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        this.ctx.restore();
-
-        this.ctx.restore();
-    }
-
-    private drawVelarisFoundrySigil(
-        foundry: SubsidiaryFactory,
-        screenPos: Vector2D,
-        size: number,
-        displayColor: string,
-        gameTime: number,
-        shouldDim: boolean
-    ): void {
-        const graphemePath = this.getVelarisGraphemeSpritePath(this.VELARIS_FOUNDRY_GRAPHEME_LETTER);
-        const graphemeSize = size * 1.55;
-        const particleRadius = Math.max(1, this.VELARIS_FOUNDRY_PARTICLE_RADIUS_PX * this.zoom);
-        const isProducing = Boolean(foundry.currentProduction);
-        const speedMultiplier = isProducing ? 2.6 : 1;
-        const orbitSpeed = this.VELARIS_FOUNDRY_PARTICLE_ORBIT_SPEED_RAD_PER_SEC * speedMultiplier;
-        const seed = this.getVelarisFoundrySeed(foundry);
-        const twoPi = Math.PI * 2;
-        const orbitRadiusBase = graphemeSize * 0.62;
-        const glyphAlpha = shouldDim ? 0.5 : 0.85;
-        const particleAlpha = shouldDim ? 0.35 : 0.7;
-
-        if (graphemePath) {
-            this.ctx.save();
-            this.ctx.globalAlpha = glyphAlpha;
-            this.drawVelarisGraphemeSprite(graphemePath, screenPos.x, screenPos.y, graphemeSize, displayColor);
-            this.ctx.restore();
-        }
-
-        this.ctx.save();
-        this.ctx.globalAlpha = particleAlpha;
-        this.ctx.fillStyle = displayColor;
-        for (let i = 0; i < this.VELARIS_FOUNDRY_PARTICLE_COUNT; i++) {
-            const baseAngle = this.getPseudoRandom(seed + i * 1.37) * twoPi;
-            const orbitRadius = orbitRadiusBase * (0.75 + this.getPseudoRandom(seed + i * 2.11) * 0.4);
-            const angle = baseAngle + gameTime * orbitSpeed + this.getPseudoRandom(seed + i * 3.07) * 0.5;
-            const x = screenPos.x + Math.cos(angle) * orbitRadius;
-            const y = screenPos.y + Math.sin(angle) * orbitRadius;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, particleRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        this.ctx.restore();
-    }
-
     private drawVelarisWarpGateVortex(
         gate: WarpGate,
         screenPos: Vector2D,
@@ -1109,141 +1024,6 @@ export class GameRenderer {
         this.ctx.restore();
     }
 
-    /**
-     * Draw Aurum stellar forge with moving squares and outline-only rendering
-     */
-    private drawAurumForgeOutline(
-        forge: StellarForge,
-        screenPos: Vector2D,
-        baseSize: number,
-        displayColor: string,
-        gameTime: number
-    ): void {
-        const state = this.getAurumForgeShapeState(forge, gameTime);
-        const deltaTime = gameTime - state.lastGameTime;
-        state.lastGameTime = gameTime;
-
-        // Update angles for each shape
-        state.shapes.forEach(shape => {
-            shape.angle += shape.speed * deltaTime;
-        });
-
-        // Calculate bounding box for optimization
-        const padding = baseSize * 2;
-        const minX = Math.max(0, Math.floor(screenPos.x - padding));
-        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
-        const minY = Math.max(0, Math.floor(screenPos.y - padding));
-        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
-        const cropWidth = maxX - minX;
-        const cropHeight = maxY - minY;
-
-        // Reuse or create offscreen canvas for better performance
-        if (!this.aurumOffscreenCanvas) {
-            this.aurumOffscreenCanvas = document.createElement('canvas');
-        }
-        const tempCanvas = this.aurumOffscreenCanvas;
-        tempCanvas.width = cropWidth;
-        tempCanvas.height = cropHeight;
-        const tempCtx = tempCanvas.getContext('2d')!;
-        
-        // Clear canvas
-        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
-
-        // Draw all squares filled on the temp canvas
-        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
-        state.shapes.forEach(shape => {
-            const size = baseSize * shape.size;
-            const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
-            const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
-            const x = screenPos.x + offsetX - minX;
-            const y = screenPos.y + offsetY - minY;
-            
-            tempCtx.save();
-            tempCtx.translate(x, y);
-            tempCtx.rotate(shape.angle);
-            tempCtx.fillRect(-size / 2, -size / 2, size, size);
-            tempCtx.restore();
-        });
-
-        // Get the image data and detect/draw edges
-        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
-        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
-    }
-
-    /**
-     * Draw Aurum foundry with moving triangles and outline-only rendering
-     */
-    private drawAurumFoundryOutline(
-        foundry: SubsidiaryFactory,
-        screenPos: Vector2D,
-        baseSize: number,
-        displayColor: string,
-        gameTime: number
-    ): void {
-        const state = this.getAurumFoundryShapeState(foundry, gameTime);
-        const deltaTime = gameTime - state.lastGameTime;
-        state.lastGameTime = gameTime;
-
-        // Update angles for each shape
-        state.shapes.forEach(shape => {
-            shape.angle += shape.speed * deltaTime;
-        });
-
-        // Calculate bounding box for optimization
-        const padding = baseSize * 2;
-        const minX = Math.max(0, Math.floor(screenPos.x - padding));
-        const maxX = Math.min(this.canvas.width, Math.ceil(screenPos.x + padding));
-        const minY = Math.max(0, Math.floor(screenPos.y - padding));
-        const maxY = Math.min(this.canvas.height, Math.ceil(screenPos.y + padding));
-        const cropWidth = maxX - minX;
-        const cropHeight = maxY - minY;
-
-        // Reuse or create offscreen canvas for better performance
-        if (!this.aurumOffscreenCanvas) {
-            this.aurumOffscreenCanvas = document.createElement('canvas');
-        }
-        const tempCanvas = this.aurumOffscreenCanvas;
-        tempCanvas.width = cropWidth;
-        tempCanvas.height = cropHeight;
-        const tempCtx = tempCanvas.getContext('2d')!;
-        
-        // Clear canvas
-        tempCtx.clearRect(0, 0, cropWidth, cropHeight);
-
-        // Draw all triangles filled on the temp canvas
-        tempCtx.fillStyle = this.AURUM_EDGE_DETECTION_FILL_COLOR;
-        state.shapes.forEach(shape => {
-            const size = baseSize * shape.size;
-            const offsetX = Math.cos(shape.angle) * baseSize * shape.offset;
-            const offsetY = Math.sin(shape.angle) * baseSize * shape.offset;
-            const x = screenPos.x + offsetX - minX;
-            const y = screenPos.y + offsetY - minY;
-            
-            tempCtx.save();
-            tempCtx.translate(x, y);
-            tempCtx.rotate(shape.angle);
-            tempCtx.beginPath();
-            // Draw equilateral triangle
-            for (let i = 0; i < 3; i++) {
-                const angle = (i / 3) * Math.PI * 2 - Math.PI / 2;
-                const px = Math.cos(angle) * size;
-                const py = Math.sin(angle) * size;
-                if (i === 0) {
-                    tempCtx.moveTo(px, py);
-                } else {
-                    tempCtx.lineTo(px, py);
-                }
-            }
-            tempCtx.closePath();
-            tempCtx.fill();
-            tempCtx.restore();
-        });
-
-        // Get the image data and detect/draw edges
-        const imageData = tempCtx.getImageData(0, 0, cropWidth, cropHeight);
-        this.detectAndDrawEdges(imageData, cropWidth, cropHeight, minX, minY, displayColor);
-    }
-
     private getHeroSpritePath(unit: Unit): string | null {
         if (unit.owner.faction !== Faction.RADIANT) {
             return null;
@@ -1295,6 +1075,55 @@ export class GameRenderer {
      */
     private darkenColor(color: string, factor: number): string {
         return darkenColor(color, factor);
+    }
+
+    /**
+     * Creates a BuildingRendererContext object for use by extracted building renderers.
+     */
+    private getBuildingRendererContext(): BuildingRendererContext {
+        return {
+            ctx: this.ctx,
+            zoom: this.zoom,
+            graphicsQuality: this.graphicsQuality,
+            playerColor: this.playerColor,
+            enemyColor: this.enemyColor,
+            canvasWidth: this.canvas.width,
+            canvasHeight: this.canvas.height,
+            viewingPlayer: this.viewingPlayer,
+            highlightedButtonIndex: this.highlightedButtonIndex,
+            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            getSpriteImage: (path) => this.getSpriteImage(path),
+            getTintedSprite: (path, color) => this.getTintedSprite(path, color) as HTMLCanvasElement,
+            getGraphicAssetPath: (key) => this.getGraphicAssetPath(key as any),
+            getCachedRadialGradient: (_key, _radius, _colorStops) => {
+                // Signature mismatch: context interface uses simplified form; caller handles directly
+                throw new Error('getCachedRadialGradient not supported via context');
+            },
+            darkenColor: (color, opacity) => this.darkenColor(color, opacity),
+            applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
+            getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
+            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+            drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset) =>
+                this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
+            drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+            drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
+                this.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color),
+            drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
+                this.drawWarpGateProductionEffect(screenPos, radius, game, color),
+            isWithinViewBounds: (worldPos, margin) => this.isWithinViewBounds(worldPos, margin),
+            getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
+            getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
+            drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
+            detectAndDrawEdges: (imageData, width, height, offsetX, offsetY, color) =>
+                this.detectAndDrawEdges(imageData, width, height, offsetX, offsetY, color),
+            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+            shakenExplosions: this.shakenExplosions,
+            triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
+        };
     }
 
     /**
@@ -1685,59 +1514,6 @@ export class GameRenderer {
         );
     }
 
-    private drawForgeFlames(
-        forge: StellarForge,
-        screenPos: Vector2D,
-        forgeSpriteSize: number,
-        game: GameState,
-        shouldDim: boolean
-    ): void {
-        const flameState = this.getForgeFlameState(forge, game.gameTime);
-        const hotSpritePath = this.getGraphicAssetPath('forgeFlameHot');
-        const coldSpritePath = this.getGraphicAssetPath('forgeFlameCold');
-        if (!hotSpritePath || !coldSpritePath) {
-            return;
-        }
-        const hotSprite = this.getSpriteImage(hotSpritePath);
-        const coldSprite = this.getSpriteImage(coldSpritePath);
-
-        if (!hotSprite.complete || hotSprite.naturalWidth === 0 || !coldSprite.complete || coldSprite.naturalWidth === 0) {
-            return;
-        }
-
-        const flameSize = forgeSpriteSize * Constants.FORGE_FLAME_SIZE_MULTIPLIER;
-        const shadeMultiplier = shouldDim ? (1 - Constants.SHADE_OPACITY) : 1;
-        const baseAlpha = Constants.FORGE_FLAME_ALPHA * shadeMultiplier;
-        const hotAlpha = baseAlpha * flameState.warmth;
-        const coldAlpha = baseAlpha * (1 - flameState.warmth);
-
-        // Both flames overlap at the same position instead of being side by side
-        const flameOffsets = [0, 0];
-
-        for (let i = 0; i < flameOffsets.length; i++) {
-            const offsetX = flameOffsets[i];
-            const rotationRad = i === 0 ? flameState.rotationRad : -flameState.rotationRad;
-
-            this.ctx.save();
-            this.ctx.translate(screenPos.x + offsetX, screenPos.y);
-            this.ctx.rotate(rotationRad);
-
-            if (coldAlpha > 0) {
-                this.ctx.globalAlpha = coldAlpha;
-                this.ctx.drawImage(coldSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
-            }
-
-            if (hotAlpha > 0) {
-                this.ctx.globalAlpha = hotAlpha;
-                this.ctx.drawImage(hotSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
-            }
-
-            this.ctx.restore();
-        }
-
-        this.ctx.globalAlpha = 1.0;
-    }
-
     /**
      * Draw cinematic lens flare for visible suns in screen space.
      */
@@ -1758,246 +1534,6 @@ export class GameRenderer {
             canvasHeight,
             this.graphicsQuality
         );
-    }
-
-    /**
-     * Draw a Stellar Forge
-     */
-    private drawStellarForge(forge: StellarForge, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(forge.position);
-        const size = 40 * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        let forgeColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        if (ladSun) {
-            ownerSide = game.getLadSide(forge.position, ladSun);
-            if (ownerSide === 'light') {
-                forgeColor = '#FFFFFF';
-            } else {
-                forgeColor = '#000000';
-            }
-        }
-
-        // Check visibility for enemy forges
-        let shouldDim = false;
-        let displayColor = forgeColor;
-        let visibilityAlpha = 1;
-        const isInShadow = !ladSun && game.isPointInShadow(forge.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer);
-            visibilityAlpha = this.getEnemyVisibilityAlpha(forge, isVisible, game.gameTime);
-            if (visibilityAlpha <= 0.01) {
-                return;
-            }
-
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(forge.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(forgeColor, Constants.SHADE_OPACITY);
-                    // Apply shade brightening effect near player units
-                    displayColor = this.applyShadeBrightening(displayColor, forge.position, game, true);
-                }
-            }
-        }
-
-        this.ctx.save();
-        this.ctx.globalAlpha = visibilityAlpha;
-
-        const shouldGlowInShade = isEnemy
-            ? (isInShadow && visibilityAlpha > 0.01)
-            : isInShadow;
-        this.drawStructureShadeGlow(
-            forge,
-            screenPos,
-            size,
-            displayColor,
-            shouldGlowInShade,
-            visibilityAlpha,
-            forge.isSelected
-        );
-
-        // Draw selection circle if selected
-        if (forge.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, size * 1.45);
-            
-            // Draw minion path if it exists
-            if (forge.minionPath.length > 0) {
-                // Add viewport culling margin to prevent pop-in
-                const viewportMargin = 100;
-                
-                // Check if forge or any waypoint is visible
-                let hasVisibleElement = this.isWithinViewBounds(forge.position, viewportMargin);
-                if (!hasVisibleElement) {
-                    for (const waypoint of forge.minionPath) {
-                        if (this.isWithinViewBounds(waypoint, viewportMargin)) {
-                            hasVisibleElement = true;
-                            break;
-                        }
-                    }
-                }
-                
-                // Only draw if something is visible
-                if (hasVisibleElement) {
-                    this.ctx.strokeStyle = '#FFFF00'; // Yellow path
-                    this.ctx.lineWidth = 3;
-                    this.ctx.setLineDash([10, 5]); // Dashed line
-                    this.ctx.beginPath();
-                    
-                    // Start from the forge position
-                    const startScreen = this.worldToScreen(forge.position);
-                    this.ctx.moveTo(startScreen.x, startScreen.y);
-                    
-                    // Draw line through all waypoints for visual continuity
-                    // (We need the full path even if some waypoints are off-screen to avoid gaps)
-                    for (const waypoint of forge.minionPath) {
-                        const waypointScreen = this.worldToScreen(waypoint);
-                        this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
-                    }
-                    
-                    this.ctx.stroke();
-                    this.ctx.setLineDash([]); // Reset to solid line
-                    
-                    // Draw waypoint markers only for visible waypoints
-                    this.ctx.fillStyle = '#FFFF00';
-                    for (let i = 0; i < forge.minionPath.length; i++) {
-                        const waypoint = forge.minionPath[i];
-                        if (!this.isWithinViewBounds(waypoint, viewportMargin)) {
-                            continue;
-                        }
-                        
-                        const waypointScreen = this.worldToScreen(waypoint);
-                        this.ctx.beginPath();
-                        this.ctx.arc(waypointScreen.x, waypointScreen.y, 5, 0, Math.PI * 2);
-                        this.ctx.fill();
-                        
-                        // Draw number for waypoint
-                        if (i === forge.minionPath.length - 1) {
-                            // Last waypoint gets special marker
-                            this.ctx.strokeStyle = '#FFFF00';
-                            this.ctx.lineWidth = 2;
-                            this.ctx.beginPath();
-                            this.ctx.arc(waypointScreen.x, waypointScreen.y, 8, 0, Math.PI * 2);
-                            this.ctx.stroke();
-                        }
-                    }
-                }
-            }
-
-            if (forge.isSelected) {
-                // Draw forge production buttons around the forge
-                this.drawHeroButtons(forge, screenPos, this.selectedHeroNames);
-            }
-
-        }
-
-
-        // Draw path preview while drawing a new path from this forge (even if forge was auto-deselected).
-        if (this.pathPreviewForge === forge && (this.pathPreviewPoints.length > 0 || this.pathPreviewEnd)) {
-            this.drawMinionPathPreview(forge.position, this.pathPreviewPoints, this.pathPreviewEnd);
-        }
-
-        // Draw aura in LaD mode
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, size, auraColor, ownerSide);
-        }
-
-        this.drawAestheticSpriteShadow(forge.position, screenPos, size * 1.05, game, {
-            opacity: visibilityAlpha,
-            widthScale: 0.9,
-            particleCount: 5,
-            particleSpread: size * 0.85
-        });
-
-        // Draw base structure - use darkened color if should dim
-        const tintColor = shouldDim
-            ? this.darkenColor(forgeColor, Constants.SHADE_OPACITY)
-            : forgeColor;
-        const isVelarisForge = forge.owner.faction === Faction.VELARIS;
-        const isAurumForge = forge.owner.faction === Faction.AURUM;
-        const forgeSpritePath = this.getForgeSpritePath(forge);
-        const forgeSprite = forgeSpritePath
-            ? this.getTintedSprite(forgeSpritePath, tintColor)
-            : null;
-        if (isAurumForge) {
-            // Draw Aurum forge with moving squares outline
-            this.drawAurumForgeOutline(
-                forge,
-                screenPos,
-                size,
-                displayColor,
-                game.gameTime
-            );
-        } else if (isVelarisForge) {
-            this.drawVelarisForgeScript(
-                forge,
-                screenPos,
-                size,
-                displayColor,
-                game.gameTime,
-                shouldDim
-            );
-        } else if (forgeSprite) {
-            const spriteSize = size * this.FORGE_SPRITE_SCALE;
-            this.ctx.drawImage(
-                forgeSprite,
-                screenPos.x - spriteSize / 2,
-                screenPos.y - spriteSize / 2,
-                spriteSize,
-                spriteSize
-            );
-
-            this.drawForgeFlames(forge, screenPos, spriteSize, game, shouldDim);
-        } else {
-            this.ctx.fillStyle = displayColor;
-            const strokeColor = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
-            this.ctx.lineWidth = 2;
-            
-            // Draw as a hexagon with rotation
-            this.ctx.beginPath();
-            for (let i = 0; i < 6; i++) {
-                const angle = (Math.PI / 3) * i + forge.rotation;
-                const x = screenPos.x + size * Math.cos(angle);
-                const y = screenPos.y + size * Math.sin(angle);
-                if (i === 0) {
-                    this.ctx.moveTo(x, y);
-                } else {
-                    this.ctx.lineTo(x, y);
-                }
-            }
-            this.ctx.closePath();
-            this.ctx.fill();
-            this.ctx.stroke();
-        }
-
-        this.drawHealthDisplay(screenPos, forge.health, this.FORGE_MAX_HEALTH, size, -size - 15);
-
-        if (forge.heroProductionUnitType && forge.heroProductionDurationSec > 0) {
-            const barWidth = size * 2;
-            const barHeight = 6;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + size + 10;
-            const progressPercent = Math.max(
-                0,
-                Math.min(1, 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec))
-            );
-
-            this.ctx.fillStyle = '#222';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-
-            this.ctx.fillStyle = '#00FF88';
-            this.ctx.fillRect(barX, barY, barWidth * progressPercent, barHeight);
-        }
-        
-        // Draw move order indicator if forge has one
-        if (forge.moveOrder > 0 && forge.targetPosition) {
-            this.drawMoveOrderIndicator(forge.position, forge.targetPosition, forge.moveOrder, shouldDim ? displayColor : color);
-        }
-
-        this.ctx.restore();
     }
 
     /**
@@ -2062,6 +1598,29 @@ export class GameRenderer {
 
     private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
         return getRadialButtonOffsets(buttonCount);
+    }
+
+    private drawRadialButtonCostLabel(
+        buttonX: number,
+        buttonY: number,
+        radialX: number,
+        radialY: number,
+        buttonRadius: number,
+        cost: number,
+        isAvailable: boolean
+    ): void {
+        const radialLength = Math.hypot(radialX, radialY);
+        const directionX = radialLength > 0 ? radialX / radialLength : 0;
+        const directionY = radialLength > 0 ? radialY / radialLength : -1;
+        const costOffsetPx = buttonRadius + 10 * this.zoom;
+        const costX = buttonX + directionX * costOffsetPx;
+        const costY = buttonY + directionY * costOffsetPx;
+
+        this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
+        this.ctx.font = `${10 * this.zoom}px Doto`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.fillText(cost.toString(), costX, costY);
     }
 
     private getHeroUnitType(heroName: string): string | null {
@@ -2162,97 +1721,8 @@ export class GameRenderer {
         this.ctx.stroke();
     }
 
-    /**
-     * Draw foundry production buttons around selected foundry
-     */
-    private drawFoundryButtons(foundry: SubsidiaryFactory, screenPos: Vector2D): void {
-        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
-        const buttonDistance = Constants.HERO_BUTTON_DISTANCE_PX * this.zoom;
-
-        const buttonConfigs = [
-            { 
-                label: 'Strafe',
-                cost: Constants.FOUNDRY_STRAFE_UPGRADE_COST,
-                available: foundry.canQueueStrafeUpgrade(),
-                index: 0
-            },
-            {
-                label: 'Blink',
-                cost: Constants.FOUNDRY_BLINK_UPGRADE_COST,
-                available: foundry.canQueueBlinkUpgrade(),
-                index: 1
-            },
-            {
-                label: 'Regen',
-                cost: Constants.FOUNDRY_REGEN_UPGRADE_COST,
-                available: foundry.canQueueRegenUpgrade(),
-                index: 2
-            },
-            {
-                label: '+1 ATK',
-                cost: Constants.FOUNDRY_ATTACK_UPGRADE_COST,
-                available: foundry.canQueueAttackUpgrade(),
-                index: 3
-            }
-        ];
-        const positions = this.getRadialButtonOffsets(buttonConfigs.length);
-
-        for (let i = 0; i < buttonConfigs.length; i++) {
-            const config = buttonConfigs[i];
-            const pos = positions[i];
-            const buttonX = screenPos.x + pos.x * buttonDistance;
-            const buttonY = screenPos.y + pos.y * buttonDistance;
-            const isHighlighted = this.highlightedButtonIndex === config.index;
-
-            // Draw button background with highlight effect
-            this.ctx.fillStyle = isHighlighted 
-                ? 'rgba(255, 215, 0, 0.7)' 
-                : (config.available ? 'rgba(255, 215, 0, 0.3)' : 'rgba(128, 128, 128, 0.3)');
-            this.ctx.strokeStyle = isHighlighted 
-                ? '#FFD700' 
-                : (config.available ? '#FFD700' : '#888888');
-            this.ctx.lineWidth = isHighlighted ? 4 : 2;
-            this.ctx.beginPath();
-            this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-            
-            // Draw button label
-            this.ctx.fillStyle = config.available ? '#FFFFFF' : '#666666';
-            this.ctx.font = `${12 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(config.label, buttonX, buttonY);
-            this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, config.cost, config.available);
-        }
-    }
-
-
     private getHeroUnitCost(player: Player): number {
         return getHeroUnitCost(player);
-    }
-
-    private drawRadialButtonCostLabel(
-        buttonX: number,
-        buttonY: number,
-        radialX: number,
-        radialY: number,
-        buttonRadius: number,
-        cost: number,
-        isAvailable: boolean
-    ): void {
-        const radialLength = Math.hypot(radialX, radialY);
-        const directionX = radialLength > 0 ? radialX / radialLength : 0;
-        const directionY = radialLength > 0 ? radialY / radialLength : -1;
-        const costOffsetPx = buttonRadius + 10 * this.zoom;
-        const costX = buttonX + directionX * costOffsetPx;
-        const costY = buttonY + directionY * costOffsetPx;
-
-        this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
-        this.ctx.font = `${10 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(cost.toString(), costX, costY);
     }
 
     private getPseudoRandom(seed: number): number {
@@ -3082,7 +2552,6 @@ export class GameRenderer {
             this.ctx.stroke();
         }
     }
-
 
     private drawAestheticSpriteShadow(
         worldPos: Vector2D,
@@ -4293,7 +3762,6 @@ export class GameRenderer {
             this.drawBuildingSelectionIndicator(screenPos, size * selectionRadiusMultiplier);
         }
 
-
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -5245,7 +4713,6 @@ export class GameRenderer {
         this.ctx.fill();
         this.ctx.restore();
     }
-
 
     private drawSplendorSunSphere(sphere: InstanceType<typeof SplendorSunSphere>): void {
         const screenPos = this.worldToScreen(sphere.position);
@@ -6221,7 +5688,6 @@ export class GameRenderer {
             : starlingColor;
         displayColor = tintColor;
         
-
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? this.enemyColor : this.playerColor;
@@ -7455,990 +6921,6 @@ export class GameRenderer {
     }
 
     /**
-     * Draw a Cannon/Gatling building
-     */
-    private drawMinigun(building: Minigun | GatlingTower, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        const isVelarisFoundry = building.owner.faction === Faction.VELARIS;
-        let buildingColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        if (ladSun && building.owner) {
-            ownerSide = building.owner.stellarForge
-                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                buildingColor = '#FFFFFF';
-            } else {
-                buildingColor = '#000000';
-            }
-        }
-        
-        // Check visibility for enemy buildings
-        let shouldDim = false;
-        let displayColor = buildingColor;
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy buildings
-            }
-            
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(building.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-                }
-            }
-        }
-
-        const shouldGlowInShade = isEnemy
-            ? isInShadow
-            : isInShadow;
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, shouldGlowInShade, 1, building.isSelected);
-
-        // Draw build progress indicator if not complete
-        if (!building.isComplete) {
-            this.drawWarpGateProductionEffect(
-                screenPos,
-                radius,
-                game,
-                displayColor
-            );
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            // Draw progress bar
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            this.ctx.fillStyle = '#00FF00';
-            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-
-            // Reset alpha
-            if (shouldDim) {
-                this.ctx.globalAlpha = 1.0;
-            }
-            return;
-        }
-
-
-        // Draw aura in LaD mode
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
-        }
-
-        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
-        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_top_outline.png';
-
-        const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
-        const topSprite = this.getTintedSprite(topSpritePath, displayColor);
-
-        if (bottomSprite && topSprite) {
-            const spriteScale = (radius * 2) / bottomSprite.width;
-            const bottomWidth = bottomSprite.width * spriteScale;
-            const bottomHeight = bottomSprite.height * spriteScale;
-
-            this.ctx.save();
-            this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.drawImage(
-                bottomSprite,
-                -bottomWidth / 2,
-                -bottomHeight / 2,
-                bottomWidth,
-                bottomHeight
-            );
-            this.ctx.restore();
-
-            // Draw selection indicator if selected
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            let gunAngle = 0;
-            if (building.target) {
-                const dx = building.target.position.x - building.position.x;
-                const dy = building.target.position.y - building.position.y;
-                gunAngle = Math.atan2(dy, dx);
-            }
-
-            const topWidth = topSprite.width * spriteScale;
-            const topHeight = topSprite.height * spriteScale;
-
-            this.ctx.save();
-            this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.rotate(gunAngle + Math.PI / 2);
-            this.ctx.drawImage(
-                topSprite,
-                -topWidth / 2,
-                -topHeight / 2,
-                topWidth,
-                topHeight
-            );
-            this.ctx.restore();
-        } else {
-            // Draw base (circular platform)
-            this.ctx.fillStyle = displayColor;
-            const strokeColor = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-
-            // Draw selection indicator if selected
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            // Draw turret base (smaller circle in center)
-            const turretBaseRadius = radius * 0.6;
-            this.ctx.fillStyle = shouldDim ? this.darkenColor('#666666', Constants.SHADE_OPACITY) : '#666666';
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, turretBaseRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            // Draw minigun barrel (pointing toward target if exists)
-            let gunAngle = 0;
-            if (building.target) {
-                const dx = building.target.position.x - building.position.x;
-                const dy = building.target.position.y - building.position.y;
-                gunAngle = Math.atan2(dy, dx);
-            }
-
-            const barrelLength = radius * 1.2;
-            const barrelWidth = 4 * this.zoom;
-
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor('#333333', Constants.SHADE_OPACITY) : '#333333';
-            this.ctx.lineWidth = barrelWidth;
-            this.ctx.lineCap = 'round';
-            this.ctx.beginPath();
-            this.ctx.moveTo(screenPos.x, screenPos.y);
-            this.ctx.lineTo(
-                screenPos.x + Math.cos(gunAngle) * barrelLength,
-                screenPos.y + Math.sin(gunAngle) * barrelLength
-            );
-            this.ctx.stroke();
-        }
-
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-    }
-
-    /**
-     * Draw a Cyclone (Space Dust Swirler) building
-     */
-    private drawSpaceDustSwirler(building: SpaceDustSwirler, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        let buildingColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        if (ladSun && building.owner) {
-            ownerSide = building.owner.stellarForge
-                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                buildingColor = '#FFFFFF';
-            } else {
-                buildingColor = '#000000';
-            }
-        }
-        
-        // Check visibility for enemy buildings
-        let shouldDim = false;
-        let displayColor = buildingColor;
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy buildings
-            }
-            
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(building.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-                }
-            }
-        }
-
-        // Draw build progress indicator if not complete
-        const shouldGlowInShade = isEnemy
-            ? isInShadow
-            : isInShadow;
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, shouldGlowInShade, 1, building.isSelected);
-
-        if (!building.isComplete) {
-            this.drawWarpGateProductionEffect(
-                screenPos,
-                radius,
-                game,
-                displayColor
-            );
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            // Draw progress bar
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            this.ctx.fillStyle = '#8A2BE2';
-            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-
-            // Reset alpha
-            if (shouldDim) {
-                this.ctx.globalAlpha = 1.0;
-            }
-            return;
-        }
-
-        // Draw influence radius (faint circle) - use current radius for smooth animation
-        const influenceRadius = building.currentInfluenceRadius * this.zoom;
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.globalAlpha = 0.15;
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, influenceRadius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1.0;
-
-
-        // Draw aura in LaD mode
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
-        }
-
-        const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_bottom.png';
-        const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_middle.png';
-        const topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_top.png';
-
-        const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
-        const middleSprite = this.getTintedSprite(middleSpritePath, displayColor);
-        const topSprite = this.getTintedSprite(topSpritePath, displayColor);
-
-        const referenceSprite = bottomSprite || middleSprite || topSprite;
-        if (referenceSprite) {
-            const spriteScale = (radius * 2) / referenceSprite.width;
-            const timeSec = game.gameTime;
-            const middleRotationRad = -timeSec * 0.6;
-            const topRotationRad = timeSec * 0.8;
-
-            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
-                if (!sprite) {
-                    return;
-                }
-                const spriteWidth = sprite.width * spriteScale;
-                const spriteHeight = sprite.height * spriteScale;
-                this.ctx.save();
-                this.ctx.translate(screenPos.x, screenPos.y);
-                this.ctx.rotate(rotationRad);
-                this.ctx.drawImage(
-                    sprite,
-                    -spriteWidth / 2,
-                    -spriteHeight / 2,
-                    spriteWidth,
-                    spriteHeight
-                );
-                this.ctx.restore();
-            };
-
-            drawLayer(bottomSprite, 0);
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            drawLayer(middleSprite, middleRotationRad);
-            drawLayer(topSprite, topRotationRad);
-        }
-
-        // Draw health bar/number if damaged
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-    }
-
-    /**
-     * Draw a Foundry building
-     */
-    private drawSubsidiaryFactory(building: SubsidiaryFactory, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        const isVelarisFoundry = building.owner.faction === Faction.VELARIS;
-        let buildingColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        if (ladSun && building.owner) {
-            ownerSide = building.owner.stellarForge
-                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                buildingColor = '#FFFFFF';
-            } else {
-                buildingColor = '#000000';
-            }
-        }
-
-        let shouldDim = false;
-        let displayColor = buildingColor;
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
-            if (!isVisible) {
-                return;
-            }
-
-            if (!ladSun && isInShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-            }
-        }
-
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
-
-        if (!building.isComplete) {
-            this.drawWarpGateProductionEffect(screenPos, radius, game, displayColor);
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-
-            if (shouldDim) {
-                this.ctx.globalAlpha = 1.0;
-            }
-            return;
-        }
-
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
-        }
-
-        const isAurumFoundry = building.owner.faction === Faction.AURUM;
-        if (isAurumFoundry) {
-            this.drawAurumFoundryOutline(building, screenPos, radius, displayColor, game.gameTime);
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-                this.drawFoundryButtons(building, screenPos);
-            }
-        } else {
-            const bottomSpritePath = isVelarisFoundry
-                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_bottom.png'
-                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
-            const middleSpritePath = isVelarisFoundry
-                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_middle.png'
-                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
-            const topSpritePath = isVelarisFoundry
-                ? 'ASSETS/sprites/VELARIS/structures/velarisFoundry_top.png'
-                : 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
-
-            const bottomSprite = this.getTintedSprite(bottomSpritePath, displayColor);
-            const middleSprite = this.getTintedSprite(middleSpritePath, displayColor);
-            const topSprite = this.getTintedSprite(topSpritePath, displayColor);
-
-            const referenceSprite = bottomSprite || middleSprite || topSprite;
-            if (referenceSprite) {
-                const spriteScale = (radius * 2) / referenceSprite.width;
-                const timeSec = game.gameTime;
-                const isProducing = Boolean(building.currentProduction);
-                const baseSpinSpeedRad = 0.2;
-                const producingMultiplier = 2.5;
-                const ACCELERATION_PHASE_DURATION = 0.2;
-
-                let speedMultiplier = 1.0;
-                if (isProducing) {
-                    if (building.productionProgress < ACCELERATION_PHASE_DURATION) {
-                        const accelProgress = building.productionProgress / ACCELERATION_PHASE_DURATION;
-                        const easeAccel = 0.5 - 0.5 * Math.cos(accelProgress * Math.PI);
-                        speedMultiplier = 1.0 + (producingMultiplier - 1.0) * easeAccel;
-                    } else {
-                        speedMultiplier = producingMultiplier;
-                    }
-                }
-
-                const spinSpeedRad = baseSpinSpeedRad * speedMultiplier;
-                const bottomRotationRad = timeSec * spinSpeedRad;
-                const topRotationRad = -timeSec * spinSpeedRad;
-
-                const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
-                    if (!sprite) {
-                        return;
-                    }
-                    const spriteWidth = sprite.width * spriteScale;
-                    const spriteHeight = sprite.height * spriteScale;
-                    this.ctx.save();
-                    this.ctx.translate(screenPos.x, screenPos.y);
-                    this.ctx.rotate(rotationRad);
-                    this.ctx.drawImage(sprite, -spriteWidth / 2, -spriteHeight / 2, spriteWidth, spriteHeight);
-                    this.ctx.restore();
-                };
-
-                drawLayer(bottomSprite, bottomRotationRad);
-
-                if (building.isSelected) {
-                    this.drawBuildingSelectionIndicator(screenPos, radius);
-                    this.drawFoundryButtons(building, screenPos);
-                }
-
-                drawLayer(middleSprite, 0);
-                drawLayer(topSprite, topRotationRad);
-            }
-        }
-
-        if (building.currentProduction) {
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-
-            this.ctx.fillStyle = '#4CAF50';
-            this.ctx.fillRect(barX, barY, barWidth * building.productionProgress, barHeight);
-        }
-
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-    }
-
-    /**
-     * Draw a Striker Tower
-     */
-    private drawStrikerTower(building: StrikerTower, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        let buildingColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        
-        if (ladSun && building.owner) {
-            ownerSide = building.owner.stellarForge
-                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                buildingColor = '#FFFFFF';
-            } else {
-                buildingColor = '#000000';
-            }
-        }
-        
-        // Check visibility for enemy buildings
-        let shouldDim = false;
-        let displayColor = buildingColor;
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy buildings
-            }
-            
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(building.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-                }
-            }
-        }
-
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
-
-        // Draw build progress indicator if not complete
-        if (!building.isComplete) {
-            this.ctx.fillStyle = displayColor;
-            this.ctx.globalAlpha = 0.3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1.0;
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            // Draw progress bar
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            return;
-        }
-
-
-        // Draw aura in LaD mode
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
-        }
-
-        // Draw tower body - hexagon shape
-        this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = '#666666';
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const x = screenPos.x + radius * Math.cos(angle);
-            const y = screenPos.y + radius * Math.sin(angle);
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
-            }
-        }
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Draw missile indicator in center
-        if (building.isMissileReady()) {
-            this.ctx.fillStyle = '#FF4444';
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius * 0.4, 0, Math.PI * 2);
-            this.ctx.fill();
-        } else {
-            // Draw reload progress
-            const reloadProgress = building.getReloadProgress();
-            this.ctx.strokeStyle = '#FF4444';
-            this.ctx.lineWidth = 3 * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(
-                screenPos.x,
-                screenPos.y,
-                radius * 0.4,
-                -Math.PI / 2,
-                -Math.PI / 2 + (Math.PI * 2 * reloadProgress)
-            );
-            this.ctx.stroke();
-        }
-
-        // Draw countdown visual if in countdown mode
-        if (building.isInCountdown()) {
-            // Pulsing glow effect
-            const time = performance.now() / 1000;
-            const pulseIntensity = 0.5 + 0.5 * Math.sin(time * 8); // Fast pulse
-            
-            this.ctx.strokeStyle = '#FF0000';
-            this.ctx.lineWidth = (4 + pulseIntensity * 4) * this.zoom;
-            this.ctx.globalAlpha = 0.6 + pulseIntensity * 0.4;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius * 1.3, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-            
-            // Draw countdown number
-            const countdown = Math.ceil(building.getRemainingCountdown());
-            if (countdown > 0) { // Only display when countdown is positive
-                this.ctx.fillStyle = '#FF0000';
-                this.ctx.font = `bold ${Math.floor(24 * this.zoom)}px Arial`;
-                this.ctx.textAlign = 'center';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(countdown.toString(), screenPos.x, screenPos.y - radius - 20 * this.zoom);
-            }
-            
-            // Draw line to target position if available
-            if (building.targetPosition) {
-                const targetScreenPos = this.worldToScreen(building.targetPosition);
-                this.ctx.strokeStyle = '#FF0000';
-                this.ctx.lineWidth = 2 * this.zoom;
-                this.ctx.globalAlpha = 0.5;
-                this.ctx.setLineDash([5 * this.zoom, 5 * this.zoom]);
-                this.ctx.beginPath();
-                this.ctx.moveTo(screenPos.x, screenPos.y);
-                this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
-                this.ctx.stroke();
-                this.ctx.setLineDash([]);
-                this.ctx.globalAlpha = 1.0;
-                
-                // Draw target indicator
-                this.ctx.strokeStyle = '#FF0000';
-                this.ctx.lineWidth = 3 * this.zoom;
-                this.ctx.beginPath();
-                this.ctx.arc(targetScreenPos.x, targetScreenPos.y, 15 * this.zoom, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.beginPath();
-                this.ctx.moveTo(targetScreenPos.x - 20 * this.zoom, targetScreenPos.y);
-                this.ctx.lineTo(targetScreenPos.x + 20 * this.zoom, targetScreenPos.y);
-                this.ctx.moveTo(targetScreenPos.x, targetScreenPos.y - 20 * this.zoom);
-                this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y + 20 * this.zoom);
-                this.ctx.stroke();
-            }
-        }
-
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
-            
-            // Draw range indicator
-            this.ctx.strokeStyle = displayColor;
-            this.ctx.globalAlpha = 0.3;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, building.attackRange * this.zoom, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
-
-        // Draw health bar/number if damaged
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-    }
-
-    /**
-     * Draw striker tower target highlighting overlay
-     * Shows available target spots when isAwaitingTarget is true
-     */
-    private drawStrikerTowerTargetHighlighting(game: GameState): void {
-        if (!this.viewingPlayer) return;
-        
-        // Find if any selected striker tower is awaiting target
-        let awaitingTower: StrikerTower | null = null;
-        for (const building of this.viewingPlayer.buildings) {
-            if (building instanceof StrikerTower && building.isAwaitingTarget && building.isMissileReady()) {
-                awaitingTower = building;
-                break;
-            }
-        }
-        
-        if (!awaitingTower) return;
-        
-        // Draw grid of highlights for valid target positions
-        const towerPos = awaitingTower.position;
-        const range = awaitingTower.attackRange;
-        const gridSpacing = 40; // Grid spacing in world units
-        
-        // Calculate bounds
-        const minX = Math.floor((towerPos.x - range) / gridSpacing) * gridSpacing;
-        const maxX = Math.ceil((towerPos.x + range) / gridSpacing) * gridSpacing;
-        const minY = Math.floor((towerPos.y - range) / gridSpacing) * gridSpacing;
-        const maxY = Math.ceil((towerPos.y + range) / gridSpacing) * gridSpacing;
-        
-        // Draw highlights
-        for (let x = minX; x <= maxX; x += gridSpacing) {
-            for (let y = minY; y <= maxY; y += gridSpacing) {
-                const testPos = new Vector2D(x, y);
-                
-                // Check if position is valid target
-                const distance = towerPos.distanceTo(testPos);
-                if (distance > range) continue;
-                
-                const inShadow = game.isPointInShadow(testPos);
-                const visibleByUnits = game.isPositionVisibleByPlayerUnits(testPos, this.viewingPlayer.units);
-                
-                if (inShadow && !visibleByUnits) {
-                    // Valid target - draw highlight
-                    const screenPos = this.worldToScreen(testPos);
-                    
-                    // Pulsing animation
-                    const time = performance.now() / 1000;
-                    const pulse = 0.3 + 0.2 * Math.sin(time * 3);
-                    
-                    this.ctx.fillStyle = `rgba(255, 0, 0, ${pulse})`;
-                    this.ctx.beginPath();
-                    this.ctx.arc(screenPos.x, screenPos.y, 8 * this.zoom, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    
-                    // Draw small crosshair
-                    this.ctx.strokeStyle = `rgba(255, 0, 0, ${pulse + 0.3})`;
-                    this.ctx.lineWidth = 1.5 * this.zoom;
-                    this.ctx.beginPath();
-                    const crossSize = 6 * this.zoom;
-                    this.ctx.moveTo(screenPos.x - crossSize, screenPos.y);
-                    this.ctx.lineTo(screenPos.x + crossSize, screenPos.y);
-                    this.ctx.moveTo(screenPos.x, screenPos.y - crossSize);
-                    this.ctx.lineTo(screenPos.x, screenPos.y + crossSize);
-                    this.ctx.stroke();
-                }
-            }
-        }
-    }
-
-    /**
-     * Draw a Lock-on Laser Tower
-     */
-    private drawLockOnLaserTower(building: LockOnLaserTower, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        let buildingColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        
-        if (ladSun && building.owner) {
-            ownerSide = building.owner.stellarForge
-                ? game.getLadSide(building.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                buildingColor = '#FFFFFF';
-            } else {
-                buildingColor = '#000000';
-            }
-        }
-        
-        // Check visibility for enemy buildings
-        let shouldDim = false;
-        let displayColor = buildingColor;
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(building.position, this.viewingPlayer);
-            if (!isVisible) {
-                return; // Don't draw invisible enemy buildings
-            }
-
-            if (!ladSun && isInShadow) {
-                shouldDim = true;
-                displayColor = this.darkenColor(buildingColor, Constants.SHADE_OPACITY);
-            }
-        }
-
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
-
-        // Draw build progress indicator if not complete
-        if (!building.isComplete) {
-            this.ctx.fillStyle = displayColor;
-            this.ctx.globalAlpha = 0.3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1.0;
-
-            if (building.isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, radius);
-            }
-
-            // Draw progress bar
-            const barWidth = radius * 2;
-            const barHeight = 4;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + radius + 5;
-            
-            this.ctx.fillStyle = '#333333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            this.ctx.fillStyle = '#FFD700';
-            this.ctx.fillRect(barX, barY, barWidth * building.buildProgress, barHeight);
-            return;
-        }
-
-
-        // Draw aura in LaD mode
-        if (ladSun && ownerSide) {
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, radius, auraColor, ownerSide);
-        }
-
-        // Draw tower body - octagon shape
-        this.ctx.fillStyle = displayColor;
-        this.ctx.strokeStyle = '#666666';
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI / 4) * i;
-            const x = screenPos.x + radius * Math.cos(angle);
-            const y = screenPos.y + radius * Math.sin(angle);
-            if (i === 0) {
-                this.ctx.moveTo(x, y);
-            } else {
-                this.ctx.lineTo(x, y);
-            }
-        }
-        this.ctx.closePath();
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Draw lock-on indicator if targeting
-        const lockedTarget = building.getLockedTarget();
-        if (lockedTarget) {
-            const lockProgress = building.getLockOnProgress();
-            const targetScreenPos = this.worldToScreen(lockedTarget.position);
-            
-            // Draw line to target
-            this.ctx.strokeStyle = displayColor;
-            this.ctx.globalAlpha = 0.5;
-            this.ctx.lineWidth = 2 * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.moveTo(screenPos.x, screenPos.y);
-            this.ctx.lineTo(targetScreenPos.x, targetScreenPos.y);
-            this.ctx.stroke();
-            
-            // Draw lock-on progress arc around target
-            this.ctx.strokeStyle = '#FF0000';
-            this.ctx.lineWidth = 3 * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(
-                targetScreenPos.x,
-                targetScreenPos.y,
-                20 * this.zoom,
-                -Math.PI / 2,
-                -Math.PI / 2 + (Math.PI * 2 * lockProgress)
-            );
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
-
-        // Draw inner circle indicator
-        this.ctx.fillStyle = lockedTarget ? '#FF0000' : '#444444';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.3, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
-            
-            // Draw range indicator
-            this.ctx.strokeStyle = displayColor;
-            this.ctx.globalAlpha = 0.3;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, building.attackRange * this.zoom, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.globalAlpha = 1.0;
-        }
-
-        // Draw health bar/number if damaged
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-    }
-
-    /**
-     * Draw a Shield Tower building
-     */
-    private drawShieldTower(building: ShieldTower, color: string, game: GameState, isEnemy: boolean): void {
-        const screenPos = this.worldToScreen(building.position);
-        const radius = building.radius * this.zoom;
-        const displayColor = building.isComplete ? color : '#666666';
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        const isInShadow = !ladSun && game.isPointInShadow(building.position);
-        this.drawStructureShadeGlow(building, screenPos, radius, displayColor, isInShadow, 1, building.isSelected);
-
-        // Draw shield radius if active
-        if (building.shieldActive && building.isComplete) {
-            const shieldRadius = building.shieldRadius * this.zoom;
-            const shieldHealthPercent = building.getShieldHealthPercent();
-            
-            // Draw shield bubble
-            this.ctx.strokeStyle = displayColor;
-            this.ctx.globalAlpha = 0.2 + (shieldHealthPercent * 0.3);
-            this.ctx.lineWidth = 3 * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            
-            // Draw shield fill
-            this.ctx.fillStyle = displayColor;
-            this.ctx.globalAlpha = 0.05 + (shieldHealthPercent * 0.1);
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1.0;
-        } else if (!building.shieldActive && building.isComplete) {
-            // Draw disabled shield indicator (faint)
-            const shieldRadius = building.shieldRadius * this.zoom;
-            this.ctx.strokeStyle = '#444444';
-            this.ctx.globalAlpha = 0.1;
-            this.ctx.lineWidth = 2 * this.zoom;
-            this.ctx.setLineDash([5 * this.zoom, 5 * this.zoom]);
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, shieldRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.setLineDash([]);
-            this.ctx.globalAlpha = 1.0;
-        }
-
-        // Draw the tower base
-        this.ctx.fillStyle = displayColor;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw outer ring
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
-        this.ctx.stroke();
-
-        // Draw center indicator
-        const centerColor = building.shieldActive ? displayColor : '#666666';
-        this.ctx.fillStyle = centerColor;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.4, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        if (building.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, radius);
-            
-            // Draw shield radius indicator
-            if (building.isComplete) {
-                this.ctx.strokeStyle = displayColor;
-                this.ctx.globalAlpha = 0.3;
-                this.ctx.lineWidth = 2;
-                this.ctx.beginPath();
-                this.ctx.arc(screenPos.x, screenPos.y, building.shieldRadius * this.zoom, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.globalAlpha = 1.0;
-            }
-        }
-
-        // Draw health bar/number if damaged
-        this.drawHealthDisplay(screenPos, building.health, building.maxHealth, radius, -radius - 10);
-        
-        // Draw shield health bar below building health
-        if (building.isComplete) {
-            const barWidth = radius * 2.5;
-            const barHeight = 4 * this.zoom;
-            const x = screenPos.x - barWidth / 2;
-            const y = screenPos.y - radius - Constants.SHIELD_HEALTH_BAR_VERTICAL_OFFSET - barHeight;
-            
-            // Background
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            this.ctx.fillRect(x, y, barWidth, barHeight);
-            
-            // Shield health fill
-            const shieldPercent = building.shieldActive ? building.getShieldHealthPercent() : 0;
-            const shieldColor = building.shieldActive ? '#00AAFF' : '#444444';
-            this.ctx.fillStyle = shieldColor;
-            this.ctx.fillRect(x, y, barWidth * shieldPercent, barHeight);
-            
-            // Border
-            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-            this.ctx.lineWidth = 1;
-            this.ctx.strokeRect(x, y, barWidth, barHeight);
-        }
-    }
-
-    /**
      * Draw a Grave projectile with trail
      */
     private drawGraveProjectile(projectile: InstanceType<typeof GraveProjectile>, color: string): void {
@@ -8573,61 +7055,6 @@ export class GameRenderer {
         this.ctx.fillStyle = gradient;
         this.ctx.fill();
         this.ctx.restore();
-    }
-
-    /**
-     * Draw striker tower missile explosion effect
-     * Shows a large, dramatic explosion with expanding rings
-     */
-    private drawStrikerTowerExplosion(explosion: { position: Vector2D; timestamp: number }, age: number): void {
-        const screenPos = this.worldToScreen(explosion.position);
-        const maxRadius = Constants.STRIKER_TOWER_EXPLOSION_RADIUS * this.zoom;
-        
-        // Explosion expands quickly at first, then fades
-        const expansionProgress = Math.min(1.0, age * 3); // Expand over 0.33 seconds
-        const fadeProgress = Math.max(0, 1.0 - age); // Fade over 1 second
-        const currentRadius = maxRadius * expansionProgress;
-        
-        // Draw multiple expanding rings for dramatic effect
-        for (let i = 0; i < 3; i++) {
-            const ringDelay = i * 0.1; // Stagger rings
-            const ringAge = age - ringDelay;
-            if (ringAge < 0) continue;
-            
-            const ringProgress = Math.min(1.0, ringAge * 3);
-            const ringRadius = maxRadius * ringProgress;
-            const ringAlpha = Math.max(0, 1.0 - ringAge) * 0.6;
-            
-            // Outer ring (shockwave)
-            this.ctx.strokeStyle = `rgba(255, 200, 100, ${ringAlpha})`;
-            this.ctx.lineWidth = (6 - i * 2) * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, ringRadius, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
-        
-        // Draw main explosion fireball
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, currentRadius
-        );
-        gradient.addColorStop(0, `rgba(255, 255, 200, ${fadeProgress * 0.9})`); // White hot center
-        gradient.addColorStop(0.3, `rgba(255, 150, 50, ${fadeProgress * 0.7})`); // Orange
-        gradient.addColorStop(0.6, `rgba(255, 50, 0, ${fadeProgress * 0.5})`); // Red
-        gradient.addColorStop(1, `rgba(100, 0, 0, 0)`); // Fade to transparent
-        
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
-        this.ctx.fillStyle = gradient;
-        this.ctx.fill();
-        
-        // Trigger screen shake only once per explosion
-        // Using WeakSet to track without mutating game state objects
-        // This is a rendering concern and belongs in the renderer
-        if (!this.shakenExplosions.has(explosion)) {
-            this.triggerScreenShake(15); // Stronger shake than normal
-            this.shakenExplosions.add(explosion);
-        }
     }
 
     /**
@@ -9859,7 +8286,7 @@ export class GameRenderer {
             // Draw Stellar Forge
             if (player.stellarForge) {
                 if (this.isWithinViewBounds(player.stellarForge.position, player.stellarForge.radius * 3)) {
-                    this.drawStellarForge(player.stellarForge, color, game, isEnemy);
+                    this.forgeRenderer.drawStellarForge(player.stellarForge, color, game, isEnemy, this.getBuildingRendererContext());
                 }
             }
         }
@@ -9961,17 +8388,17 @@ export class GameRenderer {
                         continue;
                     }
                     if (building instanceof Minigun || building instanceof GatlingTower) {
-                        this.drawMinigun(building, color, game, isEnemy);
+                        this.towerRenderer.drawMinigun(building, color, game, isEnemy, this.getBuildingRendererContext());
                     } else if (building instanceof SpaceDustSwirler) {
-                        this.drawSpaceDustSwirler(building, color, game, isEnemy);
+                        this.towerRenderer.drawSpaceDustSwirler(building, color, game, isEnemy, this.getBuildingRendererContext());
                     } else if (building instanceof SubsidiaryFactory) {
-                        this.drawSubsidiaryFactory(building, color, game, isEnemy);
+                        this.foundryRenderer.drawSubsidiaryFactory(building, color, game, isEnemy, this.getBuildingRendererContext());
                     } else if (building instanceof StrikerTower) {
-                        this.drawStrikerTower(building, color, game, isEnemy);
+                        this.towerRenderer.drawStrikerTower(building, color, game, isEnemy, this.getBuildingRendererContext());
                     } else if (building instanceof LockOnLaserTower) {
-                        this.drawLockOnLaserTower(building, color, game, isEnemy);
+                        this.towerRenderer.drawLockOnLaserTower(building, color, game, isEnemy, this.getBuildingRendererContext());
                     } else if (building instanceof ShieldTower) {
-                        this.drawShieldTower(building, color, game, isEnemy);
+                        this.towerRenderer.drawShieldTower(building, color, game, isEnemy, this.getBuildingRendererContext());
                     }
                 }
             }
@@ -10072,7 +8499,7 @@ export class GameRenderer {
 
             for (const explosion of game.strikerTowerExplosions) {
                 if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
-                    this.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp);
+                    this.towerRenderer.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp, this.getBuildingRendererContext());
                 }
             }
 
@@ -10256,7 +8683,7 @@ export class GameRenderer {
         this.drawOffScreenUnitIndicators(game);
         
         // Draw striker tower target highlighting
-        this.drawStrikerTowerTargetHighlighting(game);
+        this.towerRenderer.drawStrikerTowerTargetHighlighting(game, this.getBuildingRendererContext());
         
         // Draw mirror command buttons if mirrors are selected
         this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);

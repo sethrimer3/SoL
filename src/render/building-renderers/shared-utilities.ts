@@ -107,4 +107,8 @@ export interface BuildingRendererContext {
     
     // Pseudo-random generator (deterministic)
     getPseudoRandom(seed: number): number;
+
+    // Screen shake for explosions
+    shakenExplosions: WeakSet<any>;
+    triggerScreenShake(intensity: number): void;
 }
