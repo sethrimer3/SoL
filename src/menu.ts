@@ -185,6 +185,12 @@ export class MainMenu {
             abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage'
         },
         {
+            id: 'radiant-mothership', name: 'Mothership', description: 'Command carrier that launches mini-mothership escorts', faction: Faction.RADIANT,
+            maxHealth: Constants.MOTHERSHIP_MAX_HEALTH, attackDamage: Constants.MOTHERSHIP_ATTACK_DAMAGE, attackSpeed: Constants.MOTHERSHIP_ATTACK_SPEED,
+            attackRange: Constants.MOTHERSHIP_ATTACK_RANGE, attackIgnoresDefense: false, defense: 12, regen: 3,
+            abilityDescription: 'Escort wing: spawns 3 mini-motherships in a triangle formation'
+        },
+        {
             id: 'aurum-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.AURUM,
             maxHealth: Constants.PREIST_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
             attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
