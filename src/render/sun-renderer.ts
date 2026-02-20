@@ -697,7 +697,6 @@ export class SunRenderer {
         ) => CanvasGradient,
         ensureLightingLayer: () => CanvasRenderingContext2D,
         ensureLightingSunPassLayer: () => CanvasRenderingContext2D,
-        lightingLayerCanvas: HTMLCanvasElement,
         sunRayRadiusBucketSize: number,
         sunRayBloomRadiusMultiplier: number
     ): void {
@@ -719,7 +718,6 @@ export class SunRenderer {
                 getCachedRadialGradient,
                 ensureLightingLayer,
                 ensureLightingSunPassLayer,
-                lightingLayerCanvas,
                 sunRayRadiusBucketSize,
                 sunRayBloomRadiusMultiplier
             );
@@ -746,7 +744,6 @@ export class SunRenderer {
         ) => CanvasGradient,
         ensureLightingLayer: () => CanvasRenderingContext2D,
         ensureLightingSunPassLayer: () => CanvasRenderingContext2D,
-        lightingLayerCanvas: HTMLCanvasElement,
         sunRayRadiusBucketSize: number,
         sunRayBloomRadiusMultiplier: number
     ): void {
@@ -832,7 +829,7 @@ export class SunRenderer {
             lightingCtx.restore();
         }
 
-        targetCtx.drawImage(lightingLayerCanvas, 0, 0);
+        targetCtx.drawImage(lightingCtx.canvas, 0, 0);
     }
 
     /**

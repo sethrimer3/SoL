@@ -8145,7 +8145,6 @@ export class GameRenderer {
                 this.getCachedRadialGradient.bind(this),
                 this.ensureLightingLayer.bind(this),
                 this.ensureLightingSunPassLayer.bind(this),
-                this.lightingLayerCanvas!,
                 this.SUN_RAY_RADIUS_BUCKET_SIZE,
                 this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
             );
