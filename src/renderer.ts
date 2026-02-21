@@ -20,6 +20,8 @@ import { ForgeRenderer } from './render/building-renderers/forge-renderer';
 import { FoundryRenderer } from './render/building-renderers/foundry-renderer';
 import { TowerRenderer } from './render/building-renderers/tower-renderer';
 import type { BuildingRendererContext } from './render/building-renderers/shared-utilities';
+import { ProjectileRenderer } from './render/projectile-renderer';
+import type { ProjectileRendererContext } from './render/projectile-renderer';
 
 type ForgeFlameState = {
     warmth: number;
@@ -306,6 +308,7 @@ export class GameRenderer {
     private readonly forgeRenderer: ForgeRenderer;
     private readonly foundryRenderer: FoundryRenderer;
     private readonly towerRenderer: TowerRenderer;
+    private readonly projectileRenderer: ProjectileRenderer;
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -331,6 +334,7 @@ export class GameRenderer {
         this.forgeRenderer = new ForgeRenderer();
         this.foundryRenderer = new FoundryRenderer();
         this.towerRenderer = new TowerRenderer();
+        this.projectileRenderer = new ProjectileRenderer();
 
         const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
@@ -1123,6 +1127,19 @@ export class GameRenderer {
             getPseudoRandom: (seed) => this.getPseudoRandom(seed),
             shakenExplosions: this.shakenExplosions,
             triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
+        };
+    }
+
+    private getProjectileRendererContext(): ProjectileRendererContext {
+        return {
+            ctx: this.ctx,
+            zoom: this.zoom,
+            graphicsQuality: this.graphicsQuality,
+            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
+                this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
+            drawParticleSunShadowTrail: (worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale) =>
+                this.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale),
         };
     }
 
@@ -3962,1292 +3979,6 @@ export class GameRenderer {
         );
     }
 
-    /**
-     * Draw a muzzle flash
-     */
-    private drawMuzzleFlash(flash: MuzzleFlash): void {
-        const screenPos = this.worldToScreen(flash.position);
-        const size = 5 * this.zoom;
-        const opacity = 1.0 - (flash.lifetime / flash.maxLifetime);
-
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.rotate(flash.angle);
-        
-        // Draw flash as a bright yellow oval
-        this.ctx.fillStyle = `rgba(255, 255, 100, ${opacity})`;
-        this.ctx.beginPath();
-        this.ctx.ellipse(0, 0, size * 2, size, 0, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.restore();
-    }
-
-    /**
-     * Draw a bullet casing
-     */
-    private drawBulletCasing(casing: BulletCasing): void {
-        const screenPos = this.worldToScreen(casing.position);
-        const width = 3 * this.zoom;
-        const height = 5 * this.zoom;
-        const opacity = 1.0 - (casing.lifetime / casing.maxLifetime);
-
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.rotate(casing.rotation);
-        
-        // Draw casing as a yellow rectangle
-        this.ctx.fillStyle = `rgba(255, 215, 0, ${opacity})`;
-        this.ctx.fillRect(-width / 2, -height / 2, width, height);
-        
-        this.ctx.restore();
-    }
-
-    /**
-     * Draw a bouncing bullet
-     */
-    private drawBouncingBullet(bullet: BouncingBullet): void {
-        const screenPos = this.worldToScreen(bullet.position);
-        const size = 3 * this.zoom;
-        const opacity = 1.0 - (bullet.lifetime / bullet.maxLifetime);
-
-        // Draw bullet as a yellow circle
-        this.ctx.fillStyle = `rgba(255, 255, 0, ${opacity})`;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-    }
-
-    /**
-     * Draw an ability bullet
-     */
-    private drawAbilityBullet(bullet: AbilityBullet): void {
-        const screenPos = this.worldToScreen(bullet.position);
-        const size = 4 * this.zoom;
-        const opacity = bullet.lifetime / bullet.maxLifetime;
-
-        // Draw bullet with owner's faction color
-        const color = this.getFactionColor(bullet.owner.faction);
-        this.ctx.fillStyle = `${color}`;
-        this.ctx.globalAlpha = opacity;
-        if (bullet.isSpotlightBullet) {
-            const angle = Math.atan2(bullet.velocity.y, bullet.velocity.x);
-            const length = (bullet.renderLengthPx ?? 8) * this.zoom;
-            const width = (bullet.renderWidthPx ?? 2) * this.zoom;
-            this.ctx.save();
-            this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.rotate(angle);
-            this.ctx.fillRect(-length * 0.5, -width * 0.5, length, width);
-            this.ctx.restore();
-        } else {
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        this.ctx.globalAlpha = 1.0;
-    }
-
-    /**
-     * Draw a minion projectile
-     */
-    private drawMinionProjectile(projectile: MinionProjectile): void {
-        const screenPos = this.worldToScreen(projectile.position);
-        const size = 2.5 * this.zoom;
-        const color = this.getFactionColor(projectile.owner.faction);
-
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.9;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a mortar projectile (larger, more visible artillery shell)
-     */
-    private drawMortarProjectile(projectile: any): void {
-        const screenPos = this.worldToScreen(projectile.position);
-        const size = 6 * this.zoom; // Larger than other projectiles
-        const color = this.getFactionColor(projectile.owner.faction);
-
-        // Draw outer glow
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw main projectile
-        this.ctx.globalAlpha = 1.0;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw inner highlight
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.globalAlpha = 0.5;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x - size * 0.2, screenPos.y - size * 0.2, size * 0.4, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a Nova bomb (remote detonation bomb)
-     */
-    private drawNovaBomb(bomb: any): void {
-        const screenPos = this.worldToScreen(bomb.position);
-        const size = Constants.NOVA_BOMB_RADIUS * this.zoom;
-        const color = this.getFactionColor(bomb.owner.faction);
-        
-        // Draw pulsing effect if armed
-        if (bomb.isArmed) {
-            const pulseIntensity = 0.5 + 0.5 * Math.sin(bomb.lifetime * 8);
-            this.ctx.fillStyle = color;
-            this.ctx.globalAlpha = 0.2 * pulseIntensity;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 2, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw outer glow
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.4;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.4, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw main bomb body
-        this.ctx.globalAlpha = 1.0;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw spinning highlight for armed state
-        if (bomb.isArmed) {
-            const angle = bomb.lifetime * 5; // Rotate faster
-            const highlightX = screenPos.x + Math.cos(angle) * size * 0.6;
-            const highlightY = screenPos.y + Math.sin(angle) * size * 0.6;
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = 0.8;
-            this.ctx.beginPath();
-            this.ctx.arc(highlightX, highlightY, size * 0.3, 0, Math.PI * 2);
-            this.ctx.fill();
-        } else {
-            // Static highlight for unarmed state
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = 0.3;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x - size * 0.3, screenPos.y - size * 0.3, size * 0.4, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a mini-mothership (small autonomous units spawned by Mothership)
-     */
-    private drawMiniMothership(mini: any): void {
-        const screenPos = this.worldToScreen(mini.position);
-        const size = 8 * this.zoom; // Small unit size
-        const color = this.getFactionColor(mini.owner.faction);
-        
-        // Draw outer glow
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw main body (triangle shape pointing in movement direction)
-        this.ctx.globalAlpha = 1.0;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        
-        // Calculate angle from velocity
-        const angle = Math.atan2(mini.velocity.y, mini.velocity.x);
-        
-        // Draw triangle
-        const tipX = screenPos.x + Math.cos(angle) * size;
-        const tipY = screenPos.y + Math.sin(angle) * size;
-        const leftX = screenPos.x + Math.cos(angle + 2.5) * size * 0.6;
-        const leftY = screenPos.y + Math.sin(angle + 2.5) * size * 0.6;
-        const rightX = screenPos.x + Math.cos(angle - 2.5) * size * 0.6;
-        const rightY = screenPos.y + Math.sin(angle - 2.5) * size * 0.6;
-        
-        this.ctx.moveTo(tipX, tipY);
-        this.ctx.lineTo(leftX, leftY);
-        this.ctx.lineTo(rightX, rightY);
-        this.ctx.closePath();
-        this.ctx.fill();
-        
-        // Draw inner highlight
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.globalAlpha = 0.6;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a mini-mothership explosion (splash damage effect)
-     */
-    private drawMiniMothershipExplosion(explosion: any, age: number): void {
-        const screenPos = this.worldToScreen(explosion.position);
-        const maxRadius = Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS * this.zoom;
-        const color = this.getFactionColor(explosion.owner.faction);
-        
-        // Animation duration
-        const duration = 0.5; // 0.5 seconds
-        const progress = Math.min(age / duration, 1.0);
-        
-        // Expanding ring effect
-        const radius = maxRadius * progress;
-        const alpha = (1.0 - progress) * 0.7;
-        
-        // Draw outer ring
-        this.ctx.strokeStyle = color;
-        this.ctx.globalAlpha = alpha;
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw inner flash (only in first half)
-        if (progress < 0.5) {
-            const flashAlpha = (0.5 - progress) * 2 * 0.5;
-            this.ctx.fillStyle = color;
-            this.ctx.globalAlpha = flashAlpha;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, maxRadius * 0.3 * (1 - progress * 2), 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a Nova scatter bullet (from bomb explosion)
-     */
-    private drawNovaScatterBullet(bullet: any): void {
-        const screenPos = this.worldToScreen(bullet.position);
-        const size = 4 * this.zoom;
-        const color = this.getFactionColor(bullet.owner.faction);
-        
-        // Calculate fade based on lifetime
-        const alpha = 1.0 - (bullet.lifetime / bullet.maxLifetime);
-        
-        // Draw glow trail
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = alpha * 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw main bullet
-        this.ctx.globalAlpha = alpha;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw bright center
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.globalAlpha = alpha * 0.6;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 0.4, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a Sticky Bomb (Sly projectile)
-     */
-    private drawStickyBomb(bomb: any): void {
-        const screenPos = this.worldToScreen(bomb.position);
-        const size = Constants.STICKY_BOMB_RADIUS * this.zoom;
-        const color = this.getFactionColor(bomb.owner.faction);
-        
-        // Draw pulsing effect if armed and stuck
-        if (bomb.isArmed && bomb.isStuck) {
-            const pulseIntensity = 0.5 + 0.5 * Math.sin(bomb.lifetime * 10);
-            this.ctx.fillStyle = color;
-            this.ctx.globalAlpha = 0.3 * pulseIntensity;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 2.5, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw outer glow
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = bomb.isStuck ? 0.5 : 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.5, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw main bomb body
-        this.ctx.globalAlpha = 1.0;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw sticky substance (darker ring around bomb)
-        if (bomb.isStuck) {
-            this.ctx.fillStyle = '#000000';
-            this.ctx.globalAlpha = 0.4;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.6, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw highlight
-        if (bomb.isArmed && bomb.isStuck) {
-            // Spinning highlight for armed state
-            const angle = bomb.lifetime * 6;
-            const highlightX = screenPos.x + Math.cos(angle) * size * 0.4;
-            const highlightY = screenPos.y + Math.sin(angle) * size * 0.4;
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = 0.9;
-            this.ctx.beginPath();
-            this.ctx.arc(highlightX, highlightY, size * 0.3, 0, Math.PI * 2);
-            this.ctx.fill();
-        } else {
-            // Static highlight
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = 0.4;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x - size * 0.3, screenPos.y - size * 0.3, size * 0.3, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw surface normal indicator if stuck
-        if (bomb.isStuck && bomb.surfaceNormal) {
-            this.ctx.strokeStyle = color;
-            this.ctx.globalAlpha = 0.5;
-            this.ctx.lineWidth = 2 * this.zoom;
-            const normalLength = size * 1.5;
-            this.ctx.beginPath();
-            this.ctx.moveTo(screenPos.x, screenPos.y);
-            this.ctx.lineTo(
-                screenPos.x + bomb.surfaceNormal.x * normalLength,
-                screenPos.y + bomb.surfaceNormal.y * normalLength
-            );
-            this.ctx.stroke();
-        }
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a Sticky Laser (fired from sticky bomb)
-     */
-    private drawStickyLaser(laser: any): void {
-        const startScreen = this.worldToScreen(laser.startPosition);
-        const endPos = laser.getEndPosition();
-        const endScreen = this.worldToScreen(endPos);
-        const color = this.getFactionColor(laser.owner.faction);
-        
-        // Calculate fade based on lifetime
-        const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
-        
-        // Draw outer glow
-        this.ctx.strokeStyle = color;
-        this.ctx.globalAlpha = alpha * 0.2;
-        this.ctx.lineWidth = laser.width * this.zoom * 2.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        // Draw middle glow
-        this.ctx.globalAlpha = alpha * 0.5;
-        this.ctx.lineWidth = laser.width * this.zoom * 1.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        // Draw core beam
-        this.ctx.globalAlpha = alpha * 0.9;
-        this.ctx.lineWidth = laser.width * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        // Draw bright center line
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.globalAlpha = alpha * 0.7;
-        this.ctx.lineWidth = laser.width * this.zoom * 0.3;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a disintegration particle (from expired sticky bomb)
-     */
-    private drawDisintegrationParticle(particle: any): void {
-        const screenPos = this.worldToScreen(particle.position);
-        const size = 3 * this.zoom;
-        const color = this.getFactionColor(particle.owner.faction);
-        
-        // Calculate fade based on lifetime
-        const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
-        
-        // Draw glow trail
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = alpha * 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 1.8, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // Draw main particle
-        this.ctx.globalAlpha = alpha * 0.8;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Add erratic flicker
-        const flicker = Math.random();
-        if (flicker > 0.7) {
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = alpha * 0.5;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.5, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a laser beam
-     */
-    private drawLaserBeam(laser: LaserBeam): void {
-        const startScreen = this.worldToScreen(laser.startPos);
-        const endScreen = this.worldToScreen(laser.endPos);
-        const color = this.getFactionColor(laser.owner.faction);
-        
-        // Calculate fade based on lifetime
-        const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
-        
-        // Draw the main laser beam
-        this.ctx.strokeStyle = color;
-        this.ctx.globalAlpha = alpha * 0.8;
-        this.ctx.lineWidth = laser.widthPx;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        // Draw a glowing outer beam
-        this.ctx.globalAlpha = alpha * 0.3;
-        this.ctx.lineWidth = laser.widthPx * 2;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw an impact particle
-     */
-    private drawImpactParticle(particle: ImpactParticle): void {
-        const screenPos = this.worldToScreen(particle.position);
-        const color = this.getFactionColor(particle.faction);
-        const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
-        const size = 1 * this.zoom;
-        
-        this.ctx.fillStyle = color;
-        this.ctx.globalAlpha = alpha;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw a sparkle particle (for regeneration effects)
-     */
-    private drawSparkleParticle(sparkle: SparkleParticle): void {
-        const screenPos = this.worldToScreen(sparkle.position);
-        const opacity = sparkle.getOpacity();
-        const size = sparkle.size * this.zoom;
-        
-        // Draw sparkle as a bright star-shaped particle
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.globalAlpha = opacity;
-        
-        // Draw a cross/star shape
-        this.ctx.strokeStyle = sparkle.color;
-        this.ctx.lineWidth = Math.max(1, size * 0.4);
-        this.ctx.lineCap = 'round';
-        
-        // Horizontal line
-        this.ctx.beginPath();
-        this.ctx.moveTo(-size, 0);
-        this.ctx.lineTo(size, 0);
-        this.ctx.stroke();
-        
-        // Vertical line
-        this.ctx.beginPath();
-        this.ctx.moveTo(0, -size);
-        this.ctx.lineTo(0, size);
-        this.ctx.stroke();
-        
-        // Draw a glowing center
-        const gradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, size);
-        gradient.addColorStop(0, sparkle.color);
-        gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.restore();
-    }
-    
-    /**
-     * Draw a death particle (breaking apart effect)
-     */
-    private drawDeathParticle(particle: DeathParticle, game: GameState): void {
-        const screenPos = this.worldToScreen(particle.position);
-        const ladSun = game.suns.find(s => s.type === 'lad');
-
-        if ((this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') && game.suns.length > 0 && !ladSun) {
-            const alphaScale = this.graphicsQuality === 'ultra' ? 1 : 0.72;
-            const size = Math.max(1.1, (particle.spriteFragment?.width ?? 2) * this.zoom * 0.75);
-            this.drawParticleSunShadowTrail(
-                particle.position,
-                screenPos,
-                size,
-                game.suns,
-                Constants.DUST_SHADOW_FAR_MAX_DISTANCE_PX,
-                particle.opacity,
-                alphaScale
-            );
-        }
-
-        if (particle.spriteFragment) {
-            this.ctx.save();
-            this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.rotate(particle.rotation);
-            this.ctx.globalAlpha = particle.opacity;
-            
-            const size = particle.spriteFragment.width * this.zoom;
-            this.ctx.drawImage(
-                particle.spriteFragment,
-                -size / 2,
-                -size / 2,
-                size,
-                size
-            );
-            
-            this.ctx.restore();
-        }
-    }
-    
-    /**
-     * Draw an influence zone
-     */
-    private drawInfluenceZone(zone: InstanceType<typeof InfluenceZone>): void {
-        const screenPos = this.worldToScreen(zone.position);
-        const radius = zone.radius * this.zoom;
-        const opacity = Math.max(0.1, 1.0 - (zone.lifetime / zone.duration));
-        
-        const color = this.getFactionColor(zone.owner.faction);
-        
-        // Draw outer ring
-        this.ctx.strokeStyle = color;
-        this.ctx.globalAlpha = opacity * 0.6;
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw inner fill with cached gradient
-        const radiusRounded = Math.round(radius);
-        const cacheKey = `influence-zone-${color}-${radiusRounded}`;
-        const gradient = this.getCachedRadialGradient(
-            cacheKey,
-            0, 0, 0,
-            0, 0, radius,
-            [
-                { offset: 0, color: `${color}40` },
-                { offset: 1, color: `${color}10` }
-            ]
-        );
-        
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = opacity * 0.3;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-        
-        this.ctx.globalAlpha = 1.0;
-    }
-    
-    /**
-     * Draw an influence ball projectile
-     */
-    /**
-     * Draw an influence ball projectile
-     */
-    private drawInfluenceBallProjectile(projectile: InstanceType<typeof InfluenceBallProjectile>): void {
-        const screenPos = this.worldToScreen(projectile.position);
-        const size = 12 * this.zoom;
-        
-        const color = this.getFactionColor(projectile.owner.faction);
-        
-        // Draw glowing ball
-        const gradient = this.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size);
-        gradient.addColorStop(0, color);
-        gradient.addColorStop(0.5, `${color}AA`);
-        gradient.addColorStop(1, `${color}00`);
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw inner core
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
-        this.ctx.fill();
-    }
-
-    private drawRadiantOrb(orb: InstanceType<typeof RadiantOrb>): void {
-        const screenPos = this.worldToScreen(orb.position);
-        const color = this.getFactionColor(orb.owner.faction);
-        
-        // Draw range circle (fades with velocity)
-        const currentRange = orb.getRange();
-        const speedRatio = orb.getCurrentSpeed() / Constants.RADIANT_ORB_MAX_SPEED;
-        
-        this.ctx.globalAlpha = speedRatio * 0.3;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw orb core with cached gradient
-        const cacheKey = `radiant-orb-${color}-${Constants.RADIANT_ORB_RADIUS}`;
-        const gradient = this.getCachedRadialGradient(
-            cacheKey,
-            0, 0, 0,
-            0, 0, Constants.RADIANT_ORB_RADIUS,
-            [
-                { offset: 0, color: '#FFFFFF' },
-                { offset: 0.4, color: color },
-                { offset: 1, color: `${color}88` }
-            ]
-        );
-        
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, Constants.RADIANT_ORB_RADIUS, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-    }
-
-    private drawVelarisOrb(orb: InstanceType<typeof VelarisOrb>): void {
-        const screenPos = this.worldToScreen(orb.position);
-        const color = this.getFactionColor(orb.owner.faction);
-        
-        // Draw range circle (fades with velocity)
-        const currentRange = orb.getRange();
-        const speedRatio = orb.getCurrentSpeed() / Constants.VELARIS_ORB_MAX_SPEED;
-        
-        this.ctx.globalAlpha = speedRatio * 0.3;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw orb core with darker appearance and cached gradient
-        const cacheKey = `velaris-orb-${color}-${Constants.VELARIS_ORB_RADIUS}`;
-        const gradient = this.getCachedRadialGradient(
-            cacheKey,
-            0, 0, 0,
-            0, 0, Constants.VELARIS_ORB_RADIUS,
-            [
-                { offset: 0, color: '#444444' },
-                { offset: 0.4, color: color },
-                { offset: 1, color: `${color}66` }
-            ]
-        );
-        
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, Constants.VELARIS_ORB_RADIUS, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-    }
-
-    private drawSplendorSunSphere(sphere: InstanceType<typeof SplendorSunSphere>): void {
-        const screenPos = this.worldToScreen(sphere.position);
-        this.ctx.save();
-        this.ctx.globalAlpha = 0.9;
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, Constants.SPLENDOR_SUN_SPHERE_RADIUS, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = '#FFF59D';
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
-        this.ctx.restore();
-    }
-
-    private drawSplendorSunlightZone(zone: InstanceType<typeof SplendorSunlightZone>): void {
-        const screenPos = this.worldToScreen(zone.position);
-        this.ctx.save();
-        this.ctx.fillStyle = 'rgba(255, 215, 0, 0.12)';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, zone.radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.strokeStyle = 'rgba(255, 235, 59, 0.55)';
-        this.ctx.lineWidth = 2;
-        this.ctx.stroke();
-        this.ctx.restore();
-    }
-
-    private drawSplendorLaserSegment(segment: InstanceType<typeof SplendorLaserSegment>): void {
-        const startScreen = this.worldToScreen(segment.startPos);
-        const endScreen = this.worldToScreen(segment.endPos);
-        this.ctx.save();
-        this.ctx.strokeStyle = 'rgba(255, 245, 157, 0.9)';
-        this.ctx.lineWidth = Constants.SPLENDOR_LASER_WIDTH_PX * 0.35;
-        this.ctx.beginPath();
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-        this.ctx.lineTo(endScreen.x, endScreen.y);
-        this.ctx.stroke();
-        this.ctx.restore();
-    }
-
-    private drawSplendorChargeEffect(splendor: InstanceType<typeof Splendor>): void {
-        if (!splendor.isChargingAttack()) {
-            return;
-        }
-        const chargeDirection = splendor.getChargeDirection();
-        const nosePos = new Vector2D(
-            splendor.position.x + chargeDirection.x * Constants.SPLENDOR_LASER_NOSE_OFFSET,
-            splendor.position.y + chargeDirection.y * Constants.SPLENDOR_LASER_NOSE_OFFSET
-        );
-        const screenPos = this.worldToScreen(nosePos);
-        const radius = 4 + 8 * splendor.getChargeProgress();
-        this.ctx.save();
-        this.ctx.fillStyle = 'rgba(255, 236, 128, 0.85)';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-    }
-
-    private drawAurumOrb(orb: InstanceType<typeof AurumOrb>): void {
-        const screenPos = this.worldToScreen(orb.position);
-        const color = this.getFactionColor(orb.owner.faction);
-        
-        // Draw range circle (fades with velocity)
-        const currentRange = orb.getRange();
-        const speedRatio = orb.getCurrentSpeed() / Constants.AURUM_ORB_MAX_SPEED;
-        
-        this.ctx.globalAlpha = speedRatio * 0.3;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 1;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRange, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw orb core with cached gradient
-        const cacheKey = `aurum-orb-${color}-${Constants.AURUM_ORB_RADIUS}`;
-        const gradient = this.getCachedRadialGradient(
-            cacheKey,
-            0, 0, 0,
-            0, 0, Constants.AURUM_ORB_RADIUS,
-            [
-                { offset: 0, color: '#FFD700' }, // Golden
-                { offset: 0.4, color: color },
-                { offset: 1, color: `${color}88` }
-            ]
-        );
-        
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, Constants.AURUM_ORB_RADIUS, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
-        
-        // Draw health bar
-        const healthRatio = orb.health / orb.maxHealth;
-        const barWidth = 30;
-        const barHeight = 4;
-        const barX = screenPos.x - barWidth / 2;
-        const barY = screenPos.y - Constants.AURUM_ORB_RADIUS - 10;
-        
-        // Background
-        this.ctx.fillStyle = '#333333';
-        this.ctx.fillRect(barX, barY, barWidth, barHeight);
-        
-        // Health
-        this.ctx.fillStyle = healthRatio > 0.5 ? '#00FF00' : healthRatio > 0.25 ? '#FFFF00' : '#FF0000';
-        this.ctx.fillRect(barX, barY, barWidth * healthRatio, barHeight);
-        
-        // Border
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(barX, barY, barWidth, barHeight);
-    }
-
-    private drawRadiantLaserField(orb1: InstanceType<typeof RadiantOrb>, orb2: InstanceType<typeof RadiantOrb>): void {
-        const screenPos1 = this.worldToScreen(orb1.position);
-        const screenPos2 = this.worldToScreen(orb2.position);
-        const color = this.getFactionColor(orb1.owner.faction);
-        
-        // Draw laser beam
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 3;
-        this.ctx.globalAlpha = 0.6;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos1.x, screenPos1.y);
-        this.ctx.lineTo(screenPos2.x, screenPos2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw glow effect
-        const gradient = this.ctx.createLinearGradient(
-            screenPos1.x, screenPos1.y,
-            screenPos2.x, screenPos2.y
-        );
-        gradient.addColorStop(0, `${color}80`);
-        gradient.addColorStop(0.5, `${color}40`);
-        gradient.addColorStop(1, `${color}80`);
-        
-        this.ctx.strokeStyle = gradient;
-        this.ctx.lineWidth = 8;
-        this.ctx.globalAlpha = 0.3;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos1.x, screenPos1.y);
-        this.ctx.lineTo(screenPos2.x, screenPos2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-    }
-
-    private drawVelarisLightBlockingField(orb1: InstanceType<typeof VelarisOrb>, orb2: InstanceType<typeof VelarisOrb>, gameTime: number): void {
-        const screenPos1 = this.worldToScreen(orb1.position);
-        const screenPos2 = this.worldToScreen(orb2.position);
-        const color = this.getFactionColor(orb1.owner.faction);
-        
-        // Draw dark laser
-        this.ctx.strokeStyle = '#000000';
-        this.ctx.lineWidth = 4;
-        this.ctx.globalAlpha = 0.8;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos1.x, screenPos1.y);
-        this.ctx.lineTo(screenPos2.x, screenPos2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw colored outline
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 1;
-        this.ctx.globalAlpha = 0.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos1.x, screenPos1.y);
-        this.ctx.lineTo(screenPos2.x, screenPos2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw particles moving back and forth
-        const distance = orb1.position.distanceTo(orb2.position);
-        const particleCount = Math.floor(distance / 50);
-        
-        for (let i = 0; i < particleCount; i++) {
-            const baseT = i / particleCount;
-            // Oscillate position with time
-            const t = baseT + (Math.sin(gameTime * 2 + i) * 0.1);
-            const clampedT = Math.max(0, Math.min(1, t));
-            
-            const px = orb1.position.x + (orb2.position.x - orb1.position.x) * clampedT;
-            const py = orb1.position.y + (orb2.position.y - orb1.position.y) * clampedT;
-            const screenPos = this.worldToScreen(new Vector2D(px, py));
-            
-            this.ctx.fillStyle = color;
-            this.ctx.globalAlpha = 0.7;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, 3, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.globalAlpha = 1;
-        }
-    }
-
-    private drawAurumShieldField(orb1: InstanceType<typeof AurumOrb>, orb2: InstanceType<typeof AurumOrb>): void {
-        const screenPos1 = this.worldToScreen(orb1.position);
-        const screenPos2 = this.worldToScreen(orb2.position);
-        const color = this.getFactionColor(orb1.owner.faction);
-        
-        // Calculate offset direction (perpendicular to line between orbs)
-        const dx = orb2.position.x - orb1.position.x;
-        const dy = orb2.position.y - orb1.position.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        
-        if (dist === 0) return;
-        
-        const ndx = dx / dist;
-        const ndy = dy / dist;
-        
-        // Calculate points offset from orbs (to leave them vulnerable)
-        const offset = Constants.AURUM_SHIELD_OFFSET;
-        const p1x = orb1.position.x + ndx * offset;
-        const p1y = orb1.position.y + ndy * offset;
-        const p2x = orb2.position.x - ndx * offset;
-        const p2y = orb2.position.y - ndy * offset;
-        
-        const sp1 = this.worldToScreen(new Vector2D(p1x, p1y));
-        const sp2 = this.worldToScreen(new Vector2D(p2x, p2y));
-        
-        // Draw translucent shield
-        const gradient = this.ctx.createLinearGradient(sp1.x, sp1.y, sp2.x, sp2.y);
-        gradient.addColorStop(0, `${color}40`);
-        gradient.addColorStop(0.5, `${color}60`);
-        gradient.addColorStop(1, `${color}40`);
-        
-        this.ctx.strokeStyle = gradient;
-        this.ctx.lineWidth = 12;
-        this.ctx.globalAlpha = 0.5;
-        this.ctx.beginPath();
-        this.ctx.moveTo(sp1.x, sp1.y);
-        this.ctx.lineTo(sp2.x, sp2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-        
-        // Draw shield edges
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 2;
-        this.ctx.globalAlpha = 0.7;
-        this.ctx.beginPath();
-        this.ctx.moveTo(sp1.x, sp1.y);
-        this.ctx.lineTo(sp2.x, sp2.y);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-    }
-
-    private drawAurumShieldHit(hit: InstanceType<typeof AurumShieldHit>): void {
-        const screenPos = this.worldToScreen(hit.position);
-        const color = this.getFactionColor(hit.owner.faction);
-        const progress = hit.getProgress();
-        
-        // Flash effect
-        const radius = 20 + progress * 30;
-        const alpha = 1 - progress;
-        
-        this.ctx.globalAlpha = alpha * 0.7;
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.5, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Wave effect
-        this.ctx.globalAlpha = alpha * 0.4;
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.globalAlpha = 1;
-    }
-    
-    /**
-     * Draw a crescent wave from Tank hero ability
-     */
-    private drawCrescentWave(wave: InstanceType<typeof CrescentWave>): void {
-        const screenPos = this.worldToScreen(wave.position);
-        const color = this.getFactionColor(wave.owner.faction);
-        
-        this.ctx.save();
-        
-        // Draw wave as an arc segment - match the collision detection size
-        const waveRadius = Constants.TANK_WAVE_WIDTH * this.zoom;
-        const halfAngle = Constants.TANK_WAVE_ANGLE / 2;
-        
-        // Create gradient for wave glow
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, waveRadius * 1.5
-        );
-        gradient.addColorStop(0, `${color}00`);
-        gradient.addColorStop(0.5, `${color}88`);
-        gradient.addColorStop(1, `${color}00`);
-        
-        // Draw main wave arc
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = waveRadius * 0.5;
-        this.ctx.globalAlpha = 0.7;
-        this.ctx.beginPath();
-        this.ctx.arc(
-            screenPos.x, 
-            screenPos.y, 
-            waveRadius,
-            wave.angle - halfAngle,
-            wave.angle + halfAngle
-        );
-        this.ctx.stroke();
-        
-        // Draw wave glow effect
-        this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = 0.4;
-        this.ctx.beginPath();
-        this.ctx.moveTo(screenPos.x, screenPos.y);
-        this.ctx.arc(
-            screenPos.x, 
-            screenPos.y, 
-            waveRadius * 1.5,
-            wave.angle - halfAngle,
-            wave.angle + halfAngle
-        );
-        this.ctx.closePath();
-        this.ctx.fill();
-        
-        // Draw energy particles along the wave front
-        const numParticles = 10;
-        for (let i = 0; i < numParticles; i++) {
-            const angle = wave.angle - halfAngle + (Constants.TANK_WAVE_ANGLE * i / numParticles);
-            const distance = waveRadius * (0.8 + Math.sin(wave.lifetime * 5 + i) * 0.2);
-            const particleX = screenPos.x + Math.cos(angle) * distance;
-            const particleY = screenPos.y + Math.sin(angle) * distance;
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.globalAlpha = 0.8;
-            this.ctx.beginPath();
-            this.ctx.arc(particleX, particleY, 3 * this.zoom, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        this.ctx.restore();
-    }
-    
-    /**
-     * Draw a dash slash effect - moving projectile trail
-     */
-    private drawDashSlash(slash: InstanceType<typeof DashSlash>): void {
-        const screenPos = this.worldToScreen(slash.position);
-        const color = this.getFactionColor(slash.owner.faction);
-        
-        this.ctx.save();
-        
-        // Draw slash trail with glow effect
-        const slashRadius = Constants.DASH_SLASH_RADIUS * this.zoom;
-        
-        // Create gradient for slash glow
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, slashRadius * 2
-        );
-        gradient.addColorStop(0, `${color}ff`);
-        gradient.addColorStop(0.5, `${color}aa`);
-        gradient.addColorStop(1, `${color}00`);
-        
-        // Draw slash core
-        this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = 0.9;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, slashRadius * 2, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw bright center
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.globalAlpha = 0.8;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, slashRadius * 0.5, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw motion blur trail in the direction of movement
-        const direction = slash.getDirection();
-        const trailLength = slashRadius * 4;
-        
-        for (let i = 0; i < 5; i++) {
-            const alpha = 0.3 * (1 - i / 5);
-            const offset = (trailLength * i) / 5;
-            const trailX = screenPos.x - direction.x * offset;
-            const trailY = screenPos.y - direction.y * offset;
-            
-            this.ctx.fillStyle = color;
-            this.ctx.globalAlpha = alpha;
-            this.ctx.beginPath();
-            this.ctx.arc(trailX, trailY, slashRadius * (1 - i / 5), 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        this.ctx.restore();
-    }
-    
-    /**
-     * Draw a blink shockwave effect - expanding circle with visual progress
-     */
-    private drawBlinkShockwave(shockwave: InstanceType<typeof BlinkShockwave>): void {
-        const screenPos = this.worldToScreen(shockwave.position);
-        const color = this.getFactionColor(shockwave.owner.faction);
-        const progress = shockwave.getVisualProgress();
-        
-        this.ctx.save();
-        
-        // Draw expanding shockwave ring
-        const currentRadius = shockwave.radius * progress * this.zoom;
-        const maxRadius = shockwave.radius * this.zoom;
-        
-        // Draw outer glow
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, currentRadius * 0.8,
-            screenPos.x, screenPos.y, currentRadius * 1.5
-        );
-        gradient.addColorStop(0, `${color}88`);
-        gradient.addColorStop(0.5, `${color}44`);
-        gradient.addColorStop(1, `${color}00`);
-        
-        this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = 1 - progress * 0.5;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRadius * 1.5, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw shockwave ring
-        this.ctx.strokeStyle = color;
-        this.ctx.lineWidth = 4 * this.zoom;
-        this.ctx.globalAlpha = 0.9 * (1 - progress);
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw inner bright ring
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 2 * this.zoom;
-        this.ctx.globalAlpha = 0.8 * (1 - progress);
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, currentRadius * 0.95, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw radial lines emanating from center
-        const numLines = 16;
-        for (let i = 0; i < numLines; i++) {
-            const angle = (Math.PI * 2 * i) / numLines;
-            const startRadius = currentRadius * 0.3;
-            const endRadius = currentRadius;
-            const startX = screenPos.x + Math.cos(angle) * startRadius;
-            const startY = screenPos.y + Math.sin(angle) * startRadius;
-            const endX = screenPos.x + Math.cos(angle) * endRadius;
-            const endY = screenPos.y + Math.sin(angle) * endRadius;
-            
-            this.ctx.strokeStyle = color;
-            this.ctx.lineWidth = 2 * this.zoom;
-            this.ctx.globalAlpha = 0.4 * (1 - progress);
-            this.ctx.beginPath();
-            this.ctx.moveTo(startX, startY);
-            this.ctx.lineTo(endX, endY);
-            this.ctx.stroke();
-        }
-        
-        this.ctx.restore();
-    }
-    
-    /**
-     * Draw a Chrono freeze circle - persistent circle that freezes units
-     */
-    private drawChronoFreezeCircle(freezeCircle: InstanceType<typeof ChronoFreezeCircle>): void {
-        const screenPos = this.worldToScreen(freezeCircle.position);
-        const color = this.getFactionColor(freezeCircle.owner.faction);
-        const progress = freezeCircle.getVisualProgress();
-        const radius = freezeCircle.radius * this.zoom;
-        
-        this.ctx.save();
-        
-        // Pulsing effect
-        const pulsePhase = (progress * 8) % 1.0;
-        const pulse = 0.85 + Math.sin(pulsePhase * Math.PI * 2) * 0.15;
-        
-        // Draw outer glow with ice blue tint
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, radius * 1.2
-        );
-        gradient.addColorStop(0, `#88DDFF44`);
-        gradient.addColorStop(0.7, `#4499CC22`);
-        gradient.addColorStop(1, `#4499CC00`);
-        
-        this.ctx.fillStyle = gradient;
-        this.ctx.globalAlpha = pulse * 0.6;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 1.2, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        // Draw main freeze circle with icy effect
-        this.ctx.strokeStyle = '#88DDFF';
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.globalAlpha = 0.8 * pulse;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw inner circle
-        this.ctx.strokeStyle = '#AAEEFF';
-        this.ctx.lineWidth = 1.5 * this.zoom;
-        this.ctx.globalAlpha = 0.6 * pulse;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.95, 0, Math.PI * 2);
-        this.ctx.stroke();
-        
-        // Draw crystalline pattern
-        const numRays = 12;
-        this.ctx.strokeStyle = '#CCFFFF';
-        this.ctx.lineWidth = 1 * this.zoom;
-        this.ctx.globalAlpha = 0.4 * pulse;
-        for (let i = 0; i < numRays; i++) {
-            const angle = (Math.PI * 2 * i) / numRays;
-            const x1 = screenPos.x + Math.cos(angle) * radius * 0.3;
-            const y1 = screenPos.y + Math.sin(angle) * radius * 0.3;
-            const x2 = screenPos.x + Math.cos(angle) * radius;
-            const y2 = screenPos.y + Math.sin(angle) * radius;
-            
-            this.ctx.beginPath();
-            this.ctx.moveTo(x1, y1);
-            this.ctx.lineTo(x2, y2);
-            this.ctx.stroke();
-        }
-        
-        this.ctx.restore();
-    }
-    
     /**
      * Draw Chrono hero with hourglass icon
      */
@@ -8355,7 +7086,7 @@ export class GameRenderer {
                         this.drawUnit(unit, color, game, isEnemy); // Use default unit drawing for AurumHero
                     } else if (unit instanceof Splendor) {
                         this.drawUnit(unit, color, game, isEnemy);
-                        this.drawSplendorChargeEffect(unit);
+                        this.projectileRenderer.drawSplendorChargeEffect(unit, this.getProjectileRendererContext());
                     } else if (unit instanceof Shadow) {
                         this.drawShadow(unit, color, game, isEnemy);
                     } else {
@@ -8399,46 +7130,47 @@ export class GameRenderer {
 
         // Draw projectiles and effect particles
         if (this.isProjectilesLayerEnabled) {
+            const projCtx = this.getProjectileRendererContext();
             for (const flash of game.muzzleFlashes) {
                 if (this.isWithinViewBounds(flash.position, 80)) {
-                    this.drawMuzzleFlash(flash);
+                    this.projectileRenderer.drawMuzzleFlash(flash, projCtx);
                 }
             }
 
             for (const casing of game.bulletCasings) {
                 if (this.isWithinViewBounds(casing.position, 60)) {
-                    this.drawBulletCasing(casing);
+                    this.projectileRenderer.drawBulletCasing(casing, projCtx);
                 }
             }
 
             for (const bullet of game.bouncingBullets) {
                 if (this.isWithinViewBounds(bullet.position, 60)) {
-                    this.drawBouncingBullet(bullet);
+                    this.projectileRenderer.drawBouncingBullet(bullet, projCtx);
                 }
             }
 
             for (const bullet of game.abilityBullets) {
                 if (this.isWithinViewBounds(bullet.position, 80)) {
-                    this.drawAbilityBullet(bullet);
+                    this.projectileRenderer.drawAbilityBullet(bullet, projCtx);
                 }
             }
 
             for (const projectile of game.minionProjectiles) {
                 if (this.isWithinViewBounds(projectile.position, 80)) {
-                    this.drawMinionProjectile(projectile);
+                    this.projectileRenderer.drawMinionProjectile(projectile, projCtx);
                 }
             }
 
             for (const projectile of game.mortarProjectiles) {
                 if (this.isWithinViewBounds(projectile.position, 100)) {
-                    this.drawMortarProjectile(projectile);
+                    this.projectileRenderer.drawMortarProjectile(projectile, projCtx);
                 }
             }
 
             // Draw mini-motherships
             for (const mini of game.miniMotherships) {
                 if (this.isWithinViewBounds(mini.position, 50)) {
-                    this.drawMiniMothership(mini);
+                    this.projectileRenderer.drawMiniMothership(mini, projCtx);
                 }
             }
 
@@ -8460,33 +7192,33 @@ export class GameRenderer {
             for (const explosion of game.miniMothershipExplosions) {
                 const age = game.gameTime - explosion.timestamp;
                 if (age < 0.5 && this.isWithinViewBounds(explosion.position, Constants.MOTHERSHIP_MINI_EXPLOSION_RADIUS * 2)) {
-                    this.drawMiniMothershipExplosion(explosion, age);
+                    this.projectileRenderer.drawMiniMothershipExplosion(explosion, age, projCtx);
                 }
             }
 
             for (const laser of game.laserBeams) {
                 if (this.isWithinViewBounds(laser.startPos, 200) || this.isWithinViewBounds(laser.endPos, 200)) {
-                    this.drawLaserBeam(laser);
+                    this.projectileRenderer.drawLaserBeam(laser, projCtx);
                 }
             }
 
             if (this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra') {
                 for (const particle of game.impactParticles) {
                     if (this.isWithinViewBounds(particle.position, 120)) {
-                        this.drawImpactParticle(particle);
+                        this.projectileRenderer.drawImpactParticle(particle, projCtx);
                     }
                 }
             }
 
             for (const sparkle of game.sparkleParticles) {
                 if (this.isWithinViewBounds(sparkle.position, 50)) {
-                    this.drawSparkleParticle(sparkle);
+                    this.projectileRenderer.drawSparkleParticle(sparkle, projCtx);
                 }
             }
 
             for (const particle of game.deathParticles) {
                 if (this.isWithinViewBounds(particle.position, 100)) {
-                    this.drawDeathParticle(particle, game);
+                    this.projectileRenderer.drawDeathParticle(particle, game, projCtx);
                 }
             }
 
@@ -8498,74 +7230,74 @@ export class GameRenderer {
 
             for (const zone of game.influenceZones) {
                 if (this.isWithinViewBounds(zone.position, zone.radius)) {
-                    this.drawInfluenceZone(zone);
+                    this.projectileRenderer.drawInfluenceZone(zone, projCtx);
                 }
             }
 
             for (const projectile of game.influenceBallProjectiles) {
                 if (this.isWithinViewBounds(projectile.position, 100)) {
-                    this.drawInfluenceBallProjectile(projectile);
+                    this.projectileRenderer.drawInfluenceBallProjectile(projectile, projCtx);
                 }
             }
 
             for (const wave of game.crescentWaves) {
                 if (this.isWithinViewBounds(wave.position, Constants.TANK_WAVE_WIDTH * 2)) {
-                    this.drawCrescentWave(wave);
+                    this.projectileRenderer.drawCrescentWave(wave, projCtx);
                 }
             }
 
             for (const slash of game.dashSlashes) {
                 if (this.isWithinViewBounds(slash.position, Constants.DASH_SLASH_RADIUS * 4)) {
-                    this.drawDashSlash(slash);
+                    this.projectileRenderer.drawDashSlash(slash, projCtx);
                 }
             }
 
             for (const shockwave of game.blinkShockwaves) {
                 if (this.isWithinViewBounds(shockwave.position, shockwave.radius * 2)) {
-                    this.drawBlinkShockwave(shockwave);
+                    this.projectileRenderer.drawBlinkShockwave(shockwave, projCtx);
                 }
             }
 
             for (const freezeCircle of game.chronoFreezeCircles) {
                 if (this.isWithinViewBounds(freezeCircle.position, freezeCircle.radius * 2)) {
-                    this.drawChronoFreezeCircle(freezeCircle);
+                    this.projectileRenderer.drawChronoFreezeCircle(freezeCircle, projCtx);
                 }
             }
 
             for (const bomb of game.novaBombs) {
                 if (this.isWithinViewBounds(bomb.position, 100)) {
-                    this.drawNovaBomb(bomb);
+                    this.projectileRenderer.drawNovaBomb(bomb, projCtx);
                 }
             }
 
             for (const bullet of game.novaScatterBullets) {
                 if (this.isWithinViewBounds(bullet.position, 100)) {
-                    this.drawNovaScatterBullet(bullet);
+                    this.projectileRenderer.drawNovaScatterBullet(bullet, projCtx);
                 }
             }
 
             for (const bomb of game.stickyBombs) {
                 if (this.isWithinViewBounds(bomb.position, 100)) {
-                    this.drawStickyBomb(bomb);
+                    this.projectileRenderer.drawStickyBomb(bomb, projCtx);
                 }
             }
 
             for (const laser of game.stickyLasers) {
                 if (this.isWithinViewBounds(laser.startPosition, 600)) {
-                    this.drawStickyLaser(laser);
+                    this.projectileRenderer.drawStickyLaser(laser, projCtx);
                 }
             }
 
             for (const particle of game.disintegrationParticles) {
                 if (this.isWithinViewBounds(particle.position, 50)) {
-                    this.drawDisintegrationParticle(particle);
+                    this.projectileRenderer.drawDisintegrationParticle(particle, projCtx);
                 }
             }
 
             // Draw Radiant orbs and laser fields
             for (const orb of game.radiantOrbs) {
                 if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
-                    this.drawRadiantOrb(orb);
+                    this.projectileRenderer.drawRadiantOrb(orb, projCtx);
                 }
             }
             
@@ -8581,7 +7313,7 @@ export class GameRenderer {
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
                     
                     if (distance <= maxRange) {
-                        this.drawRadiantLaserField(orb1, orb2);
+                        this.projectileRenderer.drawRadiantLaserField(orb1, orb2, projCtx);
                     }
                 }
             }
@@ -8589,7 +7321,7 @@ export class GameRenderer {
             // Draw Velaris orbs and light-blocking fields
             for (const orb of game.velarisOrbs) {
                 if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
-                    this.drawVelarisOrb(orb);
+                    this.projectileRenderer.drawVelarisOrb(orb, projCtx);
                 }
             }
             
@@ -8605,7 +7337,7 @@ export class GameRenderer {
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
                     
                     if (distance <= maxRange) {
-                        this.drawVelarisLightBlockingField(orb1, orb2, game.gameTime);
+                        this.projectileRenderer.drawVelarisLightBlockingField(orb1, orb2, game.gameTime, projCtx);
                     }
                 }
             }
@@ -8613,7 +7345,7 @@ export class GameRenderer {
             // Draw Aurum orbs and shield fields
             for (const orb of game.aurumOrbs) {
                 if (this.isWithinViewBounds(orb.position, orb.getRange() + 100)) {
-                    this.drawAurumOrb(orb);
+                    this.projectileRenderer.drawAurumOrb(orb, projCtx);
                 }
             }
             
@@ -8629,7 +7361,7 @@ export class GameRenderer {
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
                     
                     if (distance <= maxRange) {
-                        this.drawAurumShieldField(orb1, orb2);
+                        this.projectileRenderer.drawAurumShieldField(orb1, orb2, projCtx);
                     }
                 }
             }
@@ -8637,25 +7369,25 @@ export class GameRenderer {
             // Draw Aurum shield hit effects
             for (const hit of game.aurumShieldHits) {
                 if (this.isWithinViewBounds(hit.position, 100)) {
-                    this.drawAurumShieldHit(hit);
+                    this.projectileRenderer.drawAurumShieldHit(hit, projCtx);
                 }
             }
 
             for (const sphere of game.splendorSunSpheres) {
                 if (this.isWithinViewBounds(sphere.position, Constants.SPLENDOR_SUN_SPHERE_RADIUS * 4)) {
-                    this.drawSplendorSunSphere(sphere);
+                    this.projectileRenderer.drawSplendorSunSphere(sphere, projCtx);
                 }
             }
 
             for (const zone of game.splendorSunlightZones) {
                 if (this.isWithinViewBounds(zone.position, zone.radius + 40)) {
-                    this.drawSplendorSunlightZone(zone);
+                    this.projectileRenderer.drawSplendorSunlightZone(zone, projCtx);
                 }
             }
 
             for (const segment of game.splendorLaserSegments) {
                 if (this.isWithinViewBounds(segment.startPos, 150) || this.isWithinViewBounds(segment.endPos, 150)) {
-                    this.drawSplendorLaserSegment(segment);
+                    this.projectileRenderer.drawSplendorLaserSegment(segment, projCtx);
                 }
             }
 
