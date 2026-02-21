@@ -16,6 +16,9 @@ export class DamageNumber {
     public velocity: Vector2D;
     public maxHealth: number; // For calculating size proportional to health
     public unitId: string | null; // Track which unit this belongs to (for replacement)
+    public displayText: string | null;
+    public textColor: string;
+    public isBlocked: boolean;
 
     constructor(
         position: Vector2D,
@@ -23,7 +26,11 @@ export class DamageNumber {
         creationTime: number,
         maxHealth: number = 100,
         remainingHealth: number = 0,
-        unitId: string | null = null
+        unitId: string | null = null,
+        initialVelocity: Vector2D | null = null,
+        textColor: string = '#FF6464',
+        isBlocked: boolean = false,
+        displayText: string | null = null
     ) {
         this.position = new Vector2D(position.x, position.y);
         this.damage = Math.round(damage);
@@ -31,12 +38,14 @@ export class DamageNumber {
         this.creationTime = creationTime;
         this.maxHealth = maxHealth;
         this.unitId = unitId;
-        // Random horizontal drift
+        this.textColor = textColor;
+        this.isBlocked = isBlocked;
+        this.displayText = displayText;
+
         const rng = getGameRNG();
-        this.velocity = new Vector2D(
-            rng.nextFloat(-10, 10),
-            -50 // Upward velocity
-        );
+        this.velocity = initialVelocity
+            ? new Vector2D(initialVelocity.x, initialVelocity.y)
+            : new Vector2D(rng.nextFloat(-10, 10), -50);
     }
 
     /**
@@ -45,6 +54,9 @@ export class DamageNumber {
     update(deltaTime: number): void {
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
+        const damping = Math.max(0, 1 - 8 * deltaTime);
+        this.velocity.x *= damping;
+        this.velocity.y *= damping;
     }
 
     /**

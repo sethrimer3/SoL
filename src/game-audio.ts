@@ -11,6 +11,7 @@ const LOOP_CROSSFADE_DURATION_SEC = 0.1;
 const MARINE_LOOP_BASE_VOLUME = 0.4;
 const GATLING_LOOP_BASE_VOLUME = 0.35;
 const FORGE_CHARGE_BASE_VOLUME = 1 / 3;
+const BLOCKED_PING_BASE_VOLUME = 0.32;
 
 export type AudioListenerView = {
     cameraWorld: Vector2D;
@@ -37,6 +38,9 @@ export class GameAudioController {
     private readonly forgeChargeAudio: HTMLAudioElement;
     private readonly foundryPowerUpAudio: HTMLAudioElement;
     private readonly foundryPowerDownAudio: HTMLAudioElement;
+    private readonly blockedPingAudioPool: HTMLAudioElement[];
+
+    private readonly playedBlockedDamageNumbers = new WeakSet<object>();
 
     private readonly forgeChargePlayedByForge = new WeakMap<object, boolean>();
     private readonly forgeWasCrunchingByForge = new WeakMap<object, boolean>();
@@ -73,6 +77,20 @@ export class GameAudioController {
         this.baseVolumeByElement.set(this.forgeChargeAudio, FORGE_CHARGE_BASE_VOLUME);
         this.foundryPowerUpAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_up.ogg');
         this.foundryPowerDownAudio = this.createAudio('ASSETS/SFX/radiantSFX/foundry_charge_down.ogg');
+        this.blockedPingAudioPool = [
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (1).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (2).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (3).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (4).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (5).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (6).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (7).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (8).wav'),
+            this.createAudio('ASSETS/SFX/allFactionsSFX/ping (9).wav')
+        ];
+        for (const pingAudio of this.blockedPingAudioPool) {
+            this.baseVolumeByElement.set(pingAudio, BLOCKED_PING_BASE_VOLUME);
+        }
     }
 
     setSoundEnabled(isEnabled: boolean): void {
@@ -176,6 +194,19 @@ export class GameAudioController {
             if (starlingAudioPool && this.playOneShotFromPool(starlingAudioPool, starlingSoundSource, listenerView)) {
                 this.starlingAttackCooldownRemainingSec = STARLING_ATTACK_MIN_INTERVAL_SEC;
             }
+        }
+
+        for (const damageNumber of game.damageNumbers) {
+            if (!damageNumber.isBlocked) {
+                continue;
+            }
+            if (this.playedBlockedDamageNumbers.has(damageNumber)) {
+                continue;
+            }
+            this.playedBlockedDamageNumbers.add(damageNumber);
+            const randomIndex = Math.floor(Math.random() * this.blockedPingAudioPool.length);
+            const pingAudio = this.blockedPingAudioPool[randomIndex];
+            this.playOneShot(pingAudio, damageNumber.position, listenerView, true);
         }
 
         if (didMarineFireThisFrame) {
