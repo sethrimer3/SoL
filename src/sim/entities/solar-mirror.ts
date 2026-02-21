@@ -24,10 +24,12 @@ export class SolarMirror {
     reflectionAngle: number = 0; // Angle in radians for the flat surface rotation
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
-    
+    isMovingToSun: boolean = false; // True when mirror was commanded to find nearest sunlight
+
     // Pathfinding waypoints for obstacle avoidance
     private waypoints: Vector2D[] = [];
     private finalTarget: Vector2D | null = null;
+    private sunRecheckTimerMs: number = 0;
 
     // Movement constants for mirrors (slower than Stellar Forge)
     private readonly MAX_SPEED = 50; // Pixels per second - slower than forge
@@ -47,6 +49,8 @@ export class SolarMirror {
     private readonly FORGE_CLEARANCE = 30; // Extra clearance for stellar forges (matches original reactive avoidance)
     private readonly WAYPOINT_CLEARANCE_MULTIPLIER = 1.2; // Multiplier for waypoint clearance
     private readonly REACTIVE_AVOIDANCE_RANGE = 60; // Look ahead distance for reactive avoidance
+    private readonly SUN_RECHECK_INTERVAL_MS = 1500; // How often to re-evaluate sun target when isMovingToSun
+    private readonly SUN_ORBIT_DISTANCE_PX = 180; // How far from a sun's edge to target when moving to sunlight
 
     constructor(
         public position: Vector2D,
@@ -391,7 +395,116 @@ export class SolarMirror {
      * Set target position for mirror movement with pathfinding
      */
     setTarget(target: Vector2D, gameState: GameState | null = null): void {
+        this.isMovingToSun = false; // Clear "move to sun" mode when manually re-targeted
         this.computePathWithWaypoints(target, gameState);
+    }
+
+    /**
+     * Set the mirror moving toward the nearest available sunlight position.
+     * Each call finds the best candidate from this mirror's current position.
+     * Returns the target chosen, or null if none found.
+     */
+    setTargetToNearestSunlight(gameState: GameState): Vector2D | null {
+        const target = this.findNearestSunlightPosition(gameState);
+        if (target) {
+            this.computePathWithWaypoints(target, gameState);
+            this.isMovingToSun = true;
+            this.sunRecheckTimerMs = 0;
+        }
+        return target;
+    }
+
+    /**
+     * Check whether a world position has unobstructed line-of-sight to any sun.
+     */
+    private static positionHasLineOfSightToSun(pos: Vector2D, suns: Sun[], asteroids: Asteroid[]): boolean {
+        for (const sun of suns) {
+            const dx = sun.position.x - pos.x;
+            const dy = sun.position.y - pos.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist === 0) return true;
+            const dir = new Vector2D(dx / dist, dy / dist);
+            const ray = new LightRay(pos, dir);
+            let blocked = false;
+            for (const asteroid of asteroids) {
+                const d = ray.getIntersectionDistance(asteroid.getWorldVertices());
+                if (d !== null && d < dist) {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (!blocked) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Find the nearest position around the closest sun that:
+     *  1. Has line-of-sight to the sun
+     *  2. Does not collide with any obstacle
+     *  3. Preferentially has line-of-sight to the player's forge (base)
+     * Returns null when no valid position is found.
+     */
+    findNearestSunlightPosition(gameState: GameState): Vector2D | null {
+        if (gameState.suns.length === 0) return null;
+
+        let nearestSun: Sun | null = null;
+        let minDist = Infinity;
+        for (const sun of gameState.suns) {
+            const dist = this.position.distanceTo(sun.position);
+            if (dist < minDist) {
+                minDist = dist;
+                nearestSun = sun;
+            }
+        }
+        if (!nearestSun) return null;
+
+        const forge = this.owner.stellarForge;
+        const targetDist = nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX;
+        const baseAngle = Math.atan2(
+            this.position.y - nearestSun.position.y,
+            this.position.x - nearestSun.position.x
+        );
+        const sampleCount = 24;
+        let fallback: Vector2D | null = null;
+
+        for (let i = 0; i < sampleCount; i++) {
+            const angle = baseAngle + (Math.PI * 2 * i) / sampleCount;
+            const candidate = new Vector2D(
+                nearestSun.position.x + Math.cos(angle) * targetDist,
+                nearestSun.position.y + Math.sin(angle) * targetDist
+            );
+            if (gameState.checkCollision(candidate, 20)) continue;
+            if (!SolarMirror.positionHasLineOfSightToSun(candidate, gameState.suns, gameState.asteroids)) continue;
+
+            if (!fallback) fallback = candidate;
+
+            if (forge) {
+                // Prefer positions that also have LOS to the player's forge
+                const fdx = forge.position.x - candidate.x;
+                const fdy = forge.position.y - candidate.y;
+                const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+                if (fdist > 0) {
+                    const fdir = new Vector2D(fdx / fdist, fdy / fdist);
+                    const fray = new LightRay(candidate, fdir);
+                    let forgeBlocked = false;
+                    for (const asteroid of gameState.asteroids) {
+                        const d = fray.getIntersectionDistance(asteroid.getWorldVertices());
+                        if (d !== null && d < fdist) {
+                            forgeBlocked = true;
+                            break;
+                        }
+                    }
+                    if (!forgeBlocked) return candidate;
+                } else {
+                    return candidate;
+                }
+            } else {
+                return candidate;
+            }
+        }
+
+        return fallback; // Return sunniest spot found even without forge LOS
     }
 
     setLinkedStructure(structure: StellarForge | Building | WarpGate | null): void {
@@ -478,6 +591,21 @@ export class SolarMirror {
             Constants.ASTEROID_KNOCKBACK_DECELERATION
         );
 
+        // Periodically re-evaluate sun target when in "move to sun" mode
+        if (this.isMovingToSun && gameState) {
+            this.sunRecheckTimerMs += deltaTime * 1000;
+            if (this.sunRecheckTimerMs >= this.SUN_RECHECK_INTERVAL_MS) {
+                this.sunRecheckTimerMs = 0;
+                const checkTarget = this.finalTarget ?? this.targetPosition;
+                if (checkTarget && !SolarMirror.positionHasLineOfSightToSun(checkTarget, gameState.suns, gameState.asteroids)) {
+                    const newTarget = this.findNearestSunlightPosition(gameState);
+                    if (newTarget) {
+                        this.computePathWithWaypoints(newTarget, gameState);
+                    }
+                }
+            }
+        }
+
         if (!this.targetPosition) return;
 
         if (gameState) {
@@ -516,6 +644,7 @@ export class SolarMirror {
                     this.position = this.targetPosition;
                     this.targetPosition = null;
                     this.velocity = new Vector2D(0, 0);
+                    this.isMovingToSun = false;
                 }
                 return;
             } else {
@@ -524,6 +653,7 @@ export class SolarMirror {
                 this.targetPosition = null;
                 this.finalTarget = null;
                 this.velocity = new Vector2D(0, 0);
+                this.isMovingToSun = false;
                 return;
             }
         }
