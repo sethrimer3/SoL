@@ -7677,40 +7677,34 @@ export class GameRenderer {
             if (!this.isWithinViewBounds(damageNumber.position, 100)) {
                 continue;
             }
-            
+
             const screenPos = this.worldToScreen(damageNumber.position);
             const opacity = damageNumber.getOpacity(game.gameTime);
-            
-            // Determine what to display based on mode
-            const displayValue = this.damageDisplayMode === 'remaining-life' 
-                ? damageNumber.remainingHealth 
-                : damageNumber.damage;
-            
-            // Calculate size based on damage proportion to max health
-            // Range: 8px (small) to 24px (large)
-            const damageRatio = damageNumber.damage / damageNumber.maxHealth;
-            const fontSize = Math.max(8, Math.min(24, 8 + damageRatio * 80));
-            
+
+            const displayText = damageNumber.displayText
+                ?? ((this.damageDisplayMode === 'remaining-life')
+                    ? damageNumber.remainingHealth.toString()
+                    : damageNumber.damage.toString());
+
+            const clampedDamage = Math.max(0, damageNumber.damage);
+            const damageScale = Math.min(1, clampedDamage / Math.max(1, damageNumber.maxHealth));
+            const fontSize = damageNumber.isBlocked
+                ? 14
+                : 13 + damageScale * 8;
+
             this.ctx.font = `bold ${fontSize}px Doto`;
-            
-            // For remaining life mode, color based on health percentage
-            if (this.damageDisplayMode === 'remaining-life') {
-                const healthPercent = damageNumber.remainingHealth / damageNumber.maxHealth;
-                const color = this.getHealthColor(healthPercent);
-                this.ctx.fillStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
-            } else {
-                // Damage numbers are red
-                this.ctx.fillStyle = `rgba(255, 100, 100, ${opacity})`;
-            }
-            
+            this.ctx.fillStyle = damageNumber.textColor;
+            this.ctx.globalAlpha = opacity;
+
             this.ctx.textAlign = 'center';
             this.ctx.textBaseline = 'middle';
-            
-            // Add stroke for readability
-            this.ctx.strokeStyle = `rgba(0, 0, 0, ${opacity * 0.8})`;
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeText(displayValue.toString(), screenPos.x, screenPos.y);
-            this.ctx.fillText(displayValue.toString(), screenPos.x, screenPos.y);
+
+            // Thin white outline for readability
+            this.ctx.strokeStyle = '#FFFFFF';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.strokeText(displayText, screenPos.x, screenPos.y);
+            this.ctx.fillText(displayText, screenPos.x, screenPos.y);
+            this.ctx.globalAlpha = 1;
         }
     }
 

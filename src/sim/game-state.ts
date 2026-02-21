@@ -1233,15 +1233,19 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             beamOwner.lastBeamTime = this.gameTime;
                         }
                         
+                        const previousHealth = unit.health;
                         unit.takeDamage(finalDamage);
-                        // Create damage number
+                        const actualDamage = Math.max(0, previousHealth - unit.health);
                         const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
                         this.addDamageNumber(
                             unit.position,
-                            finalDamage,
+                            actualDamage,
                             unit.maxHealth,
                             unit.health,
-                            unitKey
+                            unitKey,
+                            bullet.owner,
+                            bullet.velocity,
+                            actualDamage <= 0
                         );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
@@ -1265,7 +1269,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             mirrorDamage,
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health,
-                            mirrorKey
+                            mirrorKey,
+                            bullet.owner,
+                            bullet.velocity
                         );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
@@ -1288,7 +1294,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             bullet.damage,
                             gate.maxHealth,
                             gate.health,
-                            gateKey
+                            gateKey,
+                            bullet.owner,
+                            bullet.velocity
                         );
                         bullet.lifetime = bullet.maxLifetime; // Mark for removal
                         break;
@@ -1325,7 +1333,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                         finalDamage,
                         Constants.STELLAR_FORGE_MAX_HEALTH,
                         player.stellarForge.health,
-                        forgeKey
+                        forgeKey,
+                        bullet.owner,
+                        bullet.velocity
                     );
                     bullet.lifetime = bullet.maxLifetime; // Mark for removal
                 }
@@ -1400,7 +1410,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             finalDamage,
                             target.maxHealth,
                             target.health,
-                            unitKey
+                            unitKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                     } else if ('isBuilding' in target && target.isBuilding) {
                         const buildingKey = `building_${target.position.x}_${target.position.y}`;
@@ -1409,7 +1421,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             finalDamage,
                             target.maxHealth,
                             target.health,
-                            buildingKey
+                            buildingKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                     } else if ('isForge' in target && target.isForge) {
                         const forgeKey = `forge_${target.position.x}_${target.position.y}`;
@@ -1418,7 +1432,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             finalDamage,
                             target.maxHealth,
                             target.health,
-                            forgeKey
+                            forgeKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                     }
                 }
@@ -1533,15 +1549,19 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
 
                 for (const unit of player.units) {
                     if (projectile.checkHit(unit)) {
+                        const previousHealth = unit.health;
                         unit.takeDamage(projectile.damage);
-                        // Create damage number
+                        const actualDamage = Math.max(0, previousHealth - unit.health);
                         const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
                         this.addDamageNumber(
                             unit.position,
-                            projectile.damage,
+                            actualDamage,
                             unit.maxHealth,
                             unit.health,
-                            unitKey
+                            unitKey,
+                            projectile.owner,
+                            projectile.velocity,
+                            actualDamage <= 0
                         );
                         hasHit = true;
                         break;
@@ -1565,7 +1585,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             mirrorDamage,
                             Constants.MIRROR_MAX_HEALTH,
                             mirror.health,
-                            mirrorKey
+                            mirrorKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                         hasHit = true;
                         break;
@@ -1588,7 +1610,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             projectile.damage,
                             gate.maxHealth,
                             gate.health,
-                            gateKey
+                            gateKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                         hasHit = true;
                         break;
@@ -1609,7 +1633,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                             projectile.damage,
                             building.maxHealth,
                             building.health,
-                            buildingKey
+                            buildingKey,
+                            projectile.owner,
+                            projectile.velocity
                         );
                         hasHit = true;
                         break;
@@ -1629,7 +1655,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                         projectile.damage,
                         Constants.STELLAR_FORGE_MAX_HEALTH,
                         player.stellarForge.health,
-                        forgeKey
+                        forgeKey,
+                        projectile.owner,
+                        projectile.velocity
                     );
                     hasHit = true;
                     break;
@@ -3072,20 +3100,24 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
             if (closestHit.type === 'unit' || closestHit.type === 'forge') {
                 // Damage and stop
                 if (closestHit.target) {
+                    const previousHealth = closestHit.target.health;
                     closestHit.target.takeDamage(Constants.RAY_BEAM_DAMAGE);
-                    // Create damage number
-                    const maxHealth = closestHit.type === 'forge' 
-                        ? Constants.STELLAR_FORGE_MAX_HEALTH 
+                    const actualDamage = Math.max(0, previousHealth - closestHit.target.health);
+                    const maxHealth = closestHit.type === 'forge'
+                        ? Constants.STELLAR_FORGE_MAX_HEALTH
                         : (closestHit.target as Unit).maxHealth;
                     const targetKey = closestHit.type === 'forge'
                         ? `forge_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as StellarForge).owner.name}`
                         : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as Unit).owner.name}`;
                     this.addDamageNumber(
                         closestHit.target.position,
-                        Constants.RAY_BEAM_DAMAGE,
+                        actualDamage,
                         maxHealth,
                         closestHit.target.health,
-                        targetKey
+                        targetKey,
+                        ray.owner,
+                        currentDir,
+                        actualDamage <= 0
                     );
                 }
                 break;
@@ -3371,15 +3403,19 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
             for (const unit of player.units) {
                 const distance = driller.position.distanceTo(unit.position);
                 if (distance < 15) {
+                    const previousHealth = unit.health;
                     unit.takeDamage(Constants.DRILLER_DRILL_DAMAGE);
-                    // Create damage number
+                    const actualDamage = Math.max(0, previousHealth - unit.health);
                     const unitKey = `unit_${unit.position.x}_${unit.position.y}_${unit.owner.name}`;
                     this.addDamageNumber(
                         unit.position,
-                        Constants.DRILLER_DRILL_DAMAGE,
+                        actualDamage,
                         unit.maxHealth,
                         unit.health,
-                        unitKey
+                        unitKey,
+                        driller.owner,
+                        driller.drillVelocity,
+                        actualDamage <= 0
                     );
                 }
             }
@@ -3397,7 +3433,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                         damage,
                         building.maxHealth,
                         building.health,
-                        buildingKey
+                        buildingKey,
+                        driller.owner,
+                        driller.drillVelocity
                     );
                     // Continue drilling through building
                 }
@@ -3416,7 +3454,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
                         damage,
                         Constants.STELLAR_FORGE_MAX_HEALTH,
                         player.stellarForge.health,
-                        forgeKey
+                        forgeKey,
+                        driller.owner,
+                        driller.drillVelocity
                     );
                     // Continue drilling through
                 }
@@ -4014,7 +4054,10 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
         damage: number,
         maxHealth: number,
         currentHealth: number,
-        unitKey: string | null = null
+        unitKey: string | null = null,
+        sourcePlayer: Player | null = null,
+        incomingDirection: Vector2D | null = null,
+        isBlocked: boolean = false
     ): void {
         const remainingHealth = Math.max(0, currentHealth);
 
@@ -4023,13 +4066,30 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext {
             this.damageNumbers = this.damageNumbers.filter(dn => dn.unitId !== unitKey);
         }
 
+        const rng = getGameRNG();
+        const baseSpeed = isBlocked ? 130 : 170;
+        let velocity = new Vector2D(rng.nextFloat(-10, 10), -50);
+        if (incomingDirection) {
+            const directionLength = Math.sqrt(incomingDirection.x ** 2 + incomingDirection.y ** 2);
+            if (directionLength > 0.0001) {
+                const baseAngleRad = Math.atan2(incomingDirection.y, incomingDirection.x);
+                const randomizedAngleRad = baseAngleRad + rng.nextFloat(-0.35, 0.35);
+                const speed = baseSpeed + rng.nextFloat(-30, 30);
+                velocity = new Vector2D(Math.cos(randomizedAngleRad) * speed, Math.sin(randomizedAngleRad) * speed);
+            }
+        }
+
         this.damageNumbers.push(new DamageNumber(
             position,
             damage,
             this.gameTime,
             maxHealth,
             remainingHealth,
-            unitKey
+            unitKey,
+            velocity,
+            sourcePlayer ? this.getPlayerImpactColor(sourcePlayer) : '#FF6464',
+            isBlocked,
+            isBlocked ? 'blocked' : null
         ));
     }
 
