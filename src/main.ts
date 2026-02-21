@@ -1132,29 +1132,34 @@ class GameController {
         if (this.selectedMirrors.size === 0 || !this.game) {
             return;
         }
-        const firstMirror = Array.from(this.selectedMirrors)[0];
-        const target = this.findNearestSunlightTarget(firstMirror.position);
-        if (!target) {
-            console.log('No nearby sunlight destination found for mirror');
-            return;
-        }
-
-        const mirrorIndices = Array.from(this.selectedMirrors)
-            .map((mirror) => player.solarMirrors.indexOf(mirror))
-            .filter((index) => index >= 0);
 
         for (const mirror of this.selectedMirrors) {
-            mirror.setTarget(target, this.game);
+            const target = mirror.setTargetToNearestSunlight(this.game);
+            if (!target) {
+                console.log('No nearby sunlight destination found for mirror');
+                continue;
+            }
+            this.moveOrderCounter++;
+            mirror.moveOrder = this.moveOrderCounter;
+            const mirrorIndex = player.solarMirrors.indexOf(mirror);
+            if (mirrorIndex >= 0) {
+                this.sendNetworkCommand('mirror_move', {
+                    mirrorIndices: [mirrorIndex],
+                    targetX: target.x,
+                    targetY: target.y,
+                    moveOrder: this.moveOrderCounter,
+                    toSun: true
+                });
+                console.log(`Moving mirror to sunlight at (${target.x.toFixed(0)}, ${target.y.toFixed(0)})`);
+            }
         }
 
-        this.moveOrderCounter++;
-        this.sendNetworkCommand('mirror_move', {
-            mirrorIndices,
-            targetX: target.x,
-            targetY: target.y,
-            moveOrder: this.moveOrderCounter
-        });
-        console.log(`Moving selected mirrors to sunlight at (${target.x.toFixed(0)}, ${target.y.toFixed(0)})`);
+        // Deselect all mirrors after issuing the "to sun" command
+        for (const mirror of this.selectedMirrors) {
+            mirror.isSelected = false;
+        }
+        this.selectedMirrors.clear();
+        this.renderer.selectedMirrors = this.selectedMirrors;
     }
 
     private getBuildingAbilityAnchorScreen(): Vector2D | null {
@@ -3036,19 +3041,10 @@ class GameController {
                         targetY: worldPos.y,
                         moveOrder: this.moveOrderCounter
                     });
-                    selectedMirror.isSelected = false; // Auto-deselect after setting target
-                    this.selectedBase = null;
-                    this.selectedUnits.clear();
-                    for (const mirror of this.selectedMirrors) {
-                        mirror.isSelected = false;
-                    }
-                    this.selectedMirrors.clear();
-                    this.renderer.selectedUnits = this.selectedUnits;
-                    // Deselect all buildings
-                    for (const building of player.buildings) {
-                        building.isSelected = false;
-                    }
-                    this.selectedBuildings.clear();
+                    // Only deselect the mirror that received the move order; others stay selected
+                    selectedMirror.isSelected = false;
+                    this.selectedMirrors.delete(selectedMirror);
+                    this.renderer.selectedMirrors = this.selectedMirrors;
                     console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -3398,7 +3394,9 @@ class GameController {
                             if (closestMirror && mirrorIndex >= 0) {
                                 closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y), this.game);
                                 closestMirror.moveOrder = this.moveOrderCounter;
+                                // Only deselect the mirror that received the move order; others stay selected
                                 closestMirror.isSelected = false;
+                                this.selectedMirrors.delete(closestMirror);
                                 this.sendNetworkCommand('mirror_move', {
                                     mirrorIndices: [mirrorIndex],
                                     targetX: worldPos.x,
@@ -3420,14 +3418,11 @@ class GameController {
                             });
                         }
                         
-                        // Deselect all units immediately
+                        // Deselect all units immediately (mirrors keep their selection state from above)
                         this.selectedUnits.clear();
-                        for (const mirror of this.selectedMirrors) {
-                            mirror.isSelected = false;
-                        }
-                        this.selectedMirrors.clear();
                         this.selectedBase = null;
                         this.renderer.selectedUnits = this.selectedUnits;
+                        this.renderer.selectedMirrors = this.selectedMirrors;
                         
                         console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - Move order #${this.moveOrderCounter}`);
                     }

@@ -431,7 +431,7 @@ export class CommandProcessor {
      * Execute mirror move command
      */
     private static executeMirrorMoveCommand(player: Player, data: any, context: CommandContext): void {
-        const { mirrorIndices, targetX, targetY, moveOrder } = data;
+        const { mirrorIndices, targetX, targetY, moveOrder, toSun } = data;
         const target = new Vector2D(targetX, targetY);
 
         for (const mirrorIndex of mirrorIndices ?? []) {
@@ -439,7 +439,12 @@ export class CommandProcessor {
             if (mirror) {
                 // Note: mirror.setTarget needs game state for pathfinding - this is passed via context
                 // We need to add a method to context to handle this
-                mirror.setTarget(target, context as any);
+                if (toSun) {
+                    // Re-compute the best sunlight target on every client for determinism
+                    mirror.setTargetToNearestSunlight(context as any);
+                } else {
+                    mirror.setTarget(target, context as any);
+                }
                 if (typeof moveOrder === 'number') {
                     mirror.moveOrder = moveOrder;
                 }
