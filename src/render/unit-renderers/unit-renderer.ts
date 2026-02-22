@@ -257,7 +257,7 @@ export class UnitRenderer {
         
     }
 
-    public getMoveOrderFrameIndex(context: UnitRendererContext): number {
+    private getMoveOrderFrameIndex(context: UnitRendererContext): number {
         const animationFrame = Math.floor(performance.now() / context.MOVE_ORDER_FRAME_DURATION_MS);
         return animationFrame % context.movementPointFramePaths.length;
     }
