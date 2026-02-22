@@ -24,6 +24,10 @@ import { ProjectileRenderer } from './render/projectile-renderer';
 import type { ProjectileRendererContext } from './render/projectile-renderer';
 import { UnitRenderer } from './render/unit-renderers/unit-renderer';
 import type { UnitRendererContext } from './render/unit-renderers/shared-utilities';
+import { SolarMirrorRenderer } from './render/solar-mirror-renderer';
+import type { SolarMirrorRendererContext } from './render/solar-mirror-renderer';
+import { WarpGateRenderer } from './render/warp-gate-renderer';
+import type { WarpGateRendererContext } from './render/warp-gate-renderer';
 
 type ForgeFlameState = {
     warmth: number;
@@ -150,10 +154,6 @@ export class GameRenderer {
     private readonly VELARIS_FOUNDRY_PARTICLE_COUNT = 26;
     private readonly VELARIS_FOUNDRY_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_FOUNDRY_PARTICLE_ORBIT_SPEED_RAD_PER_SEC = 0.8;
-    private readonly VELARIS_WARP_GATE_PARTICLE_COUNT = 120;
-    private readonly VELARIS_WARP_GATE_PARTICLE_BASE_SPEED = 0.55;
-    private readonly VELARIS_WARP_GATE_PARTICLE_SWIRL_TIGHTNESS = 2.4;
-    private readonly VELARIS_WARP_GATE_PARTICLE_CENTER_FADE = 0.18;
     private readonly VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-A.png',
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-B.png',
@@ -182,16 +182,10 @@ export class GameRenderer {
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Y.png',
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Z.png'
     ];
-    private readonly VELARIS_MIRROR_WORD = 'VELARIS';
-    private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
-    private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
-    private readonly VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT = 10;
     private lightingLayerCanvas: HTMLCanvasElement | null = null;
     private lightingLayerCtx: CanvasRenderingContext2D | null = null;
     private lightingSunPassCanvas: HTMLCanvasElement | null = null;
     private lightingSunPassCtx: CanvasRenderingContext2D | null = null;
-    private readonly VELARIS_MIRROR_PARTICLE_TIME_SCALE = 0.35;
-    private readonly VELARIS_MIRROR_PARTICLE_DRIFT_SPEED = 0.7;
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
@@ -218,12 +212,10 @@ export class GameRenderer {
     private velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
-    private velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
     private velarisFoundrySeeds = new WeakMap<SubsidiaryFactory, number>();
     private aurumForgeShapeStates = new WeakMap<StellarForge, AurumShapeState>();
     private aurumFoundryShapeStates = new WeakMap<SubsidiaryFactory, AurumShapeState>();
     private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
-    private velarisWarpGateSeeds = new WeakMap<WarpGate, number>();
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
@@ -274,11 +266,6 @@ export class GameRenderer {
     private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly UNIT_GLOW_ALPHA = 0.2;
     private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
-    
-    // Gradient caching optimization constants
-    private readonly INTENSITY_QUANTIZATION_FACTOR = 10;
-    private readonly MIRROR_GLOW_INNER_ALPHA = 0.8;
-    private readonly MIRROR_GLOW_MID_ALPHA = 0.4;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
 
@@ -312,6 +299,8 @@ export class GameRenderer {
     private readonly towerRenderer: TowerRenderer;
     private readonly projectileRenderer: ProjectileRenderer;
     private readonly unitRenderer: UnitRenderer;
+    private readonly solarMirrorRenderer: SolarMirrorRenderer;
+    private readonly warpGateRenderer: WarpGateRenderer;
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -339,6 +328,8 @@ export class GameRenderer {
         this.towerRenderer = new TowerRenderer();
         this.projectileRenderer = new ProjectileRenderer();
         this.unitRenderer = new UnitRenderer();
+        this.solarMirrorRenderer = new SolarMirrorRenderer();
+        this.warpGateRenderer = new WarpGateRenderer();
 
         const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
@@ -929,57 +920,6 @@ export class GameRenderer {
         }
     }
 
-    private drawVelarisWarpGateVortex(
-        gate: WarpGate,
-        screenPos: Vector2D,
-        radiusPx: number,
-        gameTime: number,
-        displayColor: string
-    ): void {
-        const twoPi = Math.PI * 2;
-        const seed = this.getVelarisWarpGateSeed(gate);
-        const particleRadius = Math.max(1, 1.35 * this.zoom);
-        const ringAlpha = 0.65;
-
-        this.ctx.save();
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.lineWidth = 3;
-        this.ctx.globalAlpha = ringAlpha;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radiusPx, 0, twoPi);
-        this.ctx.stroke();
-        this.ctx.restore();
-
-        this.ctx.save();
-        this.ctx.fillStyle = displayColor;
-        for (let i = 0; i < this.VELARIS_WARP_GATE_PARTICLE_COUNT; i++) {
-            const seedOffset = seed + i * 0.83;
-            const progress = (gameTime * this.VELARIS_WARP_GATE_PARTICLE_BASE_SPEED
-                + this.getPseudoRandom(seedOffset)) % 1;
-            const radiusFactor = 1 - progress;
-            const alphaFactor = Math.max(
-                0,
-                (radiusFactor - this.VELARIS_WARP_GATE_PARTICLE_CENTER_FADE)
-                    / (1 - this.VELARIS_WARP_GATE_PARTICLE_CENTER_FADE)
-            );
-            if (alphaFactor <= 0) {
-                continue;
-            }
-            const baseAngle = this.getPseudoRandom(seedOffset + 2.4) * twoPi;
-            const swirlAngle = baseAngle
-                + gameTime * 0.9
-                + progress * this.VELARIS_WARP_GATE_PARTICLE_SWIRL_TIGHTNESS * twoPi;
-            const particleRadiusPx = radiusPx * radiusFactor;
-            const x = screenPos.x + Math.cos(swirlAngle) * particleRadiusPx;
-            const y = screenPos.y + Math.sin(swirlAngle) * particleRadiusPx;
-            this.ctx.globalAlpha = alphaFactor * 0.9;
-            this.ctx.beginPath();
-            this.ctx.arc(x, y, particleRadius, 0, twoPi);
-            this.ctx.fill();
-        }
-        this.ctx.restore();
-    }
-
     /**
      * Detect and draw edges from an offscreen canvas with filled shapes
      * Used for Aurum outline rendering effect
@@ -1131,6 +1071,75 @@ export class GameRenderer {
             getPseudoRandom: (seed) => this.getPseudoRandom(seed),
             shakenExplosions: this.shakenExplosions,
             triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
+        };
+    }
+
+    private getSolarMirrorRendererContext(): SolarMirrorRendererContext {
+        return {
+            ctx: this.ctx,
+            zoom: this.zoom,
+            graphicsQuality: this.graphicsQuality,
+            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+            playerColor: this.playerColor,
+            enemyColor: this.enemyColor,
+            viewingPlayer: this.viewingPlayer,
+            isWarpGatePlacementMode: this.isWarpGatePlacementMode,
+            canCreateWarpGateFromMirrors: this.canCreateWarpGateFromMirrors,
+            isSelectedMirrorInSunlight: this.isSelectedMirrorInSunlight,
+            hasSeenFoundry: this.hasSeenFoundry,
+            hasActiveFoundry: this.hasActiveFoundry,
+            highlightedButtonIndex: this.highlightedButtonIndex,
+            MIRROR_MAX_HEALTH: this.MIRROR_MAX_HEALTH,
+            gradientCache: this.gradientCache,
+            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
+            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
+            darkenColor: (color, factor) => this.darkenColor(color, factor),
+            applyShadeBrightening: (color, pos, game, isInShade) => this.applyShadeBrightening(color, pos, game, isInShade),
+            brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
+            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+            drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
+            getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
+                this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
+            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+            drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor) =>
+                this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
+            drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+            drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
+                this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
+            getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
+            getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
+            drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
+            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+            getSolarMirrorSpritePath: (mirror) => this.getSolarMirrorSpritePath(mirror),
+            getTintedSprite: (path, color) => this.getTintedSprite(path, color),
+            getSolEnergyIcon: () => this.getSolEnergyIcon(),
+        };
+    }
+
+    private getWarpGateRendererContext(): WarpGateRendererContext {
+        return {
+            ctx: this.ctx,
+            zoom: this.zoom,
+            graphicsQuality: this.graphicsQuality,
+            selectedWarpGate: this.selectedWarpGate,
+            highlightedButtonIndex: this.highlightedButtonIndex,
+            isWarpGatePlacementMode: this.isWarpGatePlacementMode,
+            warpGatePreviewWorldPos: this.warpGatePreviewWorldPos,
+            isWarpGatePreviewValid: this.isWarpGatePreviewValid,
+            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
+            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+            drawWarpGateProductionEffect: (screenPos, radius, game, displayColor) =>
+                this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, displayColor, this.getUnitRendererContext()),
+            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
         };
     }
 
@@ -1830,29 +1839,11 @@ export class GameRenderer {
         return seed;
     }
 
-    private getVelarisMirrorSeed(mirror: SolarMirror): number {
-        let seed = this.velarisMirrorSeeds.get(mirror);
-        if (seed === undefined) {
-            seed = Math.random() * 10000;
-            this.velarisMirrorSeeds.set(mirror, seed);
-        }
-        return seed;
-    }
-
     private getVelarisFoundrySeed(foundry: SubsidiaryFactory): number {
         let seed = this.velarisFoundrySeeds.get(foundry);
         if (seed === undefined) {
             seed = Math.random() * 10000;
             this.velarisFoundrySeeds.set(foundry, seed);
-        }
-        return seed;
-    }
-
-    private getVelarisWarpGateSeed(gate: WarpGate): number {
-        let seed = this.velarisWarpGateSeeds.get(gate);
-        if (seed === undefined) {
-            seed = Math.random() * 10000;
-            this.velarisWarpGateSeeds.set(gate, seed);
         }
         return seed;
     }
@@ -1913,539 +1904,6 @@ export class GameRenderer {
             this.aurumFoundryShapeStates.set(foundry, state);
         }
         return state;
-    }
-
-    /**
-     * Draw a Solar Mirror with flat surface, rotation, and proximity-based glow
-     */
-    private drawSolarMirror(
-        mirror: SolarMirror,
-        color: string,
-        game: GameState,
-        isEnemy: boolean,
-        timeSec: number
-    ): void {
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        let mirrorColor = color;
-        let ownerSide: 'light' | 'dark' | undefined = undefined;
-        if (ladSun && mirror.owner) {
-            ownerSide = mirror.owner.stellarForge
-                ? game.getLadSide(mirror.owner.stellarForge.position, ladSun)
-                : 'light';
-            if (ownerSide === 'light') {
-                mirrorColor = '#FFFFFF';
-            } else {
-                mirrorColor = '#000000';
-            }
-        }
-
-        // Check visibility for enemy mirrors
-        let shouldDim = false;
-        let displayColor = mirrorColor;
-        let visibilityAlpha = 1;
-        const isInShadow = !ladSun && game.isPointInShadow(mirror.position);
-        if (isEnemy && this.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer);
-            visibilityAlpha = this.getEnemyVisibilityAlpha(mirror, isVisible, game.gameTime);
-            if (visibilityAlpha <= 0.01) {
-                return;
-            }
-
-            // Check if in shadow for dimming effect - darken color instead of using alpha
-            if (!ladSun) {
-                const inShadow = game.isPointInShadow(mirror.position);
-                if (inShadow) {
-                    shouldDim = true;
-                    displayColor = this.darkenColor(mirrorColor, Constants.SHADE_OPACITY);
-                    // Apply shade brightening effect near player units
-                    displayColor = this.applyShadeBrightening(displayColor, mirror.position, game, true);
-                }
-            }
-        }
-        
-        const screenPos = this.worldToScreen(mirror.position);
-        const mirrorSizeWorld = 14;
-        const size = mirrorSizeWorld * this.zoom;
-        const shouldGlowInShade = isEnemy
-            ? (isInShadow && visibilityAlpha > 0.01)
-            : isInShadow;
-        this.drawStructureShadeGlow(
-            mirror,
-            screenPos,
-            size,
-            displayColor,
-            shouldGlowInShade,
-            visibilityAlpha,
-            mirror.isSelected
-        );
-
-        this.drawAestheticSpriteShadow(mirror.position, screenPos, size * 0.95, game, {
-            opacity: visibilityAlpha,
-            widthScale: 0.78,
-            particleCount: 4,
-            particleSpread: size * 0.7
-        });
-
-        // Save context state
-        this.ctx.save();
-        this.ctx.globalAlpha = visibilityAlpha;
-
-        // Calculate glow intensity based on distance to closest sun
-        // Closer = brighter glow (inverse relationship)
-        const glowIntensity = Math.max(0, Math.min(1, 1 - (mirror.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE)));
-        const isVelarisMirror = mirror.owner.faction === Faction.VELARIS;
-        const hasLight = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
-        const isMirrorActive = hasLight && glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity;
-        const velarisUnderlineOffsetWorld = mirrorSizeWorld * 0.45;
-
-        if (this.isFancyGraphicsEnabled) {
-            const bloomColor = this.brightenAndPaleColor(displayColor);
-            const bloomIntensity = (0.25 + glowIntensity * 0.5) * visibilityAlpha;
-            this.drawFancyBloom(screenPos, size * 1.6, bloomColor, bloomIntensity);
-        }
-        
-        // Draw glow if close to a light source
-        if (glowIntensity > 0.1 && mirror.closestSunDistance !== Infinity) {
-            const glowRadius = Constants.MIRROR_ACTIVE_GLOW_RADIUS * this.zoom * (1 + glowIntensity);
-            // Quantize intensity to reduce unique gradients (cache optimization)
-            const quantizedIntensity = Math.round(glowIntensity * this.INTENSITY_QUANTIZATION_FACTOR) / this.INTENSITY_QUANTIZATION_FACTOR;
-            const glowRadiusRounded = Math.round(glowRadius);
-            const cacheKey = `mirror-glow-${glowRadiusRounded}-${quantizedIntensity}`;
-            const gradient = this.getCachedRadialGradient(
-                cacheKey,
-                0, 0, 0,
-                0, 0, glowRadius,
-                [
-                    { offset: 0, color: `rgba(255, 255, 150, ${quantizedIntensity * this.MIRROR_GLOW_INNER_ALPHA})` },
-                    { offset: 0.5, color: `rgba(255, 255, 100, ${quantizedIntensity * this.MIRROR_GLOW_MID_ALPHA})` },
-                    { offset: 1, color: 'rgba(255, 255, 50, 0)' }
-                ]
-            );
-            
-            this.ctx.save();
-            this.ctx.translate(screenPos.x, screenPos.y);
-            this.ctx.fillStyle = gradient;
-            this.ctx.beginPath();
-            this.ctx.arc(0, 0, glowRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.restore();
-            
-            // Draw reflected light beam in front of the mirror
-            // Find the closest visible sun to determine reflection direction
-            const closestSun = mirror.getClosestVisibleSun(game.suns, game.asteroids);
-            if (closestSun) {
-                const forge = mirror.owner.stellarForge;
-                const linkedStructure = mirror.getLinkedStructure(forge);
-                const sunDir = new Vector2D(
-                    closestSun.position.x - mirror.position.x,
-                    closestSun.position.y - mirror.position.y
-                ).normalize();
-
-                // Reflect incoming sunlight using mirror orientation so the visual beam always
-                // matches the current mirror angle, even when the linked target is blocked.
-                const incomingDir = new Vector2D(-sunDir.x, -sunDir.y);
-                const mirrorNormal = new Vector2D(
-                    Math.cos(mirror.reflectionAngle - Math.PI / 2),
-                    Math.sin(mirror.reflectionAngle - Math.PI / 2)
-                );
-                const normalDotIncoming = incomingDir.x * mirrorNormal.x + incomingDir.y * mirrorNormal.y;
-                const reflectDir = new Vector2D(
-                    incomingDir.x - 2 * normalDotIncoming * mirrorNormal.x,
-                    incomingDir.y - 2 * normalDotIncoming * mirrorNormal.y
-                ).normalize();
-                
-                // Draw reflected light beam (a few feet / ~100 units in front of mirror)
-                const beamLength = 100;
-                const beamStartWorld = isVelarisMirror && isMirrorActive
-                    ? new Vector2D(
-                        mirror.position.x - Math.sin(mirror.reflectionAngle) * velarisUnderlineOffsetWorld,
-                        mirror.position.y + Math.cos(mirror.reflectionAngle) * velarisUnderlineOffsetWorld
-                    )
-                    : mirror.position;
-
-                const getCircleHitDistance = (center: Vector2D, radius: number): number | null => {
-                    const originToCenterX = beamStartWorld.x - center.x;
-                    const originToCenterY = beamStartWorld.y - center.y;
-                    const b = 2 * (reflectDir.x * originToCenterX + reflectDir.y * originToCenterY);
-                    const c = (originToCenterX * originToCenterX + originToCenterY * originToCenterY) - radius * radius;
-                    const discriminant = b * b - 4 * c;
-                    if (discriminant < 0) return null;
-                    const sqrtDiscriminant = Math.sqrt(discriminant);
-                    const t1 = (-b - sqrtDiscriminant) / 2;
-                    const t2 = (-b + sqrtDiscriminant) / 2;
-                    if (t1 > 0) return t1;
-                    if (t2 > 0) return t2;
-                    return null;
-                };
-
-                let visibleBeamLength = beamLength;
-                const beamRay = new LightRay(beamStartWorld, reflectDir);
-
-                for (const asteroid of game.asteroids) {
-                    const intersectionDist = beamRay.getIntersectionDistance(asteroid.getWorldVertices());
-                    if (intersectionDist !== null && intersectionDist > 0 && intersectionDist < visibleBeamLength) {
-                        visibleBeamLength = intersectionDist;
-                    }
-                }
-
-                for (const player of game.players) {
-                    for (const building of player.buildings) {
-                        const hitDist = getCircleHitDistance(building.position, building.radius);
-                        if (hitDist !== null && hitDist < visibleBeamLength) {
-                            visibleBeamLength = hitDist;
-                        }
-                    }
-
-                    if (player.stellarForge) {
-                        const hitDist = getCircleHitDistance(player.stellarForge.position, player.stellarForge.radius);
-                        if (hitDist !== null && hitDist < visibleBeamLength) {
-                            visibleBeamLength = hitDist;
-                        }
-                    }
-                }
-
-                const beamEnd = new Vector2D(
-                    beamStartWorld.x + reflectDir.x * visibleBeamLength,
-                    beamStartWorld.y + reflectDir.y * visibleBeamLength
-                );
-                const beamStartScreen = this.worldToScreen(beamStartWorld);
-                const beamEndScreen = this.worldToScreen(beamEnd);
-                
-                // Draw bright beam with doubled intensity
-                const beamGradient = this.ctx.createLinearGradient(
-                    beamStartScreen.x, beamStartScreen.y,
-                    beamEndScreen.x, beamEndScreen.y
-                );
-                beamGradient.addColorStop(0, `rgba(255, 255, 200, ${glowIntensity * 1.0})`);
-                beamGradient.addColorStop(0.7, `rgba(255, 255, 150, ${glowIntensity * 0.6})`);
-                beamGradient.addColorStop(1, 'rgba(255, 255, 100, 0)');
-                
-                this.ctx.strokeStyle = beamGradient;
-                this.ctx.lineWidth = 15 * this.zoom * glowIntensity;
-                this.ctx.lineCap = 'round';
-                this.ctx.beginPath();
-                this.ctx.moveTo(beamStartScreen.x, beamStartScreen.y);
-                this.ctx.lineTo(beamEndScreen.x, beamEndScreen.y);
-                this.ctx.stroke();
-                
-                // Add a bright spot at the end of the beam for doubled brightness effect
-                const endGlowRadius = 20 * this.zoom * glowIntensity;
-                const endGradient = this.ctx.createRadialGradient(
-                    beamEndScreen.x, beamEndScreen.y, 0,
-                    beamEndScreen.x, beamEndScreen.y, endGlowRadius
-                );
-                endGradient.addColorStop(0, `rgba(255, 255, 255, ${glowIntensity * 0.9})`);
-                endGradient.addColorStop(0.5, `rgba(255, 255, 200, ${glowIntensity * 0.5})`);
-                endGradient.addColorStop(1, 'rgba(255, 255, 150, 0)');
-                
-                this.ctx.fillStyle = endGradient;
-                this.ctx.beginPath();
-                this.ctx.arc(beamEndScreen.x, beamEndScreen.y, endGlowRadius, 0, Math.PI * 2);
-                this.ctx.fill();
-            }
-        }
-        
-        // Translate to mirror position and rotate for reflection angle
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.rotate(mirror.reflectionAngle);
-
-        // Draw aura in LaD mode (before sprite)
-        if (ladSun && ownerSide) {
-            // Save current transform and reset to screen coordinates for aura
-            this.ctx.save();
-            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-            const auraColor = isEnemy ? this.enemyColor : this.playerColor;
-            this.drawLadAura(screenPos, size, auraColor, ownerSide);
-            this.ctx.restore();
-        }
-
-        const surfaceLength = size * 2;
-        const surfaceThickness = size * 0.3;
-        let selectionWidth = surfaceLength;
-        let selectionHeight = surfaceThickness;
-        let drewSprite = false;
-
-        if (isVelarisMirror) {
-            const glyphColor = this.brightenAndPaleColor(displayColor);
-            const glyphTargetSize = size * 0.6;
-            const glyphSpacing = glyphTargetSize * 0.75;
-            const glyphSeedBase = this.getVelarisMirrorSeed(mirror) + mirror.reflectionAngle * 0.15;
-            const mirrorTimeSec = timeSec * this.VELARIS_MIRROR_PARTICLE_TIME_SCALE;
-
-            if (isMirrorActive) {
-                const word = this.VELARIS_MIRROR_WORD;
-                const wordLength = word.length;
-                const wordWidth = glyphSpacing * (wordLength - 1);
-                const wordY = -size * 0.1;
-                for (let i = 0; i < wordLength; i++) {
-                    const letterX = (i - (wordLength - 1) / 2) * glyphSpacing;
-                    const letter = word.charAt(i);
-                    const spritePath = this.getVelarisGraphemeSpritePath(letter);
-                    if (spritePath) {
-                        const drewSprite = this.drawVelarisGraphemeSprite(
-                            spritePath,
-                            letterX,
-                            wordY,
-                            glyphTargetSize,
-                            glyphColor
-                        );
-                        if (!drewSprite) {
-                            this.ctx.fillStyle = glyphColor;
-                            this.ctx.beginPath();
-                            this.ctx.arc(letterX, wordY, glyphTargetSize * 0.2, 0, Math.PI * 2);
-                            this.ctx.fill();
-                        }
-                    }
-                }
-
-                const underlineY = size * 0.45;
-                const underlineLength = wordWidth + glyphTargetSize * 0.6;
-                
-                // Skip particles on low quality, reduce on medium
-                if (this.graphicsQuality !== 'low') {
-                    const particleCount = this.graphicsQuality === 'medium' 
-                        ? Math.ceil(this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT * 0.5)
-                        : this.VELARIS_MIRROR_UNDERLINE_PARTICLE_COUNT;
-                    const particleRadius = Math.max(1, size * 0.08);
-                    this.ctx.fillStyle = `rgba(255, 255, 220, 0.85)`;
-                    for (let i = 0; i < particleCount; i++) {
-                        const t = particleCount > 1
-                            ? i / (particleCount - 1)
-                            : 0.5;
-                        const driftSeed = glyphSeedBase + i * 2.7;
-                        const driftX = Math.sin(mirrorTimeSec * this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED + driftSeed)
-                            * particleRadius * 0.6;
-                        const driftY = Math.cos(mirrorTimeSec * (this.VELARIS_MIRROR_PARTICLE_DRIFT_SPEED * 0.8) + driftSeed)
-                            * particleRadius * 0.4;
-                        const particleX = (t - 0.5) * underlineLength + driftX;
-                        const particleY = underlineY + driftY;
-                        this.ctx.beginPath();
-                        this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
-                        this.ctx.fill();
-                    }
-                }
-
-                selectionWidth = underlineLength + glyphTargetSize;
-                selectionHeight = size * 1.4;
-            } else {
-                const cloudRadius = size * 0.9;
-                const cloudDriftRadius = Math.max(1, size * 0.12);
-                const twoPi = Math.PI * 2;
-                
-                // Skip expensive cloud rendering on low quality, reduce on medium
-                if (this.graphicsQuality !== 'low') {
-                    const glyphCount = this.graphicsQuality === 'medium'
-                        ? Math.ceil(this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT * 0.5)
-                        : this.VELARIS_MIRROR_CLOUD_GLYPH_COUNT;
-                    
-                    for (let i = 0; i < glyphCount; i++) {
-                        const seed = glyphSeedBase + i * 12.7;
-                        const angle = this.getPseudoRandom(seed) * twoPi;
-                        const radius = this.getPseudoRandom(seed + 7.3) * cloudRadius;
-                        const driftAngle = mirrorTimeSec * 0.2 + this.getPseudoRandom(seed + 5.1) * twoPi;
-                        const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * cloudDriftRadius;
-                        const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * cloudDriftRadius;
-                        const spriteIndex = Math.floor(this.getPseudoRandom(seed + 9.6) * this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS.length);
-                        const spritePath = this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS[spriteIndex];
-                        const drewSprite = this.drawVelarisGraphemeSprite(
-                            spritePath,
-                            offsetX,
-                            offsetY,
-                            glyphTargetSize,
-                            glyphColor
-                        );
-                        if (!drewSprite) {
-                            this.ctx.fillStyle = glyphColor;
-                            this.ctx.beginPath();
-                            this.ctx.arc(offsetX, offsetY, glyphTargetSize * 0.2, 0, Math.PI * 2);
-                            this.ctx.fill();
-                        }
-                    }
-
-                    const particleCount = this.graphicsQuality === 'medium'
-                        ? Math.ceil(this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT * 0.5)
-                        : this.VELARIS_MIRROR_CLOUD_PARTICLE_COUNT;
-                    const particleRadius = Math.max(1, size * 0.07);
-                    this.ctx.fillStyle = `rgba(255, 255, 210, 0.6)`;
-                    for (let i = 0; i < particleCount; i++) {
-                        const seed = glyphSeedBase + i * 9.4;
-                        const angle = this.getPseudoRandom(seed + 1.1) * twoPi;
-                        const radius = this.getPseudoRandom(seed + 4.7) * cloudRadius;
-                        const driftAngle = mirrorTimeSec * 0.25 + this.getPseudoRandom(seed + 6.4) * twoPi;
-                        const driftRadius = cloudDriftRadius * 0.75;
-                        const offsetX = Math.cos(angle) * radius + Math.cos(driftAngle) * driftRadius;
-                        const offsetY = Math.sin(angle) * radius + Math.sin(driftAngle) * driftRadius;
-                        this.ctx.beginPath();
-                        this.ctx.arc(offsetX, offsetY, particleRadius, 0, Math.PI * 2);
-                        this.ctx.fill();
-                    }
-                }
-
-                selectionWidth = size * 2;
-                selectionHeight = size * 1.6;
-            }
-
-            drewSprite = true;
-        }
-
-        const mirrorSpritePath = this.getSolarMirrorSpritePath(mirror);
-        if (mirrorSpritePath) {
-            // Determine the color for the mirror (use displayColor which already accounts for enemy status and shadow)
-            const spriteColor = this.brightenAndPaleColor(displayColor);
-            
-            const mirrorSprite = this.getTintedSprite(mirrorSpritePath, spriteColor);
-            if (mirrorSprite) {
-                const targetSize = size * 2.4;
-                const scale = targetSize / Math.max(mirrorSprite.width, mirrorSprite.height);
-                const drawWidth = mirrorSprite.width * scale;
-                const drawHeight = mirrorSprite.height * scale;
-                selectionWidth = drawWidth;
-                selectionHeight = drawHeight;
-                this.ctx.drawImage(
-                    mirrorSprite,
-                    -drawWidth / 2,
-                    -drawHeight / 2,
-                    drawWidth,
-                    drawHeight
-                );
-                drewSprite = true;
-            }
-        }
-
-        if (!drewSprite) {
-            // Draw flat reflective surface (rectangle)
-            // Cache surface gradient by thickness
-            const thicknessBucket = Math.round(surfaceThickness / 5) * 5;
-            const gradientKey = `mirror-surface-${thicknessBucket}`;
-            let surfaceGradient = this.gradientCache.get(gradientKey);
-            if (!surfaceGradient) {
-                surfaceGradient = this.ctx.createLinearGradient(0, -thicknessBucket / 2, 0, thicknessBucket / 2);
-                surfaceGradient.addColorStop(0, '#FFFFFF');
-                surfaceGradient.addColorStop(0.5, '#E0E0E0');
-                surfaceGradient.addColorStop(1, '#C0C0C0');
-                this.gradientCache.set(gradientKey, surfaceGradient);
-            }
-
-            this.ctx.fillStyle = surfaceGradient;
-            this.ctx.fillRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
-
-            // Draw border for the surface
-            const strokeColor = displayColor;
-            this.ctx.strokeStyle = shouldDim ? this.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor;
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(-surfaceLength / 2, -surfaceThickness / 2, surfaceLength, surfaceThickness);
-
-            // Draw small indicator dots at the ends
-            this.ctx.fillStyle = displayColor;
-            this.ctx.beginPath();
-            this.ctx.arc(-surfaceLength / 2, 0, 3, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.beginPath();
-            this.ctx.arc(surfaceLength / 2, 0, 3, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-
-        // Restore context state
-        this.ctx.restore();
-
-        if (mirror.isSelected) {
-            this.drawBuildingSelectionIndicator(screenPos, Math.max(selectionWidth, selectionHeight) * 0.52);
-        }
-
-        if (this.isWarpGatePlacementMode && mirror.isSelected) {
-            const particleCount = 8;
-            const particleRadius = Math.max(1.2, size * 0.08);
-            const orbitRadius = size * 1.25;
-            const timeOffset = timeSec * 1.8;
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'lighter';
-            for (let i = 0; i < particleCount; i++) {
-                const angle = timeOffset + (i * Math.PI * 2) / particleCount;
-                const wobble = Math.sin(timeOffset * 1.4 + i * 1.9) * size * 0.25;
-                const radius = orbitRadius + wobble;
-                const particleX = screenPos.x + Math.cos(angle) * radius;
-                const particleY = screenPos.y + Math.sin(angle) * radius;
-                const alpha = 0.35 + 0.35 * Math.sin(timeOffset + i);
-                const gradient = this.ctx.createRadialGradient(
-                    particleX, particleY, 0,
-                    particleX, particleY, particleRadius * 3
-                );
-                gradient.addColorStop(0, `rgba(180, 255, 255, ${alpha})`);
-                gradient.addColorStop(1, 'rgba(120, 200, 255, 0)');
-                this.ctx.fillStyle = gradient;
-                this.ctx.beginPath();
-                this.ctx.arc(particleX, particleY, particleRadius * 3, 0, Math.PI * 2);
-                this.ctx.fill();
-
-                this.ctx.fillStyle = `rgba(220, 255, 255, ${Math.min(0.9, alpha + 0.3)})`;
-                this.ctx.beginPath();
-                this.ctx.arc(particleX, particleY, particleRadius, 0, Math.PI * 2);
-                this.ctx.fill();
-            }
-            this.ctx.restore();
-        }
-
-        // Draw efficiency indicator (in world space, not rotated)
-        if (mirror.efficiency < 1.0) {
-            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, size * 0.3, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Draw move order indicator if mirror has one
-        if (mirror.moveOrder > 0 && mirror.targetPosition) {
-            this.unitRenderer.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor, this.getUnitRendererContext());
-        }
-
-        // Check if mirror is regenerating (within influence radius of forge and below max health)
-        const forge = mirror.owner.stellarForge;
-        const isRegenerating = !!(forge && mirror.health < this.MIRROR_MAX_HEALTH &&
-            game.isPointWithinPlayerInfluence(mirror.owner, mirror.position));
-        // Use player color based on whether this is the viewing player or enemy
-        const playerColorToUse = (this.viewingPlayer && mirror.owner === this.viewingPlayer) 
-            ? this.playerColor 
-            : this.enemyColor;
-        
-        this.drawHealthDisplay(screenPos, mirror.health, this.MIRROR_MAX_HEALTH, size, -size - 10, 
-            isRegenerating, 
-            isRegenerating ? playerColorToUse : undefined);
-
-        if (mirror.isSelected) {
-            const hasLoSToSun = mirror.hasLineOfSightToLight(game.suns, game.asteroids);
-            const forge = mirror.owner.stellarForge;
-            const linkedStructure = mirror.getLinkedStructure(forge);
-            const hasLoSToTarget = linkedStructure
-                ? mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)
-                : false;
-            const energyRate = linkedStructure instanceof StellarForge && hasLoSToSun && hasLoSToTarget
-                ? mirror.getEnergyRatePerSec()
-                : 0;
-            
-            // Get cached SoL icon
-            const solIcon = this.getSolEnergyIcon();
-            const iconSize = 16 * this.zoom;
-            const textY = screenPos.y + size + 16 * this.zoom;
-            
-            // Calculate text width to center icon and text together
-            this.ctx.font = `${12 * this.zoom}px Doto`;
-            const energyText = `+${energyRate.toFixed(0)}/s`;
-            const textWidth = this.ctx.measureText(energyText).width;
-            const spacing = Constants.SOL_ICON_TEXT_SPACING * this.zoom;
-            const totalWidth = iconSize + spacing + textWidth; // icon + spacing + text
-            const startX = screenPos.x - totalWidth / 2;
-            
-            // Draw icon
-            if (solIcon.complete && solIcon.naturalWidth > 0) {
-                this.ctx.drawImage(solIcon, startX, textY - iconSize / 2, iconSize, iconSize);
-            }
-            
-            // Draw text
-            this.ctx.fillStyle = '#FFFFAA';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(energyText, startX + iconSize + spacing, textY);
-        }
     }
 
     /**
@@ -3383,406 +2841,6 @@ export class GameRenderer {
 
         this.ctx.stroke();
         this.ctx.globalAlpha = 1.0;
-    }
-
-    /**
-     * Draw a warp gate
-     */
-    private drawWarpGate(gate: WarpGate, game: GameState, ladSun: Sun | undefined): void {
-        const screenPos = this.worldToScreen(gate.position);
-        const maxRadius = Constants.WARP_GATE_RADIUS * this.zoom;
-        const chargeProgress = gate.chargeTime / Constants.WARP_GATE_CHARGE_TIME;
-        const currentRadius = Math.min(maxRadius, chargeProgress * maxRadius);
-        const isSelected = this.selectedWarpGate === gate;
-        const isVelarisGate = gate.owner.faction === Faction.VELARIS;
-        const displayColor = this.getLadPlayerColor(gate.owner, ladSun, game);
-        const isInShadow = !ladSun && game.isPointInShadow(gate.position);
-        this.drawStructureShadeGlow(gate, screenPos, maxRadius, displayColor, isInShadow, 1, isSelected);
-
-        this.drawAestheticSpriteShadow(gate.position, screenPos, maxRadius * 0.9, game, {
-            opacity: gate.isComplete ? 0.95 : 0.55,
-            widthScale: 0.85,
-            particleCount: gate.isComplete ? 5 : 3,
-            particleSpread: maxRadius * 0.9
-        });
-
-        if (!gate.isComplete) {
-            if (isVelarisGate) {
-                this.drawVelarisWarpGateVortex(gate, screenPos, currentRadius, game.gameTime, displayColor);
-            } else {
-                // Draw charging effect
-                this.ctx.strokeStyle = '#00FFFF';
-                this.ctx.lineWidth = 3;
-                this.ctx.globalAlpha = 0.5 + Math.sin(gate.chargeTime * 5) * 0.2;
-                this.ctx.beginPath();
-                this.ctx.arc(screenPos.x, screenPos.y, currentRadius, 0, Math.PI * 2);
-                this.ctx.stroke();
-                this.ctx.globalAlpha = 1.0;
-            }
-
-            // Draw charge progress
-            this.ctx.strokeStyle = '#FFFFFF';
-            this.ctx.lineWidth = 5;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, currentRadius + 5, 0, chargeProgress * Math.PI * 2);
-            this.ctx.stroke();
-            
-            // Draw energy progress text
-            const energyProgress = `${gate.accumulatedEnergy.toFixed(0)}/${Constants.WARP_GATE_ENERGY_REQUIRED}`;
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${12 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(energyProgress, screenPos.x, screenPos.y + maxRadius + 20 * this.zoom);
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'alphabetic';
-        } else {
-            if (isVelarisGate) {
-                this.drawVelarisWarpGateVortex(gate, screenPos, maxRadius, game.gameTime, displayColor);
-            } else {
-                this.unitRenderer.drawWarpGateProductionEffect(screenPos, maxRadius, game, displayColor, this.getUnitRendererContext());
-            }
-            if (isSelected) {
-                this.drawBuildingSelectionIndicator(screenPos, maxRadius);
-            }
-
-            const completionProgress = gate.completionRemainingSec / Constants.WARP_GATE_COMPLETION_WINDOW_SEC;
-            if (completionProgress > 0) {
-                const countdownRadius = maxRadius + 12 * this.zoom;
-                this.ctx.strokeStyle = '#FFD700';
-                this.ctx.lineWidth = 4;
-                this.ctx.beginPath();
-                this.ctx.arc(
-                    screenPos.x,
-                    screenPos.y,
-                    countdownRadius,
-                    -Math.PI / 2,
-                    -Math.PI / 2 + completionProgress * Math.PI * 2
-                );
-                this.ctx.stroke();
-            }
-
-            if (isSelected) {
-                const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
-                const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.zoom;
-                const hasSubFactory = gate.owner.buildings.some((building) => building instanceof SubsidiaryFactory);
-                const playerEnergy = gate.owner.energy;
-                
-                // Faction-specific building buttons
-                let buttonConfigs: Array<{ label: string; index: number; isAvailable: boolean }>;
-                if (gate.owner.faction === Faction.RADIANT) {
-                    buttonConfigs = [
-                        {
-                            label: 'Foundry',
-                            index: 0,
-                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
-                        },
-                        {
-                            label: 'Cannon',
-                            index: 1,
-                            isAvailable: playerEnergy >= Constants.MINIGUN_COST
-                        },
-                        {
-                            label: 'Gatling',
-                            index: 2,
-                            isAvailable: playerEnergy >= Constants.GATLING_COST
-                        },
-                        {
-                            label: 'Shield',
-                            index: 3,
-                            isAvailable: playerEnergy >= Constants.SHIELD_TOWER_COST
-                        }
-                    ];
-                } else if (gate.owner.faction === Faction.VELARIS) {
-                    buttonConfigs = [
-                        {
-                            label: 'Foundry',
-                            index: 0,
-                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
-                        },
-                        {
-                            label: 'Striker',
-                            index: 1,
-                            isAvailable: playerEnergy >= Constants.STRIKER_TOWER_COST
-                        },
-                        {
-                            label: 'Lock-on',
-                            index: 2,
-                            isAvailable: playerEnergy >= Constants.LOCKON_TOWER_COST
-                        },
-                        {
-                            label: 'Cyclone',
-                            index: 3,
-                            isAvailable: playerEnergy >= Constants.SWIRLER_COST
-                        }
-                    ];
-                } else {
-                    // Aurum or default - currently only Foundry is available
-                    // TODO: Add Aurum-specific buildings in future updates
-                    buttonConfigs = [
-                        {
-                            label: 'Foundry',
-                            index: 0,
-                            isAvailable: !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST
-                        }
-                    ];
-                }
-                
-                const positions = this.getRadialButtonOffsets(buttonConfigs.length);
-
-                for (let i = 0; i < buttonConfigs.length; i++) {
-                    const config = buttonConfigs[i];
-                    const pos = positions[i];
-                    const btnX = screenPos.x + pos.x * buttonDistance;
-                    const btnY = screenPos.y + pos.y * buttonDistance;
-                    const labelOffset = buttonRadius + 14 * this.zoom;
-                    const isHighlighted = config.isAvailable && this.highlightedButtonIndex === config.index;
-
-                    if (config.isAvailable) {
-                        this.ctx.fillStyle = isHighlighted ? 'rgba(0, 255, 255, 0.6)' : '#444444';
-                        this.ctx.strokeStyle = '#00FFFF';
-                        this.ctx.lineWidth = isHighlighted ? 4 : 2;
-                    } else {
-                        this.ctx.fillStyle = '#1F1F1F';
-                        this.ctx.strokeStyle = '#555555';
-                        this.ctx.lineWidth = 2;
-                    }
-                    this.ctx.beginPath();
-                    this.ctx.arc(btnX, btnY, buttonRadius, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.stroke();
-
-                    // Draw button label
-                    this.ctx.fillStyle = config.isAvailable ? '#FFFFFF' : '#777777';
-                    this.ctx.font = `${11 * this.zoom}px Doto`;
-                    this.ctx.textAlign = 'center';
-                    this.ctx.textBaseline = 'middle';
-                    this.ctx.fillText(
-                        config.label,
-                        btnX + pos.x * labelOffset,
-                        btnY + pos.y * labelOffset
-                    );
-                }
-            }
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'alphabetic';
-        }
-    }
-
-    /**
-     * Draw a starling merge gate
-     */
-    private drawStarlingMergeGate(gate: StarlingMergeGate, game: GameState): void {
-        const screenPos = this.worldToScreen(gate.position);
-        const radius = Constants.STARLING_MERGE_GATE_RADIUS_PX * this.zoom;
-        const totalDuration = Constants.STARLING_MERGE_DURATION_SEC;
-        const progress = totalDuration > 0 ? gate.remainingSec / totalDuration : 0;
-        const pulse = 0.18 + Math.sin((totalDuration - gate.remainingSec) * 4) * 0.06;
-        const glowAlpha = 0.35 + Math.sin((totalDuration - gate.remainingSec) * 5) * 0.1;
-
-        this.drawAestheticSpriteShadow(gate.position, screenPos, radius * 0.92, game, {
-            opacity: 0.85,
-            widthScale: 0.82,
-            particleCount: 4,
-            particleSpread: radius * 0.9
-        });
-
-        this.ctx.fillStyle = `rgba(0, 255, 255, ${Math.max(0.1, pulse)})`;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        this.ctx.strokeStyle = `rgba(0, 255, 255, ${Math.max(0.2, glowAlpha)})`;
-        this.ctx.lineWidth = 2.5 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.stroke();
-
-        this.ctx.strokeStyle = `rgba(255, 255, 255, ${Math.max(0.3, glowAlpha)})`;
-        this.ctx.lineWidth = 1.5 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 0.65, 0, Math.PI * 2);
-        this.ctx.stroke();
-
-        const countdownRadius = radius + 7 * this.zoom;
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 3 * this.zoom;
-        this.ctx.beginPath();
-        this.ctx.arc(
-            screenPos.x,
-            screenPos.y,
-            countdownRadius,
-            -Math.PI / 2,
-            -Math.PI / 2 + progress * Math.PI * 2
-        );
-        this.ctx.stroke();
-
-        const counterY = screenPos.y + radius + 10 * this.zoom;
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `${12 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'top';
-        this.ctx.fillText(
-            `${gate.absorbedCount}/${Constants.STARLING_MERGE_COUNT}`,
-            screenPos.x,
-            counterY
-        );
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'alphabetic';
-    }
-
-    /**
-     * Draw command buttons for selected solar mirrors
-     */
-    private drawMirrorCommandButtons(mirrors: Set<SolarMirror>, timeSec: number): void {
-        if (mirrors.size === 0) return;
-        
-        // Get one of the selected mirrors to determine button positions
-        const firstMirror = Array.from(mirrors)[0];
-        const screenPos = this.worldToScreen(firstMirror.position);
-        
-        const shouldShowFoundryButton = this.hasSeenFoundry;
-        const hasFoundryAvailable = this.hasActiveFoundry;
-        const isMirrorInSunlight = this.isSelectedMirrorInSunlight;
-        
-        const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.zoom;
-        const buttonOffset = 50 * this.zoom; // Distance from mirror
-
-        const buttonCount = isMirrorInSunlight ? (shouldShowFoundryButton ? 3 : 2) : 1;
-        const positions = this.getRadialButtonOffsets(buttonCount);
-        const forgePos = positions[0];
-        const warpGatePos = isMirrorInSunlight ? positions[1] : null;
-        const foundryPos = isMirrorInSunlight && shouldShowFoundryButton ? positions[2] : null;
-        const forgeButtonX = screenPos.x + forgePos.x * buttonOffset;
-        const forgeButtonY = screenPos.y + forgePos.y * buttonOffset;
-        const warpGateButtonX = warpGatePos ? screenPos.x + warpGatePos.x * buttonOffset : screenPos.x;
-        const warpGateButtonY = warpGatePos ? screenPos.y + warpGatePos.y * buttonOffset : screenPos.y;
-        const foundryButtonX = foundryPos ? screenPos.x + foundryPos.x * buttonOffset : screenPos.x;
-        const foundryButtonY = foundryPos ? screenPos.y + foundryPos.y * buttonOffset : screenPos.y;
-
-        // Draw primary mirror button
-        const isForgeHighlighted = this.highlightedButtonIndex === 0;
-        this.ctx.fillStyle = isForgeHighlighted ? 'rgba(255, 215, 0, 0.4)' : '#444444';
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = isForgeHighlighted ? 4 : 2;
-        this.ctx.beginPath();
-        this.ctx.arc(forgeButtonX, forgeButtonY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-        
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `${11 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        if (isMirrorInSunlight) {
-            this.ctx.fillText('Forge', forgeButtonX, forgeButtonY);
-        } else {
-            this.ctx.fillText('To', forgeButtonX, forgeButtonY - 5 * this.zoom);
-            this.ctx.fillText('Sun', forgeButtonX, forgeButtonY + 6 * this.zoom);
-        }
-
-        if (isMirrorInSunlight && warpGatePos) {
-        // Draw "Warp Gate" button (center or right)
-        const isWarpGateAvailable = this.canCreateWarpGateFromMirrors;
-        const isWarpGateHighlighted = this.highlightedButtonIndex === 1 && isWarpGateAvailable;
-        const isWarpGateArmed = this.isWarpGatePlacementMode && isWarpGateAvailable;
-        const warpGatePulse = 0.35 + 0.25 * Math.sin(timeSec * 4);
-        const warpGateFill = isWarpGateArmed
-            ? `rgba(0, 255, 255, ${0.35 + warpGatePulse})`
-            : (isWarpGateHighlighted ? 'rgba(0, 255, 255, 0.4)' : (isWarpGateAvailable ? '#444444' : '#2C2C2C'));
-        this.ctx.fillStyle = warpGateFill;
-        this.ctx.strokeStyle = isWarpGateAvailable ? (isWarpGateArmed ? '#B8FFFF' : '#00FFFF') : '#666666';
-        this.ctx.lineWidth = isWarpGateHighlighted || isWarpGateArmed ? 4 : 2;
-        if (isWarpGateArmed) {
-            this.ctx.save();
-            this.ctx.globalCompositeOperation = 'lighter';
-            this.ctx.strokeStyle = `rgba(120, 255, 255, ${0.35 + warpGatePulse})`;
-            this.ctx.lineWidth = 6 * this.zoom;
-            this.ctx.beginPath();
-            this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius + 5 * this.zoom, 0, Math.PI * 2);
-            this.ctx.stroke();
-            this.ctx.restore();
-        }
-        this.ctx.beginPath();
-        this.ctx.arc(warpGateButtonX, warpGateButtonY, buttonRadius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-        
-        this.ctx.fillStyle = isWarpGateAvailable ? '#FFFFFF' : '#8A8A8A';
-        this.ctx.font = `${9 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText('Warp', warpGateButtonX, warpGateButtonY - 6 * this.zoom);
-        this.ctx.fillText('Gate', warpGateButtonX, warpGateButtonY + 6 * this.zoom);
-        }
-
-        if (isMirrorInSunlight && shouldShowFoundryButton) {
-            const isFoundryHighlighted = hasFoundryAvailable && this.highlightedButtonIndex === 2;
-            const foundryFill = hasFoundryAvailable
-                ? (isFoundryHighlighted ? 'rgba(160, 160, 160, 0.4)' : '#444444')
-                : '#2C2C2C';
-            const foundryStroke = hasFoundryAvailable ? '#B0B0B0' : '#666666';
-            const foundryText = hasFoundryAvailable ? '#FFFFFF' : '#8A8A8A';
-
-            this.ctx.fillStyle = foundryFill;
-            this.ctx.strokeStyle = foundryStroke;
-            this.ctx.lineWidth = isFoundryHighlighted ? 4 : 2;
-            this.ctx.beginPath();
-            this.ctx.arc(foundryButtonX, foundryButtonY, buttonRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-
-            this.ctx.fillStyle = foundryText;
-            this.ctx.font = `${9 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('Found', foundryButtonX, foundryButtonY - 5 * this.zoom);
-            this.ctx.fillText('ry', foundryButtonX, foundryButtonY + 6 * this.zoom);
-        }
-
-        // Reset text alignment
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'alphabetic';
-    }
-
-    private drawWarpGatePlacementPreview(game: GameState): void {
-        if (!this.isWarpGatePlacementMode || !this.warpGatePreviewWorldPos) {
-            return;
-        }
-
-        const screenPos = this.worldToScreen(this.warpGatePreviewWorldPos);
-        const radius = Constants.WARP_GATE_RADIUS * this.zoom;
-
-        this.ctx.save();
-
-        // Draw the preview circle with color based on validity
-        if (this.isWarpGatePreviewValid) {
-            // Valid placement - cyan color
-            this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.8)';
-            this.ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
-        } else {
-            // Invalid placement - red color
-            this.ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-            this.ctx.fillStyle = 'rgba(255, 0, 0, 0.15)';
-        }
-
-        this.ctx.lineWidth = 3;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.stroke();
-
-        // Draw a pulsing effect for valid placement
-        if (this.isWarpGatePreviewValid) {
-            const pulse = 0.3 + 0.2 * Math.sin(game.gameTime * 4);
-            this.ctx.strokeStyle = `rgba(0, 255, 255, ${pulse})`;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius + 10 * this.zoom, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
-
-        this.ctx.restore();
     }
 
     /**
@@ -5004,7 +4062,7 @@ export class GameRenderer {
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
             for (const mirror of player.solarMirrors) {
                 if (this.isWithinViewBounds(mirror.position, 120)) {
-                    this.drawSolarMirror(mirror, color, game, isEnemy, game.gameTime);
+                    this.solarMirrorRenderer.drawSolarMirror(mirror, color, game, isEnemy, game.gameTime, this.getSolarMirrorRendererContext());
                 }
             }
 
@@ -5019,14 +4077,14 @@ export class GameRenderer {
         // Draw warp gates
         for (const gate of game.warpGates) {
             if (this.isWithinViewBounds(gate.position, Constants.WARP_GATE_RADIUS * 2)) {
-                this.drawWarpGate(gate, game, ladSun);
+                this.warpGateRenderer.drawWarpGate(gate, game, ladSun, this.getWarpGateRendererContext());
             }
         }
 
         // Draw starling merge gates
         for (const gate of game.starlingMergeGates) {
             if (this.isWithinViewBounds(gate.position, Constants.STARLING_MERGE_GATE_RADIUS_PX * 4)) {
-                this.drawStarlingMergeGate(gate, game);
+                this.warpGateRenderer.drawStarlingMergeGate(gate, game, this.getWarpGateRendererContext());
             }
         }
 
@@ -5413,10 +4471,10 @@ export class GameRenderer {
         this.towerRenderer.drawStrikerTowerTargetHighlighting(game, this.getBuildingRendererContext());
         
         // Draw mirror command buttons if mirrors are selected
-        this.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime);
+        this.solarMirrorRenderer.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime, this.getSolarMirrorRendererContext());
 
         // Draw warp gate placement preview if in placement mode
-        this.drawWarpGatePlacementPreview(game);
+        this.warpGateRenderer.drawWarpGatePlacementPreview(game, this.getWarpGateRendererContext());
 
         // Draw UI
         this.drawUI(game);
