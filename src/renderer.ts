@@ -8,7 +8,7 @@ import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
-import { getRadialButtonOffsets, getHeroUnitCost, getHeroUnitType } from './render/render-utilities';
+
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 import { getFactionColor, getVelarisGraphemeSpritePath } from './render/faction-utilities';
@@ -28,6 +28,7 @@ import { SolarMirrorRenderer } from './render/solar-mirror-renderer';
 import type { SolarMirrorRendererContext } from './render/solar-mirror-renderer';
 import { WarpGateRenderer } from './render/warp-gate-renderer';
 import type { WarpGateRendererContext } from './render/warp-gate-renderer';
+import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 
 type ForgeFlameState = {
     warmth: number;
@@ -87,7 +88,7 @@ export class GameRenderer {
     public buildingAbilityArrowStart: Vector2D | null = null; // Arrow start for building ability casting
     public buildingAbilityArrowDirection: Vector2D | null = null; // Arrow direction for building ability casting
     public buildingAbilityArrowLengthPx: number = 0; // Arrow length for building ability casting
-    private buildingAbilityArrowAngle: number = 0; // Cached angle for building ability arrow
+    
     public highlightedButtonIndex: number = -1; // Index of highlighted production button (-1 = none)
     public selectedUnits: Set<Unit> = new Set();
     public selectedMirrors: Set<SolarMirror> = new Set(); // Set of selected SolarMirror
@@ -104,15 +105,7 @@ export class GameRenderer {
     public isSelectedMirrorInSunlight: boolean = false;
     public warpGatePreviewWorldPos: Vector2D | null = null; // Position where warp gate would be placed
     public isWarpGatePreviewValid: boolean = false; // Whether the preview position is valid
-    private tapEffects: Array<{position: Vector2D, progress: number}> = [];
-    private swipeEffects: Array<{start: Vector2D, end: Vector2D, progress: number}> = [];
-    private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
-    private productionButtonWaves: Array<{position: Vector2D, progress: number}> = [];
-    private pathCommitEffects: Array<{
-        pointsWorld: Vector2D[];
-        startTimeSec: number;
-        durationSec: number;
-    }> = [];
+    
     public viewingPlayer: Player | null = null; // The player whose view we're rendering
     public showInfo: boolean = false; // Toggle for showing top-left info
     public showInGameMenu: boolean = false; // Toggle for in-game menu
@@ -301,6 +294,7 @@ export class GameRenderer {
     private readonly unitRenderer: UnitRenderer;
     private readonly solarMirrorRenderer: SolarMirrorRenderer;
     private readonly warpGateRenderer: WarpGateRenderer;
+    private readonly uiRenderer: UIRenderer;
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -330,6 +324,7 @@ export class GameRenderer {
         this.unitRenderer = new UnitRenderer();
         this.solarMirrorRenderer = new SolarMirrorRenderer();
         this.warpGateRenderer = new WarpGateRenderer();
+        this.uiRenderer = new UIRenderer();
 
         const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
@@ -485,6 +480,61 @@ export class GameRenderer {
      */
     private getFactionColor(faction: Faction): string {
         return getFactionColor(faction);
+    }
+
+    private getUIRendererContext(): UIRendererContext {
+        return {
+            ctx: this.ctx,
+            canvas: this.canvas,
+            zoom: this.zoom,
+            selectionStart: this.selectionStart,
+            selectionEnd: this.selectionEnd,
+            abilityArrowStarts: this.abilityArrowStarts,
+            abilityArrowDirection: this.abilityArrowDirection,
+            abilityArrowLengthPx: this.abilityArrowLengthPx,
+            buildingAbilityArrowStart: this.buildingAbilityArrowStart,
+            buildingAbilityArrowDirection: this.buildingAbilityArrowDirection,
+            buildingAbilityArrowLengthPx: this.buildingAbilityArrowLengthPx,
+            pathPreviewForge: this.pathPreviewForge,
+            pathPreviewPoints: this.pathPreviewPoints,
+            pathPreviewEnd: this.pathPreviewEnd,
+            pathPreviewStartWorld: this.pathPreviewStartWorld,
+            selectedUnits: this.selectedUnits,
+            selectedMirrors: this.selectedMirrors,
+            highlightedButtonIndex: this.highlightedButtonIndex,
+            showInfo: this.showInfo,
+            inGameMenuTab: this.inGameMenuTab,
+            damageDisplayMode: this.damageDisplayMode,
+            healthDisplayMode: this.healthDisplayMode,
+            offscreenIndicatorOpacity: this.offscreenIndicatorOpacity,
+            infoBoxOpacity: this.infoBoxOpacity,
+            playerColor: this.playerColor,
+            enemyColor: this.enemyColor,
+            colorblindMode: this.colorblindMode,
+            graphicsQuality: this.graphicsQuality,
+            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+            screenShakeEnabled: this.screenShakeEnabled,
+            soundVolume: this.soundVolume,
+            musicVolume: this.musicVolume,
+            graphicsMenuScrollOffset: this.graphicsMenuScrollOffset,
+            renderLayerOptions: this.renderLayerOptions,
+            isSunsLayerEnabled: this.isSunsLayerEnabled,
+            isStarsLayerEnabled: this.isStarsLayerEnabled,
+            isAsteroidsLayerEnabled: this.isAsteroidsLayerEnabled,
+            isSpaceDustLayerEnabled: this.isSpaceDustLayerEnabled,
+            isBuildingsLayerEnabled: this.isBuildingsLayerEnabled,
+            isUnitsLayerEnabled: this.isUnitsLayerEnabled,
+            isProjectilesLayerEnabled: this.isProjectilesLayerEnabled,
+            worldToScreen: (pos) => this.worldToScreen(pos),
+            isWithinViewBounds: (pos, margin) => this.isWithinViewBounds(pos, margin),
+            getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
+            getSolEnergyIcon: () => this.getSolEnergyIcon(),
+            getProductionDisplayName: (unitType) => this.getProductionDisplayName(unitType),
+            getBuildingDisplayName: (building) => this.getBuildingDisplayName(building),
+            viewingPlayer: this.viewingPlayer,
+            CONTROL_LINES_FULL: GameRenderer.CONTROL_LINES_FULL,
+            CONTROL_LINES_COMPACT: GameRenderer.CONTROL_LINES_COMPACT,
+        };
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
@@ -1636,195 +1686,6 @@ export class GameRenderer {
         );
     }
 
-    /**
-     * Draw hero production buttons around selected Stellar Forge
-     */
-    private drawHeroButtons(
-        forge: StellarForge,
-        screenPos: Vector2D,
-        heroNames: string[]
-    ): void {
-        const buttonRadius = Constants.HERO_BUTTON_RADIUS_PX * this.zoom;
-        const buttonDistance = (Constants.HERO_BUTTON_DISTANCE_PX * this.zoom);
-        
-        const displayLabels = [...heroNames.slice(0, 4), 'Solar Mirror'];
-        const positions = this.getRadialButtonOffsets(displayLabels.length);
-
-        for (let i = 0; i < displayLabels.length; i++) {
-            const heroName = displayLabels[i];
-            const pos = positions[i];
-            const buttonX = screenPos.x + pos.x * buttonDistance;
-            const buttonY = screenPos.y + pos.y * buttonDistance;
-            const isMirrorOption = heroName === 'Solar Mirror';
-            const heroUnitType = isMirrorOption ? null : this.getHeroUnitType(heroName);
-            const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
-            const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
-            const buttonCost = isMirrorOption ? Constants.STELLAR_FORGE_SOLAR_MIRROR_COST : this.getHeroUnitCost(forge.owner);
-            const isAvailable = isMirrorOption
-                ? true
-                : (heroUnitType ? !isHeroAlive && !isHeroProducing : false);
-            const isHighlighted = this.highlightedButtonIndex === i;
-
-            // Draw button background with highlight effect
-            this.ctx.fillStyle = isHighlighted 
-                ? 'rgba(0, 255, 136, 0.7)' 
-                : (isAvailable ? 'rgba(0, 255, 136, 0.3)' : 'rgba(128, 128, 128, 0.3)');
-            this.ctx.strokeStyle = isHighlighted 
-                ? '#00FF88' 
-                : (isAvailable ? '#00FF88' : '#888888');
-            this.ctx.lineWidth = isHighlighted ? 4 : 2;
-            this.ctx.beginPath();
-            this.ctx.arc(buttonX, buttonY, buttonRadius, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.stroke();
-            
-            // Draw button label
-            this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#666666';
-            this.ctx.font = `${14 * this.zoom}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-            const buttonLabel = isMirrorOption ? 'Mirror' : heroName;
-            this.ctx.fillText(buttonLabel, buttonX, buttonY);
-
-            this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, buttonCost, isAvailable);
-
-            if (!isMirrorOption && isHeroProducing) {
-                this.drawHeroHourglass(buttonX, buttonY, buttonRadius);
-            } else if (isHeroAlive) {
-                this.drawHeroCheckmark(buttonX, buttonY, buttonRadius);
-            }
-        }
-    }
-
-    private getRadialButtonOffsets(buttonCount: number): Array<{ x: number; y: number }> {
-        return getRadialButtonOffsets(buttonCount);
-    }
-
-    private drawRadialButtonCostLabel(
-        buttonX: number,
-        buttonY: number,
-        radialX: number,
-        radialY: number,
-        buttonRadius: number,
-        cost: number,
-        isAvailable: boolean
-    ): void {
-        const radialLength = Math.hypot(radialX, radialY);
-        const directionX = radialLength > 0 ? radialX / radialLength : 0;
-        const directionY = radialLength > 0 ? radialY / radialLength : -1;
-        const costOffsetPx = buttonRadius + 10 * this.zoom;
-        const costX = buttonX + directionX * costOffsetPx;
-        const costY = buttonY + directionY * costOffsetPx;
-
-        this.ctx.fillStyle = isAvailable ? '#FFFFFF' : '#888888';
-        this.ctx.font = `${10 * this.zoom}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(cost.toString(), costX, costY);
-    }
-
-    private getHeroUnitType(heroName: string): string | null {
-        return getHeroUnitType(heroName);
-    }
-
-    private isHeroUnitOfType(unit: Unit, heroUnitType: string): boolean {
-        switch (heroUnitType) {
-            case 'Marine':
-                return unit instanceof Marine;
-            case 'Mothership':
-                return unit instanceof Mothership;
-            case 'Grave':
-                return unit instanceof Grave;
-            case 'Ray':
-                return unit instanceof Ray;
-            case 'Nova':
-                return unit instanceof Nova;
-            case 'InfluenceBall':
-                return unit instanceof InfluenceBall;
-            case 'TurretDeployer':
-                return unit instanceof TurretDeployer;
-            case 'Driller':
-                return unit instanceof Driller;
-            case 'Dagger':
-                return unit instanceof Dagger;
-            case 'Beam':
-                return unit instanceof Beam;
-            case 'Spotlight':
-                return unit instanceof Spotlight;
-            case 'Splendor':
-                return unit instanceof Splendor;
-            case 'Mortar':
-                return unit instanceof Mortar;
-            case 'Preist':
-                return unit instanceof Preist;
-            case 'Sly':
-                return unit instanceof Sly;
-            case 'Shadow':
-                return unit instanceof Shadow;
-            case 'Chrono':
-                return unit instanceof Chrono;
-            default:
-                return false;
-        }
-    }
-
-    private isHeroUnitAlive(player: Player, heroUnitType: string): boolean {
-        return player.units.some((unit) => this.isHeroUnitOfType(unit, heroUnitType));
-    }
-
-    private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
-    }
-
-    private drawHeroHourglass(centerX: number, centerY: number, radius: number): void {
-        const iconWidth = radius * 0.7;
-        const iconHeight = radius * 0.8;
-        const leftX = centerX - iconWidth * 0.5;
-        const rightX = centerX + iconWidth * 0.5;
-        const topY = centerY - iconHeight * 0.5;
-        const bottomY = centerY + iconHeight * 0.5;
-        const midY = centerY;
-
-        this.ctx.strokeStyle = '#CCCCCC';
-        this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
-        this.ctx.beginPath();
-        this.ctx.moveTo(leftX, topY);
-        this.ctx.lineTo(rightX, topY);
-        this.ctx.lineTo(centerX, midY);
-        this.ctx.closePath();
-        this.ctx.stroke();
-
-        this.ctx.beginPath();
-        this.ctx.moveTo(leftX, bottomY);
-        this.ctx.lineTo(rightX, bottomY);
-        this.ctx.lineTo(centerX, midY);
-        this.ctx.closePath();
-        this.ctx.stroke();
-    }
-
-    private drawHeroCheckmark(centerX: number, centerY: number, radius: number): void {
-        const iconWidth = radius * 0.7;
-        const iconHeight = radius * 0.6;
-        const startX = centerX - iconWidth * 0.45;
-        const startY = centerY + iconHeight * 0.05;
-        const midX = centerX - iconWidth * 0.1;
-        const midY = centerY + iconHeight * 0.35;
-        const endX = centerX + iconWidth * 0.5;
-        const endY = centerY - iconHeight * 0.35;
-
-        this.ctx.strokeStyle = '#CCCCCC';
-        this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
-        this.ctx.beginPath();
-        this.ctx.moveTo(startX, startY);
-        this.ctx.lineTo(midX, midY);
-        this.ctx.lineTo(endX, endY);
-        this.ctx.stroke();
-    }
-
-    private getHeroUnitCost(player: Player): number {
-        return getHeroUnitCost(player);
-    }
-
     private getPseudoRandom(seed: number): number {
         const value = Math.sin(seed) * 43758.5453;
         return value - Math.floor(value);
@@ -2914,198 +2775,28 @@ export class GameRenderer {
      * Draw UI overlay
      */
     private drawUI(game: GameState): void {
-        // Only show info if showInfo is true
-        if (this.showInfo) {
-            const dpr = window.devicePixelRatio || 1;
-            const screenWidth = this.canvas.width / dpr;
-            const screenHeight = this.canvas.height / dpr;
-            const isCompactLayout = screenWidth < 600;
-            const infoFontSize = isCompactLayout ? 13 : 16;
-            const infoLineHeight = infoFontSize + 4;
-            const infoBoxWidth = Math.min(300, screenWidth - 20);
-            const infoBoxHeight = 20 + infoLineHeight * 5 + game.players.length * 60;
-
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(10, 10, infoBoxWidth, infoBoxHeight);
-
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${infoFontSize}px Doto`;
-            let infoY = 30;
-            this.ctx.fillText(`SoL - Speed of Light RTS`, 20, infoY);
-            infoY += infoLineHeight;
-            this.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, infoY);
-            infoY += infoLineHeight;
-            this.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, infoY);
-            infoY += infoLineHeight;
-            this.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, infoY);
-            infoY += infoLineHeight;
-            this.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, infoY);
-
-            let y = infoY + infoLineHeight;
-            for (const player of game.players) {
-                const color = this.getFactionColor(player.faction);
-                this.ctx.fillStyle = color;
-                this.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.fillText(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20);
-                
-                if (player.stellarForge) {
-                    const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
-                    this.ctx.fillText(`${status} | HP: ${player.stellarForge.health.toFixed(0)}`, 20, y + 40);
-                }
-                
-                y += 60;
-            }
-
-            // Draw controls help
-            const controlLines = isCompactLayout
-                ? GameRenderer.CONTROL_LINES_COMPACT
-                : GameRenderer.CONTROL_LINES_FULL;
-            const controlFontSize = isCompactLayout ? 12 : 14;
-            const controlLineHeight = controlFontSize + 4;
-            const controlBoxWidth = Math.min(450, screenWidth - 20);
-            const controlBoxHeight = controlLineHeight * controlLines.length + 14;
-            const controlBoxX = 10;
-            const controlBoxY = screenHeight - controlBoxHeight - 10;
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(controlBoxX, controlBoxY, controlBoxWidth, controlBoxHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${controlFontSize}px Doto`;
-            let controlTextY = controlBoxY + controlLineHeight;
-            for (const line of controlLines) {
-                this.ctx.fillText(line, 20, controlTextY);
-                controlTextY += controlLineHeight;
-            }
-        }
+        this.uiRenderer.drawUI(game, this.getUIRendererContext());
     }
 
     /**
      * Draw selection rectangle
      */
     private drawSelectionRectangle(): void {
-        if (!this.selectionStart || !this.selectionEnd) return;
-
-        const x = Math.min(this.selectionStart.x, this.selectionEnd.x);
-        const y = Math.min(this.selectionStart.y, this.selectionEnd.y);
-        const width = Math.abs(this.selectionEnd.x - this.selectionStart.x);
-        const height = Math.abs(this.selectionEnd.y - this.selectionStart.y);
-
-        // Draw selection rectangle
-        this.ctx.strokeStyle = 'rgba(0, 255, 0, 0.8)';
-        this.ctx.lineWidth = 2;
-        this.ctx.setLineDash([5, 5]);
-        this.ctx.strokeRect(x, y, width, height);
-        
-        // Draw filled background
-        this.ctx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-        this.ctx.fillRect(x, y, width, height);
-        
-        this.ctx.setLineDash([]);
+        this.uiRenderer.drawSelectionRectangle(this.getUIRendererContext());
     }
 
     /**
      * Draw ability arrow for hero units
      */
     private drawAbilityArrow(): void {
-        if (!this.abilityArrowDirection || this.abilityArrowStarts.length === 0) return;
-
-        this.ctx.strokeStyle = 'rgba(255, 215, 0, 0.9)'; // Gold color for hero abilities
-        this.ctx.lineWidth = 4;
-        this.ctx.setLineDash([]);
-        const arrowLengthPx = this.abilityArrowLengthPx;
-        for (const abilityArrowStart of this.abilityArrowStarts) {
-            const length = arrowLengthPx;
-
-            // Don't draw if arrow is too short
-            if (length < Constants.ABILITY_ARROW_MIN_LENGTH) {
-                continue;
-            }
-
-            const arrowEndX = abilityArrowStart.x + this.abilityArrowDirection.x * length;
-            const arrowEndY = abilityArrowStart.y + this.abilityArrowDirection.y * length;
-
-            // Draw arrow shaft
-            this.ctx.beginPath();
-            this.ctx.moveTo(abilityArrowStart.x, abilityArrowStart.y);
-            this.ctx.lineTo(arrowEndX, arrowEndY);
-            this.ctx.stroke();
-
-            // Draw arrowhead
-            const angle = Math.atan2(this.abilityArrowDirection.y, this.abilityArrowDirection.x);
-            const arrowHeadLength = 20;
-            const arrowHeadAngle = Math.PI / 6; // 30 degrees
-
-            this.ctx.beginPath();
-            this.ctx.moveTo(arrowEndX, arrowEndY);
-            this.ctx.lineTo(
-                arrowEndX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
-                arrowEndY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
-            );
-            this.ctx.lineTo(
-                arrowEndX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
-                arrowEndY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
-            );
-            this.ctx.closePath();
-            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.9)';
-            this.ctx.fill();
-
-            // Draw a circle at the start point
-            this.ctx.beginPath();
-            this.ctx.arc(abilityArrowStart.x, abilityArrowStart.y, 8, 0, Math.PI * 2);
-            this.ctx.fillStyle = 'rgba(255, 215, 0, 0.5)';
-            this.ctx.fill();
-        }
+        this.uiRenderer.drawAbilityArrow(this.getUIRendererContext());
     }
 
     /**
      * Draw ability arrow for building production/abilities
      */
     private drawBuildingAbilityArrow(): void {
-        if (!this.buildingAbilityArrowDirection || !this.buildingAbilityArrowStart) return;
-
-        const length = this.buildingAbilityArrowLengthPx;
-
-        // Don't draw if arrow is too short
-        if (length < Constants.ABILITY_ARROW_MIN_LENGTH) {
-            return;
-        }
-
-        const arrowEndX = this.buildingAbilityArrowStart.x + this.buildingAbilityArrowDirection.x * length;
-        const arrowEndY = this.buildingAbilityArrowStart.y + this.buildingAbilityArrowDirection.y * length;
-
-        // Draw arrow shaft
-        this.ctx.strokeStyle = 'rgba(0, 255, 136, 0.9)'; // Green color for building abilities
-        this.ctx.lineWidth = 4;
-        this.ctx.setLineDash([]);
-        this.ctx.beginPath();
-        this.ctx.moveTo(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y);
-        this.ctx.lineTo(arrowEndX, arrowEndY);
-        this.ctx.stroke();
-
-        // Draw arrowhead using cached angle (calculated when direction is set)
-        const angle = this.buildingAbilityArrowAngle;
-        const arrowHeadLength = 20;
-        const arrowHeadAngle = Math.PI / 6; // 30 degrees
-
-        this.ctx.beginPath();
-        this.ctx.moveTo(arrowEndX, arrowEndY);
-        this.ctx.lineTo(
-            arrowEndX - arrowHeadLength * Math.cos(angle - arrowHeadAngle),
-            arrowEndY - arrowHeadLength * Math.sin(angle - arrowHeadAngle)
-        );
-        this.ctx.lineTo(
-            arrowEndX - arrowHeadLength * Math.cos(angle + arrowHeadAngle),
-            arrowEndY - arrowHeadLength * Math.sin(angle + arrowHeadAngle)
-        );
-        this.ctx.closePath();
-        this.ctx.fillStyle = 'rgba(0, 255, 136, 0.9)';
-        this.ctx.fill();
-
-        // Draw a circle at the start point
-        this.ctx.beginPath();
-        this.ctx.arc(this.buildingAbilityArrowStart.x, this.buildingAbilityArrowStart.y, 8, 0, Math.PI * 2);
-        this.ctx.fillStyle = 'rgba(0, 255, 136, 0.5)';
-        this.ctx.fill();
+        this.uiRenderer.drawBuildingAbilityArrow(this.getUIRendererContext());
     }
 
     /**
@@ -3113,420 +2804,85 @@ export class GameRenderer {
      */
     setBuildingAbilityArrowDirection(direction: Vector2D | null): void {
         this.buildingAbilityArrowDirection = direction;
-        if (direction) {
-            // Cache angle calculation to avoid expensive Math.atan2 every frame
-            this.buildingAbilityArrowAngle = Math.atan2(direction.y, direction.x);
-        }
+        this.uiRenderer.setBuildingAbilityArrowDirection(direction, this.getUIRendererContext());
     }
 
     /**
      * Draw a path preview for selected units (not from base)
      */
     private drawUnitPathPreview(): void {
-        // Only draw if we have path points and no forge (meaning it's a unit path, not a base path)
-        if (!this.pathPreviewForge && this.pathPreviewPoints.length > 0) {
-            // Get the average position of selected units as the start point
-            let avgX = 0;
-            let avgY = 0;
-            let count = 0;
-            
-            if (this.selectedUnits.size > 0) {
-                for (const unit of this.selectedUnits) {
-                    avgX += unit.position.x;
-                    avgY += unit.position.y;
-                    count++;
-                }
-            } else if (this.selectedMirrors.size > 0) {
-                for (const mirror of this.selectedMirrors) {
-                    avgX += mirror.position.x;
-                    avgY += mirror.position.y;
-                    count++;
-                }
-            }
-            
-            if (count > 0) {
-                const startWorld = new Vector2D(avgX / count, avgY / count);
-                this.drawMinionPathPreview(startWorld, this.pathPreviewPoints, this.pathPreviewEnd);
-            } else if (this.pathPreviewStartWorld) {
-                this.drawMinionPathPreview(this.pathPreviewStartWorld, this.pathPreviewPoints, this.pathPreviewEnd);
-            }
-        }
+        this.uiRenderer.drawUnitPathPreview(this.getUIRendererContext());
     }
 
     public createPathCommitEffect(startWorld: Vector2D, waypoints: Vector2D[], gameTimeSec: number): void {
-        const pointsWorld: Vector2D[] = [new Vector2D(startWorld.x, startWorld.y)];
-        for (const waypoint of waypoints) {
-            pointsWorld.push(new Vector2D(waypoint.x, waypoint.y));
-        }
-        if (pointsWorld.length < 2) {
-            return;
-        }
-        this.pathCommitEffects.push({
-            pointsWorld,
-            startTimeSec: gameTimeSec,
-            durationSec: 1.1
-        });
+        this.uiRenderer.createPathCommitEffect(startWorld, waypoints, gameTimeSec);
     }
 
     private updateAndDrawPathCommitEffects(gameTimeSec: number): void {
-        if (this.pathCommitEffects.length === 0) {
-            return;
-        }
-
-        this.pathCommitEffects = this.pathCommitEffects.filter((effect) => {
-            const ageSec = gameTimeSec - effect.startTimeSec;
-            const progress = ageSec / effect.durationSec;
-            if (progress >= 1) {
-                return false;
-            }
-
-            const alpha = Math.max(0, 1 - progress);
-            const pathPointsScreen = effect.pointsWorld.map((point) => this.worldToScreen(point));
-
-            this.ctx.save();
-            this.ctx.lineWidth = 2.5;
-            this.ctx.strokeStyle = `rgba(255, 225, 120, ${0.55 * alpha})`;
-            this.ctx.setLineDash([14, 10]);
-            this.ctx.lineDashOffset = -progress * 80;
-            this.ctx.beginPath();
-            this.ctx.moveTo(pathPointsScreen[0].x, pathPointsScreen[0].y);
-            for (let i = 1; i < pathPointsScreen.length; i++) {
-                this.ctx.lineTo(pathPointsScreen[i].x, pathPointsScreen[i].y);
-            }
-            this.ctx.stroke();
-            this.ctx.restore();
-
-            return true;
-        });
-    }
-
-    /**
-     * Draw a path preview while the player is actively drawing a minion route.
-     */
-    private drawMinionPathPreview(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null): void {
-        this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
-        this.ctx.lineWidth = 3;
-        this.ctx.setLineDash([6, 6]);
-        this.ctx.beginPath();
-
-        const startScreen = this.worldToScreen(startWorld);
-        this.ctx.moveTo(startScreen.x, startScreen.y);
-
-        for (let i = 0; i < waypoints.length; i++) {
-            const waypointScreen = this.worldToScreen(waypoints[i]);
-            this.ctx.lineTo(waypointScreen.x, waypointScreen.y);
-        }
-
-        if (endWorld) {
-            const endScreen = this.worldToScreen(endWorld);
-            this.ctx.lineTo(endScreen.x, endScreen.y);
-        }
-
-        this.ctx.stroke();
-        this.ctx.setLineDash([]);
-
-        this.ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
-        for (let i = 0; i < waypoints.length; i++) {
-            const waypointScreen = this.worldToScreen(waypoints[i]);
-            this.ctx.beginPath();
-            this.ctx.arc(waypointScreen.x, waypointScreen.y, 4, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-
-        if (endWorld) {
-            const endScreen = this.worldToScreen(endWorld);
-            this.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(endScreen.x, endScreen.y, 6, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
+        this.uiRenderer.updateAndDrawPathCommitEffects(gameTimeSec, this.getUIRendererContext());
     }
 
     /**
      * Create a tap visual effect at screen position
      */
     createTapEffect(screenX: number, screenY: number): void {
-        this.tapEffects.push({
-            position: new Vector2D(screenX, screenY),
-            progress: 0
-        });
+        this.uiRenderer.createTapEffect(screenX, screenY);
     }
 
     /**
      * Create a swipe visual effect from start to end screen positions
      */
     createSwipeEffect(startX: number, startY: number, endX: number, endY: number): void {
-        this.swipeEffects.push({
-            start: new Vector2D(startX, startY),
-            end: new Vector2D(endX, endY),
-            progress: 0
-        });
+        this.uiRenderer.createSwipeEffect(startX, startY, endX, endY);
     }
 
     /**
      * Create a warp gate shockwave effect at a world position
      */
     createWarpGateShockwave(position: Vector2D): void {
-        this.warpGateShockwaves.push({
-            position: new Vector2D(position.x, position.y),
-            progress: 0
-        });
+        this.uiRenderer.createWarpGateShockwave(position);
     }
 
     /**
      * Create a production button wave effect at a world position
      */
     createProductionButtonWave(position: Vector2D): void {
-        this.productionButtonWaves.push({
-            position: new Vector2D(position.x, position.y),
-            progress: 0
-        });
+        this.uiRenderer.createProductionButtonWave(position);
     }
 
     /**
      * Update and draw tap effects (expanding ripple)
      */
     private updateAndDrawTapEffects(): void {
-        // Update and draw each tap effect
-        for (let i = this.tapEffects.length - 1; i >= 0; i--) {
-            const effect = this.tapEffects[i];
-            effect.progress += Constants.TAP_EFFECT_SPEED; // Increment progress (0 to 1)
-
-            if (effect.progress >= 1) {
-                // Remove completed effects
-                this.tapEffects.splice(i, 1);
-                continue;
-            }
-
-            // Draw expanding ripple
-            const radius = Constants.TAP_EFFECT_MAX_RADIUS * effect.progress;
-            const alpha = 1 - effect.progress; // Fade out
-
-            this.ctx.strokeStyle = `rgba(100, 200, 255, ${alpha})`;
-            this.ctx.lineWidth = 3;
-            this.ctx.beginPath();
-            this.ctx.arc(effect.position.x, effect.position.y, radius, 0, Math.PI * 2);
-            this.ctx.stroke();
-
-            // Draw inner glow
-            const gradient = this.ctx.createRadialGradient(
-                effect.position.x, effect.position.y, 0,
-                effect.position.x, effect.position.y, radius * 0.5
-            );
-            gradient.addColorStop(0, `rgba(100, 200, 255, ${alpha * 0.5})`);
-            gradient.addColorStop(1, 'rgba(100, 200, 255, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.beginPath();
-            this.ctx.arc(effect.position.x, effect.position.y, radius * 0.5, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        this.uiRenderer.updateAndDrawTapEffects(this.getUIRendererContext());
     }
 
     /**
      * Update and draw swipe effects (directional trail)
      */
     private updateAndDrawSwipeEffects(): void {
-        // Update and draw each swipe effect
-        for (let i = this.swipeEffects.length - 1; i >= 0; i--) {
-            const effect = this.swipeEffects[i];
-            effect.progress += Constants.SWIPE_EFFECT_SPEED; // Increment progress (0 to 1)
-
-            if (effect.progress >= 1) {
-                // Remove completed effects
-                this.swipeEffects.splice(i, 1);
-                continue;
-            }
-
-            // Calculate direction and length
-            const dx = effect.end.x - effect.start.x;
-            const dy = effect.end.y - effect.start.y;
-            const length = Math.sqrt(dx * dx + dy * dy);
-
-            if (length < 5) continue; // Skip very short swipes
-
-            // Draw arrow trail
-            const alpha = 1 - effect.progress;
-            const currentLength = length * effect.progress;
-            
-            // Draw line
-            this.ctx.strokeStyle = `rgba(255, 200, 100, ${alpha * 0.7})`;
-            this.ctx.lineWidth = 4;
-            this.ctx.lineCap = 'round';
-            this.ctx.beginPath();
-            this.ctx.moveTo(effect.start.x, effect.start.y);
-            const endX = effect.start.x + (dx / length) * currentLength;
-            const endY = effect.start.y + (dy / length) * currentLength;
-            this.ctx.lineTo(endX, endY);
-            this.ctx.stroke();
-
-            // Draw arrow head at the end
-            if (effect.progress > 0.3) {
-                const angle = Math.atan2(dy, dx);
-                
-                this.ctx.fillStyle = `rgba(255, 200, 100, ${alpha})`;
-                this.ctx.beginPath();
-                this.ctx.moveTo(endX, endY);
-                this.ctx.lineTo(
-                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle - Math.PI / 6),
-                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle - Math.PI / 6)
-                );
-                this.ctx.lineTo(
-                    endX - Constants.SWIPE_ARROW_SIZE * Math.cos(angle + Math.PI / 6),
-                    endY - Constants.SWIPE_ARROW_SIZE * Math.sin(angle + Math.PI / 6)
-                );
-                this.ctx.closePath();
-                this.ctx.fill();
-            }
-
-            // Draw glow trail
-            for (let j = 0; j < 5; j++) {
-                const t = j / 5;
-                const px = effect.start.x + (dx / length) * currentLength * t;
-                const py = effect.start.y + (dy / length) * currentLength * t;
-                const glowAlpha = alpha * (1 - t) * 0.3;
-                
-                const gradient = this.ctx.createRadialGradient(px, py, 0, px, py, 10);
-                gradient.addColorStop(0, `rgba(255, 200, 100, ${glowAlpha})`);
-                gradient.addColorStop(1, 'rgba(255, 200, 100, 0)');
-                this.ctx.fillStyle = gradient;
-                this.ctx.beginPath();
-                this.ctx.arc(px, py, 10, 0, Math.PI * 2);
-                this.ctx.fill();
-            }
-        }
+        this.uiRenderer.updateAndDrawSwipeEffects(this.getUIRendererContext());
     }
 
     /**
      * Update and draw warp gate shockwave effects
      */
     private updateAndDrawWarpGateShockwaves(): void {
-        for (let i = this.warpGateShockwaves.length - 1; i >= 0; i--) {
-            const effect = this.warpGateShockwaves[i];
-            effect.progress += Constants.WARP_GATE_SHOCKWAVE_PROGRESS_PER_FRAME;
-
-            if (effect.progress >= 1) {
-                this.warpGateShockwaves.splice(i, 1);
-                continue;
-            }
-
-            const screenPos = this.worldToScreen(effect.position);
-            const radius = Constants.WARP_GATE_SHOCKWAVE_MAX_RADIUS_PX * effect.progress * this.zoom;
-            const alpha = (1 - effect.progress) * 0.8;
-
-            this.ctx.strokeStyle = `rgba(0, 255, 255, ${alpha})`;
-            this.ctx.lineWidth = Math.max(2, 3 * this.zoom);
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
+        this.uiRenderer.updateAndDrawWarpGateShockwaves(this.getUIRendererContext());
     }
 
     /**
      * Update and draw production button wave effects
      */
     private updateAndDrawProductionButtonWaves(): void {
-        for (let i = this.productionButtonWaves.length - 1; i >= 0; i--) {
-            const effect = this.productionButtonWaves[i];
-            effect.progress += Constants.PRODUCTION_BUTTON_WAVE_PROGRESS_PER_FRAME;
-
-            if (effect.progress >= 1) {
-                this.productionButtonWaves.splice(i, 1);
-                continue;
-            }
-
-            const screenPos = this.worldToScreen(effect.position);
-            const radius = Constants.PRODUCTION_BUTTON_WAVE_MAX_RADIUS_PX * effect.progress * this.zoom;
-            const alpha = (1 - effect.progress) * 0.9;
-
-            this.ctx.strokeStyle = `rgba(255, 215, 0, ${alpha})`;
-            this.ctx.lineWidth = Math.max(1, 2 * this.zoom);
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-            this.ctx.stroke();
-
-            const gradient = this.ctx.createRadialGradient(
-                screenPos.x, screenPos.y, 0,
-                screenPos.x, screenPos.y, radius
-            );
-            gradient.addColorStop(0, `rgba(255, 215, 0, ${alpha * 0.35})`);
-            gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.beginPath();
-            this.ctx.arc(screenPos.x, screenPos.y, radius * 0.6, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
+        this.uiRenderer.updateAndDrawProductionButtonWaves(this.getUIRendererContext());
     }
 
     /**
      * Draw damage numbers floating up from damaged units
      */
     private drawDamageNumbers(game: GameState): void {
-        for (const damageNumber of game.damageNumbers) {
-            // Viewport culling: skip off-screen damage numbers
-            if (!this.isWithinViewBounds(damageNumber.position, 100)) {
-                continue;
-            }
-
-            const screenPos = this.worldToScreen(damageNumber.position);
-            const opacity = damageNumber.getOpacity(game.gameTime);
-
-            const displayText = damageNumber.displayText
-                ?? ((this.damageDisplayMode === 'remaining-life')
-                    ? damageNumber.remainingHealth.toString()
-                    : damageNumber.damage.toString());
-
-            const clampedDamage = Math.max(0, damageNumber.damage);
-            const damageScale = Math.min(1, clampedDamage / Math.max(1, damageNumber.maxHealth));
-            const fontSize = damageNumber.isBlocked
-                ? 14
-                : 13 + damageScale * 8;
-
-            this.ctx.font = `bold ${fontSize}px Doto`;
-            this.ctx.fillStyle = damageNumber.textColor;
-            this.ctx.globalAlpha = opacity;
-
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'middle';
-
-            // Thin white outline for readability
-            this.ctx.strokeStyle = '#FFFFFF';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.strokeText(displayText, screenPos.x, screenPos.y);
-            this.ctx.fillText(displayText, screenPos.x, screenPos.y);
-            this.ctx.globalAlpha = 1;
-        }
-    }
-
-    /**
-     * Get health color based on percentage (green -> yellow -> red)
-     */
-    private getHealthColor(healthPercent: number): { r: number; g: number; b: number } {
-        if (healthPercent > 0.6) {
-            // Green zone: interpolate from green (0, 255, 0) to yellow (255, 255, 0)
-            const t = (healthPercent - 0.6) / 0.4; // 0 at 60%, 1 at 100%
-            return {
-                r: Math.round(255 * (1 - t)),
-                g: 255,
-                b: 0
-            };
-        } else if (healthPercent > 0.3) {
-            // Yellow zone: interpolate from orange-red (255, 165, 0) to yellow (255, 255, 0)
-            const t = (healthPercent - 0.3) / 0.3; // 0 at 30%, 1 at 60%
-            return {
-                r: 255,
-                g: Math.round(165 + 90 * t),
-                b: 0
-            };
-        } else {
-            // Red zone: interpolate from dark red (180, 0, 0) to orange-red (255, 165, 0)
-            const t = healthPercent / 0.3; // 0 at 0%, 1 at 30%
-            return {
-                r: Math.round(180 + 75 * t),
-                g: Math.round(165 * t),
-                b: 0
-            };
-        }
+        this.uiRenderer.drawDamageNumbers(game, this.getUIRendererContext());
     }
 
     /**
@@ -3541,340 +2897,14 @@ export class GameRenderer {
         isRegenerating: boolean = false,
         playerColor?: string
     ): void {
-        if (currentHealth >= maxHealth) {
-            return; // Don't draw if at full health
-        }
-
-        const healthPercent = currentHealth / maxHealth;
-
-        if (this.healthDisplayMode === 'bar') {
-            // Draw health bar
-            const barWidth = size * 3;
-            const barHeight = 3;
-            const barX = screenPos.x - barWidth / 2;
-            const barY = screenPos.y + yOffset;
-            
-            this.ctx.fillStyle = '#333';
-            this.ctx.fillRect(barX, barY, barWidth, barHeight);
-            
-            this.ctx.fillStyle = healthPercent > 0.5 ? '#00FF00' : healthPercent > 0.25 ? '#FFFF00' : '#FF0000';
-            this.ctx.fillRect(barX, barY, barWidth * healthPercent, barHeight);
-            
-            // Draw + sign if regenerating
-            if (isRegenerating) {
-                const plusSize = 8;
-                const plusX = barX + barWidth + 5;
-                const plusY = barY + barHeight / 2;
-                
-                this.ctx.strokeStyle = playerColor || '#00FF00';
-                this.ctx.lineWidth = 2;
-                
-                // Horizontal line of +
-                this.ctx.beginPath();
-                this.ctx.moveTo(plusX - plusSize / 2, plusY);
-                this.ctx.lineTo(plusX + plusSize / 2, plusY);
-                this.ctx.stroke();
-                
-                // Vertical line of +
-                this.ctx.beginPath();
-                this.ctx.moveTo(plusX, plusY - plusSize / 2);
-                this.ctx.lineTo(plusX, plusY + plusSize / 2);
-                this.ctx.stroke();
-            }
-        } else {
-            // Draw health number
-            const healthColor = this.getHealthColor(healthPercent);
-            const fontSize = Math.max(10, size * 1.5);
-            
-            this.ctx.font = `bold ${fontSize}px Doto`;
-            this.ctx.fillStyle = `rgb(${healthColor.r}, ${healthColor.g}, ${healthColor.b})`;
-            this.ctx.textAlign = 'center';
-            this.ctx.textBaseline = 'bottom';
-            
-            // Add stroke for readability
-            this.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
-            this.ctx.fillText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
-            
-            // Draw + sign if regenerating
-            if (isRegenerating) {
-                const plusSize = fontSize * 0.6;
-                const plusX = screenPos.x + fontSize * 0.8;
-                const plusY = screenPos.y + yOffset - fontSize / 2;
-                
-                this.ctx.strokeStyle = playerColor || '#00FF00';
-                this.ctx.lineWidth = 2;
-                
-                // Horizontal line of +
-                this.ctx.beginPath();
-                this.ctx.moveTo(plusX - plusSize / 2, plusY);
-                this.ctx.lineTo(plusX + plusSize / 2, plusY);
-                this.ctx.stroke();
-                
-                // Vertical line of +
-                this.ctx.beginPath();
-                this.ctx.moveTo(plusX, plusY - plusSize / 2);
-                this.ctx.lineTo(plusX, plusY + plusSize / 2);
-                this.ctx.stroke();
-            }
-        }
-    }
-
-    /**
-     * Check if a world position is off-screen
-     */
-    private isOffScreen(worldPos: Vector2D): boolean {
-        const screenPos = this.worldToScreen(worldPos);
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        
-        return screenPos.x < 0 || screenPos.x > screenWidth || 
-               screenPos.y < 0 || screenPos.y > screenHeight;
-    }
-
-    /**
-     * Calculate edge position for off-screen indicator
-     * Returns screen coordinates clamped to screen edges
-     */
-    private getEdgePosition(worldPos: Vector2D, indicatorSize: number): { x: number; y: number; angle: number } {
-        const screenPos = this.worldToScreen(worldPos);
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        const centerX = screenWidth / 2;
-        const centerY = screenHeight / 2;
-        
-        // Calculate angle from screen center to object
-        const dx = screenPos.x - centerX;
-        const dy = screenPos.y - centerY;
-        const angle = Math.atan2(dy, dx);
-        
-        let edgeX = screenPos.x;
-        let edgeY = screenPos.y;
-        
-        // Clamp to screen bounds
-        if (screenPos.x < 0) {
-            edgeX = 0;
-        } else if (screenPos.x > screenWidth) {
-            edgeX = screenWidth;
-        }
-        
-        if (screenPos.y < 0) {
-            edgeY = 0;
-        } else if (screenPos.y > screenHeight) {
-            edgeY = screenHeight;
-        }
-        
-        return { x: edgeX, y: edgeY, angle };
+        this.uiRenderer.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor, this.getUIRendererContext());
     }
 
     /**
      * Draw off-screen unit indicators
      */
     private drawOffScreenUnitIndicators(game: GameState): void {
-        if (!this.viewingPlayer) return;
-        this.ctx.save();
-        this.ctx.globalAlpha = this.offscreenIndicatorOpacity;
-
-        const dpr = window.devicePixelRatio || 1;
-        const ladSun = game.suns.find(s => s.type === 'lad');
-        
-        // Define size hierarchy
-        const STARLING_SIZE = 12;
-        const HERO_SIZE = 20;
-        const MIRROR_SIZE = 24;
-        const BUILDING_SIZE = 28;
-        const FORGE_SIZE = 36;
-        
-        // Process player units (always visible)
-        for (const unit of this.viewingPlayer.units) {
-            if (!this.isOffScreen(unit.position)) continue;
-            
-            const isStarling = unit instanceof Starling;
-            const size = isStarling ? STARLING_SIZE : HERO_SIZE;
-            const edgePos = this.getEdgePosition(unit.position, size);
-            
-            // Draw circle (no fill for units)
-            this.ctx.strokeStyle = this.playerColor;
-            this.ctx.lineWidth = 2;
-            this.ctx.beginPath();
-            this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
-            this.ctx.stroke();
-        }
-        
-        // Process player solar mirrors (always visible)
-        for (const mirror of this.viewingPlayer.solarMirrors) {
-            if (!this.isOffScreen(mirror.position)) continue;
-            
-            const edgePos = this.getEdgePosition(mirror.position, MIRROR_SIZE);
-            
-            // Draw filled circle for mirrors
-            this.ctx.fillStyle = this.playerColor;
-            this.ctx.beginPath();
-            this.ctx.arc(edgePos.x, edgePos.y, MIRROR_SIZE / 2, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Process player buildings (always visible)
-        for (const building of this.viewingPlayer.buildings) {
-            if (!this.isOffScreen(building.position)) continue;
-            
-            const isFoundry = building instanceof SubsidiaryFactory;
-            const size = isFoundry ? FORGE_SIZE : BUILDING_SIZE;
-            const edgePos = this.getEdgePosition(building.position, size);
-            
-            // Draw filled circle for buildings
-            this.ctx.fillStyle = this.playerColor;
-            this.ctx.beginPath();
-            this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-        
-        // Process player stellar forge (always visible)
-        if (this.viewingPlayer.stellarForge && !this.viewingPlayer.isDefeated()) {
-            const forge = this.viewingPlayer.stellarForge;
-            if (this.isOffScreen(forge.position)) {
-                const edgePos = this.getEdgePosition(forge.position, FORGE_SIZE);
-                
-                // Draw filled circle for forge
-                this.ctx.fillStyle = this.playerColor;
-                this.ctx.beginPath();
-                this.ctx.arc(edgePos.x, edgePos.y, FORGE_SIZE / 2, 0, Math.PI * 2);
-                this.ctx.fill();
-            }
-        }
-        
-        // Process enemy units and structures (only if visible)
-        for (const player of game.players) {
-            if (player === this.viewingPlayer || player.isDefeated()) continue;
-            
-            const color = this.getLadPlayerColor(player, ladSun, game);
-            
-            // Enemy units
-            for (const unit of player.units) {
-                if (!this.isOffScreen(unit.position)) continue;
-                
-                // Check visibility
-                if (!game.isObjectVisibleToPlayer(unit.position, this.viewingPlayer, unit)) {
-                    continue;
-                }
-                
-                const isStarling = unit instanceof Starling;
-                const unitSize = isStarling ? STARLING_SIZE : HERO_SIZE;
-                const edgePos = this.getEdgePosition(unit.position, unitSize);
-                
-                // Draw based on colorblind mode
-                if (this.colorblindMode) {
-                    // Draw diamond (45° rotated square)
-                    this.ctx.save();
-                    this.ctx.translate(edgePos.x, edgePos.y);
-                    this.ctx.rotate(Math.PI / 4);
-                    this.ctx.strokeStyle = color;
-                    this.ctx.lineWidth = 2;
-                    this.ctx.strokeRect(-unitSize / 2, -unitSize / 2, unitSize, unitSize);
-                    this.ctx.restore();
-                } else {
-                    // Draw circle (no fill for units)
-                    this.ctx.strokeStyle = color;
-                    this.ctx.lineWidth = 2;
-                    this.ctx.beginPath();
-                    this.ctx.arc(edgePos.x, edgePos.y, unitSize / 2, 0, Math.PI * 2);
-                    this.ctx.stroke();
-                }
-            }
-            
-            // Enemy solar mirrors
-            for (const mirror of player.solarMirrors) {
-                if (!this.isOffScreen(mirror.position)) continue;
-                
-                // Check visibility
-                if (!game.isObjectVisibleToPlayer(mirror.position, this.viewingPlayer, mirror)) {
-                    continue;
-                }
-                
-                const edgePos = this.getEdgePosition(mirror.position, MIRROR_SIZE);
-                
-                // Draw based on colorblind mode
-                if (this.colorblindMode) {
-                    // Draw filled diamond
-                    this.ctx.save();
-                    this.ctx.translate(edgePos.x, edgePos.y);
-                    this.ctx.rotate(Math.PI / 4);
-                    this.ctx.fillStyle = color;
-                    this.ctx.fillRect(-MIRROR_SIZE / 2, -MIRROR_SIZE / 2, MIRROR_SIZE, MIRROR_SIZE);
-                    this.ctx.restore();
-                } else {
-                    // Draw filled circle
-                    this.ctx.fillStyle = color;
-                    this.ctx.beginPath();
-                    this.ctx.arc(edgePos.x, edgePos.y, MIRROR_SIZE / 2, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
-            }
-            
-            // Enemy buildings
-            for (const building of player.buildings) {
-                if (!this.isOffScreen(building.position)) continue;
-                
-                // Check visibility
-                if (!game.isObjectVisibleToPlayer(building.position, this.viewingPlayer, building)) {
-                    continue;
-                }
-                
-                const isFoundry = building instanceof SubsidiaryFactory;
-                const size = isFoundry ? FORGE_SIZE : BUILDING_SIZE;
-                const edgePos = this.getEdgePosition(building.position, size);
-                
-                // Draw based on colorblind mode
-                if (this.colorblindMode) {
-                    // Draw filled diamond
-                    this.ctx.save();
-                    this.ctx.translate(edgePos.x, edgePos.y);
-                    this.ctx.rotate(Math.PI / 4);
-                    this.ctx.fillStyle = color;
-                    this.ctx.fillRect(-size / 2, -size / 2, size, size);
-                    this.ctx.restore();
-                } else {
-                    // Draw filled circle
-                    this.ctx.fillStyle = color;
-                    this.ctx.beginPath();
-                    this.ctx.arc(edgePos.x, edgePos.y, size / 2, 0, Math.PI * 2);
-                    this.ctx.fill();
-                }
-            }
-            
-            // Enemy stellar forge
-            if (player.stellarForge) {
-                const forge = player.stellarForge;
-                if (this.isOffScreen(forge.position)) {
-                    // Check visibility
-                    if (game.isObjectVisibleToPlayer(forge.position, this.viewingPlayer, forge)) {
-                        const edgePos = this.getEdgePosition(forge.position, FORGE_SIZE);
-                        
-                        // Draw based on colorblind mode
-                        if (this.colorblindMode) {
-                            // Draw filled diamond
-                            this.ctx.save();
-                            this.ctx.translate(edgePos.x, edgePos.y);
-                            this.ctx.rotate(Math.PI / 4);
-                            this.ctx.fillStyle = color;
-                            this.ctx.fillRect(-FORGE_SIZE / 2, -FORGE_SIZE / 2, FORGE_SIZE, FORGE_SIZE);
-                            this.ctx.restore();
-                        } else {
-                            // Draw filled circle
-                            this.ctx.fillStyle = color;
-                            this.ctx.beginPath();
-                            this.ctx.arc(edgePos.x, edgePos.y, FORGE_SIZE / 2, 0, Math.PI * 2);
-                            this.ctx.fill();
-                        }
-                    }
-                }
-            }
-        }
-
-        this.ctx.restore();
+        this.uiRenderer.drawOffScreenUnitIndicators(game, this.getUIRendererContext());
     }
 
     /**
@@ -4546,275 +3576,14 @@ export class GameRenderer {
      * Draw in-game menu button in top-left corner
      */
     private drawMenuButton(): void {
-        const dpr = window.devicePixelRatio || 1;
-        const buttonSize = 50;
-        const margin = 10;
-        
-        // Draw button background
-        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.8)';
-        this.ctx.fillRect(margin, margin, buttonSize, buttonSize);
-        
-        // Draw border
-        this.ctx.strokeStyle = '#FFFFFF';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(margin, margin, buttonSize, buttonSize);
-        
-        // Draw hamburger icon (three horizontal lines)
-        this.ctx.fillStyle = '#FFFFFF';
-        const lineWidth = 30;
-        const lineHeight = 3;
-        const lineSpacing = 8;
-        const startX = margin + (buttonSize - lineWidth) / 2;
-        const startY = margin + (buttonSize - lineHeight * 3 - lineSpacing * 2) / 2;
-        
-        this.ctx.fillRect(startX, startY, lineWidth, lineHeight);
-        this.ctx.fillRect(startX, startY + lineHeight + lineSpacing, lineWidth, lineHeight);
-        this.ctx.fillRect(startX, startY + (lineHeight + lineSpacing) * 2, lineWidth, lineHeight);
+        this.uiRenderer.drawMenuButton(this.getUIRendererContext());
     }
 
     /**
      * Draw production progress indicator in top-right corner
      */
     private drawProductionProgress(game: GameState): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const margin = 10;
-        const productionBoxWidth = 200;
-        const boxHeight = 60;
-        const rightX = screenWidth - margin;
-        let y = margin;
-
-        const starlingSymbol = '✦';
-        
-        // Check for player's production
-        const player = game.players.find((p) => !p.isAi);
-        if (!player) {
-            return;
-        }
-
-        this.ctx.save();
-        this.ctx.globalAlpha = this.infoBoxOpacity;
-        
-        const compactBoxHeight = 30;
-        const compactTextPaddingLeft = 8;
-        const compactTextPaddingRight = 8;
-        const compactIconInset = 4;
-        const compactIconSize = compactBoxHeight - compactIconInset * 2;
-        this.ctx.font = 'bold 14px Doto';
-
-        const compactTextWidths: number[] = [];
-        if (player.stellarForge) {
-            const energyText = `${player.stellarForge.incomingLightPerSec.toFixed(1)}/s`;
-            compactTextWidths.push(
-                compactTextPaddingLeft + compactIconSize + compactIconInset + this.ctx.measureText(energyText).width + compactTextPaddingRight
-            );
-        }
-
-        // Count starlings
-        const starlingCount = player.units.filter(unit => unit instanceof Starling).length;
-        const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - starlingCount);
-
-        // Calculate next crunch starling count based on incoming energy rate
-        const forge = player.stellarForge;
-        const nextCrunchStarlings = forge
-            ? Math.min(
-                Math.floor(forge.incomingLightPerSec / Constants.FORGE_CRUNCH_ENERGY_PER_SEC_PER_STARLING),
-                availableStarlingSlots
-            )
-            : 0;
-        const starlingRateLabel = forge ? ` (+${nextCrunchStarlings})` : '';
-        const starlingRateText = `${starlingSymbol} ${starlingCount}${starlingRateLabel}`;
-        const maxStarlingsText = `${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`;
-
-        compactTextWidths.push(
-            compactTextPaddingLeft + this.ctx.measureText(starlingRateText).width + compactTextPaddingRight,
-            compactTextPaddingLeft + this.ctx.measureText(maxStarlingsText).width + compactTextPaddingRight
-        );
-
-        const compactBoxWidth = Math.ceil(Math.max(...compactTextWidths));
-        const compactX = rightX - compactBoxWidth;
-        const productionX = rightX - productionBoxWidth;
-        
-        // Draw incoming energy box
-        if (player.stellarForge) {
-            const forge = player.stellarForge;
-            const energyRate = forge.incomingLightPerSec;
-            
-            // Draw background box
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
-            
-            // Draw border - green if receiving light, red otherwise
-            this.ctx.strokeStyle = forge.isReceivingLight ? '#00FF00' : '#FF0000';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
-            
-            // Get cached SoL icon
-            const solIcon = this.getSolEnergyIcon();
-            const iconX = compactX + compactIconInset;
-            const iconY = y + compactIconInset;
-            
-            if (solIcon.complete && solIcon.naturalWidth > 0) {
-                this.ctx.drawImage(solIcon, iconX, iconY, compactIconSize, compactIconSize);
-            }
-            
-            // Draw text next to icon
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText(
-                `${energyRate.toFixed(1)}/s`,
-                compactX + compactTextPaddingLeft + compactIconSize + compactIconInset,
-                y + compactBoxHeight / 2
-            );
-            
-            y += compactBoxHeight + 5;
-        }
-
-        // Draw starlings count box
-        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-        this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
-        
-        // Draw border
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
-        
-        // Draw text
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 14px Doto';
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(starlingRateText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
-        
-        y += compactBoxHeight + 5;
-
-        this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-        this.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
-
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
-
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 14px Doto';
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(maxStarlingsText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
-        
-        y += compactBoxHeight + 8;
-        
-        // Draw hero production from stellar forge
-        if (player.stellarForge && player.stellarForge.heroProductionUnitType) {
-            const forge = player.stellarForge;
-            
-            // Draw background box
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            // Draw border
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            // Draw production name
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'top';
-            
-            const productionName = this.getProductionDisplayName(forge.heroProductionUnitType!);
-            this.ctx.fillText(productionName, productionX + 8, y + 8);
-            
-            // Calculate progress (guard against division by zero)
-            const progress = forge.heroProductionDurationSec > 0 
-                ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
-                : 0;
-            
-            // Draw progress bar
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, progress);
-            
-            y += boxHeight + 8;
-        }
-
-        const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
-        if (foundry?.currentProduction) {
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'top';
-            
-            const productionName = this.getProductionDisplayName(foundry.currentProduction);
-            this.ctx.fillText(`Foundry ${productionName}`, productionX + 8, y + 8);
-            
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, foundry.productionProgress);
-            
-            y += boxHeight + 8;
-        }
-
-        // Draw building construction progress
-        // Note: find() stops at first match, typically only one building under construction
-        const buildingInProgress = player.buildings.find((building) => !building.isComplete);
-        if (buildingInProgress) {
-            // Draw background box
-            this.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            this.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            // Draw border
-            this.ctx.strokeStyle = '#FFD700';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
-            
-            // Draw building name
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = 'bold 14px Doto';
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'top';
-            
-            const buildingName = this.getBuildingDisplayName(buildingInProgress);
-            this.ctx.fillText(`Building ${buildingName}`, productionX + 8, y + 8);
-            
-            // Draw progress bar
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, buildingInProgress.buildProgress);
-        }
-        
-        // Reset text alignment
-        this.ctx.textAlign = 'left';
-        this.ctx.textBaseline = 'alphabetic';
-        this.ctx.restore();
-    }
-    
-    /**
-     * Draw a progress bar
-     */
-    private drawProgressBar(x: number, y: number, width: number, height: number, progress: number): void {
-        // Draw progress bar background
-        this.ctx.fillStyle = 'rgba(100, 100, 100, 0.8)';
-        this.ctx.fillRect(x, y, width, height);
-        
-        // Draw progress bar fill
-        this.ctx.fillStyle = '#4CAF50';
-        this.ctx.fillRect(x, y, width * progress, height);
-        
-        // Draw progress bar border
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 1;
-        this.ctx.strokeRect(x, y, width, height);
-        
-        // Draw progress percentage
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = 'bold 12px Doto';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(`${Math.floor(progress * 100)}%`, x + width / 2, y + height / 2);
+        this.uiRenderer.drawProductionProgress(game, this.getUIRendererContext());
     }
     
     /**
@@ -5111,616 +3880,21 @@ export class GameRenderer {
      * Draw in-game menu overlay
      */
     private drawInGameMenuOverlay(): void {
-        const layout = this.getInGameMenuLayout();
-        const screenWidth = layout.screenWidth;
-        const screenHeight = layout.screenHeight;
-        const isCompactLayout = layout.isCompactLayout;
-        
-        // Semi-transparent background
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-        
-        // Menu panel
-        const panelWidth = layout.panelWidth;
-        const panelHeight = layout.panelHeight;
-        const panelX = layout.panelX;
-        const panelY = layout.panelY;
-
-        this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
-        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-        
-        // Panel border
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-        
-        // Title
-        this.ctx.fillStyle = '#FFD700';
-        this.ctx.font = `bold ${isCompactLayout ? 22 : 30}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME MENU', screenWidth / 2, layout.titleY);
-
-        for (const tab of layout.tabs) {
-            const isActive = this.inGameMenuTab === tab.tab;
-            this.ctx.fillStyle = isActive ? 'rgba(255, 215, 0, 0.3)' : 'rgba(60, 60, 60, 0.9)';
-            this.ctx.fillRect(tab.x, tab.y, tab.width, tab.height);
-            this.ctx.strokeStyle = isActive ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(tab.x, tab.y, tab.width, tab.height);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            const tabLabel = tab.tab === 'main' ? 'Main' : tab.tab === 'options' ? 'Options' : 'Graphics';
-            this.ctx.fillText(tabLabel, tab.x + tab.width / 2, tab.y + tab.height * 0.68);
-        }
-
-        if (this.inGameMenuTab === 'main') {
-            // Menu buttons
-            let buttonY = layout.contentTopY;
-            const buttonWidth = layout.buttonWidth;
-            const buttonHeight = layout.buttonHeight;
-            const buttonX = layout.buttonX;
-            const buttonSpacing = layout.buttonSpacing;
-
-            // Helper function to draw a button
-            const drawButton = (label: string, y: number) => {
-                this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
-                this.ctx.fillRect(buttonX, y, buttonWidth, buttonHeight);
-                this.ctx.strokeStyle = '#FFFFFF';
-                this.ctx.lineWidth = 2;
-                this.ctx.strokeRect(buttonX, y, buttonWidth, buttonHeight);
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${isCompactLayout ? 18 : 20}px Doto`;
-                this.ctx.fillText(label, screenWidth / 2, y + (buttonHeight * 0.65));
-            };
-
-            drawButton('Resume', buttonY);
-            buttonY += buttonHeight + buttonSpacing;
-            drawButton(this.showInfo ? 'Hide Info' : 'Show Info', buttonY);
-            buttonY += buttonHeight + buttonSpacing;
-            drawButton('Surrender', buttonY);
-        } else if (this.inGameMenuTab === 'options') {
-            // Options tab content
-            let optionY = layout.contentTopY;
-            const optionHeight = layout.buttonHeight;
-            const optionSpacing = layout.buttonSpacing;
-            const optionX = layout.buttonX;
-            const optionWidth = layout.buttonWidth;
-
-            // Helper function to draw an option toggle
-            const drawOptionToggle = (label: string, y: number, isActive: boolean) => {
-                // Draw label
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${isCompactLayout ? 16 : 18}px Doto`;
-                this.ctx.textAlign = 'left';
-                this.ctx.fillText(label, optionX, y + (optionHeight * 0.4));
-                
-                // Draw toggle buttons
-                const buttonWidth = optionWidth * 0.35;
-                const buttonGap = 10;
-                const button1X = optionX + optionWidth - buttonWidth * 2 - buttonGap;
-                const button2X = optionX + optionWidth - buttonWidth;
-                
-                return { button1X, button2X, buttonWidth };
-            };
-
-            // Damage Display Mode option
-            this.ctx.fillStyle = '#AAAAAA';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Damage Display:', optionX, optionY + (optionHeight * 0.4));
-            
-            const damageButtons = {
-                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
-                button2X: optionX + optionWidth - optionWidth * 0.35,
-                buttonWidth: optionWidth * 0.35
-            };
-            
-            // Damage button
-            const isDamageMode = this.damageDisplayMode === 'damage';
-            this.ctx.fillStyle = isDamageMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isDamageMode ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(damageButtons.button1X, optionY, damageButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('Dmg #', damageButtons.button1X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-            
-            // Remaining Life button
-            const isRemainingMode = this.damageDisplayMode === 'remaining-life';
-            this.ctx.fillStyle = isRemainingMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isRemainingMode ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(damageButtons.button2X, optionY, damageButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('HP Left', damageButtons.button2X + damageButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-            
-            optionY += optionHeight + optionSpacing;
-
-            // Health Display Mode option
-            this.ctx.fillStyle = '#AAAAAA';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Health Display:', optionX, optionY + (optionHeight * 0.4));
-            
-            const healthButtons = {
-                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
-                button2X: optionX + optionWidth - optionWidth * 0.35,
-                buttonWidth: optionWidth * 0.35
-            };
-            
-            // Bar button
-            const isBarMode = this.healthDisplayMode === 'bar';
-            this.ctx.fillStyle = isBarMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isBarMode ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(healthButtons.button1X, optionY, healthButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('Bar', healthButtons.button1X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-            
-            // Number button
-            const isNumberMode = this.healthDisplayMode === 'number';
-            this.ctx.fillStyle = isNumberMode ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isNumberMode ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(healthButtons.button2X, optionY, healthButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('Number', healthButtons.button2X + healthButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-
-            optionY += optionHeight + optionSpacing;
-
-            // Fancy Graphics option
-            this.ctx.fillStyle = '#AAAAAA';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Fancy Graphics:', optionX, optionY + (optionHeight * 0.4));
-
-            const fancyButtons = {
-                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
-                button2X: optionX + optionWidth - optionWidth * 0.35,
-                buttonWidth: optionWidth * 0.35
-            };
-
-            const isFancyOn = this.isFancyGraphicsEnabled;
-            this.ctx.fillStyle = isFancyOn ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(fancyButtons.button1X, optionY, fancyButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isFancyOn ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(fancyButtons.button1X, optionY, fancyButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('On', fancyButtons.button1X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-
-            const isFancyOff = !this.isFancyGraphicsEnabled;
-            this.ctx.fillStyle = isFancyOff ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(fancyButtons.button2X, optionY, fancyButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isFancyOff ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(fancyButtons.button2X, optionY, fancyButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('Off', fancyButtons.button2X + fancyButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-
-            optionY += optionHeight + optionSpacing;
-
-            // Colorblind Mode option
-            this.ctx.fillStyle = '#AAAAAA';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText('Colorblind Mode:', optionX, optionY + (optionHeight * 0.4));
-
-            const colorblindButtons = {
-                button1X: optionX + optionWidth - optionWidth * 0.35 * 2 - 10,
-                button2X: optionX + optionWidth - optionWidth * 0.35,
-                buttonWidth: optionWidth * 0.35
-            };
-
-            const isColorblindOn = this.colorblindMode;
-            this.ctx.fillStyle = isColorblindOn ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isColorblindOn ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(colorblindButtons.button1X, optionY, colorblindButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('On', colorblindButtons.button1X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-
-            const isColorblindOff = !this.colorblindMode;
-            this.ctx.fillStyle = isColorblindOff ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-            this.ctx.fillRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
-            this.ctx.strokeStyle = isColorblindOff ? '#FFD700' : '#FFFFFF';
-            this.ctx.lineWidth = 2;
-            this.ctx.strokeRect(colorblindButtons.button2X, optionY, colorblindButtons.buttonWidth, optionHeight);
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('Off', colorblindButtons.button2X + colorblindButtons.buttonWidth / 2, optionY + (optionHeight * 0.65));
-
-            optionY += optionHeight + optionSpacing;
-
-            const sliderTrackX = optionX + optionWidth * 0.35;
-            const sliderTrackWidth = optionWidth * 0.65;
-            const sliderTrackHeight = Math.max(8, Math.round(optionHeight * 0.16));
-            const volumeRows = [
-                { label: 'Sound FX Volume:', valuePercent: Math.round(this.soundVolume * 100) },
-                { label: 'Music Volume:', valuePercent: Math.round(this.musicVolume * 100) }
-            ];
-
-            for (let i = 0; i < volumeRows.length; i += 1) {
-                const row = volumeRows[i];
-                const rowY = optionY + i * (optionHeight + optionSpacing);
-                const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
-                const trackY = rowY + (optionHeight - sliderTrackHeight) / 2;
-                const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;
-
-                this.ctx.fillStyle = '#AAAAAA';
-                this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-                this.ctx.textAlign = 'left';
-                this.ctx.fillText(row.label, optionX, rowY + (optionHeight * 0.4));
-
-                this.ctx.fillStyle = 'rgba(60, 60, 60, 0.9)';
-                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
-                this.ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
-                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * (clampedPercent / 100), sliderTrackHeight);
-                this.ctx.strokeStyle = '#FFD700';
-                this.ctx.lineWidth = 1.5;
-                this.ctx.strokeRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
-
-                this.ctx.beginPath();
-                this.ctx.arc(knobX, trackY + sliderTrackHeight / 2, sliderTrackHeight * 1.1, 0, Math.PI * 2);
-                this.ctx.fillStyle = '#FFD700';
-                this.ctx.fill();
-                this.ctx.strokeStyle = '#FFFFFF';
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
-
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${isCompactLayout ? 14 : 16}px Doto`;
-                this.ctx.textAlign = 'right';
-                this.ctx.fillText(`${clampedPercent}%`, optionX + optionWidth, rowY + (optionHeight * 0.4));
-            }
-        } else {
-            const maxScroll = this.getGraphicsMenuMaxScroll(layout);
-            if (this.graphicsMenuScrollOffset > maxScroll) {
-                this.graphicsMenuScrollOffset = maxScroll;
-            }
-            const qualityRowHeight = isCompactLayout ? 34 : 38;
-            const qualityButtonGap = 8;
-            const qualityY = layout.graphicsSliderY;
-            const qualityLabelX = layout.graphicsSliderX;
-            const qualityLabelWidth = layout.graphicsSliderLabelWidth;
-            const qualityButtonWidth = (layout.graphicsSliderWidth - qualityLabelWidth - qualityButtonGap * 3) / 4;
-            const qualityStartX = layout.graphicsSliderX + qualityLabelWidth;
-            const qualityValues: Array<'low' | 'medium' | 'high' | 'ultra'> = ['low', 'medium', 'high', 'ultra'];
-
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.font = `bold ${isCompactLayout ? 13 : 15}px Doto`;
-            this.ctx.textAlign = 'left';
-            this.ctx.textBaseline = 'middle';
-            this.ctx.fillText('Graphics Quality', qualityLabelX, qualityY + qualityRowHeight * 0.5);
-
-            for (let i = 0; i < qualityValues.length; i += 1) {
-                const quality = qualityValues[i];
-                const buttonX = qualityStartX + i * (qualityButtonWidth + qualityButtonGap);
-                const isSelected = this.graphicsQuality === quality;
-                this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-                this.ctx.fillRect(buttonX, qualityY, qualityButtonWidth, qualityRowHeight);
-                this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
-                this.ctx.lineWidth = 1.5;
-                this.ctx.strokeRect(buttonX, qualityY, qualityButtonWidth, qualityRowHeight);
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
-                this.ctx.textAlign = 'center';
-                this.ctx.fillText(
-                    quality[0].toUpperCase() + quality.slice(1),
-                    buttonX + qualityButtonWidth / 2,
-                    qualityY + qualityRowHeight * 0.64
-                );
-            }
-
-            const sliderTrackX = layout.graphicsSliderX + layout.graphicsSliderLabelWidth;
-            const sliderTrackWidth = layout.graphicsSliderWidth - layout.graphicsSliderLabelWidth;
-            const sliderRowHeight = layout.graphicsSliderRowHeight;
-            const sliderGap = layout.graphicsSliderGap;
-            const sliderTrackHeight = layout.graphicsSliderTrackHeight;
-            const sliderBaseY = qualityY + qualityRowHeight + sliderGap;
-            const sliderRows = [
-                { label: 'Offscreen Indicators', valuePercent: Math.round(this.offscreenIndicatorOpacity * 100) },
-                { label: 'Info Box Opacity', valuePercent: Math.round(this.infoBoxOpacity * 100) }
-            ];
-
-            for (let i = 0; i < sliderRows.length; i += 1) {
-                const row = sliderRows[i];
-                const rowY = sliderBaseY + i * (sliderRowHeight + sliderGap);
-                const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
-                const trackY = rowY + (sliderRowHeight - sliderTrackHeight) / 2;
-                const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;
-                const knobRadius = sliderTrackHeight * 1.1;
-
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `bold ${isCompactLayout ? 13 : 15}px Doto`;
-                this.ctx.textAlign = 'left';
-                this.ctx.textBaseline = 'middle';
-                this.ctx.fillText(row.label, layout.graphicsSliderX, rowY + sliderRowHeight * 0.5);
-
-                this.ctx.fillStyle = 'rgba(60, 60, 60, 0.9)';
-                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
-                this.ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
-                this.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * (clampedPercent / 100), sliderTrackHeight);
-                this.ctx.strokeStyle = '#FFD700';
-                this.ctx.lineWidth = 1.5;
-                this.ctx.strokeRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
-
-                this.ctx.beginPath();
-                this.ctx.arc(knobX, trackY + sliderTrackHeight / 2, knobRadius, 0, Math.PI * 2);
-                this.ctx.fillStyle = '#FFD700';
-                this.ctx.fill();
-                this.ctx.strokeStyle = '#FFFFFF';
-                this.ctx.lineWidth = 1;
-                this.ctx.stroke();
-
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `bold ${isCompactLayout ? 12 : 13}px Doto`;
-                this.ctx.textAlign = 'right';
-                this.ctx.fillText(`${clampedPercent}%`, layout.graphicsSliderX + layout.graphicsSliderWidth, rowY + sliderRowHeight * 0.5);
-            }
-
-            this.ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
-            this.ctx.fillRect(
-                layout.graphicsListX,
-                layout.graphicsListY,
-                layout.graphicsListWidth,
-                layout.graphicsListHeight
-            );
-            this.ctx.save();
-            this.ctx.beginPath();
-            this.ctx.rect(
-                layout.graphicsListX,
-                layout.graphicsListY,
-                layout.graphicsListWidth,
-                layout.graphicsListHeight
-            );
-            this.ctx.clip();
-
-            const labelX = layout.graphicsListX + 8;
-            const buttonAreaWidth = layout.graphicsButtonWidth * 2 + layout.graphicsButtonGap;
-            const buttonStartX = layout.graphicsListX + layout.graphicsListWidth - buttonAreaWidth - 8;
-
-            for (let i = 0; i < this.renderLayerOptions.length; i += 1) {
-                const option = this.renderLayerOptions[i];
-                const rowY = layout.graphicsListY + i * layout.graphicsRowHeight - this.graphicsMenuScrollOffset;
-                if (rowY + layout.graphicsRowHeight < layout.graphicsListY || rowY > layout.graphicsListY + layout.graphicsListHeight) {
-                    continue;
-                }
-                this.ctx.fillStyle = i % 2 === 0 ? 'rgba(40, 40, 40, 0.6)' : 'rgba(55, 55, 55, 0.6)';
-                this.ctx.fillRect(layout.graphicsListX, rowY, layout.graphicsListWidth, layout.graphicsRowHeight);
-                this.ctx.fillStyle = '#FFFFFF';
-                this.ctx.font = `${isCompactLayout ? 13 : 15}px Doto`;
-                this.ctx.textAlign = 'left';
-                this.ctx.fillText(option.label, labelX, rowY + layout.graphicsRowHeight * 0.65);
-
-                const isEnabled = this.isRenderLayerEnabled(option.key);
-                const buttonY = rowY + (layout.graphicsRowHeight - layout.graphicsButtonHeight) / 2;
-                const labels = ['ON', 'OFF'];
-                for (let j = 0; j < labels.length; j += 1) {
-                    const isOnButton = j === 0;
-                    const isSelected = isOnButton ? isEnabled : !isEnabled;
-                    const buttonX = buttonStartX + j * (layout.graphicsButtonWidth + layout.graphicsButtonGap);
-                    this.ctx.fillStyle = isSelected ? 'rgba(255, 215, 0, 0.6)' : 'rgba(80, 80, 80, 0.9)';
-                    this.ctx.fillRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
-                    this.ctx.strokeStyle = isSelected ? '#FFD700' : '#FFFFFF';
-                    this.ctx.lineWidth = 1.5;
-                    this.ctx.strokeRect(buttonX, buttonY, layout.graphicsButtonWidth, layout.graphicsButtonHeight);
-                    this.ctx.fillStyle = '#FFFFFF';
-                    this.ctx.font = `${isCompactLayout ? 11 : 12}px Doto`;
-                    this.ctx.textAlign = 'center';
-                    this.ctx.fillText(
-                        labels[j],
-                        buttonX + layout.graphicsButtonWidth / 2,
-                        buttonY + layout.graphicsButtonHeight * 0.68
-                    );
-                }
-            }
-
-            this.ctx.restore();
-        }
-
-        this.ctx.textAlign = 'left';
+        this.uiRenderer.drawInGameMenuOverlay(this.getUIRendererContext());
     }
 
     /**
      * Draw end-game statistics screen
      */
     private drawEndGameStatsScreen(game: GameState, winner: Player): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        const isCompactLayout = screenWidth < 700;
-        const localPlayer = this.viewingPlayer;
-        const didLocalPlayerWin = winner === localPlayer;
-        
-        // Semi-transparent background
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-        
-        // Victory message
-        this.ctx.fillStyle = didLocalPlayerWin ? '#4CAF50' : '#F44336';
-        const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
-        this.ctx.font = `bold ${victoryFontSize}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText(didLocalPlayerWin ? 'VICTORY' : 'DEFEAT', screenWidth / 2, 80);
-        
-        // Stats panel
-        const panelWidth = Math.min(700, screenWidth - 40);
-        const panelHeight = Math.min(450, screenHeight - 200);
-        const panelX = (screenWidth - panelWidth) / 2;
-        const panelY = 130;
-        
-        this.ctx.fillStyle = 'rgba(30, 30, 30, 0.95)';
-        this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
-        
-        // Match statistics title
-        this.ctx.fillStyle = '#FFD700';
-        const statsTitleSize = Math.max(18, Math.min(28, screenWidth * 0.07));
-        this.ctx.font = `bold ${statsTitleSize}px Doto`;
-        this.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
-        
-        // Draw stats for each player
-        const statsFontSize = Math.max(14, Math.min(20, screenWidth * 0.045));
-        this.ctx.font = `${statsFontSize}px Doto`;
-        let y = panelY + 100;
-        const horizontalPadding = 24;
-        const labelColumnWidth = Math.max(100, Math.min(200, panelWidth * 0.4));
-        const playerCount = game.players.length;
-        const availablePlayerWidth = panelWidth - horizontalPadding * 2 - labelColumnWidth;
-        const playerColumnWidth = Math.max(50, availablePlayerWidth / playerCount);
-        const leftCol = panelX + horizontalPadding;
-        const playerStartX = leftCol + labelColumnWidth;
-        
-        // Headers
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.textAlign = 'left';
-        this.ctx.fillText('Statistic', leftCol, y);
-        this.ctx.textAlign = 'right';
-        
-        for (let i = 0; i < game.players.length; i++) {
-            const player = game.players[i];
-            const color = this.getFactionColor(player.faction);
-            this.ctx.fillStyle = color;
-            const colX = playerStartX + playerColumnWidth * (i + 1);
-            this.ctx.fillText(player.name, colX, y);
-        }
-        
-        y += isCompactLayout ? 32 : 40;
-        
-        // Stat rows
-        const stats = [
-            { label: 'Units Created', key: 'unitsCreated' },
-            { label: 'Units Lost', key: 'unitsLost' },
-            { label: 'Energy Gathered', key: 'energyGathered' }
-        ];
-        
-        for (const stat of stats) {
-            this.ctx.fillStyle = '#FFFFFF';
-            this.ctx.textAlign = 'left';
-            this.ctx.fillText(stat.label, leftCol, y);
-            this.ctx.textAlign = 'right';
-            
-            for (let i = 0; i < game.players.length; i++) {
-                const player = game.players[i] as any;
-                const value = stat.key === 'energyGathered' ? Math.round(player[stat.key]) : player[stat.key];
-                const colX = playerStartX + playerColumnWidth * (i + 1);
-                this.ctx.fillText(String(value), colX, y);
-            }
-            
-            y += isCompactLayout ? 28 : 35;
-        }
-        
-        // Continue button
-        const buttonWidth = Math.min(300, screenWidth - 60);
-        const buttonHeight = isCompactLayout ? 50 : 60;
-        const buttonX = (screenWidth - buttonWidth) / 2;
-        const buttonY = Math.min(panelY + panelHeight + 30, screenHeight - buttonHeight - 20);
-        
-        this.ctx.fillStyle = 'rgba(80, 80, 80, 0.9)';
-        this.ctx.fillRect(buttonX, buttonY, buttonWidth, buttonHeight);
-        this.ctx.strokeStyle = '#FFD700';
-        this.ctx.lineWidth = 3;
-        this.ctx.strokeRect(buttonX, buttonY, buttonWidth, buttonHeight);
-        
-        this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Doto`;
-        this.ctx.textAlign = 'center';
-        this.ctx.fillText('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65));
-        
-        this.ctx.textAlign = 'left';
+        this.uiRenderer.drawEndGameStatsScreen(game, winner, this.getUIRendererContext());
     }
 
     /**
      * Draw border fade effect - fades to black at map edges
      */
     private drawBorderFade(mapSize: number): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
-        
-        // Define fade zone width in world units
-        const fadeZoneWidth = 150;
-        
-        // Calculate map boundaries in world coordinates
-        const halfMapSize = mapSize / 2;
-        
-        // Convert map edges to screen coordinates
-        const topLeft = this.worldToScreen(new Vector2D(-halfMapSize, -halfMapSize));
-        const topRight = this.worldToScreen(new Vector2D(halfMapSize, -halfMapSize));
-        const bottomLeft = this.worldToScreen(new Vector2D(-halfMapSize, halfMapSize));
-        
-        // Calculate fade start positions (inside the map boundary) in screen space
-        const fadeStartLeft = this.worldToScreen(new Vector2D(-halfMapSize + fadeZoneWidth, 0));
-        const fadeStartRight = this.worldToScreen(new Vector2D(halfMapSize - fadeZoneWidth, 0));
-        const fadeStartTop = this.worldToScreen(new Vector2D(0, -halfMapSize + fadeZoneWidth));
-        const fadeStartBottom = this.worldToScreen(new Vector2D(0, halfMapSize - fadeZoneWidth));
-        
-        const fadeWidthX = Math.abs(fadeStartLeft.x - topLeft.x);
-        const fadeWidthY = Math.abs(fadeStartTop.y - topLeft.y);
-        
-        // Save context state
-        this.ctx.save();
-        
-        // Left edge fade
-        if (topLeft.x < screenWidth) {
-            const gradient = this.ctx.createLinearGradient(topLeft.x, 0, topLeft.x + fadeWidthX, 0);
-            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, 0, topLeft.x + fadeWidthX, screenHeight);
-        }
-        
-        // Right edge fade
-        if (topRight.x > 0) {
-            const gradient = this.ctx.createLinearGradient(topRight.x, 0, topRight.x - fadeWidthX, 0);
-            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(topRight.x - fadeWidthX, 0, screenWidth - (topRight.x - fadeWidthX), screenHeight);
-        }
-        
-        // Top edge fade
-        if (topLeft.y < screenHeight) {
-            const gradient = this.ctx.createLinearGradient(0, topLeft.y, 0, topLeft.y + fadeWidthY);
-            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, 0, screenWidth, topLeft.y + fadeWidthY);
-        }
-        
-        // Bottom edge fade
-        if (bottomLeft.y > 0) {
-            const gradient = this.ctx.createLinearGradient(0, bottomLeft.y, 0, bottomLeft.y - fadeWidthY);
-            gradient.addColorStop(0, 'rgba(0, 0, 0, 1)');
-            gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-            this.ctx.fillStyle = gradient;
-            this.ctx.fillRect(0, bottomLeft.y - fadeWidthY, screenWidth, screenHeight - (bottomLeft.y - fadeWidthY));
-        }
-        
-        // Restore context state
-        this.ctx.restore();
+        this.uiRenderer.drawBorderFade(mapSize, this.getUIRendererContext());
     }
 
     /**
