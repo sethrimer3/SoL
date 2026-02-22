@@ -31,15 +31,6 @@ import type { WarpGateRendererContext } from './render/warp-gate-renderer';
 import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 
-type UltraLightDustStatic = {
-    seed: number;
-    driftXSpeed: number;
-    driftYSpeed: number;
-    size: number;
-    textureHalfSize: number;
-    texture: HTMLCanvasElement;
-};
-
 type UnitGlowRenderCache = {
     texture: HTMLCanvasElement;
     radiusPx: number;
@@ -139,10 +130,6 @@ export class GameRenderer {
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Y.png',
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Z.png'
     ];
-    private lightingLayerCanvas: HTMLCanvasElement | null = null;
-    private lightingLayerCtx: CanvasRenderingContext2D | null = null;
-    private lightingSunPassCanvas: HTMLCanvasElement | null = null;
-    private lightingSunPassCtx: CanvasRenderingContext2D | null = null;
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
@@ -193,11 +180,6 @@ export class GameRenderer {
     public isUnitsLayerEnabled = true;
     public isProjectilesLayerEnabled = true;
 
-    private ultraSunParticleCacheBySun = new WeakMap<Sun, any>();
-    private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
-    private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
-    private ultraLightDustTextureByKey = new Map<string, HTMLCanvasElement>();
-    private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
     private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
     private enemyVisibilityAlpha = new WeakMap<object, number>();
     private shadeGlowAlphaByEntity = new WeakMap<object, number>();
@@ -206,8 +188,6 @@ export class GameRenderer {
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
 
-    private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
-    private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
     private readonly SHADE_GLOW_FADE_IN_SPEED_PER_SEC = 4.2;
     
@@ -1678,249 +1658,6 @@ export class GameRenderer {
         return nextAlpha;
     }
 
-    /**
-     * Deterministic hash function - returns value in [0, 1]
-     * Used for particle generation (sun embers, light dust, etc.)
-     */
-    private hashNormalized(inputValue: number): number {
-        const sineValue = Math.sin(inputValue * 43758.5453123);
-        return sineValue - Math.floor(sineValue);
-    }
-
-    /**
-     * Deterministic hash function - returns value in [-1, 1]
-     * Used for particle generation (sun embers, light dust, etc.)
-     */
-    private hashSigned(inputValue: number): number {
-        return this.hashNormalized(inputValue) * 2 - 1;
-    }
-
-    private ensureLightingLayer(): CanvasRenderingContext2D {
-        if (!this.lightingLayerCanvas) {
-            this.lightingLayerCanvas = document.createElement('canvas');
-            this.lightingLayerCtx = this.lightingLayerCanvas.getContext('2d');
-        }
-
-        if (!this.lightingLayerCtx || !this.lightingLayerCanvas) {
-            throw new Error('Failed to initialize lighting layer context');
-        }
-
-        if (this.lightingLayerCanvas.width !== this.canvas.width || this.lightingLayerCanvas.height !== this.canvas.height) {
-            this.lightingLayerCanvas.width = this.canvas.width;
-            this.lightingLayerCanvas.height = this.canvas.height;
-        }
-
-        this.lightingLayerCtx.clearRect(0, 0, this.lightingLayerCanvas.width, this.lightingLayerCanvas.height);
-        return this.lightingLayerCtx;
-    }
-
-    private ensureLightingSunPassLayer(): CanvasRenderingContext2D {
-        if (!this.lightingSunPassCanvas) {
-            this.lightingSunPassCanvas = document.createElement('canvas');
-            this.lightingSunPassCtx = this.lightingSunPassCanvas.getContext('2d');
-        }
-
-        if (!this.lightingSunPassCtx || !this.lightingSunPassCanvas) {
-            throw new Error('Failed to initialize sun lighting pass context');
-        }
-
-        if (this.lightingSunPassCanvas.width !== this.canvas.width || this.lightingSunPassCanvas.height !== this.canvas.height) {
-            this.lightingSunPassCanvas.width = this.canvas.width;
-            this.lightingSunPassCanvas.height = this.canvas.height;
-        }
-
-        this.lightingSunPassCtx.clearRect(0, 0, this.lightingSunPassCanvas.width, this.lightingSunPassCanvas.height);
-        return this.lightingSunPassCtx;
-    }
-
-    private getOrCreateUltraSunParticleCache(sun: Sun) {
-        // This type is defined in sun-renderer.ts
-        type UltraSunEmberStatic = {
-            seed: number;
-            speedOutward: number;
-            outwardOffset: number;
-            orbitAngle: number;
-            swirlSeedPhase: number;
-            swirlSpeed: number;
-            swirlAmplitudeOffset: number;
-            swirlAmplitudeScale: number;
-            radiusTotalScale: number;
-            arcBendSeedPhase: number;
-            arcBendSpeed: number;
-            arcBendAmplitudeOffset: number;
-            arcBendAmplitudeScale: number;
-            sizeTotal: number;
-            alphaTotal: number;
-            emberRed: number;
-            emberGreen: number;
-            emberBlue: number;
-            glowTexture: HTMLCanvasElement;
-            coreTexture: HTMLCanvasElement;
-        };
-        
-        type UltraSunParticleCache = {
-            emberStatics: UltraSunEmberStatic[];
-        };
-        
-        const cached = this.ultraSunParticleCacheBySun.get(sun);
-        if (cached) {
-            return cached;
-        }
-
-        const emberStatics: UltraSunEmberStatic[] = [];
-        const emberCount = this.getQualityAdjustedParticleCount(this.ULTRA_SOLAR_EMBER_COUNT);
-        for (let emberIndex = 0; emberIndex < emberCount; emberIndex++) {
-            const seed = emberIndex * 13.37 + sun.position.x * 0.013 + sun.position.y * 0.011;
-            const fieryColorRoll = this.hashNormalized(seed + 23.7);
-            const emberRed = Math.floor(217 + fieryColorRoll * 38);
-            const emberGreen = Math.floor(71 + this.hashNormalized(seed + 29.2) * 107);
-            const emberBlue = Math.floor(10 + this.hashNormalized(seed + 31.4) * 20);
-            const radiusVariance = this.hashNormalized(seed + 7.3) * 1.9;
-            const sizeVariance = this.hashNormalized(seed + 17.1) * 1.1;
-            const alphaVariance = this.hashNormalized(seed + 19.9) * 0.2;
-            emberStatics.push({
-                seed,
-                speedOutward: 0.06 + this.hashNormalized(seed + 2.2) * 0.08,
-                outwardOffset: this.hashNormalized(seed + 11.5) * 9.0,
-                orbitAngle: emberIndex * 0.193 + this.hashSigned(seed * 0.97) * 0.25,
-                swirlSeedPhase: seed * 0.37,
-                swirlSpeed: 2.2 + this.hashNormalized(seed + 4.4) * 3.1,
-                swirlAmplitudeOffset: 0.24,
-                swirlAmplitudeScale: 0.56,
-                radiusTotalScale: 2.4 + radiusVariance,
-                arcBendSeedPhase: seed * 0.61,
-                arcBendSpeed: 3.1 + this.hashNormalized(seed + 9.7) * 2.6,
-                arcBendAmplitudeOffset: 0.04,
-                arcBendAmplitudeScale: 0.14,
-                sizeTotal: 0.35 + sizeVariance,
-                alphaTotal: 0.06 + alphaVariance,
-                emberRed,
-                emberGreen,
-                emberBlue,
-                glowTexture: this.getOrCreateUltraEmberGlowTexture(emberRed, emberGreen, emberBlue),
-                coreTexture: this.getOrCreateUltraEmberCoreTexture(emberRed, emberGreen, emberBlue)
-            });
-        }
-
-        const generated: UltraSunParticleCache = { emberStatics };
-        this.ultraSunParticleCacheBySun.set(sun, generated);
-        return generated;
-    }
-
-    private getOrCreateUltraLightDustStatics(): UltraLightDustStatic[] {
-        if (this.ultraLightDustStatics) {
-            return this.ultraLightDustStatics;
-        }
-
-        const generatedStatics: UltraLightDustStatic[] = [];
-        const dustCount = this.getQualityAdjustedParticleCount(this.ULTRA_LIGHT_DUST_COUNT);
-        for (let dustIndex = 0; dustIndex < dustCount; dustIndex += 1) {
-            const seed = dustIndex * 31.91;
-            const alpha = 0.03 + this.hashNormalized(seed + 8.1) * 0.06;
-            const size = 0.8 + this.hashNormalized(seed + 5.2) * 2.5;
-            generatedStatics.push({
-                seed,
-                driftXSpeed: 0.6 + this.hashNormalized(seed + 1.7) * 0.5,
-                driftYSpeed: 0.35 + this.hashNormalized(seed + 3.4) * 0.4,
-                size,
-                textureHalfSize: size * 16,
-                texture: this.getOrCreateUltraLightDustTexture(size, alpha)
-            });
-        }
-
-        this.ultraLightDustStatics = generatedStatics;
-        return generatedStatics;
-    }
-
-    private getOrCreateUltraEmberGlowTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
-        const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
-        const cached = this.ultraEmberGlowTextureByColor.get(colorKey);
-        if (cached) {
-            return cached;
-        }
-
-        const textureSize = 96;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
-        if (!textureContext) {
-            return textureCanvas;
-        }
-
-        const center = textureSize * 0.5;
-        const glowGradient = textureContext.createRadialGradient(center, center, 0, center, center, center);
-        glowGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 28)}, ${Math.min(255, emberGreen + 28)}, ${Math.min(255, emberBlue + 14)}, 1)`);
-        glowGradient.addColorStop(0.45, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0.4)`);
-        glowGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
-
-        textureContext.fillStyle = glowGradient;
-        textureContext.beginPath();
-        textureContext.arc(center, center, center, 0, Math.PI * 2);
-        textureContext.fill();
-
-        this.ultraEmberGlowTextureByColor.set(colorKey, textureCanvas);
-        return textureCanvas;
-    }
-
-    private getOrCreateUltraEmberCoreTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
-        const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
-        const cached = this.ultraEmberCoreTextureByColor.get(colorKey);
-        if (cached) {
-            return cached;
-        }
-
-        const textureSize = 48;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
-        if (!textureContext) {
-            return textureCanvas;
-        }
-
-        const center = textureSize * 0.5;
-        const coreGradient = textureContext.createRadialGradient(center, center, 0, center, center, center);
-        coreGradient.addColorStop(0, `rgba(${Math.min(255, emberRed + 18)}, ${Math.min(255, emberGreen + 22)}, ${Math.min(255, emberBlue + 8)}, 1)`);
-        coreGradient.addColorStop(1, `rgba(${emberRed}, ${emberGreen}, ${emberBlue}, 0)`);
-
-        textureContext.fillStyle = coreGradient;
-        textureContext.beginPath();
-        textureContext.arc(center, center, center, 0, Math.PI * 2);
-        textureContext.fill();
-
-        this.ultraEmberCoreTextureByColor.set(colorKey, textureCanvas);
-        return textureCanvas;
-    }
-
-    private getOrCreateUltraLightDustTexture(size: number, alpha: number): HTMLCanvasElement {
-        const color = '255,182,112';
-        const alphaRounded = alpha.toFixed(4);
-        const key = `${size.toFixed(2)}:${alphaRounded}`;
-        const cached = this.ultraLightDustTextureByKey.get(key);
-        if (cached) {
-            return cached;
-        }
-
-        const textureRadius = Math.max(1, Math.ceil(size + 1));
-        const textureSize = textureRadius * 2;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
-        if (!textureContext) {
-            return textureCanvas;
-        }
-
-        textureContext.fillStyle = `rgba(${color}, ${alphaRounded})`;
-        textureContext.beginPath();
-        textureContext.arc(textureRadius, textureRadius, size, 0, Math.PI * 2);
-        textureContext.fill();
-
-        this.ultraLightDustTextureByKey.set(key, textureCanvas);
-        return textureCanvas;
-    }
-
     private applyUltraWarmCoolGrade(game: GameState): void {
         // Skip expensive color grading on low quality setting
         if (this.graphicsQuality === 'low') {
@@ -2196,8 +1933,6 @@ export class GameRenderer {
                 this.worldToScreenCoords.bind(this),
                 this.isWithinViewBounds.bind(this),
                 this.getCachedRadialGradient.bind(this),
-                this.ensureLightingLayer.bind(this),
-                this.ensureLightingSunPassLayer.bind(this),
                 this.SUN_RAY_RADIUS_BUCKET_SIZE,
                 this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
             );
@@ -2215,9 +1950,7 @@ export class GameRenderer {
                 canvasWidth,
                 canvasHeight,
                 this.graphicsQuality,
-                this.worldToScreenCoords.bind(this),
-                this.getOrCreateUltraSunParticleCache.bind(this),
-                this.getOrCreateUltraLightDustStatics.bind(this)
+                this.worldToScreenCoords.bind(this)
             );
         }
 
