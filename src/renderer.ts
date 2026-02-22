@@ -31,30 +31,6 @@ import type { WarpGateRendererContext } from './render/warp-gate-renderer';
 import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 
-type ForgeFlameState = {
-    warmth: number;
-    rotationRad: number;
-    lastGameTime: number;
-};
-
-type ForgeScriptState = {
-    positionsX: Float32Array;
-    positionsY: Float32Array;
-    velocitiesX: Float32Array;
-    velocitiesY: Float32Array;
-    lastGameTime: number;
-};
-
-type AurumShapeState = {
-    shapes: Array<{
-        size: number;
-        speed: number;
-        angle: number;
-        offset: number;
-    }>;
-    lastGameTime: number;
-};
-
 type UltraLightDustStatic = {
     seed: number;
     driftXSpeed: number;
@@ -133,21 +109,8 @@ export class GameRenderer {
 
     private readonly HERO_SPRITE_SCALE = 4.2;
     private readonly FORGE_SPRITE_SCALE = 2.64;
-    private readonly AURUM_EDGE_DETECTION_FILL_COLOR = 'white'; // Color used for edge detection in Aurum outline rendering
     private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
-    private readonly AURUM_SEED_BASE_MULTIPLIER = 1000; // Base multiplier for generating pseudo-random seeds from position
-    private readonly AURUM_FORGE_SEED_MULTIPLIER = 137.5; // Prime-like multiplier for pseudo-random shape distribution
-    private readonly AURUM_FOUNDRY_SEED_MULTIPLIER = 157.3; // Prime-like multiplier for pseudo-random shape distribution
-    private readonly VELARIS_FORGE_PARTICLE_COUNT = 180;
-    private readonly VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC = 0.28;
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
-    private readonly VELARIS_FORGE_SCRIPT_SCALE = 1.15;
-    private readonly VELARIS_FORGE_MAIN_GRAPHEME_LETTER = 'V';
-    private readonly VELARIS_FORGE_MAIN_GRAPHEME_SCALE = 2.05;
-    private readonly VELARIS_FOUNDRY_GRAPHEME_LETTER = 'F';
-    private readonly VELARIS_FOUNDRY_PARTICLE_COUNT = 26;
-    private readonly VELARIS_FOUNDRY_PARTICLE_RADIUS_PX = 1.2;
-    private readonly VELARIS_FOUNDRY_PARTICLE_ORBIT_SPEED_RAD_PER_SEC = 0.8;
     private readonly VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-A.png',
         'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-B.png',
@@ -202,13 +165,8 @@ export class GameRenderer {
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private graphemeMaskCache = new Map<string, ImageData>();
-    private forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
-    private velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
-    private velarisFoundrySeeds = new WeakMap<SubsidiaryFactory, number>();
-    private aurumForgeShapeStates = new WeakMap<StellarForge, AurumShapeState>();
-    private aurumFoundryShapeStates = new WeakMap<SubsidiaryFactory, AurumShapeState>();
     private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
     private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
@@ -857,138 +815,6 @@ export class GameRenderer {
     private getStarlingFacingRotationRad(starling: Starling): number | null {
         // Preserve the unit's last simulation rotation so stopped starlings keep their final heading.
         return starling.rotation;
-    }
-
-    private getForgeFlameState(forge: StellarForge, gameTime: number): ForgeFlameState {
-        let state = this.forgeFlameStates.get(forge);
-        if (!state) {
-            state = {
-                warmth: forge.isReceivingLight ? 1 : 0,
-                rotationRad: forge.rotation,
-                lastGameTime: gameTime
-            };
-            this.forgeFlameStates.set(forge, state);
-            return state;
-        }
-
-        const deltaTime = Math.max(0, gameTime - state.lastGameTime);
-        state.lastGameTime = gameTime;
-
-        const targetWarmth = forge.isReceivingLight ? 1 : 0;
-        if (targetWarmth > state.warmth) {
-            state.warmth = Math.min(1, state.warmth + Constants.FORGE_FLAME_WARMTH_FADE_PER_SEC * deltaTime);
-        } else if (targetWarmth < state.warmth) {
-            state.warmth = Math.max(0, state.warmth - Constants.FORGE_FLAME_WARMTH_FADE_PER_SEC * deltaTime);
-        }
-
-        if (forge.isReceivingLight) {
-            const crunch = forge.getCurrentCrunch();
-            const speedMultiplier = crunch && crunch.isActive() ? 2 : 1;
-            state.rotationRad += Constants.FORGE_FLAME_ROTATION_SPEED_RAD_PER_SEC * speedMultiplier * deltaTime;
-            if (state.rotationRad >= Math.PI * 2) {
-                state.rotationRad -= Math.PI * 2;
-            }
-        }
-
-        return state;
-    }
-
-    private getVelarisForgeScriptState(forge: StellarForge, gameTime: number): ForgeScriptState {
-        let state = this.velarisForgeScriptStates.get(forge);
-        if (state) {
-            return state;
-        }
-
-        const count = this.getQualityAdjustedParticleCount(this.VELARIS_FORGE_PARTICLE_COUNT);
-        const positionsX = new Float32Array(count);
-        const positionsY = new Float32Array(count);
-        const velocitiesX = new Float32Array(count);
-        const velocitiesY = new Float32Array(count);
-        const mainGraphemePath = this.getVelarisGraphemeSpritePath(this.VELARIS_FORGE_MAIN_GRAPHEME_LETTER);
-        const mask = mainGraphemePath ? this.getGraphemeMaskData(mainGraphemePath) : null;
-
-        for (let i = 0; i < count; i++) {
-            let attempts = 0;
-            let sampleX = 0;
-            let sampleY = 0;
-            while (attempts < 40) {
-                sampleX = Math.random() - 0.5;
-                sampleY = Math.random() - 0.5;
-                if (!mask || this.isPointInsideGraphemeMask(sampleX, sampleY, mask)) {
-                    break;
-                }
-                attempts++;
-            }
-            positionsX[i] = sampleX;
-            positionsY[i] = sampleY;
-
-            const angleRad = Math.random() * Math.PI * 2;
-            const speed = this.VELARIS_FORGE_PARTICLE_SPEED_UNITS_PER_SEC
-                * (0.6 + Math.random() * 0.8);
-            velocitiesX[i] = Math.cos(angleRad) * speed;
-            velocitiesY[i] = Math.sin(angleRad) * speed;
-        }
-
-        state = {
-            positionsX,
-            positionsY,
-            velocitiesX,
-            velocitiesY,
-            lastGameTime: gameTime
-        };
-        this.velarisForgeScriptStates.set(forge, state);
-        return state;
-    }
-
-    private updateVelarisForgeParticles(state: ForgeScriptState, deltaTimeSec: number, mask: ImageData | null): void {
-        if (deltaTimeSec <= 0) {
-            return;
-        }
-
-        const count = state.positionsX.length;
-        for (let i = 0; i < count; i++) {
-            const oldX = state.positionsX[i];
-            const oldY = state.positionsY[i];
-            let newX = oldX + state.velocitiesX[i] * deltaTimeSec;
-            let newY = oldY + state.velocitiesY[i] * deltaTimeSec;
-
-            const isOutsideMask = mask
-                ? !this.isPointInsideGraphemeMask(newX, newY, mask)
-                : Math.abs(newX) > 0.5 || Math.abs(newY) > 0.5;
-            if (isOutsideMask) {
-                state.velocitiesX[i] = -state.velocitiesX[i];
-                state.velocitiesY[i] = -state.velocitiesY[i];
-                newX = oldX + state.velocitiesX[i] * deltaTimeSec;
-                newY = oldY + state.velocitiesY[i] * deltaTimeSec;
-
-                const isStillOutside = mask
-                    ? !this.isPointInsideGraphemeMask(newX, newY, mask)
-                    : Math.abs(newX) > 0.5 || Math.abs(newY) > 0.5;
-                if (isStillOutside) {
-                    if (mask) {
-                        let attempts = 0;
-                        let sampleX = oldX;
-                        let sampleY = oldY;
-                        while (attempts < 20) {
-                            sampleX = Math.random() - 0.5;
-                            sampleY = Math.random() - 0.5;
-                            if (this.isPointInsideGraphemeMask(sampleX, sampleY, mask)) {
-                                break;
-                            }
-                            attempts++;
-                        }
-                        newX = sampleX;
-                        newY = sampleY;
-                    } else {
-                        newX = oldX;
-                        newY = oldY;
-                    }
-                }
-            }
-
-            state.positionsX[i] = newX;
-            state.positionsY[i] = newY;
-        }
     }
 
     /**
@@ -1719,73 +1545,6 @@ export class GameRenderer {
             this.starlingParticleSeeds.set(starling, seed);
         }
         return seed;
-    }
-
-    private getVelarisFoundrySeed(foundry: SubsidiaryFactory): number {
-        let seed = this.velarisFoundrySeeds.get(foundry);
-        if (seed === undefined) {
-            seed = Math.random() * 10000;
-            this.velarisFoundrySeeds.set(foundry, seed);
-        }
-        return seed;
-    }
-
-    /**
-     * Get or initialize Aurum forge shape state
-     */
-    private getAurumForgeShapeState(forge: StellarForge, gameTime: number): AurumShapeState {
-        let state = this.aurumForgeShapeStates.get(forge);
-        if (!state) {
-            // Initialize with multiple squares of different sizes and speeds
-            const shapeCount = 12;
-            const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
-            const seed = forge.position.x * this.AURUM_SEED_BASE_MULTIPLIER + forge.position.y;
-            
-            for (let i = 0; i < shapeCount; i++) {
-                const random = (seed + i * this.AURUM_FORGE_SEED_MULTIPLIER) % 1000 / 1000;
-                const size = 0.3 + random * 1.2; // Sizes from 0.3 to 1.5
-                const speed = 0.15 + (random * 0.5); // Speeds from 0.15 to 0.65 rad/sec
-                const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
-                const offset = random * 0.4; // Random offset from center (0 to 0.4 of base size)
-                shapes.push({ size, speed, angle, offset });
-            }
-            
-            state = {
-                shapes,
-                lastGameTime: gameTime
-            };
-            this.aurumForgeShapeStates.set(forge, state);
-        }
-        return state;
-    }
-
-    /**
-     * Get or initialize Aurum foundry shape state
-     */
-    private getAurumFoundryShapeState(foundry: SubsidiaryFactory, gameTime: number): AurumShapeState {
-        let state = this.aurumFoundryShapeStates.get(foundry);
-        if (!state) {
-            // Initialize with multiple triangles of different sizes and speeds
-            const shapeCount = 10;
-            const shapes: Array<{size: number; speed: number; angle: number; offset: number}> = [];
-            const seed = foundry.position.x * this.AURUM_SEED_BASE_MULTIPLIER + foundry.position.y;
-            
-            for (let i = 0; i < shapeCount; i++) {
-                const random = (seed + i * this.AURUM_FOUNDRY_SEED_MULTIPLIER) % 1000 / 1000;
-                const size = 0.25 + random * 1.0; // Sizes from 0.25 to 1.25
-                const speed = 0.2 + (random * 0.6); // Speeds from 0.2 to 0.8 rad/sec
-                const angle = (i / shapeCount) * Math.PI * 2; // Evenly distributed initial angles
-                const offset = random * 0.35; // Random offset from center
-                shapes.push({ size, speed, angle, offset });
-            }
-            
-            state = {
-                shapes,
-                lastGameTime: gameTime
-            };
-            this.aurumFoundryShapeStates.set(foundry, state);
-        }
-        return state;
     }
 
     /**
