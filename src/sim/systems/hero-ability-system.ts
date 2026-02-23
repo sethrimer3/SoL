@@ -23,6 +23,7 @@ import {
     CombatTarget,
 } from '../../game-core';
 import { StellarForge } from '../entities/stellar-forge';
+import { Unit } from '../entities/unit';
 
 /**
  * Context required by HeroAbilitySystem methods
@@ -147,10 +148,10 @@ export class HeroAbilitySystem {
                     const actualDamage = Math.max(0, previousHealth - closestHit.target.health);
                     const maxHealth = closestHit.type === 'forge'
                         ? Constants.STELLAR_FORGE_MAX_HEALTH
-                        : (closestHit.target as any).maxHealth;
+                        : (closestHit.target as Unit).maxHealth;
                     const targetKey = closestHit.type === 'forge'
                         ? `forge_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as StellarForge).owner.name}`
-                        : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as any).owner.name}`;
+                        : `unit_${closestHit.target.position.x}_${closestHit.target.position.y}_${(closestHit.target as Unit).owner.name}`;
                     ctx.addDamageNumber(
                         closestHit.target.position,
                         actualDamage,
@@ -167,10 +168,9 @@ export class HeroAbilitySystem {
                 // Stop at sun or edge
                 break;
             } else if (closestHit.type === 'asteroid') {
-                // Bounce off asteroid
                 bounces++;
                 currentPos = closestHit.pos;
-                // Calculate reflection direction (simplified)
+                // Simplified 180-degree reversal; no surface-normal data available for true reflection
                 currentDir = new Vector2D(-currentDir.x, -currentDir.y);
             }
         }

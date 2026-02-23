@@ -2995,18 +2995,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Check visibility in LaD (Light and Dark) mode
      * Units are invisible to the enemy until they cross into enemy territory
      */
-    /**
-     * Check visibility in LaD (Light and Dark) mode
-     * Units are invisible to the enemy until they cross into enemy territory
-     */
-    private isObjectVisibleInLadMode(objectPos: Vector2D, player: Player, object: CombatTarget | undefined, ladSun: Sun): boolean {
-        // Delegate to VisionSystem
-        // Note: This method is kept as a private wrapper but now delegates to VisionSystem
-        // which handles the actual logic. This maintains compatibility with existing code.
-        return VisionSystem.isObjectVisibleToPlayer(objectPos, player, this.suns, this.asteroids, this.splendorSunlightZones, object);
-    }
-    
-    /**
+        /**
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
      * Returns true if collision detected
      */
