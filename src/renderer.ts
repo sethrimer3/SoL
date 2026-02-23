@@ -11,8 +11,8 @@ import { renderLensFlare } from './rendering/LensFlare';
 
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
-import { getFactionColor, getVelarisGraphemeSpritePath } from './render/faction-utilities';
-import { resolveAssetPath } from './render/asset-utilities';
+import { getFactionColor } from './render/faction-utilities';
+import { SpriteManager, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
 import { AsteroidRenderer } from './render/asteroid-renderer';
@@ -102,34 +102,6 @@ export class GameRenderer {
     private readonly FORGE_SPRITE_SCALE = 2.64;
     private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
     private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
-    private readonly VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-A.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-B.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-C.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-D.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-E.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-F.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-G.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-H.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-I.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-J.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-K.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-L.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-M.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-N.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-O.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-P.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Q.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-R.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-S.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-T.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-U.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-V.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-W.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-X.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Y.png',
-        'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Z.png'
-    ];
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
@@ -149,13 +121,10 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_GRAPHEME_ALPHA_MAX = 0.3;
     private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
     private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
-    private spriteImageCache = new Map<string, HTMLImageElement>();
-    private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
-    private graphemeMaskCache = new Map<string, ImageData>();
+    private readonly spriteManager = new SpriteManager();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
     private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
-    private solEnergyIcon: HTMLImageElement | null = null; // Cached SoL energy icon
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
     private viewMinY: number = 0;
@@ -570,99 +539,30 @@ export class GameRenderer {
     }
 
     private getSpriteImage(path: string): HTMLImageElement {
-        const resolvedPath = this.resolveAssetPath(path);
-        const cached = this.spriteImageCache.get(resolvedPath);
-        if (cached) {
-            return cached;
-        }
-        const image = new Image();
-        image.src = resolvedPath;
-        this.spriteImageCache.set(resolvedPath, image);
-        return image;
+        return this.spriteManager.getSpriteImage(path);
     }
 
     /**
      * Get the cached SoL energy icon
      */
     private getSolEnergyIcon(): HTMLImageElement {
-        if (!this.solEnergyIcon) {
-            this.solEnergyIcon = this.getSpriteImage('ASSETS/sprites/interface/SoL_icon.png');
-        }
-        return this.solEnergyIcon;
+        return this.spriteManager.getSolEnergyIcon();
     }
 
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
-        const resolvedPath = this.resolveAssetPath(path);
-        const cacheKey = `${resolvedPath}|${color}`;
-        const cached = this.tintedSpriteCache.get(cacheKey);
-        if (cached) {
-            return cached;
-        }
-
-        const image = this.getSpriteImage(resolvedPath);
-        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
-            return null;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            return null;
-        }
-
-        ctx.drawImage(image, 0, 0);
-        ctx.globalCompositeOperation = 'multiply';
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.globalCompositeOperation = 'destination-in';
-        ctx.drawImage(image, 0, 0);
-        ctx.globalCompositeOperation = 'source-over';
-
-        this.tintedSpriteCache.set(cacheKey, canvas);
-        return canvas;
+        return this.spriteManager.getTintedSprite(path, color);
     }
 
     private getVelarisGraphemeSpritePath(letter: string): string | null {
-        return getVelarisGraphemeSpritePath(letter, this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS);
+        return this.spriteManager.getVelarisGraphemeSpritePath(letter);
     }
 
     private getGraphemeMaskData(spritePath: string): ImageData | null {
-        const resolvedPath = this.resolveAssetPath(spritePath);
-        const cached = this.graphemeMaskCache.get(resolvedPath);
-        if (cached) {
-            return cached;
-        }
-
-        const image = this.getSpriteImage(resolvedPath);
-        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
-            return null;
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-            return null;
-        }
-        ctx.drawImage(image, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        this.graphemeMaskCache.set(resolvedPath, imageData);
-        return imageData;
+        return this.spriteManager.getGraphemeMaskData(spritePath);
     }
 
     private isPointInsideGraphemeMask(x: number, y: number, mask: ImageData): boolean {
-        const width = mask.width;
-        const height = mask.height;
-        const sampleX = Math.round((x + 0.5) * (width - 1));
-        const sampleY = Math.round((y + 0.5) * (height - 1));
-        if (sampleX < 0 || sampleX >= width || sampleY < 0 || sampleY >= height) {
-            return false;
-        }
-        const alpha = mask.data[(sampleY * width + sampleX) * 4 + 3];
-        return alpha > 24;
+        return this.spriteManager.isPointInsideGraphemeMask(x, y, mask);
     }
 
     private drawVelarisGraphemeSprite(
@@ -672,25 +572,7 @@ export class GameRenderer {
         targetSize: number,
         color: string
     ): boolean {
-        const tintedSprite = this.getTintedSprite(spritePath, color);
-        if (!tintedSprite) {
-            return false;
-        }
-        const scale = targetSize / Math.max(tintedSprite.width, tintedSprite.height);
-        const drawWidth = tintedSprite.width * scale;
-        const drawHeight = tintedSprite.height * scale;
-        this.ctx.drawImage(
-            tintedSprite,
-            centerX - drawWidth / 2,
-            centerY - drawHeight / 2,
-            drawWidth,
-            drawHeight
-        );
-        return true;
-    }
-
-    private resolveAssetPath(path: string): string {
-        return resolveAssetPath(path);
+        return this.spriteManager.drawVelarisGraphemeSprite(this.ctx, spritePath, centerX, centerY, targetSize, color);
     }
 
     private getGraphicVariant(key: GraphicKey): GraphicVariant {
@@ -968,7 +850,7 @@ export class GameRenderer {
             highlightedButtonIndex: this.highlightedButtonIndex,
             MIRROR_MAX_HEALTH: this.MIRROR_MAX_HEALTH,
             gradientCache: this.gradientCache,
-            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
+            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
             worldToScreen: (worldPos) => this.worldToScreen(worldPos),
             getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
             darkenColor: (color, factor) => this.darkenColor(color, factor),
@@ -1097,7 +979,7 @@ export class GameRenderer {
             VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE,
             VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE,
             VELARIS_STARLING_CLOUD_PULL_SPEED: this.VELARIS_STARLING_CLOUD_PULL_SPEED,
-            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: this.VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
+            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
             canvas: this.canvas,
             camera: this.camera,
         };

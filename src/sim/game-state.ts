@@ -9,6 +9,7 @@ import { AISystem, AIContext } from './systems/ai-system';
 import { PhysicsSystem, PhysicsContext } from './systems/physics-system';
 import { ParticleSystem, ParticleContext } from './systems/particle-system';
 import { HeroAbilitySystem, HeroAbilityContext } from './systems/hero-ability-system';
+import { StarlingSystem, StarlingContext } from './systems/starling-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -93,7 +94,7 @@ import {
 } from '../game-core';
 
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -302,7 +303,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
                 if (!this.isCountdownActive) {
                     const energyForMinions = player.stellarForge.shouldCrunch();
                     if (energyForMinions > 0) {
-                        const currentStarlingCount = this.getStarlingCountForPlayer(player);
+                        const currentStarlingCount = StarlingSystem.getStarlingCountForPlayer(player);
                         const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
                         const numStarlings = Math.min(
                             Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY),
@@ -910,11 +911,11 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             } // End of countdown check
 
             if (!this.isCountdownActive) {
-                this.updateStarlingMergeGatesForPlayer(player, deltaTime);
+                StarlingSystem.updateStarlingMergeGatesForPlayer(this, player, deltaTime);
             }
 
             if (!this.isCountdownActive) {
-                this.processStarlingSacrificesForPlayer(player);
+                StarlingSystem.processStarlingSacrificesForPlayer(player);
             }
 
             // Remove dead units and track losses
@@ -2660,122 +2661,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         AISystem.updateAi(deltaTime, this);
     }
 
-    private updateStarlingMergeGatesForPlayer(player: Player, deltaTime: number): void {
-        for (let gateIndex = this.starlingMergeGates.length - 1; gateIndex >= 0; gateIndex--) {
-            const gate = this.starlingMergeGates[gateIndex];
-            if (gate.owner !== player) {
-                continue;
-            }
-
-            if (gate.health <= 0) {
-                this.releaseStarlingMergeGate(gate, player);
-                this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
-                this.starlingMergeGates.splice(gateIndex, 1);
-                continue;
-            }
-
-            gate.remainingSec = Math.max(0, gate.remainingSec - deltaTime);
-
-            const assignedStarlings = gate.assignedStarlings;
-            let writeIndex = 0;
-
-            for (let i = 0; i < assignedStarlings.length; i++) {
-                const starling = assignedStarlings[i];
-                if (starling.isDead()) {
-                    continue;
-                }
-
-                starling.clearManualTarget();
-                starling.setManualRallyPoint(gate.position);
-
-                if (starling.position.distanceTo(gate.position) <= Constants.STARLING_MERGE_GATE_RADIUS_PX) {
-                    starling.health = 0;
-                    gate.absorbedCount += 1;
-                    continue;
-                }
-
-                assignedStarlings[writeIndex] = starling;
-                writeIndex += 1;
-            }
-
-            assignedStarlings.length = writeIndex;
-
-            if (gate.remainingSec <= 0) {
-                if (gate.absorbedCount >= Constants.STARLING_MERGE_COUNT) {
-                    this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
-                    player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
-                } else {
-                    this.releaseStarlingMergeGate(gate, player);
-                    this.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
-                }
-                this.starlingMergeGates.splice(gateIndex, 1);
-            }
-        }
-    }
-
-    private processStarlingSacrificesForPlayer(player: Player): void {
-        const energyBoost = Constants.STARLING_COST_PER_ENERGY * Constants.STARLING_SACRIFICE_ENERGY_MULTIPLIER;
-        if (energyBoost <= 0) {
-            return;
-        }
-
-        for (const building of player.buildings) {
-            if (!(building instanceof SubsidiaryFactory)) {
-                continue;
-            }
-            if (!building.isComplete || !building.currentProduction) {
-                continue;
-            }
-
-            for (const unit of player.units) {
-                if (!(unit instanceof Starling) || unit.isDead()) {
-                    continue;
-                }
-                if (unit.getManualTarget() !== building) {
-                    continue;
-                }
-                if (!building.currentProduction) {
-                    break;
-                }
-
-                const distance = unit.position.distanceTo(building.position);
-                if (distance > building.radius + unit.collisionRadiusPx) {
-                    continue;
-                }
-
-                building.addProductionEnergyBoost(energyBoost);
-                unit.health = 0;
-            }
-        }
-    }
-
-    private releaseStarlingMergeGate(gate: StarlingMergeGate, player: Player): void {
-        const releaseCount = gate.absorbedCount;
-        if (releaseCount > 0) {
-            const currentStarlingCount = this.getStarlingCountForPlayer(player);
-            const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
-            const starlingSpawnCount = Math.min(releaseCount, availableStarlingSlots);
-            const spawnRadius = Constants.STARLING_MERGE_GATE_RADIUS_PX + Constants.STARLING_COLLISION_RADIUS_PX + 4;
-            for (let i = 0; i < starlingSpawnCount; i++) {
-                const angle = (Math.PI * 2 * i) / starlingSpawnCount;
-                const spawnPosition = new Vector2D(
-                    gate.position.x + Math.cos(angle) * spawnRadius,
-                    gate.position.y + Math.sin(angle) * spawnRadius
-                );
-                const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
-                player.units.push(starling);
-                player.unitsCreated++;
-            }
-        }
-
-        for (const starling of gate.assignedStarlings) {
-            if (!starling.isDead()) {
-                starling.clearManualOrders();
-            }
-        }
-        gate.assignedStarlings.length = 0;
-    }
-
     getEnemiesForPlayer(player: Player): CombatTarget[] {
         const enemies: CombatTarget[] = [];
         for (const otherPlayer of this.players) {
@@ -2807,16 +2692,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             }
         }
         return enemies;
-    }
-
-    private getStarlingCountForPlayer(player: Player): number {
-        let count = 0;
-        for (const unit of player.units) {
-            if (unit instanceof Starling) {
-                count += 1;
-            }
-        }
-        return count;
     }
 
     getHeroUnitCost(player: Player): number {
