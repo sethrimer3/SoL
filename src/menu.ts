@@ -4,7 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
-import { NetworkManager, LANSignaling, LobbyInfo, MessageType, NetworkEvent } from './network';
+import { NetworkManager, LANSignaling, LobbyInfo } from './network';
 import { MenuOption, FactionCarouselOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
 import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
@@ -31,9 +31,12 @@ import { renderP2PMenuScreen } from './menu/screens/p2p-menu-screen';
 import { renderP2PHostScreen } from './menu/screens/p2p-host-screen';
 import { renderP2PJoinScreen } from './menu/screens/p2p-join-screen';
 import { renderLANScreen } from './menu/screens/lan-screen';
+import { renderHostLobbyScreen } from './menu/screens/lan-host-lobby-screen';
+import { renderClientAnswerScreen, renderClientWaitingScreen } from './menu/screens/lan-client-screens';
 import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
+import { renderMainScreen } from './menu/screens/main-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
 import { MenuAudioController } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
@@ -901,108 +904,41 @@ export class MainMenu {
         this.setLadButtonVisible(true);
         this.setMenuParticleDensity(1.6);
         this.updateAtmosphereOpacityForCurrentScreen();
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-        container.style.justifyContent = 'flex-start';
-        
-        // Title graphic - raised a little
-        const titleGraphic = document.createElement('img');
-        titleGraphic.src = this.resolveAssetPath('ASSETS/SPRITES/menu/titleGraphic.png');
-        titleGraphic.alt = 'Speed of Light RTS';
-        titleGraphic.style.width = isCompactLayout ? '300px' : '480px';
-        titleGraphic.style.maxWidth = '90%';
-        titleGraphic.style.height = 'auto';
-        titleGraphic.style.marginBottom = isCompactLayout ? '6px' : '12px';
-        titleGraphic.style.alignSelf = 'center';
-        container.appendChild(titleGraphic);
 
-        // Create carousel menu container
-        const carouselContainer = document.createElement('div');
-        carouselContainer.style.width = '100%';
-        carouselContainer.style.maxWidth = isCompactLayout ? '100%' : '900px';
-        carouselContainer.style.padding = isCompactLayout ? '0 10px' : '0';
-        carouselContainer.style.marginTop = '0';
-        carouselContainer.style.marginBottom = isCompactLayout ? '18px' : '20px';
-        container.appendChild(carouselContainer);
-
-        // Create carousel menu with main menu options
-        const { label: factionLabel, color: factionColor } = this.getFactionLabelAndColor(this.settings.selectedFaction);
-        const menuOptions: MenuOption[] = [
-            {
-                id: 'loadout',
-                name: 'LOADOUT',
-                description: 'Select faction & heroes',
-                subLabel: factionLabel,
-                subLabelColor: factionColor
+        renderMainScreen(container, {
+            selectedFaction: this.settings.selectedFaction,
+            selectedMap: this.settings.selectedMap,
+            resolveAssetPath: this.resolveAssetPath.bind(this),
+            onLoadout: () => {
+                this.currentScreen = 'loadout-select';
+                this.startMenuTransition();
+                this.renderLoadoutSelectionScreen(this.contentElement);
             },
-            {
-                id: 'start',
-                name: 'START',
-                description: 'Begin game'
+            onStart: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
             },
-            {
-                id: 'match-history',
-                name: 'MATCH HISTORY',
-                description: 'View past matches'
+            onMatchHistory: () => {
+                this.currentScreen = 'match-history';
+                this.startMenuTransition();
+                this.renderMatchHistoryScreen(this.contentElement);
             },
-            {
-                id: 'maps',
-                name: 'MAPS',
-                description: 'Select map',
-                subLabel: this.settings.selectedMap.name,
-                subLabelColor: '#FFD700',
-                previewMap: this.settings.selectedMap
+            onMaps: () => {
+                this.currentScreen = 'maps';
+                this.startMenuTransition();
+                this.renderMapSelectionScreen(this.contentElement);
             },
-            {
-                id: 'settings',
-                name: 'SETTINGS',
-                description: 'Configure game'
-            }
-        ];
-
-        this.carouselMenu = new CarouselMenuView(
-            carouselContainer,
-            menuOptions,
-            1,
-            'rgba(0, 0, 0, 0.5)'
-        ); // Default to "START" button
-        this.carouselMenu.onRender(() => {
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+            onSettings: () => {
+                this.currentScreen = 'settings';
+                this.startMenuTransition();
+                this.renderSettingsScreen(this.contentElement);
+            },
+            onCarouselCreated: (carousel) => {
+                this.carouselMenu = carousel;
+            },
+            menuParticleLayer: this.menuParticleLayer
         });
-        this.carouselMenu.onNavigate(() => {
-            this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
-        });
-        this.carouselMenu.onSelect((option: MenuOption) => {
-            switch (option.id) {
-                case 'loadout':
-                    this.currentScreen = 'loadout-select';
-                    this.startMenuTransition();
-                    this.renderLoadoutSelectionScreen(this.contentElement);
-                    break;
-                case 'start':
-                    this.currentScreen = 'game-mode-select';
-                    this.startMenuTransition();
-                    this.renderGameModeSelectionScreen(this.contentElement);
-                    break;
-                case 'match-history':
-                    this.currentScreen = 'match-history';
-                    this.startMenuTransition();
-                    this.renderMatchHistoryScreen(this.contentElement);
-                    break;
-                case 'maps':
-                    this.currentScreen = 'maps';
-                    this.startMenuTransition();
-                    this.renderMapSelectionScreen(this.contentElement);
-                    break;
-                case 'settings':
-                    this.currentScreen = 'settings';
-                    this.startMenuTransition();
-                    this.renderSettingsScreen(this.contentElement);
-                    break;
-            }
-        });
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
     }
 
     private renderMapSelectionScreen(container: HTMLElement): void {
@@ -1079,350 +1015,75 @@ export class MainMenu {
     private renderHostLobbyScreen(lobby: LobbyInfo, connectionCode: string, hostPlayerId: string): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
-        const screenWidth = window.innerWidth;
-        const isCompactLayout = screenWidth < 600;
-        this.lanLobbyManager.startHeartbeat({
-            hostPlayerId: hostPlayerId,
-            lobbyName: lobby.name,
-            hostUsername: lobby.players.find((player) => player.isHost)?.username ?? this.settings.username,
-            connectionCode: connectionCode,
-            maxPlayerCount: lobby.maxPlayers,
-            playerCount: lobby.players.length
-        });
 
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Lobby: ' + lobby.name;
-        title.style.fontSize = isCompactLayout ? '28px' : '36px';
-        title.style.marginBottom = '20px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        this.contentElement.appendChild(title);
-
-        // Connection code display
-        const codeContainer = document.createElement('div');
-        codeContainer.style.maxWidth = '600px';
-        codeContainer.style.width = '100%';
-        codeContainer.style.padding = '20px';
-        codeContainer.style.backgroundColor = 'rgba(0, 100, 0, 0.3)';
-        codeContainer.style.borderRadius = '10px';
-        codeContainer.style.border = '2px solid rgba(0, 255, 0, 0.3)';
-        codeContainer.style.marginBottom = '20px';
-
-        const codeLabel = document.createElement('p');
-        codeLabel.textContent = 'Share this connection code:';
-        codeLabel.style.color = '#CCCCCC';
-        codeLabel.style.fontSize = '18px';
-        codeLabel.style.marginBottom = '10px';
-        codeContainer.appendChild(codeLabel);
-
-        const codeText = document.createElement('textarea');
-        codeText.value = connectionCode;
-        codeText.readOnly = true;
-        codeText.style.width = '100%';
-        codeText.style.height = '80px';
-        codeText.style.padding = '10px';
-        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        codeText.style.color = '#00FF00';
-        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
-        codeText.style.borderRadius = '5px';
-        codeText.style.fontSize = '14px';
-        codeText.style.fontFamily = 'monospace';
-        codeText.style.resize = 'none';
-        codeContainer.appendChild(codeText);
-
-        const copyButton = this.createButton('COPY CODE', async () => {
-            try {
-                await navigator.clipboard.writeText(codeText.value);
-                alert('Connection code copied to clipboard!');
-            } catch (err) {
-                // Fallback for older browsers
-                codeText.select();
-                document.execCommand('copy');
-                alert('Connection code copied to clipboard!');
-            }
-        }, '#008800');
-        copyButton.style.marginTop = '10px';
-        copyButton.style.padding = '10px 20px';
-        copyButton.style.fontSize = '16px';
-        codeContainer.appendChild(copyButton);
-
-        this.contentElement.appendChild(codeContainer);
-
-        // Waiting for answer code input
-        const answerContainer = document.createElement('div');
-        answerContainer.style.maxWidth = '600px';
-        answerContainer.style.width = '100%';
-        answerContainer.style.padding = '20px';
-        answerContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
-        answerContainer.style.borderRadius = '10px';
-        answerContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
-        answerContainer.style.marginBottom = '30px';
-
-        const answerLabel = document.createElement('p');
-        answerLabel.textContent = 'Paste the answer code from the client:';
-        answerLabel.style.color = '#CCCCCC';
-        answerLabel.style.fontSize = '18px';
-        answerLabel.style.marginBottom = '10px';
-        answerContainer.appendChild(answerLabel);
-
-        const answerInput = document.createElement('textarea');
-        answerInput.placeholder = 'Paste answer code here...';
-        answerInput.style.width = '100%';
-        answerInput.style.height = '80px';
-        answerInput.style.padding = '10px';
-        answerInput.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        answerInput.style.color = '#FFFFFF';
-        answerInput.style.border = '1px solid rgba(255, 255, 255, 0.3)';
-        answerInput.style.borderRadius = '5px';
-        answerInput.style.fontSize = '14px';
-        answerInput.style.fontFamily = 'monospace';
-        answerInput.style.resize = 'none';
-        answerContainer.appendChild(answerInput);
-
-        const connectButton = this.createButton('CONNECT', async () => {
-            const answerCode = answerInput.value.trim();
-            if (!answerCode) {
-                alert('Please paste the answer code from the client.');
-                return;
-            }
-
-            try {
-                const { answer, playerId: clientId, username: clientUsername } = LANSignaling.parseAnswerCode(answerCode);
-                await this.networkManager?.completeConnection(clientId, answer);
-                
-                // Send lobby update to client
-                if (this.networkManager && this.networkManager.getLobby()) {
-                    const lobby = this.networkManager.getLobby()!;
-                    lobby.players.push({
-                        id: clientId,
-                        username: clientUsername,
-                        isHost: false,
-                        isReady: true
-                    });
-                    this.networkManager.broadcast({
-                        type: MessageType.LOBBY_UPDATE,
-                        senderId: hostPlayerId,
-                        timestamp: Date.now(),
-                        data: lobby
-                    });
-                    const hostPlayer = lobby.players.find((player) => player.isHost);
-                    this.lanLobbyManager.registerEntry({
-                        hostPlayerId: hostPlayerId,
-                        lobbyName: lobby.name,
-                        hostUsername: hostPlayer?.username ?? this.settings.username,
-                        connectionCode: connectionCode,
-                        maxPlayerCount: lobby.maxPlayers,
-                        playerCount: lobby.players.length
-                    });
+        renderHostLobbyScreen(this.contentElement, {
+            lobby,
+            connectionCode,
+            hostPlayerId,
+            username: this.settings.username,
+            networkManager: this.networkManager,
+            lanLobbyManager: this.lanLobbyManager,
+            onGameStarted: () => {
+                this.settings.gameMode = 'lan';
+                this.settings.networkManager = this.networkManager!;
+                if (this.onStartCallback) {
+                    this.hide();
+                    this.onStartCallback(this.settings);
                 }
-                
-                alert(`${clientUsername} connected! You can now start the game.`);
-            } catch (error) {
-                console.error('Failed to connect client:', error);
-                alert(`Failed to connect: ${error instanceof Error ? error.message : 'Invalid answer code'}`);
-            }
-        }, '#0088FF');
-        connectButton.style.marginTop = '10px';
-        connectButton.style.padding = '10px 20px';
-        connectButton.style.fontSize = '16px';
-        answerContainer.appendChild(connectButton);
-
-        this.contentElement.appendChild(answerContainer);
-
-        // Start Game button (only for host)
-        const startGameButton = this.createButton('START GAME', () => {
-            if (!this.networkManager) {
-                alert('Network manager not initialized.');
-                return;
-            }
-
-            if (this.networkManager.getPeerCount() === 0) {
-                alert('Please wait for at least one player to connect before starting.');
-                return;
-            }
-
-            // Notify peers that game is starting
-            this.networkManager.startGame();
-            this.lanLobbyManager.unregisterEntry(hostPlayerId);
-            this.lanLobbyManager.stopHeartbeat();
-
-            // Set game mode to LAN
-            this.settings.gameMode = 'lan';
-            // Pass network manager to settings
-            this.settings.networkManager = this.networkManager;
-            
-            // Start the game
-            if (this.onStartCallback) {
-                this.hide();
-                this.onStartCallback(this.settings);
-            }
-        }, '#FF8800');
-        startGameButton.style.marginBottom = '20px';
-        startGameButton.style.padding = '15px 40px';
-        startGameButton.style.fontSize = '24px';
-        this.contentElement.appendChild(startGameButton);
-
-        // Cancel button
-        const cancelButton = this.createButton('CANCEL', () => {
-            if (this.networkManager) {
-                this.networkManager.disconnect();
+            },
+            onCancel: () => {
                 this.networkManager = null;
-            }
-            this.lanLobbyManager.unregisterEntry(hostPlayerId);
-            this.lanLobbyManager.stopHeartbeat();
-            this.currentScreen = 'lan';
-            this.startMenuTransition();
-            this.renderLANScreen(this.contentElement);
-        }, '#666666');
-        this.contentElement.appendChild(cancelButton);
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+                this.currentScreen = 'lan';
+                this.startMenuTransition();
+                this.renderLANScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderClientAnswerScreen(answerCode: string, hostUsername: string): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
 
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = `Joining ${hostUsername}'s Lobby`;
-        title.style.fontSize = '32px';
-        title.style.marginBottom = '20px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        this.contentElement.appendChild(title);
-
-        // Instructions
-        const instructions = document.createElement('p');
-        instructions.textContent = 'Send this answer code to the host:';
-        instructions.style.color = '#CCCCCC';
-        instructions.style.fontSize = '18px';
-        instructions.style.textAlign = 'center';
-        instructions.style.marginBottom = '20px';
-        this.contentElement.appendChild(instructions);
-
-        // Answer code display
-        const codeContainer = document.createElement('div');
-        codeContainer.style.maxWidth = '600px';
-        codeContainer.style.width = '100%';
-        codeContainer.style.padding = '20px';
-        codeContainer.style.backgroundColor = 'rgba(0, 0, 100, 0.3)';
-        codeContainer.style.borderRadius = '10px';
-        codeContainer.style.border = '2px solid rgba(0, 100, 255, 0.3)';
-        codeContainer.style.marginBottom = '30px';
-
-        const codeText = document.createElement('textarea');
-        codeText.value = answerCode;
-        codeText.readOnly = true;
-        codeText.style.width = '100%';
-        codeText.style.height = '80px';
-        codeText.style.padding = '10px';
-        codeText.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        codeText.style.color = '#0088FF';
-        codeText.style.border = '1px solid rgba(255, 255, 255, 0.3)';
-        codeText.style.borderRadius = '5px';
-        codeText.style.fontSize = '14px';
-        codeText.style.fontFamily = 'monospace';
-        codeText.style.resize = 'none';
-        codeContainer.appendChild(codeText);
-
-        const copyButton = this.createButton('COPY CODE', async () => {
-            try {
-                await navigator.clipboard.writeText(codeText.value);
-                alert('Answer code copied to clipboard!');
-            } catch (err) {
-                // Fallback for older browsers
-                codeText.select();
-                document.execCommand('copy');
-                alert('Answer code copied to clipboard!');
-            }
-        }, '#0088FF');
-        copyButton.style.marginTop = '10px';
-        copyButton.style.padding = '10px 20px';
-        copyButton.style.fontSize = '16px';
-        codeContainer.appendChild(copyButton);
-
-        this.contentElement.appendChild(codeContainer);
-
-        // Waiting message
-        const waitingText = document.createElement('p');
-        waitingText.textContent = 'Waiting for host to complete connection...';
-        waitingText.style.color = '#888888';
-        waitingText.style.fontSize = '18px';
-        waitingText.style.textAlign = 'center';
-        waitingText.style.marginBottom = '30px';
-        this.contentElement.appendChild(waitingText);
-
-        // Listen for game start
-        this.networkManager?.on(NetworkEvent.MESSAGE_RECEIVED, (data) => {
-            if (data && data.type === MessageType.GAME_START) {
-                // Hide menu and start game
+        renderClientAnswerScreen(this.contentElement, {
+            answerCode,
+            hostUsername,
+            networkManager: this.networkManager,
+            onGameStarted: (nm) => {
                 if (this.onStartCallback) {
                     this.settings.gameMode = 'lan';
-                    this.settings.networkManager = this.networkManager!;
+                    this.settings.networkManager = nm;
                     this.hide();
                     this.onStartCallback(this.settings);
                 }
-            }
-        });
-
-        // Cancel button
-        const cancelButton = this.createButton('CANCEL', () => {
-            if (this.networkManager) {
-                this.networkManager.disconnect();
+            },
+            onCancel: () => {
                 this.networkManager = null;
-            }
-            this.currentScreen = 'lan';
-            this.startMenuTransition();
-            this.renderLANScreen(this.contentElement);
-        }, '#666666');
-        this.contentElement.appendChild(cancelButton);
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+                this.currentScreen = 'lan';
+                this.startMenuTransition();
+                this.renderLANScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderClientWaitingScreen(): void {
         this.clearMenu();
         this.setMenuParticleDensity(1.6);
 
-        // Title
-        const title = document.createElement('h2');
-        title.textContent = 'Connecting to Host...';
-        title.style.fontSize = '36px';
-        title.style.marginBottom = '30px';
-        title.style.color = '#FFD700';
-        title.style.textAlign = 'center';
-        title.dataset.particleText = 'true';
-        title.dataset.particleColor = '#FFD700';
-        this.contentElement.appendChild(title);
-
-        // Info text
-        const infoText = document.createElement('p');
-        infoText.textContent = 'Waiting for host to complete the connection...';
-        infoText.style.color = '#CCCCCC';
-        infoText.style.fontSize = '20px';
-        infoText.style.textAlign = 'center';
-        infoText.style.marginBottom = '30px';
-        this.contentElement.appendChild(infoText);
-
-        // Cancel button
-        const cancelButton = this.createButton('CANCEL', () => {
-            if (this.networkManager) {
-                this.networkManager.disconnect();
+        renderClientWaitingScreen(this.contentElement, {
+            networkManager: this.networkManager,
+            onCancel: () => {
                 this.networkManager = null;
-            }
-            this.currentScreen = 'lan';
-            this.startMenuTransition();
-            this.renderLANScreen(this.contentElement);
-        }, '#666666');
-        this.contentElement.appendChild(cancelButton);
-
-        this.menuParticleLayer?.requestTargetRefresh(this.contentElement);
+                this.currentScreen = 'lan';
+                this.startMenuTransition();
+                this.renderLANScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
     }
 
     private renderOnlinePlaceholderScreen(container: HTMLElement): void {
