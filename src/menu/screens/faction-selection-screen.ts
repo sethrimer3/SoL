@@ -5,7 +5,7 @@
 
 import { Faction } from '../../game-core';
 import { FactionCarouselOption } from '../types';
-import { FactionCarouselView } from '../../menu';
+import { FactionCarouselView } from '../faction-carousel-view';
 
 export interface FactionSelectionScreenParams {
     selectedFaction: Faction | null;
