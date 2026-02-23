@@ -4,6 +4,7 @@
 
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor } from './game-core';
 import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
+import { SelectionManager, SelectionManagerContext } from './input/selection-manager';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
@@ -34,15 +35,12 @@ class GameController {
     private holdStartTime: number | null = null;
     private holdStarlingForMerge: Starling | null = null;
     private warpGateManager!: WarpGateManager;
+    private selectionManager!: SelectionManager;
     private shouldSkipMoveOrderThisTap: boolean = false;
     private hasSeenFoundry: boolean = false;
     private hasActiveFoundry: boolean = false;
     private menu: MainMenu;
     private gameAudioController: GameAudioController;
-    private selectedUnits: Set<Unit> = new Set();
-    private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
-    private selectedBase: any | null = null; // StellarForge or null
-    private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry, StrikerTower, LockOnLaserTower, ShieldTower)
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
@@ -70,120 +68,17 @@ class GameController {
 
     private abilityArrowStarts: Vector2D[] = [];
 
-    /**
-     * Check if any hero units are currently selected
-     */
-    private hasHeroUnitsSelected(): boolean {
-        if (this.selectedUnits.size === 0) {
-            return false;
-        }
-        for (const unit of this.selectedUnits) {
-            if (unit.isHero) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private getSelectedStarlings(player: Player): Starling[] {
-        const starlings: Starling[] = [];
-        for (const unit of this.selectedUnits) {
-            if (unit instanceof Starling && unit.owner === player) {
-                starlings.push(unit);
-            }
-        }
-        return starlings;
-    }
-
-    private tryStartStarlingMerge(player: Player, starlings: Starling[], targetPosition: Vector2D): boolean {
-        if (!this.game) {
-            return false;
-        }
-        if (starlings.length < Constants.STARLING_MERGE_COUNT) {
-            return false;
-        }
-        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-        if (!hasFoundry) {
-            return false;
-        }
-        const mergeStarlings = starlings.slice(0, Constants.STARLING_MERGE_COUNT);
-        const unitIds = mergeStarlings.map((unit) => this.game!.getUnitNetworkId(unit));
-        this.game.applyStarlingMerge(player, unitIds, targetPosition);
-        this.sendNetworkCommand('starling_merge', {
-            unitIds,
-            targetX: targetPosition.x,
-            targetY: targetPosition.y
-        });
-
-        for (const unit of this.selectedUnits) {
-            unit.isSelected = false;
-        }
-        this.selectedUnits.clear();
-        this.renderer.selectedUnits = this.selectedUnits;
-        return true;
-    }
-
-    private getClosestSelectedStarling(worldPos: Vector2D): Starling | null {
-        let closestStarling: Starling | null = null;
-        let closestDistanceSq = Infinity;
-
-        for (const unit of this.selectedUnits) {
-            if (!(unit instanceof Starling)) {
-                continue;
-            }
-            const dx = unit.position.x - worldPos.x;
-            const dy = unit.position.y - worldPos.y;
-            const distanceSq = dx * dx + dy * dy;
-            if (distanceSq <= Constants.STARLING_MERGE_HOLD_RADIUS_PX * Constants.STARLING_MERGE_HOLD_RADIUS_PX
-                && distanceSq < closestDistanceSq) {
-                closestDistanceSq = distanceSq;
-                closestStarling = unit;
-            }
-        }
-
-        return closestStarling;
-    }
-
     private updateAbilityArrowStarts(): void {
         this.abilityArrowStarts.length = 0;
         if (this.selectionStartScreen) {
             this.abilityArrowStarts.push(this.selectionStartScreen);
         }
-        for (const unit of this.selectedUnits) {
+        for (const unit of this.selectionManager.selectedUnits) {
             if (unit.isHero) {
                 this.abilityArrowStarts.push(this.renderer.worldToScreen(unit.position));
             }
         }
         this.renderer.abilityArrowStarts = this.abilityArrowStarts;
-    }
-
-    /**
-     * Check if a world position is near any selected unit
-     */
-    private isDragStartNearSelectedUnits(worldPos: Vector2D): boolean {
-        if (this.selectedUnits.size === 0) return false;
-        
-        for (const unit of this.selectedUnits) {
-            const distance = unit.position.distanceTo(worldPos);
-            if (distance <= Constants.UNIT_PATH_DRAW_RADIUS) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private isDragStartNearSelectedMirrors(worldPos: Vector2D): boolean {
-        if (this.selectedMirrors.size === 0) {
-            return false;
-        }
-
-        for (const mirror of this.selectedMirrors) {
-            if (mirror.containsPoint(worldPos)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private getHeroUnitType(heroName: string): string | null {
@@ -377,10 +272,10 @@ class GameController {
     }
 
     private hasSelectedStarlingsOnly(): boolean {
-        if (this.selectedUnits.size === 0) {
+        if (this.selectionManager.selectedUnits.size === 0) {
             return false;
         }
-        for (const unit of this.selectedUnits) {
+        for (const unit of this.selectionManager.selectedUnits) {
             if (!(unit instanceof Starling)) {
                 return false;
             }
@@ -414,7 +309,7 @@ class GameController {
                 console.log('Queued foundry Strafe upgrade');
                 this.sendNetworkCommand('foundry_strafe_upgrade', { buildingId });
                 foundry.isSelected = false;
-                this.selectedBuildings.clear();
+                this.selectionManager.selectedBuildings.clear();
             } else {
                 console.log('Cannot queue Strafe upgrade');
             }
@@ -424,7 +319,7 @@ class GameController {
                 console.log('Queued foundry Blink upgrade');
                 this.sendNetworkCommand('foundry_blink_upgrade', { buildingId });
                 foundry.isSelected = false;
-                this.selectedBuildings.clear();
+                this.selectionManager.selectedBuildings.clear();
             } else {
                 console.log('Cannot queue Blink upgrade');
             }
@@ -434,7 +329,7 @@ class GameController {
                 console.log('Queued foundry Regen upgrade');
                 this.sendNetworkCommand('foundry_regen_upgrade', { buildingId });
                 foundry.isSelected = false;
-                this.selectedBuildings.clear();
+                this.selectionManager.selectedBuildings.clear();
             } else {
                 console.log('Cannot queue Regen upgrade');
             }
@@ -444,7 +339,7 @@ class GameController {
                 console.log('Queued foundry +1 ATK upgrade');
                 this.sendNetworkCommand('foundry_attack_upgrade', { buildingId });
                 foundry.isSelected = false;
-                this.selectedBuildings.clear();
+                this.selectionManager.selectedBuildings.clear();
             } else {
                 console.log('Cannot queue +1 ATK upgrade');
             }
@@ -486,87 +381,6 @@ class GameController {
         this.lastTapPosition = new Vector2D(screenX, screenY);
         return false;
     }
-
-    /**
-     * Clear all selections and deselect all entities
-     */
-    private clearAllSelections(): void {
-        const player = this.getLocalPlayer();
-        if (!player) return;
-        
-        // Clear selection sets
-        this.selectedUnits.clear();
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-        this.selectedBuildings.clear();
-        this.warpGateManager.clearWarpGateSelection();
-        this.warpGateManager.mirrorCommandMode = null;
-        this.warpGateManager.mirrorHoldStartTimeMs = null;
-        this.warpGateManager.mirrorHoldWorldPos = null;
-        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
-        
-        // Deselect all entities
-        if (player.stellarForge) {
-            player.stellarForge.isSelected = false;
-        }
-        for (const mirror of player.solarMirrors) {
-            mirror.isSelected = false;
-        }
-        for (const building of player.buildings) {
-            building.isSelected = false;
-        }
-        
-        this.renderer.selectedUnits = this.selectedUnits;
-        this.renderer.selectedMirrors = this.selectedMirrors;
-    }
-
-    /**
-     * Select all starlings owned by the player
-     */
-    private selectAllStarlings(): void {
-        if (!this.game) return;
-        
-        const player = this.getLocalPlayer();
-        if (!player) return;
-        
-        // Clear all selections
-        this.clearAllSelections();
-        
-        // Select all starlings
-        for (const unit of player.units) {
-            if (unit instanceof Starling) {
-                this.selectedUnits.add(unit);
-            }
-        }
-        
-        this.renderer.selectedUnits = this.selectedUnits;
-        console.log(`Double-tap: Selected all ${this.selectedUnits.size} starlings`);
-    }
-
-    /**
-     * Select all buildings of the same type as the clicked building
-     */
-    private selectAllBuildingsOfType(clickedBuilding: Building): void {
-        if (!this.game) return;
-        
-        const player = this.getLocalPlayer();
-        if (!player) return;
-        
-        // Clear all selections
-        this.clearAllSelections();
-        
-        // Select all buildings of the same type
-        const buildingType = clickedBuilding.constructor;
-        for (const building of player.buildings) {
-            if (building.constructor === buildingType) {
-                building.isSelected = true;
-                this.selectedBuildings.add(building);
-            }
-        }
-        
-        console.log(`Double-tap: Selected all ${this.selectedBuildings.size} buildings of type ${buildingType.name}`);
-    }
-
 
     private getForgeButtonLabels(): string[] {
         const heroLabels = this.renderer.selectedHeroNames.slice(0, 4);
@@ -712,10 +526,10 @@ class GameController {
     }
 
     private isSelectedMirrorInSunlight(): boolean {
-        if (!this.game || this.selectedMirrors.size === 0) {
+        if (!this.game || this.selectionManager.selectedMirrors.size === 0) {
             return false;
         }
-        for (const mirror of this.selectedMirrors) {
+        for (const mirror of this.selectionManager.selectedMirrors) {
             if (mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) {
                 return true;
             }
@@ -788,11 +602,11 @@ class GameController {
     }
 
     private moveSelectedMirrorsToNearestSunlight(player: Player): void {
-        if (this.selectedMirrors.size === 0 || !this.game) {
+        if (this.selectionManager.selectedMirrors.size === 0 || !this.game) {
             return;
         }
 
-        for (const mirror of this.selectedMirrors) {
+        for (const mirror of this.selectionManager.selectedMirrors) {
             const target = mirror.setTargetToNearestSunlight(this.game);
             if (!target) {
                 console.log('No nearby sunlight destination found for mirror');
@@ -814,20 +628,20 @@ class GameController {
         }
 
         // Deselect all mirrors after issuing the "to sun" command
-        for (const mirror of this.selectedMirrors) {
+        for (const mirror of this.selectionManager.selectedMirrors) {
             mirror.isSelected = false;
         }
-        this.selectedMirrors.clear();
-        this.renderer.selectedMirrors = this.selectedMirrors;
+        this.selectionManager.selectedMirrors.clear();
+        this.renderer.selectedMirrors = this.selectionManager.selectedMirrors;
     }
 
     private getBuildingAbilityAnchorScreen(): Vector2D | null {
-        if (this.selectedBase) {
-            return this.renderer.worldToScreen(this.selectedBase.position);
+        if (this.selectionManager.selectedBase) {
+            return this.renderer.worldToScreen(this.selectionManager.selectedBase.position);
         }
 
-        if (this.selectedMirrors.size > 0) {
-            for (const mirror of this.selectedMirrors) {
+        if (this.selectionManager.selectedMirrors.size > 0) {
+            for (const mirror of this.selectionManager.selectedMirrors) {
                 return this.renderer.worldToScreen(mirror.position);
             }
         }
@@ -836,8 +650,8 @@ class GameController {
             return this.renderer.worldToScreen(this.warpGateManager.selectedWarpGate.position);
         }
 
-        if (this.selectedBuildings.size === 1) {
-            const selectedBuilding = Array.from(this.selectedBuildings)[0];
+        if (this.selectionManager.selectedBuildings.size === 1) {
+            const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
             if (selectedBuilding instanceof SubsidiaryFactory) {
                 return this.renderer.worldToScreen(selectedBuilding.position);
             }
@@ -865,12 +679,12 @@ class GameController {
     private cancelMirrorWarpGateModeAndDeselectMirrors(): void {
         this.warpGateManager.mirrorCommandMode = null;
         this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
-        for (const mirror of this.selectedMirrors) {
+        for (const mirror of this.selectionManager.selectedMirrors) {
             mirror.isSelected = false;
         }
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-        this.renderer.selectedMirrors = this.selectedMirrors;
+        this.selectionManager.selectedMirrors.clear();
+        this.selectionManager.selectedBase = null;
+        this.renderer.selectedMirrors = this.selectionManager.selectedMirrors;
         this.clearPathPreview();
     }
 
@@ -900,13 +714,24 @@ class GameController {
             renderer: this.renderer,
             getGame: () => this.game,
             getLocalPlayer: () => this.getLocalPlayer(),
-            getSelectedMirrors: () => this.selectedMirrors,
-            setSelectedMirrors: (mirrors) => { this.selectedMirrors = mirrors; },
+            getSelectedMirrors: () => this.selectionManager.selectedMirrors,
+            setSelectedMirrors: (mirrors) => { this.selectionManager.selectedMirrors = mirrors; },
             getRadialButtonOffsets: (count) => this.getRadialButtonOffsets(count),
             sendNetworkCommand: (cmd, data) => this.sendNetworkCommand(cmd, data),
             scatterParticles: (pos) => this.scatterParticles(pos),
             implodeParticles: (pos) => this.implodeParticles(pos),
             setShouldSkipMoveOrderThisTap: (value) => { this.shouldSkipMoveOrderThisTap = value; },
+        };
+    }
+
+    private getSelectionManagerContext(): SelectionManagerContext {
+        return {
+            renderer: this.renderer,
+            getGame: () => this.game,
+            getLocalPlayer: () => this.getLocalPlayer(),
+            getWarpGateManager: () => this.warpGateManager,
+            sendNetworkCommand: (cmd, data) => this.sendNetworkCommand(cmd, data),
+            isDoubleTap: (screenX, screenY) => this.isDoubleTap(screenX, screenY),
         };
     }
 
@@ -978,13 +803,13 @@ class GameController {
         this.game = null;
         
         // Clear selections
-        this.selectedUnits.clear();
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-        this.selectedBuildings.clear();
+        this.selectionManager.selectedUnits.clear();
+        this.selectionManager.selectedMirrors.clear();
+        this.selectionManager.selectedBase = null;
+        this.selectionManager.selectedBuildings.clear();
         this.warpGateManager.clearWarpGateSelection();
-        this.renderer.selectedUnits = this.selectedUnits;
-        this.renderer.selectedMirrors = this.selectedMirrors;
+        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
+        this.renderer.selectedMirrors = this.selectionManager.selectedMirrors;
         
         // Reset states
         this.isPaused = false;
@@ -1192,6 +1017,7 @@ class GameController {
         // Set up input handlers
         this.setupInputHandlers(canvas);
         this.warpGateManager = new WarpGateManager(this.getWarpGateManagerContext());
+        this.selectionManager = new SelectionManager(this.getSelectionManagerContext());
 
         // Listen for replay launch events from menu
         window.addEventListener('launchReplay', ((event: CustomEvent) => {
@@ -1813,20 +1639,20 @@ class GameController {
             } else if (totalMovement > Constants.CLICK_DRAG_THRESHOLD) {
                 // Single-finger/mouse drag needs a threshold to distinguish from taps
                 // Check if only hero units are selected - if so, show arrow instead of selection box
-                const hasHeroUnits = this.hasHeroUnitsSelected();
+                const hasHeroUnits = this.selectionManager.hasHeroUnitsSelected();
                 const dragStartWorld = this.selectionStartScreen
                     ? this.renderer.screenToWorld(this.selectionStartScreen.x, this.selectionStartScreen.y)
                     : null;
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDraggingBuildingArrow && !this.isDrawingPath) {
                     const isDragStartOnSelectedBase = Boolean(
-                        this.selectedBase &&
-                        this.selectedBase.isSelected &&
+                        this.selectionManager.selectedBase &&
+                        this.selectionManager.selectedBase.isSelected &&
                         dragStartWorld &&
-                        this.selectedBase.containsPoint(dragStartWorld)
+                        this.selectionManager.selectedBase.containsPoint(dragStartWorld)
                     );
                     const isDragStartOnSelectedMirror = Boolean(
-                        dragStartWorld && this.isDragStartNearSelectedMirrors(dragStartWorld)
+                        dragStartWorld && this.selectionManager.isDragStartNearSelectedMirrors(dragStartWorld)
                     );
                     const isDragStartOnSelectedWarpGate = Boolean(
                         this.warpGateManager.selectedWarpGate &&
@@ -1838,38 +1664,38 @@ class GameController {
                         // Drawing a path from the selected base
                         this.isDrawingPath = true;
                         this.pathPoints = [];
-                        this.renderer.pathPreviewForge = this.selectedBase;
-                        this.renderer.pathPreviewStartWorld = new Vector2D(this.selectedBase.position.x, this.selectedBase.position.y);
+                        this.renderer.pathPreviewForge = this.selectionManager.selectedBase;
+                        this.renderer.pathPreviewStartWorld = new Vector2D(this.selectionManager.selectedBase.position.x, this.selectionManager.selectedBase.position.y);
                         this.renderer.pathPreviewPoints = this.pathPoints;
-                        this.selectedBase.isSelected = false;
+                        this.selectionManager.selectedBase.isSelected = false;
                         this.cancelHold();
                     } else if (isDragStartOnSelectedMirror) {
                         // Drawing a path from selected solar mirrors
                         this.isDrawingPath = true;
                         this.pathPoints = [];
                         this.renderer.pathPreviewForge = null;
-                        const firstMirror = Array.from(this.selectedMirrors)[0];
+                        const firstMirror = Array.from(this.selectionManager.selectedMirrors)[0];
                         this.renderer.pathPreviewStartWorld = firstMirror ? new Vector2D(firstMirror.position.x, firstMirror.position.y) : null;
                         this.renderer.pathPreviewPoints = this.pathPoints;
                         this.cancelHold();
                     } else if (isDragStartOnSelectedWarpGate) {
                         this.isDraggingBuildingArrow = true;
                         this.cancelHold();
-                    } else if (this.selectedBuildings.size === 1) {
+                    } else if (this.selectionManager.selectedBuildings.size === 1) {
                         // Check if a foundry is selected
-                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
                             // Foundry is selected - use building arrow mode
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
                         }
-                    } else if ((this.selectedBase || this.selectedMirrors.size > 0 || this.warpGateManager.selectedWarpGate) && this.selectedUnits.size === 0) {
+                    } else if ((this.selectionManager.selectedBase || this.selectionManager.selectedMirrors.size > 0 || this.warpGateManager.selectedWarpGate) && this.selectionManager.selectedUnits.size === 0) {
                         // Stellar forge or mirror selected - use building arrow mode even when dragging from empty space
                         this.isDraggingBuildingArrow = true;
                         this.cancelHold();
-                    } else if (this.selectedUnits.size > 0 && this.selectionStartScreen) {
+                    } else if (this.selectionManager.selectedUnits.size > 0 && this.selectionStartScreen) {
                         // Check if drag started near selected units - if so, draw movement path
-                        if (dragStartWorld && this.isDragStartNearSelectedUnits(dragStartWorld)) {
+                        if (dragStartWorld && this.selectionManager.isDragStartNearSelectedUnits(dragStartWorld)) {
                             // Drawing a movement path for selected units
                             this.isDrawingPath = true;
                             this.pathPoints = [];
@@ -1959,7 +1785,7 @@ class GameController {
                         this.renderer.highlightedButtonIndex = dragDirection
                             ? this.getNearestButtonIndexFromAngle(angle, forgeButtonCount)
                             : -1;
-                    } else if (this.selectedMirrors.size > 0) {
+                    } else if (this.selectionManager.selectedMirrors.size > 0) {
                         // Solar mirrors have 2 or 3 buttons
                         this.renderer.highlightedButtonIndex = dragDirection
                             ? this.getNearestMirrorButtonIndexFromAngle(angle, this.hasSeenFoundry, this.isSelectedMirrorInSunlight())
@@ -1985,9 +1811,9 @@ class GameController {
                         } else {
                             this.renderer.highlightedButtonIndex = -1;
                         }
-                    } else if (this.selectedBuildings.size === 1) {
+                    } else if (this.selectionManager.selectedBuildings.size === 1) {
                         // Foundry building has 4 buttons
-                        const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                        const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
                         if (selectedBuilding instanceof SubsidiaryFactory) {
                             this.renderer.highlightedButtonIndex = dragDirection
                                 ? this.getNearestButtonIndexFromAngle(angle, 4)
@@ -2201,7 +2027,7 @@ class GameController {
                     if (this.warpGateManager.selectedWarpGate === clickedWarpGate) {
                         this.warpGateManager.clearWarpGateSelection();
                     } else {
-                        this.clearAllSelections();
+                        this.selectionManager.clearAllSelections();
                         this.warpGateManager.selectedWarpGate = clickedWarpGate;
                         this.renderer.selectedWarpGate = clickedWarpGate;
                     }
@@ -2216,8 +2042,8 @@ class GameController {
                     return;
                 }
 
-                if (this.warpGateManager.mirrorCommandMode === 'warpgate' && this.selectedMirrors.size > 0) {
-                    if (this.isDragStartNearSelectedMirrors(worldPos)) {
+                if (this.warpGateManager.mirrorCommandMode === 'warpgate' && this.selectionManager.selectedMirrors.size > 0) {
+                    if (this.selectionManager.isDragStartNearSelectedMirrors(worldPos)) {
                         this.cancelMirrorWarpGateModeAndDeselectMirrors();
                         isPanning = false;
                         isMouseDown = false;
@@ -2244,13 +2070,13 @@ class GameController {
                     ? this.getFriendlySacrificeTargetAtPosition(worldPos, player)
                     : null;
                 const targetableStructure = friendlySacrificeTarget ?? this.getTargetableStructureAtPosition(worldPos, player);
-                if (this.selectedUnits.size > 0 && targetableStructure) {
+                if (this.selectionManager.selectedUnits.size > 0 && targetableStructure) {
                     this.moveOrderCounter++;
                     const isFriendlySacrificeTarget = targetableStructure.target instanceof SubsidiaryFactory &&
                         targetableStructure.target.owner === player;
                     const targetRadiusPx = this.getTargetStructureRadiusPx(targetableStructure.target);
 
-                    for (const unit of this.selectedUnits) {
+                    for (const unit of this.selectionManager.selectedUnits) {
                         const rallyPoint = isFriendlySacrificeTarget && unit instanceof Starling
                             ? targetableStructure.target.position
                             : unit.getStructureStandoffPoint(
@@ -2262,7 +2088,7 @@ class GameController {
                     }
 
                     const unitIds = this.game
-                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                        ? Array.from(this.selectionManager.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
                         : [];
                     this.sendNetworkCommand('unit_target_structure', {
                         unitIds,
@@ -2272,8 +2098,8 @@ class GameController {
                         moveOrder: this.moveOrderCounter
                     });
 
-                    this.selectedUnits.clear();
-                    this.renderer.selectedUnits = this.selectedUnits;
+                    this.selectionManager.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                     this.clearPathPreview();
                     console.log('Units targeting structure', targetableStructure.structureType);
 
@@ -2290,33 +2116,33 @@ class GameController {
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
                     this.warpGateManager.clearWarpGateSelection();
-                    if (this.selectedMirrors.size > 0) {
-                        for (const mirror of this.selectedMirrors) {
+                    if (this.selectionManager.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectionManager.selectedMirrors) {
                             mirror.setLinkedStructure(player.stellarForge);
                             mirror.isSelected = false;
                         }
-                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
+                        const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror) =>
                             player.solarMirrors.indexOf(mirror)
                         ).filter((index) => index >= 0);
                         this.sendNetworkCommand('mirror_link', {
                             mirrorIndices,
                             structureType: 'forge'
                         });
-                        this.selectedMirrors.clear();
+                        this.selectionManager.selectedMirrors.clear();
                     }
                     if (player.stellarForge.isSelected) {
                         // Deselect forge
                         player.stellarForge.isSelected = false;
-                        this.selectedBase = null;
+                        this.selectionManager.selectedBase = null;
                         this.clearPathPreview();
                         console.log('Stellar Forge deselected');
                     } else {
                         // Select forge, deselect units, mirrors, and buildings
                         player.stellarForge.isSelected = true;
-                        this.selectedBase = player.stellarForge;
-                        this.selectedUnits.clear();
-                        this.selectedMirrors.clear();
-                        this.renderer.selectedUnits = this.selectedUnits;
+                        this.selectionManager.selectedBase = player.stellarForge;
+                        this.selectionManager.selectedUnits.clear();
+                        this.selectionManager.selectedMirrors.clear();
+                        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                         // Deselect all mirrors
                         for (const mirror of player.solarMirrors) {
                             mirror.isSelected = false;
@@ -2325,7 +2151,7 @@ class GameController {
                         for (const building of player.buildings) {
                             building.isSelected = false;
                         }
-                        this.selectedBuildings.clear();
+                        this.selectionManager.selectedBuildings.clear();
                         this.clearPathPreview();
                         console.log('Stellar Forge selected');
                     }
@@ -2354,20 +2180,20 @@ class GameController {
                     if (clickedMirror.isSelected) {
                         // Deselect mirror
                         clickedMirror.isSelected = false;
-                        this.selectedMirrors.delete(clickedMirror);
+                        this.selectionManager.selectedMirrors.delete(clickedMirror);
                         this.clearPathPreview();
                         console.log('Solar Mirror deselected');
                     } else {
                         // Select mirror, deselect forge, units, and buildings
                         clickedMirror.isSelected = true;
-                        this.selectedMirrors.clear();
-                        this.selectedMirrors.add(clickedMirror);
+                        this.selectionManager.selectedMirrors.clear();
+                        this.selectionManager.selectedMirrors.add(clickedMirror);
                         if (player.stellarForge) {
                             player.stellarForge.isSelected = false;
                         }
-                        this.selectedBase = null;
-                        this.selectedUnits.clear();
-                        this.renderer.selectedUnits = this.selectedUnits;
+                        this.selectionManager.selectedBase = null;
+                        this.selectionManager.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                         // Deselect other mirrors
                         for (const mirror of player.solarMirrors) {
                             if (mirror !== clickedMirror) {
@@ -2378,7 +2204,7 @@ class GameController {
                         for (const building of player.buildings) {
                             building.isSelected = false;
                         }
-                        this.selectedBuildings.clear();
+                        this.selectionManager.selectedBuildings.clear();
                         this.clearPathPreview();
                         console.log('Solar Mirror selected');
                     }
@@ -2411,12 +2237,12 @@ class GameController {
                         clickedBuilding instanceof StrikerTower ||
                         clickedBuilding instanceof LockOnLaserTower ||
                         clickedBuilding instanceof ShieldTower;
-                    if (isCompatibleMirrorTarget && this.selectedMirrors.size > 0) {
-                        for (const mirror of this.selectedMirrors) {
+                    if (isCompatibleMirrorTarget && this.selectionManager.selectedMirrors.size > 0) {
+                        for (const mirror of this.selectionManager.selectedMirrors) {
                             mirror.setLinkedStructure(clickedBuilding);
                             mirror.isSelected = false;
                         }
-                        const mirrorIndices = Array.from(this.selectedMirrors).map((mirror) =>
+                        const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror) =>
                             player.solarMirrors.indexOf(mirror)
                         ).filter((index) => index >= 0);
                         const buildingIndex = player.buildings.indexOf(clickedBuilding);
@@ -2427,7 +2253,7 @@ class GameController {
                                 buildingIndex
                             });
                         }
-                        this.selectedMirrors.clear();
+                        this.selectionManager.selectedMirrors.clear();
                     }
                     
                     // Check if this is a double-tap
@@ -2435,7 +2261,7 @@ class GameController {
                     
                     if (isDoubleTap) {
                         // Double-tap: select all buildings of this type
-                        this.selectAllBuildingsOfType(clickedBuilding);
+                        this.selectionManager.selectAllBuildingsOfType(clickedBuilding);
                     } else if (clickedBuilding.isSelected) {
                         // If Striker Tower is selected and missile is ready, activate targeting mode
                         if (clickedBuilding instanceof StrikerTower && clickedBuilding.isMissileReady()) {
@@ -2444,25 +2270,25 @@ class GameController {
                         } else {
                             // Deselect building
                             clickedBuilding.isSelected = false;
-                            this.selectedBuildings.delete(clickedBuilding);
+                            this.selectionManager.selectedBuildings.delete(clickedBuilding);
                             console.log('Building deselected');
                         }
                     } else {
                         // Select building, deselect forge, units, and mirrors
                         clickedBuilding.isSelected = true;
-                        this.selectedBuildings.clear();
-                        this.selectedBuildings.add(clickedBuilding);
+                        this.selectionManager.selectedBuildings.clear();
+                        this.selectionManager.selectedBuildings.add(clickedBuilding);
                         if (player.stellarForge) {
                             player.stellarForge.isSelected = false;
                         }
-                        this.selectedBase = null;
-                        this.selectedUnits.clear();
-                        this.renderer.selectedUnits = this.selectedUnits;
+                        this.selectionManager.selectedBase = null;
+                        this.selectionManager.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                         // Deselect all mirrors
                         for (const mirror of player.solarMirrors) {
                             mirror.isSelected = false;
                         }
-                        this.selectedMirrors.clear();
+                        this.selectionManager.selectedMirrors.clear();
                         this.clearPathPreview();
                         console.log('Building selected');
                     }
@@ -2478,8 +2304,8 @@ class GameController {
                 }
 
                 // Check if clicked on mirror command buttons
-                if (this.selectedMirrors.size > 0) {
-                    const firstMirror = Array.from(this.selectedMirrors)[0] as any;
+                if (this.selectionManager.selectedMirrors.size > 0) {
+                    const firstMirror = Array.from(this.selectionManager.selectedMirrors)[0] as any;
                     const mirrorScreenPos = this.renderer.worldToScreen(firstMirror.position);
                     const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
                     const buttonOffset = 50 * this.renderer.zoom;
@@ -2512,10 +2338,10 @@ class GameController {
                         if (i === 0) {
                             console.log('Mirror command: Link to Forge');
                             if (player.stellarForge) {
-                                for (const mirror of this.selectedMirrors) {
+                                for (const mirror of this.selectionManager.selectedMirrors) {
                                     mirror.setLinkedStructure(player.stellarForge);
                                 }
-                                const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror: any) =>
                                     player.solarMirrors.indexOf(mirror)
                                 ).filter((index) => index >= 0);
                                 this.sendNetworkCommand('mirror_link', {
@@ -2523,10 +2349,10 @@ class GameController {
                                     structureType: 'forge'
                                 });
                             }
-                            for (const mirror of this.selectedMirrors) {
+                            for (const mirror of this.selectionManager.selectedMirrors) {
                                 (mirror as any).isSelected = false;
                             }
-                            this.selectedMirrors.clear();
+                            this.selectionManager.selectedMirrors.clear();
                             isPanning = false;
                             isMouseDown = false;
                             this.isSelecting = false;
@@ -2554,10 +2380,10 @@ class GameController {
                             if (this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
                                 if (foundry) {
-                                    for (const mirror of this.selectedMirrors) {
+                                    for (const mirror of this.selectionManager.selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
                                     }
-                                    const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                    const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror: any) =>
                                         player.solarMirrors.indexOf(mirror)
                                     ).filter((index) => index >= 0);
                                     const buildingIndex = player.buildings.indexOf(foundry);
@@ -2570,10 +2396,10 @@ class GameController {
                                     }
                                 }
                             }
-                            for (const mirror of this.selectedMirrors) {
+                            for (const mirror of this.selectionManager.selectedMirrors) {
                                 (mirror as any).isSelected = false;
                             }
-                            this.selectedMirrors.clear();
+                            this.selectionManager.selectedMirrors.clear();
                             isPanning = false;
                             isMouseDown = false;
                             this.isSelecting = false;
@@ -2616,15 +2442,15 @@ class GameController {
 
                         if (didTriggerForgeAction) {
                             player.stellarForge.isSelected = false;
-                            this.selectedBase = null;
-                            this.selectedUnits.clear();
-                            this.selectedMirrors.clear();
-                            this.renderer.selectedUnits = this.selectedUnits;
+                            this.selectionManager.selectedBase = null;
+                            this.selectionManager.selectedUnits.clear();
+                            this.selectionManager.selectedMirrors.clear();
+                            this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                             // Deselect all buildings
                             for (const building of player.buildings) {
                                 building.isSelected = false;
                             }
-                            this.selectedBuildings.clear();
+                            this.selectionManager.selectedBuildings.clear();
                             this.clearPathPreview();
                         }
 
@@ -2639,8 +2465,8 @@ class GameController {
                     }
                 }
 
-                if (this.selectedBuildings.size === 1) {
-                    const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                if (this.selectionManager.selectedBuildings.size === 1) {
+                    const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
                     if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
                         const clickedFoundryButtonIndex = this.getClickedFoundryButtonIndex(
                             lastX,
@@ -2654,11 +2480,11 @@ class GameController {
                     }
                 }
 
-                if (this.selectedBuildings.size > 0) {
-                    for (const building of this.selectedBuildings) {
+                if (this.selectionManager.selectedBuildings.size > 0) {
+                    for (const building of this.selectionManager.selectedBuildings) {
                         building.isSelected = false;
                     }
-                    this.selectedBuildings.clear();
+                    this.selectionManager.selectedBuildings.clear();
                     this.clearPathPreview();
                     console.log('Buildings deselected');
 
@@ -2683,15 +2509,15 @@ class GameController {
                         moveOrder: this.moveOrderCounter
                     });
                     player.stellarForge.isSelected = false; // Auto-deselect after setting target
-                    this.selectedBase = null;
-                    this.selectedUnits.clear();
-                    this.selectedMirrors.clear();
-                    this.renderer.selectedUnits = this.selectedUnits;
+                    this.selectionManager.selectedBase = null;
+                    this.selectionManager.selectedUnits.clear();
+                    this.selectionManager.selectedMirrors.clear();
+                    this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                     // Deselect all buildings
                     for (const building of player.buildings) {
                         building.isSelected = false;
                     }
-                    this.selectedBuildings.clear();
+                    this.selectionManager.selectedBuildings.clear();
                     console.log(`Stellar Forge moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -2718,8 +2544,8 @@ class GameController {
                     });
                     // Only deselect the mirror that received the move order; others stay selected
                     selectedMirror.isSelected = false;
-                    this.selectedMirrors.delete(selectedMirror);
-                    this.renderer.selectedMirrors = this.selectedMirrors;
+                    this.selectionManager.selectedMirrors.delete(selectedMirror);
+                    this.renderer.selectedMirrors = this.selectionManager.selectedMirrors;
                     console.log(`Solar Mirror moving to (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)})`);
                     
                     isPanning = false;
@@ -2736,18 +2562,18 @@ class GameController {
             // If we were selecting, finalize the selection
             if (this.isSelecting && this.selectionStartScreen && this.game) {
                 const endPos = new Vector2D(lastX, lastY);
-                this.selectUnitsInRectangle(this.selectionStartScreen, endPos);
+                this.selectionManager.selectUnitsInRectangle(this.selectionStartScreen, endPos);
             } else if (this.isDrawingPath && this.pathPoints.length > 0 && this.game) {
                 // Finalize the path drawing
-                if (this.selectedBase) {
+                if (this.selectionManager.selectedBase) {
                     // Path for base (minion spawning)
-                    this.selectedBase.setMinionPath(this.pathPoints);
+                    this.selectionManager.selectedBase.setMinionPath(this.pathPoints);
                     console.log(`Base path set with ${this.pathPoints.length} waypoints`);
                     this.sendNetworkCommand('set_rally_path', {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
                     });
-                    this.renderer.createPathCommitEffect(this.selectedBase.position, this.pathPoints, this.game.gameTime);
-                } else if (this.selectedMirrors.size > 0) {
+                    this.renderer.createPathCommitEffect(this.selectionManager.selectedBase.position, this.pathPoints, this.game.gameTime);
+                } else if (this.selectionManager.selectedMirrors.size > 0) {
                     const player = this.getLocalPlayer();
                     const lastWaypoint = this.pathPoints[this.pathPoints.length - 1];
 
@@ -2756,7 +2582,7 @@ class GameController {
                         this.moveOrderCounter++;
                         const mirrorIndices: number[] = [];
 
-                        for (const mirror of this.selectedMirrors) {
+                        for (const mirror of this.selectionManager.selectedMirrors) {
                             mirror.setTarget(lastWaypoint, this.game);
                             mirror.moveOrder = this.moveOrderCounter;
                             mirror.isSelected = false;
@@ -2772,36 +2598,36 @@ class GameController {
                             targetY: lastWaypoint.y,
                             moveOrder: this.moveOrderCounter
                         });
-                        const startMirror = Array.from(this.selectedMirrors)[0];
+                        const startMirror = Array.from(this.selectionManager.selectedMirrors)[0];
                         if (startMirror) {
                             this.renderer.createPathCommitEffect(startMirror.position, this.pathPoints, this.game.gameTime);
                         }
                     }
 
-                    this.selectedMirrors.clear();
+                    this.selectionManager.selectedMirrors.clear();
                     const localPlayer = this.getLocalPlayer();
                     if (localPlayer) {
                         for (const building of localPlayer.buildings) {
                             building.isSelected = false;
                         }
-                        this.selectedBuildings.clear();
+                        this.selectionManager.selectedBuildings.clear();
                     }
-                } else if (this.selectedUnits.size > 0) {
+                } else if (this.selectionManager.selectedUnits.size > 0) {
                     // Path for selected units
-                    console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectedUnits.size} unit(s)`);
+                    console.log(`Unit movement path set with ${this.pathPoints.length} waypoints for ${this.selectionManager.selectedUnits.size} unit(s)`);
                     
                     // Increment move order counter
                     this.moveOrderCounter++;
                     
                     // Set path for all selected units
-                    for (const unit of this.selectedUnits) {
+                    for (const unit of this.selectionManager.selectedUnits) {
                         // All units now support path following
                         unit.clearManualTarget();
                         unit.setPath(this.pathPoints);
                         unit.moveOrder = this.moveOrderCounter;
                     }
                     const unitIds = this.game
-                        ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                        ? Array.from(this.selectionManager.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
                         : [];
                     this.sendNetworkCommand('unit_path', {
                         unitIds,
@@ -2813,31 +2639,31 @@ class GameController {
                     }
                     
                     // Deselect units and buildings after setting path
-                    this.selectedUnits.clear();
-                    this.renderer.selectedUnits = this.selectedUnits;
+                    this.selectionManager.selectedUnits.clear();
+                    this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                     const player = this.getLocalPlayer();
                     if (player) {
                         for (const building of player.buildings) {
                             building.isSelected = false;
                         }
-                        this.selectedBuildings.clear();
+                        this.selectionManager.selectedBuildings.clear();
                     }
                 }
                 this.clearPathPreview();
-            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase || this.warpGateManager.selectedWarpGate) && this.selectionStartScreen && this.game) {
+            } else if (!this.isSelecting && (this.selectionManager.selectedUnits.size > 0 || this.selectionManager.selectedMirrors.size > 0 || this.selectionManager.selectedBase || this.warpGateManager.selectedWarpGate) && this.selectionStartScreen && this.game) {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
                 const buildingAbilityMovement = totalMovement;
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
-                const hasHeroUnits = this.hasHeroUnitsSelected();
+                const hasHeroUnits = this.selectionManager.hasHeroUnitsSelected();
                 if (this.warpGateManager.shouldCancelMirrorWarpGateOnRelease) {
                     this.cancelMirrorWarpGateModeAndDeselectMirrors();
                     this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
                 }
 
-                const shouldUseAbility = this.selectedUnits.size > 0 && (
+                const shouldUseAbility = this.selectionManager.selectedUnits.size > 0 && (
                     (!hasHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
                     (hasHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
                 );
@@ -2865,13 +2691,13 @@ class GameController {
                     if (!hasHeroUnits) {
                         const player = this.getLocalPlayer();
                         if (player && direction.y < -0.5) {
-                            const selectedStarlings = this.getSelectedStarlings(player);
+                            const selectedStarlings = this.selectionManager.getSelectedStarlings(player);
                             if (selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
                                 // Calculate average position of selected starlings as merge target
                                 const avgX = selectedStarlings.reduce((sum, s) => sum + s.position.x, 0) / selectedStarlings.length;
                                 const avgY = selectedStarlings.reduce((sum, s) => sum + s.position.y, 0) / selectedStarlings.length;
                                 const targetPos = new Vector2D(avgX, avgY);
-                                didMergeStarlings = this.tryStartStarlingMerge(player, selectedStarlings, targetPos);
+                                didMergeStarlings = this.selectionManager.tryStartStarlingMerge(player, selectedStarlings, targetPos);
                             }
                         }
                     }
@@ -2879,7 +2705,7 @@ class GameController {
                     if (!didMergeStarlings) {
                         // Activate ability for all selected units
                         let anyAbilityUsed = false;
-                        for (const unit of this.selectedUnits) {
+                        for (const unit of this.selectionManager.selectedUnits) {
                             if (unit.useAbility(direction)) {
                                 anyAbilityUsed = true;
                                 if (this.game) {
@@ -2897,8 +2723,8 @@ class GameController {
                         }
 
                         // Deselect all units after using ability
-                        this.selectedUnits.clear();
-                        this.renderer.selectedUnits = this.selectedUnits;
+                        this.selectionManager.selectedUnits.clear();
+                        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
                     }
                 } else if (this.isDraggingBuildingArrow && buildingAbilityMovement >= abilityDragThreshold) {
                     // Building ability arrow was dragged - activate the highlighted button
@@ -2912,7 +2738,7 @@ class GameController {
                                     const didCreateMirror = this.trySpawnSolarMirrorFromForge(player);
                                     if (didCreateMirror) {
                                         player.stellarForge.isSelected = false;
-                                        this.selectedBase = null;
+                                        this.selectionManager.selectedBase = null;
                                     }
                                 } else {
                                     const heroUnitType = this.getHeroUnitType(selectedLabel);
@@ -2925,11 +2751,11 @@ class GameController {
                                         });
 
                                         player.stellarForge.isSelected = false;
-                                        this.selectedBase = null;
+                                        this.selectionManager.selectedBase = null;
                                     }
                                 }
                             }
-                        } else if (this.selectedMirrors.size > 0) {
+                        } else if (this.selectionManager.selectedMirrors.size > 0) {
                             // Solar mirror button selected
                             const isMirrorInSunlight = this.isSelectedMirrorInSunlight();
                             if (!isMirrorInSunlight && this.renderer.highlightedButtonIndex === 0) {
@@ -2937,10 +2763,10 @@ class GameController {
                             } else if (this.renderer.highlightedButtonIndex === 0) {
                                 // Forge button
                                 if (player.stellarForge) {
-                                    for (const mirror of this.selectedMirrors) {
+                                    for (const mirror of this.selectionManager.selectedMirrors) {
                                         mirror.setLinkedStructure(player.stellarForge);
                                     }
-                                    const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                    const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror: any) =>
                                         player.solarMirrors.indexOf(mirror)
                                     ).filter((index) => index >= 0);
                                     this.sendNetworkCommand('mirror_link', {
@@ -2949,10 +2775,10 @@ class GameController {
                                     });
                                     console.log('Radial selection: Mirrors linked to forge');
                                 }
-                                for (const mirror of this.selectedMirrors) {
+                                for (const mirror of this.selectionManager.selectedMirrors) {
                                     (mirror as any).isSelected = false;
                                 }
-                                this.selectedMirrors.clear();
+                                this.selectionManager.selectedMirrors.clear();
                             } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 1) {
                                 // Warp gate button
                                 if (this.warpGateManager.mirrorCommandMode === 'warpgate') {
@@ -2965,10 +2791,10 @@ class GameController {
                             } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 2 && this.hasActiveFoundry) {
                                 const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
                                 if (foundry) {
-                                    for (const mirror of this.selectedMirrors) {
+                                    for (const mirror of this.selectionManager.selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
                                     }
-                                    const mirrorIndices = Array.from(this.selectedMirrors).map((mirror: any) =>
+                                    const mirrorIndices = Array.from(this.selectionManager.selectedMirrors).map((mirror: any) =>
                                         player.solarMirrors.indexOf(mirror)
                                     ).filter((index) => index >= 0);
                                     const buildingIndex = player.buildings.indexOf(foundry);
@@ -2981,18 +2807,18 @@ class GameController {
                                     }
                                     console.log('Radial selection: Mirrors linked to foundry');
                                 }
-                                for (const mirror of this.selectedMirrors) {
+                                for (const mirror of this.selectionManager.selectedMirrors) {
                                     (mirror as any).isSelected = false;
                                 }
-                                this.selectedMirrors.clear();
+                                this.selectionManager.selectedMirrors.clear();
                             }
                         } else if (this.warpGateManager.selectedWarpGate) {
                             if (this.warpGateManager.isWarpGateButtonAvailable(player, this.renderer.highlightedButtonIndex)) {
                                 this.warpGateManager.buildFromWarpGate(player, this.warpGateManager.selectedWarpGate, this.renderer.highlightedButtonIndex);
                             }
-                        } else if (this.selectedBuildings.size === 1) {
+                        } else if (this.selectionManager.selectedBuildings.size === 1) {
                             // Foundry building button selected
-                            const selectedBuilding = Array.from(this.selectedBuildings)[0];
+                            const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
                             if (selectedBuilding instanceof SubsidiaryFactory) {
                                 this.handleFoundryButtonPress(player, selectedBuilding, this.renderer.highlightedButtonIndex);
                             }
@@ -3002,13 +2828,13 @@ class GameController {
                     // Cancel ability casting if arrow was dragged back to nothing
                 } else if (this.shouldSkipMoveOrderThisTap) {
                     this.shouldSkipMoveOrderThisTap = false;
-                } else if (this.warpGateManager.selectedWarpGate && this.selectedUnits.size === 0 && this.selectedMirrors.size === 0 && !this.selectedBase) {
+                } else if (this.warpGateManager.selectedWarpGate && this.selectionManager.selectedUnits.size === 0 && this.selectionManager.selectedMirrors.size === 0 && !this.selectionManager.selectedBase) {
                     // Warp gate selected without a drag - no movement action
                 } else {
                     // Check if any selected Striker Tower is awaiting target
                     const player = this.getLocalPlayer();
-                    const awaitingStrikerTower = player && this.selectedBuildings.size === 1 ? 
-                        Array.from(this.selectedBuildings)[0] : null;
+                    const awaitingStrikerTower = player && this.selectionManager.selectedBuildings.size === 1 ? 
+                        Array.from(this.selectionManager.selectedBuildings)[0] : null;
                     
                     if (awaitingStrikerTower instanceof StrikerTower && awaitingStrikerTower.isAwaitingTarget) {
                         // Start countdown for striker tower missile
@@ -3042,7 +2868,7 @@ class GameController {
                         this.moveOrderCounter++;
                         
                         // Set rally point for all selected units
-                        for (const unit of this.selectedUnits) {
+                        for (const unit of this.selectionManager.selectedUnits) {
                             const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
                             unit.clearManualTarget();
                             if (unit instanceof Starling) {
@@ -3053,7 +2879,7 @@ class GameController {
                             unit.moveOrder = this.moveOrderCounter;
                         }
                         const unitIds = this.game
-                            ? Array.from(this.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
+                            ? Array.from(this.selectionManager.selectedUnits).map((unit) => this.game!.getUnitNetworkId(unit))
                             : [];
                         this.sendNetworkCommand('unit_move', {
                             unitIds,
@@ -3071,7 +2897,7 @@ class GameController {
                                 closestMirror.moveOrder = this.moveOrderCounter;
                                 // Only deselect the mirror that received the move order; others stay selected
                                 closestMirror.isSelected = false;
-                                this.selectedMirrors.delete(closestMirror);
+                                this.selectionManager.selectedMirrors.delete(closestMirror);
                                 this.sendNetworkCommand('mirror_move', {
                                     mirrorIndices: [mirrorIndex],
                                     targetX: worldPos.x,
@@ -3082,10 +2908,10 @@ class GameController {
                         }
                         
                         // Set target for selected base
-                        if (this.selectedBase) {
-                            this.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                            this.selectedBase.moveOrder = this.moveOrderCounter;
-                            this.selectedBase.isSelected = false;
+                        if (this.selectionManager.selectedBase) {
+                            this.selectionManager.selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                            this.selectionManager.selectedBase.moveOrder = this.moveOrderCounter;
+                            this.selectionManager.selectedBase.isSelected = false;
                             this.sendNetworkCommand('forge_move', {
                                 targetX: worldPos.x,
                                 targetY: worldPos.y,
@@ -3094,10 +2920,10 @@ class GameController {
                         }
                         
                         // Deselect all units immediately (mirrors keep their selection state from above)
-                        this.selectedUnits.clear();
-                        this.selectedBase = null;
-                        this.renderer.selectedUnits = this.selectedUnits;
-                        this.renderer.selectedMirrors = this.selectedMirrors;
+                        this.selectionManager.selectedUnits.clear();
+                        this.selectionManager.selectedBase = null;
+                        this.renderer.selectedUnits = this.selectionManager.selectedUnits;
+                        this.renderer.selectedMirrors = this.selectionManager.selectedMirrors;
                         
                         console.log(`Movement target set at (${worldPos.x.toFixed(0)}, ${worldPos.y.toFixed(0)}) - Move order #${this.moveOrderCounter}`);
                     }
@@ -3360,13 +3186,13 @@ class GameController {
         this.holdStarlingForMerge = null;
 
         // Check if any buildings with guns are selected
-        const hasSelectedShootingBuildings = Array.from(this.selectedBuildings).some(
+        const hasSelectedShootingBuildings = Array.from(this.selectionManager.selectedBuildings).some(
             (building: any) => building.canShoot()
         );
         
         if (hasSelectedShootingBuildings) {
             // Building control: Set target for all selected buildings that can shoot
-            for (const building of this.selectedBuildings) {
+            for (const building of this.selectionManager.selectedBuildings) {
                 if (building.canShoot()) {
                     // Find the nearest enemy to the hold position
                     const enemies: any[] = [];
@@ -3405,7 +3231,7 @@ class GameController {
         }
 
         // Check if any mirrors are selected
-        const hasSelectedMirrors = this.selectedMirrors.size > 0;
+        const hasSelectedMirrors = this.selectionManager.selectedMirrors.size > 0;
         
         if (hasSelectedMirrors && this.warpGateManager.mirrorCommandMode === 'warpgate') {
             this.warpGateManager.tryCreateWarpGateAt(worldPos);
@@ -3418,105 +3244,15 @@ class GameController {
             this.warpGateManager.mirrorHoldWorldPos = worldPos;
         }
 
-        const selectedStarlings = this.getSelectedStarlings(player);
+        const selectedStarlings = this.selectionManager.getSelectedStarlings(player);
         const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
         if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
-            const closestStarling = this.getClosestSelectedStarling(worldPos);
+            const closestStarling = this.selectionManager.getClosestSelectedStarling(worldPos);
             if (closestStarling) {
                 this.holdStartTime = performance.now();
                 this.holdStarlingForMerge = closestStarling;
             }
         }
-    }
-
-    private selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
-        if (!this.game) return;
-
-        // Check if this is a small selection (single click area) and a double-tap
-        const selectionWidth = Math.abs(screenEnd.x - screenStart.x);
-        const selectionHeight = Math.abs(screenEnd.y - screenStart.y);
-        const isSmallSelection = selectionWidth < Constants.SMALL_SELECTION_THRESHOLD && selectionHeight < Constants.SMALL_SELECTION_THRESHOLD;
-        const isDoubleTap = isSmallSelection && this.isDoubleTap(screenEnd.x, screenEnd.y);
-
-        // Convert screen coordinates to world coordinates
-        const worldStart = this.renderer.screenToWorld(screenStart.x, screenStart.y);
-        const worldEnd = this.renderer.screenToWorld(screenEnd.x, screenEnd.y);
-
-        // Calculate rectangle bounds
-        const minX = Math.min(worldStart.x, worldEnd.x);
-        const maxX = Math.max(worldStart.x, worldEnd.x);
-        const minY = Math.min(worldStart.y, worldEnd.y);
-        const maxY = Math.max(worldStart.y, worldEnd.y);
-
-        // Get the player's units (assume player 1 is the human player)
-        const player = this.getLocalPlayer();
-        if (!player || player.isDefeated()) {
-            return;
-        }
-
-        // If double-tap, check what was clicked and select all of that type
-        if (isDoubleTap) {
-            // Check if clicked on a starling
-            for (const unit of player.units) {
-                if (unit instanceof Starling &&
-                    unit.position.x >= minX && unit.position.x <= maxX &&
-                    unit.position.y >= minY && unit.position.y <= maxY) {
-                    this.selectAllStarlings();
-                    return;
-                }
-            }
-            
-            // Not a starling, continue with normal selection
-        }
-
-        // Clear previous selection
-        this.selectedUnits.clear();
-        this.selectedMirrors.clear();
-        this.selectedBase = null;
-        this.warpGateManager.clearWarpGateSelection();
-
-        // Deselect all buildings
-        for (const building of player.buildings) {
-            building.isSelected = false;
-        }
-        this.selectedBuildings.clear();
-
-        // Select units within the rectangle
-        for (const unit of player.units) {
-            if (unit.position.x >= minX && unit.position.x <= maxX &&
-                unit.position.y >= minY && unit.position.y <= maxY) {
-                this.selectedUnits.add(unit);
-            }
-        }
-
-        // Select solar mirrors within the rectangle
-        for (const mirror of player.solarMirrors) {
-            if (mirror.position.x >= minX && mirror.position.x <= maxX &&
-                mirror.position.y >= minY && mirror.position.y <= maxY) {
-                this.selectedMirrors.add(mirror);
-                mirror.isSelected = true;
-            } else {
-                mirror.isSelected = false;
-            }
-        }
-
-        // Select base if within rectangle and no units are selected
-        if (player.stellarForge && 
-            player.stellarForge.position.x >= minX && player.stellarForge.position.x <= maxX &&
-            player.stellarForge.position.y >= minY && player.stellarForge.position.y <= maxY &&
-            this.selectedUnits.size === 0) {
-            this.selectedBase = player.stellarForge;
-            player.stellarForge.isSelected = true;
-        } else if (player.stellarForge) {
-            player.stellarForge.isSelected = false;
-        }
-
-        // Update renderer's selected units and mirrors
-        this.renderer.selectedUnits = this.selectedUnits;
-        this.renderer.selectedMirrors = this.selectedMirrors;
-
-        // Log selection for debugging
-        console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}`);
     }
 
     private cancelHold(): void {
@@ -3555,12 +3291,12 @@ class GameController {
             return;
         }
 
-        if (!this.selectedUnits.has(this.holdStarlingForMerge)) {
+        if (!this.selectionManager.selectedUnits.has(this.holdStarlingForMerge)) {
             this.cancelHold();
             return;
         }
 
-        const selectedStarlings = this.getSelectedStarlings(player);
+        const selectedStarlings = this.selectionManager.getSelectedStarlings(player);
         if (selectedStarlings.length < Constants.STARLING_MERGE_COUNT) {
             this.cancelHold();
             return;
@@ -3582,7 +3318,7 @@ class GameController {
             this.holdStarlingForMerge.position.y
         );
 
-        if (this.tryStartStarlingMerge(player, selectedStarlings, targetPosition)) {
+        if (this.selectionManager.tryStartStarlingMerge(player, selectedStarlings, targetPosition)) {
             this.shouldSkipMoveOrderThisTap = true;
         }
 
@@ -3593,7 +3329,7 @@ class GameController {
         if (!this.warpGateManager.mirrorHoldStartTimeMs || !this.warpGateManager.mirrorHoldWorldPos) {
             return;
         }
-        if (this.selectedMirrors.size === 0 || this.warpGateManager.mirrorCommandMode === 'warpgate') {
+        if (this.selectionManager.selectedMirrors.size === 0 || this.warpGateManager.mirrorCommandMode === 'warpgate') {
             this.warpGateManager.mirrorHoldStartTimeMs = null;
             this.warpGateManager.mirrorHoldWorldPos = null;
             return;
@@ -3841,7 +3577,7 @@ class GameController {
         if (this.game) {
             this.updateFoundryButtonState();
             const isSelectedMirrorInSunlight = this.isSelectedMirrorInSunlight();
-            const canCreateWarpGate = this.selectedMirrors.size > 0
+            const canCreateWarpGate = this.selectionManager.selectedMirrors.size > 0
                 && isSelectedMirrorInSunlight
                 && this.warpGateManager.canCreateWarpGateFromSelectedMirrors();
             this.renderer.isSelectedMirrorInSunlight = isSelectedMirrorInSunlight;
