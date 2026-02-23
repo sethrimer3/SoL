@@ -3,6 +3,7 @@
  */
 
 import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor } from './game-core';
+import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
@@ -32,12 +33,8 @@ class GameController {
     private showInfo: boolean = false;
     private holdStartTime: number | null = null;
     private holdStarlingForMerge: Starling | null = null;
-    private currentWarpGate: WarpGate | null = null;
-    private isUsingMirrorsForWarpGate: boolean = false;
-    private mirrorCommandMode: 'warpgate' | null = null; // Track which command was selected
+    private warpGateManager!: WarpGateManager;
     private shouldSkipMoveOrderThisTap: boolean = false;
-    private mirrorHoldStartTimeMs: number | null = null;
-    private mirrorHoldWorldPos: Vector2D | null = null;
     private hasSeenFoundry: boolean = false;
     private hasActiveFoundry: boolean = false;
     private menu: MainMenu;
@@ -46,14 +43,12 @@ class GameController {
     private selectedMirrors: Set<SolarMirror> = new Set(); // Set of SolarMirror
     private selectedBase: any | null = null; // StellarForge or null
     private selectedBuildings: Set<any> = new Set(); // Set of Building (Minigun/Cannon, Gatling, SpaceDustSwirler, SubsidiaryFactory/Foundry, StrikerTower, LockOnLaserTower, ShieldTower)
-    private selectedWarpGate: WarpGate | null = null;
     private isSelecting: boolean = false;
     private selectionStartScreen: Vector2D | null = null;
     private isDraggingHeroArrow: boolean = false; // Flag for hero arrow dragging
     private isDraggingBuildingArrow: boolean = false; // Flag for building ability arrow dragging
     private isDrawingPath: boolean = false; // Flag for drawing minion path from base
     private pathPoints: Vector2D[] = []; // Path waypoints being drawn
-    private shouldCancelMirrorWarpGateOnRelease: boolean = false;
     private moveOrderCounter: number = 0; // Counter for move order indicators
     private localPlayerIndex: number = 0; // Track local player index for LAN mode
     private lastTapTime: number = 0; // Timestamp of last tap for double-tap detection
@@ -492,342 +487,6 @@ class GameController {
         return false;
     }
 
-    private clearWarpGateSelection(): void {
-        this.selectedWarpGate = null;
-        this.renderer.selectedWarpGate = null;
-        this.renderer.highlightedButtonIndex = -1;
-    }
-
-    private getWarpGateAtPosition(worldPos: Vector2D, player: Player): WarpGate | null {
-        if (!this.game) {
-            return null;
-        }
-
-        for (const gate of this.game.warpGates) {
-            if (!gate.isComplete || gate.owner !== player) {
-                continue;
-            }
-            const distance = gate.position.distanceTo(worldPos);
-            if (distance <= Constants.WARP_GATE_RADIUS) {
-                return gate;
-            }
-        }
-        return null;
-    }
-
-    private getWarpGateButtonIndexFromClick(
-        gate: WarpGate,
-        screenX: number,
-        screenY: number
-    ): number {
-        const gateScreenPos = this.renderer.worldToScreen(gate.position);
-        const maxRadius = Constants.WARP_GATE_RADIUS * this.renderer.zoom;
-        const buttonRadius = Constants.WARP_GATE_BUTTON_RADIUS * this.renderer.zoom;
-        const buttonDistance = maxRadius + Constants.WARP_GATE_BUTTON_OFFSET * this.renderer.zoom;
-        const positions = this.getRadialButtonOffsets(4);
-
-        for (let i = 0; i < positions.length; i++) {
-            const pos = positions[i];
-            const buttonScreenX = gateScreenPos.x + pos.x * buttonDistance;
-            const buttonScreenY = gateScreenPos.y + pos.y * buttonDistance;
-            const dx = screenX - buttonScreenX;
-            const dy = screenY - buttonScreenY;
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            if (distance <= buttonRadius) {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private isWarpGateButtonAvailable(player: Player, buttonIndex: number): boolean {
-        const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-        const playerEnergy = player.energy;
-
-        if (player.faction === Faction.RADIANT) {
-            if (buttonIndex === 0) {
-                return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
-            }
-            if (buttonIndex === 1) {
-                return playerEnergy >= Constants.MINIGUN_COST;
-            }
-            if (buttonIndex === 2) {
-                return playerEnergy >= Constants.GATLING_COST;
-            }
-            if (buttonIndex === 3) {
-                return playerEnergy >= Constants.SHIELD_TOWER_COST;
-            }
-            return false;
-        }
-
-        if (player.faction === Faction.VELARIS) {
-            if (buttonIndex === 0) {
-                return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
-            }
-            if (buttonIndex === 1) {
-                return playerEnergy >= Constants.STRIKER_TOWER_COST;
-            }
-            if (buttonIndex === 2) {
-                return playerEnergy >= Constants.LOCKON_TOWER_COST;
-            }
-            if (buttonIndex === 3) {
-                return playerEnergy >= Constants.SWIRLER_COST;
-            }
-            return false;
-        }
-
-        if (buttonIndex === 0) {
-            return !hasSubFactory && playerEnergy >= Constants.SUBSIDIARY_FACTORY_COST;
-        }
-
-        return false;
-    }
-
-    private getWarpGateButtonDirection(buttonIndex: number): Vector2D | null {
-        const directions = this.getRadialButtonOffsets(4);
-        const direction = directions[buttonIndex];
-        if (!direction) {
-            return null;
-        }
-        return new Vector2D(direction.x, direction.y);
-    }
-
-    private getWarpGateButtonWorldPosition(gate: WarpGate, buttonIndex: number): Vector2D | null {
-        const direction = this.getWarpGateButtonDirection(buttonIndex);
-        if (!direction) {
-            return null;
-        }
-        const buttonDistanceWorld = Constants.WARP_GATE_RADIUS + Constants.WARP_GATE_BUTTON_OFFSET;
-        return new Vector2D(
-            gate.position.x + direction.x * buttonDistanceWorld,
-            gate.position.y + direction.y * buttonDistanceWorld
-        );
-    }
-
-    private buildFromWarpGate(player: Player, gate: WarpGate, buttonIndex: number): void {
-        if (!gate.isComplete || gate.owner !== player) {
-            return;
-        }
-        const gatePosition = new Vector2D(gate.position.x, gate.position.y);
-        const hasSubFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
-
-        if (buttonIndex === 0) {
-            if (hasSubFactory) {
-                console.log('Only one Foundry can exist at a time');
-                return;
-            }
-            if (!player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
-                console.log('Not enough energy to build Foundry');
-                return;
-            }
-            const subFactory = new SubsidiaryFactory(gatePosition, player);
-            player.buildings.push(subFactory);
-            console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-            this.sendNetworkCommand('building_purchase', {
-                buildingType: 'SubsidiaryFactory',
-                positionX: gate.position.x,
-                positionY: gate.position.y
-            });
-        } else if (buttonIndex === 1) {
-            // Faction-specific button 1
-            if (player.faction === Faction.RADIANT) {
-                // Radiant: Cannon
-                if (!player.spendEnergy(Constants.MINIGUN_COST)) {
-                    console.log('Not enough energy to build Cannon');
-                    return;
-                }
-                const minigun = new Minigun(gatePosition, player);
-                player.buildings.push(minigun);
-                console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'Minigun',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            } else if (player.faction === Faction.VELARIS) {
-                // Velaris: Striker Tower
-                if (!player.spendEnergy(Constants.STRIKER_TOWER_COST)) {
-                    console.log('Not enough energy to build Striker Tower');
-                    return;
-                }
-                const striker = new StrikerTower(gatePosition, player);
-                player.buildings.push(striker);
-                console.log(`Striker Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'StrikerTower',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            }
-        } else if (buttonIndex === 2) {
-            // Faction-specific button 2
-            if (player.faction === Faction.RADIANT) {
-                // Radiant: Gatling Tower
-                if (!player.spendEnergy(Constants.GATLING_COST)) {
-                    console.log('Not enough energy to build Gatling Tower');
-                    return;
-                }
-                const gatling = new GatlingTower(gatePosition, player);
-                player.buildings.push(gatling);
-                console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'Gatling',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            } else if (player.faction === Faction.VELARIS) {
-                // Velaris: Lock-on Laser Tower
-                if (!player.spendEnergy(Constants.LOCKON_TOWER_COST)) {
-                    console.log('Not enough energy to build Lock-on Laser Tower');
-                    return;
-                }
-                const lockon = new LockOnLaserTower(gatePosition, player);
-                player.buildings.push(lockon);
-                console.log(`Lock-on Laser Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'LockOnLaserTower',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            }
-        } else if (buttonIndex === 3) {
-            // Faction-specific button 3
-            if (player.faction === Faction.RADIANT) {
-                // Radiant: Shield Tower
-                if (!player.spendEnergy(Constants.SHIELD_TOWER_COST)) {
-                    console.log('Not enough energy to build Shield Tower');
-                    return;
-                }
-                const shield = new ShieldTower(gatePosition, player);
-                player.buildings.push(shield);
-                console.log(`Shield Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'ShieldTower',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            } else if (player.faction === Faction.VELARIS) {
-                // Velaris: Cyclone (SpaceDustSwirler)
-                if (!player.spendEnergy(Constants.SWIRLER_COST)) {
-                    console.log('Not enough energy to build Cyclone');
-                    return;
-                }
-                const swirler = new SpaceDustSwirler(gatePosition, player);
-                player.buildings.push(swirler);
-                console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
-                this.sendNetworkCommand('building_purchase', {
-                    buildingType: 'SpaceDustSwirler',
-                    positionX: gate.position.x,
-                    positionY: gate.position.y
-                });
-            }
-        } else {
-            return;
-        }
-
-        this.scatterParticles(gate.position);
-        this.removeWarpGate(gate);
-    }
-
-    private removeWarpGate(gate: WarpGate): void {
-        if (!this.game) {
-            return;
-        }
-
-        const gateIndex = this.game.warpGates.indexOf(gate);
-        if (gateIndex > -1) {
-            this.game.warpGates.splice(gateIndex, 1);
-        }
-        if (this.currentWarpGate === gate) {
-            this.currentWarpGate = null;
-        }
-        if (this.selectedWarpGate === gate) {
-            this.clearWarpGateSelection();
-        }
-        this.implodeParticles(gate.position);
-    }
-
-    private tryCreateWarpGateAt(worldPos: Vector2D): boolean {
-        if (!this.game) {
-            return false;
-        }
-        const player = this.getLocalPlayer();
-        if (!player || this.selectedMirrors.size === 0) {
-            return false;
-        }
-
-        // Check if the position is within the player's influence field
-        if (!this.game.isPointWithinPlayerInfluence(player, worldPos)) {
-            console.log('Cannot place warp gate outside influence field');
-            return false;
-        }
-
-        if (!this.canCreateWarpGateFromSelectedMirrors(worldPos)) {
-            return false;
-        }
-
-        const warpGate = new WarpGate(worldPos, player);
-        warpGate.startCharging();
-        this.game.warpGates.push(warpGate);
-        this.currentWarpGate = warpGate;
-        this.shouldSkipMoveOrderThisTap = true;
-
-        for (const mirror of this.selectedMirrors) {
-            mirror.setLinkedStructure(warpGate);
-            mirror.isSelected = false;
-        }
-        this.selectedMirrors.clear();
-        this.renderer.selectedMirrors = this.selectedMirrors;
-
-        console.log('Mirror-based warp gate created at', worldPos);
-
-        this.mirrorCommandMode = null;
-        this.mirrorHoldStartTimeMs = null;
-        this.mirrorHoldWorldPos = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
-        return true;
-    }
-
-    private canCreateWarpGateFromSelectedMirrors(targetPos?: Vector2D): boolean {
-        if (!this.game) {
-            return false;
-        }
-
-        for (const mirror of this.selectedMirrors) {
-            if (!mirror.hasLineOfSightToLight(this.game.suns, this.game.asteroids)) {
-                continue;
-            }
-
-            if (!targetPos) {
-                return true;
-            }
-
-            const ray = new LightRay(
-                mirror.position,
-                new Vector2D(
-                    targetPos.x - mirror.position.x,
-                    targetPos.y - mirror.position.y
-                ).normalize(),
-                1.0
-            );
-
-            let hasLineOfSight = true;
-            for (const asteroid of this.game.asteroids) {
-                if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                    hasLineOfSight = false;
-                    break;
-                }
-            }
-
-            if (hasLineOfSight) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /**
      * Clear all selections and deselect all entities
      */
@@ -840,11 +499,11 @@ class GameController {
         this.selectedMirrors.clear();
         this.selectedBase = null;
         this.selectedBuildings.clear();
-        this.clearWarpGateSelection();
-        this.mirrorCommandMode = null;
-        this.mirrorHoldStartTimeMs = null;
-        this.mirrorHoldWorldPos = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
+        this.warpGateManager.clearWarpGateSelection();
+        this.warpGateManager.mirrorCommandMode = null;
+        this.warpGateManager.mirrorHoldStartTimeMs = null;
+        this.warpGateManager.mirrorHoldWorldPos = null;
+        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
         
         // Deselect all entities
         if (player.stellarForge) {
@@ -1173,8 +832,8 @@ class GameController {
             }
         }
 
-        if (this.selectedWarpGate) {
-            return this.renderer.worldToScreen(this.selectedWarpGate.position);
+        if (this.warpGateManager.selectedWarpGate) {
+            return this.renderer.worldToScreen(this.warpGateManager.selectedWarpGate.position);
         }
 
         if (this.selectedBuildings.size === 1) {
@@ -1204,8 +863,8 @@ class GameController {
 
 
     private cancelMirrorWarpGateModeAndDeselectMirrors(): void {
-        this.mirrorCommandMode = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
+        this.warpGateManager.mirrorCommandMode = null;
+        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
         for (const mirror of this.selectedMirrors) {
             mirror.isSelected = false;
         }
@@ -1234,6 +893,21 @@ class GameController {
     private toggleInfo(): void {
         this.showInfo = !this.showInfo;
         this.renderer.showInfo = this.showInfo;
+    }
+
+    private getWarpGateManagerContext(): WarpGateManagerContext {
+        return {
+            renderer: this.renderer,
+            getGame: () => this.game,
+            getLocalPlayer: () => this.getLocalPlayer(),
+            getSelectedMirrors: () => this.selectedMirrors,
+            setSelectedMirrors: (mirrors) => { this.selectedMirrors = mirrors; },
+            getRadialButtonOffsets: (count) => this.getRadialButtonOffsets(count),
+            sendNetworkCommand: (cmd, data) => this.sendNetworkCommand(cmd, data),
+            scatterParticles: (pos) => this.scatterParticles(pos),
+            implodeParticles: (pos) => this.implodeParticles(pos),
+            setShouldSkipMoveOrderThisTap: (value) => { this.shouldSkipMoveOrderThisTap = value; },
+        };
     }
 
     private getLocalPlayer(): Player | null {
@@ -1308,7 +982,7 @@ class GameController {
         this.selectedMirrors.clear();
         this.selectedBase = null;
         this.selectedBuildings.clear();
-        this.clearWarpGateSelection();
+        this.warpGateManager.clearWarpGateSelection();
         this.renderer.selectedUnits = this.selectedUnits;
         this.renderer.selectedMirrors = this.selectedMirrors;
         
@@ -1517,6 +1191,7 @@ class GameController {
 
         // Set up input handlers
         this.setupInputHandlers(canvas);
+        this.warpGateManager = new WarpGateManager(this.getWarpGateManagerContext());
 
         // Listen for replay launch events from menu
         window.addEventListener('launchReplay', ((event: CustomEvent) => {
@@ -2154,9 +1829,9 @@ class GameController {
                         dragStartWorld && this.isDragStartNearSelectedMirrors(dragStartWorld)
                     );
                     const isDragStartOnSelectedWarpGate = Boolean(
-                        this.selectedWarpGate &&
+                        this.warpGateManager.selectedWarpGate &&
                         dragStartWorld &&
-                        dragStartWorld.distanceTo(this.selectedWarpGate.position) <= Constants.WARP_GATE_RADIUS
+                        dragStartWorld.distanceTo(this.warpGateManager.selectedWarpGate.position) <= Constants.WARP_GATE_RADIUS
                     );
 
                     if (isDragStartOnSelectedBase) {
@@ -2188,7 +1863,7 @@ class GameController {
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
                         }
-                    } else if ((this.selectedBase || this.selectedMirrors.size > 0 || this.selectedWarpGate) && this.selectedUnits.size === 0) {
+                    } else if ((this.selectedBase || this.selectedMirrors.size > 0 || this.warpGateManager.selectedWarpGate) && this.selectedUnits.size === 0) {
                         // Stellar forge or mirror selected - use building arrow mode even when dragging from empty space
                         this.isDraggingBuildingArrow = true;
                         this.cancelHold();
@@ -2291,20 +1966,20 @@ class GameController {
                             : -1;
                         const isMirrorInSunlight = this.isSelectedMirrorInSunlight();
                         if (isMirrorInSunlight) {
-                            if (this.renderer.highlightedButtonIndex === 1 && !this.canCreateWarpGateFromSelectedMirrors()) {
+                            if (this.renderer.highlightedButtonIndex === 1 && !this.warpGateManager.canCreateWarpGateFromSelectedMirrors()) {
                                 this.renderer.highlightedButtonIndex = -1;
                             }
                         }
-                        this.shouldCancelMirrorWarpGateOnRelease = Boolean(
+                        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = Boolean(
                             dragDirection &&
-                            this.mirrorCommandMode === 'warpgate' &&
+                            this.warpGateManager.mirrorCommandMode === 'warpgate' &&
                             dragDirection.y > 0.7 &&
                             this.renderer.buildingAbilityArrowLengthPx >= Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH)
                         );
-                    } else if (this.selectedWarpGate) {
+                    } else if (this.warpGateManager.selectedWarpGate) {
                         if (dragDirection && player) {
                             const nearestIndex = this.getNearestButtonIndexFromAngle(angle, 4);
-                            this.renderer.highlightedButtonIndex = this.isWarpGateButtonAvailable(player, nearestIndex)
+                            this.renderer.highlightedButtonIndex = this.warpGateManager.isWarpGateButtonAvailable(player, nearestIndex)
                                 ? nearestIndex
                                 : -1;
                         } else {
@@ -2488,10 +2163,10 @@ class GameController {
                     return;
                 }
 
-                if (this.selectedWarpGate) {
-                    const buttonIndex = this.getWarpGateButtonIndexFromClick(this.selectedWarpGate, lastX, lastY);
+                if (this.warpGateManager.selectedWarpGate) {
+                    const buttonIndex = this.warpGateManager.getWarpGateButtonIndexFromClick(this.warpGateManager.selectedWarpGate, lastX, lastY);
                     if (buttonIndex >= 0) {
-                        if (!this.isWarpGateButtonAvailable(player, buttonIndex)) {
+                        if (!this.warpGateManager.isWarpGateButtonAvailable(player, buttonIndex)) {
                             isPanning = false;
                             isMouseDown = false;
                             this.isSelecting = false;
@@ -2501,14 +2176,14 @@ class GameController {
                             this.endHold();
                             return;
                         }
-                        const buttonWorldPos = this.getWarpGateButtonWorldPosition(this.selectedWarpGate, buttonIndex);
+                        const buttonWorldPos = this.warpGateManager.getWarpGateButtonWorldPosition(this.warpGateManager.selectedWarpGate, buttonIndex);
                         if (buttonWorldPos) {
                             this.renderer.createProductionButtonWave(buttonWorldPos);
                         }
                         console.log(
                             `Warp gate button clicked: index ${buttonIndex} | energy=${player.energy.toFixed(1)}`
                         );
-                        this.buildFromWarpGate(player, this.selectedWarpGate, buttonIndex);
+                        this.warpGateManager.buildFromWarpGate(player, this.warpGateManager.selectedWarpGate, buttonIndex);
 
                         isPanning = false;
                         isMouseDown = false;
@@ -2521,13 +2196,13 @@ class GameController {
                     }
                 }
 
-                const clickedWarpGate = this.getWarpGateAtPosition(worldPos, player);
+                const clickedWarpGate = this.warpGateManager.getWarpGateAtPosition(worldPos, player);
                 if (clickedWarpGate) {
-                    if (this.selectedWarpGate === clickedWarpGate) {
-                        this.clearWarpGateSelection();
+                    if (this.warpGateManager.selectedWarpGate === clickedWarpGate) {
+                        this.warpGateManager.clearWarpGateSelection();
                     } else {
                         this.clearAllSelections();
-                        this.selectedWarpGate = clickedWarpGate;
+                        this.warpGateManager.selectedWarpGate = clickedWarpGate;
                         this.renderer.selectedWarpGate = clickedWarpGate;
                     }
 
@@ -2541,7 +2216,7 @@ class GameController {
                     return;
                 }
 
-                if (this.mirrorCommandMode === 'warpgate' && this.selectedMirrors.size > 0) {
+                if (this.warpGateManager.mirrorCommandMode === 'warpgate' && this.selectedMirrors.size > 0) {
                     if (this.isDragStartNearSelectedMirrors(worldPos)) {
                         this.cancelMirrorWarpGateModeAndDeselectMirrors();
                         isPanning = false;
@@ -2554,7 +2229,7 @@ class GameController {
                         return;
                     }
 
-                    this.tryCreateWarpGateAt(worldPos);
+                    this.warpGateManager.tryCreateWarpGateAt(worldPos);
                     isPanning = false;
                     isMouseDown = false;
                     this.isSelecting = false;
@@ -2614,7 +2289,7 @@ class GameController {
                 
                 // Check if clicked on stellar forge
                 if (player.stellarForge && player.stellarForge.containsPoint(worldPos)) {
-                    this.clearWarpGateSelection();
+                    this.warpGateManager.clearWarpGateSelection();
                     if (this.selectedMirrors.size > 0) {
                         for (const mirror of this.selectedMirrors) {
                             mirror.setLinkedStructure(player.stellarForge);
@@ -2675,7 +2350,7 @@ class GameController {
                 }
                 
                 if (clickedMirror) {
-                    this.clearWarpGateSelection();
+                    this.warpGateManager.clearWarpGateSelection();
                     if (clickedMirror.isSelected) {
                         // Deselect mirror
                         clickedMirror.isSelected = false;
@@ -2728,7 +2403,7 @@ class GameController {
                 }
                 
                 if (clickedBuilding) {
-                    this.clearWarpGateSelection();
+                    this.warpGateManager.clearWarpGateSelection();
                     const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
                         clickedBuilding instanceof GatlingTower ||
                         clickedBuilding instanceof SpaceDustSwirler ||
@@ -2863,8 +2538,8 @@ class GameController {
 
                         if (i === 1) {
                             console.log('Mirror command: Create Warp Gate');
-                            if (this.canCreateWarpGateFromSelectedMirrors()) {
-                                this.mirrorCommandMode = 'warpgate';
+                            if (this.warpGateManager.canCreateWarpGateFromSelectedMirrors()) {
+                                this.warpGateManager.mirrorCommandMode = 'warpgate';
                             }
                             isPanning = false;
                             isMouseDown = false;
@@ -3031,7 +2706,7 @@ class GameController {
                 
                 // If a mirror is selected and clicked elsewhere, move it
                 const { mirror: selectedMirror, mirrorIndex } = this.getClosestSelectedMirror(player, worldPos);
-                if (selectedMirror && this.mirrorCommandMode !== 'warpgate') {
+                if (selectedMirror && this.warpGateManager.mirrorCommandMode !== 'warpgate') {
                     selectedMirror.setTarget(worldPos, this.game);
                     this.moveOrderCounter++;
                     selectedMirror.moveOrder = this.moveOrderCounter;
@@ -3149,7 +2824,7 @@ class GameController {
                     }
                 }
                 this.clearPathPreview();
-            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase || this.selectedWarpGate) && this.selectionStartScreen && this.game) {
+            } else if (!this.isSelecting && (this.selectedUnits.size > 0 || this.selectedMirrors.size > 0 || this.selectedBase || this.warpGateManager.selectedWarpGate) && this.selectionStartScreen && this.game) {
                 // If units, mirrors, or base are selected and player dragged/clicked
                 const endPos = new Vector2D(lastX, lastY);
                 const totalMovement = this.selectionStartScreen.distanceTo(endPos);
@@ -3157,9 +2832,9 @@ class GameController {
                 
                 const abilityDragThreshold = Math.max(Constants.CLICK_DRAG_THRESHOLD, Constants.ABILITY_ARROW_MIN_LENGTH);
                 const hasHeroUnits = this.hasHeroUnitsSelected();
-                if (this.shouldCancelMirrorWarpGateOnRelease) {
+                if (this.warpGateManager.shouldCancelMirrorWarpGateOnRelease) {
                     this.cancelMirrorWarpGateModeAndDeselectMirrors();
-                    this.shouldCancelMirrorWarpGateOnRelease = false;
+                    this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
                 }
 
                 const shouldUseAbility = this.selectedUnits.size > 0 && (
@@ -3280,11 +2955,11 @@ class GameController {
                                 this.selectedMirrors.clear();
                             } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 1) {
                                 // Warp gate button
-                                if (this.mirrorCommandMode === 'warpgate') {
+                                if (this.warpGateManager.mirrorCommandMode === 'warpgate') {
                                     this.cancelMirrorWarpGateModeAndDeselectMirrors();
                                     console.log('Radial selection: Mirror warp gate mode cancelled');
-                                } else if (this.canCreateWarpGateFromSelectedMirrors()) {
-                                    this.mirrorCommandMode = 'warpgate';
+                                } else if (this.warpGateManager.canCreateWarpGateFromSelectedMirrors()) {
+                                    this.warpGateManager.mirrorCommandMode = 'warpgate';
                                     console.log('Radial selection: Mirror command mode set to warpgate');
                                 }
                             } else if (isMirrorInSunlight && this.renderer.highlightedButtonIndex === 2 && this.hasActiveFoundry) {
@@ -3311,9 +2986,9 @@ class GameController {
                                 }
                                 this.selectedMirrors.clear();
                             }
-                        } else if (this.selectedWarpGate) {
-                            if (this.isWarpGateButtonAvailable(player, this.renderer.highlightedButtonIndex)) {
-                                this.buildFromWarpGate(player, this.selectedWarpGate, this.renderer.highlightedButtonIndex);
+                        } else if (this.warpGateManager.selectedWarpGate) {
+                            if (this.warpGateManager.isWarpGateButtonAvailable(player, this.renderer.highlightedButtonIndex)) {
+                                this.warpGateManager.buildFromWarpGate(player, this.warpGateManager.selectedWarpGate, this.renderer.highlightedButtonIndex);
                             }
                         } else if (this.selectedBuildings.size === 1) {
                             // Foundry building button selected
@@ -3327,7 +3002,7 @@ class GameController {
                     // Cancel ability casting if arrow was dragged back to nothing
                 } else if (this.shouldSkipMoveOrderThisTap) {
                     this.shouldSkipMoveOrderThisTap = false;
-                } else if (this.selectedWarpGate && this.selectedUnits.size === 0 && this.selectedMirrors.size === 0 && !this.selectedBase) {
+                } else if (this.warpGateManager.selectedWarpGate && this.selectedUnits.size === 0 && this.selectedMirrors.size === 0 && !this.selectedBase) {
                     // Warp gate selected without a drag - no movement action
                 } else {
                     // Check if any selected Striker Tower is awaiting target
@@ -3436,7 +3111,7 @@ class GameController {
             this.isDraggingBuildingArrow = false;
             this.isDrawingPath = false;
             this.pathPoints = [];
-            this.shouldCancelMirrorWarpGateOnRelease = false;
+            this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
             this.selectionStartScreen = null;
             this.renderer.selectionStart = null;
             this.renderer.selectionEnd = null;
@@ -3732,15 +3407,15 @@ class GameController {
         // Check if any mirrors are selected
         const hasSelectedMirrors = this.selectedMirrors.size > 0;
         
-        if (hasSelectedMirrors && this.mirrorCommandMode === 'warpgate') {
-            this.tryCreateWarpGateAt(worldPos);
+        if (hasSelectedMirrors && this.warpGateManager.mirrorCommandMode === 'warpgate') {
+            this.warpGateManager.tryCreateWarpGateAt(worldPos);
             return;
         }
         // NOTE: Removed old influence-based warp gate creation - now only via mirrors
 
-        if (hasSelectedMirrors && this.mirrorCommandMode === null) {
-            this.mirrorHoldStartTimeMs = performance.now();
-            this.mirrorHoldWorldPos = worldPos;
+        if (hasSelectedMirrors && this.warpGateManager.mirrorCommandMode === null) {
+            this.warpGateManager.mirrorHoldStartTimeMs = performance.now();
+            this.warpGateManager.mirrorHoldWorldPos = worldPos;
         }
 
         const selectedStarlings = this.getSelectedStarlings(player);
@@ -3798,7 +3473,7 @@ class GameController {
         this.selectedUnits.clear();
         this.selectedMirrors.clear();
         this.selectedBase = null;
-        this.clearWarpGateSelection();
+        this.warpGateManager.clearWarpGateSelection();
 
         // Deselect all buildings
         for (const building of player.buildings) {
@@ -3849,21 +3524,21 @@ class GameController {
         // Warp gates are now created instantly via mirror commands
         this.holdStartTime = null;
         this.holdStarlingForMerge = null;
-        this.currentWarpGate = null;
-        this.isUsingMirrorsForWarpGate = false;
-        this.mirrorHoldStartTimeMs = null;
-        this.mirrorHoldWorldPos = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
+        this.warpGateManager.currentWarpGate = null;
+        this.warpGateManager.isUsingMirrorsForWarpGate = false;
+        this.warpGateManager.mirrorHoldStartTimeMs = null;
+        this.warpGateManager.mirrorHoldWorldPos = null;
+        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     private endHold(): void {
         // Deprecated: Hold-based warp gate creation is no longer used
         this.holdStartTime = null;
         this.holdStarlingForMerge = null;
-        this.isUsingMirrorsForWarpGate = false;
-        this.mirrorHoldStartTimeMs = null;
-        this.mirrorHoldWorldPos = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
+        this.warpGateManager.isUsingMirrorsForWarpGate = false;
+        this.warpGateManager.mirrorHoldStartTimeMs = null;
+        this.warpGateManager.mirrorHoldWorldPos = null;
+        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     private updateStarlingMergeHold(): void {
@@ -3915,24 +3590,24 @@ class GameController {
     }
 
     private updateMirrorWarpGateHold(): void {
-        if (!this.mirrorHoldStartTimeMs || !this.mirrorHoldWorldPos) {
+        if (!this.warpGateManager.mirrorHoldStartTimeMs || !this.warpGateManager.mirrorHoldWorldPos) {
             return;
         }
-        if (this.selectedMirrors.size === 0 || this.mirrorCommandMode === 'warpgate') {
-            this.mirrorHoldStartTimeMs = null;
-            this.mirrorHoldWorldPos = null;
+        if (this.selectedMirrors.size === 0 || this.warpGateManager.mirrorCommandMode === 'warpgate') {
+            this.warpGateManager.mirrorHoldStartTimeMs = null;
+            this.warpGateManager.mirrorHoldWorldPos = null;
             return;
         }
 
-        const elapsedMs = performance.now() - this.mirrorHoldStartTimeMs;
+        const elapsedMs = performance.now() - this.warpGateManager.mirrorHoldStartTimeMs;
         if (elapsedMs < Constants.MIRROR_WARP_GATE_HOLD_DURATION_MS) {
             return;
         }
 
-        this.tryCreateWarpGateAt(this.mirrorHoldWorldPos);
-        this.mirrorHoldStartTimeMs = null;
-        this.mirrorHoldWorldPos = null;
-        this.shouldCancelMirrorWarpGateOnRelease = false;
+        this.warpGateManager.tryCreateWarpGateAt(this.warpGateManager.mirrorHoldWorldPos);
+        this.warpGateManager.mirrorHoldStartTimeMs = null;
+        this.warpGateManager.mirrorHoldWorldPos = null;
+        this.warpGateManager.shouldCancelMirrorWarpGateOnRelease = false;
     }
 
     /**
@@ -4024,8 +3699,8 @@ class GameController {
         this.updateStarlingMergeHold();
         this.updateMirrorWarpGateHold();
 
-        if (this.mirrorCommandMode === 'warpgate' && !this.canCreateWarpGateFromSelectedMirrors()) {
-            this.mirrorCommandMode = null;
+        if (this.warpGateManager.mirrorCommandMode === 'warpgate' && !this.warpGateManager.canCreateWarpGateFromSelectedMirrors()) {
+            this.warpGateManager.mirrorCommandMode = null;
         }
         
         // Check if game has ended
@@ -4064,8 +3739,8 @@ class GameController {
                 this.unlinkMirrorsFromWarpGate(gate);
                 this.scatterParticles(gate.position);
                 this.renderer.createWarpGateShockwave(gate.position);
-                if (this.selectedWarpGate === gate) {
-                    this.clearWarpGateSelection();
+                if (this.warpGateManager.selectedWarpGate === gate) {
+                    this.warpGateManager.clearWarpGateSelection();
                 }
                 this.game.warpGates.splice(i, 1);
             }
@@ -4089,8 +3764,8 @@ class GameController {
         this.updateStarlingMergeHold();
         this.updateMirrorWarpGateHold();
 
-        if (this.mirrorCommandMode === 'warpgate' && !this.canCreateWarpGateFromSelectedMirrors()) {
-            this.mirrorCommandMode = null;
+        if (this.warpGateManager.mirrorCommandMode === 'warpgate' && !this.warpGateManager.canCreateWarpGateFromSelectedMirrors()) {
+            this.warpGateManager.mirrorCommandMode = null;
         }
 
         // Accumulate time for fixed timestep
@@ -4149,8 +3824,8 @@ class GameController {
                 this.unlinkMirrorsFromWarpGate(gate);
                 this.scatterParticles(gate.position);
                 this.renderer.createWarpGateShockwave(gate.position);
-                if (this.selectedWarpGate === gate) {
-                    this.clearWarpGateSelection();
+                if (this.warpGateManager.selectedWarpGate === gate) {
+                    this.warpGateManager.clearWarpGateSelection();
                 }
                 this.game.warpGates.splice(i, 1);
             }
@@ -4168,10 +3843,10 @@ class GameController {
             const isSelectedMirrorInSunlight = this.isSelectedMirrorInSunlight();
             const canCreateWarpGate = this.selectedMirrors.size > 0
                 && isSelectedMirrorInSunlight
-                && this.canCreateWarpGateFromSelectedMirrors();
+                && this.warpGateManager.canCreateWarpGateFromSelectedMirrors();
             this.renderer.isSelectedMirrorInSunlight = isSelectedMirrorInSunlight;
             this.renderer.canCreateWarpGateFromMirrors = canCreateWarpGate;
-            this.renderer.isWarpGatePlacementMode = this.mirrorCommandMode === 'warpgate'
+            this.renderer.isWarpGatePlacementMode = this.warpGateManager.mirrorCommandMode === 'warpgate'
                 && canCreateWarpGate;
             
             // Update warp gate placement preview if in placement mode
@@ -4189,7 +3864,7 @@ class GameController {
                     
                     // Check if the position is valid (within influence field and has line of sight)
                     const withinInfluence = this.game.isPointWithinPlayerInfluence(player, worldPos);
-                    const hasLineOfSight = this.canCreateWarpGateFromSelectedMirrors(worldPos);
+                    const hasLineOfSight = this.warpGateManager.canCreateWarpGateFromSelectedMirrors(worldPos);
                     this.renderer.isWarpGatePreviewValid = withinInfluence && hasLineOfSight;
                 }
             } else {
