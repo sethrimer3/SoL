@@ -453,6 +453,7 @@ export class GameRenderer {
             getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
             drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
             getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+            gradientCache: this.gradientCache,
         };
     }
 
@@ -1302,43 +1303,6 @@ export class GameRenderer {
         this.environmentRenderer.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale, this.getEnvironmentRendererContext());
     }
 
-    private getClosestInfluenceOwnerIndex(position: Vector2D, game: GameState): number | null {
-        let closestDistance = Infinity;
-        let closestIndex: number | null = null;
-
-        for (let i = 0; i < game.players.length; i++) {
-            const player = game.players[i];
-            if (player.isDefeated()) {
-                continue;
-            }
-
-            const influenceSources: Array<{ position: Vector2D; radius: number }> = [];
-            if (player.stellarForge && player.stellarForge.isReceivingLight && player.stellarForge.health > 0) {
-                influenceSources.push({ position: player.stellarForge.position, radius: Constants.INFLUENCE_RADIUS });
-            }
-            for (const building of player.buildings) {
-                if (building.health <= 0) {
-                    continue;
-                }
-                const isFoundry = building instanceof SubsidiaryFactory;
-                const radius = isFoundry
-                    ? Constants.INFLUENCE_RADIUS
-                    : Constants.INFLUENCE_RADIUS * Constants.BUILDING_INFLUENCE_RADIUS_MULTIPLIER;
-                influenceSources.push({ position: building.position, radius });
-            }
-
-            for (const source of influenceSources) {
-                const distance = position.distanceTo(source.position);
-                if (distance < source.radius && distance < closestDistance) {
-                    closestDistance = distance;
-                    closestIndex = i;
-                }
-            }
-        }
-
-        return closestIndex;
-    }
-
     /**
      * Draw an asteroid
      */
@@ -1356,58 +1320,7 @@ export class GameRenderer {
     }
 
     private applyUltraWarmCoolGrade(game: GameState): void {
-        // Skip expensive color grading on low quality setting
-        if (this.graphicsQuality === 'low') {
-            return;
-        }
-
-        const dpr = window.devicePixelRatio || 1;
-        const width = this.canvas.width / dpr;
-        const height = this.canvas.height / dpr;
-
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'multiply';
-        
-        // Cache cool vignette gradient by screen dimensions
-        const coolKey = `cool-vignette-${Math.round(width / 50)}-${Math.round(height / 50)}`;
-        let coolVignette = this.gradientCache.get(coolKey) as CanvasGradient | undefined;
-        if (!coolVignette) {
-            coolVignette = this.ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
-            coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
-            coolVignette.addColorStop(1, 'rgba(138, 155, 210, 0.94)');
-            this.gradientCache.set(coolKey, coolVignette);
-        }
-        this.ctx.fillStyle = coolVignette;
-        this.ctx.fillRect(0, 0, width, height);
-
-        this.ctx.globalCompositeOperation = 'screen';
-        for (const sun of game.suns) {
-            if (sun.type === 'lad') {
-                continue;
-            }
-            const sunScreenPos = this.worldToScreen(sun.position);
-            
-            // Cache warm gradient by screen size (position-independent, applied per sun)
-            const maxDimension = Math.max(width, height);
-            const warmKey = `warm-gradient-${Math.round(maxDimension / 100)}`;
-            let warmGradient = this.gradientCache.get(warmKey) as CanvasGradient | undefined;
-            if (!warmGradient) {
-                warmGradient = this.ctx.createRadialGradient(0, 0, 0, 0, 0, maxDimension * 0.45);
-                warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');
-                warmGradient.addColorStop(0.34, 'rgba(255, 148, 62, 0.18)');
-                warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
-                this.gradientCache.set(warmKey, warmGradient);
-            }
-            
-            // Use translate to position the cached gradient
-            this.ctx.save();
-            this.ctx.translate(sunScreenPos.x, sunScreenPos.y);
-            this.ctx.fillStyle = warmGradient;
-            this.ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, width, height);
-            this.ctx.restore();
-        }
-
-        this.ctx.restore();
+        this.environmentRenderer.applyUltraWarmCoolGrade(game, this.getEnvironmentRendererContext());
     }
 
     /**
