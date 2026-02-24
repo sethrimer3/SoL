@@ -974,6 +974,7 @@ export class GameRenderer {
             VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
             canvas: this.canvas,
             camera: this.camera,
+            drawUnit: (unit, color, game, isEnemy, sizeMultiplier, context) => this.unitRenderer.drawUnit(unit, color, game, isEnemy, sizeMultiplier, context),
         };
     }
 
