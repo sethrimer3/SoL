@@ -2,7 +2,7 @@
  * ProjectileCombatSystem
  * Handles projectile updates and collision detection extracted from game-state.ts
  *
- * Extracted from game-state.ts as part of Phase 3 refactoring
+ * Extracted from game-state.ts as part of Phase 7 refactoring
  */
 
 import { Vector2D } from '../math';
