@@ -5,7 +5,7 @@
  * Extracted from game-state.ts as part of Phase 7 refactoring
  */
 
-import { Vector2D } from '../math';
+import { Vector2D, pointToLineSegmentDistanceSquared, getClosestPointOnLineSegment } from '../math';
 import * as Constants from '../../constants';
 import { Player } from '../entities/player';
 import { Asteroid } from '../entities/asteroid';
@@ -78,60 +78,6 @@ export interface ProjectileCombatContext {
 }
 
 export class ProjectileCombatSystem {
-    private static pointToLineSegmentDistanceSquared(
-        point: Vector2D,
-        lineStart: Vector2D,
-        lineEnd: Vector2D
-    ): number {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const lengthSq = dx * dx + dy * dy;
-
-        if (lengthSq === 0) {
-            // Line segment is a point
-            const px = point.x - lineStart.x;
-            const py = point.y - lineStart.y;
-            return px * px + py * py;
-        }
-
-        // Calculate projection parameter
-        const t = Math.max(0, Math.min(1,
-            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
-        ));
-
-        // Calculate closest point on line segment
-        const closestX = lineStart.x + t * dx;
-        const closestY = lineStart.y + t * dy;
-
-        // Return squared distance
-        const distX = point.x - closestX;
-        const distY = point.y - closestY;
-        return distX * distX + distY * distY;
-    }
-
-    private static getClosestPointOnLineSegment(
-        point: Vector2D,
-        lineStart: Vector2D,
-        lineEnd: Vector2D
-    ): Vector2D {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const lengthSq = dx * dx + dy * dy;
-
-        if (lengthSq === 0) {
-            return new Vector2D(lineStart.x, lineStart.y);
-        }
-
-        const t = Math.max(0, Math.min(1,
-            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
-        ));
-
-        return new Vector2D(
-            lineStart.x + t * dx,
-            lineStart.y + t * dy
-        );
-    }
-
     static update(ctx: ProjectileCombatContext, deltaTime: number): void {
         // Update muzzle flashes
         for (const flash of ctx.muzzleFlashes) {
@@ -215,7 +161,7 @@ export class ProjectileCombatSystem {
 
                         if (distance <= maxRange) {
                             // Calculate distance from bullet to shield line
-                            const distSq = ProjectileCombatSystem.pointToLineSegmentDistanceSquared(
+                            const distSq = pointToLineSegmentDistanceSquared(
                                 bullet.position,
                                 orb1.position,
                                 orb2.position
@@ -231,7 +177,7 @@ export class ProjectileCombatSystem {
                                 const shieldWidth = 10; // Shield field width in pixels
                                 if (distSq < shieldWidth * shieldWidth) {
                                     // Create shield hit effect
-                                    const closestPoint = ProjectileCombatSystem.getClosestPointOnLineSegment(
+                                    const closestPoint = getClosestPointOnLineSegment(
                                         bullet.position,
                                         orb1.position,
                                         orb2.position

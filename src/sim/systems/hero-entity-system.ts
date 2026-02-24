@@ -5,7 +5,7 @@
  * Extracted from game-state.ts as part of Phase 7 refactoring
  */
 
-import { Vector2D } from '../math';
+import { Vector2D, pointToLineSegmentDistanceSquared } from '../math';
 import * as Constants from '../../constants';
 import { Player } from '../entities/player';
 import { Asteroid } from '../entities/asteroid';
@@ -662,7 +662,7 @@ export class HeroEntitySystem {
 
                         for (const unit of player.units) {
                             // Calculate distance from unit to line segment between orbs
-                            const lineDistSq = HeroEntitySystem.pointToLineSegmentDistanceSquared(
+                            const lineDistSq = pointToLineSegmentDistanceSquared(
                                 unit.position,
                                 orb1.position,
                                 orb2.position
@@ -877,29 +877,4 @@ export class HeroEntitySystem {
         ctx.chronoFreezeCircles = ctx.chronoFreezeCircles.filter(circle => !circle.shouldDespawn());
     }
 
-    private static pointToLineSegmentDistanceSquared(
-        point: Vector2D,
-        lineStart: Vector2D,
-        lineEnd: Vector2D
-    ): number {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const lenSq = dx * dx + dy * dy;
-
-        if (lenSq === 0) {
-            // Line segment is a point
-            const px = point.x - lineStart.x;
-            const py = point.y - lineStart.y;
-            return px * px + py * py;
-        }
-
-        // Project point onto line segment
-        const t = Math.max(0, Math.min(1, ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lenSq));
-        const closestX = lineStart.x + t * dx;
-        const closestY = lineStart.y + t * dy;
-
-        const distX = point.x - closestX;
-        const distY = point.y - closestY;
-        return distX * distX + distY * distY;
-    }
 }

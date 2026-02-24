@@ -12,6 +12,7 @@ import { HeroAbilitySystem, HeroAbilityContext } from './systems/hero-ability-sy
 import { StarlingSystem, StarlingContext } from './systems/starling-system';
 import { HeroEntitySystem, HeroEntityContext } from './systems/hero-entity-system';
 import { ProjectileCombatSystem, ProjectileCombatContext } from './systems/projectile-combat-system';
+import { SpaceDustSystem, SpaceDustContext } from './systems/space-dust-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -97,7 +98,7 @@ import {
 
 import { computeStateHash, StateHashContext } from './state-hash';
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, StateHashContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -174,38 +175,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         return VisionSystem.isPointWithinPlayerInfluence(player, point);
     }
 
-    private getClosestInfluenceAtPoint(point: Vector2D): { playerIndex: number; distance: number; radius: number } | null {
-        let closestInfluence: { playerIndex: number; distance: number; radius: number } | null = null;
-
-        for (let i = 0; i < this.players.length; i++) {
-            const player = this.players[i];
-            if (player.isDefeated()) {
-                continue;
-            }
-
-            const forge = player.stellarForge;
-            if (forge && this.isInfluenceSourceActive(forge)) {
-                const radius = this.getInfluenceRadiusForSource(forge);
-                const distance = point.distanceTo(forge.position);
-                if (distance < radius && (!closestInfluence || distance < closestInfluence.distance)) {
-                    closestInfluence = { playerIndex: i, distance, radius };
-                }
-            }
-
-            for (const building of player.buildings) {
-                if (!this.isInfluenceSourceActive(building)) {
-                    continue;
-                }
-                const radius = this.getInfluenceRadiusForSource(building);
-                const distance = point.distanceTo(building.position);
-                if (distance < radius && (!closestInfluence || distance < closestInfluence.distance)) {
-                    closestInfluence = { playerIndex: i, distance, radius };
-                }
-            }
-        }
-
-        return closestInfluence;
-    }
 
     /**
      * Update game state
@@ -1105,112 +1074,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Update space dust particles with physics and color influences
      */
     private updateSpaceDust(deltaTime: number): void {
-        PhysicsSystem.applyDustRepulsion(this, deltaTime);
-
-        for (const particle of this.spaceDust) {
-            // Update particle position
-            particle.update(deltaTime);
-            PhysicsSystem.resolveDustAsteroidCollision(this, particle, deltaTime);
-
-            // Check for influence from player structures
-            const closestInfluence = this.getClosestInfluenceAtPoint(particle.position);
-
-            // Update particle color based on influence
-            if (closestInfluence) {
-                const color = closestInfluence.playerIndex === 0 ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                const blendFactor = 1.0 - (closestInfluence.distance / closestInfluence.radius);
-                particle.updateColor(color, blendFactor);
-            } else {
-                particle.updateColor(null, 0);
-            }
-        }
-
-        // Apply forces from warp gates (spiral effect)
-        for (const gate of this.warpGates) {
-            if (gate.isCharging && gate.chargeTime >= Constants.WARP_GATE_INITIAL_DELAY) {
-                for (const particle of this.spaceDust) {
-                    const distance = particle.position.distanceTo(gate.position);
-                    if (distance < Constants.WARP_GATE_SPIRAL_RADIUS && distance > Constants.WARP_GATE_SPIRAL_MIN_DISTANCE) {
-                        // Calculate spiral force
-                        const direction = new Vector2D(
-                            gate.position.x - particle.position.x,
-                            gate.position.y - particle.position.y
-                        ).normalize();
-                        
-                        // Add tangential component for spiral
-                        const tangent = new Vector2D(-direction.y, direction.x);
-                        const force = new Vector2D(
-                            direction.x * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.x * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT,
-                            direction.y * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.y * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT
-                        );
-                        
-                        particle.applyForce(new Vector2D(
-                            force.x * deltaTime / distance,
-                            force.y * deltaTime / distance
-                        ));
-                    }
-                }
-            }
-        }
-
-        // Apply forces from forge crunches (suck in, then wave out)
-        for (const player of this.players) {
-            if (player.stellarForge && !player.isDefeated()) {
-                const crunch = player.stellarForge.getCurrentCrunch();
-                if (crunch && crunch.isActive()) {
-                    for (const particle of this.spaceDust) {
-                        const distance = particle.position.distanceTo(crunch.position);
-                        
-                        if (crunch.phase === 'suck' && distance < Constants.FORGE_CRUNCH_SUCK_RADIUS) {
-                            // Suck phase: pull dust toward forge
-                            if (distance > 5) { // Minimum distance to avoid division by zero
-                                const direction = new Vector2D(
-                                    crunch.position.x - particle.position.x,
-                                    crunch.position.y - particle.position.y
-                                ).normalize();
-                                
-                                // Force decreases with distance
-                                const forceMagnitude = Constants.FORGE_CRUNCH_SUCK_FORCE / Math.sqrt(distance);
-                                particle.applyForce(new Vector2D(
-                                    direction.x * forceMagnitude * deltaTime,
-                                    direction.y * forceMagnitude * deltaTime
-                                ));
-                            }
-                        } else if (crunch.phase === 'wave' && distance < Constants.FORGE_CRUNCH_WAVE_RADIUS) {
-                            // Wave phase: push dust away from forge
-                            if (distance > 5) { // Minimum distance to avoid division by zero
-                                const direction = new Vector2D(
-                                    particle.position.x - crunch.position.x,
-                                    particle.position.y - crunch.position.y
-                                ).normalize();
-                                
-                                // Wave effect: stronger push at the wavefront
-                                const waveProgress = crunch.getPhaseProgress();
-                                const wavePosition = waveProgress * Constants.FORGE_CRUNCH_WAVE_RADIUS;
-                                const distanceToWave = Math.abs(distance - wavePosition);
-                                const waveSharpness = 50; // How focused the wave is
-                                const waveStrength = Math.exp(-distanceToWave / waveSharpness);
-                                
-                                const forceMagnitude = Constants.FORGE_CRUNCH_WAVE_FORCE * waveStrength;
-                                particle.applyForce(new Vector2D(
-                                    direction.x * forceMagnitude * deltaTime,
-                                    direction.y * forceMagnitude * deltaTime
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Apply forces from Space Dust Swirler buildings (counter-clockwise orbits)
-        for (const player of this.players) {
-            for (const building of player.buildings) {
-                if (building instanceof SpaceDustSwirler) {
-                    building.applyDustSwirl(this.spaceDust, deltaTime);
-                }
-            }
-        }
+        SpaceDustSystem.update(this, deltaTime);
     }
 
     private updateAi(deltaTime: number): void {
@@ -1863,67 +1727,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             return target.radius;
         }
         return 0;
-    }
-
-    /**
-     * Calculate squared distance from point to line segment
-     * Used for laser field collision detection
-     */
-    private pointToLineSegmentDistanceSquared(
-        point: Vector2D,
-        lineStart: Vector2D,
-        lineEnd: Vector2D
-    ): number {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const lengthSq = dx * dx + dy * dy;
-        
-        if (lengthSq === 0) {
-            // Line segment is a point
-            const px = point.x - lineStart.x;
-            const py = point.y - lineStart.y;
-            return px * px + py * py;
-        }
-        
-        // Calculate projection parameter
-        const t = Math.max(0, Math.min(1, 
-            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
-        ));
-        
-        // Calculate closest point on line segment
-        const closestX = lineStart.x + t * dx;
-        const closestY = lineStart.y + t * dy;
-        
-        // Return squared distance
-        const distX = point.x - closestX;
-        const distY = point.y - closestY;
-        return distX * distX + distY * distY;
-    }
-
-    /**
-     * Get closest point on line segment to a given point
-     */
-    private getClosestPointOnLineSegment(
-        point: Vector2D,
-        lineStart: Vector2D,
-        lineEnd: Vector2D
-    ): Vector2D {
-        const dx = lineEnd.x - lineStart.x;
-        const dy = lineEnd.y - lineStart.y;
-        const lengthSq = dx * dx + dy * dy;
-        
-        if (lengthSq === 0) {
-            return new Vector2D(lineStart.x, lineStart.y);
-        }
-        
-        const t = Math.max(0, Math.min(1, 
-            ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
-        ));
-        
-        return new Vector2D(
-            lineStart.x + t * dx,
-            lineStart.y + t * dy
-        );
     }
 
     /**
