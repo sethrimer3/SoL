@@ -14,6 +14,7 @@ import { HeroEntitySystem, HeroEntityContext } from './systems/hero-entity-syste
 import { ProjectileCombatSystem, ProjectileCombatContext } from './systems/projectile-combat-system';
 import { SpaceDustSystem, SpaceDustContext } from './systems/space-dust-system';
 import { MirrorSystem, MirrorSystemContext } from './systems/mirror-system';
+import { WorldInitializationSystem } from './systems/world-initialization-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -94,7 +95,8 @@ import {
     Splendor,
     SplendorSunSphere,
     SplendorSunlightZone,
-    SplendorLaserSegment
+    SplendorLaserSegment,
+    createHeroUnit
 } from '../game-core';
 
 import { computeStateHash, StateHashContext } from './state-hash';
@@ -368,7 +370,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
                                     player.stellarForge.position.x,
                                     player.stellarForge.position.y + spawnRadius
                                 );
-                                const heroUnit = this.createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
+                                const heroUnit = createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
                                 if (heroUnit) {
                                     player.units.push(heroUnit);
                                     player.unitsCreated++;
@@ -1220,66 +1222,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     }
 
     /**
-     * Check visibility in LaD (Light and Dark) mode
-     * Units are invisible to the enemy until they cross into enemy territory
-     */
-        /**
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
      * Returns true if collision detected
      */
-    private createHeroUnit(unitType: string, spawnPosition: Vector2D, owner: Player): Unit | null {
-        switch (unitType) {
-            case 'Marine':
-                return new Marine(spawnPosition, owner);
-            case 'Mothership':
-                return new Mothership(spawnPosition, owner);
-            case 'Grave':
-                return new Grave(spawnPosition, owner);
-            case 'Ray':
-                return new Ray(spawnPosition, owner);
-            case 'InfluenceBall':
-                return new InfluenceBall(spawnPosition, owner);
-            case 'TurretDeployer':
-                return new TurretDeployer(spawnPosition, owner);
-            case 'Driller':
-                return new Driller(spawnPosition, owner);
-            case 'Dagger':
-                return new Dagger(spawnPosition, owner);
-            case 'Beam':
-                return new Beam(spawnPosition, owner);
-            case 'Mortar':
-                return new Mortar(spawnPosition, owner);
-            case 'Preist':
-                return new Preist(spawnPosition, owner);
-            case 'Tank':
-                return new Tank(spawnPosition, owner);
-            case 'Spotlight':
-                return new Spotlight(spawnPosition, owner);
-            case 'Nova':
-                return new Nova(spawnPosition, owner);
-            case 'Sly':
-                return new Sly(spawnPosition, owner);
-            case 'Radiant':
-                return new Radiant(spawnPosition, owner);
-            case 'VelarisHero':
-                return new VelarisHero(spawnPosition, owner);
-            case 'Chrono':
-                return new Chrono(spawnPosition, owner);
-            case 'AurumHero':
-                return new AurumHero(spawnPosition, owner);
-            case 'Dash':
-                return new Dash(spawnPosition, owner);
-            case 'Blink':
-                return new Blink(spawnPosition, owner);
-            case 'Splendor':
-                return new Splendor(spawnPosition, owner);
-            case 'Shadow':
-                return new Shadow(spawnPosition, owner);
-            default:
-                return null;
-        }
-    }
-
     checkCollision(
         position: Vector2D,
         unitRadius: number = Constants.UNIT_RADIUS_PX,
@@ -1304,106 +1249,14 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Initialize space dust particles
      */
     initializeSpaceDust(count: number, width: number, height: number, palette?: SpaceDustPalette): void {
-        this.spaceDust = [];
-        const clusterCount = Constants.DUST_CLUSTER_COUNT;
-        const clusterRadiusPx = Constants.DUST_CLUSTER_RADIUS_PX;
-        const clusterSpawnRatio = Constants.DUST_CLUSTER_SPAWN_RATIO;
-        const clusterCenters: Vector2D[] = [];
-        const rng = getGameRNG();
-
-        for (let i = 0; i < clusterCount; i++) {
-            const centerX = rng.nextFloat(-width/2, width/2);
-            const centerY = rng.nextFloat(-height/2, height/2);
-            clusterCenters.push(new Vector2D(centerX, centerY));
-        }
-
-        for (let i = 0; i < count; i++) {
-            const useCluster = rng.next() < clusterSpawnRatio;
-            let x = 0;
-            let y = 0;
-
-            if (useCluster && clusterCenters.length > 0) {
-                const centerIndex = rng.nextInt(0, clusterCenters.length - 1);
-                const center = clusterCenters[centerIndex];
-                const angle = rng.nextAngle();
-                const distance = Math.sqrt(rng.next()) * clusterRadiusPx;
-                x = center.x + Math.cos(angle) * distance;
-                y = center.y + Math.sin(angle) * distance;
-            } else {
-                x = rng.nextFloat(-width/2, width/2);
-                y = rng.nextFloat(-height/2, height/2);
-            }
-            this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y), undefined, palette));
-        }
+        WorldInitializationSystem.initializeSpaceDust(this.spaceDust, count, width, height, palette);
     }
 
     /**
      * Initialize asteroids at random positions
      */
     initializeAsteroids(count: number, width: number, height: number, exclusionZones?: Array<{ position: Vector2D, radius: number }>): void {
-        this.asteroids = [];
-        const maxAttempts = 50; // Maximum attempts to find a valid position
-        const rng = getGameRNG();
-        
-        for (let i = 0; i < count; i++) {
-            let validPosition = false;
-            let attempts = 0;
-            let x = 0, y = 0, size = 0;
-            
-            while (!validPosition && attempts < maxAttempts) {
-                // Random position avoiding the center (where players start)
-                const angle = rng.nextAngle();
-                const distance = rng.nextFloat(200, Math.min(width, height) / 2 - 100);
-                x = Math.cos(angle) * distance;
-                y = Math.sin(angle) * distance;
-                
-                // Random size (30-80)
-                size = rng.nextFloat(Constants.ASTEROID_MIN_SIZE, 80);
-                
-                validPosition = true;
-                
-                // Check if this position has enough gap from existing asteroids
-                // Gap must be at least the sum of both asteroid radii (accounting for rotation)
-                // Use size * 1.32 as maximum radius (from asteroid generation vertex radiusScale max)
-                const maxRadius = size * 1.32;
-                for (const asteroid of this.asteroids) {
-                    const dx = x - asteroid.position.x;
-                    const dy = y - asteroid.position.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const existingMaxRadius = asteroid.size * 1.32;
-                    const requiredGap = maxRadius + existingMaxRadius;
-                    
-                    if (dist < requiredGap) {
-                        validPosition = false;
-                        break;
-                    }
-                }
-                
-                // Check if this position is within any exclusion zones
-                if (validPosition && exclusionZones) {
-                    for (const zone of exclusionZones) {
-                        const dx = x - zone.position.x;
-                        const dy = y - zone.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const requiredGap = maxRadius + zone.radius;
-                        
-                        if (dist < requiredGap) {
-                            validPosition = false;
-                            break;
-                        }
-                    }
-                }
-                
-                attempts++;
-            }
-            
-            // If we found a valid position, add the asteroid
-            if (validPosition) {
-                // Random polygon sides for faceted low-poly silhouette (12-24)
-                const sides = rng.nextInt(12, 24);
-                this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
-            }
-        }
+        WorldInitializationSystem.initializeAsteroids(this.asteroids, count, width, height, exclusionZones);
     }
 
     /**
