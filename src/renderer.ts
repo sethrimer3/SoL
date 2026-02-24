@@ -31,6 +31,7 @@ import type { WarpGateRendererContext } from './render/warp-gate-renderer';
 import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 import { GlowRenderer } from './render/glow-renderer';
+import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 
 
 type InfluenceRenderCircle = {
@@ -146,20 +147,13 @@ export class GameRenderer {
     public isUnitsLayerEnabled = true;
     public isProjectilesLayerEnabled = true;
 
-    private enemyVisibilityAlpha = new WeakMap<object, number>();
-    private shadeGlowAlphaByEntity = new WeakMap<object, number>();
-    private enemyVisibilityLastUpdateSec = Number.NaN;
-    private enemyVisibilityFrameDeltaSec = 0;
+    private readonly visibilityTracker = new VisibilityAlphaTracker();
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
 
-    private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
-    private readonly SHADE_GLOW_FADE_IN_SPEED_PER_SEC = 4.2;
-    
     // Gradient caching bucket sizes for performance optimization
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
     private readonly SUN_RAY_BLOOM_RADIUS_MULTIPLIER = 1.1; // Bloom radius is 10% larger than ambient for softer edges
-    private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
     private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
@@ -1350,43 +1344,15 @@ export class GameRenderer {
      */
 
     private updateEnemyVisibilityFadeClock(gameTimeSec: number): void {
-        if (Number.isNaN(this.enemyVisibilityLastUpdateSec)) {
-            this.enemyVisibilityFrameDeltaSec = 0;
-            this.enemyVisibilityLastUpdateSec = gameTimeSec;
-            return;
-        }
-
-        this.enemyVisibilityFrameDeltaSec = Math.max(0, gameTimeSec - this.enemyVisibilityLastUpdateSec);
-        this.enemyVisibilityLastUpdateSec = gameTimeSec;
+        this.visibilityTracker.updateFrameDelta(gameTimeSec);
     }
 
     private getEnemyVisibilityAlpha(entity: object, isVisible: boolean, _gameTimeSec: number): number {
-        const currentAlpha = this.enemyVisibilityAlpha.get(entity) ?? (isVisible ? 1 : 0);
-        const dtSec = this.enemyVisibilityFrameDeltaSec;
-        const maxStep = this.ENEMY_VISIBILITY_FADE_SPEED_PER_SEC * dtSec;
-        const targetAlpha = isVisible ? 1 : 0;
-        const alphaDelta = targetAlpha - currentAlpha;
-        const nextAlpha = Math.abs(alphaDelta) <= maxStep
-            ? targetAlpha
-            : currentAlpha + Math.sign(alphaDelta) * maxStep;
-        this.enemyVisibilityAlpha.set(entity, nextAlpha);
-        return nextAlpha;
+        return this.visibilityTracker.getEntityVisibilityAlpha(entity, isVisible);
     }
 
     private getShadeGlowAlpha(entity: object, shouldGlowInShade: boolean): number {
-        const currentAlpha = this.shadeGlowAlphaByEntity.get(entity) ?? 0;
-        const dtSec = this.enemyVisibilityFrameDeltaSec;
-        const fadeSpeedPerSec = shouldGlowInShade
-            ? this.SHADE_GLOW_FADE_IN_SPEED_PER_SEC
-            : this.SHADE_GLOW_FADE_OUT_SPEED_PER_SEC;
-        const maxStep = fadeSpeedPerSec * dtSec;
-        const targetAlpha = shouldGlowInShade ? 1 : 0;
-        const alphaDelta = targetAlpha - currentAlpha;
-        const nextAlpha = Math.abs(alphaDelta) <= maxStep
-            ? targetAlpha
-            : currentAlpha + Math.sign(alphaDelta) * maxStep;
-        this.shadeGlowAlphaByEntity.set(entity, nextAlpha);
-        return nextAlpha;
+        return this.visibilityTracker.getEntityShadeGlowAlpha(entity, shouldGlowInShade);
     }
 
     private applyUltraWarmCoolGrade(game: GameState): void {
