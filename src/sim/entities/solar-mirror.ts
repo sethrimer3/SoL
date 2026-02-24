@@ -10,7 +10,16 @@ import type { StellarForge } from './stellar-forge';
 import type { Building } from './buildings';
 import type { WarpGate } from './warp-gate';
 import type { Asteroid } from './asteroid';
-import type { GameState } from '../game-state';
+/**
+ * Minimal context interface for SolarMirror movement and pathfinding.
+ * GameState satisfies this interface structurally.
+ */
+export interface MirrorMovementContext {
+    suns: import('./sun').Sun[];
+    asteroids: import('./asteroid').Asteroid[];
+    players: import('./player').Player[];
+    checkCollision(position: import('../math').Vector2D, unitRadius?: number, ignoredObject?: object | null): boolean;
+}
 
 export class SolarMirror {
     health: number = Constants.MIRROR_MAX_HEALTH;
@@ -237,7 +246,7 @@ export class SolarMirror {
     private findBlockingObstacle(
         start: Vector2D,
         end: Vector2D,
-        gameState: GameState | null
+        gameState: MirrorMovementContext | null
     ): { type: 'asteroid' | 'building' | 'sun' | 'forge', obstacle: any } | null {
         if (!gameState) return null;
 
@@ -347,7 +356,7 @@ export class SolarMirror {
     /**
      * Compute path with waypoints to avoid obstacles
      */
-    private computePathWithWaypoints(target: Vector2D, gameState: GameState | null): void {
+    private computePathWithWaypoints(target: Vector2D, gameState: MirrorMovementContext | null): void {
         this.waypoints = [];
         this.finalTarget = target;
         
@@ -394,7 +403,7 @@ export class SolarMirror {
     /**
      * Set target position for mirror movement with pathfinding
      */
-    setTarget(target: Vector2D, gameState: GameState | null = null): void {
+    setTarget(target: Vector2D, gameState: MirrorMovementContext | null = null): void {
         this.isMovingToSun = false; // Clear "move to sun" mode when manually re-targeted
         this.computePathWithWaypoints(target, gameState);
     }
@@ -404,7 +413,7 @@ export class SolarMirror {
      * Each call finds the best candidate from this mirror's current position.
      * Returns the target chosen, or null if none found.
      */
-    setTargetToNearestSunlight(gameState: GameState): Vector2D | null {
+    setTargetToNearestSunlight(gameState: MirrorMovementContext): Vector2D | null {
         const target = this.findNearestSunlightPosition(gameState);
         if (target) {
             this.computePathWithWaypoints(target, gameState);
@@ -445,7 +454,7 @@ export class SolarMirror {
      *  3. Preferentially has line-of-sight to the player's forge (base)
      * Returns null when no valid position is found.
      */
-    findNearestSunlightPosition(gameState: GameState): Vector2D | null {
+    findNearestSunlightPosition(gameState: MirrorMovementContext): Vector2D | null {
         if (gameState.suns.length === 0) return null;
 
         let nearestSun: Sun | null = null;
@@ -582,7 +591,7 @@ export class SolarMirror {
     /**
      * Update mirror position based on target and velocity with obstacle avoidance
      */
-    update(deltaTime: number, gameState: GameState | null = null): void {
+    update(deltaTime: number, gameState: MirrorMovementContext | null = null): void {
         // Apply knockback velocity from asteroid rotation
         updateKnockbackMotion(
             this.position,
@@ -720,7 +729,7 @@ export class SolarMirror {
     /**
      * Calculate obstacle avoidance direction for smooth pathfinding
      */
-    private calculateObstacleAvoidance(gameState: GameState): Vector2D | null {
+    private calculateObstacleAvoidance(gameState: MirrorMovementContext): Vector2D | null {
         let avoidX = 0;
         let avoidY = 0;
         let avoidCount = 0;

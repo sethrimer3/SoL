@@ -2,7 +2,7 @@
  * GameState - Main game state class containing the game loop and all game logic
  */
 
-import { Vector2D, LightRay, applyKnockbackVelocity } from './math';
+import { Vector2D } from './math';
 import { VisionSystem } from './systems/vision-system';
 import { CommandProcessor } from './systems/command-processor';
 import { AISystem, AIContext } from './systems/ai-system';
@@ -13,6 +13,8 @@ import { StarlingSystem, StarlingContext } from './systems/starling-system';
 import { HeroEntitySystem, HeroEntityContext } from './systems/hero-entity-system';
 import { ProjectileCombatSystem, ProjectileCombatContext } from './systems/projectile-combat-system';
 import { SpaceDustSystem, SpaceDustContext } from './systems/space-dust-system';
+import { MirrorSystem, MirrorSystemContext } from './systems/mirror-system';
+import { WorldInitializationSystem } from './systems/world-initialization-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -93,12 +95,13 @@ import {
     Splendor,
     SplendorSunSphere,
     SplendorSunlightZone,
-    SplendorLaserSegment
+    SplendorLaserSegment,
+    createHeroUnit
 } from '../game-core';
 
 import { computeStateHash, StateHashContext } from './state-hash';
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -315,130 +318,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
 
             // Update solar mirrors - position and reflection angle
             // Mirrors can move during countdown to reach the sun
-            for (const mirror of player.solarMirrors) {
-                const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
-                mirror.update(deltaTime, this); // Update mirror movement with gameState
-                
-                // Check collision for mirror
-                if (this.checkCollision(mirror.position, 20, mirror)) {
-                    // Revert to old position and stop movement
-                    mirror.position = oldMirrorPos;
-                    mirror.velocity = new Vector2D(0, 0);
-                }
-
-                PhysicsSystem.applyDustPushFromMovingEntity(
-                    this,
-                    mirror.position,
-                    mirror.velocity,
-                    Constants.MIRROR_DUST_PUSH_RADIUS_PX,
-                    Constants.MIRROR_DUST_PUSH_FORCE_MULTIPLIER,
-                    this.getPlayerImpactColor(player),
-                    deltaTime
-                );
-                
-                if (mirror.linkedStructure instanceof Building && mirror.linkedStructure.isDestroyed()) {
-                    mirror.setLinkedStructure(null);
-                }
-                if (mirror.linkedStructure instanceof StellarForge && mirror.linkedStructure !== player.stellarForge) {
-                    mirror.setLinkedStructure(null);
-                }
-
-                const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
-                mirror.updateReflectionAngle(linkedStructure, this.suns, this.asteroids, deltaTime);
-                
-                // Check if light path is blocked by Velaris orb fields
-                const isBlockedByVelarisField = this.isLightBlockedByVelarisField(
-                    mirror.position,
-                    linkedStructure ? linkedStructure.position : mirror.position
-                );
-                
-                // Generate energy and apply to linked structure
-                if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(this.suns, this.asteroids) && linkedStructure) {
-                    const energyGenerated = mirror.generateEnergy(deltaTime);
-                    
-                    if (linkedStructure instanceof StellarForge &&
-                        player.stellarForge &&
-                        mirror.hasLineOfSightToForge(player.stellarForge, this.asteroids, this.players)) {
-                        const completedForgeItems = player.stellarForge.advanceProductionByEnergy(energyGenerated);
-                        for (const completedItem of completedForgeItems) {
-                            if (completedItem.productionType === 'hero' && completedItem.heroUnitType) {
-                                const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
-                                const spawnPosition = new Vector2D(
-                                    player.stellarForge.position.x,
-                                    player.stellarForge.position.y + spawnRadius
-                                );
-                                const heroUnit = this.createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
-                                if (heroUnit) {
-                                    player.units.push(heroUnit);
-                                    player.unitsCreated++;
-                                    console.log(`${player.name} forged hero ${completedItem.heroUnitType}`);
-                                }
-                            } else if (completedItem.productionType === 'mirror' && completedItem.spawnPosition) {
-                                player.solarMirrors.push(new SolarMirror(
-                                    new Vector2D(completedItem.spawnPosition.x, completedItem.spawnPosition.y),
-                                    player
-                                ));
-                            }
-                        }
-
-                        // Add to player's spendable energy pool (non-forge actions)
-                        player.addEnergy(energyGenerated);
-                    } else if (linkedStructure instanceof Building &&
-                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
-                        linkedStructure.isReceivingLight = true;
-                        linkedStructure.incomingLightPerSec += mirror.getEnergyRatePerSec();
-                        // Provide energy to building being constructed
-                        if (!linkedStructure.isComplete) {
-                            linkedStructure.addEnergy(energyGenerated);
-                        }
-                    } else if (linkedStructure instanceof WarpGate &&
-                               mirror.hasLineOfSightToStructure(linkedStructure, this.asteroids, this.players)) {
-                        // Provide energy to warp gate
-                        const wasIncomplete = !linkedStructure.isComplete;
-                        if (linkedStructure.isCharging && !linkedStructure.isComplete) {
-                            linkedStructure.addEnergy(energyGenerated);
-                        }
-                        // If warp gate just completed, redirect mirror to main base
-                        if (wasIncomplete && linkedStructure.isComplete && player.stellarForge) {
-                            mirror.setLinkedStructure(player.stellarForge);
-                        }
-                    }
-                }
-
-                if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
-                    if (this.isPointWithinPlayerInfluence(player, mirror.position)) {
-                        mirror.health = Math.min(
-                            Constants.MIRROR_MAX_HEALTH,
-                            mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
-                        );
-                        
-                        // Spawn sparkle particles for regeneration visual effect
-                        // Spawn ~2-3 particles per second
-                        const rng = getGameRNG();
-                        if (rng.next() < deltaTime * 2.5) {
-                            const angle = rng.nextAngle();
-                            const distance = rng.nextFloat(0, 25);
-                            const sparklePos = new Vector2D(
-                                mirror.position.x + Math.cos(angle) * distance,
-                                mirror.position.y + Math.sin(angle) * distance
-                            );
-                            const velocity = new Vector2D(
-                                rng.nextFloat(-15, 15),
-                                rng.nextFloat(-15, 15) - 20 // Slight upward bias
-                            );
-                            // Use player's color for sparkles
-                            const playerColor = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                            this.sparkleParticles.push(new SparkleParticle(
-                                sparklePos,
-                                velocity,
-                                0.8, // lifetime in seconds
-                                playerColor,
-                                rng.nextFloat(2, 4) // size 2-4
-                            ));
-                        }
-                    }
-                }
-            }
+            MirrorSystem.updateMirrorsForPlayer(this, player, deltaTime);
         }
 
         for (const gate of this.warpGates) {
@@ -1148,75 +1028,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Moves mirrors outward perpendicular to base position
      */
     initializeMirrorMovement(): void {
-        if (this.suns.length === 0) return;
-        
-        const sun = this.suns[0]; // Use first sun as reference
-        
-        for (const player of this.players) {
-            if (!player.stellarForge || player.solarMirrors.length < 2) continue;
-            
-            const forgePos = player.stellarForge.position;
-            
-            // Calculate angle from sun to forge
-            const dx = forgePos.x - sun.position.x;
-            const dy = forgePos.y - sun.position.y;
-            const angleToForge = Math.atan2(dy, dx);
-            
-            // Calculate perpendicular angles (left and right relative to sun-to-forge direction)
-            const leftAngle = angleToForge + Math.PI / 2;
-            const rightAngle = angleToForge - Math.PI / 2;
-            
-            // Try to find valid positions for mirrors, avoiding asteroids
-            if (player.solarMirrors.length >= 1) {
-                // Try to place left mirror perpendicular to sun-forge line
-                let leftTarget = new Vector2D(
-                    forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
-                    forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
-                );
-                
-                // If target is blocked, try to find alternative position
-                if (this.checkCollision(leftTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
-                    // Try closer or further positions
-                    for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
-                        const altTarget = new Vector2D(
-                            forgePos.x + Math.cos(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
-                            forgePos.y + Math.sin(leftAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
-                        );
-                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
-                            leftTarget = altTarget;
-                            break;
-                        }
-                    }
-                }
-                
-                player.solarMirrors[0].setTarget(leftTarget, this);
-            }
-            
-            if (player.solarMirrors.length >= 2) {
-                // Try to place right mirror perpendicular to sun-forge line
-                let rightTarget = new Vector2D(
-                    forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE,
-                    forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE
-                );
-                
-                // If target is blocked, try to find alternative position
-                if (this.checkCollision(rightTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
-                    // Try closer or further positions
-                    for (let distMult = 0.7; distMult <= 1.5; distMult += 0.2) {
-                        const altTarget = new Vector2D(
-                            forgePos.x + Math.cos(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult,
-                            forgePos.y + Math.sin(rightAngle) * Constants.MIRROR_COUNTDOWN_DEPLOY_DISTANCE * distMult
-                        );
-                        if (!this.checkCollision(altTarget, Constants.AI_MIRROR_COLLISION_RADIUS_PX)) {
-                            rightTarget = altTarget;
-                            break;
-                        }
-                    }
-                }
-                
-                player.solarMirrors[1].setTarget(rightTarget, this);
-            }
-        }
+        MirrorSystem.initializeMirrorMovement(this);
     }
 
     private isUnitInSunlight(unit: Unit): boolean {
@@ -1287,66 +1099,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     }
 
     /**
-     * Check visibility in LaD (Light and Dark) mode
-     * Units are invisible to the enemy until they cross into enemy territory
-     */
-        /**
      * Check if a position would collide with any obstacle (sun, asteroid, or building)
      * Returns true if collision detected
      */
-    private createHeroUnit(unitType: string, spawnPosition: Vector2D, owner: Player): Unit | null {
-        switch (unitType) {
-            case 'Marine':
-                return new Marine(spawnPosition, owner);
-            case 'Mothership':
-                return new Mothership(spawnPosition, owner);
-            case 'Grave':
-                return new Grave(spawnPosition, owner);
-            case 'Ray':
-                return new Ray(spawnPosition, owner);
-            case 'InfluenceBall':
-                return new InfluenceBall(spawnPosition, owner);
-            case 'TurretDeployer':
-                return new TurretDeployer(spawnPosition, owner);
-            case 'Driller':
-                return new Driller(spawnPosition, owner);
-            case 'Dagger':
-                return new Dagger(spawnPosition, owner);
-            case 'Beam':
-                return new Beam(spawnPosition, owner);
-            case 'Mortar':
-                return new Mortar(spawnPosition, owner);
-            case 'Preist':
-                return new Preist(spawnPosition, owner);
-            case 'Tank':
-                return new Tank(spawnPosition, owner);
-            case 'Spotlight':
-                return new Spotlight(spawnPosition, owner);
-            case 'Nova':
-                return new Nova(spawnPosition, owner);
-            case 'Sly':
-                return new Sly(spawnPosition, owner);
-            case 'Radiant':
-                return new Radiant(spawnPosition, owner);
-            case 'VelarisHero':
-                return new VelarisHero(spawnPosition, owner);
-            case 'Chrono':
-                return new Chrono(spawnPosition, owner);
-            case 'AurumHero':
-                return new AurumHero(spawnPosition, owner);
-            case 'Dash':
-                return new Dash(spawnPosition, owner);
-            case 'Blink':
-                return new Blink(spawnPosition, owner);
-            case 'Splendor':
-                return new Splendor(spawnPosition, owner);
-            case 'Shadow':
-                return new Shadow(spawnPosition, owner);
-            default:
-                return null;
-        }
-    }
-
     checkCollision(
         position: Vector2D,
         unitRadius: number = Constants.UNIT_RADIUS_PX,
@@ -1360,49 +1115,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * This prevents entities from getting stuck inside rotating asteroids
      */
     private getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {
-        let totalLight = 0;
-
-        for (const mirror of player.solarMirrors) {
-            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
-            if (linkedStructure !== structure) continue;
-            if (!mirror.hasLineOfSightToLight(this.suns, this.asteroids)) continue;
-
-            const ray = new LightRay(
-                mirror.position,
-                new Vector2D(
-                    structure.position.x - mirror.position.x,
-                    structure.position.y - mirror.position.y
-                ).normalize(),
-                1.0
-            );
-
-            let hasLineOfSight = true;
-            for (const asteroid of this.asteroids) {
-                if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
-                    hasLineOfSight = false;
-                    break;
-                }
-            }
-
-            if (hasLineOfSight) {
-                const closestSun = this.suns.reduce((closest, sun) => {
-                    const distToSun = mirror.position.distanceTo(sun.position);
-                    const distToClosest = closest ? mirror.position.distanceTo(closest.position) : Infinity;
-                    return distToSun < distToClosest ? sun : closest;
-                }, null as Sun | null);
-
-                if (closestSun) {
-                    const distanceToSun = mirror.position.distanceTo(closestSun.position);
-                    const distanceMultiplier = Math.max(
-                        1.0,
-                        Constants.MIRROR_PROXIMITY_MULTIPLIER * (1.0 - Math.min(1.0, distanceToSun / Constants.MIRROR_MAX_GLOW_DISTANCE))
-                    );
-                    totalLight += distanceMultiplier;
-                }
-            }
-        }
-
-        return totalLight;
+        return MirrorSystem.getMirrorLightOnStructure(this, player, structure);
     }
 
     private updateStateHash(): void {
@@ -1413,106 +1126,14 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Initialize space dust particles
      */
     initializeSpaceDust(count: number, width: number, height: number, palette?: SpaceDustPalette): void {
-        this.spaceDust = [];
-        const clusterCount = Constants.DUST_CLUSTER_COUNT;
-        const clusterRadiusPx = Constants.DUST_CLUSTER_RADIUS_PX;
-        const clusterSpawnRatio = Constants.DUST_CLUSTER_SPAWN_RATIO;
-        const clusterCenters: Vector2D[] = [];
-        const rng = getGameRNG();
-
-        for (let i = 0; i < clusterCount; i++) {
-            const centerX = rng.nextFloat(-width/2, width/2);
-            const centerY = rng.nextFloat(-height/2, height/2);
-            clusterCenters.push(new Vector2D(centerX, centerY));
-        }
-
-        for (let i = 0; i < count; i++) {
-            const useCluster = rng.next() < clusterSpawnRatio;
-            let x = 0;
-            let y = 0;
-
-            if (useCluster && clusterCenters.length > 0) {
-                const centerIndex = rng.nextInt(0, clusterCenters.length - 1);
-                const center = clusterCenters[centerIndex];
-                const angle = rng.nextAngle();
-                const distance = Math.sqrt(rng.next()) * clusterRadiusPx;
-                x = center.x + Math.cos(angle) * distance;
-                y = center.y + Math.sin(angle) * distance;
-            } else {
-                x = rng.nextFloat(-width/2, width/2);
-                y = rng.nextFloat(-height/2, height/2);
-            }
-            this.spaceDust.push(new SpaceDustParticle(new Vector2D(x, y), undefined, palette));
-        }
+        WorldInitializationSystem.initializeSpaceDust(this.spaceDust, count, width, height, palette);
     }
 
     /**
      * Initialize asteroids at random positions
      */
     initializeAsteroids(count: number, width: number, height: number, exclusionZones?: Array<{ position: Vector2D, radius: number }>): void {
-        this.asteroids = [];
-        const maxAttempts = 50; // Maximum attempts to find a valid position
-        const rng = getGameRNG();
-        
-        for (let i = 0; i < count; i++) {
-            let validPosition = false;
-            let attempts = 0;
-            let x = 0, y = 0, size = 0;
-            
-            while (!validPosition && attempts < maxAttempts) {
-                // Random position avoiding the center (where players start)
-                const angle = rng.nextAngle();
-                const distance = rng.nextFloat(200, Math.min(width, height) / 2 - 100);
-                x = Math.cos(angle) * distance;
-                y = Math.sin(angle) * distance;
-                
-                // Random size (30-80)
-                size = rng.nextFloat(Constants.ASTEROID_MIN_SIZE, 80);
-                
-                validPosition = true;
-                
-                // Check if this position has enough gap from existing asteroids
-                // Gap must be at least the sum of both asteroid radii (accounting for rotation)
-                // Use size * 1.32 as maximum radius (from asteroid generation vertex radiusScale max)
-                const maxRadius = size * 1.32;
-                for (const asteroid of this.asteroids) {
-                    const dx = x - asteroid.position.x;
-                    const dy = y - asteroid.position.y;
-                    const dist = Math.sqrt(dx * dx + dy * dy);
-                    const existingMaxRadius = asteroid.size * 1.32;
-                    const requiredGap = maxRadius + existingMaxRadius;
-                    
-                    if (dist < requiredGap) {
-                        validPosition = false;
-                        break;
-                    }
-                }
-                
-                // Check if this position is within any exclusion zones
-                if (validPosition && exclusionZones) {
-                    for (const zone of exclusionZones) {
-                        const dx = x - zone.position.x;
-                        const dy = y - zone.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const requiredGap = maxRadius + zone.radius;
-                        
-                        if (dist < requiredGap) {
-                            validPosition = false;
-                            break;
-                        }
-                    }
-                }
-                
-                attempts++;
-            }
-            
-            // If we found a valid position, add the asteroid
-            if (validPosition) {
-                // Random polygon sides for faceted low-poly silhouette (12-24)
-                const sides = rng.nextInt(12, 24);
-                this.asteroids.push(new Asteroid(new Vector2D(x, y), sides, size));
-            }
-        }
+        WorldInitializationSystem.initializeAsteroids(this.asteroids, count, width, height, exclusionZones);
     }
 
     /**

@@ -253,3 +253,43 @@ export {
     SplendorSunlightZone,
     SplendorLaserSegment
 };
+
+// Import Player type for the hero factory function
+import type { Player } from './sim/entities/player';
+
+/**
+ * Factory function: create a hero unit instance by type name.
+ * Returns null for unrecognised type strings.
+ */
+export function createHeroUnit(
+    unitType: string,
+    spawnPosition: Vector2D,
+    owner: Player
+): Unit | null {
+    switch (unitType) {
+        case 'Marine': return new Marine(spawnPosition, owner);
+        case 'Mothership': return new Mothership(spawnPosition, owner);
+        case 'Grave': return new Grave(spawnPosition, owner);
+        case 'Ray': return new Ray(spawnPosition, owner);
+        case 'InfluenceBall': return new InfluenceBall(spawnPosition, owner);
+        case 'TurretDeployer': return new TurretDeployer(spawnPosition, owner);
+        case 'Driller': return new Driller(spawnPosition, owner);
+        case 'Dagger': return new Dagger(spawnPosition, owner);
+        case 'Beam': return new Beam(spawnPosition, owner);
+        case 'Mortar': return new Mortar(spawnPosition, owner);
+        case 'Preist': return new Preist(spawnPosition, owner);
+        case 'Tank': return new Tank(spawnPosition, owner);
+        case 'Spotlight': return new Spotlight(spawnPosition, owner);
+        case 'Nova': return new Nova(spawnPosition, owner);
+        case 'Sly': return new Sly(spawnPosition, owner);
+        case 'Radiant': return new Radiant(spawnPosition, owner);
+        case 'VelarisHero': return new VelarisHero(spawnPosition, owner);
+        case 'Chrono': return new Chrono(spawnPosition, owner);
+        case 'AurumHero': return new AurumHero(spawnPosition, owner);
+        case 'Dash': return new Dash(spawnPosition, owner);
+        case 'Blink': return new Blink(spawnPosition, owner);
+        case 'Splendor': return new Splendor(spawnPosition, owner);
+        case 'Shadow': return new Shadow(spawnPosition, owner);
+        default: return null;
+    }
+}
