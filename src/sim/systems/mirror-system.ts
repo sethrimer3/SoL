@@ -1,8 +1,8 @@
 /**
  * Mirror System
- * Handles mirror initialization and light-on-structure calculations extracted from game-state.ts.
+ * Handles mirror initialization, per-frame updates, and light-on-structure calculations.
  *
- * Extracted from game-state.ts as part of Phase 12 refactoring.
+ * Extracted from game-state.ts as part of Phase 12–14 refactoring.
  */
 
 import { Vector2D, LightRay } from '../math';
@@ -13,17 +13,27 @@ import { Asteroid } from '../entities/asteroid';
 import { SolarMirror, MirrorMovementContext } from '../entities/solar-mirror';
 import { StellarForge } from '../entities/stellar-forge';
 import { Building } from '../entities/buildings';
+import { WarpGate } from '../entities/warp-gate';
+import { SpaceDustParticle, SparkleParticle } from '../entities/particles';
+import { PhysicsContext, PhysicsSystem } from './physics-system';
+import { VisionSystem } from './vision-system';
+import { VelarisOrb } from '../../game-core';
+import { createHeroUnit } from '../../game-core';
+import { getGameRNG } from '../../seeded-random';
 
 /**
  * Context interface for MirrorSystem operations.
- * Defines the minimum fields required from GameState.
+ * Extends MirrorMovementContext (for mirror.setTarget() compatibility) and
+ * PhysicsContext (for dust-push during mirror movement).
  * GameState satisfies this interface structurally.
- *
- * Extends MirrorMovementContext (which adds checkCollision) so that
- * initializeMirrorMovement can pass this context directly to mirror.setTarget().
- * Additional system-level fields can be added here as the system grows.
  */
-export interface MirrorSystemContext extends MirrorMovementContext {}
+export interface MirrorSystemContext extends MirrorMovementContext, PhysicsContext {
+    warpGates: WarpGate[];
+    velarisOrbs: InstanceType<typeof VelarisOrb>[];
+    sparkleParticles: SparkleParticle[];
+    isPointWithinPlayerInfluence(player: Player, point: Vector2D): boolean;
+    getPlayerImpactColor(player: Player): string;
+}
 
 /**
  * Mirror System – static methods for mirror initialization and light calculations.
@@ -164,5 +174,142 @@ export class MirrorSystem {
         }
 
         return totalLight;
+    }
+
+    /**
+     * Update all solar mirrors for a player for one simulation tick.
+     * Handles movement, collision, dust-push, energy generation, and regen sparkles.
+     *
+     * Extracted from GameState.update() as part of Phase 14 refactoring.
+     */
+    static updateMirrorsForPlayer(
+        game: MirrorSystemContext,
+        player: Player,
+        deltaTime: number
+    ): void {
+        for (const mirror of player.solarMirrors) {
+            const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
+            mirror.update(deltaTime, game);
+
+            // Check collision for mirror
+            if (game.checkCollision(mirror.position, 20, mirror)) {
+                // Revert to old position and stop movement
+                mirror.position = oldMirrorPos;
+                mirror.velocity = new Vector2D(0, 0);
+            }
+
+            PhysicsSystem.applyDustPushFromMovingEntity(
+                game,
+                mirror.position,
+                mirror.velocity,
+                Constants.MIRROR_DUST_PUSH_RADIUS_PX,
+                Constants.MIRROR_DUST_PUSH_FORCE_MULTIPLIER,
+                game.getPlayerImpactColor(player),
+                deltaTime
+            );
+
+            if (mirror.linkedStructure instanceof Building && mirror.linkedStructure.isDestroyed()) {
+                mirror.setLinkedStructure(null);
+            }
+            if (mirror.linkedStructure instanceof StellarForge && mirror.linkedStructure !== player.stellarForge) {
+                mirror.setLinkedStructure(null);
+            }
+
+            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            mirror.updateReflectionAngle(linkedStructure, game.suns, game.asteroids, deltaTime);
+
+            // Check if light path is blocked by Velaris orb fields
+            const isBlockedByVelarisField = VisionSystem.isLightBlockedByVelarisField(
+                mirror.position,
+                linkedStructure ? linkedStructure.position : mirror.position,
+                game.velarisOrbs
+            );
+
+            // Generate energy and apply to linked structure
+            if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(game.suns, game.asteroids) && linkedStructure) {
+                const energyGenerated = mirror.generateEnergy(deltaTime);
+
+                if (linkedStructure instanceof StellarForge &&
+                    player.stellarForge &&
+                    mirror.hasLineOfSightToForge(player.stellarForge, game.asteroids, game.players)) {
+                    const completedForgeItems = player.stellarForge.advanceProductionByEnergy(energyGenerated);
+                    for (const completedItem of completedForgeItems) {
+                        if (completedItem.productionType === 'hero' && completedItem.heroUnitType) {
+                            const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
+                            const spawnPosition = new Vector2D(
+                                player.stellarForge.position.x,
+                                player.stellarForge.position.y + spawnRadius
+                            );
+                            const heroUnit = createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
+                            if (heroUnit) {
+                                player.units.push(heroUnit);
+                                player.unitsCreated++;
+                                console.log(`${player.name} forged hero ${completedItem.heroUnitType}`);
+                            }
+                        } else if (completedItem.productionType === 'mirror' && completedItem.spawnPosition) {
+                            player.solarMirrors.push(new SolarMirror(
+                                new Vector2D(completedItem.spawnPosition.x, completedItem.spawnPosition.y),
+                                player
+                            ));
+                        }
+                    }
+
+                    // Add to player's spendable energy pool (non-forge actions)
+                    player.addEnergy(energyGenerated);
+                } else if (linkedStructure instanceof Building &&
+                           mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)) {
+                    linkedStructure.isReceivingLight = true;
+                    linkedStructure.incomingLightPerSec += mirror.getEnergyRatePerSec();
+                    // Provide energy to building being constructed
+                    if (!linkedStructure.isComplete) {
+                        linkedStructure.addEnergy(energyGenerated);
+                    }
+                } else if (linkedStructure instanceof WarpGate &&
+                           mirror.hasLineOfSightToStructure(linkedStructure, game.asteroids, game.players)) {
+                    // Provide energy to warp gate
+                    const wasIncomplete = !linkedStructure.isComplete;
+                    if (linkedStructure.isCharging && !linkedStructure.isComplete) {
+                        linkedStructure.addEnergy(energyGenerated);
+                    }
+                    // If warp gate just completed, redirect mirror to main base
+                    if (wasIncomplete && linkedStructure.isComplete && player.stellarForge) {
+                        mirror.setLinkedStructure(player.stellarForge);
+                    }
+                }
+            }
+
+            // Mirror health regeneration within player's influence radius
+            if (player.stellarForge && mirror.health < Constants.MIRROR_MAX_HEALTH) {
+                if (game.isPointWithinPlayerInfluence(player, mirror.position)) {
+                    mirror.health = Math.min(
+                        Constants.MIRROR_MAX_HEALTH,
+                        mirror.health + Constants.MIRROR_REGEN_PER_SEC * deltaTime
+                    );
+
+                    // Spawn sparkle particles for regeneration visual effect (~2-3 per second)
+                    const rng = getGameRNG();
+                    if (rng.next() < deltaTime * 2.5) {
+                        const angle = rng.nextAngle();
+                        const distance = rng.nextFloat(0, 25);
+                        const sparklePos = new Vector2D(
+                            mirror.position.x + Math.cos(angle) * distance,
+                            mirror.position.y + Math.sin(angle) * distance
+                        );
+                        const velocity = new Vector2D(
+                            rng.nextFloat(-15, 15),
+                            rng.nextFloat(-15, 15) - 20 // Slight upward bias
+                        );
+                        const playerColor = game.getPlayerImpactColor(player);
+                        game.sparkleParticles.push(new SparkleParticle(
+                            sparklePos,
+                            velocity,
+                            0.8, // lifetime in seconds
+                            playerColor,
+                            rng.nextFloat(2, 4) // size 2-4
+                        ));
+                    }
+                }
+            }
+        }
     }
 }
