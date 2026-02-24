@@ -2,7 +2,7 @@
  * Shared utilities and type definitions for unit renderers
  */
 
-import { Vector2D } from '../../game-core';
+import { Vector2D, Unit } from '../../game-core';
 
 /**
  * Interface for accessing renderer context and state.
@@ -106,4 +106,41 @@ export interface UnitRendererContext {
     // Canvas for drawMergedStarlingRanges
     canvas: HTMLCanvasElement;
     camera: { x: number; y: number };
+}
+
+/**
+ * Draw an ability cooldown bar below a unit.
+ * Shared between UnitRenderer (hero units) and StarlingRenderer (starlings with blink upgrade).
+ */
+export function drawAbilityCooldownBar(
+    screenPos: Vector2D,
+    size: number,
+    unit: Unit,
+    fillColor: string,
+    yOffset: number,
+    barWidth: number,
+    context: UnitRendererContext
+): void {
+    if (unit.abilityCooldownTime <= 0) {
+        return;
+    }
+
+    const cooldownPercent = Math.max(
+        0,
+        Math.min(1, 1 - (unit.abilityCooldown / unit.abilityCooldownTime))
+    );
+
+    // Hide the bar entirely once the ability is fully recharged.
+    if (cooldownPercent >= 1) {
+        return;
+    }
+
+    const barHeight = Math.max(2, 3 * context.zoom);
+    const barX = screenPos.x - barWidth / 2;
+    const barY = screenPos.y + yOffset;
+
+    context.ctx.fillStyle = '#222';
+    context.ctx.fillRect(barX, barY, barWidth, barHeight);
+    context.ctx.fillStyle = fillColor;
+    context.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
 }

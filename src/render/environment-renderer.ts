@@ -32,6 +32,9 @@ export interface EnvironmentRendererContext {
     getLadPlayerColor(player: any, ladSun: any, game: any): string;
     drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void;
     getPseudoRandom(seed: number): number;
+
+    // Gradient cache for color grading
+    gradientCache: Map<string, CanvasGradient>;
 }
 
 export class EnvironmentRenderer {
@@ -680,5 +683,62 @@ export class EnvironmentRenderer {
             return source.isReceivingLight;
         }
         return true;
+    }
+
+    /**
+     * Apply warm/cool color grading for ultra-quality mode.
+     * Adds a cool vignette and warm sun bloom using multiply/screen compositing.
+     */
+    public applyUltraWarmCoolGrade(game: GameState, context: EnvironmentRendererContext): void {
+        const { ctx, canvas, graphicsQuality, gradientCache, worldToScreen } = context;
+
+        if (graphicsQuality === 'low') {
+            return;
+        }
+
+        const dpr = window.devicePixelRatio || 1;
+        const width = canvas.width / dpr;
+        const height = canvas.height / dpr;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'multiply';
+
+        const coolKey = `cool-vignette-${Math.round(width / 50)}-${Math.round(height / 50)}`;
+        let coolVignette = gradientCache.get(coolKey) as CanvasGradient | undefined;
+        if (!coolVignette) {
+            coolVignette = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
+            coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
+            coolVignette.addColorStop(1, 'rgba(138, 155, 210, 0.94)');
+            gradientCache.set(coolKey, coolVignette);
+        }
+        ctx.fillStyle = coolVignette;
+        ctx.fillRect(0, 0, width, height);
+
+        ctx.globalCompositeOperation = 'screen';
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+            const sunScreenPos = worldToScreen(sun.position);
+
+            const maxDimension = Math.max(width, height);
+            const warmKey = `warm-gradient-${Math.round(maxDimension / 100)}`;
+            let warmGradient = gradientCache.get(warmKey) as CanvasGradient | undefined;
+            if (!warmGradient) {
+                warmGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, maxDimension * 0.45);
+                warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');
+                warmGradient.addColorStop(0.34, 'rgba(255, 148, 62, 0.18)');
+                warmGradient.addColorStop(1, 'rgba(255, 112, 46, 0)');
+                gradientCache.set(warmKey, warmGradient);
+            }
+
+            ctx.save();
+            ctx.translate(sunScreenPos.x, sunScreenPos.y);
+            ctx.fillStyle = warmGradient;
+            ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, width, height);
+            ctx.restore();
+        }
+
+        ctx.restore();
     }
 }
