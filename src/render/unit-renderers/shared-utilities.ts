@@ -106,6 +106,9 @@ export interface UnitRendererContext {
     // Canvas for drawMergedStarlingRanges
     canvas: HTMLCanvasElement;
     camera: { x: number; y: number };
+
+    // Unit drawing (needed by HeroRenderer)
+    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext): void;
 }
 
 /**
