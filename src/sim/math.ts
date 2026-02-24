@@ -184,3 +184,60 @@ export function updateKnockbackMotion(
         }
     }
 }
+
+/**
+ * Calculate squared distance from a point to the closest point on a line segment.
+ * Used for laser/beam collision detection across multiple sim systems.
+ */
+export function pointToLineSegmentDistanceSquared(
+    point: Vector2D,
+    lineStart: Vector2D,
+    lineEnd: Vector2D
+): number {
+    const dx = lineEnd.x - lineStart.x;
+    const dy = lineEnd.y - lineStart.y;
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) {
+        const px = point.x - lineStart.x;
+        const py = point.y - lineStart.y;
+        return px * px + py * py;
+    }
+
+    const t = Math.max(0, Math.min(1,
+        ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
+    ));
+
+    const closestX = lineStart.x + t * dx;
+    const closestY = lineStart.y + t * dy;
+    const distX = point.x - closestX;
+    const distY = point.y - closestY;
+    return distX * distX + distY * distY;
+}
+
+/**
+ * Get the closest point on a line segment to a given point.
+ * Used for laser/beam collision detection across multiple sim systems.
+ */
+export function getClosestPointOnLineSegment(
+    point: Vector2D,
+    lineStart: Vector2D,
+    lineEnd: Vector2D
+): Vector2D {
+    const dx = lineEnd.x - lineStart.x;
+    const dy = lineEnd.y - lineStart.y;
+    const lengthSq = dx * dx + dy * dy;
+
+    if (lengthSq === 0) {
+        return new Vector2D(lineStart.x, lineStart.y);
+    }
+
+    const t = Math.max(0, Math.min(1,
+        ((point.x - lineStart.x) * dx + (point.y - lineStart.y) * dy) / lengthSq
+    ));
+
+    return new Vector2D(
+        lineStart.x + t * dx,
+        lineStart.y + t * dy
+    );
+}

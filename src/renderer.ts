@@ -9,7 +9,7 @@ import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 import { renderLensFlare } from './rendering/LensFlare';
 
-import { darkenColor, adjustColorBrightness, brightenAndPaleColor } from './render/color-utilities';
+import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 import { getFactionColor } from './render/faction-utilities';
 import { SpriteManager, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
@@ -30,11 +30,9 @@ import { WarpGateRenderer } from './render/warp-gate-renderer';
 import type { WarpGateRendererContext } from './render/warp-gate-renderer';
 import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
+import { GlowRenderer } from './render/glow-renderer';
+import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 
-type UnitGlowRenderCache = {
-    texture: HTMLCanvasElement;
-    radiusPx: number;
-};
 
 type InfluenceRenderCircle = {
     position: Vector2D;
@@ -149,22 +147,13 @@ export class GameRenderer {
     public isUnitsLayerEnabled = true;
     public isProjectilesLayerEnabled = true;
 
-    private unitGlowRenderCache = new Map<string, UnitGlowRenderCache>();
-    private enemyVisibilityAlpha = new WeakMap<object, number>();
-    private shadeGlowAlphaByEntity = new WeakMap<object, number>();
-    private enemyVisibilityLastUpdateSec = Number.NaN;
-    private enemyVisibilityFrameDeltaSec = 0;
+    private readonly visibilityTracker = new VisibilityAlphaTracker();
     private influenceRadiusLastUpdateSec = Number.NaN;
     private gradientCache = new Map<string, CanvasGradient>();
 
-    private readonly ENEMY_VISIBILITY_FADE_SPEED_PER_SEC = 20;
-    private readonly SHADE_GLOW_FADE_IN_SPEED_PER_SEC = 4.2;
-    
     // Gradient caching bucket sizes for performance optimization
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
     private readonly SUN_RAY_BLOOM_RADIUS_MULTIPLIER = 1.1; // Bloom radius is 10% larger than ambient for softer edges
-    private readonly SHADE_GLOW_FADE_OUT_SPEED_PER_SEC = 6.5;
-    private readonly UNIT_GLOW_ALPHA = 0.2;
     private readonly ENTITY_SHADE_GLOW_SCALE = 1.2;
 
     private readonly graphicsOptions = defaultGraphicsOptions;
@@ -203,6 +192,7 @@ export class GameRenderer {
     private readonly warpGateRenderer: WarpGateRenderer;
     private readonly uiRenderer: UIRenderer;
     private readonly environmentRenderer = new EnvironmentRenderer();
+    private readonly glowRenderer = new GlowRenderer();
     private movementPointFramePaths: string[] = [];
 
     constructor(canvas: HTMLCanvasElement) {
@@ -1076,7 +1066,7 @@ export class GameRenderer {
     }
 
     /**
-     * Draw an aura (colored glow) behind a unit or structure in LaD mode
+     * Draw an aura (colored glow) behind a unit or structure in LaD mode.
      * The aura color is adjusted based on the unit's side (white/black)
      */
     private drawLadAura(
@@ -1085,68 +1075,15 @@ export class GameRenderer {
         baseColor: string,
         unitSide: 'light' | 'dark'
     ): void {
-        this.ctx.save();
-        
-        // Adjust color brightness based on side
-        // White side: darken the aura slightly for contrast
-        // Black side: brighten the aura slightly for contrast
-        let adjustedColor = baseColor;
-        if (unitSide === 'light') {
-            // Darken for white units
-            adjustedColor = this.darkenColor(baseColor, 0.7);
-        } else {
-            // Brighten for black units
-            adjustedColor = this.adjustColorBrightness(baseColor, 1.3);
-        }
-        
-        // Draw the aura as a radial gradient that completely envelops the unit
-        const gradient = this.ctx.createRadialGradient(
-            screenPos.x, screenPos.y, 0,
-            screenPos.x, screenPos.y, radius * 1.8
-        );
-        // Opacity values: ~50%, ~38%, ~19%, 0%
-        gradient.addColorStop(0, adjustedColor + '80'); // Semi-transparent center (~50% opacity)
-        gradient.addColorStop(0.5, adjustedColor + '60'); // ~38% opacity
-        gradient.addColorStop(0.8, adjustedColor + '30'); // ~19% opacity
-        gradient.addColorStop(1, adjustedColor + '00'); // Fully transparent edge
-        
-        this.ctx.fillStyle = gradient;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius * 1.8, 0, Math.PI * 2);
-        this.ctx.fill();
-        
-        this.ctx.restore();
+        this.glowRenderer.drawLadAura(screenPos, radius, baseColor, unitSide, this.ctx);
     }
 
     private drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void {
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-        this.ctx.globalAlpha = Math.max(0, Math.min(1, intensity));
-        this.ctx.shadowColor = color;
-        this.ctx.shadowBlur = radius * 0.9;
-        this.ctx.fillStyle = color;
-        this.ctx.beginPath();
-        this.ctx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2);
-        this.ctx.fill();
-        this.ctx.restore();
+        this.glowRenderer.drawFancyBloom(screenPos, radius, color, intensity, this.ctx);
     }
 
     private drawCachedUnitGlow(screenPos: Vector2D, radiusPx: number, color: string, alphaScale: number = 1): void {
-        const clampedRadiusPx = Math.max(6, Math.round(radiusPx));
-        const glowTexture = this.getOrCreateUnitGlowTexture(clampedRadiusPx, color);
-        const drawSize = glowTexture.width;
-
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-        this.ctx.globalAlpha = Math.max(0, Math.min(1, this.UNIT_GLOW_ALPHA * alphaScale));
-        this.ctx.drawImage(
-            glowTexture,
-            screenPos.x - drawSize * 0.5,
-            screenPos.y - drawSize * 0.5,
-            drawSize,
-            drawSize
-        );
-        this.ctx.restore();
+        this.glowRenderer.drawCachedUnitGlow(screenPos, radiusPx, color, alphaScale, this.ctx);
     }
 
     private drawStructureShadeGlow(
@@ -1171,71 +1108,6 @@ export class GameRenderer {
             glowColor,
             (0.9 + shadeGlowBoost) * visibilityAlpha
         );
-    }
-
-    private getOrCreateUnitGlowTexture(radiusPx: number, color: string): HTMLCanvasElement {
-        const cacheKey = `${radiusPx}:${color}`;
-        const cached = this.unitGlowRenderCache.get(cacheKey);
-        if (cached) {
-            return cached.texture;
-        }
-
-        const textureRadiusPx = Math.max(2, Math.round(radiusPx * 1.8));
-        const textureSize = textureRadiusPx * 2;
-        const glowCanvas = document.createElement('canvas');
-        glowCanvas.width = textureSize;
-        glowCanvas.height = textureSize;
-        const glowCtx = glowCanvas.getContext('2d');
-
-        if (!glowCtx) {
-            return glowCanvas;
-        }
-
-        const gradient = glowCtx.createRadialGradient(
-            textureRadiusPx,
-            textureRadiusPx,
-            0,
-            textureRadiusPx,
-            textureRadiusPx,
-            textureRadiusPx
-        );
-        gradient.addColorStop(0, this.withAlpha(color, 0.58));
-        gradient.addColorStop(0.42, this.withAlpha(color, 0.22));
-        gradient.addColorStop(1, this.withAlpha(color, 0));
-
-        glowCtx.fillStyle = gradient;
-        glowCtx.beginPath();
-        glowCtx.arc(textureRadiusPx, textureRadiusPx, textureRadiusPx, 0, Math.PI * 2);
-        glowCtx.fill();
-
-        this.unitGlowRenderCache.set(cacheKey, {
-            texture: glowCanvas,
-            radiusPx,
-        });
-
-        return glowCanvas;
-    }
-
-    private withAlpha(color: string, alpha: number): string {
-        if (color.startsWith('#')) {
-            const hex = color.slice(1);
-            if (hex.length === 6) {
-                const r = Number.parseInt(hex.slice(0, 2), 16);
-                const g = Number.parseInt(hex.slice(2, 4), 16);
-                const b = Number.parseInt(hex.slice(4, 6), 16);
-                return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
-            }
-        }
-
-        const rgbaMatch = color.match(/rgba?\(([^)]+)\)/);
-        if (rgbaMatch) {
-            const components = rgbaMatch[1].split(',').map(component => component.trim());
-            if (components.length >= 3) {
-                return `rgba(${components[0]}, ${components[1]}, ${components[2]}, ${Math.max(0, Math.min(1, alpha))})`;
-            }
-        }
-
-        return color;
     }
 
     /**
@@ -1316,37 +1188,7 @@ export class GameRenderer {
         if (!this.isScreenPosWithinViewBounds(screenPos, margin)) {
             return;
         }
-
-        const selectionRadius = radius + Math.max(2, this.zoom * 2.5);
-        const ringThickness = Math.max(1.5, this.zoom * 1.8);
-        
-        // Quantize values for caching - use these for both gradient and drawing
-        const radiusBucket = Math.round(selectionRadius / 5) * 5;
-        const thicknessBucket = Math.round(ringThickness * 10) / 10; // 0.1 precision
-        const cacheKey = `building-selection-${radiusBucket}-${thicknessBucket}`;
-        
-        const innerR = Math.max(0, radiusBucket - thicknessBucket * 0.4);
-        const outerR = radiusBucket + thicknessBucket * 2.4;
-        
-        const gradient = this.getCachedRadialGradient(
-            cacheKey,
-            0, 0, innerR,
-            0, 0, outerR,
-            [
-                { offset: 0, color: 'rgba(255, 215, 0, 0.95)' },
-                { offset: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
-                { offset: 1, color: 'rgba(255, 255, 255, 0)' }
-            ]
-        );
-
-        this.ctx.save();
-        this.ctx.translate(screenPos.x, screenPos.y);
-        this.ctx.strokeStyle = gradient;
-        this.ctx.lineWidth = thicknessBucket;
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, radiusBucket, 0, Math.PI * 2);
-        this.ctx.stroke();
-        this.ctx.restore();
+        this.glowRenderer.drawBuildingSelectionIndicator(screenPos, radius, { ctx: this.ctx, zoom: this.zoom });
     }
 
     /**
@@ -1370,7 +1212,7 @@ export class GameRenderer {
             this.colorScheme,
             sunSprite,
             this.drawFancyBloom.bind(this),
-            this.withAlpha.bind(this)
+            withAlpha
         );
     }
 
@@ -1502,43 +1344,15 @@ export class GameRenderer {
      */
 
     private updateEnemyVisibilityFadeClock(gameTimeSec: number): void {
-        if (Number.isNaN(this.enemyVisibilityLastUpdateSec)) {
-            this.enemyVisibilityFrameDeltaSec = 0;
-            this.enemyVisibilityLastUpdateSec = gameTimeSec;
-            return;
-        }
-
-        this.enemyVisibilityFrameDeltaSec = Math.max(0, gameTimeSec - this.enemyVisibilityLastUpdateSec);
-        this.enemyVisibilityLastUpdateSec = gameTimeSec;
+        this.visibilityTracker.updateFrameDelta(gameTimeSec);
     }
 
     private getEnemyVisibilityAlpha(entity: object, isVisible: boolean, _gameTimeSec: number): number {
-        const currentAlpha = this.enemyVisibilityAlpha.get(entity) ?? (isVisible ? 1 : 0);
-        const dtSec = this.enemyVisibilityFrameDeltaSec;
-        const maxStep = this.ENEMY_VISIBILITY_FADE_SPEED_PER_SEC * dtSec;
-        const targetAlpha = isVisible ? 1 : 0;
-        const alphaDelta = targetAlpha - currentAlpha;
-        const nextAlpha = Math.abs(alphaDelta) <= maxStep
-            ? targetAlpha
-            : currentAlpha + Math.sign(alphaDelta) * maxStep;
-        this.enemyVisibilityAlpha.set(entity, nextAlpha);
-        return nextAlpha;
+        return this.visibilityTracker.getEntityVisibilityAlpha(entity, isVisible);
     }
 
     private getShadeGlowAlpha(entity: object, shouldGlowInShade: boolean): number {
-        const currentAlpha = this.shadeGlowAlphaByEntity.get(entity) ?? 0;
-        const dtSec = this.enemyVisibilityFrameDeltaSec;
-        const fadeSpeedPerSec = shouldGlowInShade
-            ? this.SHADE_GLOW_FADE_IN_SPEED_PER_SEC
-            : this.SHADE_GLOW_FADE_OUT_SPEED_PER_SEC;
-        const maxStep = fadeSpeedPerSec * dtSec;
-        const targetAlpha = shouldGlowInShade ? 1 : 0;
-        const alphaDelta = targetAlpha - currentAlpha;
-        const nextAlpha = Math.abs(alphaDelta) <= maxStep
-            ? targetAlpha
-            : currentAlpha + Math.sign(alphaDelta) * maxStep;
-        this.shadeGlowAlphaByEntity.set(entity, nextAlpha);
-        return nextAlpha;
+        return this.visibilityTracker.getEntityShadeGlowAlpha(entity, shouldGlowInShade);
     }
 
     private applyUltraWarmCoolGrade(game: GameState): void {

@@ -4,6 +4,34 @@
  */
 
 /**
+ * Convert any hex or rgb(a) color to an rgba string with the given alpha value.
+ * @param color - Hex (#RRGGBB) or rgb/rgba color string
+ * @param alpha - Alpha value between 0 and 1
+ * @returns rgba color string
+ */
+export function withAlpha(color: string, alpha: number): string {
+    if (color.startsWith('#')) {
+        const hex = color.slice(1);
+        if (hex.length === 6) {
+            const r = Number.parseInt(hex.slice(0, 2), 16);
+            const g = Number.parseInt(hex.slice(2, 4), 16);
+            const b = Number.parseInt(hex.slice(4, 6), 16);
+            return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha))})`;
+        }
+    }
+
+    const rgbaMatch = color.match(/rgba?\(([^)]+)\)/);
+    if (rgbaMatch) {
+        const components = rgbaMatch[1].split(',').map(component => component.trim());
+        if (components.length >= 3) {
+            return `rgba(${components[0]}, ${components[1]}, ${components[2]}, ${Math.max(0, Math.min(1, alpha))})`;
+        }
+    }
+
+    return color;
+}
+
+/**
  * Darken a hex color by a given factor
  * @param color - Hex color string (#RGB or #RRGGBB)
  * @param factor - Darkening factor (0 = black, 1 = original color)
