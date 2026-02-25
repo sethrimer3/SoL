@@ -18,6 +18,7 @@ import { WorldInitializationSystem } from './systems/world-initialization-system
 import { UnitEffectsSystem, UnitEffectsContext } from './systems/unit-effects-system';
 import { BuildingUpdateSystem, BuildingUpdateContext } from './systems/building-update-system';
 import { PlayerStructureSystem, PlayerStructureContext } from './systems/player-structure-system';
+import { UnitUpdateSystem, UnitUpdateContext } from './systems/unit-update-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -104,7 +105,7 @@ import {
 
 import { computeStateHash, StateHashContext } from './state-hash';
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext, PlayerStructureContext, UnitUpdateContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -274,161 +275,11 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             }
         }
 
-        // Update each player's units
+        // Update each player's units, buildings, and apply effects
         for (const player of this.players) {
             if (player.isDefeated()) continue;
 
-            // Get enemies (units and structures not owned by this player or their team)
-            const enemies: CombatTarget[] = [];
-            for (const otherPlayer of this.players) {
-                // Skip self
-                if (otherPlayer === player) continue;
-                
-                // Skip defeated players
-                if (otherPlayer.isDefeated()) continue;
-                
-                // Skip teammates in team games (3+ players)
-                if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) {
-                    continue;
-                }
-                
-                enemies.push(...otherPlayer.units);
-                enemies.push(...otherPlayer.buildings);
-                for (const mirror of otherPlayer.solarMirrors) {
-                    if (mirror.health > 0) {
-                        enemies.push(mirror);
-                    }
-                }
-                for (const gate of this.starlingMergeGates) {
-                    if (gate.owner === otherPlayer && gate.health > 0) {
-                        enemies.push(gate);
-                    }
-                }
-                if (otherPlayer.stellarForge) {
-                    enemies.push(otherPlayer.stellarForge);
-                }
-                
-                // Add enemy shadow decoys as targetable entities
-                // Note: Decoys have position, health, and owner properties compatible with CombatTarget,
-                // but can't be added to the union type without creating circular dependencies
-                for (const decoy of this.shadowDecoys) {
-                    if (decoy.owner === otherPlayer && !decoy.shouldDespawn) {
-                        enemies.push(decoy as any);
-                    }
-                }
-            }
-
-            // Update each unit (only after countdown)
-            if (!this.isCountdownActive) {
-                for (const unit of player.units) {
-                    // Starlings need special AI update before regular update
-                    if (unit instanceof Starling) {
-                        unit.updateAI(this, enemies);
-                    }
-                    
-                    unit.update(deltaTime, enemies, allUnits, this.asteroids);
-
-                    if (unit.isHero && unit.owner.faction === Faction.AURUM && this.isUnitInSunlight(unit)) {
-                        unit.position.x += unit.velocity.x * deltaTime * (Constants.AURUM_HERO_SUNLIGHT_SPEED_MULTIPLIER - 1);
-                        unit.position.y += unit.velocity.y * deltaTime * (Constants.AURUM_HERO_SUNLIGHT_SPEED_MULTIPLIER - 1);
-                    }
-
-                    // Apply shield blocking from enemy ShieldTowers (not allied ones)
-                    for (const enemyPlayer of this.players) {
-                        // Skip own units and teammates
-                        if (enemyPlayer === unit.owner) continue;
-                        if (this.players.length >= 3 && enemyPlayer.teamId === unit.owner.teamId) {
-                            continue;
-                        }
-                        
-                        for (const building of enemyPlayer.buildings) {
-                            if (building instanceof ShieldTower && building.shieldActive && building.isComplete) {
-                                const dx = unit.position.x - building.position.x;
-                                const dy = unit.position.y - building.position.y;
-                                const distance = Math.sqrt(dx * dx + dy * dy);
-                                
-                                // If unit is inside shield radius, push it back out
-                                if (distance < building.shieldRadius) {
-                                    const pushDistance = building.shieldRadius - distance;
-                                    // Avoid division by zero when unit is exactly at tower center
-                                    if (distance > Constants.SHIELD_CENTER_COLLISION_THRESHOLD) {
-                                        const dirX = dx / distance;
-                                        const dirY = dy / distance;
-                                        unit.position.x += dirX * pushDistance;
-                                        unit.position.y += dirY * pushDistance;
-                                    } else {
-                                        // Push in arbitrary direction when at center
-                                        unit.position.x += pushDistance;
-                                    }
-                                    // Stop unit's velocity when hitting shield
-                                    unit.velocity.x = 0;
-                                    unit.velocity.y = 0;
-                                }
-                            }
-                        }
-                    }
-
-                    if (unit instanceof Starling) {
-                        PhysicsSystem.applyDustPushFromMovingEntity(
-                            this,
-                            unit.position,
-                            unit.velocity,
-                            Constants.STARLING_DUST_PUSH_RADIUS_PX,
-                            Constants.STARLING_DUST_PUSH_FORCE_MULTIPLIER,
-                            this.getPlayerImpactColor(unit.owner),
-                            deltaTime
-                        );
-                    }
-                    
-                    // Apply fluid forces from Grave projectiles
-                    if (unit instanceof Grave) {
-                        for (const projectile of unit.getProjectiles()) {
-                            if (projectile.isAttacking) {
-                                // Attacking projectiles push dust as they fly
-                                const projectileSpeed = Math.sqrt(projectile.velocity.x ** 2 + projectile.velocity.y ** 2);
-                                PhysicsSystem.applyFluidForceFromMovingObject(
-                                    this,
-                                    projectile.position,
-                                    projectile.velocity,
-                                    Constants.GRAVE_PROJECTILE_EFFECT_RADIUS,
-                                    projectileSpeed * Constants.GRAVE_PROJECTILE_FORCE_MULTIPLIER,
-                                    this.getPlayerImpactColor(unit.owner),
-                                    deltaTime
-                                );
-                            }
-                        }
-                    }
-
-                // If unit is a Marine, collect its effects
-                // (Marine, Mothership, Starling lasers, InfluenceBall, Mortar, Tank, Nova,
-                //  Sly, Radiant, Velaris, Splendor, Aurum, Dash, Blink, Shadow, Chrono
-                //  effects + Ray/TurretDeployer/Spotlight/Driller/Dagger/Grave ability updates)
-                UnitEffectsSystem.collectEffectsForUnit(unit, this, enemies, deltaTime);
-            }
-            } // End of countdown check
-
-            if (!this.isCountdownActive) {
-                StarlingSystem.updateStarlingMergeGatesForPlayer(this, player, deltaTime);
-            }
-
-            if (!this.isCountdownActive) {
-                StarlingSystem.processStarlingSacrificesForPlayer(player);
-            }
-
-            // Remove dead units and track losses
-            const deadUnits = player.units.filter(unit => unit.isDead());
-            for (const deadUnit of deadUnits) {
-                // Create death particles for visual effect
-                const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                ParticleSystem.createDeathParticles(this, deadUnit, color);
-            }
-            player.unitsLost += deadUnits.length;
-            player.units = player.units.filter(unit => !unit.isDead());
-
-            // Update each building (only after countdown)
-            if (!this.isCountdownActive) {
-                BuildingUpdateSystem.updateBuildingsForPlayer(this, player, enemies, allUnits, allStructures, deltaTime);
-            }
+            UnitUpdateSystem.updateUnitsForPlayer(this, player, allUnits, allStructures, deltaTime);
         }
 
         if (!this.isCountdownActive) {
