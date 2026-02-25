@@ -17,6 +17,7 @@ import { MirrorSystem, MirrorSystemContext } from './systems/mirror-system';
 import { WorldInitializationSystem } from './systems/world-initialization-system';
 import { UnitEffectsSystem, UnitEffectsContext } from './systems/unit-effects-system';
 import { BuildingUpdateSystem, BuildingUpdateContext } from './systems/building-update-system';
+import { PlayerStructureSystem, PlayerStructureContext } from './systems/player-structure-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -237,90 +238,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
                 continue;
             }
 
-            if (player.solarMirrors.length > 0) {
-                const destroyedMirrors = player.solarMirrors.filter(mirror => mirror.health <= 0);
-                if (destroyedMirrors.length > 0) {
-                    const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                    for (const mirror of destroyedMirrors) {
-                        ParticleSystem.createDeathParticlesForMirror(this, mirror, color);
-                    }
-                }
-                player.solarMirrors = player.solarMirrors.filter(mirror => mirror.health > 0);
-            }
-
-            // Update light status for Stellar Forge
-            if (player.stellarForge) {
-                const oldForgePos = new Vector2D(player.stellarForge.position.x, player.stellarForge.position.y);
-                player.stellarForge.updateLightStatus(player.solarMirrors, this.suns, this.asteroids, this.players);
-                
-                // Only allow forge movement after countdown
-                if (!this.isCountdownActive) {
-                    player.stellarForge.update(deltaTime, this); // Update forge movement with gameState
-                    
-                    // Check collision for forge (larger radius)
-                    if (this.checkCollision(player.stellarForge.position, player.stellarForge.radius, player.stellarForge)) {
-                        // Revert to old position and stop movement
-                        player.stellarForge.position = oldForgePos;
-                        player.stellarForge.targetPosition = null;
-                        player.stellarForge.velocity = new Vector2D(0, 0);
-                    }
-
-                    PhysicsSystem.applyDustPushFromMovingEntity(
-                        this,
-                        player.stellarForge.position,
-                        player.stellarForge.velocity,
-                        Constants.FORGE_DUST_PUSH_RADIUS_PX,
-                        Constants.FORGE_DUST_PUSH_FORCE_MULTIPLIER,
-                        this.getPlayerImpactColor(player),
-                        deltaTime
-                    );
-                }
-                
-                // Check for forge crunch (spawns minions with excess energy)
-                if (!this.isCountdownActive) {
-                    const energyForMinions = player.stellarForge.shouldCrunch();
-                    if (energyForMinions > 0) {
-                        const currentStarlingCount = StarlingSystem.getStarlingCountForPlayer(player);
-                        const availableStarlingSlots = Math.max(0, Constants.STARLING_MAX_COUNT - currentStarlingCount);
-                        const numStarlings = Math.min(
-                            Math.floor(energyForMinions / Constants.STARLING_COST_PER_ENERGY),
-                            availableStarlingSlots
-                        );
-                        const usedEnergy = numStarlings * Constants.STARLING_COST_PER_ENERGY;
-                        const unusedEnergy = Math.max(0, energyForMinions - usedEnergy);
-                        if (unusedEnergy > 0) {
-                            player.stellarForge.addPendingEnergy(unusedEnergy);
-                        }
-                        
-                        // Spawn starlings close to the forge
-                        if (numStarlings > 0) {
-                            for (let i = 0; i < numStarlings; i++) {
-                                const angle = (Math.PI * 2 * i) / numStarlings; // Evenly distribute around forge
-                                const spawnRadius = player.stellarForge.radius + Constants.STARLING_COLLISION_RADIUS_PX + 5;
-                                const spawnPosition = new Vector2D(
-                                    player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
-                                    player.stellarForge.position.y + Math.sin(angle) * spawnRadius
-                                );
-                                const starling = new Starling(spawnPosition, player, player.stellarForge?.minionPath ?? []);
-                                player.units.push(starling);
-                                player.unitsCreated++;
-                            }
-                            
-                            console.log(`${player.name} forge crunch spawned ${numStarlings} Starlings with ${energyForMinions.toFixed(0)} energy`);
-                        }
-                    }
-                }
-
-            }
-
-            for (const building of player.buildings) {
-                building.isReceivingLight = false;
-                building.incomingLightPerSec = 0;
-            }
-
-            // Update solar mirrors - position and reflection angle
-            // Mirrors can move during countdown to reach the sun
-            MirrorSystem.updateMirrorsForPlayer(this, player, deltaTime);
+            PlayerStructureSystem.updateStructuresForPlayer(this, player, deltaTime);
         }
 
         for (const gate of this.warpGates) {

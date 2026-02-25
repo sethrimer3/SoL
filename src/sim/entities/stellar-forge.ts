@@ -5,8 +5,16 @@ import type { Player } from './player';
 import type { Asteroid } from './asteroid';
 import type { SolarMirror } from './solar-mirror';
 import type { Sun } from './sun';
-import type { GameState } from '../game-state';
 import { getGameRNG } from '../../seeded-random';
+
+/**
+ * Minimal context required by StellarForge.update() for obstacle avoidance.
+ * GameState satisfies this interface structurally.
+ */
+export interface StellarForgeUpdateContext {
+    suns: Sun[];
+    players: Player[];
+}
 
 type ForgeProductionType = 'hero' | 'mirror';
 
@@ -215,7 +223,7 @@ export class StellarForge {
     /**
      * Update forge movement and crunch effects with obstacle avoidance
      */
-    update(deltaTime: number, gameState: GameState | null = null): void {
+    update(deltaTime: number, context: StellarForgeUpdateContext | null = null): void {
         // Update crunch timer
         if (this.health > 0 && this.isReceivingLight) {
             this.crunchTimer -= deltaTime;
@@ -262,9 +270,9 @@ export class StellarForge {
                 let directionX = dx / distanceToTarget;
                 let directionY = dy / distanceToTarget;
 
-                // Add obstacle avoidance if gameState is provided
-                if (gameState) {
-                    const avoidanceDir = this.calculateObstacleAvoidance(gameState);
+                // Add obstacle avoidance if context is provided
+                if (context) {
+                    const avoidanceDir = this.calculateObstacleAvoidance(context);
                     if (avoidanceDir) {
                         directionX += avoidanceDir.x * this.AVOIDANCE_BLEND_FACTOR;
                         directionY += avoidanceDir.y * this.AVOIDANCE_BLEND_FACTOR;
@@ -304,14 +312,14 @@ export class StellarForge {
     /**
      * Calculate obstacle avoidance direction for smooth pathfinding
      */
-    private calculateObstacleAvoidance(gameState: GameState): Vector2D | null {
+    private calculateObstacleAvoidance(context: StellarForgeUpdateContext): Vector2D | null {
         let avoidX = 0;
         let avoidY = 0;
         let avoidCount = 0;
         const avoidanceRange = 80; // Look ahead distance
 
         // Check nearby obstacles
-        for (const sun of gameState.suns) {
+        for (const sun of context.suns) {
             const dx = this.position.x - sun.position.x;
             const dy = this.position.y - sun.position.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
@@ -325,7 +333,7 @@ export class StellarForge {
         }
 
         // Check other forges and mirrors
-        for (const player of gameState.players) {
+        for (const player of context.players) {
             // Check other stellar forges
             if (player.stellarForge && player.stellarForge !== this) {
                 const forge = player.stellarForge;
