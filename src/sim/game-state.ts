@@ -15,6 +15,8 @@ import { ProjectileCombatSystem, ProjectileCombatContext } from './systems/proje
 import { SpaceDustSystem, SpaceDustContext } from './systems/space-dust-system';
 import { MirrorSystem, MirrorSystemContext } from './systems/mirror-system';
 import { WorldInitializationSystem } from './systems/world-initialization-system';
+import { UnitEffectsSystem, UnitEffectsContext } from './systems/unit-effects-system';
+import { BuildingUpdateSystem, BuildingUpdateContext } from './systems/building-update-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -101,7 +103,7 @@ import {
 
 import { computeStateHash, StateHashContext } from './state-hash';
 import { Faction } from './entities/player';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -480,285 +482,10 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
                     }
 
                 // If unit is a Marine, collect its effects
-                if (unit instanceof Marine) {
-                    const effects = unit.getAndClearLastShotEffects();
-                    if (effects.muzzleFlash) {
-                        this.muzzleFlashes.push(effects.muzzleFlash);
-                    }
-                    if (effects.casing) {
-                        this.bulletCasings.push(effects.casing);
-                    }
-                    if (effects.bouncingBullet) {
-                        this.bouncingBullets.push(effects.bouncingBullet);
-                    }
-                }
-
-                // If unit is a Mothership, collect its effects
-                if (unit instanceof Mothership) {
-                    const effects = unit.getAndClearLastShotEffects();
-                    if (effects.muzzleFlash) {
-                        this.muzzleFlashes.push(effects.muzzleFlash);
-                    }
-                    if (effects.casing) {
-                        this.bulletCasings.push(effects.casing);
-                    }
-                    if (effects.bouncingBullet) {
-                        this.bouncingBullets.push(effects.bouncingBullet);
-                    }
-                    
-                    // Collect spawned mini-motherships
-                    const minis = unit.getAndClearMiniMotherships();
-                    this.miniMotherships.push(...minis);
-                }
-
-                // Collect ability effects from all units
-                const abilityEffects = unit.getAndClearLastAbilityEffects();
-                this.abilityBullets.push(...abilityEffects);
-
-                if (unit instanceof Starling) {
-                    const lasers = unit.getAndClearLastShotLasers();
-                    if (lasers.length > 0) {
-                        this.laserBeams.push(...lasers);
-                        
-                        // Spawn impact particles at laser endpoints
-                        for (const laser of lasers) {
-                            for (let i = 0; i < Constants.STARLING_LASER_IMPACT_PARTICLES; i++) {
-                                const angle = (Math.PI * 2 * i) / Constants.STARLING_LASER_IMPACT_PARTICLES;
-                                const velocity = new Vector2D(
-                                    Math.cos(angle) * Constants.STARLING_LASER_PARTICLE_SPEED,
-                                    Math.sin(angle) * Constants.STARLING_LASER_PARTICLE_SPEED
-                                );
-                                this.impactParticles.push(new ImpactParticle(
-                                    new Vector2D(laser.endPos.x, laser.endPos.y),
-                                    velocity,
-                                    Constants.STARLING_LASER_PARTICLE_LIFETIME,
-                                    laser.owner.faction
-                                ));
-                            }
-                        }
-                    }
-                }
-                
-                // Handle InfluenceBall projectiles specifically
-                if (unit instanceof InfluenceBall) {
-                    const projectile = unit.getAndClearProjectile();
-                    if (projectile) {
-                        this.influenceBallProjectiles.push(projectile);
-                    }
-                }
-                
-                // Handle Mortar projectiles
-                if (unit instanceof Mortar) {
-                    const projectiles = unit.getAndClearLastShotProjectiles();
-                    if (projectiles.length > 0) {
-                        this.mortarProjectiles.push(...projectiles);
-                    }
-                }
-                
-                // Handle Tank crescent wave
-                if (unit instanceof Tank) {
-                    const wave = unit.getCrescentWave();
-                    if (wave && !this.crescentWaves.includes(wave)) {
-                        this.crescentWaves.push(wave);
-                    }
-                }
-                
-                // Handle Nova bomb
-                if (unit instanceof Nova) {
-                    const bomb = unit.getAndClearBomb();
-                    if (bomb) {
-                        this.novaBombs.push(bomb);
-                    }
-                }
-                
-                // Handle Sly sticky bomb and lasers
-                if (unit instanceof Sly) {
-                    const bomb = unit.getAndClearBombToCreate();
-                    if (bomb) {
-                        this.stickyBombs.push(bomb);
-                    }
-                    const lasers = unit.getAndClearLasersToCreate();
-                    if (lasers.length > 0) {
-                        this.stickyLasers.push(...lasers);
-                    }
-                    const particles = unit.getAndClearParticlesToCreate();
-                    if (particles.length > 0) {
-                        this.disintegrationParticles.push(...particles);
-                    }
-                }
-                
-                // Handle Radiant orbs
-                if (unit instanceof Radiant) {
-                    const orb = unit.getAndClearOrb();
-                    if (orb) {
-                        this.radiantOrbs.push(orb);
-                        // Remove oldest orb if we have more than max
-                        if (this.radiantOrbs.filter(o => o.owner === unit.owner).length > Constants.RADIANT_MAX_ORBS) {
-                            const ownerOrbs = this.radiantOrbs.filter(o => o.owner === unit.owner);
-                            const oldestOrb = ownerOrbs[0];
-                            const index = this.radiantOrbs.indexOf(oldestOrb);
-                            if (index > -1) {
-                                this.radiantOrbs.splice(index, 1);
-                            }
-                        }
-                    }
-                }
-                
-                // Handle Velaris orbs
-                if (unit instanceof VelarisHero) {
-                    const orb = unit.getAndClearOrb();
-                    if (orb) {
-                        this.velarisOrbs.push(orb);
-                        // Remove oldest orb if we have more than max
-                        if (this.velarisOrbs.filter(o => o.owner === unit.owner).length > Constants.VELARIS_MAX_ORBS) {
-                            const ownerOrbs = this.velarisOrbs.filter(o => o.owner === unit.owner);
-                            const oldestOrb = ownerOrbs[0];
-                            const index = this.velarisOrbs.indexOf(oldestOrb);
-                            if (index > -1) {
-                                this.velarisOrbs.splice(index, 1);
-                            }
-                        }
-                    }
-                }
-                
-                // Handle Splendor sunlight spheres and laser visuals
-                if (unit instanceof Splendor) {
-                    const sphere = unit.getAndClearSunSphere();
-                    if (sphere) {
-                        this.splendorSunSpheres.push(sphere);
-                    }
-                    const laserSegment = unit.getAndClearLaserSegment();
-                    if (laserSegment) {
-                        this.splendorLaserSegments.push(laserSegment);
-                    }
-                }
-
-                // Handle Aurum orbs
-                if (unit instanceof AurumHero) {
-                    const orb = unit.getAndClearOrb();
-                    if (orb) {
-                        this.aurumOrbs.push(orb);
-                        // Remove oldest orb if we have more than max
-                        if (this.aurumOrbs.filter(o => o.owner === unit.owner).length > Constants.AURUM_MAX_ORBS) {
-                            const ownerOrbs = this.aurumOrbs.filter(o => o.owner === unit.owner);
-                            const oldestOrb = ownerOrbs[0];
-                            const index = this.aurumOrbs.indexOf(oldestOrb);
-                            if (index > -1) {
-                                this.aurumOrbs.splice(index, 1);
-                            }
-                        }
-                    }
-                }
-                
-                // Handle Dash slashes
-                if (unit instanceof Dash) {
-                    const slash = unit.getAndClearDashSlash();
-                    if (slash) {
-                        this.dashSlashes.push(slash);
-                        // Mark unit as dashing
-                        unit.setDashing(true, slash);
-                    }
-                }
-                
-                // Handle Blink shockwaves
-                if (unit instanceof Blink) {
-                    const shockwave = unit.getAndClearShockwave();
-                    if (shockwave) {
-                        this.blinkShockwaves.push(shockwave);
-                    }
-                }
-                
-                // Handle Shadow decoys
-                if (unit instanceof Shadow) {
-                    const decoy = unit.getAndClearDecoy();
-                    if (decoy) {
-                        this.shadowDecoys.push(decoy);
-                    }
-                }
-                
-                // Handle Chrono freeze circles
-                if (unit instanceof Chrono) {
-                    const freezeCircle = unit.getAndClearFreezeCircle();
-                    if (freezeCircle) {
-                        this.chronoFreezeCircles.push(freezeCircle);
-                    }
-                }
-                
-                // Handle Ray beam updates
-                if (unit instanceof Ray) {
-                    unit.updateBeamSegments(deltaTime);
-                    
-                    // Apply fluid forces from active beam segments
-                    for (const segment of unit.getBeamSegments()) {
-                        PhysicsSystem.applyFluidForceFromBeam(
-                            this,
-                            segment.startPos,
-                            segment.endPos,
-                            Constants.BEAM_EFFECT_RADIUS,
-                            Constants.BEAM_FORCE_STRENGTH,
-                            this.getPlayerImpactColor(unit.owner),
-                            deltaTime
-                        );
-                    }
-                    
-                    // Process Ray ability if just used (check if cooldown is near max)
-                    if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1 && unit.drillDirection) {
-                        HeroAbilitySystem.processRayBeamAbility(unit, this);
-                        unit.drillDirection = null; // Clear after processing
-                    }
-                }
-                
-                // Handle TurretDeployer ability
-                if (unit instanceof TurretDeployer) {
-                    // Check if ability was just used (check if cooldown is near max)
-                    if (unit.abilityCooldown > unit.abilityCooldownTime - 0.1) {
-                        HeroAbilitySystem.processTurretDeployment(unit, this);
-                    }
-                }
-
-                // Handle Spotlight ability updates and firing
-                if (unit instanceof Spotlight) {
-                    HeroAbilitySystem.updateSpotlightAbility(unit, enemies, deltaTime, this);
-                }
-                
-                // Handle Driller movement and collision
-                if (unit instanceof Driller && unit.isDrilling) {
-                    unit.updateDrilling(deltaTime);
-                    HeroAbilitySystem.processDrillerCollisions(unit, deltaTime, this);
-                }
-                
-                // Handle Dagger timers
-                if (unit instanceof Dagger) {
-                    unit.updateTimers(deltaTime);
-                }
-                
-                // Handle Grave projectile absorption
-                if (unit instanceof Grave) {
-                    for (const projectile of unit.getProjectiles()) {
-                        if (projectile.isAttacking) {
-                            // Check for absorption by Space Dust Swirler buildings
-                            let wasAbsorbed = false;
-                            for (const player of this.players) {
-                                for (const building of player.buildings) {
-                                    if (building instanceof SpaceDustSwirler) {
-                                        // Don't absorb friendly projectiles
-                                        if (building.owner === projectile.owner) continue;
-                                        
-                                        if (building.absorbProjectile(projectile)) {
-                                            // Make projectile return to grave (stop attacking)
-                                            projectile.isAttacking = false;
-                                            projectile.trail = [];
-                                            projectile.targetEnemy = null;
-                                            wasAbsorbed = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                                if (wasAbsorbed) break;
-                            }
-                        }
-                    }
-                }
+                // (Marine, Mothership, Starling lasers, InfluenceBall, Mortar, Tank, Nova,
+                //  Sly, Radiant, Velaris, Splendor, Aurum, Dash, Blink, Shadow, Chrono
+                //  effects + Ray/TurretDeployer/Spotlight/Driller/Dagger/Grave ability updates)
+                UnitEffectsSystem.collectEffectsForUnit(unit, this, enemies, deltaTime);
             }
             } // End of countdown check
 
@@ -782,114 +509,8 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
 
             // Update each building (only after countdown)
             if (!this.isCountdownActive) {
-                for (const building of player.buildings) {
-                    building.update(deltaTime, enemies, allUnits, this.asteroids, allStructures, Constants.MAP_PLAYABLE_BOUNDARY);
-
-                    // Check if StrikerTower countdown completed
-                    if (building instanceof StrikerTower && building.targetPosition && building.countdownTimer <= 0.001 && building.isMissileReady()) {
-                        // Countdown complete, fire the missile!
-                        const targetPos = building.targetPosition;
-                        const fired = building.fireMissile(
-                            targetPos,
-                            enemies,
-                            (pos) => this.isPointInShadow(pos),
-                            (pos, playerUnits) => this.isPositionVisibleByPlayerUnits(pos, playerUnits),
-                            player.units
-                        );
-                        
-                        // Track explosion for visual effect and trigger screen shake
-                        if (fired) {
-                            this.strikerTowerExplosions.push({
-                                position: targetPos, // Use existing Vector2D directly
-                                timestamp: this.gameTime
-                            });
-                        }
-                    }
-
-                // If building is a Cannon or Gatling Tower, collect its effects
-                if (building instanceof Minigun || building instanceof GatlingTower) {
-                    const effects = building.getAndClearLastShotEffects();
-                    if (effects.muzzleFlash) {
-                        this.muzzleFlashes.push(effects.muzzleFlash);
-                    }
-                    if (effects.casing) {
-                        this.bulletCasings.push(effects.casing);
-                    }
-                    if (effects.bouncingBullet) {
-                        this.bouncingBullets.push(effects.bouncingBullet);
-                    }
-                }
-
-                if (building instanceof Minigun || building instanceof LockOnLaserTower) {
-                    const lasers = building.getAndClearLastShotLasers();
-                    if (lasers.length > 0) {
-                        this.laserBeams.push(...lasers);
-                    }
-                }
-                
-                // If building is a Foundry, check for completed production
-                if (building instanceof SubsidiaryFactory) {
-                    if (building.currentProduction) {
-                        const totalLight = this.getMirrorLightOnStructure(player, building);
-                        if (totalLight > 0) {
-                            const buildRate = (totalLight / 10.0) * (1.0 / Constants.BUILDING_BUILD_TIME);
-                            const buildProgress = buildRate * deltaTime;
-                            building.addProductionProgress(buildProgress);
-                        }
-                    }
-                    const completedProduction = building.getCompletedProduction();
-                    if (completedProduction === Constants.FOUNDRY_STRAFE_UPGRADE_ITEM) {
-                        building.upgradeStrafe();
-                    } else if (completedProduction === Constants.FOUNDRY_REGEN_UPGRADE_ITEM) {
-                        building.upgradeRegen();
-                    } else if (completedProduction === Constants.FOUNDRY_ATTACK_UPGRADE_ITEM) {
-                        building.upgradeAttack();
-                    } else if (completedProduction === Constants.FOUNDRY_BLINK_UPGRADE_ITEM) {
-                        building.upgradeBlink();
-                    }
-                }
+                BuildingUpdateSystem.updateBuildingsForPlayer(this, player, enemies, allUnits, allStructures, deltaTime);
             }
-            } // End of countdown check for buildings
-
-            // Update building construction (only after countdown)
-            if (!this.isCountdownActive) {
-                for (const building of player.buildings) {
-                    if (building.isComplete) continue; // Skip completed buildings
-                
-                // Check if building is inside player's influence (near stellar forge)
-                const isInInfluence = this.isPointWithinPlayerInfluence(player, building.position);
-                
-                if (isInInfluence && player.stellarForge) {
-                    // Building inside influence: take energy from forge
-                    // Calculate build progress per second (inverse of build time)
-                    const buildRate = 1.0 / Constants.BUILDING_BUILD_TIME;
-                    const buildProgress = buildRate * deltaTime;
-                    
-                    // TODO: Split energy between buildings and hero units
-                    // For now, buildings get energy if available
-                    building.addBuildProgress(buildProgress);
-                } else {
-                    // Building outside influence: powered by mirrors shining on it
-                    const totalLight = this.getMirrorLightOnStructure(player, building);
-                    
-                    // Convert light to build progress
-                    if (totalLight > 0) {
-                        const buildRate = (totalLight / 10.0) * (1.0 / Constants.BUILDING_BUILD_TIME);
-                        const buildProgress = buildRate * deltaTime;
-                        building.addBuildProgress(buildProgress);
-                    }
-                }
-            }
-            } // End of countdown check for building construction
-
-            // Remove destroyed buildings
-            const destroyedBuildings = player.buildings.filter(building => building.isDestroyed());
-            for (const building of destroyedBuildings) {
-                // Create death particles for visual effect
-                const color = player === this.players[0] ? Constants.PLAYER_1_COLOR : Constants.PLAYER_2_COLOR;
-                ParticleSystem.createDeathParticles(this, building, color);
-            }
-            player.buildings = player.buildings.filter(building => !building.isDestroyed());
         }
 
         if (!this.isCountdownActive) {
@@ -1114,7 +735,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Apply knockback to units and solar mirrors when asteroids rotate and collide with them
      * This prevents entities from getting stuck inside rotating asteroids
      */
-    private getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {
+    public getMirrorLightOnStructure(player: Player, structure: Building | StellarForge): number {
         return MirrorSystem.getMirrorLightOnStructure(this, player, structure);
     }
 
