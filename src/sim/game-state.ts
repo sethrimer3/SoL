@@ -28,7 +28,7 @@ import { Sun } from './entities/sun';
 import { Asteroid } from './entities/asteroid';
 import { SolarMirror } from './entities/solar-mirror';
 import { StellarForge } from './entities/stellar-forge';
-import { Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, CombatTarget } from './entities/buildings';
+import { Building, SubsidiaryFactory, CombatTarget } from './entities/buildings';
 import { Unit } from './entities/unit';
 import { Starling } from './entities/starling';
 import { StarlingMergeGate } from './entities/starling-merge-gate';
@@ -49,11 +49,7 @@ import {
     DeathParticle
 } from './entities/particles';
 import {
-    Marine,
-    Mothership,
     MiniMothership,
-    Grave,
-    GraveProjectile,
     GraveBlackHole,
     GraveSmallParticle,
     Ray,
@@ -104,7 +100,6 @@ import {
 } from '../game-core';
 
 import { computeStateHash, StateHashContext } from './state-hash';
-import { Faction } from './entities/player';
 export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext, PlayerStructureContext, UnitUpdateContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
