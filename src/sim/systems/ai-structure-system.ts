@@ -205,7 +205,7 @@ export class AiStructureSystem {
             return null;
         }
 
-        if (player.solarMirrors.length === 0 || player.solarMirrors.length === 0) {
+        if (player.solarMirrors.length === 0) {
             return player.stellarForge.position;
         }
 

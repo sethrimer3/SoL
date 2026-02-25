@@ -75,6 +75,55 @@ export class HeroRenderer {
     /**
      * Draw warp gate effect for buildings that are warping in.
      */
+    /**
+     * Draw a Driller unit (Aurum hero)
+     */
+    public drawDriller(driller: InstanceType<typeof Driller>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        // Don't draw if hidden in asteroid
+        if (driller.isHiddenInAsteroid()) {
+            return;
+        }
+        
+        // Check visibility for enemy units
+        let shouldDim = false;
+        let displayColor = color;
+        if (isEnemy && context.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(driller.position, context.viewingPlayer);
+            if (!isVisible) {
+                return;
+            }
+            
+            if (!ladSun) {
+                const inShadow = game.isPointInShadow(driller.position);
+                if (inShadow) {
+                    shouldDim = false;
+                    displayColor = color;
+                }
+            }
+        }
+        
+        // Draw base unit
+        context.drawUnit(driller, displayColor, game, isEnemy, 1.0, context);
+        
+        // Draw drill symbol
+        const screenPos = context.worldToScreen(driller.position);
+        const size = 10 * context.zoom;
+        
+        context.ctx.strokeStyle = displayColor;
+        context.ctx.lineWidth = 2 * context.zoom;
+        
+        // Draw drill bit
+        context.ctx.beginPath();
+        context.ctx.moveTo(screenPos.x - size, screenPos.y);
+        context.ctx.lineTo(screenPos.x, screenPos.y - size * 0.5);
+        context.ctx.lineTo(screenPos.x + size, screenPos.y);
+        context.ctx.lineTo(screenPos.x, screenPos.y + size * 0.5);
+        context.ctx.closePath();
+        context.ctx.stroke();
+    }
+
     public drawWarpGateProductionEffect(
         screenPos: { x: number; y: number },
         radius: number,
@@ -156,10 +205,6 @@ export class HeroRenderer {
 
     public drawTank(tank: InstanceType<typeof Tank>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
         this.radiantRenderer.drawTank(tank, color, game, isEnemy, context);
-    }
-
-    public drawDriller(driller: InstanceType<typeof Driller>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
-        this.velarisRenderer.drawDriller(driller, color, game, isEnemy, context);
     }
 
     public drawDeployedTurret(turret: InstanceType<typeof DeployedTurret>, game: GameState, context: UnitRendererContext): void {
