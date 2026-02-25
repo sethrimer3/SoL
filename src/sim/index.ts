@@ -10,3 +10,6 @@ export * from './entities';
 
 // Game state
 export * from './game-state';
+
+// Standard game factory
+export * from './standard-game-factory';

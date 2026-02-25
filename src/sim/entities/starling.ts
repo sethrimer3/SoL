@@ -12,8 +12,16 @@ import { Building } from './buildings';
 import type { Player } from './player';
 import type { CombatTarget } from './buildings';
 import type { Asteroid } from './asteroid';
-import type { GameState } from '../game-state';
 import { getGameRNG } from '../../seeded-random';
+
+/**
+ * Minimal context required by Starling.updateAI() for path-following and targeting.
+ * GameState satisfies this interface structurally.
+ */
+export interface StarlingUpdateContext {
+    players: Player[];
+    isObjectVisibleToPlayer(pos: Vector2D, player: Player, object?: CombatTarget): boolean;
+}
 
 export class Starling extends Unit {
     private explorationTarget: Vector2D | null = null;
@@ -156,7 +164,7 @@ export class Starling extends Unit {
     /**
      * Update starling AI behavior (call this before regular update)
      */
-    updateAI(gameState: GameState, enemies: CombatTarget[]): void {
+    updateAI(ctx: StarlingUpdateContext, enemies: CombatTarget[]): void {
         if (this.hasManualOrder) {
             return;
         }
@@ -165,7 +173,7 @@ export class Starling extends Unit {
         if (this.assignedPath.length > 0) {
             // Follow the base's path
             const targetWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-            const rallyTarget = this.getStandoffPointForWaypoint(gameState, targetWaypoint) ?? targetWaypoint;
+            const rallyTarget = this.getStandoffPointForWaypoint(ctx, targetWaypoint) ?? targetWaypoint;
             
             // Check if we've reached the current waypoint
             if (this.position.distanceTo(rallyTarget) < Constants.UNIT_ARRIVAL_THRESHOLD * Constants.PATH_WAYPOINT_ARRIVAL_MULTIPLIER) {
@@ -173,7 +181,7 @@ export class Starling extends Unit {
                 if (this.currentPathWaypointIndex < this.assignedPath.length - 1) {
                     this.currentPathWaypointIndex++;
                     const nextWaypoint = this.assignedPath[this.currentPathWaypointIndex];
-                    this.rallyPoint = this.getStandoffPointForWaypoint(gameState, nextWaypoint) ?? nextWaypoint;
+                    this.rallyPoint = this.getStandoffPointForWaypoint(ctx, nextWaypoint) ?? nextWaypoint;
                 } else {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = rallyTarget;
@@ -196,7 +204,7 @@ export class Starling extends Unit {
             for (const enemy of enemies) {
                 if (enemy instanceof StellarForge && enemy.owner !== this.owner) {
                     // Check if enemy base is visible (not in shadow)
-                    if (gameState.isObjectVisibleToPlayer(enemy.position, this.owner)) {
+                    if (ctx.isObjectVisibleToPlayer(enemy.position, this.owner)) {
                         targetPosition = enemy.position;
                         targetRadiusPx = enemy.radius;
                         break;
@@ -206,10 +214,10 @@ export class Starling extends Unit {
 
             // 2. If no visible enemy base, target visible enemy buildings (mirrors)
             if (!targetPosition) {
-                for (const player of gameState.players) {
+                for (const player of ctx.players) {
                     if (player !== this.owner) {
                         for (const mirror of player.solarMirrors) {
-                            if (gameState.isObjectVisibleToPlayer(mirror.position, this.owner)) {
+                            if (ctx.isObjectVisibleToPlayer(mirror.position, this.owner)) {
                                 targetPosition = mirror.position;
                                 break;
                             }
@@ -248,8 +256,8 @@ export class Starling extends Unit {
         }
     }
 
-    private getStandoffPointForWaypoint(gameState: GameState, waypoint: Vector2D): Vector2D | null {
-        for (const player of gameState.players) {
+    private getStandoffPointForWaypoint(ctx: StarlingUpdateContext, waypoint: Vector2D): Vector2D | null {
+        for (const player of ctx.players) {
             if (player.stellarForge) {
                 const forgeDistance = waypoint.distanceTo(player.stellarForge.position);
                 if (forgeDistance < player.stellarForge.radius + this.collisionRadiusPx) {
