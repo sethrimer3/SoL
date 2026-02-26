@@ -7,6 +7,7 @@ export * from './sun';
 export * from './solar-mirror';
 export * from './stellar-forge';
 export * from './buildings';
+export * from './advanced-buildings';
 export * from './player';
 export * from './particles';
 export * from './unit';

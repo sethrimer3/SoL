@@ -16,10 +16,9 @@ import {
     CombatTarget,
     Minigun,
     GatlingTower,
-    LockOnLaserTower,
     SubsidiaryFactory,
-    StrikerTower,
 } from '../entities/buildings';
+import { LockOnLaserTower, StrikerTower } from '../entities/advanced-buildings';
 import {
     MuzzleFlash,
     BulletCasing,
