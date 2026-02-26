@@ -2,6 +2,8 @@
  * Math and geometry primitives for SoL game simulation
  */
 
+import { getGameRNG } from '../seeded-random';
+
 /**
  * 2D position/direction vector
  */
@@ -41,11 +43,12 @@ export class LightRay {
      * Check if ray intersects with a circular object
      */
     intersects(position: Vector2D, radius: number): boolean {
-        // Ray-circle intersection using vector math
-        const oc = new Vector2D(this.origin.x - position.x, this.origin.y - position.y);
+        // Ray-circle intersection using inline scalar math (avoids Vector2D allocation)
+        const ocX = this.origin.x - position.x;
+        const ocY = this.origin.y - position.y;
         const a = this.direction.x * this.direction.x + this.direction.y * this.direction.y;
-        const b = 2.0 * (oc.x * this.direction.x + oc.y * this.direction.y);
-        const c = oc.x * oc.x + oc.y * oc.y - radius * radius;
+        const b = 2.0 * (ocX * this.direction.x + ocY * this.direction.y);
+        const c = ocX * ocX + ocY * ocY - radius * radius;
         const discriminant = b * b - 4 * a * c;
         return discriminant >= 0;
     }
@@ -92,19 +95,22 @@ export class LightRay {
      * Check if ray intersects with a line segment and return the distance, or null if no intersection
      */
     private intersectsLineSegment(p1: Vector2D, p2: Vector2D): number | null {
-        const v1 = new Vector2D(p2.x - p1.x, p2.y - p1.y);
-        const v2 = new Vector2D(p1.x - this.origin.x, p1.y - this.origin.y);
-        const cross1 = this.direction.x * v1.y - this.direction.y * v1.x;
-        
+        // Inline scalar math to avoid Vector2D allocations
+        const v1x = p2.x - p1.x;
+        const v1y = p2.y - p1.y;
+        const v2x = p1.x - this.origin.x;
+        const v2y = p1.y - this.origin.y;
+        const cross1 = this.direction.x * v1y - this.direction.y * v1x;
+
         if (Math.abs(cross1) < 0.0001) return null; // Parallel
-        
-        const t1 = (v2.x * v1.y - v2.y * v1.x) / cross1;
-        const t2 = (v2.x * this.direction.y - v2.y * this.direction.x) / cross1;
-        
+
+        const t1 = (v2x * v1y - v2y * v1x) / cross1;
+        const t2 = (v2x * this.direction.y - v2y * this.direction.x) / cross1;
+
         if (t1 >= 0 && t2 >= 0 && t2 <= 1) {
             return t1; // Return the distance along the ray
         }
-        
+
         return null;
     }
 }
@@ -136,8 +142,9 @@ export function applyKnockbackVelocity(
         entityKnockbackVelocity.x = normalizedX * initialSpeed;
         entityKnockbackVelocity.y = normalizedY * initialSpeed;
     } else {
-        // If at center, push in a random direction
-        const angle = Math.random() * Math.PI * 2;
+        // If at center, push in a deterministic direction using seeded RNG
+        const rng = getGameRNG();
+        const angle = rng.nextFloat(0, Math.PI * 2);
         entityKnockbackVelocity.x = Math.cos(angle) * initialSpeed;
         entityKnockbackVelocity.y = Math.sin(angle) * initialSpeed;
     }

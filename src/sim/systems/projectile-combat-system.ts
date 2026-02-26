@@ -91,24 +91,18 @@ export class ProjectileCombatSystem {
 
             // Check collision with space dust particles
             for (const particle of ctx.spaceDust) {
-                const distance = casing.position.distanceTo(particle.position);
-                if (distance < Constants.CASING_SPACEDUST_COLLISION_DISTANCE) {
-                    // Apply force to both casing and particle
-                    const direction = new Vector2D(
-                        particle.position.x - casing.position.x,
-                        particle.position.y - casing.position.y
-                    ).normalize();
-
-                    particle.applyForce(new Vector2D(
-                        direction.x * Constants.CASING_SPACEDUST_FORCE,
-                        direction.y * Constants.CASING_SPACEDUST_FORCE
-                    ));
-
-                    // Apply counter-force to casing (damping applied in applyCollision method)
-                    casing.applyCollision(new Vector2D(
-                        -direction.x * Constants.CASING_SPACEDUST_FORCE,
-                        -direction.y * Constants.CASING_SPACEDUST_FORCE
-                    ));
+                const dx = particle.position.x - casing.position.x;
+                const dy = particle.position.y - casing.position.y;
+                const distSq = dx * dx + dy * dy;
+                const collDist = Constants.CASING_SPACEDUST_COLLISION_DISTANCE;
+                if (distSq < collDist * collDist) {
+                    // Apply force to both casing and particle (inline scalar math)
+                    const dist = Math.sqrt(distSq) || 1;
+                    const dirX = dx / dist;
+                    const dirY = dy / dist;
+                    const force = Constants.CASING_SPACEDUST_FORCE;
+                    particle.applyForceXY(dirX * force, dirY * force);
+                    casing.applyCollisionXY(-dirX * force, -dirY * force);
                 }
             }
         }

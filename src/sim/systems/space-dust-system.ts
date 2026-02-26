@@ -17,6 +17,7 @@ import { VisionSystem } from './vision-system';
 
 export interface SpaceDustContext extends PhysicsContext {
     warpGates: WarpGate[];
+    gameTime: number;
 }
 
 export class SpaceDustSystem {
@@ -27,7 +28,7 @@ export class SpaceDustSystem {
         PhysicsSystem.applyDustRepulsion(ctx, deltaTime);
 
         for (const particle of ctx.spaceDust) {
-            particle.update(deltaTime);
+            particle.update(deltaTime, ctx.gameTime);
             PhysicsSystem.resolveDustAsteroidCollision(ctx, particle, deltaTime);
 
             const closestInfluence = SpaceDustSystem.getClosestInfluenceAtPoint(ctx, particle.position);
@@ -45,23 +46,17 @@ export class SpaceDustSystem {
         for (const gate of ctx.warpGates) {
             if (gate.isCharging && gate.chargeTime >= Constants.WARP_GATE_INITIAL_DELAY) {
                 for (const particle of ctx.spaceDust) {
-                    const distance = particle.position.distanceTo(gate.position);
+                    const dx = gate.position.x - particle.position.x;
+                    const dy = gate.position.y - particle.position.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
                     if (distance < Constants.WARP_GATE_SPIRAL_RADIUS && distance > Constants.WARP_GATE_SPIRAL_MIN_DISTANCE) {
-                        const direction = new Vector2D(
-                            gate.position.x - particle.position.x,
-                            gate.position.y - particle.position.y
-                        ).normalize();
-
-                        const tangent = new Vector2D(-direction.y, direction.x);
-                        const force = new Vector2D(
-                            direction.x * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.x * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT,
-                            direction.y * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + tangent.y * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT
-                        );
-
-                        particle.applyForce(new Vector2D(
-                            force.x * deltaTime / distance,
-                            force.y * deltaTime / distance
-                        ));
+                        const invDist = 1 / distance;
+                        const dirX = dx * invDist;
+                        const dirY = dy * invDist;
+                        // tangent = (-dirY, dirX)
+                        const forceX = dirX * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL - dirY * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT;
+                        const forceY = dirY * Constants.WARP_GATE_SPIRAL_FORCE_RADIAL + dirX * Constants.WARP_GATE_SPIRAL_FORCE_TANGENT;
+                        particle.applyForceXY(forceX * deltaTime / distance, forceY * deltaTime / distance);
                     }
                 }
             }
@@ -73,28 +68,20 @@ export class SpaceDustSystem {
                 const crunch = player.stellarForge.getCurrentCrunch();
                 if (crunch && crunch.isActive()) {
                     for (const particle of ctx.spaceDust) {
-                        const distance = particle.position.distanceTo(crunch.position);
+                        const dx = particle.position.x - crunch.position.x;
+                        const dy = particle.position.y - crunch.position.y;
+                        const distance = Math.sqrt(dx * dx + dy * dy);
 
                         if (crunch.phase === 'suck' && distance < Constants.FORGE_CRUNCH_SUCK_RADIUS) {
                             if (distance > 5) {
-                                const direction = new Vector2D(
-                                    crunch.position.x - particle.position.x,
-                                    crunch.position.y - particle.position.y
-                                ).normalize();
-
+                                const invDist = 1 / distance;
                                 const forceMagnitude = Constants.FORGE_CRUNCH_SUCK_FORCE / Math.sqrt(distance);
-                                particle.applyForce(new Vector2D(
-                                    direction.x * forceMagnitude * deltaTime,
-                                    direction.y * forceMagnitude * deltaTime
-                                ));
+                                // Direction towards crunch (negate dx/dy)
+                                particle.applyForceXY(-dx * invDist * forceMagnitude * deltaTime, -dy * invDist * forceMagnitude * deltaTime);
                             }
                         } else if (crunch.phase === 'wave' && distance < Constants.FORGE_CRUNCH_WAVE_RADIUS) {
                             if (distance > 5) {
-                                const direction = new Vector2D(
-                                    particle.position.x - crunch.position.x,
-                                    particle.position.y - crunch.position.y
-                                ).normalize();
-
+                                const invDist = 1 / distance;
                                 const waveProgress = crunch.getPhaseProgress();
                                 const wavePosition = waveProgress * Constants.FORGE_CRUNCH_WAVE_RADIUS;
                                 const distanceToWave = Math.abs(distance - wavePosition);
@@ -102,10 +89,8 @@ export class SpaceDustSystem {
                                 const waveStrength = Math.exp(-distanceToWave / waveSharpness);
 
                                 const forceMagnitude = Constants.FORGE_CRUNCH_WAVE_FORCE * waveStrength;
-                                particle.applyForce(new Vector2D(
-                                    direction.x * forceMagnitude * deltaTime,
-                                    direction.y * forceMagnitude * deltaTime
-                                ));
+                                // Direction away from crunch
+                                particle.applyForceXY(dx * invDist * forceMagnitude * deltaTime, dy * invDist * forceMagnitude * deltaTime);
                             }
                         }
                     }

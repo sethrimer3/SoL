@@ -152,7 +152,8 @@ export class PhysicsSystem {
                 continue;
             }
 
-            const oldPosition = new Vector2D(unit.position.x, unit.position.y);
+            const oldX = unit.position.x;
+            const oldY = unit.position.y;
 
             if (this.checkCollision(context, unit.position, unit.collisionRadiusPx)) {
                 // Smooth collision: Find the nearest obstacle and push away from it gently
@@ -235,14 +236,15 @@ export class PhysicsSystem {
                     if (pushLength > 0) {
                         // Normalize and apply gentle push
                         const pushDistance = Math.min(this.MAX_PUSH_DISTANCE, pushLength * this.PUSH_MULTIPLIER);
-                        unit.position.x = oldPosition.x + (pushX / pushLength) * pushDistance;
-                        unit.position.y = oldPosition.y + (pushY / pushLength) * pushDistance;
+                        unit.position.x = oldX + (pushX / pushLength) * pushDistance;
+                        unit.position.y = oldY + (pushY / pushLength) * pushDistance;
                     }
                 }
 
                 // If still in collision after push, stop the unit
                 if (this.checkCollision(context, unit.position, unit.collisionRadiusPx)) {
-                    unit.position = oldPosition;
+                    unit.position.x = oldX;
+                    unit.position.y = oldY;
                     if (unit.rallyPoint && this.checkCollision(context, unit.rallyPoint, unit.collisionRadiusPx)) {
                         unit.rallyPoint = null;
                     }
@@ -506,44 +508,42 @@ export class PhysicsSystem {
         impactColor: string | null,
         deltaTime: number
     ): void {
-        for (const particle of context.spaceDust) {
-            const distance = particle.position.distanceTo(position);
-            
-            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
-                // Calculate direction from object to particle
-                const directionToParticle = new Vector2D(
-                    particle.position.x - position.x,
-                    particle.position.y - position.y
-                ).normalize();
-                
-                // Combine forward motion with radial push
-                const velocityNorm = velocity.normalize();
-                
-                // Mix of forward push and radial displacement (like fluid being displaced)
-                const forwardComponent = Constants.FLUID_FORWARD_COMPONENT;
-                const radialComponent = Constants.FLUID_RADIAL_COMPONENT;
-                
-                const pushDirection = new Vector2D(
-                    velocityNorm.x * forwardComponent + directionToParticle.x * radialComponent,
-                    velocityNorm.y * forwardComponent + directionToParticle.y * radialComponent
-                );
-                
-                // Force falls off with distance (inverse square for more realistic fluid behavior)
-                const distanceFactor = 1.0 - (distance / radius);
-                const forceMagnitude = strength * distanceFactor * distanceFactor;
+        const velMagSq = velocity.x * velocity.x + velocity.y * velocity.y;
+        if (velMagSq <= 0) return;
+        const velMag = Math.sqrt(velMagSq);
+        const velNormX = velocity.x / velMag;
+        const velNormY = velocity.y / velMag;
+        const forwardComponent = Constants.FLUID_FORWARD_COMPONENT;
+        const radialComponent = Constants.FLUID_RADIAL_COMPONENT;
+        const minDist = Constants.FLUID_MIN_DISTANCE;
+        const radiusSq = radius * radius;
 
-                if (impactColor) {
-                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
-                    if (impactStrength > 0) {
-                        particle.applyImpactColor(impactColor, impactStrength);
-                    }
+        for (const particle of context.spaceDust) {
+            const dx = particle.position.x - position.x;
+            const dy = particle.position.y - position.y;
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= radiusSq || distSq < minDist * minDist) continue;
+
+            const distance = Math.sqrt(distSq);
+            const invDist = 1 / distance;
+            const dirX = dx * invDist;
+            const dirY = dy * invDist;
+
+            const pushX = velNormX * forwardComponent + dirX * radialComponent;
+            const pushY = velNormY * forwardComponent + dirY * radialComponent;
+
+            // Force falls off with distance (inverse square for more realistic fluid behavior)
+            const distanceFactor = 1.0 - (distance / radius);
+            const forceMagnitude = strength * distanceFactor * distanceFactor;
+
+            if (impactColor) {
+                const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
+                if (impactStrength > 0) {
+                    particle.applyImpactColor(impactColor, impactStrength);
                 }
-                
-                particle.applyForce(new Vector2D(
-                    pushDirection.x * forceMagnitude * deltaTime,
-                    pushDirection.y * forceMagnitude * deltaTime
-                ));
             }
+
+            particle.applyForceXY(pushX * forceMagnitude * deltaTime, pushY * forceMagnitude * deltaTime);
         }
     }
 
@@ -560,66 +560,55 @@ export class PhysicsSystem {
         deltaTime: number
     ): void {
         // Calculate beam direction
-        const beamLength = startPos.distanceTo(endPos);
+        const bDx = endPos.x - startPos.x;
+        const bDy = endPos.y - startPos.y;
+        const beamLength = Math.sqrt(bDx * bDx + bDy * bDy);
         if (beamLength < Constants.FLUID_MIN_DISTANCE) return;
-        
-        const beamDirection = new Vector2D(
-            endPos.x - startPos.x,
-            endPos.y - startPos.y
-        ).normalize();
-        
-        for (const particle of context.spaceDust) {
-            // Find closest point on line segment to particle
-            const toParticle = new Vector2D(
-                particle.position.x - startPos.x,
-                particle.position.y - startPos.y
-            );
-            
-            // Project particle position onto beam line
-            const projection = toParticle.x * beamDirection.x + toParticle.y * beamDirection.y;
-            const clampedProjection = Math.max(0, Math.min(beamLength, projection));
-            
-            // Closest point on beam to particle
-            const closestPoint = new Vector2D(
-                startPos.x + beamDirection.x * clampedProjection,
-                startPos.y + beamDirection.y * clampedProjection
-            );
-            
-            const distance = particle.position.distanceTo(closestPoint);
-            
-            if (distance < radius && distance > Constants.FLUID_MIN_DISTANCE) {
-                // Direction from beam to particle (perpendicular push)
-                const directionToParticle = new Vector2D(
-                    particle.position.x - closestPoint.x,
-                    particle.position.y - closestPoint.y
-                ).normalize();
-                
-                // Combine beam direction with radial push
-                // Particles along beam get pushed forward and outward
-                const alongBeamComponent = Constants.BEAM_ALONG_COMPONENT;
-                const perpendicularComponent = Constants.BEAM_PERPENDICULAR_COMPONENT;
-                
-                const pushDirection = new Vector2D(
-                    beamDirection.x * alongBeamComponent + directionToParticle.x * perpendicularComponent,
-                    beamDirection.y * alongBeamComponent + directionToParticle.y * perpendicularComponent
-                );
-                
-                // Force falls off with distance from beam
-                const distanceFactor = 1.0 - (distance / radius);
-                const forceMagnitude = strength * distanceFactor * distanceFactor;
 
-                if (impactColor) {
-                    const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
-                    if (impactStrength > 0) {
-                        particle.applyImpactColor(impactColor, impactStrength);
-                    }
+        const invBeamLength = 1 / beamLength;
+        const beamDirX = bDx * invBeamLength;
+        const beamDirY = bDy * invBeamLength;
+        const alongBeamComponent = Constants.BEAM_ALONG_COMPONENT;
+        const perpendicularComponent = Constants.BEAM_PERPENDICULAR_COMPONENT;
+        const minDist = Constants.FLUID_MIN_DISTANCE;
+        const radiusSq = radius * radius;
+
+        for (const particle of context.spaceDust) {
+            // Project particle onto beam line (find closest point on segment)
+            const tpX = particle.position.x - startPos.x;
+            const tpY = particle.position.y - startPos.y;
+            const projection = tpX * beamDirX + tpY * beamDirY;
+            const clampedProjection = Math.max(0, Math.min(beamLength, projection));
+
+            // Closest point on beam to particle
+            const cpX = startPos.x + beamDirX * clampedProjection;
+            const cpY = startPos.y + beamDirY * clampedProjection;
+
+            const dx = particle.position.x - cpX;
+            const dy = particle.position.y - cpY;
+            const distSq = dx * dx + dy * dy;
+            if (distSq >= radiusSq || distSq < minDist * minDist) continue;
+
+            const distance = Math.sqrt(distSq);
+            const invDist = 1 / distance;
+            const dirX = dx * invDist;
+            const dirY = dy * invDist;
+
+            const pushX = beamDirX * alongBeamComponent + dirX * perpendicularComponent;
+            const pushY = beamDirY * alongBeamComponent + dirY * perpendicularComponent;
+
+            // Force falls off with distance from beam
+            const distanceFactor = 1.0 - (distance / radius);
+            const forceMagnitude = strength * distanceFactor * distanceFactor;
+
+            if (impactColor) {
+                const impactStrength = Math.min(1, forceMagnitude / Constants.DUST_COLOR_FORCE_SCALE);
+                if (impactStrength > 0) {
+                    particle.applyImpactColor(impactColor, impactStrength);
                 }
-                
-                particle.applyForce(new Vector2D(
-                    pushDirection.x * forceMagnitude * deltaTime,
-                    pushDirection.y * forceMagnitude * deltaTime
-                ));
             }
+
+            particle.applyForceXY(pushX * forceMagnitude * deltaTime, pushY * forceMagnitude * deltaTime);
         }
     }
 }

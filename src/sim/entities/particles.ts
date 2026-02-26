@@ -23,7 +23,7 @@ export class SpaceDustParticle {
     glowState: number = Constants.DUST_GLOW_STATE_NORMAL;
     glowTransition: number = 0; // 0-1 transition between states
     targetGlowState: number = Constants.DUST_GLOW_STATE_NORMAL;
-    lastMovementTime: number = 0; // Time since last significant movement
+    lastMovementTimeSec: number = -10; // Game time (seconds) of last significant movement
     impactColor: string | null = null;
     impactBlend: number = 0;
     impactTargetBlend: number = 0;
@@ -50,30 +50,31 @@ export class SpaceDustParticle {
 
     /**
      * Update particle position based on velocity
+     * @param gameTimeSec Current game time in seconds (deterministic, not wall-clock)
      */
-    update(deltaTime: number): void {
+    update(deltaTime: number, gameTimeSec: number): void {
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
         
         // Check if particle is moving significantly
-        const speed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+        const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
         if (speed > Constants.DUST_FAST_MOVEMENT_THRESHOLD) {
             // Fast movement - trigger full glow
             this.targetGlowState = Constants.DUST_GLOW_STATE_FULL;
-            this.lastMovementTime = Date.now();
+            this.lastMovementTimeSec = gameTimeSec;
         } else if (speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {
             // Some movement - maintain current glow or go to slight glow
             if (this.glowState < Constants.DUST_GLOW_STATE_SLIGHT) {
                 this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
             }
-            this.lastMovementTime = Date.now();
+            this.lastMovementTimeSec = gameTimeSec;
         } else {
             // Slow/no movement - fade back to normal based on time since last movement
-            const timeSinceMovement = Date.now() - this.lastMovementTime;
-            if (timeSinceMovement > Constants.DUST_FADE_TO_NORMAL_DELAY_MS) {
+            const timeSinceMovementMs = (gameTimeSec - this.lastMovementTimeSec) * 1000;
+            if (timeSinceMovementMs > Constants.DUST_FADE_TO_NORMAL_DELAY_MS) {
                 // After 2 seconds of slow movement, start fading to normal
                 this.targetGlowState = Constants.DUST_GLOW_STATE_NORMAL;
-            } else if (timeSinceMovement > Constants.DUST_FADE_TO_SLIGHT_DELAY_MS && this.glowState === Constants.DUST_GLOW_STATE_FULL) {
+            } else if (timeSinceMovementMs > Constants.DUST_FADE_TO_SLIGHT_DELAY_MS && this.glowState === Constants.DUST_GLOW_STATE_FULL) {
                 // After 1 second, fade from full glow to slight glow
                 this.targetGlowState = Constants.DUST_GLOW_STATE_SLIGHT;
             }
@@ -120,6 +121,14 @@ export class SpaceDustParticle {
     applyForce(force: Vector2D): void {
         this.velocity.x += force.x;
         this.velocity.y += force.y;
+    }
+
+    /**
+     * Apply force components directly, avoiding a Vector2D allocation in hot paths.
+     */
+    applyForceXY(fx: number, fy: number): void {
+        this.velocity.x += fx;
+        this.velocity.y += fy;
     }
 
     /**
@@ -348,6 +357,14 @@ export class BulletCasing {
     applyCollision(force: Vector2D): void {
         this.velocity.x += force.x * Constants.CASING_COLLISION_DAMPING;
         this.velocity.y += force.y * Constants.CASING_COLLISION_DAMPING;
+    }
+
+    /**
+     * Apply collision response using scalar components, avoiding a Vector2D allocation in hot paths.
+     */
+    applyCollisionXY(fx: number, fy: number): void {
+        this.velocity.x += fx * Constants.CASING_COLLISION_DAMPING;
+        this.velocity.y += fy * Constants.CASING_COLLISION_DAMPING;
     }
 }
 
