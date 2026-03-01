@@ -145,7 +145,23 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
     // Initialize space dust particles
     game.initializeSpaceDust(Constants.SPACE_DUST_PARTICLE_COUNT, 2000, 2000, spaceDustPalette);
 
-    // Create exclusion zones around stellar forge spawn positions
+    // Add two large strategic asteroids that cast shadows on the bases.
+    // We reserve their space before random asteroid generation so no random asteroid can overlap them.
+    const strategicAsteroidRadius = Constants.STRATEGIC_ASTEROID_SIZE * 1.32;
+
+    const bottomLeftShadowAngle = -Math.PI / 4; // -45 degrees (top-right quadrant)
+    const bottomLeftAsteroidPos = new Vector2D(
+        Math.cos(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+
+    const topRightShadowAngle = (3 * Math.PI) / 4; // 135 degrees (bottom-left quadrant)
+    const topRightAsteroidPos = new Vector2D(
+        Math.cos(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
+        Math.sin(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
+    );
+
+    // Create exclusion zones around stellar forge spawn positions and strategic asteroid anchors.
     const exclusionZones = game.players
         .filter(p => p.stellarForge)
         .map(p => ({
@@ -153,25 +169,15 @@ export function createStandardGame(playerNames: Array<[string, Faction]>, spaceD
             radius: 250 // Exclusion zone radius around each base
         }));
 
+    exclusionZones.push(
+        { position: bottomLeftAsteroidPos, radius: strategicAsteroidRadius },
+        { position: topRightAsteroidPos, radius: strategicAsteroidRadius }
+    );
+
     // Initialize random asteroids with exclusion zones
     game.initializeAsteroids(10, 2000, 2000, exclusionZones);
-    
-    // Add two large strategic asteroids that cast shadows on the bases
-    // Position them close to the sun to cast shadows toward bottom-left and top-right
-    // Bottom-left shadow: asteroid positioned at top-right of sun (angle ~-45 degrees or 315 degrees)
-    const bottomLeftShadowAngle = -Math.PI / 4; // -45 degrees (top-right quadrant)
-    const bottomLeftAsteroidPos = new Vector2D(
-        Math.cos(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
-        Math.sin(bottomLeftShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
-    );
+
     game.asteroids.push(new Asteroid(bottomLeftAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
-    
-    // Top-right shadow: asteroid positioned at bottom-left of sun (angle ~135 degrees)
-    const topRightShadowAngle = (3 * Math.PI) / 4; // 135 degrees (bottom-left quadrant)
-    const topRightAsteroidPos = new Vector2D(
-        Math.cos(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE,
-        Math.sin(topRightShadowAngle) * Constants.STRATEGIC_ASTEROID_DISTANCE
-    );
     game.asteroids.push(new Asteroid(topRightAsteroidPos, 6, Constants.STRATEGIC_ASTEROID_SIZE));
 
     game.isRunning = true;
