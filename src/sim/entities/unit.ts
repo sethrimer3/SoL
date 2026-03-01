@@ -171,6 +171,24 @@ export class Unit {
         }
     }
 
+    /**
+     * Return the currently queued movement path from the active target onward.
+     * The first point is the current rally point, followed by remaining queued waypoints.
+     */
+    getQueuedPathPoints(): Vector2D[] {
+        if (!this.rallyPoint) {
+            return [];
+        }
+
+        const queuedPathPoints: Vector2D[] = [new Vector2D(this.rallyPoint.x, this.rallyPoint.y)];
+        for (let waypointIndex = this.currentWaypointIndex + 1; waypointIndex < this.waypoints.length; waypointIndex++) {
+            const waypoint = this.waypoints[waypointIndex];
+            queuedPathPoints.push(new Vector2D(waypoint.x, waypoint.y));
+        }
+
+        return queuedPathPoints;
+    }
+
     getStructureStandoffPoint(targetPosition: Vector2D, targetRadiusPx: number): Vector2D {
         const offsetX = this.position.x - targetPosition.x;
         const offsetY = this.position.y - targetPosition.y;

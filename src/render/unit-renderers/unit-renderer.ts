@@ -224,7 +224,24 @@ export class UnitRenderer {
         
         // Draw move order indicator if unit has one
         if (unit.moveOrder > 0 && unit.rallyPoint) {
-            this.drawMoveOrderIndicator(unit.position, unit.rallyPoint, unit.moveOrder, shouldDim ? displayColor : color, context);
+            this.drawQueuedMoveOrderPath(unit, shouldDim ? displayColor : color, context);
+        }
+    }
+
+
+    private drawQueuedMoveOrderPath(unit: Unit, color: string, context: UnitRendererContext): void {
+        const queuedPathPoints = unit.getQueuedPathPoints();
+        if (queuedPathPoints.length === 0) {
+            return;
+        }
+
+        let segmentStart = unit.position;
+        let moveOrderNumber = unit.moveOrder;
+        for (let pathPointIndex = 0; pathPointIndex < queuedPathPoints.length; pathPointIndex++) {
+            const segmentTarget = queuedPathPoints[pathPointIndex];
+            this.drawMoveOrderIndicator(segmentStart, segmentTarget, moveOrderNumber, color, context);
+            segmentStart = segmentTarget;
+            moveOrderNumber += 1;
         }
     }
 
@@ -366,47 +383,27 @@ export class UnitRenderer {
     }
 
     /**
-     * Draw move order lines for selected starlings
-     * Shows a single line from the closest starling to the destination when multiple are selected
+     * Draw queued move-order lines for selected starlings.
+     * Shared paths are rendered once to avoid duplicate overlays.
      */
     public drawStarlingMoveLines(game: GameState, context: UnitRendererContext): void {
         if (!context.viewingPlayer) return;
-        
-        // Group selected starlings by their rally point (using string key for proper Map comparison)
-        const starlingsByRallyPoint = new Map<string, {rallyPoint: Vector2D, starlings: Starling[]}>();
-        
-        for (const unit of context.selectedUnits) {
-            if (unit instanceof Starling && unit.owner === context.viewingPlayer && unit.rallyPoint && unit.moveOrder > 0) {
-                const key = `${unit.rallyPoint.x},${unit.rallyPoint.y}`;
-                if (!starlingsByRallyPoint.has(key)) {
-                    starlingsByRallyPoint.set(key, {rallyPoint: unit.rallyPoint, starlings: []});
-                }
-                starlingsByRallyPoint.get(key)!.starlings.push(unit);
-            }
-        }
-        
+
         const color = context.getFactionColor(context.viewingPlayer.faction);
-        
-        // For each rally point, draw a single line from the closest starling
-        for (const [key, group] of starlingsByRallyPoint) {
-            if (group.starlings.length === 0) continue;
-            
-            // Find the closest starling to the rally point
-            let closestStarling = group.starlings[0];
-            let minDistSq = Infinity;
-            
-            for (const starling of group.starlings) {
-                const dx = group.rallyPoint.x - starling.position.x;
-                const dy = group.rallyPoint.y - starling.position.y;
-                const distSq = dx * dx + dy * dy;
-                if (distSq < minDistSq) {
-                    minDistSq = distSq;
-                    closestStarling = starling;
-                }
+        const renderedPathHashes = new Set<string>();
+
+        for (const unit of context.selectedUnits) {
+            if (!(unit instanceof Starling) || unit.owner !== context.viewingPlayer || unit.moveOrder <= 0 || !unit.rallyPoint) {
+                continue;
             }
-            
-            // Draw move order indicator from the closest starling only
-            this.drawMoveOrderIndicator(closestStarling.position, group.rallyPoint, closestStarling.moveOrder, color, context);
+
+            const pathHash = unit.getPathHash();
+            if (renderedPathHashes.has(pathHash)) {
+                continue;
+            }
+
+            renderedPathHashes.add(pathHash);
+            this.drawQueuedMoveOrderPath(unit, color, context);
         }
     }
 

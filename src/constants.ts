@@ -450,7 +450,7 @@ export const CLICK_DRAG_THRESHOLD = 16; // Pixels of movement to distinguish cli
 export const SMALL_SELECTION_THRESHOLD = 50; // Maximum selection box size (pixels) to be considered a single-click for double-tap detection
 export const HERO_ATTACK_RANGE_ALPHA = 0.2; // Opacity for hero unit attack range circles
 export const SOL_ICON_TEXT_SPACING = 2; // Spacing between SoL icon and text in zoom units
-export const ABILITY_ARROW_MIN_LENGTH = 10; // Minimum pixel length to display ability arrow (prevents tiny arrows on accidental drags)
+export const ABILITY_ARROW_MIN_LENGTH = 28; // Minimum pixel drag distance required before ability-cast arrows trigger
 export const SHIELD_HEALTH_BAR_VERTICAL_OFFSET = 20; // Vertical offset for shield health bar below main health bar
 
 // Visual effect constants

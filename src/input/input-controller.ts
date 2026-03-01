@@ -1233,7 +1233,7 @@ export class InputController {
                 }
 
                 const shouldUseAbility = this.ctx.getSelectionManager().selectedUnits.size > 0 && (
-                    (!hasHeroUnits && totalMovement >= Constants.CLICK_DRAG_THRESHOLD) ||
+                    (!hasHeroUnits && totalMovement >= abilityDragThreshold) ||
                     (hasHeroUnits && this.isDraggingHeroArrow && totalMovement >= abilityDragThreshold)
                 );
 
