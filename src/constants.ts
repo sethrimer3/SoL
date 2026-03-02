@@ -104,6 +104,7 @@ export const STARLING_SPRITE_SCALE_FACTOR = 6;
 export const STARLING_SPRITE_ROTATION_OFFSET_RAD = Math.PI / 2;
 export const MOVEMENT_POINT_ANIMATION_FRAME_COUNT = 30; // Number of movement point animation frames
 export const MOVEMENT_POINT_ANIMATION_FPS = 60; // Movement point animation speed (frames per second)
+export const CAMERA_MAX_ZOOM = 3.0;
 
 // Space dust glow constants
 export const DUST_GLOW_STATE_NORMAL = 0;

@@ -303,14 +303,7 @@ export class UnitRenderer {
     }
 
     public drawMovementPointSprite(sprite: HTMLCanvasElement, targetScreenPos: Vector2D, dotRadius: number, context: UnitRendererContext): void {
-        // Scale down movement points to 50% when zoomed all the way out
-        const minZoom = context.getMinZoomForBounds();
-        let sizeMultiplier = 1.0;
-        if (context.zoom <= minZoom) {
-            sizeMultiplier = 0.5;
-        }
-        
-        const maxSize = dotRadius * 2 * sizeMultiplier;
+        const maxSize = dotRadius * 2;
         const scale = maxSize / Math.max(sprite.width, sprite.height);
         const drawWidth = sprite.width * scale;
         const drawHeight = sprite.height * scale;
