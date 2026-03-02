@@ -128,20 +128,30 @@ export class EnvironmentRenderer {
                 Math.max(Constants.DUST_TRAIL_MIN_LENGTH_PX, speed * Constants.DUST_TRAIL_LENGTH_PER_SPEED)
             );
             const trailLength = trailLengthPx * zoom;
-            const trailOffsetX = perpX * baseSize;
-            const trailOffsetY = perpY * baseSize;
-            const trailEndX = dirX * trailLength;
-            const trailEndY = dirY * trailLength;
-            const leftStartX = screenPos.x + trailOffsetX;
-            const leftStartY = screenPos.y + trailOffsetY;
-            const rightStartX = screenPos.x - trailOffsetX;
-            const rightStartY = screenPos.y - trailOffsetY;
-            const leftEndX = leftStartX - trailEndX;
-            const leftEndY = leftStartY - trailEndY;
-            const rightEndX = rightStartX - trailEndX;
-            const rightEndY = rightStartY - trailEndY;
 
-            ctx.lineWidth = Math.max(0.2, Constants.DUST_TRAIL_WIDTH_PX * zoom);
+            // Teardrop / raindrop shaped trail: circle head at current position tapering to a tip behind
+            const tipX = screenPos.x - dirX * trailLength;
+            const tipY = screenPos.y - dirY * trailLength;
+            const movDir = Math.atan2(dirY, dirX);
+
+            // Control points for quadratic bezier sides: placed 55% back along the trail,
+            // offset 35% of the head radius outward to give the teardrop a smooth taper
+            const midTrailX = screenPos.x - dirX * trailLength * 0.55;
+            const midTrailY = screenPos.y - dirY * trailLength * 0.55;
+            const ctrlLeftX = midTrailX + perpX * baseSize * 0.35;
+            const ctrlLeftY = midTrailY + perpY * baseSize * 0.35;
+            const ctrlRightX = midTrailX - perpX * baseSize * 0.35;
+            const ctrlRightY = midTrailY - perpY * baseSize * 0.35;
+
+            ctx.beginPath();
+            // Arc sweeps the leading (front) half of the circle from right to left side
+            ctx.arc(screenPos.x, screenPos.y, baseSize, movDir - Math.PI / 2, movDir + Math.PI / 2, false);
+            // Left side curves back to tip
+            ctx.quadraticCurveTo(ctrlLeftX, ctrlLeftY, tipX, tipY);
+            // Right side curves from tip back to right attachment (closes the shape)
+            ctx.quadraticCurveTo(ctrlRightX, ctrlRightY, screenPos.x - perpX * baseSize, screenPos.y - perpY * baseSize);
+            ctx.closePath();
+
             if (isFancyGraphicsEnabled && dustColor.startsWith('#')) {
                 let hex = dustColor.slice(1);
                 if (hex.length === 3) {
@@ -151,35 +161,16 @@ export class EnvironmentRenderer {
                 const trailR = (colorInt >> 16) & 0xff;
                 const trailG = (colorInt >> 8) & 0xff;
                 const trailB = colorInt & 0xff;
-                const trailAlpha = 0.6;
-                const leftGradient = ctx.createLinearGradient(leftStartX, leftStartY, leftEndX, leftEndY);
-                leftGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, ${trailAlpha})`);
-                leftGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
-                ctx.strokeStyle = leftGradient;
-                ctx.beginPath();
-                ctx.moveTo(leftStartX, leftStartY);
-                ctx.lineTo(leftEndX, leftEndY);
-                ctx.stroke();
-
-                const rightGradient = ctx.createLinearGradient(rightStartX, rightStartY, rightEndX, rightEndY);
-                rightGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, ${trailAlpha})`);
-                rightGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
-                ctx.strokeStyle = rightGradient;
-                ctx.beginPath();
-                ctx.moveTo(rightStartX, rightStartY);
-                ctx.lineTo(rightEndX, rightEndY);
-                ctx.stroke();
+                const trailGradient = ctx.createLinearGradient(screenPos.x, screenPos.y, tipX, tipY);
+                trailGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, 0.65)`);
+                trailGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
+                ctx.fillStyle = trailGradient;
             } else {
-                ctx.strokeStyle = dustColor;
+                ctx.fillStyle = dustColor;
                 ctx.globalAlpha = 0.45;
-                ctx.beginPath();
-                ctx.moveTo(leftStartX, leftStartY);
-                ctx.lineTo(leftEndX, leftEndY);
-                ctx.moveTo(rightStartX, rightStartY);
-                ctx.lineTo(rightEndX, rightEndY);
-                ctx.stroke();
-                ctx.globalAlpha = 1.0;
             }
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
         }
 
         if (isHighGraphics && speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {

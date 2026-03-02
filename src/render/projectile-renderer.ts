@@ -469,7 +469,8 @@ export class ProjectileRenderer {
     public drawLaserBeam(laser: LaserBeam, context: ProjectileRendererContext): void {
         const startScreen = context.worldToScreen(laser.startPos);
         const endScreen = context.worldToScreen(laser.endPos);
-        const color = getFactionColor(laser.owner.faction as Faction);
+        // Use a very bright purple for Velaris beams so they're visible on dark backgrounds
+        const color = laser.owner.faction === Faction.VELARIS ? '#EE44FF' : getFactionColor(laser.owner.faction as Faction);
 
         const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
 

@@ -120,7 +120,7 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
     private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
     private readonly spriteManager = new SpriteManager();
-    private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number}>();
+    private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number; pentagonRotationRad: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
     private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
     private viewMinX: number = 0;
@@ -2099,6 +2099,15 @@ export class GameRenderer {
         
         // Draw mirror command buttons if mirrors are selected
         this.solarMirrorRenderer.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime, this.getSolarMirrorRendererContext());
+
+        // Draw forge hero/mirror buttons if the viewing player's forge is selected
+        if (this.viewingPlayer && this.viewingPlayer.stellarForge && this.viewingPlayer.stellarForge.isSelected) {
+            const forge = this.viewingPlayer.stellarForge;
+            if (this.isWithinViewBounds(forge.position, forge.radius * 3)) {
+                const screenPos = this.worldToScreen(forge.position);
+                this.uiRenderer.drawForgeButtons(forge, screenPos, this.selectedHeroNames, this.getUIRendererContext());
+            }
+        }
 
         // Draw warp gate placement preview if in placement mode
         this.warpGateRenderer.drawWarpGatePlacementPreview(game, this.getWarpGateRendererContext());
