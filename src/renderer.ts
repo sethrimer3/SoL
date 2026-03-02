@@ -2261,7 +2261,7 @@ export class GameRenderer {
      */
     setZoom(zoom: number): void {
         const minZoom = this.getMinZoomForBounds();
-        this.zoom = Math.max(minZoom, Math.min(2.0, zoom));
+        this.zoom = Math.max(minZoom, Math.min(Constants.CAMERA_MAX_ZOOM, zoom));
         const clampedPos = this.clampCameraToLevelBounds(this.camera);
         this.camera = new Vector2D(clampedPos.x, clampedPos.y);
         this.parallaxCamera = new Vector2D(clampedPos.x, clampedPos.y);
