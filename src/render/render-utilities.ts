@@ -56,6 +56,7 @@ export function getHeroUnitType(heroName: string): string | null {
         case 'Sly':
         case 'Shadow':
         case 'Chrono':
+        case 'Shroud':
             return heroName;
         case 'Influence Ball':
             return 'InfluenceBall';

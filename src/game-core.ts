@@ -36,6 +36,7 @@ import { createBlinkHero } from './heroes/blink';
 import { createShadowHero } from './heroes/shadow';
 import { createChronoHero } from './heroes/chrono';
 import { createSplendorHero } from './heroes/splendor';
+import { createShroudHero } from './heroes/shroud';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -199,6 +200,12 @@ const { Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment 
     Constants
 });
 
+const { Shroud, ShroudCube, ShroudSmallCube, ShroudTinyCube } = createShroudHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -251,7 +258,11 @@ export {
     Splendor,
     SplendorSunSphere,
     SplendorSunlightZone,
-    SplendorLaserSegment
+    SplendorLaserSegment,
+    Shroud,
+    ShroudCube,
+    ShroudSmallCube,
+    ShroudTinyCube
 };
 
 // Import Player type for the hero factory function
@@ -289,6 +300,7 @@ export function createHeroUnit(
         case 'Dash': return new Dash(spawnPosition, owner);
         case 'Blink': return new Blink(spawnPosition, owner);
         case 'Splendor': return new Splendor(spawnPosition, owner);
+        case 'Shroud': return new Shroud(spawnPosition, owner);
         case 'Shadow': return new Shadow(spawnPosition, owner);
         default: return null;
     }

@@ -128,5 +128,11 @@ export const HERO_UNITS: HeroUnit[] = [
         maxHealth: Constants.BLINK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
         attackRange: Constants.BLINK_MAX_DISTANCE, attackIgnoresDefense: false, defense: 8, regen: 4,
         abilityDescription: 'Blink shockwave: teleport to target location and release an area stun pulse'
+    },
+    {
+        id: 'aurum-shroud', name: 'Shroud', description: 'Fires heavy cubes that decelerate and block sunlight', faction: Faction.AURUM,
+        maxHealth: Constants.SHROUD_MAX_HEALTH, attackDamage: Constants.SHROUD_CUBE_MAX_DAMAGE, attackSpeed: 0,
+        attackRange: 0, attackIgnoresDefense: false, defense: 12, regen: 3,
+        abilityDescription: 'Shroud cube: fires a heavy cube that deals velocity-proportional damage, then unfolds smaller cubes that block sunlight'
     }
 ];

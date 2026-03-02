@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -1757,6 +1757,8 @@ export class GameRenderer {
                         this.unitRenderer.drawChronoHero(unit, color, game, isEnemy, unitCtx);
                     } else if (unit instanceof AurumHero) {
                         this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx); // Use default unit drawing for AurumHero
+                    } else if (unit instanceof Shroud) {
+                        this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx); // Use default unit drawing for Shroud
                     } else if (unit instanceof Splendor) {
                         this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx);
                         this.projectileRenderer.drawSplendorChargeEffect(unit, this.getProjectileRendererContext());
@@ -2046,6 +2048,9 @@ export class GameRenderer {
                 }
             }
 
+            // Draw Shroud cubes (main cubes + unfolding child cubes)
+            this.drawShroudCubes(game);
+
             for (const sphere of game.splendorSunSpheres) {
                 if (this.isWithinViewBounds(sphere.position, Constants.SPLENDOR_SUN_SPHERE_RADIUS * 4)) {
                     this.projectileRenderer.drawSplendorSunSphere(sphere, projCtx);
@@ -2206,6 +2211,7 @@ export class GameRenderer {
             'beam': 'Beam',
             'spotlight': 'Spotlight',
             'splendor': 'Splendor',
+            'shroud': 'Shroud',
             'solar-mirror': 'Solar Mirror',
             'strafe-upgrade': 'Strafe Upgrade',
             'regen-upgrade': 'Regen Upgrade',
@@ -2217,6 +2223,81 @@ export class GameRenderer {
 
     private getInGameMenuLayout(): InGameMenuLayout {
         return getInGameMenuLayout(this.canvas.width, this.canvas.height);
+    }
+
+    /**
+     * Draw all Shroud cubes (main cubes, small cubes, and tiny cubes).
+     * Main cubes are drawn as solid dark squares when moving, transitioning to translucent when stopped.
+     * Child cubes animate outward from the stopped position.
+     */
+    private drawShroudCubes(game: GameState): void {
+        const ctx = this.ctx;
+
+        for (const cube of game.shroudCubes) {
+            if (!this.isWithinViewBounds(cube.position, cube.halfSizePx * 6)) continue;
+
+            const isStopped = cube.isStopped();
+            this.drawShroudCubeRect(ctx, cube.position.x, cube.position.y, cube.halfSizePx, isStopped, 1.0);
+
+            if (isStopped) {
+                // Draw child small cubes
+                for (const small of cube.smallCubes) {
+                    const cx = small.currentX;
+                    const cy = small.currentY;
+                    const alpha = 0.85;
+                    this.drawShroudCubeRect(ctx, cx, cy, small.halfSizePx, true, alpha);
+
+                    // Draw tiny cubes
+                    for (const tiny of small.tinyCubes) {
+                        const tcx = tiny.startPos.x + (tiny.finalPos.x - tiny.startPos.x) * tiny.unfoldProgress;
+                        const tcy = tiny.startPos.y + (tiny.finalPos.y - tiny.startPos.y) * tiny.unfoldProgress;
+                        this.drawShroudCubeRect(ctx, tcx, tcy, tiny.halfSizePx, true, 0.7);
+                    }
+                }
+            }
+        }
+    }
+
+    private drawShroudCubeRect(
+        ctx: CanvasRenderingContext2D,
+        worldX: number,
+        worldY: number,
+        halfSizePx: number,
+        isStopped: boolean,
+        alpha: number
+    ): void {
+        const screenPos = this.worldToScreen(new Vector2D(worldX, worldY));
+        const halfScreen = halfSizePx * this.zoom;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        if (isStopped) {
+            // Stopped cubes: dark semi-transparent fill with outline (blocks sunlight visually)
+            ctx.fillStyle = 'rgba(20, 15, 35, 0.82)';
+            ctx.strokeStyle = '#6633AA';
+            ctx.lineWidth = Math.max(1, 1.5 * this.zoom);
+        } else {
+            // Moving cubes: glowing golden/purple look proportional to speed
+            ctx.fillStyle = 'rgba(80, 40, 120, 0.9)';
+            ctx.strokeStyle = '#CC88FF';
+            ctx.lineWidth = Math.max(1, 2 * this.zoom);
+        }
+
+        ctx.fillRect(
+            screenPos.x - halfScreen,
+            screenPos.y - halfScreen,
+            halfScreen * 2,
+            halfScreen * 2
+        );
+        ctx.strokeRect(
+            screenPos.x - halfScreen,
+            screenPos.y - halfScreen,
+            halfScreen * 2,
+            halfScreen * 2
+        );
+
+        ctx.restore();
     }
 
     private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {

@@ -43,6 +43,7 @@ import {
     Sly,
     MortarProjectile,
     InfluenceBallProjectile,
+    ShroudCube,
 } from '../../game-core';
 import { getGameRNG } from '../../seeded-random';
 
@@ -68,6 +69,7 @@ export interface HeroEntityContext {
     splendorSunSpheres: InstanceType<typeof SplendorSunSphere>[];
     splendorSunlightZones: InstanceType<typeof SplendorSunlightZone>[];
     splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[];
+    shroudCubes: InstanceType<typeof ShroudCube>[];
     dashSlashes: InstanceType<typeof DashSlash>[];
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[];
     chronoFreezeCircles: InstanceType<typeof ChronoFreezeCircle>[];
@@ -704,6 +706,12 @@ export class HeroEntitySystem {
             }
         }
         ctx.aurumShieldHits = ctx.aurumShieldHits.filter(hit => hit.getProgress() < 1.0);
+
+        // Update Shroud cubes (decelerate, unfold, and eventually expire)
+        for (const cube of ctx.shroudCubes) {
+            cube.update(deltaTime);
+        }
+        ctx.shroudCubes = ctx.shroudCubes.filter(cube => !cube.isExpired());
 
         for (const sphere of ctx.splendorSunSpheres) {
             sphere.update(deltaTime, ctx.asteroids, ctx.getSplendorSphereObstacles());

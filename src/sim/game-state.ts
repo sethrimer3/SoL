@@ -96,6 +96,7 @@ import {
     SplendorSunSphere,
     SplendorSunlightZone,
     SplendorLaserSegment,
+    ShroudCube,
     createHeroUnit
 } from '../game-core';
 
@@ -139,6 +140,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     splendorSunSpheres: InstanceType<typeof SplendorSunSphere>[] = [];
     splendorSunlightZones: InstanceType<typeof SplendorSunlightZone>[] = [];
     splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[] = [];
+    shroudCubes: InstanceType<typeof ShroudCube>[] = [];
     miniMotherships: InstanceType<typeof MiniMothership>[] = [];
     miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
