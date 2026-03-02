@@ -118,6 +118,12 @@ export const HERO_UNITS: HeroUnit[] = [
         abilityDescription: 'Decoy projection: launch a durable decoy that distracts enemies and emits particles on despawn'
     },
     {
+        id: 'velaris-occlude', name: 'Occlude', description: 'Shadow-beam attacker whose beams only work in sunlight', faction: Faction.VELARIS,
+        maxHealth: Constants.OCCLUDE_MAX_HEALTH, attackDamage: Constants.OCCLUDE_ATTACK_DAMAGE, attackSpeed: Constants.OCCLUDE_ATTACK_SPEED,
+        attackRange: Constants.OCCLUDE_ATTACK_RANGE, attackIgnoresDefense: false, defense: 8, regen: 3,
+        abilityDescription: 'Shadow cone: project a 15° cone of shadow that makes anything inside act as if in natural shadow'
+    },
+    {
         id: 'aurum-dash', name: 'Dash', description: 'Burst skirmisher with a high-speed slash dash', faction: Faction.AURUM,
         maxHealth: Constants.DASH_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
         attackRange: Constants.DASH_MAX_DISTANCE, attackIgnoresDefense: false, defense: 10, regen: 4,

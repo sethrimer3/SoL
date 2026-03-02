@@ -17,7 +17,7 @@ import { WarpGate } from '../entities/warp-gate';
 import { SpaceDustParticle, SparkleParticle } from '../entities/particles';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
 import { VisionSystem } from './vision-system';
-import { VelarisOrb, ShroudCube } from '../../game-core';
+import { VelarisOrb, ShroudCube, OccludeShadowCone } from '../../game-core';
 import { createHeroUnit } from '../../game-core';
 import { getGameRNG } from '../../seeded-random';
 
@@ -31,6 +31,7 @@ export interface MirrorSystemContext extends MirrorMovementContext, PhysicsConte
     warpGates: WarpGate[];
     velarisOrbs: InstanceType<typeof VelarisOrb>[];
     shroudCubes: InstanceType<typeof ShroudCube>[];
+    occludeShadowCones: InstanceType<typeof OccludeShadowCone>[];
     sparkleParticles: SparkleParticle[];
     isPointWithinPlayerInfluence(player: Player, point: Vector2D): boolean;
     getPlayerImpactColor(player: Player): string;
@@ -253,8 +254,11 @@ export class MirrorSystem {
                 game.velarisOrbs
             );
 
+            // Check if mirror is inside an Occlude shadow cone (treats it as in shadow)
+            const isInOccludeShadow = game.occludeShadowCones.some(cone => cone.containsPoint(mirror.position));
+
             // Generate energy and apply to linked structure
-            if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(game.suns, game.asteroids, shroudBlockers) && linkedStructure) {
+            if (!isBlockedByVelarisField && !isInOccludeShadow && mirror.hasLineOfSightToLight(game.suns, game.asteroids, shroudBlockers) && linkedStructure) {
                 const energyGenerated = mirror.generateEnergy(deltaTime);
 
                 if (linkedStructure instanceof StellarForge &&

@@ -755,6 +755,22 @@ export const SHADOW_DECOY_PARTICLE_SPEED = 200; // Speed of despawn particles
 export const SHADOW_DECOY_PARTICLE_LIFETIME = 1.5; // Lifetime of particles in seconds
 export const SHADOW_DECOY_PARTICLE_SIZE = 3; // Size of particles
 
+// Occlude hero constants (Velaris faction - shadow beam attacker with shadow cone ability)
+export const OCCLUDE_MAX_HEALTH = 100;
+export const OCCLUDE_ATTACK_RANGE = 350;
+export const OCCLUDE_ATTACK_DAMAGE = 18;
+export const OCCLUDE_ATTACK_SPEED = 2.5; // Attacks per second
+export const OCCLUDE_ABILITY_COOLDOWN = 12.0; // 12 seconds
+export const OCCLUDE_BEAM_WIDTH = 3; // Visual width of the shadow beam
+export const OCCLUDE_BEAM_LIFETIME_SEC = 0.15; // Brief flash duration
+export const OCCLUDE_SHADOW_CONE_ANGLE_RAD = Math.PI / 12; // 15 degrees total (half = 7.5°)
+export const OCCLUDE_SHADOW_CONE_RANGE_PX = 450; // Range of the shadow cone in pixels
+export const OCCLUDE_SHADOW_CONE_DURATION_SEC = 8.0; // How long the shadow cone persists
+export const OCCLUDE_BEAM_COLOR = '#1a0033'; // Very dark purple – beam looks like shadow
+export const OCCLUDE_BEAM_HIGHLIGHT_COLOR = '#6600cc'; // Thin highlight on beam edge
+export const OCCLUDE_CONE_FILL_COLOR = '#110022'; // Shadow cone interior fill
+export const OCCLUDE_CONE_EDGE_COLOR = '#6600cc'; // Shadow cone edge lines
+
 // Shroud hero constants (Aurum faction - decelerating cube projectiles that block sunlight)
 export const SHROUD_MAX_HEALTH = 115;
 export const SHROUD_ATTACK_RANGE = 0;  // No normal attack

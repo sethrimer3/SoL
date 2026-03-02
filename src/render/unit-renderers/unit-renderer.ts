@@ -31,6 +31,8 @@ import {
     ShadowDecoy,
     ShadowDecoyParticle,
     Chrono,
+    Occlude,
+    OccludeShadowCone,
 } from '../../game-core';
 import * as Constants from '../../constants';
 import type { UnitRendererContext } from './shared-utilities';
@@ -490,6 +492,20 @@ export class UnitRenderer {
      */
     public drawShadowDecoyParticle(particle: InstanceType<typeof ShadowDecoyParticle>, context: UnitRendererContext): void {
         this.heroRenderer.drawShadowDecoyParticle(particle, context);
+    }
+
+    /**
+     * Draw the Occlude hero (Velaris faction)
+     */
+    public drawOcclude(occlude: InstanceType<typeof Occlude>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
+        this.heroRenderer.drawOcclude(occlude, color, game, isEnemy, context);
+    }
+
+    /**
+     * Draw an Occlude shadow cone
+     */
+    public drawOccludeShadowCone(cone: InstanceType<typeof OccludeShadowCone>, context: UnitRendererContext): void {
+        this.heroRenderer.drawOccludeShadowCone(cone, context);
     }
 
     /**

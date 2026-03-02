@@ -97,7 +97,10 @@ import {
     SplendorSunlightZone,
     SplendorLaserSegment,
     ShroudCube,
-    createHeroUnit
+    createHeroUnit,
+    Occlude,
+    OccludeShadowBeam,
+    OccludeShadowCone,
 } from '../game-core';
 
 import { computeStateHash, StateHashContext } from './state-hash';
@@ -141,6 +144,7 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     splendorSunlightZones: InstanceType<typeof SplendorSunlightZone>[] = [];
     splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[] = [];
     shroudCubes: InstanceType<typeof ShroudCube>[] = [];
+    occludeShadowCones: InstanceType<typeof OccludeShadowCone>[] = [];
     miniMotherships: InstanceType<typeof MiniMothership>[] = [];
     miniMothershipExplosions: { position: Vector2D; owner: Player; timestamp: number }[] = [];
     sparkleParticles: SparkleParticle[] = [];
@@ -451,6 +455,12 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * Returns true if the point is in shadow from all light sources
      */
     isPointInShadow(point: Vector2D): boolean {
+        // Occlude shadow cones force a point into shadow regardless of sunlight
+        for (const cone of this.occludeShadowCones) {
+            if (cone.containsPoint(point)) {
+                return true;
+            }
+        }
         return VisionSystem.isPointInShadow(
             point,
             this.suns,

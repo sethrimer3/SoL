@@ -2,7 +2,7 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
 import { SparkleParticle, DeathParticle } from './sim/entities/particles';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
@@ -1764,6 +1764,8 @@ export class GameRenderer {
                         this.projectileRenderer.drawSplendorChargeEffect(unit, this.getProjectileRendererContext());
                     } else if (unit instanceof Shadow) {
                         this.unitRenderer.drawShadow(unit, color, game, isEnemy, unitCtx);
+                    } else if (unit instanceof Occlude) {
+                        this.unitRenderer.drawOcclude(unit, color, game, isEnemy, unitCtx);
                     } else {
                         this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx);
                     }
@@ -1860,6 +1862,13 @@ export class GameRenderer {
             for (const particle of game.shadowDecoyParticles) {
                 if (this.isWithinViewBounds(particle.position, 50)) {
                     this.unitRenderer.drawShadowDecoyParticle(particle, unitCtx);
+                }
+            }
+
+            // Draw Occlude shadow cones
+            for (const cone of game.occludeShadowCones) {
+                if (this.isWithinViewBounds(cone.position, cone.rangePx + 20)) {
+                    this.unitRenderer.drawOccludeShadowCone(cone, unitCtx);
                 }
             }
 
