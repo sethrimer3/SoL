@@ -35,6 +35,7 @@ import { renderHostLobbyScreen } from './menu/screens/lan-host-lobby-screen';
 import { renderClientAnswerScreen, renderClientWaitingScreen } from './menu/screens/lan-client-screens';
 import { renderCustomLobbyScreen } from './menu/screens/custom-lobby-screen';
 import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-screen';
+import { renderMatchmaking1v1Screen } from './menu/screens/matchmaking-1v1-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
@@ -51,7 +52,8 @@ import {
     MatchHistoryEntry, 
     loadReplayFromStorage, 
     ReplayData,
-    getPlayerMMRData
+    getPlayerMMRData,
+    calculateMMRChange
 } from './replay';
 import { HERO_UNITS } from './menu/hero-data';
 import { AVAILABLE_MAPS, BASE_LOADOUTS, SPAWN_LOADOUTS } from './menu/map-data';
@@ -97,7 +99,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | 'lobby-detail' = 'main';
+    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -875,6 +877,11 @@ export class MainMenu {
                 this.onlineMode = mode;
                 this.renderOnlinePlaceholderScreen(this.contentElement);
             },
+            onStartRankedMatchmaking: () => {
+                this.currentScreen = '1v1-matchmaking';
+                this.startMenuTransition();
+                this.render1v1MatchmakingScreen(this.contentElement);
+            },
             onBack: () => {
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
@@ -1308,6 +1315,157 @@ export class MainMenu {
             }
         }, 5000); // Poll every 5 seconds
     }
+
+    private render1v1MatchmakingScreen(container: HTMLElement): void {
+        this.isMatchmakingSearching = false;
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        // Get 1v1 MMR data
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking1v1Screen(container, {
+            currentMMR: mmrData.mmr,
+            wins: mmrData.wins,
+            losses: mmrData.losses,
+            isSearching: false,
+            onStartMatchmaking: async () => {
+                console.log('Starting 1v1 matchmaking...');
+                
+                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                    alert('Online networking not available. Please check your Supabase configuration.');
+                    return;
+                }
+                
+                const success = await this.onlineNetworkManager.joinMatchmakingQueue(
+                    this.settings.username,
+                    mmrData.mmr,
+                    this.settings.selectedFaction || 'RADIANT',
+                    '1v1'
+                );
+                
+                if (success) {
+                    console.log('Joined 1v1 matchmaking queue');
+                    this.render1v1MatchmakingScreenSearching(this.contentElement);
+                } else {
+                    alert('Failed to join matchmaking queue. Please try again.');
+                }
+            },
+            onCancelMatchmaking: async () => {
+                console.log('Cancelling 1v1 matchmaking...');
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                this.isMatchmakingSearching = false;
+                this.render1v1MatchmakingScreen(this.contentElement);
+            },
+            onBack: () => {
+                this.isMatchmakingSearching = false;
+                this.currentScreen = 'online';
+                this.startMenuTransition();
+                this.renderOnlinePlaceholderScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private render1v1MatchmakingScreenSearching(container: HTMLElement): void {
+        this.isMatchmakingSearching = true;
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+        
+        const mmrData = getPlayerMMRData();
+        
+        renderMatchmaking1v1Screen(container, {
+            currentMMR: mmrData.mmr,
+            wins: mmrData.wins,
+            losses: mmrData.losses,
+            isSearching: true,
+            onStartMatchmaking: async () => {},
+            onCancelMatchmaking: async () => {
+                console.log('Cancelling 1v1 matchmaking...');
+                
+                // Clear polling interval
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
+                if (!this.onlineNetworkManager) {
+                    return;
+                }
+                
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                this.isMatchmakingSearching = false;
+                this.render1v1MatchmakingScreen(this.contentElement);
+            },
+            onBack: () => {
+                // Clear polling if active
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                this.isMatchmakingSearching = false;
+                this.currentScreen = 'online';
+                this.startMenuTransition();
+                this.renderOnlinePlaceholderScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+        
+        // Start polling for matchmaking results
+        console.log('Starting 1v1 matchmaking search...');
+        
+        this.matchmakingPollInterval = window.setInterval(async () => {
+            if (!this.onlineNetworkManager) {
+                return;
+            }
+            
+            // Check if still in queue
+            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
+            if (!inQueue) {
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                return;
+            }
+            
+            // Find potential 1v1 match
+            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr, '1v1');
+            
+            if (candidates.length >= 1) {
+                // Found a 1v1 opponent
+                console.log('1v1 match found! Opponent:', candidates[0]);
+                
+                // Stop polling
+                if (this.matchmakingPollInterval !== null) {
+                    window.clearInterval(this.matchmakingPollInterval);
+                    this.matchmakingPollInterval = null;
+                }
+                
+                // Leave matchmaking queue
+                await this.onlineNetworkManager.leaveMatchmakingQueue();
+                
+                // Start a standard 1v1 online game
+                this.settings.gameMode = 'online';
+                this.onlineMode = 'ranked';
+                
+                this.hide();
+                if (this.onStartCallback) {
+                    this.onStartCallback(this.settings);
+                }
+            }
+        }, 5000); // Poll every 5 seconds
+    }
+
 
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
         if (this.carouselMenu) {
@@ -1986,24 +2144,29 @@ export class MainMenu {
         gameModeText.textContent = displayMode;
         gameModeContainer.appendChild(gameModeText);
 
-        // For Ranked mode, show MMR and win/loss info (stub data)
+        // For Ranked mode, show MMR and win/loss info
         if (this.settings.gameMode === 'online' && this.onlineMode === 'ranked') {
+            const mmrData = getPlayerMMRData();
+            const currentMMR = mmrData.mmr;
+            const estimatedWin = calculateMMRChange(currentMMR, currentMMR, true);
+            const estimatedLoss = calculateMMRChange(currentMMR, currentMMR, false);
+
             const mmrText = document.createElement('div');
-            mmrText.textContent = 'MMR: 1000';
+            mmrText.textContent = `MMR: ${currentMMR}`;
             mmrText.style.fontSize = '24px';
             mmrText.style.marginTop = '10px';
             mmrText.style.color = '#D0D0D0';
             gameModeContainer.appendChild(mmrText);
 
             const winText = document.createElement('div');
-            winText.textContent = 'Win: +16';
+            winText.textContent = `Win: +${estimatedWin}`;
             winText.style.fontSize = '20px';
             winText.style.marginTop = '8px';
             winText.style.color = '#00FF00';
             gameModeContainer.appendChild(winText);
 
             const lossText = document.createElement('div');
-            lossText.textContent = 'Loss: -37';
+            lossText.textContent = `Loss: ${estimatedLoss}`;
             lossText.style.fontSize = '20px';
             lossText.style.marginTop = '4px';
             lossText.style.color = '#FF6666';

@@ -1465,9 +1465,9 @@ export class OnlineNetworkManager {
     // ============================================================================
 
     /**
-     * Join the 2v2 matchmaking queue
+     * Join the matchmaking queue
      */
-    async joinMatchmakingQueue(username: string, mmr: number, faction: string): Promise<boolean> {
+    async joinMatchmakingQueue(username: string, mmr: number, faction: string, gameMode: '1v1' | '2v2' = '2v2'): Promise<boolean> {
         if (!this.supabase) {
             console.error('Supabase not initialized');
             return false;
@@ -1480,7 +1480,7 @@ export class OnlineNetworkManager {
                     player_id: this.getDatabasePlayerId(),
                     username: username,
                     mmr: mmr,
-                    game_mode: '2v2',
+                    game_mode: gameMode,
                     faction: faction,
                     status: 'searching'
                 }]);
@@ -1490,7 +1490,7 @@ export class OnlineNetworkManager {
                 return false;
             }
 
-            console.log('Joined 2v2 matchmaking queue');
+            console.log(`Joined ${gameMode} matchmaking queue`);
             return true;
         } catch (error) {
             console.error('Error joining matchmaking queue:', error);
@@ -1553,7 +1553,7 @@ export class OnlineNetworkManager {
     /**
      * Find matchmaking candidates (simplified matching)
      */
-    async findMatchmakingCandidates(mmr: number): Promise<any[]> {
+    async findMatchmakingCandidates(mmr: number, gameMode: '1v1' | '2v2' = '2v2'): Promise<any[]> {
         if (!this.supabase) return [];
 
         try {
@@ -1561,13 +1561,13 @@ export class OnlineNetworkManager {
             const { data, error } = await this.supabase
                 .from('matchmaking_queue')
                 .select('*')
-                .eq('game_mode', '2v2')
+                .eq('game_mode', gameMode)
                 .eq('status', 'searching')
                 .neq('player_id', this.getDatabasePlayerId())
                 .gte('mmr', mmr - 100)
                 .lte('mmr', mmr + 100)
                 .order('joined_at', { ascending: true })
-                .limit(3); // Need 3 other players for 2v2
+                .limit(gameMode === '1v1' ? 1 : 3); // 1v1: need 1 other player, 2v2: need 3
 
             if (error) {
                 console.error('Failed to find matchmaking candidates:', error);
