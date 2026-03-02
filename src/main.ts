@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude } from './game-core';
 import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
 import { SelectionManager, SelectionManagerContext } from './input/selection-manager';
 import { InputController, InputControllerContext } from './input/input-controller';
@@ -72,6 +72,7 @@ class GameController {
             case 'Chrono':
             case 'Splendor':
             case 'Shroud':
+            case 'Occlude':
                 return heroName;
             case 'Influence Ball':
                 return 'InfluenceBall';
@@ -114,6 +115,8 @@ class GameController {
                 return unit instanceof Splendor;
             case 'Shroud':
                 return unit instanceof Shroud;
+            case 'Occlude':
+                return unit instanceof Occlude;
             default:
                 return false;
         }

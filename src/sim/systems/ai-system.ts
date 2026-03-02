@@ -42,7 +42,8 @@ import {
     Blink,
     Splendor,
     Shadow,
-    Shroud
+    Shroud,
+    Occlude
 } from '../../game-core';
 
 /**
@@ -251,7 +252,7 @@ export class AISystem {
             case Faction.AURUM:
                 return ['Driller', 'AurumHero', 'Dash', 'Blink', 'Splendor', 'Shroud'];
             case Faction.VELARIS:
-                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono'];
+                return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono', 'Occlude'];
             default:
                 return [];
         }
@@ -324,6 +325,8 @@ export class AISystem {
                 return unit instanceof Shroud;
             case 'Shadow':
                 return unit instanceof Shadow;
+            case 'Occlude':
+                return unit instanceof Occlude;
             default:
                 return false;
         }

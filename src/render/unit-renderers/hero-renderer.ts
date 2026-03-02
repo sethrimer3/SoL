@@ -29,6 +29,8 @@ import {
     ShadowDecoy,
     ShadowDecoyParticle,
     Chrono,
+    Occlude,
+    OccludeShadowCone,
 } from '../../game-core';
 import * as Constants from '../../constants';
 import { RadiantHeroRenderer } from './radiant-hero-renderer';
@@ -257,6 +259,14 @@ export class HeroRenderer {
 
     public drawExplosionEffect(position: Vector2D, context: UnitRendererContext): void {
         this.velarisRenderer.drawExplosionEffect(position, context);
+    }
+
+    public drawOcclude(occlude: InstanceType<typeof Occlude>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
+        this.velarisRenderer.drawOcclude(occlude, color, game, isEnemy, context);
+    }
+
+    public drawOccludeShadowCone(cone: InstanceType<typeof OccludeShadowCone>, context: UnitRendererContext): void {
+        this.velarisRenderer.drawOccludeShadowCone(cone, context);
     }
 
 }

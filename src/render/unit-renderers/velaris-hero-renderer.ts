@@ -3,7 +3,8 @@
  *
  * Contains: DeployedTurret, Grave, Ray, Nova, InfluenceBall, TurretDeployer,
  *           Shadow, ShadowDecoy, ShadowDecoyParticle,
- *           GraveProjectile, GraveSmallParticle, GraveBlackHole, ExplosionEffect
+ *           GraveProjectile, GraveSmallParticle, GraveBlackHole, ExplosionEffect,
+ *           Occlude, OccludeShadowBeam, OccludeShadowCone
  * Extracted from hero-renderer.ts as part of Phase 25 refactoring.
  */
 
@@ -22,6 +23,9 @@ import {
     Shadow,
     ShadowDecoy,
     ShadowDecoyParticle,
+    Occlude,
+    OccludeShadowBeam,
+    OccludeShadowCone,
 } from '../../game-core';
 import * as Constants from '../../constants';
 import type { UnitRendererContext } from './shared-utilities';
@@ -670,6 +674,101 @@ export class VelarisHeroRenderer {
         context.ctx.arc(0, 0, radius, 0, Math.PI * 2);
         context.ctx.fillStyle = gradient;
         context.ctx.fill();
+        context.ctx.restore();
+    }
+
+    /**
+     * Draw the Occlude hero (Velaris faction) – shadow-beam attacker
+     */
+    public drawOcclude(occlude: InstanceType<typeof Occlude>, color: string, game: GameState, isEnemy: boolean, context: UnitRendererContext): void {
+        const ladSun = game.suns.find(s => s.type === 'lad');
+
+        if (isEnemy && context.viewingPlayer) {
+            const isVisible = game.isObjectVisibleToPlayer(occlude.position, context.viewingPlayer);
+            if (!isVisible) {
+                return;
+            }
+        }
+
+        const inShadow = !ladSun && game.isPointInShadow(occlude.position);
+
+        // Draw hero with reduced visibility when in shadow (own perspective)
+        const opacity = inShadow ? 0.45 : 1.0;
+        context.drawUnit(occlude, color, game, isEnemy, opacity, context);
+
+        // Draw active shadow beams
+        for (const beam of occlude.shadowBeams) {
+            if (!beam.startsInSun) continue;
+            const beamOpacity = beam.getOpacity();
+            const startScreen = context.worldToScreen(beam.startPos);
+            const endScreen   = context.worldToScreen(beam.endPos);
+
+            // Shadow beam: dark, slightly translucent stripe
+            context.ctx.save();
+            context.ctx.globalAlpha = beamOpacity * 0.8;
+            context.ctx.strokeStyle = '#1a0033'; // Very dark purple – looks like shadow
+            context.ctx.lineWidth = Constants.OCCLUDE_BEAM_WIDTH * context.zoom;
+            context.ctx.lineCap = 'round';
+            context.ctx.beginPath();
+            context.ctx.moveTo(startScreen.x, startScreen.y);
+            context.ctx.lineTo(endScreen.x, endScreen.y);
+            context.ctx.stroke();
+
+            // Thin highlight to distinguish from plain darkness
+            context.ctx.globalAlpha = beamOpacity * 0.4;
+            context.ctx.strokeStyle = '#6600cc';
+            context.ctx.lineWidth = 1 * context.zoom;
+            context.ctx.beginPath();
+            context.ctx.moveTo(startScreen.x, startScreen.y);
+            context.ctx.lineTo(endScreen.x, endScreen.y);
+            context.ctx.stroke();
+            context.ctx.restore();
+        }
+    }
+
+    /**
+     * Draw an Occlude shadow cone (ability visual)
+     */
+    public drawOccludeShadowCone(cone: InstanceType<typeof OccludeShadowCone>, context: UnitRendererContext): void {
+        const originScreen = context.worldToScreen(cone.position);
+        const rangePxScreen = cone.rangePx * context.zoom;
+        const remaining = cone.getRemainingFraction();
+
+        if (remaining <= 0) return;
+
+        // Cone fill angle extents
+        const dirAngleRad = Math.atan2(cone.direction.y, cone.direction.x);
+        const startAngle  = dirAngleRad - cone.halfAngleRad;
+        const endAngle    = dirAngleRad + cone.halfAngleRad;
+
+        context.ctx.save();
+
+        // Filled shadow region (dark translucent)
+        context.ctx.globalAlpha = remaining * 0.35;
+        context.ctx.fillStyle = '#110022';
+        context.ctx.beginPath();
+        context.ctx.moveTo(originScreen.x, originScreen.y);
+        context.ctx.arc(originScreen.x, originScreen.y, rangePxScreen, startAngle, endAngle);
+        context.ctx.closePath();
+        context.ctx.fill();
+
+        // Cone edge lines
+        context.ctx.globalAlpha = remaining * 0.6;
+        context.ctx.strokeStyle = '#6600cc';
+        context.ctx.lineWidth = 1.5 * context.zoom;
+        context.ctx.beginPath();
+        context.ctx.moveTo(originScreen.x, originScreen.y);
+        context.ctx.lineTo(
+            originScreen.x + Math.cos(startAngle) * rangePxScreen,
+            originScreen.y + Math.sin(startAngle) * rangePxScreen
+        );
+        context.ctx.moveTo(originScreen.x, originScreen.y);
+        context.ctx.lineTo(
+            originScreen.x + Math.cos(endAngle) * rangePxScreen,
+            originScreen.y + Math.sin(endAngle) * rangePxScreen
+        );
+        context.ctx.stroke();
+
         context.ctx.restore();
     }
 }

@@ -44,6 +44,7 @@ import {
     MortarProjectile,
     InfluenceBallProjectile,
     ShroudCube,
+    OccludeShadowCone,
 } from '../../game-core';
 import { getGameRNG } from '../../seeded-random';
 
@@ -70,6 +71,7 @@ export interface HeroEntityContext {
     splendorSunlightZones: InstanceType<typeof SplendorSunlightZone>[];
     splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[];
     shroudCubes: InstanceType<typeof ShroudCube>[];
+    occludeShadowCones: InstanceType<typeof OccludeShadowCone>[];
     dashSlashes: InstanceType<typeof DashSlash>[];
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[];
     chronoFreezeCircles: InstanceType<typeof ChronoFreezeCircle>[];
@@ -712,6 +714,9 @@ export class HeroEntitySystem {
             cube.update(deltaTime);
         }
         ctx.shroudCubes = ctx.shroudCubes.filter(cube => !cube.isExpired());
+
+        // Update Occlude shadow cones (advance lifetime, remove expired)
+        ctx.occludeShadowCones = ctx.occludeShadowCones.filter(cone => !cone.update(deltaTime));
 
         for (const sphere of ctx.splendorSunSpheres) {
             sphere.update(deltaTime, ctx.asteroids, ctx.getSplendorSphereObstacles());

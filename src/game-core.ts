@@ -37,6 +37,7 @@ import { createShadowHero } from './heroes/shadow';
 import { createChronoHero } from './heroes/chrono';
 import { createSplendorHero } from './heroes/splendor';
 import { createShroudHero } from './heroes/shroud';
+import { createOccludeHero } from './heroes/occlude';
 
 // Import dependencies needed for hero factories
 import { Unit } from './sim/entities/unit';
@@ -206,6 +207,12 @@ const { Shroud, ShroudCube, ShroudSmallCube, ShroudTinyCube } = createShroudHero
     Constants
 });
 
+const { Occlude, OccludeShadowBeam, OccludeShadowCone } = createOccludeHero({
+    Unit,
+    Vector2D,
+    Constants
+});
+
 // Export hero classes and their related types
 export {
     Marine,
@@ -262,7 +269,10 @@ export {
     Shroud,
     ShroudCube,
     ShroudSmallCube,
-    ShroudTinyCube
+    ShroudTinyCube,
+    Occlude,
+    OccludeShadowBeam,
+    OccludeShadowCone
 };
 
 // Import Player type for the hero factory function
@@ -302,6 +312,7 @@ export function createHeroUnit(
         case 'Splendor': return new Splendor(spawnPosition, owner);
         case 'Shroud': return new Shroud(spawnPosition, owner);
         case 'Shadow': return new Shadow(spawnPosition, owner);
+        case 'Occlude': return new Occlude(spawnPosition, owner);
         default: return null;
     }
 }

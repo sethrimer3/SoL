@@ -62,6 +62,9 @@ import {
     Dagger,
     Shroud,
     ShroudCube,
+    Occlude,
+    OccludeShadowBeam,
+    OccludeShadowCone,
 } from '../../game-core';
 import { HeroAbilityContext, HeroAbilitySystem } from './hero-ability-system';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
@@ -100,6 +103,12 @@ export interface UnitEffectsContext extends HeroAbilityContext, PhysicsContext {
     shadowDecoys: InstanceType<typeof ShadowDecoy>[];
     chronoFreezeCircles: InstanceType<typeof ChronoFreezeCircle>[];
     miniMotherships: InstanceType<typeof MiniMothership>[];
+
+    // Occlude shadow cones (managed by unit-effects + hero-entity systems)
+    occludeShadowCones: InstanceType<typeof OccludeShadowCone>[];
+
+    /** Check if a world-space position is in shadow (including Occlude cones). */
+    isPointInShadow(pos: Vector2D): boolean;
 
     // Method needed for Ray beam fluid-force colour
     getPlayerImpactColor(player: Player): string;
@@ -329,6 +338,39 @@ export class UnitEffectsSystem {
             const decoy = unit.getAndClearDecoy();
             if (decoy) {
                 ctx.shadowDecoys.push(decoy);
+            }
+        }
+
+        // Handle Occlude shadow beams and shadow cone ability
+        if (unit instanceof Occlude) {
+            unit.updateShadowBeams(deltaTime);
+
+            // Consume pending shadow cone from ability use
+            const cone = unit.getAndClearShadowCone();
+            if (cone) {
+                ctx.occludeShadowCones.push(cone);
+            }
+
+            // Process deferred attack with sunlight checks
+            const attackTarget = unit.getAndClearPendingAttack();
+            if (attackTarget) {
+                const occludeInSun = !ctx.isPointInShadow(unit.position);
+                const targetInSun = !ctx.isPointInShadow(attackTarget.position);
+
+                // Create shadow beam visual (only when Occlude is in sunlight)
+                if (occludeInSun) {
+                    unit.shadowBeams.push(new OccludeShadowBeam(
+                        new Vector2D(unit.position.x, unit.position.y),
+                        new Vector2D(attackTarget.position.x, attackTarget.position.y),
+                        unit.owner,
+                        true
+                    ));
+                }
+
+                // Damage only if Occlude AND target are both in sunlight
+                if (occludeInSun && targetInSun && 'health' in attackTarget) {
+                    (attackTarget as { health: number }).health -= unit.attackDamage;
+                }
             }
         }
 
