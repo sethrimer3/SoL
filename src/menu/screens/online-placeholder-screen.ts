@@ -9,13 +9,14 @@ export interface OnlinePlaceholderScreenParams {
     onBack: () => void;
     createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
     menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
+    onStartRankedMatchmaking?: () => void;
 }
 
 export function renderOnlinePlaceholderScreen(
     container: HTMLElement,
     params: OnlinePlaceholderScreenParams
 ): void {
-    const { onlineMode, onModeChange, onBack, createButton, menuParticleLayer } = params;
+    const { onlineMode, onModeChange, onBack, createButton, menuParticleLayer, onStartRankedMatchmaking } = params;
     const screenWidth = window.innerWidth;
     const isCompactLayout = screenWidth < 600;
 
@@ -63,26 +64,54 @@ export function renderOnlinePlaceholderScreen(
 
     container.appendChild(modeButtonContainer);
 
-    // Coming soon message
-    const message = document.createElement('div');
-    message.style.maxWidth = '600px';
-    message.style.padding = '40px';
-    message.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-    message.style.borderRadius = '10px';
-    message.style.border = '2px solid rgba(255, 215, 0, 0.3)';
-    message.style.marginBottom = '30px';
+    if (onlineMode === 'ranked' && onStartRankedMatchmaking) {
+        // Ranked mode: show ranked 1v1 matchmaking button
+        const rankedSection = document.createElement('div');
+        rankedSection.style.width = '100%';
+        rankedSection.style.maxWidth = '600px';
+        rankedSection.style.padding = '30px';
+        rankedSection.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        rankedSection.style.borderRadius = '10px';
+        rankedSection.style.border = '2px solid rgba(255, 215, 0, 0.3)';
+        rankedSection.style.marginBottom = '30px';
+        rankedSection.style.textAlign = 'center';
 
-    const messageTitle = document.createElement('h3');
-    messageTitle.textContent = 'Coming Soon!';
-    messageTitle.style.fontSize = '32px';
-    messageTitle.style.color = '#FFD700';
-    messageTitle.style.textAlign = 'center';
-    messageTitle.style.marginBottom = '20px';
-    messageTitle.style.fontWeight = '300';
-    message.appendChild(messageTitle);
+        const rankedTitle = document.createElement('h3');
+        rankedTitle.textContent = 'Ranked Play';
+        rankedTitle.style.fontSize = '28px';
+        rankedTitle.style.color = '#FFD700';
+        rankedTitle.style.marginBottom = '20px';
+        rankedTitle.style.fontWeight = '300';
+        rankedSection.appendChild(rankedTitle);
 
-    const messageText = document.createElement('p');
-    messageText.innerHTML = `
+        const ranked1v1Button = createButton('1v1 RANKED MATCHMAKING', onStartRankedMatchmaking, '#FF8800');
+        ranked1v1Button.style.width = '100%';
+        ranked1v1Button.style.fontSize = '20px';
+        ranked1v1Button.style.marginBottom = '10px';
+        rankedSection.appendChild(ranked1v1Button);
+
+        container.appendChild(rankedSection);
+    } else {
+        // Coming soon message (unranked or ranked without callback)
+        const message = document.createElement('div');
+        message.style.maxWidth = '600px';
+        message.style.padding = '40px';
+        message.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        message.style.borderRadius = '10px';
+        message.style.border = '2px solid rgba(255, 215, 0, 0.3)';
+        message.style.marginBottom = '30px';
+
+        const messageTitle = document.createElement('h3');
+        messageTitle.textContent = 'Coming Soon!';
+        messageTitle.style.fontSize = '32px';
+        messageTitle.style.color = '#FFD700';
+        messageTitle.style.textAlign = 'center';
+        messageTitle.style.marginBottom = '20px';
+        messageTitle.style.fontWeight = '300';
+        message.appendChild(messageTitle);
+
+        const messageText = document.createElement('p');
+        messageText.innerHTML = `
         Online multiplayer is currently in development.<br><br>
         <strong>Features:</strong><br>
         • Simple, efficient data transmission<br>
@@ -90,13 +119,14 @@ export function renderOnlinePlaceholderScreen(
         • Cross-platform matchmaking<br>
         • Ranked and casual modes
     `;
-    messageText.style.fontSize = '20px';
-    messageText.style.color = '#CCCCCC';
-    messageText.style.textAlign = 'center';
-    messageText.style.lineHeight = '1.6';
-    message.appendChild(messageText);
+        messageText.style.fontSize = '20px';
+        messageText.style.color = '#CCCCCC';
+        messageText.style.textAlign = 'center';
+        messageText.style.lineHeight = '1.6';
+        message.appendChild(messageText);
 
-    container.appendChild(message);
+        container.appendChild(message);
+    }
 
     // Back button
     const backButton = createButton('BACK', onBack, '#666666');

@@ -14,6 +14,7 @@ export type MenuScreenAudioState =
     | 'match-history'
     | 'custom-lobby'
     | '2v2-matchmaking'
+    | '1v1-matchmaking'
     | 'lobby-detail';
 
 type TrackId =
