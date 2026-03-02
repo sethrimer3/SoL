@@ -492,6 +492,15 @@ export class UIRenderer {
         this.menuRenderer.drawInGameMenuOverlay(context);
     }
 
+    public drawForgeButtons(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        heroNames: string[],
+        context: UIRendererContext
+    ): void {
+        this.menuRenderer.drawForgeButtons(forge, screenPos, heroNames, context);
+    }
+
     public drawEndGameStatsScreen(game: GameState, winner: Player, context: UIRendererContext): void {
         this.hudRenderer.drawEndGameStatsScreen(game, winner, context);
     }

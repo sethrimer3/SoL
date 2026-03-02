@@ -365,7 +365,8 @@ export class StarlingRenderer {
             state = {
                 shapeBlend: hasShapeTarget ? 1 : 0,
                 polygonBlend: isPentagonTarget ? 1 : 0,
-                lastTimeSec: timeSec
+                lastTimeSec: timeSec,
+                pentagonRotationRad: 0
             };
             context.starlingParticleStates.set(starling, state);
         }
@@ -377,6 +378,11 @@ export class StarlingRenderer {
         const targetPolygonBlend = isPentagonTarget ? 1 : 0;
         state.shapeBlend += (targetShapeBlend - state.shapeBlend) * blendStep;
         state.polygonBlend += (targetPolygonBlend - state.polygonBlend) * blendStep;
+
+        // Slowly rotate pentagon with sustained fire (0.4 rad/s gives one full rotation ~every 15 seconds)
+        if (isFiring) {
+            state.pentagonRotationRad += deltaSec * 0.4;
+        }
 
         const particleRadius = Math.max(1, context.VELARIS_STARLING_PARTICLE_RADIUS_PX * context.zoom);
         const particleColor = context.brightenAndPaleColor(displayColor);
@@ -457,11 +463,13 @@ export class StarlingRenderer {
             const triangleOffsetX = triangleBaseX + triangleNormalX * wobble;
             const triangleOffsetY = triangleBaseY + triangleNormalY * wobble;
 
+            // Pentagon uses accumulated rotation offset for slow spin during sustained fire
+            const pentagonRotBase = rotationOffsetRad + state.pentagonRotationRad;
             const pentagonEdgeValue = edgeProgress * 5;
             const pentagonEdgeIndex = Math.floor(pentagonEdgeValue);
             const pentagonEdgeT = pentagonEdgeValue - pentagonEdgeIndex;
-            const pentagonAngle0 = rotationOffsetRad + pentagonEdgeIndex * pentagonStep;
-            const pentagonAngle1 = rotationOffsetRad + (pentagonEdgeIndex + 1) * pentagonStep;
+            const pentagonAngle0 = pentagonRotBase + pentagonEdgeIndex * pentagonStep;
+            const pentagonAngle1 = pentagonRotBase + (pentagonEdgeIndex + 1) * pentagonStep;
             const pentagonStartX = Math.cos(pentagonAngle0) * pentagonRadius;
             const pentagonStartY = Math.sin(pentagonAngle0) * pentagonRadius;
             const pentagonEndX = Math.cos(pentagonAngle1) * pentagonRadius;
@@ -479,7 +487,10 @@ export class StarlingRenderer {
             const polygonOffsetX = triangleOffsetX + (pentagonOffsetX - triangleOffsetX) * state.polygonBlend;
             const polygonOffsetY = triangleOffsetY + (pentagonOffsetY - triangleOffsetY) * state.polygonBlend;
 
-            const angle = context.getPseudoRandom(seed) * twoPi;
+            // Cloud particles drift smoothly: each particle slowly rotates its base position angle
+            // (base 0.07 + up to 0.06 rad/sec variance per particle) giving a gentle organic shifting
+            const driftSpeed = 0.07 + context.getPseudoRandom(seed + 8.3) * 0.06;
+            const angle = context.getPseudoRandom(seed) * twoPi + scaledTimeSec * driftSpeed;
             const baseRadius = context.getPseudoRandom(seed + 1.3) * cloudRadius;
             const orbitSpeed = context.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE
                 + context.getPseudoRandom(seed + 2.1) * context.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE;
