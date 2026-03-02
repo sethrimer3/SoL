@@ -28,6 +28,7 @@ import {
     ShieldTower,
     SpaceDustSwirler,
     CombatTarget,
+    ShroudCube,
 } from '../../game-core';
 import { PhysicsSystem } from '../systems/physics-system';
 import { Unit } from '../entities/unit';
@@ -52,6 +53,7 @@ export interface ProjectileCombatContext {
     // Arrays (readonly)
     spaceDust: SpaceDustParticle[];
     aurumOrbs: InstanceType<typeof AurumOrb>[];
+    shroudCubes: InstanceType<typeof ShroudCube>[];
     players: Player[];
     starlingMergeGates: StarlingMergeGate[];
     asteroids: Asteroid[];
@@ -745,5 +747,59 @@ export class ProjectileCombatSystem {
             }
         }
         ctx.influenceBallProjectiles = ctx.influenceBallProjectiles.filter(p => !p.shouldExplode());
+
+        // Shroud cube collision damage: moving cubes damage enemies proportional to velocity
+        for (const cube of ctx.shroudCubes) {
+            if (cube.isStopped()) continue; // Only deal damage while moving
+            const damageFraction = cube.getDamageFraction();
+            if (damageFraction <= 0) continue;
+            const damage = Constants.SHROUD_CUBE_MAX_DAMAGE * damageFraction;
+            const h = cube.halfSizePx;
+
+            for (const player of ctx.players) {
+                if (player === cube.owner) continue; // No friendly fire
+                for (const unit of player.units) {
+                    const dx = unit.position.x - cube.position.x;
+                    const dy = unit.position.y - cube.position.y;
+                    // AABB check (cube) + unit radius
+                    const unitR = Constants.UNIT_RADIUS_PX;
+                    if (Math.abs(dx) < h + unitR && Math.abs(dy) < h + unitR) {
+                        const previousHealth = unit.health;
+                        unit.takeDamage(damage);
+                        const actualDamage = Math.max(0, previousHealth - unit.health);
+                        if (actualDamage > 0) {
+                            ctx.damageNumbers.push(new DamageNumber(unit.position, actualDamage, ctx.gameTime));
+                        }
+                    }
+                }
+                for (const mirror of player.solarMirrors) {
+                    if (mirror.health <= 0) continue;
+                    const dx = mirror.position.x - cube.position.x;
+                    const dy = mirror.position.y - cube.position.y;
+                    if (Math.abs(dx) < h + Constants.SOLAR_MIRROR_COLLISION_RADIUS && Math.abs(dy) < h + Constants.SOLAR_MIRROR_COLLISION_RADIUS) {
+                        const mirrorDamage = Math.max(1, Math.round(damage * (1 - Constants.MIRROR_DAMAGE_REDUCTION)));
+                        mirror.health -= mirrorDamage;
+                        ctx.damageNumbers.push(new DamageNumber(mirror.position, mirrorDamage, ctx.gameTime));
+                    }
+                }
+                for (const building of player.buildings) {
+                    const dx = building.position.x - cube.position.x;
+                    const dy = building.position.y - cube.position.y;
+                    if (Math.abs(dx) < h + building.radius && Math.abs(dy) < h + building.radius) {
+                        building.health -= damage;
+                        ctx.damageNumbers.push(new DamageNumber(building.position, damage, ctx.gameTime));
+                    }
+                }
+                if (player.stellarForge) {
+                    const forge = player.stellarForge;
+                    const dx = forge.position.x - cube.position.x;
+                    const dy = forge.position.y - cube.position.y;
+                    if (Math.abs(dx) < h + forge.radius && Math.abs(dy) < h + forge.radius) {
+                        forge.health -= damage;
+                        ctx.damageNumbers.push(new DamageNumber(forge.position, damage, ctx.gameTime));
+                    }
+                }
+            }
+        }
     }
 }

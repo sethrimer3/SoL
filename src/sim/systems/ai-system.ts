@@ -41,7 +41,8 @@ import {
     Dash,
     Blink,
     Splendor,
-    Shadow
+    Shadow,
+    Shroud
 } from '../../game-core';
 
 /**
@@ -248,7 +249,7 @@ export class AISystem {
             case Faction.RADIANT:
                 return ['Marine', 'Mothership', 'Dagger', 'Beam', 'Mortar', 'Preist', 'Tank', 'Spotlight', 'Radiant'];
             case Faction.AURUM:
-                return ['Driller', 'AurumHero', 'Dash', 'Blink', 'Splendor'];
+                return ['Driller', 'AurumHero', 'Dash', 'Blink', 'Splendor', 'Shroud'];
             case Faction.VELARIS:
                 return ['Grave', 'Ray', 'InfluenceBall', 'TurretDeployer', 'VelarisHero', 'Shadow', 'Chrono'];
             default:
@@ -319,6 +320,8 @@ export class AISystem {
                 return unit instanceof Blink;
             case 'Splendor':
                 return unit instanceof Splendor;
+            case 'Shroud':
+                return unit instanceof Shroud;
             case 'Shadow':
                 return unit instanceof Shadow;
             default:

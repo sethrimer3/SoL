@@ -60,6 +60,8 @@ import {
     Spotlight,
     Driller,
     Dagger,
+    Shroud,
+    ShroudCube,
 } from '../../game-core';
 import { HeroAbilityContext, HeroAbilitySystem } from './hero-ability-system';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
@@ -92,6 +94,7 @@ export interface UnitEffectsContext extends HeroAbilityContext, PhysicsContext {
     aurumOrbs: InstanceType<typeof AurumOrb>[];
     splendorSunSpheres: InstanceType<typeof SplendorSunSphere>[];
     splendorLaserSegments: InstanceType<typeof SplendorLaserSegment>[];
+    shroudCubes: InstanceType<typeof ShroudCube>[];
     dashSlashes: InstanceType<typeof DashSlash>[];
     blinkShockwaves: InstanceType<typeof BlinkShockwave>[];
     shadowDecoys: InstanceType<typeof ShadowDecoy>[];
@@ -292,6 +295,14 @@ export class UnitEffectsSystem {
                         ctx.aurumOrbs.splice(index, 1);
                     }
                 }
+            }
+        }
+
+        // Handle Shroud cubes
+        if (unit instanceof Shroud) {
+            const cube = unit.getAndClearCube();
+            if (cube) {
+                ctx.shroudCubes.push(cube);
             }
         }
 

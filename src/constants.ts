@@ -755,6 +755,25 @@ export const SHADOW_DECOY_PARTICLE_SPEED = 200; // Speed of despawn particles
 export const SHADOW_DECOY_PARTICLE_LIFETIME = 1.5; // Lifetime of particles in seconds
 export const SHADOW_DECOY_PARTICLE_SIZE = 3; // Size of particles
 
+// Shroud hero constants (Aurum faction - decelerating cube projectiles that block sunlight)
+export const SHROUD_MAX_HEALTH = 115;
+export const SHROUD_ATTACK_RANGE = 0;  // No normal attack
+export const SHROUD_ATTACK_DAMAGE = 0;
+export const SHROUD_ATTACK_SPEED = 0;
+export const SHROUD_ABILITY_COOLDOWN = 7.0;
+export const SHROUD_CUBE_SPEED_MULTIPLIER = 2.5; // Arrow length to speed
+export const SHROUD_CUBE_INITIAL_SPEED = 700;    // Max initial speed (px/sec)
+export const SHROUD_CUBE_DECELERATION = 500;     // Deceleration (px/sec²) - decelerates quickly
+export const SHROUD_CUBE_HALF_SIZE_PX = 28;      // Half-size of main cube (56px square)
+export const SHROUD_CUBE_MAX_DAMAGE = 80;        // Damage at full (initial) speed
+export const SHROUD_CUBE_STOP_SPEED = 5;         // Speed threshold to consider stopped
+export const SHROUD_CUBE_LIFETIME_SEC = 35.0;    // How long cubes persist after stopping
+export const SHROUD_SMALL_CUBE_HALF_SIZE_PX = 14; // Half-size of small cubes (28px)
+export const SHROUD_TINY_CUBE_HALF_SIZE_PX = 7;   // Half-size of tiny cubes (14px)
+export const SHROUD_UNFOLD_DURATION_SEC = 0.6;    // Duration of unfolding animation
+export const SHROUD_SMALL_UNFOLD_DELAY_SEC = 0.0; // Delay before small cubes start unfolding
+export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spawns before tiny cubes unfold
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy

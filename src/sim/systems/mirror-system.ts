@@ -17,7 +17,7 @@ import { WarpGate } from '../entities/warp-gate';
 import { SpaceDustParticle, SparkleParticle } from '../entities/particles';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
 import { VisionSystem } from './vision-system';
-import { VelarisOrb } from '../../game-core';
+import { VelarisOrb, ShroudCube } from '../../game-core';
 import { createHeroUnit } from '../../game-core';
 import { getGameRNG } from '../../seeded-random';
 
@@ -30,6 +30,7 @@ import { getGameRNG } from '../../seeded-random';
 export interface MirrorSystemContext extends MirrorMovementContext, PhysicsContext {
     warpGates: WarpGate[];
     velarisOrbs: InstanceType<typeof VelarisOrb>[];
+    shroudCubes: InstanceType<typeof ShroudCube>[];
     sparkleParticles: SparkleParticle[];
     isPointWithinPlayerInfluence(player: Player, point: Vector2D): boolean;
     getPlayerImpactColor(player: Player): string;
@@ -124,16 +125,26 @@ export class MirrorSystem {
      * Extracted from GameState.getMirrorLightOnStructure().
      */
     static getMirrorLightOnStructure(
-        game: { suns: Sun[]; asteroids: Asteroid[] },
+        game: { suns: Sun[]; asteroids: Asteroid[]; shroudCubes?: { getAllBlockingVertexArrays(): Vector2D[][] }[] },
         player: Player,
         structure: Building | StellarForge
     ): number {
         let totalLight = 0;
 
+        // Collect all stopped shroud cube polygon blockers
+        const shroudBlockers: { getWorldVertices(): Vector2D[] }[] = [];
+        if (game.shroudCubes) {
+            for (const cube of game.shroudCubes) {
+                for (const verts of cube.getAllBlockingVertexArrays()) {
+                    shroudBlockers.push({ getWorldVertices: () => verts });
+                }
+            }
+        }
+
         for (const mirror of player.solarMirrors) {
             const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
             if (linkedStructure !== structure) continue;
-            if (!mirror.hasLineOfSightToLight(game.suns, game.asteroids)) continue;
+            if (!mirror.hasLineOfSightToLight(game.suns, game.asteroids, shroudBlockers)) continue;
 
             const ray = new LightRay(
                 mirror.position,
@@ -149,6 +160,15 @@ export class MirrorSystem {
                 if (ray.intersectsPolygon(asteroid.getWorldVertices())) {
                     hasLineOfSight = false;
                     break;
+                }
+            }
+
+            if (hasLineOfSight) {
+                for (const blocker of shroudBlockers) {
+                    if (ray.intersectsPolygon(blocker.getWorldVertices())) {
+                        hasLineOfSight = false;
+                        break;
+                    }
                 }
             }
 
@@ -187,6 +207,14 @@ export class MirrorSystem {
         player: Player,
         deltaTime: number
     ): void {
+        // Collect all stopped shroud cube polygon blockers once per player update
+        const shroudBlockers: { getWorldVertices(): Vector2D[] }[] = [];
+        for (const cube of game.shroudCubes) {
+            for (const verts of cube.getAllBlockingVertexArrays()) {
+                shroudBlockers.push({ getWorldVertices: () => verts });
+            }
+        }
+
         for (const mirror of player.solarMirrors) {
             const oldMirrorPos = new Vector2D(mirror.position.x, mirror.position.y);
             mirror.update(deltaTime, game);
@@ -226,7 +254,7 @@ export class MirrorSystem {
             );
 
             // Generate energy and apply to linked structure
-            if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(game.suns, game.asteroids) && linkedStructure) {
+            if (!isBlockedByVelarisField && mirror.hasLineOfSightToLight(game.suns, game.asteroids, shroudBlockers) && linkedStructure) {
                 const energyGenerated = mirror.generateEnergy(deltaTime);
 
                 if (linkedStructure instanceof StellarForge &&

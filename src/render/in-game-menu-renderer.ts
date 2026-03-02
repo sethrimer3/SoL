@@ -5,7 +5,7 @@
 import {
     Vector2D, Player, StellarForge, Unit,
     Marine, Mothership, Grave, Ray, Nova, InfluenceBall, TurretDeployer, Driller,
-    Dagger, Beam, Spotlight, Splendor, Mortar, Preist, Sly, Shadow, Chrono
+    Dagger, Beam, Spotlight, Splendor, Mortar, Preist, Sly, Shadow, Chrono, Shroud
 } from '../game-core';
 import * as Constants from '../constants';
 import { getRadialButtonOffsets, getHeroUnitType, getHeroUnitCost } from './render-utilities';
@@ -842,6 +842,8 @@ export class InGameMenuRenderer {
                 return unit instanceof Shadow;
             case 'Chrono':
                 return unit instanceof Chrono;
+            case 'Shroud':
+                return unit instanceof Shroud;
             default:
                 return false;
         }

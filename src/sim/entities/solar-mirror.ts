@@ -67,10 +67,14 @@ export class SolarMirror {
     ) {}
 
     /**
-     * Check if ray from mirror to target is blocked by asteroids
+     * Check if ray from mirror to target is blocked by asteroids or extra polygon blockers
      * Helper method to avoid code duplication
      */
-    private isPathClear(target: Vector2D, asteroids: Asteroid[] = []): boolean {
+    private isPathClear(
+        target: Vector2D,
+        asteroids: Asteroid[] = [],
+        extraBlockers: { getWorldVertices(): Vector2D[] }[] = []
+    ): boolean {
         const direction = new Vector2D(
             target.x - this.position.x,
             target.y - this.position.y
@@ -83,6 +87,13 @@ export class SolarMirror {
             const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
             if (intersectionDist !== null && intersectionDist < distance) {
                 return false; // Path is blocked
+            }
+        }
+
+        for (const blocker of extraBlockers) {
+            const intersectionDist = ray.getIntersectionDistance(blocker.getWorldVertices());
+            if (intersectionDist !== null && intersectionDist < distance) {
+                return false; // Path is blocked by extra blocker
             }
         }
         
@@ -116,9 +127,13 @@ export class SolarMirror {
      * Check if mirror has clear view of any light source
      * Returns true if at least one sun is visible
      */
-    hasLineOfSightToLight(lightSources: Sun[], asteroids: Asteroid[] = []): boolean {
+    hasLineOfSightToLight(
+        lightSources: Sun[],
+        asteroids: Asteroid[] = [],
+        extraBlockers: { getWorldVertices(): Vector2D[] }[] = []
+    ): boolean {
         for (const sun of lightSources) {
-            if (this.isPathClear(sun.position, asteroids)) {
+            if (this.isPathClear(sun.position, asteroids, extraBlockers)) {
                 return true; // Found at least one clear path to a sun
             }
         }
