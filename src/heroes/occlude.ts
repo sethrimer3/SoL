@@ -64,16 +64,23 @@ export const createOccludeHero = (deps: OccludeHeroDeps) => {
             const dx = point.x - this.position.x;
             const dy = point.y - this.position.y;
             const distSq = dx * dx + dy * dy;
-            if (distSq > this.rangePx * this.rangePx) {
+            const rangeSq = this.rangePx * this.rangePx;
+            if (distSq > rangeSq) {
                 return false;
             }
             if (distSq === 0) {
                 return true; // Origin is inside the cone
             }
+            // Compute dot product without full sqrt to check forward half-space first
+            const dot = dx * this.direction.x + dy * this.direction.y;
+            if (dot <= 0) {
+                return false; // Point is behind the cone origin
+            }
+            // Now check exact angle (requires sqrt for normalisation)
             const dist = Math.sqrt(distSq);
-            const dot = (dx * this.direction.x + dy * this.direction.y) / dist;
-            const clampedDot = Math.max(-1, Math.min(1, dot));
-            return Math.acos(clampedDot) <= this.halfAngleRad;
+            const cosAngle = dot / dist; // dot / (dist * 1) since direction is normalised
+            const clampedCos = Math.max(-1, Math.min(1, cosAngle));
+            return Math.acos(clampedCos) <= this.halfAngleRad;
         }
 
         /** Returns true when the cone should be removed */

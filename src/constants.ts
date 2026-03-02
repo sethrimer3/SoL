@@ -766,6 +766,10 @@ export const OCCLUDE_BEAM_LIFETIME_SEC = 0.15; // Brief flash duration
 export const OCCLUDE_SHADOW_CONE_ANGLE_RAD = Math.PI / 12; // 15 degrees total (half = 7.5°)
 export const OCCLUDE_SHADOW_CONE_RANGE_PX = 450; // Range of the shadow cone in pixels
 export const OCCLUDE_SHADOW_CONE_DURATION_SEC = 8.0; // How long the shadow cone persists
+export const OCCLUDE_BEAM_COLOR = '#1a0033'; // Very dark purple – beam looks like shadow
+export const OCCLUDE_BEAM_HIGHLIGHT_COLOR = '#6600cc'; // Thin highlight on beam edge
+export const OCCLUDE_CONE_FILL_COLOR = '#110022'; // Shadow cone interior fill
+export const OCCLUDE_CONE_EDGE_COLOR = '#6600cc'; // Shadow cone edge lines
 
 // Shroud hero constants (Aurum faction - decelerating cube projectiles that block sunlight)
 export const SHROUD_MAX_HEALTH = 115;

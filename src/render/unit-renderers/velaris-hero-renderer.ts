@@ -706,7 +706,7 @@ export class VelarisHeroRenderer {
             // Shadow beam: dark, slightly translucent stripe
             context.ctx.save();
             context.ctx.globalAlpha = beamOpacity * 0.8;
-            context.ctx.strokeStyle = '#1a0033'; // Very dark purple – looks like shadow
+            context.ctx.strokeStyle = Constants.OCCLUDE_BEAM_COLOR;
             context.ctx.lineWidth = Constants.OCCLUDE_BEAM_WIDTH * context.zoom;
             context.ctx.lineCap = 'round';
             context.ctx.beginPath();
@@ -716,7 +716,7 @@ export class VelarisHeroRenderer {
 
             // Thin highlight to distinguish from plain darkness
             context.ctx.globalAlpha = beamOpacity * 0.4;
-            context.ctx.strokeStyle = '#6600cc';
+            context.ctx.strokeStyle = Constants.OCCLUDE_BEAM_HIGHLIGHT_COLOR;
             context.ctx.lineWidth = 1 * context.zoom;
             context.ctx.beginPath();
             context.ctx.moveTo(startScreen.x, startScreen.y);
@@ -745,7 +745,7 @@ export class VelarisHeroRenderer {
 
         // Filled shadow region (dark translucent)
         context.ctx.globalAlpha = remaining * 0.35;
-        context.ctx.fillStyle = '#110022';
+        context.ctx.fillStyle = Constants.OCCLUDE_CONE_FILL_COLOR;
         context.ctx.beginPath();
         context.ctx.moveTo(originScreen.x, originScreen.y);
         context.ctx.arc(originScreen.x, originScreen.y, rangePxScreen, startAngle, endAngle);
@@ -754,7 +754,7 @@ export class VelarisHeroRenderer {
 
         // Cone edge lines
         context.ctx.globalAlpha = remaining * 0.6;
-        context.ctx.strokeStyle = '#6600cc';
+        context.ctx.strokeStyle = Constants.OCCLUDE_CONE_EDGE_COLOR;
         context.ctx.lineWidth = 1.5 * context.zoom;
         context.ctx.beginPath();
         context.ctx.moveTo(originScreen.x, originScreen.y);
