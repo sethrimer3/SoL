@@ -19,8 +19,9 @@ export class MenuAtmosphereLayer {
     private static readonly STAR_SIZE_MIN_PX = 0.45;
     private static readonly STAR_SIZE_MAX_PX = 3.4;
     private static readonly STAR_SIZE_POWER_ALPHA = 1.82;
-    private static readonly STAR_FLICKER_BASE_HZ = 0.16;
-    private static readonly STAR_FLICKER_AMPLITUDE = 0.03;
+    private static readonly STAR_FLICKER_BASE_HZ = 0.34;
+    private static readonly STAR_FLICKER_VARIANCE_HZ = 0.44;
+    private static readonly STAR_FLICKER_AMPLITUDE = 0.11;
     private static readonly STAR_DENSITY_NOISE_SCALE = 0.0048;
     private static readonly STAR_DENSITY_THRESHOLD = 0.38;
     private static readonly STAR_PLACEMENT_MAX_ATTEMPTS = 30000;
@@ -358,7 +359,8 @@ export class MenuAtmosphereLayer {
                 phase: Math.random() * Math.PI * 2,
                 brightness,
                 colorRgb,
-                flickerHz: MenuAtmosphereLayer.STAR_FLICKER_BASE_HZ + Math.random() * 0.14,
+                flickerHz: MenuAtmosphereLayer.STAR_FLICKER_BASE_HZ
+                    + Math.random() * MenuAtmosphereLayer.STAR_FLICKER_VARIANCE_HZ,
                 hasChromaticAberration: sizePx > 2.15 && brightness > 0.82 && Math.random() > 0.4,
             });
         }
