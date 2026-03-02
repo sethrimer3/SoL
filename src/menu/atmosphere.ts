@@ -37,6 +37,10 @@ export class MenuAtmosphereLayer {
     private static readonly BOUNDS_MARGIN_PX = 80;
     private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
+    private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
+    private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
+    // Refresh the offscreen star cache at ~12.5 fps; drift is imperceptible over 80 ms on low quality
+    private static readonly STAR_CACHE_INTERVAL_MS = 80;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -50,6 +54,13 @@ export class MenuAtmosphereLayer {
     private opacity: number = 0.2;
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     private lastFrameTimeMs: number = 0;
+    // Cached sun center – a constant value derived from static constants; avoids per-frame allocation
+    private cachedSunCenterX: number = 0;
+    private cachedSunCenterY: number = 0;
+    // Offscreen star canvas used by low quality to blit the pre-rendered star field in one drawImage
+    private offscreenStarCanvas: HTMLCanvasElement | null = null;
+    private offscreenStarContext: CanvasRenderingContext2D | null = null;
+    private lastStarCacheMs: number = 0;
     private stars: {
         x: number;
         y: number;
@@ -104,6 +115,8 @@ export class MenuAtmosphereLayer {
             return;
         }
         this.graphicsQuality = quality;
+        this.offscreenStarCanvas = null;
+        this.offscreenStarContext = null;
         this.initializeStars();
     }
 
@@ -132,6 +145,13 @@ export class MenuAtmosphereLayer {
         this.canvas.width = Math.round(width * devicePixelRatio);
         this.canvas.height = Math.round(height * devicePixelRatio);
         this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        // Cache sun center – depends only on constants, so computed once per resize
+        const sunCenter = this.getSunCenter();
+        this.cachedSunCenterX = sunCenter.x;
+        this.cachedSunCenterY = sunCenter.y;
+        // Invalidate offscreen star canvas so it is recreated at the new size
+        this.offscreenStarCanvas = null;
+        this.offscreenStarContext = null;
         this.initializeStars();
         this.initializeCachedGradients();
     }
@@ -141,6 +161,8 @@ export class MenuAtmosphereLayer {
         if (this.canvas.parentElement) {
             this.canvas.parentElement.removeChild(this.canvas);
         }
+        this.offscreenStarCanvas = null;
+        this.offscreenStarContext = null;
     }
 
     public setOpacity(opacity: number): void {
@@ -163,15 +185,13 @@ export class MenuAtmosphereLayer {
     }
 
     private initializeCachedGradients(): void {
-        const sunCenter = this.getSunCenter();
-
         // Cache sun white hot core gradient
         this.sunWhiteHotCoreGradient = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             0,
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             MenuAtmosphereLayer.SUN_RADIUS_PX * 0.48
         );
         this.sunWhiteHotCoreGradient.addColorStop(0, '#FFF8E6');
@@ -180,11 +200,11 @@ export class MenuAtmosphereLayer {
 
         // Cache sun glow gradient
         this.sunGlowGradient = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             MenuAtmosphereLayer.SUN_RADIUS_PX * 0.35,
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX
         );
         this.sunGlowGradient.addColorStop(0, 'rgba(255, 214, 90, 0.95)');
@@ -195,11 +215,11 @@ export class MenuAtmosphereLayer {
 
         // Cache sun plasma gradient (fallback when sprite not loaded)
         this.sunPlasmaGradient = this.context.createRadialGradient(
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             0,
-            sunCenter.x,
-            sunCenter.y,
+            this.cachedSunCenterX,
+            this.cachedSunCenterY,
             MenuAtmosphereLayer.SUN_RADIUS_PX
         );
         this.sunPlasmaGradient.addColorStop(0, '#FFD65A');
@@ -283,12 +303,15 @@ export class MenuAtmosphereLayer {
             return;
         }
         
-        // Throttle frame rate on low quality setting to reduce CPU load
-        if (this.graphicsQuality === 'low') {
+        // Throttle frame rate on low/medium quality to reduce CPU load
+        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
             const nowMs = performance.now();
+            const targetFrameTimeMs = this.graphicsQuality === 'low'
+                ? MenuAtmosphereLayer.LOW_QUALITY_FRAME_TIME_MS
+                : MenuAtmosphereLayer.MEDIUM_QUALITY_FRAME_TIME_MS;
             const deltaMs = nowMs - this.lastFrameTimeMs;
             
-            if (deltaMs < MenuAtmosphereLayer.LOW_QUALITY_FRAME_TIME_MS) {
+            if (deltaMs < targetFrameTimeMs) {
                 this.animationFrameId = requestAnimationFrame(() => this.animate());
                 return;
             }
@@ -368,19 +391,69 @@ export class MenuAtmosphereLayer {
 
     private renderStars(): void {
         const nowMs = performance.now();
-        const sunCenter = this.getSunCenter();
+        if (this.graphicsQuality === 'low') {
+            this.renderStarsCachedLow(nowMs);
+            return;
+        }
+        this.renderStarsToContext(this.context, nowMs);
+    }
+
+    /**
+     * Low quality star rendering: pre-renders all stars to an offscreen canvas at ~12 fps and
+     * blits the result each frame with a single drawImage call, reducing per-frame draw calls
+     * from ~2800 down to 1.
+     */
+    private renderStarsCachedLow(nowMs: number): void {
+        const needsUpdate = this.offscreenStarCanvas === null
+            || nowMs - this.lastStarCacheMs >= MenuAtmosphereLayer.STAR_CACHE_INTERVAL_MS;
+
+        if (needsUpdate) {
+            // (Re)create the offscreen canvas at physical resolution to avoid upscaling artefacts
+            if (this.offscreenStarCanvas === null) {
+                this.offscreenStarCanvas = document.createElement('canvas');
+                this.offscreenStarCanvas.width = this.canvas.width;
+                this.offscreenStarCanvas.height = this.canvas.height;
+                const ctx = this.offscreenStarCanvas.getContext('2d');
+                if (ctx === null) {
+                    // Fallback: render directly to main context and mark cache time to avoid
+                    // repeated allocation attempts next frame
+                    this.lastStarCacheMs = nowMs;
+                    this.renderStarsToContext(this.context, nowMs);
+                    return;
+                }
+                this.offscreenStarContext = ctx;
+                const dpr = window.devicePixelRatio || 1;
+                this.offscreenStarContext.setTransform(dpr, 0, 0, dpr, 0, 0);
+            }
+            this.offscreenStarContext!.clearRect(0, 0, this.widthPx, this.heightPx);
+            this.renderStarsToContext(this.offscreenStarContext!, nowMs);
+            this.lastStarCacheMs = nowMs;
+        }
+
+        if (this.offscreenStarCanvas !== null) {
+            // Blit the pre-rendered star field onto the main canvas.
+            // Use source-over (default) since the main canvas is transparent at this point and
+            // the offscreen canvas already carries the correct accumulated star colours.
+            this.context.drawImage(this.offscreenStarCanvas, 0, 0, this.widthPx, this.heightPx);
+        }
+    }
+
+    private renderStarsToContext(ctx: CanvasRenderingContext2D, nowMs: number): void {
         const sunParallaxOriginX = this.widthPx * 0.5;
         const sunParallaxOriginY = this.heightPx * 0.5;
-        const sunParallaxDeltaX = sunCenter.x - sunParallaxOriginX;
-        const sunParallaxDeltaY = sunCenter.y - sunParallaxOriginY;
+        const sunParallaxDeltaX = this.cachedSunCenterX - sunParallaxOriginX;
+        const sunParallaxDeltaY = this.cachedSunCenterY - sunParallaxOriginY;
 
+        // Skip per-star Math.sin flicker on low/medium quality – reduces CPU cost significantly
+        const skipFlicker = this.graphicsQuality === 'low' || this.graphicsQuality === 'medium';
         // Pre-compute loop invariants for performance
-        const flickerTimeBase = (nowMs * 0.001) * Math.PI * 2;
+        const flickerTimeBase = skipFlicker ? 0 : (nowMs * 0.001) * Math.PI * 2;
         const driftMultiplier = nowMs * MenuAtmosphereLayer.STAR_BASE_DRIFT_PX;
-        const shouldRenderChromaticAberration = this.graphicsQuality !== 'low';
+        // Only render chromatic aberration on high/ultra quality
+        const shouldRenderChromaticAberration = this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra';
 
-        this.context.save();
-        this.context.globalCompositeOperation = 'lighter';
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
 
         for (let i = 0; i < this.stars.length; i++) {
             const star = this.stars[i];
@@ -389,8 +462,10 @@ export class MenuAtmosphereLayer {
             const parallaxOffsetX = sunParallaxDeltaX * parallaxScale;
             const parallaxOffsetY = sunParallaxDeltaY * parallaxScale;
 
-            const flicker = 1 + MenuAtmosphereLayer.STAR_FLICKER_AMPLITUDE
-                * Math.sin(star.phase + flickerTimeBase * star.flickerHz);
+            const flicker = skipFlicker
+                ? 1
+                : 1 + MenuAtmosphereLayer.STAR_FLICKER_AMPLITUDE
+                    * Math.sin(star.phase + flickerTimeBase * star.flickerHz);
             const alpha = star.brightness * flicker * (0.4 + depthScale * 0.6);
 
             const renderedX = (star.x + parallaxOffsetX + driftMultiplier * depthScale) % this.widthPx;
@@ -400,9 +475,9 @@ export class MenuAtmosphereLayer {
             const coreCacheCanvas = this.starCoreCacheByTemperature[cacheIndex];
             const haloCacheCanvas = this.starHaloCacheByTemperature[cacheIndex];
 
-            this.context.globalAlpha = alpha * (0.56 + depthScale * 0.44);
+            ctx.globalAlpha = alpha * (0.56 + depthScale * 0.44);
             const haloRadiusPx = sizePx * (3.2 + depthScale * 1.8);
-            this.context.drawImage(
+            ctx.drawImage(
                 haloCacheCanvas,
                 renderedX - haloRadiusPx,
                 renderedY - haloRadiusPx,
@@ -410,9 +485,9 @@ export class MenuAtmosphereLayer {
                 haloRadiusPx * 2
             );
 
-            this.context.globalAlpha = alpha;
+            ctx.globalAlpha = alpha;
             const coreRadiusPx = sizePx * 0.95;
-            this.context.drawImage(
+            ctx.drawImage(
                 coreCacheCanvas,
                 renderedX - coreRadiusPx,
                 renderedY - coreRadiusPx,
@@ -420,14 +495,14 @@ export class MenuAtmosphereLayer {
                 coreRadiusPx * 2
             );
 
-            // Skip chromatic aberration on low quality for better performance
+            // Skip chromatic aberration on low/medium quality for better performance
             if (star.hasChromaticAberration && shouldRenderChromaticAberration) {
-                this.renderChromaticAberration(renderedX, renderedY, sizePx, alpha * 0.17, star.colorRgb);
+                this.renderChromaticAberration(ctx, renderedX, renderedY, sizePx, alpha * 0.17, star.colorRgb);
             }
         }
 
-        this.context.restore();
-        this.context.globalAlpha = 1;
+        ctx.restore();
+        ctx.globalAlpha = 1;
     }
 
     private createStarCoreCacheByTemperature(): HTMLCanvasElement[] {
@@ -495,6 +570,7 @@ export class MenuAtmosphereLayer {
     }
 
     private renderChromaticAberration(
+        ctx: CanvasRenderingContext2D,
         x: number,
         y: number,
         sizePx: number,
@@ -502,16 +578,16 @@ export class MenuAtmosphereLayer {
         colorRgb: [number, number, number]
     ): void {
         const offsetPx = Math.min(0.45, sizePx * 0.1);
-        this.context.globalAlpha = alpha;
-        this.context.fillStyle = `rgba(${Math.min(255, colorRgb[0] + 20)}, 92, 92, 0.65)`;
-        this.context.beginPath();
-        this.context.arc(x - offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
-        this.context.fill();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = `rgba(${Math.min(255, colorRgb[0] + 20)}, 92, 92, 0.65)`;
+        ctx.beginPath();
+        ctx.arc(x - offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
+        ctx.fill();
 
-        this.context.fillStyle = `rgba(118, ${Math.min(255, colorRgb[1] + 16)}, 255, 0.62)`;
-        this.context.beginPath();
-        this.context.arc(x + offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
-        this.context.fill();
+        ctx.fillStyle = `rgba(118, ${Math.min(255, colorRgb[1] + 16)}, 255, 0.62)`;
+        ctx.beginPath();
+        ctx.arc(x + offsetPx, y, sizePx * 0.34, 0, Math.PI * 2);
+        ctx.fill();
     }
 
     private getStarCountForGraphicsQuality(): number {
@@ -619,7 +695,6 @@ export class MenuAtmosphereLayer {
     }
 
     private renderSunGlow(): void {
-        const sunCenter = this.getSunCenter();
         this.context.save();
         this.context.globalCompositeOperation = 'lighter';
 
@@ -627,7 +702,7 @@ export class MenuAtmosphereLayer {
         if (this.sunWhiteHotCoreGradient) {
             this.context.fillStyle = this.sunWhiteHotCoreGradient;
             this.context.beginPath();
-            this.context.arc(sunCenter.x, sunCenter.y, MenuAtmosphereLayer.SUN_RADIUS_PX * 0.52, 0, Math.PI * 2);
+            this.context.arc(this.cachedSunCenterX, this.cachedSunCenterY, MenuAtmosphereLayer.SUN_RADIUS_PX * 0.52, 0, Math.PI * 2);
             this.context.fill();
         }
 
@@ -636,8 +711,8 @@ export class MenuAtmosphereLayer {
             this.context.fillStyle = this.sunGlowGradient;
             this.context.beginPath();
             this.context.arc(
-                sunCenter.x,
-                sunCenter.y,
+                this.cachedSunCenterX,
+                this.cachedSunCenterY,
                 MenuAtmosphereLayer.SUN_GLOW_RADIUS_PX,
                 0,
                 Math.PI * 2
@@ -649,8 +724,8 @@ export class MenuAtmosphereLayer {
             const diameterPx = MenuAtmosphereLayer.SUN_RADIUS_PX * 2;
             this.context.drawImage(
                 this.sunSprite,
-                sunCenter.x - MenuAtmosphereLayer.SUN_RADIUS_PX,
-                sunCenter.y - MenuAtmosphereLayer.SUN_RADIUS_PX,
+                this.cachedSunCenterX - MenuAtmosphereLayer.SUN_RADIUS_PX,
+                this.cachedSunCenterY - MenuAtmosphereLayer.SUN_RADIUS_PX,
                 diameterPx,
                 diameterPx
             );
@@ -659,8 +734,8 @@ export class MenuAtmosphereLayer {
             this.context.fillStyle = this.sunPlasmaGradient;
             this.context.beginPath();
             this.context.arc(
-                sunCenter.x,
-                sunCenter.y,
+                this.cachedSunCenterX,
+                this.cachedSunCenterY,
                 MenuAtmosphereLayer.SUN_RADIUS_PX,
                 0,
                 Math.PI * 2

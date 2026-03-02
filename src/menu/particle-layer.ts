@@ -24,6 +24,8 @@ export class ParticleMenuLayer {
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
     private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
+    private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
+    private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -153,11 +155,14 @@ export class ParticleMenuLayer {
 
         const nowMs = performance.now();
         
-        // Throttle frame rate on low quality setting to reduce CPU load
-        if (this.graphicsQuality === 'low') {
+        // Throttle frame rate on low/medium quality to reduce CPU load
+        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
             const deltaMs = nowMs - this.lastFrameTimeMs;
+            const targetFrameTimeMs = this.graphicsQuality === 'low'
+                ? ParticleMenuLayer.LOW_QUALITY_FRAME_TIME_MS
+                : ParticleMenuLayer.MEDIUM_QUALITY_FRAME_TIME_MS;
             
-            if (deltaMs < ParticleMenuLayer.LOW_QUALITY_FRAME_TIME_MS) {
+            if (deltaMs < targetFrameTimeMs) {
                 this.animationFrameId = requestAnimationFrame(() => this.animate());
                 return;
             }
