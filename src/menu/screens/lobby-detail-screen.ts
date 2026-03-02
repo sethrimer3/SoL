@@ -32,6 +32,7 @@ export interface LobbyDetailScreenParams {
     onAssignPlayerToTeam: (playerId: string, teamId: number) => void;
     onSetSlotType: (playerId: string, slotType: 'player' | 'ai' | 'spectator') => void;
     onSetAIDifficulty: (playerId: string, difficulty: 'easy' | 'normal' | 'hard') => void;
+    onSetAIFaction: (playerId: string, faction: Faction) => void;
     onSetFaction: (faction: Faction) => void;
     onSetColor: (color: string) => void;
     onAddAI: (teamId: number) => void;
@@ -62,6 +63,7 @@ export function renderLobbyDetailScreen(
         onAssignPlayerToTeam,
         onSetSlotType,
         onSetAIDifficulty,
+        onSetAIFaction,
         onSetFaction,
         onSetColor,
         onAddAI,
@@ -165,6 +167,7 @@ export function renderLobbyDetailScreen(
                 onAssignPlayerToTeam,
                 onSetSlotType,
                 onSetAIDifficulty,
+                onSetAIFaction,
                 onSetFaction,
                 onSetColor,
                 onAddAI,
@@ -244,7 +247,7 @@ export function renderLobbyDetailScreen(
         const startButton = createButton('START GAME', onStartGame, '#4CAF50');
         startButton.style.fontSize = '18px';
         startButton.style.padding = '12px 40px';
-        const allReady = players.filter(p => p.slot_type === 'player').every(p => p.is_ready);
+        const allReady = players.filter(p => p.slot_type === 'player' && !p.is_host).every(p => p.is_ready);
         const hasEnoughPlayers = players.filter(p => p.slot_type === 'player' || p.slot_type === 'ai').length >= 2;
         if (!allReady || !hasEnoughPlayers) {
             startButton.disabled = true;
@@ -321,6 +324,7 @@ function renderSlot(
         onAssignPlayerToTeam: (playerId: string, teamId: number) => void;
         onSetSlotType: (playerId: string, slotType: 'player' | 'ai' | 'spectator') => void;
         onSetAIDifficulty: (playerId: string, difficulty: 'easy' | 'normal' | 'hard') => void;
+        onSetAIFaction: (playerId: string, faction: Faction) => void;
         onSetFaction: (faction: Faction) => void;
         onSetColor: (color: string) => void;
         onAddAI: (teamId: number) => void;
@@ -418,13 +422,14 @@ function renderSlot(
 
     // Ready status
     if (player.slot_type === 'player') {
+        const isEffectivelyReady = player.is_host || player.is_ready;
         const readyBadge = document.createElement('span');
-        readyBadge.textContent = player.is_ready ? '✓ Ready' : 'Not Ready';
+        readyBadge.textContent = isEffectivelyReady ? '✓ Ready' : 'Not Ready';
         readyBadge.style.fontSize = '12px';
         readyBadge.style.padding = '4px 8px';
         readyBadge.style.borderRadius = '4px';
-        readyBadge.style.backgroundColor = player.is_ready ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 165, 0, 0.3)';
-        readyBadge.style.color = player.is_ready ? '#4CAF50' : '#FFA500';
+        readyBadge.style.backgroundColor = isEffectivelyReady ? 'rgba(76, 175, 80, 0.3)' : 'rgba(255, 165, 0, 0.3)';
+        readyBadge.style.color = isEffectivelyReady ? '#4CAF50' : '#FFA500';
         nameRow.appendChild(readyBadge);
     }
 
@@ -458,7 +463,7 @@ function renderSlot(
         moveButton.style.padding = '6px';
         controlsRow.appendChild(moveButton);
 
-        // AI difficulty (if AI)
+        // AI difficulty and faction (if AI)
         if (player.slot_type === 'ai') {
             const difficultySelect = document.createElement('select');
             difficultySelect.style.flex = '1';
@@ -482,6 +487,29 @@ function renderSlot(
             });
             
             controlsRow.appendChild(difficultySelect);
+
+            const factionSelect = document.createElement('select');
+            factionSelect.style.flex = '1';
+            factionSelect.style.fontSize = '12px';
+            factionSelect.style.padding = '6px';
+            factionSelect.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+            factionSelect.style.color = '#ffffff';
+            factionSelect.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+            factionSelect.style.borderRadius = '4px';
+
+            [Faction.RADIANT, Faction.AURUM, Faction.VELARIS].forEach(f => {
+                const option = document.createElement('option');
+                option.value = f;
+                option.textContent = f;
+                option.selected = f === (player.faction || Faction.RADIANT);
+                factionSelect.appendChild(option);
+            });
+
+            factionSelect.addEventListener('change', () => {
+                callbacks.onSetAIFaction(player.player_id, factionSelect.value as Faction);
+            });
+
+            controlsRow.appendChild(factionSelect);
 
             // Remove AI button
             const removeButton = callbacks.createButton('✕', () => callbacks.onRemoveSlot(player.player_id), '#FF6B6B');

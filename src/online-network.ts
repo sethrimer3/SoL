@@ -1405,6 +1405,35 @@ export class OnlineNetworkManager {
     }
 
     /**
+     * Set AI player faction (host only)
+     */
+    async setAIFaction(playerId: string, faction: string): Promise<boolean> {
+        if (!this.supabase || !this.isHost || !this.currentRoom) {
+            console.error('Not authorized to set AI faction');
+            return false;
+        }
+
+        try {
+            const { error } = await this.supabase
+                .from('room_players')
+                .update({ faction: faction })
+                .eq('room_id', this.currentRoom.id)
+                .eq('player_id', playerId)
+                .eq('slot_type', 'ai');
+
+            if (error) {
+                console.error('Failed to set AI faction:', error);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Error setting AI faction:', error);
+            return false;
+        }
+    }
+
+    /**
      * Set player color
      */
     async setPlayerColor(color: string): Promise<boolean> {
