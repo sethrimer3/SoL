@@ -1663,9 +1663,22 @@ export class InputController {
 
         // Keyboard controls (WASD and arrow keys) - Desktop only
         const KEYBOARD_PAN_SPEED = 10;
+        const isTextInputTarget = (target: EventTarget | null): boolean => {
+            if (!(target instanceof HTMLElement)) {
+                return false;
+            }
+
+            const tagName = target.tagName;
+            return tagName === 'INPUT' || tagName === 'TEXTAREA' || target.isContentEditable;
+        };
         
         window.addEventListener('keydown', (e: KeyboardEvent) => {
             const key = e.key.toLowerCase();
+
+            // Let text fields receive all typing input, including WASD.
+            if (isTextInputTarget(e.target)) {
+                return;
+            }
             
             // ESC key toggles in-game menu
             if (key === 'escape' && this.ctx.getGame() && !this.ctx.getGame()!.isCountdownActive) {
@@ -1684,8 +1697,17 @@ export class InputController {
         });
 
         window.addEventListener('keyup', (e: KeyboardEvent) => {
+            if (isTextInputTarget(e.target)) {
+                return;
+            }
+
             const key = e.key.toLowerCase();
             keysPressed.delete(key);
+        });
+
+        // Ensure stale key states do not persist after tab switching/window blur.
+        window.addEventListener('blur', () => {
+            keysPressed.clear();
         });
 
         // Update camera based on keyboard input and edge panning
