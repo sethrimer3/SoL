@@ -39,6 +39,7 @@ export class MenuAtmosphereLayer {
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
+    private static readonly DEFAULT_OPACITY_STRING = '0.200';
     // Refresh the offscreen star cache at ~12.5 fps; drift is imperceptible over 80 ms on low quality
     private static readonly STAR_CACHE_INTERVAL_MS = 80;
 
@@ -52,6 +53,7 @@ export class MenuAtmosphereLayer {
     private heightPx: number = 0;
     private sunSprite: HTMLImageElement;
     private opacity: number = 0.2;
+    private cachedOpacityString: string = MenuAtmosphereLayer.DEFAULT_OPACITY_STRING;
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     private lastFrameTimeMs: number = 0;
     // Cached sun center – a constant value derived from static constants; avoids per-frame allocation
@@ -90,7 +92,7 @@ export class MenuAtmosphereLayer {
         this.canvas.style.height = '100%';
         this.canvas.style.pointerEvents = 'none';
         this.canvas.style.zIndex = '0';
-        this.canvas.style.opacity = this.opacity.toString();
+        this.canvas.style.opacity = this.cachedOpacityString;
 
         const context = this.canvas.getContext('2d');
         if (!context) {
@@ -171,7 +173,11 @@ export class MenuAtmosphereLayer {
             return;
         }
         this.opacity = clampedOpacity;
-        this.canvas.style.opacity = this.opacity.toString();
+        const opacityString = this.opacity.toFixed(3);
+        if (opacityString !== this.cachedOpacityString) {
+            this.canvas.style.opacity = opacityString;
+            this.cachedOpacityString = opacityString;
+        }
     }
 
     public getSunCenterNormalized(): { x: number; y: number } {
