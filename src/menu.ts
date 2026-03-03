@@ -1545,6 +1545,13 @@ export class MainMenu {
                     await this.renderLobbyDetailScreen(this.contentElement);
                 }
             },
+            onSetAIFaction: async (playerId: string, faction: Faction) => {
+                if (!this.onlineNetworkManager) return;
+                const success = await this.onlineNetworkManager.setAIFaction(playerId, faction);
+                if (success) {
+                    await this.renderLobbyDetailScreen(this.contentElement);
+                }
+            },
             onSetFaction: async (faction: Faction) => {
                 if (!this.onlineNetworkManager) return;
                 this.settings.selectedFaction = faction;
@@ -1608,8 +1615,8 @@ export class MainMenu {
                     return;
                 }
                 
-                // Verify all human players are ready
-                const humanPlayers = allPlayers.filter(p => p.slot_type === 'player');
+                // Verify all non-host human players are ready (host is always considered ready)
+                const humanPlayers = allPlayers.filter(p => p.slot_type === 'player' && !p.is_host);
                 const allReady = humanPlayers.every(p => p.is_ready);
                 if (!allReady) {
                     alert('All players must be ready before starting');
