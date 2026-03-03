@@ -16,6 +16,8 @@ export class ParticleMenuLayer {
     private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
     private static readonly BASE_PARTICLE_OPACITY = 0.15;
     private static readonly PEAK_PARTICLE_OPACITY = 0.4;
+    private static readonly BASE_PARTICLE_OPACITY_STRING = '0.150';
+    private static readonly FULL_OPACITY_STRING = '1.000';
     private static readonly TRANSITION_DURATION_MS = 600;
     private static readonly SPEED_MULTIPLIER_MIN = 1.8;
     private static readonly SPEED_MULTIPLIER_MAX = 16;
@@ -49,7 +51,9 @@ export class ParticleMenuLayer {
     // Cache for gradient templates to avoid per-particle string allocation
     private haloGradientCache: Map<string, CanvasGradient> = new Map();
     // Pre-formatted opacity strings to avoid toFixed() calls
-    private cachedOpacityString: string = '';
+    private cachedOpacityString: string = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
+    private cachedMenuOpacityString: string = ParticleMenuLayer.FULL_OPACITY_STRING;
+    private lastAppliedMenuOpacityString: string = '';
     // Cached canvas dimensions to avoid getBoundingRect() every frame
     private cachedWidthPx: number = 0;
     private cachedHeightPx: number = 0;
@@ -315,10 +319,15 @@ export class ParticleMenuLayer {
 
     private updateTransition(nowMs: number): void {
         if (this.transitionStartMs === null) {
-            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-            this.menuOpacity = 1;
-            this.cachedOpacityString = this.particleOpacity.toFixed(3);
-            this.applyMenuOpacity();
+            if (this.particleOpacity !== ParticleMenuLayer.BASE_PARTICLE_OPACITY) {
+                this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
+                this.cachedOpacityString = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
+            }
+            if (this.menuOpacity !== 1) {
+                this.menuOpacity = 1;
+                this.cachedMenuOpacityString = ParticleMenuLayer.FULL_OPACITY_STRING;
+                this.applyMenuOpacity();
+            }
             return;
         }
 
@@ -330,7 +339,8 @@ export class ParticleMenuLayer {
             this.transitionStartMs = null;
             this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
             this.menuOpacity = 1;
-            this.cachedOpacityString = this.particleOpacity.toFixed(3);
+            this.cachedOpacityString = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
+            this.cachedMenuOpacityString = ParticleMenuLayer.FULL_OPACITY_STRING;
             this.applyMenuOpacity();
             return;
         }
@@ -348,12 +358,16 @@ export class ParticleMenuLayer {
         }
 
         this.cachedOpacityString = this.particleOpacity.toFixed(3);
+        this.cachedMenuOpacityString = this.menuOpacity.toFixed(3);
         this.applyMenuOpacity();
     }
 
     private applyMenuOpacity(): void {
         if (this.menuContentElement) {
-            this.menuContentElement.style.opacity = this.menuOpacity.toFixed(3);
+            if (this.lastAppliedMenuOpacityString !== this.cachedMenuOpacityString) {
+                this.menuContentElement.style.opacity = this.cachedMenuOpacityString;
+                this.lastAppliedMenuOpacityString = this.cachedMenuOpacityString;
+            }
         }
     }
 
