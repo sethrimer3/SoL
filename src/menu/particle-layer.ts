@@ -50,6 +50,7 @@ export class ParticleMenuLayer {
     private haloGradientCache: Map<string, CanvasGradient> = new Map();
     // Pre-formatted opacity strings to avoid toFixed() calls
     private cachedOpacityString: string = '';
+    private cachedMenuOpacityString: string = '1.000';
     // Cached canvas dimensions to avoid getBoundingRect() every frame
     private cachedWidthPx: number = 0;
     private cachedHeightPx: number = 0;
@@ -315,10 +316,15 @@ export class ParticleMenuLayer {
 
     private updateTransition(nowMs: number): void {
         if (this.transitionStartMs === null) {
-            this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-            this.menuOpacity = 1;
-            this.cachedOpacityString = this.particleOpacity.toFixed(3);
-            this.applyMenuOpacity();
+            if (this.particleOpacity !== ParticleMenuLayer.BASE_PARTICLE_OPACITY) {
+                this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
+                this.cachedOpacityString = this.particleOpacity.toFixed(3);
+            }
+            if (this.menuOpacity !== 1) {
+                this.menuOpacity = 1;
+                this.cachedMenuOpacityString = '1.000';
+                this.applyMenuOpacity();
+            }
             return;
         }
 
@@ -331,6 +337,7 @@ export class ParticleMenuLayer {
             this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
             this.menuOpacity = 1;
             this.cachedOpacityString = this.particleOpacity.toFixed(3);
+            this.cachedMenuOpacityString = '1.000';
             this.applyMenuOpacity();
             return;
         }
@@ -348,12 +355,15 @@ export class ParticleMenuLayer {
         }
 
         this.cachedOpacityString = this.particleOpacity.toFixed(3);
+        this.cachedMenuOpacityString = this.menuOpacity.toFixed(3);
         this.applyMenuOpacity();
     }
 
     private applyMenuOpacity(): void {
         if (this.menuContentElement) {
-            this.menuContentElement.style.opacity = this.menuOpacity.toFixed(3);
+            if (this.menuContentElement.style.opacity !== this.cachedMenuOpacityString) {
+                this.menuContentElement.style.opacity = this.cachedMenuOpacityString;
+            }
         }
     }
 
