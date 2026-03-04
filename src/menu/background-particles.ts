@@ -206,6 +206,7 @@ export class BackgroundParticleLayer {
             return;
         }
         this.isActive = true;
+        this.lastColorChangeMs = performance.now();
         this.render();
     }
     
