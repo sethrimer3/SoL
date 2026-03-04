@@ -308,10 +308,11 @@ export class MenuAtmosphereLayer {
         if (!this.isActive) {
             return;
         }
+
+        const nowMs = performance.now();
         
         // Throttle frame rate on low/medium quality to reduce CPU load
         if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
-            const nowMs = performance.now();
             const targetFrameTimeMs = this.graphicsQuality === 'low'
                 ? MenuAtmosphereLayer.LOW_QUALITY_FRAME_TIME_MS
                 : MenuAtmosphereLayer.MEDIUM_QUALITY_FRAME_TIME_MS;
@@ -325,7 +326,7 @@ export class MenuAtmosphereLayer {
         }
         
         this.updateAsteroids();
-        this.render();
+        this.render(nowMs);
         this.animationFrameId = requestAnimationFrame(() => this.animate());
     }
 
@@ -352,9 +353,9 @@ export class MenuAtmosphereLayer {
         }
     }
 
-    private render(): void {
+    private render(nowMs: number): void {
         this.context.clearRect(0, 0, this.widthPx, this.heightPx);
-        this.renderStars();
+        this.renderStars(nowMs);
         this.renderSunGlow();
         this.renderAsteroids();
     }
@@ -395,8 +396,7 @@ export class MenuAtmosphereLayer {
         }
     }
 
-    private renderStars(): void {
-        const nowMs = performance.now();
+    private renderStars(nowMs: number): void {
         if (this.graphicsQuality === 'low') {
             this.renderStarsCachedLow(nowMs);
             return;

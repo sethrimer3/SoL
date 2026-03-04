@@ -82,6 +82,7 @@ export class BackgroundParticleLayer {
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
+    private static readonly COLOR_CACHE_QUANTIZATION_STEP = 8;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -412,6 +413,11 @@ export class BackgroundParticleLayer {
         }
         return BackgroundParticleLayer.PARTICLE_RADIUS_MOBILE_PX;
     }
+
+    private quantizeColorChannel(channel: number): number {
+        const step = BackgroundParticleLayer.COLOR_CACHE_QUANTIZATION_STEP;
+        return Math.min(255, Math.max(0, Math.round(channel / step) * step));
+    }
     
     private render(): void {
         // Use cached dimensions
@@ -438,9 +444,9 @@ export class BackgroundParticleLayer {
         const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
         
         // Top edge
-        const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
-        const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
-        const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
+        const topR = this.quantizeColorChannel(this.edgeGlows.top[0] / maxGlow * 255);
+        const topG = this.quantizeColorChannel(this.edgeGlows.top[1] / maxGlow * 255);
+        const topB = this.quantizeColorChannel(this.edgeGlows.top[2] / maxGlow * 255);
         if (topR + topG + topB > 0) {
             // Vertical gradient from (0,0) to (0,glowHeight) - no canvas dimension dependency
             const cacheKey = `top,${topR},${topG},${topB},${glowHeight}`;
@@ -463,9 +469,9 @@ export class BackgroundParticleLayer {
         }
         
         // Bottom edge
-        const bottomR = Math.min(255, Math.round(this.edgeGlows.bottom[0] / maxGlow * 255));
-        const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
-        const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
+        const bottomR = this.quantizeColorChannel(this.edgeGlows.bottom[0] / maxGlow * 255);
+        const bottomG = this.quantizeColorChannel(this.edgeGlows.bottom[1] / maxGlow * 255);
+        const bottomB = this.quantizeColorChannel(this.edgeGlows.bottom[2] / maxGlow * 255);
         if (bottomR + bottomG + bottomB > 0) {
             // Vertical gradient - include height since gradient position depends on it
             const cacheKey = `bottom,${bottomR},${bottomG},${bottomB},${glowHeight},${height}`;
@@ -488,9 +494,9 @@ export class BackgroundParticleLayer {
         }
         
         // Left edge
-        const leftR = Math.min(255, Math.round(this.edgeGlows.left[0] / maxGlow * 255));
-        const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
-        const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
+        const leftR = this.quantizeColorChannel(this.edgeGlows.left[0] / maxGlow * 255);
+        const leftG = this.quantizeColorChannel(this.edgeGlows.left[1] / maxGlow * 255);
+        const leftB = this.quantizeColorChannel(this.edgeGlows.left[2] / maxGlow * 255);
         if (leftR + leftG + leftB > 0) {
             // Horizontal gradient from (0,0) to (glowWidth,0) - no canvas dimension dependency
             const cacheKey = `left,${leftR},${leftG},${leftB},${glowWidth}`;
@@ -513,9 +519,9 @@ export class BackgroundParticleLayer {
         }
         
         // Right edge
-        const rightR = Math.min(255, Math.round(this.edgeGlows.right[0] / maxGlow * 255));
-        const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
-        const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
+        const rightR = this.quantizeColorChannel(this.edgeGlows.right[0] / maxGlow * 255);
+        const rightG = this.quantizeColorChannel(this.edgeGlows.right[1] / maxGlow * 255);
+        const rightB = this.quantizeColorChannel(this.edgeGlows.right[2] / maxGlow * 255);
         if (rightR + rightG + rightB > 0) {
             // Horizontal gradient - include width since gradient position depends on it
             const cacheKey = `right,${rightR},${rightG},${rightB},${glowWidth},${width}`;
@@ -544,9 +550,9 @@ export class BackgroundParticleLayer {
         this.context.globalCompositeOperation = 'screen';
         
         for (const particle of this.particles) {
-            const r = Math.round(particle.colorR);
-            const g = Math.round(particle.colorG);
-            const b = Math.round(particle.colorB);
+            const r = this.quantizeColorChannel(particle.colorR);
+            const g = this.quantizeColorChannel(particle.colorG);
+            const b = this.quantizeColorChannel(particle.colorB);
             
             // Cache gradients by color and radius
             const cacheKey = `${r},${g},${b},${particle.radius}`;
