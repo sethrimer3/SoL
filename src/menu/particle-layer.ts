@@ -24,6 +24,8 @@ export class ParticleMenuLayer {
     private static readonly ULTRA_BASE_HALO_ALPHA = 0.2;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MIN = 3.3;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
+    private static readonly HALO_COLOR_CACHE_QUANTIZATION_STEP = 8;
+    private static readonly HALO_ALPHA_CACHE_PRECISION = 20; // 0.05 precision
     private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
@@ -381,9 +383,9 @@ export class ParticleMenuLayer {
 
         const isUltraQuality = this.graphicsQuality === 'ultra';
         for (const particle of this.particles) {
-            const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
-            const green = Math.min(255, Math.max(0, Math.round(particle.colorG)));
-            const blue = Math.min(255, Math.max(0, Math.round(particle.colorB)));
+            const red = this.quantizeColorChannel(particle.colorR);
+            const green = this.quantizeColorChannel(particle.colorG);
+            const blue = this.quantizeColorChannel(particle.colorB);
 
             if (isUltraQuality) {
                 const haloAlpha = Math.min(0.7, Math.max(0.06,
@@ -404,7 +406,7 @@ export class ParticleMenuLayer {
                 // Create cache key using rounded integers to avoid toFixed() calls
                 // Round radius and alpha to reduce cache key variations
                 const radiusKey = Math.round(haloRadiusPx * 10); // 0.1px precision
-                const alphaKey = Math.round(haloAlpha * 100); // 0.01 precision
+                const alphaKey = Math.round(haloAlpha * ParticleMenuLayer.HALO_ALPHA_CACHE_PRECISION);
                 const cacheKey = `${red},${green},${blue},${radiusKey},${alphaKey}`;
                 let haloGradient = this.haloGradientCache.get(cacheKey);
                 
@@ -649,6 +651,11 @@ export class ParticleMenuLayer {
 
     private randomRange(min: number, max: number): number {
         return min + Math.random() * (max - min);
+    }
+
+    private quantizeColorChannel(channel: number): number {
+        const step = ParticleMenuLayer.HALO_COLOR_CACHE_QUANTIZATION_STEP;
+        return Math.min(255, Math.max(0, Math.round(channel / step) * step));
     }
 
     private parseColor(color: string): { r: number; g: number; b: number } {

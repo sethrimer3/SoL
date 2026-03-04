@@ -82,6 +82,7 @@ export class BackgroundParticleLayer {
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
+    private static readonly COLOR_CACHE_QUANTIZATION_STEP = 8;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -193,6 +194,7 @@ export class BackgroundParticleLayer {
         this.cachedWidthPx = width;
         this.cachedHeightPx = height;
         this.updateParticleRadii();
+        this.render();
     }
     
     public setGraphicsQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
@@ -205,7 +207,7 @@ export class BackgroundParticleLayer {
         }
         this.isActive = true;
         this.lastColorChangeMs = performance.now();
-        this.animate();
+        this.render();
     }
     
     public stop(): void {
@@ -412,6 +414,11 @@ export class BackgroundParticleLayer {
         }
         return BackgroundParticleLayer.PARTICLE_RADIUS_MOBILE_PX;
     }
+
+    private quantizeColorChannel(channel: number): number {
+        const step = BackgroundParticleLayer.COLOR_CACHE_QUANTIZATION_STEP;
+        return Math.min(255, Math.max(0, Math.round(channel / step) * step));
+    }
     
     private render(): void {
         // Use cached dimensions
@@ -421,166 +428,6 @@ export class BackgroundParticleLayer {
         // Clear with black background
         this.context.fillStyle = '#000000';
         this.context.fillRect(0, 0, width, height);
-        
-        // Apply blur filter based on quality (skip on low/medium quality)
-        const shouldApplyBlur = this.graphicsQuality === 'high' || this.graphicsQuality === 'ultra';
-        
-        // Draw edge glows first (under particles)
-        this.context.globalCompositeOperation = 'screen';
-        if (shouldApplyBlur) {
-            this.context.filter = 'blur(40px)';
-        }
-        
-        const glowHeight = 60;
-        const glowWidth = 60;
-        
-        // Normalize and draw edge glows
-        const maxGlow = BackgroundParticleLayer.EDGE_GLOW_NORMALIZATION;
-        
-        // Top edge
-        const topR = Math.min(255, Math.round(this.edgeGlows.top[0] / maxGlow * 255));
-        const topG = Math.min(255, Math.round(this.edgeGlows.top[1] / maxGlow * 255));
-        const topB = Math.min(255, Math.round(this.edgeGlows.top[2] / maxGlow * 255));
-        if (topR + topG + topB > 0) {
-            // Vertical gradient from (0,0) to (0,glowHeight) - no canvas dimension dependency
-            const cacheKey = `top,${topR},${topG},${topB},${glowHeight}`;
-            let gradient = this.edgeGlowGradientCache.get(cacheKey);
-            if (!gradient) {
-                gradient = this.context.createLinearGradient(0, 0, 0, glowHeight);
-                gradient.addColorStop(0, `rgba(${topR}, ${topG}, ${topB}, 0.6)`);
-                gradient.addColorStop(1, `rgba(${topR}, ${topG}, ${topB}, 0)`);
-                // Limit cache to prevent memory growth
-                if (this.edgeGlowGradientCache.size >= 20) {
-                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
-                    if (firstKey) {
-                        this.edgeGlowGradientCache.delete(firstKey);
-                    }
-                }
-                this.edgeGlowGradientCache.set(cacheKey, gradient);
-            }
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, 0, width, glowHeight);
-        }
-        
-        // Bottom edge
-        const bottomR = Math.min(255, Math.round(this.edgeGlows.bottom[0] / maxGlow * 255));
-        const bottomG = Math.min(255, Math.round(this.edgeGlows.bottom[1] / maxGlow * 255));
-        const bottomB = Math.min(255, Math.round(this.edgeGlows.bottom[2] / maxGlow * 255));
-        if (bottomR + bottomG + bottomB > 0) {
-            // Vertical gradient - include height since gradient position depends on it
-            const cacheKey = `bottom,${bottomR},${bottomG},${bottomB},${glowHeight},${height}`;
-            let gradient = this.edgeGlowGradientCache.get(cacheKey);
-            if (!gradient) {
-                gradient = this.context.createLinearGradient(0, height - glowHeight, 0, height);
-                gradient.addColorStop(0, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0)`);
-                gradient.addColorStop(1, `rgba(${bottomR}, ${bottomG}, ${bottomB}, 0.6)`);
-                // Consistent FIFO eviction
-                if (this.edgeGlowGradientCache.size >= 20) {
-                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
-                    if (firstKey) {
-                        this.edgeGlowGradientCache.delete(firstKey);
-                    }
-                }
-                this.edgeGlowGradientCache.set(cacheKey, gradient);
-            }
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, height - glowHeight, width, glowHeight);
-        }
-        
-        // Left edge
-        const leftR = Math.min(255, Math.round(this.edgeGlows.left[0] / maxGlow * 255));
-        const leftG = Math.min(255, Math.round(this.edgeGlows.left[1] / maxGlow * 255));
-        const leftB = Math.min(255, Math.round(this.edgeGlows.left[2] / maxGlow * 255));
-        if (leftR + leftG + leftB > 0) {
-            // Horizontal gradient from (0,0) to (glowWidth,0) - no canvas dimension dependency
-            const cacheKey = `left,${leftR},${leftG},${leftB},${glowWidth}`;
-            let gradient = this.edgeGlowGradientCache.get(cacheKey);
-            if (!gradient) {
-                gradient = this.context.createLinearGradient(0, 0, glowWidth, 0);
-                gradient.addColorStop(0, `rgba(${leftR}, ${leftG}, ${leftB}, 0.6)`);
-                gradient.addColorStop(1, `rgba(${leftR}, ${leftG}, ${leftB}, 0)`);
-                // Consistent FIFO eviction
-                if (this.edgeGlowGradientCache.size >= 20) {
-                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
-                    if (firstKey) {
-                        this.edgeGlowGradientCache.delete(firstKey);
-                    }
-                }
-                this.edgeGlowGradientCache.set(cacheKey, gradient);
-            }
-            this.context.fillStyle = gradient;
-            this.context.fillRect(0, 0, glowWidth, height);
-        }
-        
-        // Right edge
-        const rightR = Math.min(255, Math.round(this.edgeGlows.right[0] / maxGlow * 255));
-        const rightG = Math.min(255, Math.round(this.edgeGlows.right[1] / maxGlow * 255));
-        const rightB = Math.min(255, Math.round(this.edgeGlows.right[2] / maxGlow * 255));
-        if (rightR + rightG + rightB > 0) {
-            // Horizontal gradient - include width since gradient position depends on it
-            const cacheKey = `right,${rightR},${rightG},${rightB},${glowWidth},${width}`;
-            let gradient = this.edgeGlowGradientCache.get(cacheKey);
-            if (!gradient) {
-                gradient = this.context.createLinearGradient(width - glowWidth, 0, width, 0);
-                gradient.addColorStop(0, `rgba(${rightR}, ${rightG}, ${rightB}, 0)`);
-                gradient.addColorStop(1, `rgba(${rightR}, ${rightG}, ${rightB}, 0.6)`);
-                // Consistent FIFO eviction
-                if (this.edgeGlowGradientCache.size >= 20) {
-                    const firstKey = this.edgeGlowGradientCache.keys().next().value;
-                    if (firstKey) {
-                        this.edgeGlowGradientCache.delete(firstKey);
-                    }
-                }
-                this.edgeGlowGradientCache.set(cacheKey, gradient);
-            }
-            this.context.fillStyle = gradient;
-            this.context.fillRect(width - glowWidth, 0, glowWidth, height);
-        }
-        
-        // Draw particles with blur effect (only on high/ultra quality)
-        if (shouldApplyBlur) {
-            this.context.filter = 'blur(60px)';
-        }
-        this.context.globalCompositeOperation = 'screen';
-        
-        for (const particle of this.particles) {
-            const r = Math.round(particle.colorR);
-            const g = Math.round(particle.colorG);
-            const b = Math.round(particle.colorB);
-            
-            // Cache gradients by color and radius
-            const cacheKey = `${r},${g},${b},${particle.radius}`;
-            let gradient = this.particleGradientCache.get(cacheKey);
-            
-            if (!gradient) {
-                // Create gradient at origin (0, 0) so it can be cached and reused
-                // Using translate to reposition avoids creating new gradients per-frame
-                gradient = this.context.createRadialGradient(0, 0, 0, 0, 0, particle.radius);
-                gradient.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.4)`);
-                gradient.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
-                
-                // Limit cache size to prevent memory growth
-                if (this.particleGradientCache.size >= 50) {
-                    const firstKey = this.particleGradientCache.keys().next().value;
-                    if (firstKey) {
-                        this.particleGradientCache.delete(firstKey);
-                    }
-                }
-                this.particleGradientCache.set(cacheKey, gradient);
-            }
-            
-            // Use translate to position the cached gradient
-            this.context.save();
-            this.context.translate(particle.x, particle.y);
-            this.context.fillStyle = gradient;
-            this.context.beginPath();
-            this.context.arc(0, 0, particle.radius, 0, Math.PI * 2);
-            this.context.fill();
-            this.context.restore();
-        }
-        
-        this.context.filter = 'none';
-        this.context.globalCompositeOperation = 'source-over';
     }
     
     public destroy(): void {
