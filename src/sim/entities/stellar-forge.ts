@@ -100,22 +100,57 @@ export class StellarForge {
         return true;
     }
 
-    enqueueHeroUnit(unitType: string, costEnergy: number): void {
+    hasQueuedOrProducingHeroUnit(unitType: string): boolean {
+        if (this.heroProductionUnitType === unitType) {
+            return true;
+        }
+
+        for (const productionItem of this.productionQueue) {
+            if (productionItem.productionType === 'hero' && productionItem.heroUnitType === unitType) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    enqueueHeroUnit(unitType: string, costEnergy: number): boolean {
+        const isHeroAlive = this.owner.units.some((unit) => unit.isHero && unit.constructor.name === unitType);
+        if (isHeroAlive || this.hasQueuedOrProducingHeroUnit(unitType)) {
+            return false;
+        }
+
         this.unitQueue.push(unitType);
         this.productionQueue.push({
             productionType: 'hero',
             heroUnitType: unitType,
             costEnergy
         });
+        return true;
     }
 
-    enqueueMirror(costEnergy: number, spawnPosition: Vector2D): void {
+    isMirrorQueuedOrProducing(): boolean {
+        if (this.activeProduction?.productionType === 'mirror') {
+            return true;
+        }
+
+        for (const productionItem of this.productionQueue) {
+            if (productionItem.productionType === 'mirror') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    enqueueMirror(costEnergy: number, spawnPosition: Vector2D): boolean {
         this.mirrorQueueCount++;
         this.productionQueue.push({
             productionType: 'mirror',
             costEnergy,
             spawnPosition: new Vector2D(spawnPosition.x, spawnPosition.y)
         });
+        return true;
     }
 
     private startProductionIfIdle(): void {

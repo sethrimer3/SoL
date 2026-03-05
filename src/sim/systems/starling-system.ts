@@ -59,7 +59,9 @@ export class StarlingSystem {
             if (gate.remainingSec <= 0) {
                 if (gate.absorbedCount >= Constants.STARLING_MERGE_COUNT) {
                     context.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));
-                    player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
+                    if (player.solarMirrors.length < Constants.MAX_SOLAR_MIRRORS_PER_PLAYER) {
+                        player.solarMirrors.push(new SolarMirror(new Vector2D(gate.position.x, gate.position.y), player));
+                    }
                 } else {
                     StarlingSystem.releaseStarlingMergeGate(context, gate, player);
                     context.starlingMergeGateExplosions.push(new Vector2D(gate.position.x, gate.position.y));

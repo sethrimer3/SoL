@@ -61,6 +61,7 @@ export interface InputControllerContext {
     hasSelectedStarlingsOnly: () => boolean;
     getForgeButtonLabels: () => string[];
     trySpawnSolarMirrorFromForge: (player: Player) => boolean;
+    canQueueSolarMirrorFromForge: (player: Player) => boolean;
     getClickedHeroButton: (screenX: number, screenY: number, forge: StellarForge, heroNames: string[]) => { heroName: string; buttonPos: Vector2D } | null;
     getClickedFoundryButtonIndex: (screenX: number, screenY: number, foundry: SubsidiaryFactory) => number;
     getNearestButtonIndexFromAngle: (dragAngleRad: number, buttonCount: number) => number;
@@ -1000,12 +1001,14 @@ export class InputController {
                                     `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | energy=${player.energy.toFixed(1)}`
                                 );
                                 const heroCost = this.ctx.getHeroUnitCost(player);
-                                player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
-                                console.log(`Queued hero ${clickedHeroName} for forging`);
-                                didTriggerForgeAction = true;
-                                this.ctx.sendNetworkCommand('hero_purchase', {
-                                    heroType: heroUnitType
-                                });
+                                const wasQueued = player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                if (wasQueued) {
+                                    console.log(`Queued hero ${clickedHeroName} for forging`);
+                                    didTriggerForgeAction = true;
+                                    this.ctx.sendNetworkCommand('hero_purchase', {
+                                        heroType: heroUnitType
+                                    });
+                                }
                             }
                         }
 
@@ -1304,23 +1307,27 @@ export class InputController {
                             if (this.ctx.renderer.highlightedButtonIndex < forgeButtonLabels.length) {
                                 const selectedLabel = forgeButtonLabels[this.ctx.renderer.highlightedButtonIndex];
                                 if (selectedLabel === 'Solar Mirror') {
-                                    const didCreateMirror = this.ctx.trySpawnSolarMirrorFromForge(player);
-                                    if (didCreateMirror) {
-                                        player.stellarForge.isSelected = false;
-                                        this.ctx.getSelectionManager().selectedBase = null;
+                                    if (this.ctx.canQueueSolarMirrorFromForge(player)) {
+                                        const didCreateMirror = this.ctx.trySpawnSolarMirrorFromForge(player);
+                                        if (didCreateMirror) {
+                                            player.stellarForge.isSelected = false;
+                                            this.ctx.getSelectionManager().selectedBase = null;
+                                        }
                                     }
                                 } else {
                                     const heroUnitType = this.ctx.getHeroUnitType(selectedLabel);
                                     if (heroUnitType) {
                                         const heroCost = this.ctx.getHeroUnitCost(player);
-                                        player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
-                                        console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
-                                        this.ctx.sendNetworkCommand('hero_purchase', {
-                                            heroType: heroUnitType
-                                        });
+                                        const wasQueued = player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                        if (wasQueued) {
+                                            console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
+                                            this.ctx.sendNetworkCommand('hero_purchase', {
+                                                heroType: heroUnitType
+                                            });
 
-                                        player.stellarForge.isSelected = false;
-                                        this.ctx.getSelectionManager().selectedBase = null;
+                                            player.stellarForge.isSelected = false;
+                                            this.ctx.getSelectionManager().selectedBase = null;
+                                        }
                                     }
                                 }
                             }
