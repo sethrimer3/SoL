@@ -217,6 +217,10 @@ export class BackgroundParticleLayer {
             this.animationFrameId = null;
         }
     }
+
+    public setVisible(isVisible: boolean): void {
+        this.canvas.style.display = isVisible ? 'block' : 'none';
+    }
     
     private animate(): void {
         if (!this.isActive) {

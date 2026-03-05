@@ -115,6 +115,10 @@ export class ParticleMenuLayer {
         }
     }
 
+    public setVisible(isVisible: boolean): void {
+        this.canvas.style.display = isVisible ? 'block' : 'none';
+    }
+
     public resize(): void {
         const rect = this.container.getBoundingClientRect();
         const devicePixelRatio = window.devicePixelRatio || 1;

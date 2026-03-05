@@ -72,6 +72,7 @@ export interface GameSettings {
     musicVolume: number; // Music volume percentage (0-100)
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean; // Screen shake for explosions and splash damage
+    developerModeEnabled: boolean;
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
     selectedHeroNames: string[];
@@ -105,6 +106,8 @@ export class MainMenu {
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
     private ladButton: HTMLButtonElement | null = null;
+    private buildNumberLabel: HTMLDivElement | null = null;
+    private developerMenuControlsPanel: HTMLDivElement | null = null;
     private lanLobbyManager: LanLobbyManager = new LanLobbyManager(); // LAN lobby discovery manager
     private playerProfileManager: PlayerProfileManager = new PlayerProfileManager(); // Player profile manager
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
@@ -121,6 +124,15 @@ export class MainMenu {
     private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
     private isMatchmakingSearching = false;
+    private developerMenuElementVisibility = {
+        isBackgroundLayerVisible: true,
+        isAtmosphereLayerVisible: true,
+        isParticleLayerVisible: true,
+        isBuildLabelVisible: true,
+        isTestLevelButtonVisible: true,
+        isLadButtonVisible: true,
+        isMainMenuContentVisible: true
+    };
     
     private heroUnits: HeroUnit[] = HERO_UNITS;
     private availableMaps: MapConfig[] = AVAILABLE_MAPS;
@@ -138,6 +150,7 @@ export class MainMenu {
             musicVolume: 100,
             isBattleStatsInfoEnabled: false,
             screenShakeEnabled: true, // Default to enabled
+            developerModeEnabled: false,
             selectedFaction: Faction.RADIANT,
             selectedHeroes: ['radiant-marine'],
             selectedHeroNames: [],
@@ -246,11 +259,15 @@ export class MainMenu {
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
-        menu.appendChild(this.createBuildNumberLabel());
+        this.buildNumberLabel = this.createBuildNumberLabel();
+        menu.appendChild(this.buildNumberLabel);
         this.testLevelButton = this.createTestLevelButton();
         menu.appendChild(this.testLevelButton);
         this.ladButton = this.createLadButton();
         menu.appendChild(this.ladButton);
+        this.developerMenuControlsPanel = this.createDeveloperMenuControlsPanel();
+        menu.appendChild(this.developerMenuControlsPanel);
+        this.updateDeveloperMenuControlsVisibility();
 
         // Menu images are now preloaded in index.html, so we can render directly
         this.renderMainScreenContent(content);
@@ -421,6 +438,168 @@ export class MainMenu {
         this.ladButton.style.display = isVisible ? 'block' : 'none';
     }
 
+    private setBuildNumberLabelVisible(isVisible: boolean): void {
+        if (!this.buildNumberLabel) {
+            return;
+        }
+        this.buildNumberLabel.style.display = isVisible ? 'block' : 'none';
+    }
+
+    private setMainMenuContentVisible(isVisible: boolean): void {
+        if (!this.contentElement) {
+            return;
+        }
+        this.contentElement.style.visibility = isVisible ? 'visible' : 'hidden';
+    }
+
+    private setBackgroundLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.backgroundParticleLayer?.setVisible(true);
+            this.backgroundParticleLayer?.start();
+            return;
+        }
+        this.backgroundParticleLayer?.stop();
+        this.backgroundParticleLayer?.setVisible(false);
+    }
+
+    private setAtmosphereLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.atmosphereLayer?.setVisible(true);
+            this.atmosphereLayer?.start();
+            return;
+        }
+        this.atmosphereLayer?.stop();
+        this.atmosphereLayer?.setVisible(false);
+    }
+
+    private setParticleLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.menuParticleLayer?.setVisible(true);
+            this.menuParticleLayer?.start();
+            return;
+        }
+        this.menuParticleLayer?.stop();
+        this.menuParticleLayer?.setVisible(false);
+    }
+
+    private applyDeveloperMenuElementVisibility(): void {
+        this.setBackgroundLayerVisible(this.developerMenuElementVisibility.isBackgroundLayerVisible);
+        this.setAtmosphereLayerVisible(this.developerMenuElementVisibility.isAtmosphereLayerVisible);
+        this.setParticleLayerVisible(this.developerMenuElementVisibility.isParticleLayerVisible);
+        this.setBuildNumberLabelVisible(this.developerMenuElementVisibility.isBuildLabelVisible);
+        this.setTestLevelButtonVisible(this.developerMenuElementVisibility.isTestLevelButtonVisible);
+        this.setLadButtonVisible(this.developerMenuElementVisibility.isLadButtonVisible);
+        this.setMainMenuContentVisible(this.developerMenuElementVisibility.isMainMenuContentVisible);
+    }
+
+    private resetDeveloperMenuElementVisibility(): void {
+        this.developerMenuElementVisibility.isBackgroundLayerVisible = true;
+        this.developerMenuElementVisibility.isAtmosphereLayerVisible = true;
+        this.developerMenuElementVisibility.isParticleLayerVisible = true;
+        this.developerMenuElementVisibility.isBuildLabelVisible = true;
+        this.developerMenuElementVisibility.isTestLevelButtonVisible = true;
+        this.developerMenuElementVisibility.isLadButtonVisible = true;
+        this.developerMenuElementVisibility.isMainMenuContentVisible = true;
+        this.applyDeveloperMenuElementVisibility();
+    }
+
+    private createDeveloperToggleControl(
+        labelText: string,
+        isChecked: boolean,
+        onChange: (isEnabled: boolean) => void
+    ): HTMLDivElement {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.gap = '8px';
+
+        const label = document.createElement('span');
+        label.textContent = labelText;
+        label.style.fontSize = '12px';
+        label.style.color = '#FFFFFF';
+        label.style.fontFamily = 'Arial, sans-serif';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isChecked;
+        checkbox.style.cursor = 'pointer';
+        checkbox.addEventListener('change', () => {
+            onChange(checkbox.checked);
+        });
+
+        row.appendChild(label);
+        row.appendChild(checkbox);
+        return row;
+    }
+
+    private createDeveloperMenuControlsPanel(): HTMLDivElement {
+        const panel = document.createElement('div');
+        panel.style.position = 'absolute';
+        panel.style.top = '64px';
+        panel.style.right = '20px';
+        panel.style.width = '220px';
+        panel.style.padding = '10px';
+        panel.style.borderRadius = '8px';
+        panel.style.border = '1px solid rgba(255, 255, 255, 0.5)';
+        panel.style.backgroundColor = 'rgba(12, 12, 12, 0.82)';
+        panel.style.zIndex = '3';
+        panel.style.display = 'none';
+
+        const title = document.createElement('div');
+        title.textContent = 'DEV MENU ELEMENTS';
+        title.style.color = '#FFD700';
+        title.style.fontFamily = 'Arial, sans-serif';
+        title.style.fontSize = '11px';
+        title.style.fontWeight = '600';
+        title.style.letterSpacing = '0.1em';
+        title.style.marginBottom = '8px';
+        panel.appendChild(title);
+
+        panel.appendChild(this.createDeveloperToggleControl('Background Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isBackgroundLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Atmosphere Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isAtmosphereLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Particle Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isParticleLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Build Label', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isBuildLabelVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Test Button', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isTestLevelButtonVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('LaD Button', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isLadButtonVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Main Content', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isMainMenuContentVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+
+        return panel;
+    }
+
+    private updateDeveloperMenuControlsVisibility(): void {
+        if (!this.developerMenuControlsPanel) {
+            return;
+        }
+        const isMainScreen = this.currentScreen === 'main';
+        const isVisible = this.settings.developerModeEnabled && isMainScreen;
+        this.developerMenuControlsPanel.style.display = isVisible ? 'block' : 'none';
+        if (!isVisible) {
+            this.resetDeveloperMenuElementVisibility();
+        }
+    }
+
     private getSelectedHeroNames(): string[] {
         return this.heroUnits
             .filter(hero => this.settings.selectedHeroes.includes(hero.id))
@@ -515,6 +694,7 @@ export class MainMenu {
         this.lanLobbyManager.cleanup();
         this.setTestLevelButtonVisible(false);
         this.setLadButtonVisible(false);
+        this.updateDeveloperMenuControlsVisibility();
         this.updateAtmosphereOpacityForCurrentScreen();
         this.updateSunRumbleAudioContext();
         this.updateMenuAudioState();
@@ -681,8 +861,8 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
-        this.setTestLevelButtonVisible(true);
-        this.setLadButtonVisible(true);
+        this.applyDeveloperMenuElementVisibility();
+        this.updateDeveloperMenuControlsVisibility();
         this.setMenuParticleDensity(1.6);
         this.updateAtmosphereOpacityForCurrentScreen();
 
@@ -1776,6 +1956,7 @@ export class MainMenu {
             musicVolume: this.settings.musicVolume,
             isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
             screenShakeEnabled: this.settings.screenShakeEnabled,
+            developerModeEnabled: this.settings.developerModeEnabled,
             playerColor: this.settings.playerColor,
             enemyColor: this.settings.enemyColor,
             allyColor: this.settings.allyColor,
@@ -1808,6 +1989,13 @@ export class MainMenu {
             },
             onScreenShakeChange: (value) => {
                 this.settings.screenShakeEnabled = value;
+            },
+            onDeveloperModeEnabledChange: (value) => {
+                this.settings.developerModeEnabled = value;
+                if (!value) {
+                    this.resetDeveloperMenuElementVisibility();
+                }
+                this.updateDeveloperMenuControlsVisibility();
             },
             onPlayerColorChange: (value) => {
                 this.settings.playerColor = value;
