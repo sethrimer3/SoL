@@ -521,6 +521,7 @@ export class ParticleMenuLayer {
         this.offscreenCanvas.width = sampleWidth;
         this.offscreenCanvas.height = sampleHeight;
 
+        this.offscreenContext.setTransform(1, 0, 0, 1, 0, 0);
         this.offscreenContext.setTransform(sampleScale, 0, 0, sampleScale, 0, 0);
         this.offscreenContext.clearRect(0, 0, rect.width, rect.height);
         this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
