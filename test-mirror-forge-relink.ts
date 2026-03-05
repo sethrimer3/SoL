@@ -9,6 +9,9 @@ function assert(condition: boolean, message: string): void {
 
 console.log('=== Mirror Forge Relink Test ===');
 setGameRNG(new SeededRandom(12345));
+const frameDeltaMs = 16;
+const firstBuildingOffsetPx = 120;
+const secondBuildingOffsetPx = 180;
 
 const game = createStandardGame([
     ['Player 1', Faction.RADIANT],
@@ -18,36 +21,44 @@ game.isCountdownActive = false;
 
 const player = game.players[0];
 const forge = player.stellarForge;
-assert(forge !== null, 'Expected player to have a stellar forge');
+if (!forge) {
+    throw new Error('Expected player to have a stellar forge');
+}
 
 const mirror = player.solarMirrors[0];
 assert(!!mirror, 'Expected player to have at least one mirror');
 
-const completeBuilding = new Minigun(
-    new Vector2D(forge!.position.x + 120, forge!.position.y),
+const completedMinigun = new Minigun(
+    new Vector2D(forge.position.x + firstBuildingOffsetPx, forge.position.y),
     player
 );
-completeBuilding.isComplete = true;
-player.buildings.push(completeBuilding);
+completedMinigun.isComplete = true;
+player.buildings.push(completedMinigun);
 
-mirror.setLinkedStructure(completeBuilding);
-game.update(1 / 60);
+for (const playerMirror of player.solarMirrors) {
+    playerMirror.setLinkedStructure(completedMinigun);
+}
+game.update(frameDeltaMs / 1000);
 
 assert(
     mirror.getLinkedStructure(forge) === forge,
     'Expected mirror linked to a completed building to relink back to forge'
 );
+assert(
+    player.solarMirrors[1].getLinkedStructure(forge) === forge,
+    'Expected all mirrors linked to a completed building to relink back to forge'
+);
 
-const incompleteBuilding = new Minigun(
-    new Vector2D(forge!.position.x + 180, forge!.position.y),
+const incompleteMinigun = new Minigun(
+    new Vector2D(forge.position.x + secondBuildingOffsetPx, forge.position.y),
     player
 );
-player.buildings.push(incompleteBuilding);
-mirror.setLinkedStructure(incompleteBuilding);
-game.update(1 / 60);
+player.buildings.push(incompleteMinigun);
+mirror.setLinkedStructure(incompleteMinigun);
+game.update(frameDeltaMs / 1000);
 
 assert(
-    mirror.getLinkedStructure(forge) === incompleteBuilding,
+    mirror.getLinkedStructure(forge) === incompleteMinigun,
     'Expected mirror linked to an incomplete building to remain linked'
 );
 
