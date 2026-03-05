@@ -33,6 +33,11 @@ export class ParticleMenuLayer {
     private static readonly LOW_QUALITY_RENDER_SCALE = 0.55;
     private static readonly MEDIUM_QUALITY_RENDER_SCALE = 0.7;
     private static readonly HIGH_QUALITY_RENDER_SCALE = 0.85;
+    private static readonly MAX_PARTICLES_LOW = 220;
+    private static readonly MAX_PARTICLES_MEDIUM = 420;
+    private static readonly MAX_PARTICLES_HIGH = 720;
+    private static readonly MAX_PARTICLES_ULTRA = 1050;
+    private static readonly ULTRA_HALO_MAX_PARTICLES = 380;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -210,7 +215,11 @@ export class ParticleMenuLayer {
 
     private setTargets(targets: ParticleTarget[]): void {
         const updatedParticles: Particle[] = [];
-        const targetCount = targets.length;
+        const maxParticleCount = this.getMaxParticleCount();
+        const selectedTargets = targets.length > maxParticleCount
+            ? this.downsampleTargets(targets, maxParticleCount)
+            : targets;
+        const targetCount = selectedTargets.length;
 
         if (targetCount === 0) {
             this.particles = updatedParticles;
@@ -232,7 +241,7 @@ export class ParticleMenuLayer {
         }
 
         for (let i = 0; i < desiredCount; i++) {
-            const target = targets[i % targetCount];
+            const target = selectedTargets[i % targetCount];
             const particle = existingParticles[i];
             const relocatedTarget = this.getRelocatedTarget(target);
             particle.targetX = relocatedTarget.x;
@@ -395,12 +404,13 @@ export class ParticleMenuLayer {
         this.context.globalAlpha = this.particleOpacity;
 
         const isUltraQuality = this.graphicsQuality === 'ultra';
+        const shouldRenderUltraHalo = isUltraQuality && this.particles.length <= ParticleMenuLayer.ULTRA_HALO_MAX_PARTICLES;
         for (const particle of this.particles) {
             const red = this.quantizeColorChannel(particle.colorR);
             const green = this.quantizeColorChannel(particle.colorG);
             const blue = this.quantizeColorChannel(particle.colorB);
 
-            if (isUltraQuality) {
+            if (shouldRenderUltraHalo) {
                 const haloAlpha = Math.min(0.7, Math.max(0.06,
                     ParticleMenuLayer.ULTRA_BASE_HALO_ALPHA
                     + particle.colorLightnessShift * 0.45
@@ -476,6 +486,36 @@ export class ParticleMenuLayer {
             return ParticleMenuLayer.HIGH_QUALITY_RENDER_SCALE;
         }
         return 1;
+    }
+
+    private getMaxParticleCount(): number {
+        if (this.graphicsQuality === 'low') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_LOW * this.densityMultiplier);
+        }
+        if (this.graphicsQuality === 'medium') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_MEDIUM * this.densityMultiplier);
+        }
+        if (this.graphicsQuality === 'high') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_HIGH * this.densityMultiplier);
+        }
+        return Math.round(ParticleMenuLayer.MAX_PARTICLES_ULTRA * this.densityMultiplier);
+    }
+
+    private downsampleTargets(targets: ParticleTarget[], desiredCount: number): ParticleTarget[] {
+        if (targets.length <= desiredCount) {
+            return targets;
+        }
+
+        const sampledTargets: ParticleTarget[] = [];
+        const step = targets.length / desiredCount;
+        let cursor = Math.random() * step;
+
+        for (let index = 0; index < desiredCount; index++) {
+            sampledTargets.push(targets[Math.floor(cursor)]);
+            cursor += step;
+        }
+
+        return sampledTargets;
     }
 
     private collectTargets(container: HTMLElement): ParticleTarget[] {
