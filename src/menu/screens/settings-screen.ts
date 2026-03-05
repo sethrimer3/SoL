@@ -15,6 +15,7 @@ export interface SettingsScreenParams {
     musicVolume: number;
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean;
+    developerModeEnabled: boolean;
     playerColor: string;
     enemyColor: string;
     allyColor: string;
@@ -29,6 +30,7 @@ export interface SettingsScreenParams {
     onMusicVolumeChange: (value: number) => void;
     onBattleStatsInfoChange: (value: boolean) => void;
     onScreenShakeChange: (value: boolean) => void;
+    onDeveloperModeEnabledChange: (value: boolean) => void;
     onPlayerColorChange: (value: string) => void;
     onEnemyColorChange: (value: string) => void;
     onAllyColorChange: (value: string) => void;
@@ -54,6 +56,7 @@ export function renderSettingsScreen(
         musicVolume,
         isBattleStatsInfoEnabled,
         screenShakeEnabled,
+        developerModeEnabled,
         playerColor,
         enemyColor,
         allyColor,
@@ -68,6 +71,7 @@ export function renderSettingsScreen(
         onMusicVolumeChange,
         onBattleStatsInfoChange,
         onScreenShakeChange,
+        onDeveloperModeEnabledChange,
         onPlayerColorChange,
         onEnemyColorChange,
         onAllyColorChange,
@@ -164,6 +168,12 @@ export function renderSettingsScreen(
         createToggle(screenShakeEnabled, onScreenShakeChange)
     );
     settingsContainer.appendChild(screenShakeSection);
+
+    const developerModeSection = createSettingSection(
+        'Developer Mode',
+        createToggle(developerModeEnabled, onDeveloperModeEnabledChange)
+    );
+    settingsContainer.appendChild(developerModeSection);
 
     // Player Color setting
     const playerColorSection = createSettingSection(

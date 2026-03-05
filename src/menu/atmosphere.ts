@@ -138,6 +138,10 @@ export class MenuAtmosphereLayer {
         }
     }
 
+    public setVisible(isVisible: boolean): void {
+        this.canvas.style.display = isVisible ? 'block' : 'none';
+    }
+
     public resize(): void {
         const devicePixelRatio = window.devicePixelRatio || 1;
         const width = window.innerWidth;
