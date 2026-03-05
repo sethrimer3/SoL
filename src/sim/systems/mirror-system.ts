@@ -244,7 +244,14 @@ export class MirrorSystem {
                 mirror.setLinkedStructure(null);
             }
 
-            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            const initialLinkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            const shouldRelinkToForge = initialLinkedStructure instanceof Building &&
+                initialLinkedStructure.isComplete &&
+                player.stellarForge !== null;
+            if (shouldRelinkToForge) {
+                mirror.setLinkedStructure(player.stellarForge);
+            }
+            const linkedStructure = shouldRelinkToForge ? player.stellarForge : initialLinkedStructure;
             mirror.updateReflectionAngle(linkedStructure, game.suns, game.asteroids, deltaTime);
 
             // Check if light path is blocked by Velaris orb fields
