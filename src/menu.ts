@@ -449,7 +449,7 @@ export class MainMenu {
         if (!this.contentElement) {
             return;
         }
-        this.contentElement.style.visibility = isVisible ? 'visible' : 'hidden';
+        this.contentElement.style.display = isVisible ? 'flex' : 'none';
     }
 
     private setBackgroundLayerVisible(isVisible: boolean): void {
