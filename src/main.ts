@@ -127,7 +127,7 @@ class GameController {
     }
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+        return forge.hasQueuedOrProducingHeroUnit(heroUnitType);
     }
 
 
@@ -337,8 +337,32 @@ class GameController {
         return [...heroLabels, 'Solar Mirror'];
     }
 
+    private getAliveSolarMirrorCount(player: Player): number {
+        return player.solarMirrors.length;
+    }
+
+    private canQueueSolarMirrorFromForge(player: Player): boolean {
+        if (!player.stellarForge) {
+            return false;
+        }
+
+        if (this.getAliveSolarMirrorCount(player) >= Constants.MAX_SOLAR_MIRRORS_PER_PLAYER) {
+            return false;
+        }
+
+        if (player.stellarForge.isMirrorQueuedOrProducing()) {
+            return false;
+        }
+
+        return true;
+    }
+
     private trySpawnSolarMirrorFromForge(player: Player): boolean {
         if (!this.game || !player.stellarForge) {
+            return false;
+        }
+
+        if (!this.canQueueSolarMirrorFromForge(player)) {
             return false;
         }
 
@@ -709,6 +733,7 @@ class GameController {
             hasSelectedStarlingsOnly: () => this.hasSelectedStarlingsOnly(),
             getForgeButtonLabels: () => this.getForgeButtonLabels(),
             trySpawnSolarMirrorFromForge: (player) => this.trySpawnSolarMirrorFromForge(player),
+            canQueueSolarMirrorFromForge: (player) => this.canQueueSolarMirrorFromForge(player),
             getClickedHeroButton: (screenX, screenY, forge, heroNames) => this.getClickedHeroButton(screenX, screenY, forge, heroNames),
             getClickedFoundryButtonIndex: (screenX, screenY, foundry) => this.getClickedFoundryButtonIndex(screenX, screenY, foundry),
             getNearestButtonIndexFromAngle: (dragAngleRad, buttonCount) => this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount),

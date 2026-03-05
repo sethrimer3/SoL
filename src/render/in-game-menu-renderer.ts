@@ -702,9 +702,11 @@ export class InGameMenuRenderer {
             const heroUnitType = isMirrorOption ? null : getHeroUnitType(heroName);
             const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
             const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
+            const isMirrorProducing = isMirrorOption ? forge.isMirrorQueuedOrProducing() : false;
+            const hasMaxMirrorCount = isMirrorOption ? forge.owner.solarMirrors.length >= Constants.MAX_SOLAR_MIRRORS_PER_PLAYER : false;
             const buttonCost = isMirrorOption ? Constants.STELLAR_FORGE_SOLAR_MIRROR_COST : getHeroUnitCost(forge.owner);
             const isAvailable = isMirrorOption
-                ? true
+                ? !isMirrorProducing && !hasMaxMirrorCount
                 : (heroUnitType ? !isHeroAlive && !isHeroProducing : false);
             const isHighlighted = context.highlightedButtonIndex === i;
 
@@ -729,7 +731,13 @@ export class InGameMenuRenderer {
 
             this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, buttonCost, isAvailable, context);
 
-            if (!isMirrorOption && isHeroProducing) {
+            if (isMirrorOption) {
+                if (isMirrorProducing) {
+                    this.drawHeroHourglass(buttonX, buttonY, buttonRadius, context);
+                } else if (hasMaxMirrorCount) {
+                    this.drawHeroCheckmark(buttonX, buttonY, buttonRadius, context);
+                }
+            } else if (isHeroProducing) {
                 this.drawHeroHourglass(buttonX, buttonY, buttonRadius, context);
             } else if (isHeroAlive) {
                 this.drawHeroCheckmark(buttonX, buttonY, buttonRadius, context);
@@ -856,7 +864,7 @@ export class InGameMenuRenderer {
     }
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+        return forge.hasQueuedOrProducingHeroUnit(heroUnitType);
     }
 
     private isRenderLayerEnabled(layer: RenderLayerKey, context: InGameMenuRendererContext): boolean {

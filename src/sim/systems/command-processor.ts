@@ -355,6 +355,14 @@ export class CommandProcessor {
             return;
         }
 
+        if (player.solarMirrors.length >= Constants.MAX_SOLAR_MIRRORS_PER_PLAYER) {
+            return;
+        }
+
+        if (player.stellarForge.isMirrorQueuedOrProducing()) {
+            return;
+        }
+
         player.stellarForge.enqueueMirror(requiredIncomingLight, new Vector2D(positionX, positionY));
     }
 

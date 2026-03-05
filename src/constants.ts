@@ -325,6 +325,7 @@ export const HERO_UNIT_BASE_COST = 300;
 export const HERO_UNIT_COST_INCREMENT = 200;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 export const STELLAR_FORGE_SOLAR_MIRROR_COST = 500; // Required incoming sunlight/sec to produce a solar mirror from the main stellar forge
+export const MAX_SOLAR_MIRRORS_PER_PLAYER = 10;
 
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
