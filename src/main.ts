@@ -1132,6 +1132,7 @@ class GameController {
         
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         
         // Set up network manager for LAN play
         this.localPlayerIndex = 0;
@@ -1353,6 +1354,7 @@ class GameController {
         this.game.damageDisplayMode = settings.damageDisplayMode;
         this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         
         // Set local player using the found index
         this.localPlayerIndex = localPlayerIndex;

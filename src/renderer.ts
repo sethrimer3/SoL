@@ -1324,6 +1324,180 @@ export class GameRenderer {
         this.environmentRenderer.applyUltraWarmCoolGrade(game, this.getEnvironmentRendererContext());
     }
 
+    private drawExperimentalFieldAtmospherics(game: GameState, screenWidth: number, screenHeight: number): void {
+        // game.gameTime is maintained in simulation seconds.
+        const gameTimeSec = game.gameTime;
+        const isUltraQuality = this.graphicsQuality === 'ultra';
+        const isHighQuality = this.graphicsQuality === 'high';
+        const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
+        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 18 : 12;
+        const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : this.graphicsQuality === 'medium' ? 0.1 : 0.08;
+        const cameraNoiseWorldX = this.camera.x * 0.0012;
+        const cameraNoiseWorldY = this.camera.y * 0.0012;
+        const nebulaBaseRadiusScale = 0.78;
+        const nebulaQualityRadiusScale = 0.24;
+        const ribbonLayerCount = 2;
+        const nebulaBaseAlpha = 0.095;
+        const nebulaMidAlpha = 0.065;
+        const ribbonCenterAlpha = 0.065;
+        const starlightBaseAlpha = 0.016;
+        const starlightNoiseAlphaScale = 0.026;
+        const starlightNoiseOctaves = 2;
+        const dpr = window.devicePixelRatio || 1;
+        const screenCenterX = (this.canvas.width / dpr) * 0.5;
+        const screenCenterY = (this.canvas.height / dpr) * 0.5;
+
+        this.ctx.save();
+        this.ctx.globalCompositeOperation = 'screen';
+
+        const nebulaNoiseValue = fractalNoise2D(
+            cameraNoiseWorldX * 0.8 + gameTimeSec * 0.02,
+            cameraNoiseWorldY * 0.8 - gameTimeSec * 0.015,
+            3
+        );
+        const nebulaCenterScreenX = screenWidth * (0.5 + (nebulaNoiseValue - 0.5) * 0.28);
+        const nebulaCenterScreenY = screenHeight * (
+            0.44 + (valueNoise2D(cameraNoiseWorldX + 7.31, cameraNoiseWorldY + gameTimeSec * 0.01) - 0.5) * 0.22
+        );
+        const nebulaRadiusPx = Math.max(screenWidth, screenHeight) * (nebulaBaseRadiusScale + qualityIntensity * nebulaQualityRadiusScale);
+        const nebulaGradient = this.ctx.createRadialGradient(
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            0,
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            nebulaRadiusPx
+        );
+        nebulaGradient.addColorStop(0, `rgba(156, 228, 255, ${nebulaBaseAlpha * qualityIntensity})`);
+        nebulaGradient.addColorStop(0.55, `rgba(173, 130, 255, ${nebulaMidAlpha * qualityIntensity})`);
+        nebulaGradient.addColorStop(1, 'rgba(8, 18, 42, 0)');
+        this.ctx.fillStyle = nebulaGradient;
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (let layerIndex = 0; layerIndex < ribbonLayerCount; layerIndex += 1) {
+            const layerSeed = layerIndex * 29.17;
+            const leftToRightDriftPx = (valueNoise2D(cameraNoiseWorldX + layerSeed + gameTimeSec * 0.04, cameraNoiseWorldY - layerSeed) - 0.5) * screenWidth * 0.24;
+            const ribbonCenterYPx = screenHeight * (
+                0.21 + layerIndex * 0.28
+                + (fractalNoise2D(cameraNoiseWorldX * 0.65 + layerSeed, cameraNoiseWorldY * 0.65 - gameTimeSec * 0.02, 3) - 0.5) * 0.18
+            );
+            const ribbonHeightPx = screenHeight * (0.1 + layerIndex * 0.03 + qualityIntensity * 0.02);
+            const waveMagnitudePx = screenHeight * (0.06 + layerIndex * 0.015);
+            const waveOffsetPx = Math.sin(gameTimeSec * (0.26 + layerIndex * 0.09) + layerSeed) * waveMagnitudePx;
+
+            const ribbonGradient = this.ctx.createLinearGradient(0, ribbonCenterYPx - ribbonHeightPx, 0, ribbonCenterYPx + ribbonHeightPx);
+            ribbonGradient.addColorStop(0, 'rgba(114, 243, 255, 0)');
+            ribbonGradient.addColorStop(0.5, `rgba(114, 243, 255, ${ribbonCenterAlpha * qualityIntensity})`);
+            ribbonGradient.addColorStop(1, 'rgba(195, 116, 255, 0)');
+
+            this.ctx.fillStyle = ribbonGradient;
+            this.ctx.beginPath();
+            this.ctx.moveTo(-screenWidth * 0.2 + leftToRightDriftPx, ribbonCenterYPx - waveOffsetPx);
+            this.ctx.bezierCurveTo(
+                screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx - waveMagnitudePx,
+                screenWidth * 0.54 + leftToRightDriftPx,
+                ribbonCenterYPx + waveMagnitudePx,
+                screenWidth * 1.2 + leftToRightDriftPx,
+                ribbonCenterYPx + waveOffsetPx
+            );
+            this.ctx.lineTo(screenWidth * 1.2 + leftToRightDriftPx, ribbonCenterYPx + ribbonHeightPx + waveOffsetPx);
+            this.ctx.bezierCurveTo(
+                screenWidth * 0.54 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx + waveMagnitudePx,
+                screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx - waveMagnitudePx,
+                -screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx - waveOffsetPx
+            );
+            this.ctx.closePath();
+            this.ctx.fill();
+        }
+
+        const starlightVeilAlpha = (
+            starlightBaseAlpha
+                + fractalNoise2D(
+                cameraNoiseWorldX + gameTimeSec * 0.013,
+                cameraNoiseWorldY - gameTimeSec * 0.011,
+                starlightNoiseOctaves
+            ) * starlightNoiseAlphaScale
+        ) * qualityIntensity;
+        this.ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+            const sunScreenPos = this.worldToScreen(sun.position);
+            if (sunScreenPos.x < -220 || sunScreenPos.x > screenWidth + 220 || sunScreenPos.y < -220 || sunScreenPos.y > screenHeight + 220) {
+                continue;
+            }
+            const sunDistanceToCenterPx = Math.hypot(sunScreenPos.x - screenCenterX, sunScreenPos.y - screenCenterY);
+            const sunCenterFalloff = Math.max(0.12, 1 - sunDistanceToCenterPx / (Math.max(screenWidth, screenHeight) * 0.9));
+            const haloRadiusPx = Math.max(180, sun.radius * this.zoom * (4 + qualityIntensity * 2.4));
+            const haloGradient = this.ctx.createRadialGradient(
+                sunScreenPos.x,
+                sunScreenPos.y,
+                0,
+                sunScreenPos.x,
+                sunScreenPos.y,
+                haloRadiusPx
+            );
+            haloGradient.addColorStop(0, `rgba(255, 241, 198, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(0.55, `rgba(255, 183, 140, ${0.05 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(1, 'rgba(255, 120, 105, 0)');
+            this.ctx.fillStyle = haloGradient;
+            this.ctx.beginPath();
+            this.ctx.arc(sunScreenPos.x, sunScreenPos.y, haloRadiusPx, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
+            const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
+            const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
+            const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
+            const streakGradient = this.ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
+            streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+            streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
+            this.ctx.strokeStyle = streakGradient;
+            this.ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
+            this.ctx.beginPath();
+            this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
+            this.ctx.lineTo(streakEndX, streakEndY);
+            this.ctx.stroke();
+        }
+
+        for (let glintIndex = 0; glintIndex < glintCount; glintIndex += 1) {
+            const glintSeed = glintIndex * 73.941 + 14.287;
+            const glintPosX = valueNoise2D(cameraNoiseWorldX + glintSeed, cameraNoiseWorldY - glintSeed) * screenWidth;
+            const glintPosY = valueNoise2D(cameraNoiseWorldX - glintSeed * 0.7, cameraNoiseWorldY + glintSeed * 1.1) * screenHeight;
+            const glintNoise = fractalNoise2D(cameraNoiseWorldX + glintSeed * 0.11, cameraNoiseWorldY + glintSeed * 0.13, 2);
+            const pulseValue = 0.5 + 0.5 * Math.sin(gameTimeSec * (0.65 + glintNoise) + glintSeed);
+            const glintAlpha = (0.025 + pulseValue * 0.06) * qualityIntensity;
+            const glintRadiusPx = 0.8 + glintNoise * 1.6 + qualityIntensity * 0.7;
+            this.ctx.fillStyle = `rgba(228, 242, 255, ${glintAlpha})`;
+            this.ctx.beginPath();
+            this.ctx.arc(glintPosX, glintPosY, glintRadiusPx, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.globalCompositeOperation = 'multiply';
+        const vignetteGradient = this.ctx.createRadialGradient(
+            screenCenterX,
+            screenCenterY,
+            Math.min(screenWidth, screenHeight) * 0.12,
+            screenCenterX,
+            screenCenterY,
+            Math.max(screenWidth, screenHeight) * 0.72
+        );
+        vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignetteGradient.addColorStop(1, `rgba(8, 12, 28, ${vignetteAlpha})`);
+        this.ctx.fillStyle = vignetteGradient;
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        this.ctx.restore();
+    }
+
     /**
      * Draw influence circle for a base
      */
@@ -1599,6 +1773,10 @@ export class GameRenderer {
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
             this.applyUltraWarmCoolGrade(game);
+        }
+
+        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled) {
+            this.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight);
         }
 
         // Draw space dust particles on top of celestial environment layers.
