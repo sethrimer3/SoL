@@ -108,14 +108,14 @@ export class StarfieldRenderer {
         };
 
         const layerConfigs = [
-            { count: 1400, parallaxFactor: 0.12, sizeMinPx: 0.65, sizeMaxPx: 1.6 },
-            { count: 1100, parallaxFactor: 0.17, sizeMinPx: 0.72, sizeMaxPx: 1.85 },
-            { count: 900, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
-            { count: 700, parallaxFactor: 0.27, sizeMinPx: 0.9, sizeMaxPx: 2.3 },
-            { count: 500, parallaxFactor: 0.32, sizeMinPx: 1.0, sizeMaxPx: 2.55 },
-            { count: 350, parallaxFactor: 0.38, sizeMinPx: 1.12, sizeMaxPx: 2.8 },
-            { count: 220, parallaxFactor: 0.45, sizeMinPx: 1.26, sizeMaxPx: 3.05 },
-            { count: 130, parallaxFactor: 0.53, sizeMinPx: 1.4, sizeMaxPx: 3.3 },
+            { count: 1300, parallaxFactor: 0.12, sizeMinPx: 0.65, sizeMaxPx: 1.6 },
+            { count: 1000, parallaxFactor: 0.17, sizeMinPx: 0.72, sizeMaxPx: 1.85 },
+            { count: 850, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
+            { count: 650, parallaxFactor: 0.27, sizeMinPx: 0.9, sizeMaxPx: 2.3 },
+            { count: 450, parallaxFactor: 0.32, sizeMinPx: 1.0, sizeMaxPx: 2.55 },
+            { count: 300, parallaxFactor: 0.38, sizeMinPx: 1.12, sizeMaxPx: 2.8 },
+            { count: 180, parallaxFactor: 0.45, sizeMinPx: 1.26, sizeMaxPx: 3.05 },
+            { count: 110, parallaxFactor: 0.53, sizeMinPx: 1.4, sizeMaxPx: 3.3 },
         ];
         for (const layerConfig of layerConfigs) {
             const stars: ReworkedStarData[] = [];
