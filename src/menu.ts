@@ -86,7 +86,7 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
-    isExperimentalGraphicsEnabled: boolean; // Enables additional gameplay field rendering effects
+    isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play

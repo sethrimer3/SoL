@@ -1325,48 +1325,64 @@ export class GameRenderer {
     }
 
     private drawExperimentalFieldAtmospherics(game: GameState, screenWidth: number, screenHeight: number): void {
-        const timeSec = game.gameTime;
+        // game.gameTime is maintained in simulation seconds.
+        const gameTimeSec = game.gameTime;
         const isUltraQuality = this.graphicsQuality === 'ultra';
         const isHighQuality = this.graphicsQuality === 'high';
         const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
-        const cameraNoiseX = this.camera.x * 0.0012;
-        const cameraNoiseY = this.camera.y * 0.0012;
+        const cameraNoiseWorldX = this.camera.x * 0.0012;
+        const cameraNoiseWorldY = this.camera.y * 0.0012;
+        const nebulaBaseRadiusScale = 0.78;
+        const nebulaQualityRadiusScale = 0.24;
+        const ribbonLayerCount = 2;
+        const nebulaBaseAlpha = 0.095;
+        const nebulaMidAlpha = 0.065;
+        const ribbonCenterAlpha = 0.065;
+        const starlightBaseAlpha = 0.016;
+        const starlightNoiseAlphaScale = 0.026;
+        const starlightNoiseOctaves = 2;
 
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
 
-        const nebulaSeed = fractalNoise2D(cameraNoiseX * 0.8 + timeSec * 0.02, cameraNoiseY * 0.8 - timeSec * 0.015, 3);
-        const nebulaCenterX = screenWidth * (0.5 + (nebulaSeed - 0.5) * 0.28);
-        const nebulaCenterY = screenHeight * (0.44 + (valueNoise2D(cameraNoiseX + 7.31, cameraNoiseY + timeSec * 0.01) - 0.5) * 0.22);
-        const nebulaRadius = Math.max(screenWidth, screenHeight) * (0.78 + qualityIntensity * 0.24);
-        const nebulaGradient = this.ctx.createRadialGradient(
-            nebulaCenterX,
-            nebulaCenterY,
-            0,
-            nebulaCenterX,
-            nebulaCenterY,
-            nebulaRadius
+        const nebulaNoiseValue = fractalNoise2D(
+            cameraNoiseWorldX * 0.8 + gameTimeSec * 0.02,
+            cameraNoiseWorldY * 0.8 - gameTimeSec * 0.015,
+            3
         );
-        nebulaGradient.addColorStop(0, `rgba(156, 228, 255, ${0.095 * qualityIntensity})`);
-        nebulaGradient.addColorStop(0.55, `rgba(173, 130, 255, ${0.065 * qualityIntensity})`);
+        const nebulaCenterScreenX = screenWidth * (0.5 + (nebulaNoiseValue - 0.5) * 0.28);
+        const nebulaCenterScreenY = screenHeight * (
+            0.44 + (valueNoise2D(cameraNoiseWorldX + 7.31, cameraNoiseWorldY + gameTimeSec * 0.01) - 0.5) * 0.22
+        );
+        const nebulaRadiusPx = Math.max(screenWidth, screenHeight) * (nebulaBaseRadiusScale + qualityIntensity * nebulaQualityRadiusScale);
+        const nebulaGradient = this.ctx.createRadialGradient(
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            0,
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            nebulaRadiusPx
+        );
+        nebulaGradient.addColorStop(0, `rgba(156, 228, 255, ${nebulaBaseAlpha * qualityIntensity})`);
+        nebulaGradient.addColorStop(0.55, `rgba(173, 130, 255, ${nebulaMidAlpha * qualityIntensity})`);
         nebulaGradient.addColorStop(1, 'rgba(8, 18, 42, 0)');
         this.ctx.fillStyle = nebulaGradient;
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
-        for (let layerIndex = 0; layerIndex < 2; layerIndex += 1) {
+        for (let layerIndex = 0; layerIndex < ribbonLayerCount; layerIndex += 1) {
             const layerSeed = layerIndex * 29.17;
-            const leftToRightDriftPx = (valueNoise2D(cameraNoiseX + layerSeed + timeSec * 0.04, cameraNoiseY - layerSeed) - 0.5) * screenWidth * 0.24;
+            const leftToRightDriftPx = (valueNoise2D(cameraNoiseWorldX + layerSeed + gameTimeSec * 0.04, cameraNoiseWorldY - layerSeed) - 0.5) * screenWidth * 0.24;
             const ribbonCenterYPx = screenHeight * (
                 0.21 + layerIndex * 0.28
-                + (fractalNoise2D(cameraNoiseX * 0.65 + layerSeed, cameraNoiseY * 0.65 - timeSec * 0.02, 3) - 0.5) * 0.18
+                + (fractalNoise2D(cameraNoiseWorldX * 0.65 + layerSeed, cameraNoiseWorldY * 0.65 - gameTimeSec * 0.02, 3) - 0.5) * 0.18
             );
             const ribbonHeightPx = screenHeight * (0.1 + layerIndex * 0.03 + qualityIntensity * 0.02);
             const waveMagnitudePx = screenHeight * (0.06 + layerIndex * 0.015);
-            const waveOffsetPx = Math.sin(timeSec * (0.26 + layerIndex * 0.09) + layerSeed) * waveMagnitudePx;
+            const waveOffsetPx = Math.sin(gameTimeSec * (0.26 + layerIndex * 0.09) + layerSeed) * waveMagnitudePx;
 
             const ribbonGradient = this.ctx.createLinearGradient(0, ribbonCenterYPx - ribbonHeightPx, 0, ribbonCenterYPx + ribbonHeightPx);
             ribbonGradient.addColorStop(0, 'rgba(114, 243, 255, 0)');
-            ribbonGradient.addColorStop(0.5, `rgba(114, 243, 255, ${0.065 * qualityIntensity})`);
+            ribbonGradient.addColorStop(0.5, `rgba(114, 243, 255, ${ribbonCenterAlpha * qualityIntensity})`);
             ribbonGradient.addColorStop(1, 'rgba(195, 116, 255, 0)');
 
             this.ctx.fillStyle = ribbonGradient;
@@ -1393,7 +1409,14 @@ export class GameRenderer {
             this.ctx.fill();
         }
 
-        const starlightVeilAlpha = (0.016 + fractalNoise2D(cameraNoiseX + timeSec * 0.013, cameraNoiseY - timeSec * 0.011, 2) * 0.026) * qualityIntensity;
+        const starlightVeilAlpha = (
+            starlightBaseAlpha
+                + fractalNoise2D(
+                cameraNoiseWorldX + gameTimeSec * 0.013,
+                cameraNoiseWorldY - gameTimeSec * 0.011,
+                starlightNoiseOctaves
+            ) * starlightNoiseAlphaScale
+        ) * qualityIntensity;
         this.ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
