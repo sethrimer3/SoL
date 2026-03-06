@@ -21,6 +21,7 @@ export interface SettingsScreenParams {
     allyColor: string;
     enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
+    isExperimentalGraphicsEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -36,6 +37,7 @@ export interface SettingsScreenParams {
     onAllyColorChange: (value: string) => void;
     onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
+    onExperimentalGraphicsEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -62,6 +64,7 @@ export function renderSettingsScreen(
         allyColor,
         enemy2Color,
         graphicsQuality,
+        isExperimentalGraphicsEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -77,6 +80,7 @@ export function renderSettingsScreen(
         onAllyColorChange,
         onEnemy2ColorChange,
         onGraphicsQualityChange,
+        onExperimentalGraphicsEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -215,6 +219,12 @@ export function renderSettingsScreen(
         )
     );
     settingsContainer.appendChild(graphicsQualitySection);
+
+    const experimentalGraphicsSection = createSettingSection(
+        'Experimental Graphics',
+        createToggle(isExperimentalGraphicsEnabled, onExperimentalGraphicsEnabledChange)
+    );
+    settingsContainer.appendChild(experimentalGraphicsSection);
 
     // Color Scheme setting
     const colorSchemeSection = createSettingSection(

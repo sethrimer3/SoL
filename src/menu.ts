@@ -86,6 +86,7 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
+    isExperimentalGraphicsEnabled: boolean; // Enables additional gameplay field rendering effects
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -164,6 +165,7 @@ export class MainMenu {
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
             graphicsQuality: 'ultra', // Default to ultra graphics
+            isExperimentalGraphicsEnabled: false,
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
@@ -1962,6 +1964,7 @@ export class MainMenu {
             allyColor: this.settings.allyColor,
             enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
+            isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
@@ -2014,6 +2017,9 @@ export class MainMenu {
                 this.backgroundParticleLayer?.setGraphicsQuality(value);
                 this.atmosphereLayer?.setGraphicsQuality(value);
                 this.menuParticleLayer?.setGraphicsQuality(value);
+            },
+            onExperimentalGraphicsEnabledChange: (value) => {
+                this.settings.isExperimentalGraphicsEnabled = value;
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
