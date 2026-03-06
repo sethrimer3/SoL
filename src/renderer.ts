@@ -1330,6 +1330,8 @@ export class GameRenderer {
         const isUltraQuality = this.graphicsQuality === 'ultra';
         const isHighQuality = this.graphicsQuality === 'high';
         const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
+        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 18 : 12;
+        const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : this.graphicsQuality === 'medium' ? 0.1 : 0.08;
         const cameraNoiseWorldX = this.camera.x * 0.0012;
         const cameraNoiseWorldY = this.camera.y * 0.0012;
         const nebulaBaseRadiusScale = 0.78;
@@ -1341,6 +1343,9 @@ export class GameRenderer {
         const starlightBaseAlpha = 0.016;
         const starlightNoiseAlphaScale = 0.026;
         const starlightNoiseOctaves = 2;
+        const dpr = window.devicePixelRatio || 1;
+        const screenCenterX = (this.canvas.width / dpr) * 0.5;
+        const screenCenterY = (this.canvas.height / dpr) * 0.5;
 
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
@@ -1418,6 +1423,76 @@ export class GameRenderer {
             ) * starlightNoiseAlphaScale
         ) * qualityIntensity;
         this.ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+            const sunScreenPos = this.worldToScreen(sun.position);
+            if (sunScreenPos.x < -220 || sunScreenPos.x > screenWidth + 220 || sunScreenPos.y < -220 || sunScreenPos.y > screenHeight + 220) {
+                continue;
+            }
+            const sunDistanceToCenterPx = Math.hypot(sunScreenPos.x - screenCenterX, sunScreenPos.y - screenCenterY);
+            const sunCenterFalloff = Math.max(0.12, 1 - sunDistanceToCenterPx / (Math.max(screenWidth, screenHeight) * 0.9));
+            const haloRadiusPx = Math.max(180, sun.radius * this.zoom * (4 + qualityIntensity * 2.4));
+            const haloGradient = this.ctx.createRadialGradient(
+                sunScreenPos.x,
+                sunScreenPos.y,
+                0,
+                sunScreenPos.x,
+                sunScreenPos.y,
+                haloRadiusPx
+            );
+            haloGradient.addColorStop(0, `rgba(255, 241, 198, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(0.55, `rgba(255, 183, 140, ${0.05 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(1, 'rgba(255, 120, 105, 0)');
+            this.ctx.fillStyle = haloGradient;
+            this.ctx.beginPath();
+            this.ctx.arc(sunScreenPos.x, sunScreenPos.y, haloRadiusPx, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
+            const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
+            const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
+            const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
+            const streakGradient = this.ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
+            streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+            streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
+            this.ctx.strokeStyle = streakGradient;
+            this.ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
+            this.ctx.beginPath();
+            this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
+            this.ctx.lineTo(streakEndX, streakEndY);
+            this.ctx.stroke();
+        }
+
+        for (let glintIndex = 0; glintIndex < glintCount; glintIndex += 1) {
+            const glintSeed = glintIndex * 73.941 + 14.287;
+            const glintPosX = valueNoise2D(cameraNoiseWorldX + glintSeed, cameraNoiseWorldY - glintSeed) * screenWidth;
+            const glintPosY = valueNoise2D(cameraNoiseWorldX - glintSeed * 0.7, cameraNoiseWorldY + glintSeed * 1.1) * screenHeight;
+            const glintNoise = fractalNoise2D(cameraNoiseWorldX + glintSeed * 0.11, cameraNoiseWorldY + glintSeed * 0.13, 2);
+            const pulseValue = 0.5 + 0.5 * Math.sin(gameTimeSec * (0.65 + glintNoise) + glintSeed);
+            const glintAlpha = (0.025 + pulseValue * 0.06) * qualityIntensity;
+            const glintRadiusPx = 0.8 + glintNoise * 1.6 + qualityIntensity * 0.7;
+            this.ctx.fillStyle = `rgba(228, 242, 255, ${glintAlpha})`;
+            this.ctx.beginPath();
+            this.ctx.arc(glintPosX, glintPosY, glintRadiusPx, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.globalCompositeOperation = 'multiply';
+        const vignetteGradient = this.ctx.createRadialGradient(
+            screenCenterX,
+            screenCenterY,
+            Math.min(screenWidth, screenHeight) * 0.12,
+            screenCenterX,
+            screenCenterY,
+            Math.max(screenWidth, screenHeight) * 0.72
+        );
+        vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignetteGradient.addColorStop(1, `rgba(8, 12, 28, ${vignetteAlpha})`);
+        this.ctx.fillStyle = vignetteGradient;
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
         this.ctx.restore();
