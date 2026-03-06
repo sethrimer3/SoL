@@ -123,6 +123,11 @@ export class Building {
         _mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
     ): void {
         // Base implementation
+        if ('takeDamage' in target && typeof target.takeDamage === 'function') {
+            target.takeDamage(this.attackDamage);
+            return;
+        }
+
         if ('health' in target) {
             target.health -= this.attackDamage;
         }
@@ -871,4 +876,3 @@ export class SubsidiaryFactory extends Building {
         return true;
     }
 }
-
