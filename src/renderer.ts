@@ -1332,6 +1332,27 @@ export class GameRenderer {
         const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
         const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 18 : 12;
         const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : this.graphicsQuality === 'medium' ? 0.1 : 0.08;
+        const causticLayerCount = isUltraQuality ? 3 : isHighQuality ? 2 : 1;
+        const causticAlphaBase = isUltraQuality ? 0.07 : isHighQuality ? 0.055 : this.graphicsQuality === 'medium' ? 0.045 : 0.035;
+        const edgeBloomAlpha = isUltraQuality ? 0.115 : isHighQuality ? 0.09 : this.graphicsQuality === 'medium' ? 0.072 : 0.058;
+        const causticDriftSpeedXPerSec = 0.03;
+        const causticDriftSpeedYPerSec = 0.024;
+        const causticDriftRangeXScale = 0.7;
+        const causticDriftRangeYScale = 0.4;
+        const causticBandBaseWidthScale = 0.2;
+        const causticBandLayerWidthScale = 0.05;
+        const causticBandQualityWidthScale = 0.05;
+        const causticSeedBase = 19.2;
+        const causticSeedLayerOffset = 31.5;
+        const causticLayerAlphaFalloff = 0.2;
+        const causticGradientTopOffsetScale = 0.35;
+        const causticGradientBottomOffsetScale = 1.35;
+        const causticMagentaBlendStop = 0.62;
+        const causticMagentaAlphaScale = 0.88;
+        const edgeBloomInnerRadiusScale = 0.2;
+        const edgeBloomOuterRadiusScale = 0.88;
+        const edgeBloomMidStop = 0.7;
+        const edgeBloomMidAlphaScale = 0.45;
         const cameraNoiseWorldX = this.camera.x * 0.0012;
         const cameraNoiseWorldY = this.camera.y * 0.0012;
         const nebulaBaseRadiusScale = 0.78;
@@ -1423,6 +1444,44 @@ export class GameRenderer {
             ) * starlightNoiseAlphaScale
         ) * qualityIntensity;
         this.ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (let layerIndex = 0; layerIndex < causticLayerCount; layerIndex += 1) {
+            const causticSeed = causticSeedBase + layerIndex * causticSeedLayerOffset;
+            const driftXPx = (valueNoise2D(cameraNoiseWorldX + causticSeed + gameTimeSec * causticDriftSpeedXPerSec, cameraNoiseWorldY - causticSeed) - 0.5) * screenWidth * causticDriftRangeXScale;
+            const driftYPx = (valueNoise2D(cameraNoiseWorldX - causticSeed, cameraNoiseWorldY + causticSeed + gameTimeSec * causticDriftSpeedYPerSec) - 0.5) * screenHeight * causticDriftRangeYScale;
+            const bandWidthPx = Math.max(screenWidth, screenHeight) * (
+                causticBandBaseWidthScale
+                + layerIndex * causticBandLayerWidthScale
+                + qualityIntensity * causticBandQualityWidthScale
+            );
+            const bandAlpha = causticAlphaBase * (1 - layerIndex * causticLayerAlphaFalloff) * qualityIntensity;
+            const bandGradient = this.ctx.createLinearGradient(
+                screenCenterX - bandWidthPx + driftXPx,
+                -screenHeight * causticGradientTopOffsetScale + driftYPx,
+                screenCenterX + bandWidthPx + driftXPx,
+                screenHeight * causticGradientBottomOffsetScale + driftYPx
+            );
+            bandGradient.addColorStop(0, 'rgba(82, 220, 255, 0)');
+            bandGradient.addColorStop(0.3, `rgba(82, 220, 255, ${bandAlpha})`);
+            bandGradient.addColorStop(causticMagentaBlendStop, `rgba(222, 152, 255, ${bandAlpha * causticMagentaAlphaScale})`);
+            bandGradient.addColorStop(1, 'rgba(222, 152, 255, 0)');
+            this.ctx.fillStyle = bandGradient;
+            this.ctx.fillRect(0, 0, screenWidth, screenHeight);
+        }
+
+        const edgeBloomGradient = this.ctx.createRadialGradient(
+            screenCenterX,
+            screenCenterY,
+            Math.min(screenWidth, screenHeight) * edgeBloomInnerRadiusScale,
+            screenCenterX,
+            screenCenterY,
+            Math.max(screenWidth, screenHeight) * edgeBloomOuterRadiusScale
+        );
+        edgeBloomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        edgeBloomGradient.addColorStop(edgeBloomMidStop, `rgba(83, 44, 154, ${edgeBloomAlpha * edgeBloomMidAlphaScale})`);
+        edgeBloomGradient.addColorStop(1, `rgba(16, 36, 88, ${edgeBloomAlpha})`);
+        this.ctx.fillStyle = edgeBloomGradient;
         this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
         for (const sun of game.suns) {
