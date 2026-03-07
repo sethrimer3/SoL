@@ -1329,8 +1329,9 @@ export class GameRenderer {
         const gameTimeSec = game.gameTime;
         const isUltraQuality = this.graphicsQuality === 'ultra';
         const isHighQuality = this.graphicsQuality === 'high';
+        const shouldRenderAtmosphericSunStreaks = isUltraQuality || isHighQuality;
         const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
-        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 18 : 12;
+        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 14 : 8;
         const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : this.graphicsQuality === 'medium' ? 0.1 : 0.08;
         const causticLayerCount = isUltraQuality ? 3 : isHighQuality ? 2 : 1;
         const causticAlphaBase = isUltraQuality ? 0.07 : isHighQuality ? 0.055 : this.graphicsQuality === 'medium' ? 0.045 : 0.035;
@@ -1511,19 +1512,21 @@ export class GameRenderer {
             this.ctx.arc(sunScreenPos.x, sunScreenPos.y, haloRadiusPx, 0, Math.PI * 2);
             this.ctx.fill();
 
-            const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
-            const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
-            const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
-            const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
-            const streakGradient = this.ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
-            streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
-            streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
-            this.ctx.strokeStyle = streakGradient;
-            this.ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
-            this.ctx.beginPath();
-            this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
-            this.ctx.lineTo(streakEndX, streakEndY);
-            this.ctx.stroke();
+            if (shouldRenderAtmosphericSunStreaks) {
+                const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
+                const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
+                const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
+                const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
+                const streakGradient = this.ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
+                streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+                streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
+                this.ctx.strokeStyle = streakGradient;
+                this.ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
+                this.ctx.beginPath();
+                this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
+                this.ctx.lineTo(streakEndX, streakEndY);
+                this.ctx.stroke();
+            }
         }
 
         for (let glintIndex = 0; glintIndex < glintCount; glintIndex += 1) {
@@ -1801,7 +1804,9 @@ export class GameRenderer {
         // Draw lens flare effects for visible suns
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
-                this.drawLensFlare(sun);
+                if (this.isWithinViewBounds(sun.position, sun.radius * 5)) {
+                    this.drawLensFlare(sun);
+                }
             }
         }
 

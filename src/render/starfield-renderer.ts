@@ -197,6 +197,7 @@ export class StarfieldRenderer {
         screenHeight: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'
     ): void {
+        const shouldRenderStarChromaticAberration = graphicsQuality === 'high' || graphicsQuality === 'ultra';
         const centerX = screenWidth * 0.5;
         const centerY = screenHeight * 0.5;
         const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
@@ -253,8 +254,8 @@ export class StarfieldRenderer {
                     coreRadiusPx * 2
                 );
 
-                // Only render chromatic aberration on medium+ quality
-                if (star.hasChromaticAberration && graphicsQuality !== 'low') {
+                // Chromatic aberration is one of the heaviest per-star passes; keep it on high/ultra.
+                if (star.hasChromaticAberration && shouldRenderStarChromaticAberration) {
                     this.renderStarChromaticAberration(ctx, wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb);
                 }
             }
