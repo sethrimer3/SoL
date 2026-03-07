@@ -5,6 +5,7 @@
 
 import { Vector2D } from '../game-core';
 import * as Constants from '../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 
 export class Camera {
     public position: Vector2D = new Vector2D(0, 0);
@@ -27,9 +28,8 @@ export class Camera {
      * Convert world coordinates to screen coordinates
      */
     worldToScreen(worldPos: Vector2D): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
         
         // Apply screen shake offset if enabled
         let shakeOffsetX = 0;
@@ -51,9 +51,8 @@ export class Camera {
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
         return new Vector2D(
             this.position.x + (screenX - centerX) / this.zoom,
             this.position.y + (screenY - centerY) / this.zoom
@@ -64,9 +63,8 @@ export class Camera {
      * Update view bounds cache for efficient culling
      */
     updateViewBounds(): void {
-        const dpr = window.devicePixelRatio || 1;
-        const viewHalfWidth = (this.canvas.width / dpr) / (2 * this.zoom);
-        const viewHalfHeight = (this.canvas.height / dpr) / (2 * this.zoom);
+        const viewHalfWidth = getCanvasScreenWidthPx(this.canvas) / (2 * this.zoom);
+        const viewHalfHeight = getCanvasScreenHeightPx(this.canvas) / (2 * this.zoom);
 
         this.viewMinX = this.position.x - viewHalfWidth;
         this.viewMaxX = this.position.x + viewHalfWidth;

@@ -10,6 +10,7 @@ import {
 import * as Constants from '../constants';
 import { getRadialButtonOffsets, getHeroUnitType, getHeroUnitCost } from './render-utilities';
 import { getInGameMenuLayout, getGraphicsMenuMaxScroll, InGameMenuTab, InGameMenuAction, RenderLayerKey } from './in-game-menu';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 
 export interface InGameMenuRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -41,7 +42,7 @@ export interface InGameMenuRendererContext {
 
 export class InGameMenuRenderer {
     public drawInGameMenuOverlay(context: InGameMenuRendererContext): void {
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         const screenWidth = layout.screenWidth;
         const screenHeight = layout.screenHeight;
         const isCompactLayout = layout.isCompactLayout;
@@ -448,7 +449,7 @@ export class InGameMenuRenderer {
         if (!context.showInGameMenu || context.inGameMenuTab !== 'graphics') {
             return noChange;
         }
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         const isWithinList =
             screenX >= layout.graphicsListX &&
             screenX <= layout.graphicsListX + layout.graphicsListWidth &&
@@ -473,7 +474,7 @@ export class InGameMenuRenderer {
         if (!context.showInGameMenu) {
             return null;
         }
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         for (const tab of layout.tabs) {
             const isWithinTab =
                 screenX >= tab.x &&

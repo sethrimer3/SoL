@@ -10,6 +10,7 @@ import {
     SubsidiaryFactory,
 } from '../game-core';
 import * as Constants from '../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 
 export interface EnvironmentRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -421,9 +422,8 @@ export class EnvironmentRenderer {
         const twoPi = Math.PI * 2;
         const coverageEpsilonWorld = 0.5;
         const coverageEpsilonSq = coverageEpsilonWorld * coverageEpsilonWorld;
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (canvas.width / dpr) / 2;
-        const centerY = (canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(canvas) * 0.5;
         const cameraX = camera.x;
         const cameraY = camera.y;
         const targetStepPx = 8;
@@ -687,9 +687,8 @@ export class EnvironmentRenderer {
             return;
         }
 
-        const dpr = window.devicePixelRatio || 1;
-        const width = canvas.width / dpr;
-        const height = canvas.height / dpr;
+        const width = getCanvasScreenWidthPx(canvas);
+        const height = getCanvasScreenHeightPx(canvas);
 
         ctx.save();
         ctx.globalCompositeOperation = 'multiply';

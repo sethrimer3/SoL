@@ -6,6 +6,7 @@
 
 import { Vector2D, Player, Building, SubsidiaryFactory, Starling, GameState } from '../game-core';
 import * as Constants from '../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 import { getFactionColor } from './faction-utilities';
 
 export interface HUDRendererContext {
@@ -323,9 +324,8 @@ export class HUDRenderer {
 
     public drawUI(game: GameState, context: HUDRendererContext): void {
         if (context.showInfo) {
-            const dpr = window.devicePixelRatio || 1;
-            const screenWidth = context.canvas.width / dpr;
-            const screenHeight = context.canvas.height / dpr;
+            const screenWidth = getCanvasScreenWidthPx(context.canvas);
+            const screenHeight = getCanvasScreenHeightPx(context.canvas);
             const isCompactLayout = screenWidth < 600;
             const infoFontSize = isCompactLayout ? 13 : 16;
             const infoLineHeight = infoFontSize + 4;
@@ -409,8 +409,7 @@ export class HUDRenderer {
     }
 
     public drawProductionProgress(game: GameState, context: HUDRendererContext): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = context.canvas.width / dpr;
+        const screenWidth = getCanvasScreenWidthPx(context.canvas);
         const margin = 10;
         const productionBoxWidth = 200;
         const boxHeight = 60;
@@ -602,9 +601,8 @@ export class HUDRenderer {
     }
 
     public drawEndGameStatsScreen(game: GameState, winner: Player, context: HUDRendererContext): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = context.canvas.width / dpr;
-        const screenHeight = context.canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(context.canvas);
+        const screenHeight = getCanvasScreenHeightPx(context.canvas);
         const isCompactLayout = screenWidth < 700;
         const localPlayer = context.viewingPlayer;
         const didLocalPlayerWin = winner === localPlayer;
@@ -702,9 +700,8 @@ export class HUDRenderer {
     }
 
     public drawBorderFade(mapSize: number, context: HUDRendererContext): void {
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = context.canvas.width / dpr;
-        const screenHeight = context.canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(context.canvas);
+        const screenHeight = getCanvasScreenHeightPx(context.canvas);
 
         const fadeZoneWidth = 150;
         const halfMapSize = mapSize / 2;
@@ -801,9 +798,8 @@ export class HUDRenderer {
 
     private isOffScreen(worldPos: Vector2D, context: HUDRendererContext): boolean {
         const screenPos = context.worldToScreen(worldPos);
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = context.canvas.width / dpr;
-        const screenHeight = context.canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(context.canvas);
+        const screenHeight = getCanvasScreenHeightPx(context.canvas);
 
         return screenPos.x < 0 || screenPos.x > screenWidth ||
                screenPos.y < 0 || screenPos.y > screenHeight;
@@ -811,9 +807,8 @@ export class HUDRenderer {
 
     private getEdgePosition(worldPos: Vector2D, _indicatorSize: number, context: HUDRendererContext): {x: number, y: number, angle: number} {
         const screenPos = context.worldToScreen(worldPos);
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = context.canvas.width / dpr;
-        const screenHeight = context.canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(context.canvas);
+        const screenHeight = getCanvasScreenHeightPx(context.canvas);
         const centerX = screenWidth / 2;
         const centerY = screenHeight / 2;
 
