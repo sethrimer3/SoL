@@ -60,10 +60,7 @@ export type InGameMenuLayout = {
     graphicsButtonGap: number;
 };
 
-export function getInGameMenuLayout(canvasWidth: number, canvasHeight: number): InGameMenuLayout {
-    const dpr = window.devicePixelRatio || 1;
-    const screenWidth = canvasWidth / dpr;
-    const screenHeight = canvasHeight / dpr;
+export function getInGameMenuLayout(screenWidth: number, screenHeight: number): InGameMenuLayout {
     const isCompactLayout = screenWidth < 600;
     const panelWidth = Math.min(480, screenWidth - 40);
     const panelHeight = Math.min(460, screenHeight - 40);

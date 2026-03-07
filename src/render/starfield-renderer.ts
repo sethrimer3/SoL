@@ -16,6 +16,7 @@
 
 import { Vector2D, GameState, Asteroid } from '../game-core';
 import * as Constants from '../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 import { valueNoise2D, fractalNoise2D } from './noise-utilities';
 
 type StarData = {
@@ -668,9 +669,8 @@ export class StarfieldRenderer {
         ctx.globalCompositeOperation = 'screen';
         ctx.globalAlpha = graphicsQuality === 'ultra' ? 0.82 : 0.68;
 
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = canvas.width / dpr;
-        const screenHeight = canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(canvas);
+        const screenHeight = getCanvasScreenHeightPx(canvas);
         ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
         ctx.restore();
     }

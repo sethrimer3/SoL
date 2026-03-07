@@ -9,6 +9,7 @@ import { InputController, InputControllerContext } from './input/input-controlle
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
@@ -1493,12 +1494,11 @@ class GameController {
         
         if (this.game.isRunning) {
             this.game.update(deltaTime);
-            const dpr = window.devicePixelRatio || 1;
             this.gameAudioController.update(this.game, deltaTime, {
                 cameraWorld: this.renderer.camera,
                 zoom: this.renderer.zoom,
-                viewportWidthPx: this.renderer.canvas.width / dpr,
-                viewportHeightPx: this.renderer.canvas.height / dpr
+                viewportWidthPx: getCanvasScreenWidthPx(this.renderer.canvas),
+                viewportHeightPx: getCanvasScreenHeightPx(this.renderer.canvas)
             });
         }
 
@@ -1571,12 +1571,11 @@ class GameController {
                 if (this.game.isRunning) {
                     const tickDeltaTimeSec = this.TICK_INTERVAL_MS / 1000;
                     this.game.update(tickDeltaTimeSec);
-                    const dpr = window.devicePixelRatio || 1;
                     this.gameAudioController.update(this.game, tickDeltaTimeSec, {
                         cameraWorld: this.renderer.camera,
                         zoom: this.renderer.zoom,
-                        viewportWidthPx: this.renderer.canvas.width / dpr,
-                        viewportHeightPx: this.renderer.canvas.height / dpr
+                        viewportWidthPx: getCanvasScreenWidthPx(this.renderer.canvas),
+                        viewportHeightPx: getCanvasScreenHeightPx(this.renderer.canvas)
                     });
                 }
 

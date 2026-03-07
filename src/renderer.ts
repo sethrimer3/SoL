@@ -32,6 +32,7 @@ import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 import { GlowRenderer } from './render/glow-renderer';
 import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 
 
 type InfluenceRenderCircle = {
@@ -118,6 +119,7 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_SHAPE_BLEND_SPEED = 1.4;
     private readonly VELARIS_STARLING_GRAPHEME_ALPHA_MAX = 0.3;
     private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
+    private readonly MAX_RENDER_PIXEL_RATIO = 2;
     private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
     private readonly spriteManager = new SpriteManager();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number; pentagonRotationRad: number}>();
@@ -244,8 +246,8 @@ export class GameRenderer {
     }
 
     private resizeCanvas(): void {
-        // Get device pixel ratio for high-DPI displays (retina, mobile, etc.)
-        const dpr = window.devicePixelRatio || 1;
+        // Cap render DPR to reduce fill-rate pressure on high-DPI devices.
+        const cappedDpr = Math.min(window.devicePixelRatio || 1, this.MAX_RENDER_PIXEL_RATIO);
         
         // Apply resolution scaling based on quality setting
         // Low quality: 0.75x resolution (56% pixel count)
@@ -258,7 +260,7 @@ export class GameRenderer {
             resolutionScale = 0.9;
         }
         
-        const effectiveDpr = dpr * resolutionScale;
+        const effectiveDpr = cappedDpr * resolutionScale;
         
         // Set canvas physical size to match display size * effective DPR
         this.canvas.width = window.innerWidth * effectiveDpr;
@@ -277,9 +279,8 @@ export class GameRenderer {
      * Convert world coordinates to screen coordinates
      */
     worldToScreen(worldPos: Vector2D): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
         
         // Apply screen shake offset if enabled
         let shakeOffsetX = 0;
@@ -298,9 +299,8 @@ export class GameRenderer {
     }
 
     private worldToScreenCoords(worldX: number, worldY: number, out: Vector2D): void {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
 
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
@@ -330,9 +330,8 @@ export class GameRenderer {
     }
 
     private updateViewBounds(): void {
-        const dpr = window.devicePixelRatio || 1;
-        const viewHalfWidth = (this.canvas.width / dpr) / (2 * this.zoom);
-        const viewHalfHeight = (this.canvas.height / dpr) / (2 * this.zoom);
+        const viewHalfWidth = getCanvasScreenWidthPx(this.canvas) / (2 * this.zoom);
+        const viewHalfHeight = getCanvasScreenHeightPx(this.canvas) / (2 * this.zoom);
 
         this.viewMinX = this.camera.x - viewHalfWidth;
         this.viewMaxX = this.camera.x + viewHalfWidth;
@@ -351,9 +350,8 @@ export class GameRenderer {
      * Check if screen position is within viewport bounds
      */
     private isScreenPosWithinViewBounds(screenPos: { x: number; y: number }, margin: number = 0): boolean {
-        const dpr = window.devicePixelRatio || 1;
-        const viewportWidth = this.canvas.width / dpr;
-        const viewportHeight = this.canvas.height / dpr;
+        const viewportWidth = getCanvasScreenWidthPx(this.canvas);
+        const viewportHeight = getCanvasScreenHeightPx(this.canvas);
         return screenPos.x >= -margin &&
                screenPos.x <= viewportWidth + margin &&
                screenPos.y >= -margin &&
@@ -364,9 +362,8 @@ export class GameRenderer {
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
         return new Vector2D(
             this.camera.x + (screenX - centerX) / this.zoom,
             this.camera.y + (screenY - centerY) / this.zoom
@@ -1225,9 +1222,8 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         
-        const dpr = window.devicePixelRatio || 1;
-        const canvasWidth = this.canvas.width / dpr;
-        const canvasHeight = this.canvas.height / dpr;
+        const canvasWidth = getCanvasScreenWidthPx(this.canvas);
+        const canvasHeight = getCanvasScreenHeightPx(this.canvas);
         
         this.sunRenderer.drawLensFlare(
             this.ctx,
@@ -1365,9 +1361,8 @@ export class GameRenderer {
         const starlightBaseAlpha = 0.016;
         const starlightNoiseAlphaScale = 0.026;
         const starlightNoiseOctaves = 2;
-        const dpr = window.devicePixelRatio || 1;
-        const screenCenterX = (this.canvas.width / dpr) * 0.5;
-        const screenCenterY = (this.canvas.height / dpr) * 0.5;
+        const screenCenterX = getCanvasScreenWidthPx(this.canvas) * 0.5;
+        const screenCenterY = getCanvasScreenHeightPx(this.canvas) * 0.5;
 
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
@@ -1747,9 +1742,8 @@ export class GameRenderer {
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
         
         // Draw camera-space values used by reworked parallax stars.
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(this.canvas);
+        const screenHeight = getCanvasScreenHeightPx(this.canvas);
 
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
@@ -1765,9 +1759,8 @@ export class GameRenderer {
 
         // Draw sun rays with raytracing (light and shadows)
         if (this.isSunsLayerEnabled) {
-            const dpr = window.devicePixelRatio || 1;
-            const canvasWidth = this.canvas.width / dpr;
-            const canvasHeight = this.canvas.height / dpr;
+            const canvasWidth = getCanvasScreenWidthPx(this.canvas);
+            const canvasHeight = getCanvasScreenHeightPx(this.canvas);
             
             this.sunRenderer.drawSunRays(
                 this.ctx,
@@ -1786,9 +1779,8 @@ export class GameRenderer {
         }
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
-            const dpr = window.devicePixelRatio || 1;
-            const canvasWidth = this.canvas.width / dpr;
-            const canvasHeight = this.canvas.height / dpr;
+            const canvasWidth = getCanvasScreenWidthPx(this.canvas);
+            const canvasHeight = getCanvasScreenHeightPx(this.canvas);
             
             this.sunRenderer.drawUltraSunParticleLayers(
                 this.ctx,
@@ -2482,7 +2474,7 @@ export class GameRenderer {
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
-        return getInGameMenuLayout(this.canvas.width, this.canvas.height);
+        return getInGameMenuLayout(getCanvasScreenWidthPx(this.canvas), getCanvasScreenHeightPx(this.canvas));
     }
 
     /**
@@ -2657,12 +2649,9 @@ export class GameRenderer {
      * Clamp camera position to level boundaries
      */
     private clampCameraToLevelBounds(pos: Vector2D): Vector2D {
-        // Get device pixel ratio
-        const dpr = window.devicePixelRatio || 1;
-        
-        // Calculate visible world dimensions based on canvas size and zoom
-        const viewWidth = (this.canvas.width / dpr) / this.zoom;
-        const viewHeight = (this.canvas.height / dpr) / this.zoom;
+        // Calculate visible world dimensions based on screen-space canvas size and zoom
+        const viewWidth = getCanvasScreenWidthPx(this.canvas) / this.zoom;
+        const viewHeight = getCanvasScreenHeightPx(this.canvas) / this.zoom;
         
         // Calculate max camera offset based on map size and view size
         // The camera can move such that the view edges align with map boundaries
@@ -2680,9 +2669,8 @@ export class GameRenderer {
     }
 
     private getMinZoomForBounds(): number {
-        const dpr = window.devicePixelRatio || 1;
-        const viewWidth = this.canvas.width / dpr;
-        const viewHeight = this.canvas.height / dpr;
+        const viewWidth = getCanvasScreenWidthPx(this.canvas);
+        const viewHeight = getCanvasScreenHeightPx(this.canvas);
         const minZoomWidth = viewWidth / Constants.MAP_SIZE;
         const minZoomHeight = viewHeight / Constants.MAP_SIZE;
         return Math.max(0.5, minZoomWidth, minZoomHeight);

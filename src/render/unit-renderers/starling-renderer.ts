@@ -12,6 +12,7 @@ import {
     Starling,
 } from '../../game-core';
 import * as Constants from '../../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from '../canvas-metrics';
 import type { UnitRendererContext } from './shared-utilities';
 import { drawAbilityCooldownBar } from './shared-utilities';
 
@@ -44,9 +45,8 @@ export class StarlingRenderer {
         const twoPi = Math.PI * 2;
         const coverageEpsilonWorld = 0.5;
         const coverageEpsilonSq = coverageEpsilonWorld * coverageEpsilonWorld;
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (context.canvas.width / dpr) / 2;
-        const centerY = (context.canvas.height / dpr) / 2;
+        const centerX = getCanvasScreenWidthPx(context.canvas) * 0.5;
+        const centerY = getCanvasScreenHeightPx(context.canvas) * 0.5;
         const cameraX = context.camera.x;
         const cameraY = context.camera.y;
         const zoom = context.zoom;
