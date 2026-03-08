@@ -654,6 +654,14 @@ class GameController {
     }
 
     private clearPathPreview(): void {
+        if (this.inputController.isDrawingPath && this.inputController.pathPoints.length > 0 && this.renderer.pathPreviewStartWorld) {
+            this.renderer.createPathPreviewFadeEffect(
+                this.renderer.pathPreviewStartWorld,
+                this.inputController.pathPoints,
+                this.renderer.pathPreviewEnd,
+                this.game ? this.game.gameTime : 0
+            );
+        }
         this.inputController.pathPoints = [];
         this.inputController.isDrawingPath = false;
         this.renderer.pathPreviewForge = null;

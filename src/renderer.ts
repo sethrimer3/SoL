@@ -394,6 +394,7 @@ export class GameRenderer {
             pathPreviewPoints: this.pathPreviewPoints,
             pathPreviewEnd: this.pathPreviewEnd,
             pathPreviewStartWorld: this.pathPreviewStartWorld,
+            uiTimeSec: performance.now() * 0.001,
             selectedUnits: this.selectedUnits,
             selectedMirrors: this.selectedMirrors,
             highlightedButtonIndex: this.highlightedButtonIndex,
@@ -1634,6 +1635,10 @@ export class GameRenderer {
 
     public createPathCommitEffect(startWorld: Vector2D, waypoints: Vector2D[], gameTimeSec: number): void {
         this.uiRenderer.createPathCommitEffect(startWorld, waypoints, gameTimeSec);
+    }
+
+    public createPathPreviewFadeEffect(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null, gameTimeSec: number): void {
+        this.uiRenderer.createPathPreviewFadeEffect(startWorld, waypoints, endWorld, gameTimeSec);
     }
 
     private updateAndDrawPathCommitEffects(gameTimeSec: number): void {
