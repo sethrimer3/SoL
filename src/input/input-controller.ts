@@ -91,6 +91,10 @@ export class InputController {
 
     private ctx: InputControllerContext;
 
+    private isFoundryBuilding(building: Building): building is SubsidiaryFactory {
+        return building instanceof SubsidiaryFactory || building.constructor.name === 'SubsidiaryFactory';
+    }
+
     constructor(canvas: HTMLCanvasElement, context: InputControllerContext) {
         this.ctx = context;
         this.setupInputHandlers(canvas);
@@ -254,7 +258,7 @@ export class InputController {
                     } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                         // Check if a foundry is selected
                         const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                        if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                        if (this.isFoundryBuilding(selectedBuilding) && selectedBuilding.isComplete) {
                             // Foundry is selected - use building arrow mode
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
@@ -384,7 +388,7 @@ export class InputController {
                     } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                         // Foundry building has 4 buttons
                         const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                        if (selectedBuilding instanceof SubsidiaryFactory) {
+                        if (this.isFoundryBuilding(selectedBuilding)) {
                             this.ctx.renderer.highlightedButtonIndex = dragDirection
                                 ? this.ctx.getNearestButtonIndexFromAngle(angle, 4)
                                 : -1;
@@ -642,7 +646,7 @@ export class InputController {
                 const targetableStructure = friendlySacrificeTarget ?? this.ctx.getTargetableStructureAtPosition(worldPos, player);
                 if (this.ctx.getSelectionManager().selectedUnits.size > 0 && targetableStructure) {
                     this.moveOrderCounter++;
-                    const isFriendlySacrificeTarget = targetableStructure.target instanceof SubsidiaryFactory &&
+                    const isFriendlySacrificeTarget = this.isFoundryBuilding(targetableStructure.target) &&
                         targetableStructure.target.owner === player;
                     const targetRadiusPx = this.ctx.getTargetStructureRadiusPx(targetableStructure.target);
 
@@ -803,7 +807,7 @@ export class InputController {
                     const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
                         clickedBuilding instanceof GatlingTower ||
                         clickedBuilding instanceof SpaceDustSwirler ||
-                        clickedBuilding instanceof SubsidiaryFactory ||
+                        this.isFoundryBuilding(clickedBuilding) ||
                         clickedBuilding instanceof StrikerTower ||
                         clickedBuilding instanceof LockOnLaserTower ||
                         clickedBuilding instanceof ShieldTower;
@@ -824,6 +828,15 @@ export class InputController {
                             });
                         }
                         this.ctx.getSelectionManager().selectedMirrors.clear();
+
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.ctx.renderer.selectionStart = null;
+                        this.ctx.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
                     }
                     
                     // Check if this is a double-tap
@@ -948,7 +961,7 @@ export class InputController {
 
                         if (i === 2 && shouldShowFoundryButton) {
                             if (this.ctx.getHasActiveFoundry()) {
-                                const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
+                                const foundry = player.buildings.find((building) => this.isFoundryBuilding(building));
                                 if (foundry) {
                                     for (const mirror of this.ctx.getSelectionManager().selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
@@ -1039,7 +1052,7 @@ export class InputController {
 
                 if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                     const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                    if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                    if (this.isFoundryBuilding(selectedBuilding) && selectedBuilding.isComplete) {
                         const clickedFoundryButtonIndex = this.ctx.getClickedFoundryButtonIndex(
                             lastX,
                             lastY,
@@ -1365,7 +1378,7 @@ export class InputController {
                                     console.log('Radial selection: Mirror command mode set to warpgate');
                                 }
                             } else if (isMirrorInSunlight && this.ctx.renderer.highlightedButtonIndex === 2 && this.ctx.getHasActiveFoundry()) {
-                                const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
+                                const foundry = player.buildings.find((building) => this.isFoundryBuilding(building));
                                 if (foundry) {
                                     for (const mirror of this.ctx.getSelectionManager().selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
@@ -1395,7 +1408,7 @@ export class InputController {
                         } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                             // Foundry building button selected
                             const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                            if (selectedBuilding instanceof SubsidiaryFactory) {
+                            if (this.isFoundryBuilding(selectedBuilding)) {
                                 this.ctx.handleFoundryButtonPress(player, selectedBuilding, this.ctx.renderer.highlightedButtonIndex);
                             }
                         }
@@ -1843,7 +1856,7 @@ export class InputController {
         }
 
         const selectedStarlings = this.ctx.getSelectionManager().getSelectedStarlings(player);
-        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
             const closestStarling = this.ctx.getSelectionManager().getClosestSelectedStarling(worldPos);
             if (closestStarling) {
@@ -1900,7 +1913,7 @@ export class InputController {
             return;
         }
 
-        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (!hasFoundry) {
             this.cancelHold();
             return;

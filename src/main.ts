@@ -215,6 +215,11 @@ class GameController {
         return null;
     }
 
+
+    private isFoundryBuilding(building: Building): building is SubsidiaryFactory {
+        return building instanceof SubsidiaryFactory || building.constructor.name === 'SubsidiaryFactory';
+    }
+
     private getFriendlySacrificeTargetAtPosition(
         worldPos: Vector2D,
         player: Player
@@ -235,7 +240,7 @@ class GameController {
 
         for (let buildingIndex = 0; buildingIndex < player.buildings.length; buildingIndex++) {
             const building = player.buildings[buildingIndex];
-            if (!(building instanceof SubsidiaryFactory)) {
+            if (!this.isFoundryBuilding(building)) {
                 continue;
             }
             if (!building.currentProduction) {
@@ -627,7 +632,7 @@ class GameController {
 
         if (this.selectionManager.selectedBuildings.size === 1) {
             const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
-            if (selectedBuilding instanceof SubsidiaryFactory) {
+            if (this.isFoundryBuilding(selectedBuilding)) {
                 return this.renderer.worldToScreen(selectedBuilding.position);
             }
         }
@@ -1444,7 +1449,7 @@ class GameController {
             return;
         }
 
-        const hasActiveFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasActiveFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (hasActiveFoundry) {
             this.hasSeenFoundry = true;
         }
