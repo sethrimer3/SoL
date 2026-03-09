@@ -37,6 +37,10 @@ export class CarouselMenuView {
     private isCompactLayout: boolean = false;
     private resizeHandler: (() => void) | null = null;
     private optionBackgroundColor: string;
+    private isTouchInteractionPending: boolean = false;
+    private isTouchHorizontalDragActive: boolean = false;
+    private touchStartClientX: number = 0;
+    private touchStartClientY: number = 0;
 
     constructor(
         container: HTMLElement,
@@ -99,25 +103,77 @@ export class CarouselMenuView {
         // Touch events
         this.container.addEventListener('touchstart', (e: TouchEvent) => {
             if (e.touches.length === 1) {
-                this.startDrag(e.touches[0].clientX);
-                e.preventDefault();
+                this.beginTouchInteraction(e.touches[0].clientX, e.touches[0].clientY);
             }
         }, { passive: false });
 
         this.container.addEventListener('touchmove', (e: TouchEvent) => {
-            if (this.isDragging && e.touches.length === 1) {
-                this.updateDrag(e.touches[0].clientX);
+            if (e.touches.length !== 1) {
+                return;
+            }
+
+            const touch = e.touches[0];
+            if (!this.isTouchHorizontalDragActive) {
+                const deltaX = touch.clientX - this.touchStartClientX;
+                const deltaY = touch.clientY - this.touchStartClientY;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+
+                if (absDeltaY > absDeltaX && absDeltaY > Constants.CLICK_DRAG_THRESHOLD) {
+                    this.resetTouchInteraction();
+                    return;
+                }
+
+                if (absDeltaX > absDeltaY && absDeltaX > Constants.CLICK_DRAG_THRESHOLD) {
+                    this.startDrag(this.touchStartClientX);
+                    this.isTouchInteractionPending = false;
+                    this.isTouchHorizontalDragActive = true;
+                } else {
+                    return;
+                }
+            }
+
+            if (this.isDragging) {
+                this.updateDrag(touch.clientX);
                 e.preventDefault();
             }
         }, { passive: false });
 
         this.container.addEventListener('touchend', (e: TouchEvent) => {
-            if (this.isDragging) {
-                const touch = e.changedTouches[0];
+            const touch = e.changedTouches[0];
+            if (!touch) {
+                this.resetTouchInteraction();
+                return;
+            }
+
+            if (this.isTouchHorizontalDragActive && this.isDragging) {
                 this.endDrag(touch.clientX);
                 e.preventDefault();
+            } else if (this.isTouchInteractionPending) {
+                this.handleClick(touch.clientX);
             }
+            this.resetTouchInteraction();
         }, { passive: false });
+
+        this.container.addEventListener('touchcancel', () => {
+            this.resetTouchInteraction();
+        });
+    }
+
+    private beginTouchInteraction(clientX: number, clientY: number): void {
+        this.isTouchInteractionPending = true;
+        this.isTouchHorizontalDragActive = false;
+        this.touchStartClientX = clientX;
+        this.touchStartClientY = clientY;
+    }
+
+    private resetTouchInteraction(): void {
+        this.isTouchInteractionPending = false;
+        this.isTouchHorizontalDragActive = false;
+        if (this.isDragging) {
+            this.isDragging = false;
+            this.container.style.cursor = 'grab';
+        }
     }
 
     private startDrag(x: number): void {
