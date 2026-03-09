@@ -34,10 +34,10 @@ export class FactionCarouselView {
     private onRenderCallback: (() => void) | null = null;
     private animationFrameId: number | null = null;
     private isAnimationActive: boolean = false;
-    private isTouchInteractionPending: boolean = false;
-    private isTouchHorizontalDragActive: boolean = false;
-    private touchStartClientX: number = 0;
-    private touchStartClientY: number = 0;
+    private isPendingGestureClassification: boolean = false;
+    private isHorizontalDragActive: boolean = false;
+    private touchStartXScreen: number = 0;
+    private touchStartYScreen: number = 0;
 
     constructor(container: HTMLElement, options: FactionCarouselOption[], initialIndex: number) {
         this.container = container;
@@ -118,9 +118,9 @@ export class FactionCarouselView {
             }
 
             const touch = event.touches[0];
-            if (!this.isTouchHorizontalDragActive) {
-                const deltaX = touch.clientX - this.touchStartClientX;
-                const deltaY = touch.clientY - this.touchStartClientY;
+            if (!this.isHorizontalDragActive) {
+                const deltaX = touch.clientX - this.touchStartXScreen;
+                const deltaY = touch.clientY - this.touchStartYScreen;
                 const absDeltaX = Math.abs(deltaX);
                 const absDeltaY = Math.abs(deltaY);
 
@@ -130,9 +130,9 @@ export class FactionCarouselView {
                 }
 
                 if (absDeltaX > absDeltaY && absDeltaX > Constants.CLICK_DRAG_THRESHOLD) {
-                    this.startDrag(this.touchStartClientX);
-                    this.isTouchInteractionPending = false;
-                    this.isTouchHorizontalDragActive = true;
+                    this.startDrag(this.touchStartXScreen);
+                    this.isPendingGestureClassification = false;
+                    this.isHorizontalDragActive = true;
                 } else {
                     return;
                 }
@@ -151,10 +151,10 @@ export class FactionCarouselView {
                 return;
             }
 
-            if (this.isTouchHorizontalDragActive && this.isDragging) {
+            if (this.isHorizontalDragActive && this.isDragging) {
                 this.endDrag(touch.clientX);
                 event.preventDefault();
-            } else if (this.isTouchInteractionPending) {
+            } else if (this.isPendingGestureClassification) {
                 this.handleClick(touch.clientX);
             }
             this.resetTouchInteraction();
@@ -166,18 +166,17 @@ export class FactionCarouselView {
     }
 
     private beginTouchInteraction(clientX: number, clientY: number): void {
-        this.isTouchInteractionPending = true;
-        this.isTouchHorizontalDragActive = false;
-        this.touchStartClientX = clientX;
-        this.touchStartClientY = clientY;
+        this.isPendingGestureClassification = true;
+        this.isHorizontalDragActive = false;
+        this.touchStartXScreen = clientX;
+        this.touchStartYScreen = clientY;
     }
 
     private resetTouchInteraction(): void {
-        this.isTouchInteractionPending = false;
-        this.isTouchHorizontalDragActive = false;
+        this.isPendingGestureClassification = false;
+        this.isHorizontalDragActive = false;
         if (this.isDragging) {
-            this.isDragging = false;
-            this.container.style.cursor = 'grab';
+            this.stopDrag();
         }
     }
 
@@ -209,8 +208,7 @@ export class FactionCarouselView {
     private endDrag(x: number): void {
         if (!this.isDragging) return;
 
-        this.isDragging = false;
-        this.container.style.cursor = 'grab';
+        this.stopDrag();
 
         if (!this.hasDragged) {
             this.handleClick(x);
@@ -228,6 +226,11 @@ export class FactionCarouselView {
         const targetIndexFloat = -this.scrollOffset / itemWidthPx;
         const targetIndex = Math.round(targetIndexFloat + this.velocity * FactionCarouselView.VELOCITY_FACTOR);
         this.setCurrentIndex(targetIndex);
+    }
+
+    private stopDrag(): void {
+        this.isDragging = false;
+        this.container.style.cursor = 'grab';
     }
 
     private handleClick(x: number): void {
