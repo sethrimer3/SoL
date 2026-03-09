@@ -45,6 +45,7 @@ export class SolarMirror {
     private readonly ACCELERATION = 25; // Pixels per second squared
     private readonly DECELERATION = 50; // Pixels per second squared
     private readonly ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
+    private readonly INTERMEDIATE_WAYPOINT_ARRIVAL_THRESHOLD_PX = 12; // Looser arrival radius for non-final waypoints
     private readonly SLOW_RADIUS_PX = 60; // Distance to begin slow approach
     private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
     private readonly ROTATION_SPEED_RAD_PER_SEC = Math.PI * 0.25; // Radians per second
@@ -423,6 +424,22 @@ export class SolarMirror {
         this.computePathWithWaypoints(target, gameState);
     }
 
+    getQueuedPathPoints(): Vector2D[] {
+        if (!this.targetPosition) {
+            return [];
+        }
+
+        const queuedPathPoints: Vector2D[] = [this.targetPosition];
+        if (this.waypoints.length > 1) {
+            queuedPathPoints.push(...this.waypoints.slice(1));
+        }
+        if (this.finalTarget) {
+            queuedPathPoints.push(this.finalTarget);
+        }
+
+        return queuedPathPoints;
+    }
+
     /**
      * Set the mirror moving toward the nearest available sunlight position.
      * Each call finds the best candidate from this mirror's current position.
@@ -650,8 +667,12 @@ export class SolarMirror {
         const dy = this.targetPosition.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         
+        const arrivalThresholdPx = this.waypoints.length > 0
+            ? this.INTERMEDIATE_WAYPOINT_ARRIVAL_THRESHOLD_PX
+            : this.ARRIVAL_THRESHOLD;
+
         // If we're close enough to current target (waypoint or final target)
-        if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
+        if (distanceToTarget < arrivalThresholdPx) {
             // Check if there are more waypoints to navigate through
             if (this.waypoints.length > 0) {
                 // Remove the waypoint we just reached
