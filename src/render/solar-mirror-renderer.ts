@@ -566,8 +566,16 @@ export class SolarMirrorRenderer {
         }
         
         // Draw move order indicator if mirror has one
-        if (mirror.moveOrder > 0 && mirror.targetPosition) {
-            context.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor);
+        if (mirror.moveOrder > 0) {
+            const queuedPathPoints = mirror.getQueuedPathPoints();
+            let segmentStart = mirror.position;
+            let moveOrderNumber = mirror.moveOrder;
+            for (let pathPointIndex = 0; pathPointIndex < queuedPathPoints.length; pathPointIndex++) {
+                const segmentTarget = queuedPathPoints[pathPointIndex];
+                context.drawMoveOrderIndicator(segmentStart, segmentTarget, moveOrderNumber, displayColor);
+                segmentStart = segmentTarget;
+                moveOrderNumber += 1;
+            }
         }
 
         // Check if mirror is regenerating (within influence radius of forge and below max health)
