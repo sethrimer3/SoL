@@ -34,6 +34,10 @@ export class FactionCarouselView {
     private onRenderCallback: (() => void) | null = null;
     private animationFrameId: number | null = null;
     private isAnimationActive: boolean = false;
+    private isPendingGestureClassification: boolean = false;
+    private isHorizontalDragActive: boolean = false;
+    private touchStartXScreen: number = 0;
+    private touchStartYScreen: number = 0;
 
     constructor(container: HTMLElement, options: FactionCarouselOption[], initialIndex: number) {
         this.container = container;
@@ -104,25 +108,76 @@ export class FactionCarouselView {
 
         this.container.addEventListener('touchstart', (event: TouchEvent) => {
             if (event.touches.length === 1) {
-                this.startDrag(event.touches[0].clientX);
-                event.preventDefault();
+                this.beginTouchInteraction(event.touches[0].clientX, event.touches[0].clientY);
             }
         }, { passive: false });
 
         this.container.addEventListener('touchmove', (event: TouchEvent) => {
-            if (this.isDragging && event.touches.length === 1) {
-                this.updateDrag(event.touches[0].clientX);
+            if (event.touches.length !== 1) {
+                return;
+            }
+
+            const touch = event.touches[0];
+            if (!this.isHorizontalDragActive) {
+                const deltaX = touch.clientX - this.touchStartXScreen;
+                const deltaY = touch.clientY - this.touchStartYScreen;
+                const absDeltaX = Math.abs(deltaX);
+                const absDeltaY = Math.abs(deltaY);
+
+                if (absDeltaY > absDeltaX && absDeltaY > Constants.CLICK_DRAG_THRESHOLD) {
+                    this.resetTouchInteraction();
+                    return;
+                }
+
+                if (absDeltaX > absDeltaY && absDeltaX > Constants.CLICK_DRAG_THRESHOLD) {
+                    this.startDrag(this.touchStartXScreen);
+                    this.isPendingGestureClassification = false;
+                    this.isHorizontalDragActive = true;
+                } else {
+                    return;
+                }
+            }
+
+            if (this.isDragging) {
+                this.updateDrag(touch.clientX);
                 event.preventDefault();
             }
         }, { passive: false });
 
         this.container.addEventListener('touchend', (event: TouchEvent) => {
-            if (this.isDragging) {
-                const touch = event.changedTouches[0];
+            const touch = event.changedTouches[0];
+            if (!touch) {
+                this.resetTouchInteraction();
+                return;
+            }
+
+            if (this.isHorizontalDragActive && this.isDragging) {
                 this.endDrag(touch.clientX);
                 event.preventDefault();
+            } else if (this.isPendingGestureClassification) {
+                this.handleClick(touch.clientX);
             }
+            this.resetTouchInteraction();
         }, { passive: false });
+
+        this.container.addEventListener('touchcancel', () => {
+            this.resetTouchInteraction();
+        });
+    }
+
+    private beginTouchInteraction(clientX: number, clientY: number): void {
+        this.isPendingGestureClassification = true;
+        this.isHorizontalDragActive = false;
+        this.touchStartXScreen = clientX;
+        this.touchStartYScreen = clientY;
+    }
+
+    private resetTouchInteraction(): void {
+        this.isPendingGestureClassification = false;
+        this.isHorizontalDragActive = false;
+        if (this.isDragging) {
+            this.stopDrag();
+        }
     }
 
     private startDrag(x: number): void {
@@ -153,8 +208,7 @@ export class FactionCarouselView {
     private endDrag(x: number): void {
         if (!this.isDragging) return;
 
-        this.isDragging = false;
-        this.container.style.cursor = 'grab';
+        this.stopDrag();
 
         if (!this.hasDragged) {
             this.handleClick(x);
@@ -172,6 +226,11 @@ export class FactionCarouselView {
         const targetIndexFloat = -this.scrollOffset / itemWidthPx;
         const targetIndex = Math.round(targetIndexFloat + this.velocity * FactionCarouselView.VELOCITY_FACTOR);
         this.setCurrentIndex(targetIndex);
+    }
+
+    private stopDrag(): void {
+        this.isDragging = false;
+        this.container.style.cursor = 'grab';
     }
 
     private handleClick(x: number): void {
