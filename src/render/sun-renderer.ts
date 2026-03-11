@@ -1266,7 +1266,8 @@ export class SunRenderer {
         }
 
         const gameTimeSec = game.gameTime;
-        const dpr = window.devicePixelRatio || 1;
+        // Guard against worker context where `window` is not defined.
+        const dpr = (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1;
         const viewportWidth = canvasWidth / dpr;
         const viewportHeight = canvasHeight / dpr;
 
