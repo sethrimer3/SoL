@@ -31,6 +31,11 @@ export interface HUDRendererContext {
     getBuildingDisplayName(building: Building): string;
 }
 
+interface ProductionEntry {
+    label: string;
+    progress: number;
+}
+
 export class HUDRenderer {
     public drawDamageNumbers(game: GameState, context: HUDRendererContext): void {
         for (const damageNumber of game.damageNumbers) {
@@ -526,53 +531,71 @@ export class HUDRenderer {
 
         y += compactBoxHeight + 8;
 
-        if (player.stellarForge && player.stellarForge.heroProductionUnitType) {
+        if (player.stellarForge) {
             const forge = player.stellarForge;
+            const forgeProductionEntries: ProductionEntry[] = [];
 
-            context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            context.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
+            if (forge.heroProductionUnitType) {
+                const progress = forge.heroProductionDurationSec > 0
+                    ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
+                    : 0;
+                forgeProductionEntries.push({
+                    label: context.getProductionDisplayName(forge.heroProductionUnitType),
+                    progress
+                });
+            }
 
-            context.ctx.strokeStyle = '#FFD700';
-            context.ctx.lineWidth = 2;
-            context.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
+            for (const queuedHeroUnitType of forge.unitQueue) {
+                forgeProductionEntries.push({
+                    label: context.getProductionDisplayName(queuedHeroUnitType),
+                    progress: 0
+                });
+            }
 
-            context.ctx.fillStyle = '#FFFFFF';
-            context.ctx.font = 'bold 14px Doto';
-            context.ctx.textAlign = 'left';
-            context.ctx.textBaseline = 'top';
-
-            const productionName = context.getProductionDisplayName(forge.heroProductionUnitType!);
-            context.ctx.fillText(productionName, productionX + 8, y + 8);
-
-            const progress = forge.heroProductionDurationSec > 0
-                ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
-                : 0;
-
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, progress, context);
-
-            y += boxHeight + 8;
+            for (const forgeProductionEntry of forgeProductionEntries) {
+                this.drawProductionEntry(
+                    productionX,
+                    y,
+                    productionBoxWidth,
+                    boxHeight,
+                    forgeProductionEntry.label,
+                    forgeProductionEntry.progress,
+                    context
+                );
+                y += boxHeight + 8;
+            }
         }
 
         const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
-        if (foundry?.currentProduction) {
-            context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
-            context.ctx.fillRect(productionX, y, productionBoxWidth, boxHeight);
+        if (foundry) {
+            const foundryProductionEntries: ProductionEntry[] = [];
 
-            context.ctx.strokeStyle = '#FFD700';
-            context.ctx.lineWidth = 2;
-            context.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
+            if (foundry.currentProduction) {
+                foundryProductionEntries.push({
+                    label: `Foundry ${context.getProductionDisplayName(foundry.currentProduction)}`,
+                    progress: foundry.productionProgress
+                });
+            }
 
-            context.ctx.fillStyle = '#FFFFFF';
-            context.ctx.font = 'bold 14px Doto';
-            context.ctx.textAlign = 'left';
-            context.ctx.textBaseline = 'top';
+            for (const queuedProductionType of foundry.productionQueue) {
+                foundryProductionEntries.push({
+                    label: `Foundry ${context.getProductionDisplayName(queuedProductionType)}`,
+                    progress: 0
+                });
+            }
 
-            const productionName = context.getProductionDisplayName(foundry.currentProduction);
-            context.ctx.fillText(`Foundry ${productionName}`, productionX + 8, y + 8);
-
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, foundry.productionProgress, context);
-
-            y += boxHeight + 8;
+            for (const foundryProductionEntry of foundryProductionEntries) {
+                this.drawProductionEntry(
+                    productionX,
+                    y,
+                    productionBoxWidth,
+                    boxHeight,
+                    foundryProductionEntry.label,
+                    foundryProductionEntry.progress,
+                    context
+                );
+                y += boxHeight + 8;
+            }
         }
 
         const buildingInProgress = player.buildings.find((building) => !building.isComplete);
@@ -769,6 +792,31 @@ export class HUDRenderer {
         context.ctx.textAlign = 'center';
         context.ctx.textBaseline = 'middle';
         context.ctx.fillText(`${Math.floor(progress * 100)}%`, x + width / 2, y + height / 2);
+    }
+
+    private drawProductionEntry(
+        x: number,
+        y: number,
+        width: number,
+        height: number,
+        label: string,
+        progress: number,
+        context: HUDRendererContext
+    ): void {
+        context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
+        context.ctx.fillRect(x, y, width, height);
+
+        context.ctx.strokeStyle = '#FFD700';
+        context.ctx.lineWidth = 2;
+        context.ctx.strokeRect(x, y, width, height);
+
+        context.ctx.fillStyle = '#FFFFFF';
+        context.ctx.font = 'bold 14px Doto';
+        context.ctx.textAlign = 'left';
+        context.ctx.textBaseline = 'top';
+        context.ctx.fillText(label, x + 8, y + 8);
+
+        this.drawProgressBar(x + 8, y + 32, width - 16, 16, progress, context);
     }
 
     private getHealthColor(healthPercent: number): {r: number, g: number, b: number} {
