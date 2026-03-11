@@ -61,10 +61,15 @@ class GameController {
     private lastAdaptiveQualityChangeTimeMs = 0;
     private lastRenderTimeMs = 0;
     private adaptiveQualitySampledQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    // Sample count for ~1.5 seconds at 60 FPS (90 frames), which is enough to avoid quality thrash on short spikes.
     private readonly ADAPTIVE_QUALITY_SAMPLE_COUNT = 90;
+    // Drop quality once sustained frame time rises above 20 ms, which corresponds to roughly 50 FPS.
     private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 20;
+    // Wait two seconds between automatic downgrades so the renderer has time to settle after each step.
     private readonly ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS = 2000;
-    private readonly LOW_QUALITY_RENDER_INTERVAL_MS = 1000 / 30;
+    private readonly ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS = 250;
+    private readonly LOW_QUALITY_TARGET_RENDER_FPS = 30;
+    private readonly LOW_QUALITY_RENDER_INTERVAL_MS = 1000 / this.LOW_QUALITY_TARGET_RENDER_FPS;
 
 
     private getHeroUnitType(heroName: string): string | null {
@@ -1676,7 +1681,7 @@ class GameController {
     }
 
     private recordAdaptiveQualityFrameTime(frameTimeMs: number): void {
-        if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0 || frameTimeMs > 250) {
+        if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0 || frameTimeMs > this.ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS) {
             return;
         }
 

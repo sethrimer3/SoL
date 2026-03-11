@@ -44,7 +44,12 @@ type CachedTextSprite = {
 };
 
 export class HUDRenderer {
-    private static readonly MAX_TEXT_SPRITE_CACHE_ENTRIES = 512;
+    // Keep text caches bounded so long matches do not grow memory indefinitely; clearing on overflow
+    // is a simple reset strategy because the cached HUD strings are cheap to repopulate over a few frames.
+    private static readonly MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT = 512;
+    private static readonly MIN_TEXT_SPRITE_PADDING_PX = 4;
+    private static readonly TEXT_SPRITE_STROKE_PADDING_MULTIPLIER = 2;
+    private static readonly TEXT_SPRITE_BASE_PADDING_PX = 2;
     private readonly cachedTextSprites = new Map<string, CachedTextSprite>();
     private readonly cachedTextWidths = new Map<string, number>();
     private readonly textMeasureCanvas = document.createElement('canvas');
@@ -683,7 +688,20 @@ export class HUDRenderer {
         const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
         context.ctx.font = `bold ${victoryFontSize}px Doto`;
         context.ctx.textAlign = 'center';
-        this.drawCachedTextSprite(didLocalPlayerWin ? 'VICTORY' : 'DEFEAT', screenWidth / 2, 80, { font: `bold ${victoryFontSize}px Doto`, fillStyle: didLocalPlayerWin ? '#4CAF50' : '#F44336', textAlign: 'center', textBaseline: 'alphabetic' }, context);
+        const victoryText = didLocalPlayerWin ? 'VICTORY' : 'DEFEAT';
+        const victoryFillStyle = didLocalPlayerWin ? '#4CAF50' : '#F44336';
+        this.drawCachedTextSprite(
+            victoryText,
+            screenWidth / 2,
+            80,
+            {
+                font: `bold ${victoryFontSize}px Doto`,
+                fillStyle: victoryFillStyle,
+                textAlign: 'center',
+                textBaseline: 'alphabetic'
+            },
+            context
+        );
 
         const panelWidth = Math.min(700, screenWidth - 40);
         const panelHeight = Math.min(450, screenHeight - 200);
@@ -953,7 +971,7 @@ export class HUDRenderer {
         this.textMeasureContext.font = font;
         const width = this.textMeasureContext.measureText(text).width;
         this.cachedTextWidths.set(cacheKey, width);
-        if (this.cachedTextWidths.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRIES) {
+        if (this.cachedTextWidths.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT) {
             this.cachedTextWidths.clear();
         }
         return width;
@@ -984,7 +1002,12 @@ export class HUDRenderer {
         measureContext.textAlign = 'left';
         measureContext.textBaseline = 'alphabetic';
         const metrics = measureContext.measureText(text);
-        const paddingPx = Math.max(4, Math.ceil(lineWidth * 2 + 2));
+        // Keep at least a small border around the cached glyph, while expanding further
+        // when stroke width increases so outlines do not clip against the sprite edges.
+        const paddingPx = Math.max(
+            HUDRenderer.MIN_TEXT_SPRITE_PADDING_PX,
+            Math.ceil(lineWidth * HUDRenderer.TEXT_SPRITE_STROKE_PADDING_MULTIPLIER + HUDRenderer.TEXT_SPRITE_BASE_PADDING_PX)
+        );
         const fontSizePx = this.getFontSizePx(font);
         const leftPx = Math.ceil(metrics.actualBoundingBoxLeft || 0);
         const rightPx = Math.ceil(metrics.actualBoundingBoxRight || metrics.width);
@@ -1018,7 +1041,7 @@ export class HUDRenderer {
 
         const sprite = { canvas, width, height, alphabeticBaselineOffsetPx: drawY };
         this.cachedTextSprites.set(cacheKey, sprite);
-        if (this.cachedTextSprites.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRIES) {
+        if (this.cachedTextSprites.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT) {
             this.cachedTextSprites.clear();
         }
         return sprite;

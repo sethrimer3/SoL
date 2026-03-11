@@ -41,6 +41,7 @@ export class AsteroidRenderer {
     // Constants for rim lighting effects
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
+    private readonly FACET_CULL_MARGIN_PX = 4;
 
     // Cache for generated asteroid facets (Delaunay triangulation is expensive)
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
@@ -179,7 +180,6 @@ export class AsteroidRenderer {
         const viewportHeight = ctx.canvas instanceof HTMLCanvasElement && ctx.canvas.clientHeight > 0
             ? ctx.canvas.clientHeight
             : ctx.canvas.height;
-        const facetCullMarginPx = 4;
 
         for (let i = 0; i < asteroidRenderCache.facets.length; i++) {
             const facet = asteroidRenderCache.facets[i];
@@ -195,6 +195,8 @@ export class AsteroidRenderer {
             const lambert = Math.max(0, pseudoNormal.x * lightDirection.x + pseudoNormal.y * lightDirection.y);
             const projection = (centroidWorld.x - asteroid.position.x) * lightDirection.x
                 + (centroidWorld.y - asteroid.position.y) * lightDirection.y;
+            // Cull facets that project notably behind the asteroid center to avoid spending work
+            // on triangles that read as back-facing in the faceted lighting model.
             if (projection < -asteroid.size * 0.18) {
                 continue;
             }
@@ -217,10 +219,10 @@ export class AsteroidRenderer {
             const minScreenY = Math.min(screenA.y, screenB.y, screenC.y);
             const maxScreenY = Math.max(screenA.y, screenB.y, screenC.y);
 
-            if (maxScreenX < -facetCullMarginPx
-                || minScreenX > viewportWidth + facetCullMarginPx
-                || maxScreenY < -facetCullMarginPx
-                || minScreenY > viewportHeight + facetCullMarginPx) {
+            if (maxScreenX < -this.FACET_CULL_MARGIN_PX
+                || minScreenX > viewportWidth + this.FACET_CULL_MARGIN_PX
+                || maxScreenY < -this.FACET_CULL_MARGIN_PX
+                || minScreenY > viewportHeight + this.FACET_CULL_MARGIN_PX) {
                 continue;
             }
 

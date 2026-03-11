@@ -181,6 +181,9 @@ export class GameRenderer {
     private readonly MOVE_ORDER_DOT_RADIUS = 8.4;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
+    private readonly UNIT_BASE_SIZE_PX = 8;
+    private readonly LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 9;
+    private readonly STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 6.5;
     private readonly FORGE_MAX_HEALTH = 1000;
     private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
@@ -200,6 +203,8 @@ export class GameRenderer {
     private readonly glowRenderer = new GlowRenderer();
     private movementPointFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    // Device pixel ratio is dimensionless and does not use a unit suffix.
+    // Viewport dimensions represent pixels, so they continue to use the Px suffix.
     private lastAppliedDevicePixelRatio = 0;
     private lastAppliedViewportWidthPx = 0;
     private lastAppliedViewportHeightPx = 0;
@@ -305,11 +310,11 @@ export class GameRenderer {
     }
 
     private getViewportWidthPx(): number {
-        return this.cachedViewportWidthPx || getCanvasScreenWidthPx(this.canvas);
+        return this.cachedViewportWidthPx;
     }
 
     private getViewportHeightPx(): number {
-        return this.cachedViewportHeightPx || getCanvasScreenHeightPx(this.canvas);
+        return this.cachedViewportHeightPx;
     }
 
     private getMaxEffectiveRenderPixelRatioForQuality(): number {
@@ -342,12 +347,12 @@ export class GameRenderer {
     }
 
     private shouldUseSimpleUnitLod(unit: Unit): boolean {
-        const baseRadiusPx = 8 * this.zoom * (unit.isHero ? this.HERO_SPRITE_SCALE * 0.5 : 1);
+        const baseRadiusPx = this.UNIT_BASE_SIZE_PX * this.zoom * (unit.isHero ? this.HERO_SPRITE_SCALE * 0.5 : 1);
         if (this.graphicsQuality === 'low') {
-            return baseRadiusPx <= 9;
+            return baseRadiusPx <= this.LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
         }
         if (this.graphicsQuality === 'medium' || this.graphicsQuality === 'high') {
-            return baseRadiusPx <= 6.5;
+            return baseRadiusPx <= this.STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
         }
         return false;
     }

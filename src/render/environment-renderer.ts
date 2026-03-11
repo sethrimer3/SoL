@@ -41,6 +41,7 @@ export interface EnvironmentRendererContext {
 export class EnvironmentRenderer {
     // Influence animation state (moved from GameRenderer)
     private influenceRadiusBySource: WeakMap<object, number> = new WeakMap();
+    private readonly SPACE_DUST_VIEWPORT_MARGIN_PX = 100;
 
     public drawSpaceDustBatch(
         particles: SpaceDustParticle[],
@@ -59,13 +60,14 @@ export class EnvironmentRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
         const viewportWidth = canvas.clientWidth > 0 ? canvas.clientWidth : canvas.width;
         const viewportHeight = canvas.clientHeight > 0 ? canvas.clientHeight : canvas.height;
-        const marginPx = 100;
         const circleBatchByColor = new Map<string, number[]>();
 
         for (const particle of particles) {
             const screenPos = context.worldToScreen(particle.position);
-            if (screenPos.x < -marginPx || screenPos.x > viewportWidth + marginPx
-                || screenPos.y < -marginPx || screenPos.y > viewportHeight + marginPx) {
+            if (screenPos.x < -this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.x > viewportWidth + this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.y < -this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.y > viewportHeight + this.SPACE_DUST_VIEWPORT_MARGIN_PX) {
                 continue;
             }
 
@@ -267,11 +269,11 @@ export class EnvironmentRenderer {
         const dirY = velocityY * invSpeed;
         const perpX = -dirY;
         const perpY = dirX;
-        const zoom = baseSize / Constants.DUST_PARTICLE_SIZE;
+        const zoomFactor = baseSize / Constants.DUST_PARTICLE_SIZE;
         const trailLength = Math.min(
             Constants.DUST_TRAIL_MAX_LENGTH_PX,
             Math.max(Constants.DUST_TRAIL_MIN_LENGTH_PX, speed * Constants.DUST_TRAIL_LENGTH_PER_SPEED)
-        ) * zoom;
+        ) * zoomFactor;
         const tipX = screenPos.x - dirX * trailLength;
         const tipY = screenPos.y - dirY * trailLength;
         const movDir = Math.atan2(dirY, dirX);
