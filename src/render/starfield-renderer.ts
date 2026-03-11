@@ -47,6 +47,9 @@ type ReworkedStarLayer = {
     parallaxFactor: number;
 };
 
+type StarfieldCanvasType = HTMLCanvasElement | OffscreenCanvas;
+type Starfield2DContextType = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 export class StarfieldRenderer {
     // Cinematic orange palette for reworked parallax stars
     private readonly cinematicOrangePaletteRgb: Array<[number, number, number]> = [
@@ -68,10 +71,10 @@ export class StarfieldRenderer {
 
     // Star layers (reworked parallax system - active)
     private reworkedParallaxStarLayers: ReworkedStarLayer[] = [];
-    private readonly reworkedStarCoreCacheByPalette: HTMLCanvasElement[];
-    private readonly reworkedStarHaloCacheByPalette: HTMLCanvasElement[];
-    private reworkedStarCacheCanvas: HTMLCanvasElement | null = null;
-    private reworkedStarCacheCtx: CanvasRenderingContext2D | null = null;
+    private readonly reworkedStarCoreCacheByPalette: StarfieldCanvasType[];
+    private readonly reworkedStarHaloCacheByPalette: StarfieldCanvasType[];
+    private reworkedStarCacheCanvas: StarfieldCanvasType | null = null;
+    private reworkedStarCacheCtx: Starfield2DContextType | null = null;
     private reworkedStarCacheWidthPx = 0;
     private reworkedStarCacheHeightPx = 0;
     private reworkedStarCacheCameraX = Number.NaN;
@@ -82,12 +85,12 @@ export class StarfieldRenderer {
     // Star layers (traditional temperature-based system - legacy, unused)
     private starLayers: StarLayer[] = [];
     private readonly starColorTemperatureLut: Array<[number, number, number]>;
-    private readonly starCoreCacheByTemperature: HTMLCanvasElement[];
-    private readonly starHaloCacheByTemperature: HTMLCanvasElement[];
+    private readonly starCoreCacheByTemperature: StarfieldCanvasType[];
+    private readonly starHaloCacheByTemperature: StarfieldCanvasType[];
 
     // Starfield cache (for traditional system)
-    private starfieldCacheCanvas: HTMLCanvasElement | null = null;
-    private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
+    private starfieldCacheCanvas: StarfieldCanvasType | null = null;
+    private starfieldCacheCtx: Starfield2DContextType | null = null;
     private starfieldCacheWidth = 0;
     private starfieldCacheHeight = 0;
     private starfieldCacheCameraX = Number.NaN;
@@ -96,7 +99,15 @@ export class StarfieldRenderer {
     // Gradient cache (shared)
     private gradientCache = new Map<string, CanvasGradient>();
 
-    constructor() {
+    constructor(
+        private readonly canvasFactory: (widthPx: number, heightPx: number) => StarfieldCanvasType =
+            (widthPx, heightPx) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = widthPx;
+                canvas.height = heightPx;
+                return canvas;
+            }
+    ) {
         // Initialize temperature-based caches (for traditional system)
         this.starColorTemperatureLut = this.createStarTemperatureLookup();
         this.starCoreCacheByTemperature = this.createStarCoreCacheByTemperature();
@@ -191,14 +202,14 @@ export class StarfieldRenderer {
     /**
      * Create star core caches for reworked palette
      */
-    private createReworkedStarCoreCacheByPalette(): HTMLCanvasElement[] {
+    private createReworkedStarCoreCacheByPalette(): StarfieldCanvasType[] {
         return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarCoreCacheCanvas(colorRgb));
     }
 
     /**
      * Create star halo caches for reworked palette
      */
-    private createReworkedStarHaloCacheByPalette(): HTMLCanvasElement[] {
+    private createReworkedStarHaloCacheByPalette(): StarfieldCanvasType[] {
         return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarHaloCacheCanvas(colorRgb));
     }
 
@@ -214,7 +225,7 @@ export class StarfieldRenderer {
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'
     ): void {
         if (!this.reworkedStarCacheCanvas) {
-            this.reworkedStarCacheCanvas = document.createElement('canvas');
+            this.reworkedStarCacheCanvas = this.canvasFactory(screenWidth, screenHeight);
             this.reworkedStarCacheCtx = this.reworkedStarCacheCanvas.getContext('2d');
         }
 
@@ -457,7 +468,7 @@ export class StarfieldRenderer {
         screenHeight: number
     ): void {
         if (!this.starfieldCacheCanvas) {
-            this.starfieldCacheCanvas = document.createElement('canvas');
+            this.starfieldCacheCanvas = this.canvasFactory(screenWidth, screenHeight);
             this.starfieldCacheCtx = this.starfieldCacheCanvas.getContext('2d');
         }
 
@@ -563,7 +574,7 @@ export class StarfieldRenderer {
     /**
      * Create star core caches for temperature-based system
      */
-    private createStarCoreCacheByTemperature(): HTMLCanvasElement[] {
+    private createStarCoreCacheByTemperature(): StarfieldCanvasType[] {
         return [
             this.createStarCoreCacheCanvas([255, 191, 130]),
             this.createStarCoreCacheCanvas([255, 226, 181]),
@@ -575,7 +586,7 @@ export class StarfieldRenderer {
     /**
      * Create star halo caches for temperature-based system
      */
-    private createStarHaloCacheByTemperature(): HTMLCanvasElement[] {
+    private createStarHaloCacheByTemperature(): StarfieldCanvasType[] {
         return [
             this.createStarHaloCacheCanvas([255, 184, 120]),
             this.createStarHaloCacheCanvas([255, 214, 154]),
@@ -587,10 +598,8 @@ export class StarfieldRenderer {
     /**
      * Create star core cache canvas with radial gradient
      */
-    private createStarCoreCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
-        const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = 64;
-        cacheCanvas.height = 64;
+    private createStarCoreCacheCanvas(colorRgb: [number, number, number]): StarfieldCanvasType {
+        const cacheCanvas = this.canvasFactory(64, 64);
         const cacheContext = cacheCanvas.getContext('2d');
         if (!cacheContext) {
             return cacheCanvas;
@@ -613,10 +622,8 @@ export class StarfieldRenderer {
     /**
      * Create star halo cache canvas with radial gradient
      */
-    private createStarHaloCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
-        const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = 96;
-        cacheCanvas.height = 96;
+    private createStarHaloCacheCanvas(colorRgb: [number, number, number]): StarfieldCanvasType {
+        const cacheCanvas = this.canvasFactory(96, 96);
         const cacheContext = cacheCanvas.getContext('2d');
         if (!cacheContext) {
             return cacheCanvas;
@@ -656,7 +663,7 @@ export class StarfieldRenderer {
      * Render chromatic aberration effect for bright stars
      */
     private renderStarChromaticAberration(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         x: number,
         y: number,
         sizePx: number,
