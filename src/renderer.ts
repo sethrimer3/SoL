@@ -33,6 +33,7 @@ import { EnvironmentRenderer, EnvironmentRendererContext } from './render/enviro
 import { GlowRenderer } from './render/glow-renderer';
 import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
+import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
 
 
 type InfluenceRenderCircle = {
@@ -189,6 +190,7 @@ export class GameRenderer {
     
     // Starfield renderer for background stars and nebula
     private readonly starfieldRenderer: StarfieldRenderer;
+    private readonly starfieldWorkerBridge: StarfieldWorkerBridge | null;
     private readonly sunRenderer: SunRenderer;
     private readonly asteroidRenderer: AsteroidRenderer;
     private readonly forgeRenderer: ForgeRenderer;
@@ -228,6 +230,9 @@ export class GameRenderer {
 
         // Initialize starfield renderer
         this.starfieldRenderer = new StarfieldRenderer();
+        this.starfieldWorkerBridge = StarfieldWorkerBridge.isSupported()
+            ? new StarfieldWorkerBridge()
+            : null;
         
         // Initialize sun renderer
         this.sunRenderer = new SunRenderer();
@@ -315,6 +320,10 @@ export class GameRenderer {
 
     private getViewportHeightPx(): number {
         return this.cachedViewportHeightPx;
+    }
+
+    public destroy(): void {
+        this.starfieldWorkerBridge?.dispose();
     }
 
     private getCanvasScreenWidthPx(): number {
@@ -1920,7 +1929,25 @@ export class GameRenderer {
 
         // Draw reworked parallax stars right behind asteroid silhouettes.
         if (this.isStarsLayerEnabled) {
-            this.starfieldRenderer.drawReworkedParallaxStars(this.ctx, this.parallaxCamera, screenWidth, screenHeight, this.graphicsQuality);
+            this.starfieldWorkerBridge?.requestFrame(
+                this.parallaxCamera.x,
+                this.parallaxCamera.y,
+                screenWidth,
+                screenHeight,
+                this.graphicsQuality
+            );
+            const starBitmap = this.starfieldWorkerBridge?.getLatestBitmap();
+            if (starBitmap) {
+                this.ctx.drawImage(starBitmap, 0, 0, screenWidth, screenHeight);
+            } else {
+                this.starfieldRenderer.drawReworkedParallaxStars(
+                    this.ctx,
+                    this.parallaxCamera,
+                    screenWidth,
+                    screenHeight,
+                    this.graphicsQuality
+                );
+            }
         }
 
         // Draw asteroids (with culling - skip rendering beyond map bounds)
