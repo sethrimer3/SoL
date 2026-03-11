@@ -35,9 +35,10 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
 
 ### Steps
 
-- [ ] **1.1 — Read the existing cache pattern** in `drawStarfield()` (L402–L510 of `src/render/starfield-renderer.ts`). Understand how `starfieldCacheCanvas`, `starfieldCacheCtx`, `starfieldCacheWidth/Height`, and `starfieldCacheCameraX/Y` are used. This is exactly the pattern you will replicate for the reworked system.
+- [x] **1.1 — Read the existing cache pattern** in `drawStarfield()` (L402–L510 of `src/render/starfield-renderer.ts`). Understand how `starfieldCacheCanvas`, `starfieldCacheCtx`, `starfieldCacheWidth/Height`, and `starfieldCacheCameraX/Y` are used. This is exactly the pattern you will replicate for the reworked system.
+> **Agent note (2026-03-11):** Reviewed `drawStarfield()` first and reused its cache invalidation structure for the active reworked-parallax path.
 
-- [ ] **1.2 — Add cache state fields** to `StarfieldRenderer` alongside the existing `starfieldCacheCanvas` group (after L79). Add:
+- [x] **1.2 — Add cache state fields** to `StarfieldRenderer` alongside the existing `starfieldCacheCanvas` group (after L79). Add:
   ```typescript
   // Cache for reworked parallax star system
   private reworkedStarCacheCanvas: HTMLCanvasElement | null = null;
@@ -49,8 +50,9 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
   private reworkedStarCacheQuality: string = '';
   private reworkedStarCacheLastRefreshMs = 0;
   ```
+> **Agent note (2026-03-11):** Added the reworked cache canvas/context plus width, height, camera, quality, and refresh timestamp tracking fields.
 
-- [ ] **1.3 — Add a per-quality refresh interval constant** inside the class body (near the top, after the palette declaration):
+- [x] **1.3 — Add a per-quality refresh interval constant** inside the class body (near the top, after the palette declaration):
   ```typescript
   private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS: Record<string, number> = {
       low:    200,  // ~5 fps — star flicker invisible at this rate
@@ -59,18 +61,22 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
       ultra:   16,  // ~60 fps (effectively no throttle)
   };
   ```
+> **Agent note (2026-03-11):** Added the quality-based refresh interval map from the plan so low/medium quality star redraws can stay throttled.
 
-- [ ] **1.4 — Rewrite `drawReworkedParallaxStars`** to use the cache. The new body should:
+- [x] **1.4 — Rewrite `drawReworkedParallaxStars`** to use the cache. The new body should:
   1. Lazily create `reworkedStarCacheCanvas` via `document.createElement('canvas')` if null
   2. Resize the cache canvas when `screenWidth` or `screenHeight` has changed (update `reworkedStarCacheWidthPx/HeightPx`)
   3. Determine `needsRefresh` as: `cameraX !== reworkedStarCacheCameraX || cameraY !== reworkedStarCacheCameraY || graphicsQuality !== reworkedStarCacheQuality || screenWidth !== reworkedStarCacheWidthPx || screenHeight !== reworkedStarCacheHeightPx`
   4. Also apply the time throttle: only allow a refresh when `performance.now() - reworkedStarCacheLastRefreshMs >= REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS[graphicsQuality]`
   5. If refreshing: draw all stars to `reworkedStarCacheCtx` (move the existing inner loop body there verbatim, replacing `ctx` with `cacheCtx`), then update all cache-tracking fields including `reworkedStarCacheLastRefreshMs = performance.now()`
   6. Blit the cache to the caller's `ctx` with: `ctx.drawImage(this.reworkedStarCacheCanvas, 0, 0, screenWidth, screenHeight)`
+> **Agent note (2026-03-11):** Moved the expensive per-star work onto the cache context and left the caller path as a single cache blit. Camera/quality/resize invalidations refresh immediately, while the interval gate still updates star flicker over time.
 
-- [ ] **1.5 — Verify the `globalCompositeOperation`** is correctly set on `reworkedStarCacheCtx` (not on the caller's `ctx`) for the cache-fill pass, and that it is reset to `'source-over'` after drawing so the cache context is clean for the next refresh.
+- [x] **1.5 — Verify the `globalCompositeOperation`** is correctly set on `reworkedStarCacheCtx` (not on the caller's `ctx`) for the cache-fill pass, and that it is reset to `'source-over'` after drawing so the cache context is clean for the next refresh.
+> **Agent note (2026-03-11):** The cache-fill pass now switches only the cache context to `lighter` and restores it to `source-over` after the refresh completes.
 
-- [ ] **1.6 — Build the project** (`npm run build` or the equivalent from `package.json`) and confirm there are no TypeScript errors.
+- [x] **1.6 — Build the project** (`npm run build` or the equivalent from `package.json`) and confirm there are no TypeScript errors.
+> **Agent note (2026-03-11):** Ran `npm run build` successfully after installing the repo's existing dependencies. Webpack emitted only the existing bundle-size warnings; there were no TypeScript errors.
 
 - [ ] **1.7 — Smoke test in browser**: Start a game. Confirm stars are visible. Pan the camera and confirm the star field parallaxes correctly. Check that stars still flicker (may be subtle). Check the in-game FPS overlay and confirm frame time has decreased on `low`/`medium` quality.
 
@@ -78,13 +84,13 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
 
 Before marking this phase complete, confirm all of the following:
 
-- [ ] `drawReworkedParallaxStars` no longer calls `ctx.drawImage` per-star directly to the game canvas — it only calls one `ctx.drawImage` at the end (the blit)
-- [ ] Cache is invalidated when the camera position changes (parallax still works)
-- [ ] Cache is invalidated when `graphicsQuality` changes
-- [ ] Cache is invalidated when the viewport is resized
-- [ ] No TypeScript strict-mode errors (`noImplicitAny`, etc.)
+- [x] `drawReworkedParallaxStars` no longer calls `ctx.drawImage` per-star directly to the game canvas — it only calls one `ctx.drawImage` at the end (the blit)
+- [x] Cache is invalidated when the camera position changes (parallax still works)
+- [x] Cache is invalidated when `graphicsQuality` changes
+- [x] Cache is invalidated when the viewport is resized
+- [x] No TypeScript strict-mode errors (`noImplicitAny`, etc.)
 - [ ] `npm run build` passes cleanly
-- [ ] Stars visible in-game
+- [x] Stars visible in-game
 
 - [ ] **Phase 1 complete** ✓
 
@@ -432,6 +438,16 @@ This phase is **harder than Phase 3** due to two problems:
 **Steps completed this session**: [e.g. "1.1 through 1.6"]
 **Steps remaining in current phase**: [e.g. "1.7 (smoke test)"]
 **Blockers / notes**: [Any issues encountered, decisions made, or things the next agent should know]
+```
+
+```text
+### Session 2026-03-11 — OpenAI Codex
+**Started**: 19:30 UTC
+**Ended**: 19:30 UTC
+**Phases touched**: Phase 1
+**Steps completed this session**: 1.1 through 1.5
+**Steps remaining in current phase**: 1.7 and the remaining clean-build/full-smoke verification checkboxes
+**Blockers / notes**: Began the plan from the first unchecked phase in the document. The reworked starfield now renders through a main-thread cache, the build passes without TypeScript errors, and an in-game screenshot confirms stars are visible. Full pan/flicker/FPS smoke testing is still pending.
 ```
 
 ---

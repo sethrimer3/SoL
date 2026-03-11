@@ -59,10 +59,25 @@ export class StarfieldRenderer {
         [232, 239, 255],
     ];
 
+    private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
+        low: 200,
+        medium: 100,
+        high: 33,
+        ultra: 16,
+    };
+
     // Star layers (reworked parallax system - active)
     private reworkedParallaxStarLayers: ReworkedStarLayer[] = [];
     private readonly reworkedStarCoreCacheByPalette: HTMLCanvasElement[];
     private readonly reworkedStarHaloCacheByPalette: HTMLCanvasElement[];
+    private reworkedStarCacheCanvas: HTMLCanvasElement | null = null;
+    private reworkedStarCacheCtx: CanvasRenderingContext2D | null = null;
+    private reworkedStarCacheWidthPx = 0;
+    private reworkedStarCacheHeightPx = 0;
+    private reworkedStarCacheCameraX = Number.NaN;
+    private reworkedStarCacheCameraY = Number.NaN;
+    private reworkedStarCacheQuality: 'low' | 'medium' | 'high' | 'ultra' | '' = '';
+    private reworkedStarCacheLastRefreshMs = 0;
 
     // Star layers (traditional temperature-based system - legacy, unused)
     private starLayers: StarLayer[] = [];
@@ -198,6 +213,15 @@ export class StarfieldRenderer {
         screenHeight: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'
     ): void {
+        if (!this.reworkedStarCacheCanvas) {
+            this.reworkedStarCacheCanvas = document.createElement('canvas');
+            this.reworkedStarCacheCtx = this.reworkedStarCacheCanvas.getContext('2d');
+        }
+
+        if (!this.reworkedStarCacheCanvas || !this.reworkedStarCacheCtx) {
+            return;
+        }
+
         const shouldRenderStarChromaticAberration = graphicsQuality === 'high' || graphicsQuality === 'ultra';
         const centerX = screenWidth * 0.5;
         const centerY = screenHeight * 0.5;
@@ -205,64 +229,91 @@ export class StarfieldRenderer {
         const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
         const cameraX = parallaxCamera.x;
         const cameraY = parallaxCamera.y;
-        const nowSeconds = performance.now() * 0.001;
+        const nowMs = performance.now();
+        const nowSeconds = nowMs * 0.001;
+        const dimensionsChanged = this.reworkedStarCacheWidthPx !== screenWidth || this.reworkedStarCacheHeightPx !== screenHeight;
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-
-        for (const layer of this.reworkedParallaxStarLayers) {
-            const parallaxX = cameraX * layer.parallaxFactor;
-            const parallaxY = cameraY * layer.parallaxFactor;
-            const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
-            
-            // Pre-compute depth-based alpha and size multipliers
-            const depthAlpha = 0.5 + depthScale * 0.5;
-            const depthSizeMultiplier = 0.84 + depthScale * 0.62;
-            const haloAlphaMultiplier = 0.56 + depthScale * 0.44;
-
-            for (const star of layer.stars) {
-                const screenX = centerX + (star.x - parallaxX);
-                const screenY = centerY + (star.y - parallaxY);
-                const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
-                const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
-
-                if (wrappedX < -140 || wrappedX > screenWidth + 140 || wrappedY < -140 || wrappedY > screenHeight + 140) {
-                    continue;
-                }
-
-                const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
-                const alpha = star.brightness * flicker * depthAlpha;
-                const renderedSizePx = star.sizePx * depthSizeMultiplier;
-                const cacheIndex = star.colorIndex;
-
-                const haloRadiusPx = renderedSizePx * star.haloScale;
-                ctx.globalAlpha = alpha * haloAlphaMultiplier;
-                ctx.drawImage(
-                    this.reworkedStarHaloCacheByPalette[cacheIndex],
-                    wrappedX - haloRadiusPx,
-                    wrappedY - haloRadiusPx,
-                    haloRadiusPx * 2,
-                    haloRadiusPx * 2
-                );
-
-                const coreRadiusPx = renderedSizePx * 0.95;
-                ctx.globalAlpha = alpha;
-                ctx.drawImage(
-                    this.reworkedStarCoreCacheByPalette[cacheIndex],
-                    wrappedX - coreRadiusPx,
-                    wrappedY - coreRadiusPx,
-                    coreRadiusPx * 2,
-                    coreRadiusPx * 2
-                );
-
-                // Chromatic aberration is one of the heaviest per-star passes; keep it on high/ultra.
-                if (star.hasChromaticAberration && shouldRenderStarChromaticAberration) {
-                    this.renderStarChromaticAberration(ctx, wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb);
-                }
-            }
+        if (dimensionsChanged) {
+            this.reworkedStarCacheCanvas.width = screenWidth;
+            this.reworkedStarCacheCanvas.height = screenHeight;
+            this.reworkedStarCacheWidthPx = screenWidth;
+            this.reworkedStarCacheHeightPx = screenHeight;
         }
 
-        ctx.restore();
+        const cameraChanged = cameraX !== this.reworkedStarCacheCameraX || cameraY !== this.reworkedStarCacheCameraY;
+        const qualityChanged = graphicsQuality !== this.reworkedStarCacheQuality;
+        const refreshIntervalMs = this.REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS[graphicsQuality];
+        const refreshIntervalElapsed = nowMs - this.reworkedStarCacheLastRefreshMs >= refreshIntervalMs;
+        const shouldRefresh = dimensionsChanged || cameraChanged || qualityChanged || refreshIntervalElapsed;
+
+        if (shouldRefresh) {
+            const cacheCtx = this.reworkedStarCacheCtx;
+            cacheCtx.globalCompositeOperation = 'source-over';
+            cacheCtx.clearRect(0, 0, screenWidth, screenHeight);
+            cacheCtx.save();
+            cacheCtx.globalCompositeOperation = 'lighter';
+
+            for (const layer of this.reworkedParallaxStarLayers) {
+                const parallaxX = cameraX * layer.parallaxFactor;
+                const parallaxY = cameraY * layer.parallaxFactor;
+                const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
+
+                const depthAlpha = 0.5 + depthScale * 0.5;
+                const depthSizeMultiplier = 0.84 + depthScale * 0.62;
+                const haloAlphaMultiplier = 0.56 + depthScale * 0.44;
+
+                for (const star of layer.stars) {
+                    const screenX = centerX + (star.x - parallaxX);
+                    const screenY = centerY + (star.y - parallaxY);
+                    const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
+                    const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
+
+                    if (wrappedX < -140 || wrappedX > screenWidth + 140 || wrappedY < -140 || wrappedY > screenHeight + 140) {
+                        continue;
+                    }
+
+                    const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
+                    const alpha = star.brightness * flicker * depthAlpha;
+                    const renderedSizePx = star.sizePx * depthSizeMultiplier;
+                    const cacheIndex = star.colorIndex;
+
+                    const haloRadiusPx = renderedSizePx * star.haloScale;
+                    cacheCtx.globalAlpha = alpha * haloAlphaMultiplier;
+                    cacheCtx.drawImage(
+                        this.reworkedStarHaloCacheByPalette[cacheIndex],
+                        wrappedX - haloRadiusPx,
+                        wrappedY - haloRadiusPx,
+                        haloRadiusPx * 2,
+                        haloRadiusPx * 2
+                    );
+
+                    const coreRadiusPx = renderedSizePx * 0.95;
+                    cacheCtx.globalAlpha = alpha;
+                    cacheCtx.drawImage(
+                        this.reworkedStarCoreCacheByPalette[cacheIndex],
+                        wrappedX - coreRadiusPx,
+                        wrappedY - coreRadiusPx,
+                        coreRadiusPx * 2,
+                        coreRadiusPx * 2
+                    );
+
+                    if (star.hasChromaticAberration && shouldRenderStarChromaticAberration) {
+                        this.renderStarChromaticAberration(cacheCtx, wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb);
+                    }
+                }
+            }
+
+            cacheCtx.restore();
+            cacheCtx.filter = 'none';
+            cacheCtx.globalAlpha = 1;
+            cacheCtx.globalCompositeOperation = 'source-over';
+            this.reworkedStarCacheCameraX = cameraX;
+            this.reworkedStarCacheCameraY = cameraY;
+            this.reworkedStarCacheQuality = graphicsQuality;
+            this.reworkedStarCacheLastRefreshMs = nowMs;
+        }
+
+        ctx.drawImage(this.reworkedStarCacheCanvas, 0, 0, screenWidth, screenHeight);
         ctx.globalAlpha = 1;
     }
 
