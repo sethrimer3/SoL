@@ -195,11 +195,6 @@ export class AsteroidRenderer {
             const lambert = Math.max(0, pseudoNormal.x * lightDirection.x + pseudoNormal.y * lightDirection.y);
             const projection = (centroidWorld.x - asteroid.position.x) * lightDirection.x
                 + (centroidWorld.y - asteroid.position.y) * lightDirection.y;
-            // Cull facets that project notably behind the asteroid center to avoid spending work
-            // on triangles that read as back-facing in the faceted lighting model.
-            if (projection < -asteroid.size * 0.18) {
-                continue;
-            }
             const normalizedProjection = Math.min(1, Math.max(0, (projection - minProjection) / projectionSpan));
             const directionalBrightness = 0.35 + 0.65 * normalizedProjection;
             const brightness = directionalBrightness * (0.8 + lambert * 0.2);

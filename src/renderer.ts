@@ -317,6 +317,14 @@ export class GameRenderer {
         return this.cachedViewportHeightPx;
     }
 
+    private getCanvasScreenWidthPx(): number {
+        return getCanvasScreenWidthPx(this.canvas);
+    }
+
+    private getCanvasScreenHeightPx(): number {
+        return getCanvasScreenHeightPx(this.canvas);
+    }
+
     private getMaxEffectiveRenderPixelRatioForQuality(): number {
         switch (this.graphicsQuality) {
             case 'low':
@@ -1846,9 +1854,10 @@ export class GameRenderer {
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
         
-        // Draw camera-space values used by reworked parallax stars.
-        const screenWidth = this.getViewportWidthPx();
-        const screenHeight = this.getViewportHeightPx();
+        // Use actual canvas screen-space size for full-screen environment effects so
+        // quality-scaled rendering still covers the full visible playfield correctly.
+        const screenWidth = this.getCanvasScreenWidthPx();
+        const screenHeight = this.getCanvasScreenHeightPx();
 
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
@@ -1864,8 +1873,8 @@ export class GameRenderer {
 
         // Draw sun rays with raytracing (light and shadows)
         if (this.isSunsLayerEnabled) {
-            const canvasWidth = this.getViewportWidthPx();
-            const canvasHeight = this.getViewportHeightPx();
+            const canvasWidth = this.getCanvasScreenWidthPx();
+            const canvasHeight = this.getCanvasScreenHeightPx();
             
             this.sunRenderer.drawSunRays(
                 this.ctx,
@@ -1886,8 +1895,8 @@ export class GameRenderer {
         const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
-            const canvasWidth = this.getViewportWidthPx();
-            const canvasHeight = this.getViewportHeightPx();
+            const canvasWidth = this.getCanvasScreenWidthPx();
+            const canvasHeight = this.getCanvasScreenHeightPx();
             
             this.sunRenderer.drawUltraSunParticleLayers(
                 this.ctx,
