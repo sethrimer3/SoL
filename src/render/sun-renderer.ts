@@ -61,6 +61,14 @@ type ShaftGradientPair = {
     spine: CanvasGradient;
 };
 
+type SunBodyCacheEntry = {
+    canvas: HTMLCanvasElement;
+    screenX: number;
+    screenY: number;
+    radiusPx: number;
+    lastRefreshMs: number;
+};
+
 export class SunRenderer {
     // Constants
     private readonly ULTRA_SUN_BLOOM_STEPS = 4;
@@ -70,9 +78,16 @@ export class SunRenderer {
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
+    private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
+        low: 100,
+        medium: 50,
+        high: 16,
+        ultra: 0,
+    };
     
     // Caches
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
+    private sunBodyCacheByKey = new Map<string, SunBodyCacheEntry>();
     private ultraSunParticleCacheBySun = new WeakMap<Sun, UltraSunParticleCache>();
     private sunShadowQuadFrameCache = new WeakMap<Sun, ShadowQuad[]>();
     private sunShaftGradientCache = new Map<string, ShaftGradientPair>();
@@ -127,9 +142,95 @@ export class SunRenderer {
             return;
         }
 
+        if (graphicsQuality === 'low' || graphicsQuality === 'medium') {
+            if (isFancyGraphicsEnabled) {
+                const bloomRadius = screenRadius * 1.35;
+                drawFancyBloom(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
+            }
+            this.drawCachedSunBody(ctx, sun, screenPos, screenRadius, graphicsQuality, colorScheme, sunSprite);
+            return;
+        }
+
+        this.drawStandardSunBody(ctx, screenPos, screenRadius, isFancyGraphicsEnabled, colorScheme, sunSprite, drawFancyBloom);
+    }
+
+    private drawCachedSunBody(
+        ctx: CanvasRenderingContext2D,
+        sun: Sun,
+        screenPos: Vector2D,
+        screenRadius: number,
+        graphicsQuality: 'low' | 'medium',
+        colorScheme: ColorScheme,
+        sunSprite: SpriteDrawSource | null
+    ): void {
+        const cacheKey = this.getSunBodyCacheKey(sun);
+        let cacheEntry = this.sunBodyCacheByKey.get(cacheKey);
+        const nowMs = performance.now();
+        const refreshIntervalMs = this.SUN_BODY_CACHE_REFRESH_INTERVAL_Ms[graphicsQuality];
+        const needsRefresh = !cacheEntry
+            || Math.abs(screenPos.x - cacheEntry.screenX) > 1
+            || Math.abs(screenPos.y - cacheEntry.screenY) > 1
+            || Math.abs(screenRadius - cacheEntry.radiusPx) > 1
+            || nowMs - cacheEntry.lastRefreshMs >= refreshIntervalMs;
+
+        if (needsRefresh) {
+            const cacheDiameterPx = Math.max(1, Math.ceil(screenRadius * 2));
+            const cacheCanvas = cacheEntry?.canvas ?? document.createElement('canvas');
+            if (cacheCanvas.width !== cacheDiameterPx || cacheCanvas.height !== cacheDiameterPx) {
+                cacheCanvas.width = cacheDiameterPx;
+                cacheCanvas.height = cacheDiameterPx;
+            }
+
+            const cacheContext = cacheCanvas.getContext('2d');
+            if (!cacheContext) {
+                this.drawStandardSunBody(ctx, screenPos, screenRadius, false, colorScheme, sunSprite);
+                return;
+            }
+
+            cacheContext.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+            this.drawStandardSunBody(
+                cacheContext,
+                new Vector2D(cacheCanvas.width * 0.5, cacheCanvas.height * 0.5),
+                screenRadius,
+                false,
+                colorScheme,
+                sunSprite
+            );
+
+            cacheEntry = {
+                canvas: cacheCanvas,
+                screenX: screenPos.x,
+                screenY: screenPos.y,
+                radiusPx: screenRadius,
+                lastRefreshMs: nowMs,
+            };
+            this.sunBodyCacheByKey.set(cacheKey, cacheEntry);
+        }
+
+        if (!cacheEntry) {
+            this.drawStandardSunBody(ctx, screenPos, screenRadius, false, colorScheme, sunSprite);
+            return;
+        }
+
+        ctx.drawImage(
+            cacheEntry.canvas,
+            screenPos.x - cacheEntry.canvas.width * 0.5,
+            screenPos.y - cacheEntry.canvas.height * 0.5
+        );
+    }
+
+    private drawStandardSunBody(
+        ctx: CanvasRenderingContext2D,
+        screenPos: Vector2D,
+        screenRadius: number,
+        isFancyGraphicsEnabled: boolean,
+        colorScheme: ColorScheme,
+        sunSprite: SpriteDrawSource | null,
+        drawFancyBloom?: (screenPos: Vector2D, radius: number, color: string, intensity: number) => void
+    ): void {
         if (isFancyGraphicsEnabled) {
             const bloomRadius = screenRadius * 1.35;
-            drawFancyBloom(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
+            drawFancyBloom?.(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
         }
 
         // Draw sun glow (outer glow)
@@ -169,6 +270,10 @@ export class SunRenderer {
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, screenRadius * 0.8, 0, Math.PI * 2);
         ctx.stroke();
+    }
+
+    private getSunBodyCacheKey(sun: Sun): string {
+        return `${sun.position.x}_${sun.position.y}`;
     }
 
     /**

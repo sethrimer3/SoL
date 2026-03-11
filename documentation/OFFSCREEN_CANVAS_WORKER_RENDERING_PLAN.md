@@ -106,17 +106,19 @@ Before marking this phase complete, confirm all of the following:
 
 ### Steps
 
-- [ ] **2.1 — Read `SunRenderer`** fully, particularly:
+- [x] **2.1 — Read `SunRenderer`** fully, particularly:
   - The `drawSun` entry point and what it dispatches to
   - How `lightingLayerCanvas` and `lightingSunPassCanvas` are used
   - Where `gameTime` is used (animation) vs where `sun.position` is used (placement)
   - The `clearFrameCache()` method and what it clears
 
   Understanding this fully before touching anything is critical — `SunRenderer` is complex.
+> **Agent note (2026-03-11):** Reviewed `drawSun`, `drawUltraSun`, `drawSunRays`, the lighting-layer helpers, and `clearFrameCache()` before editing. `drawSun()` owns the body render path; sun shafts remain isolated in `drawSunRays()`.
 
-- [ ] **2.2 — Identify the "sun body" draw surface** — the portion of `drawSun` that renders the plasma gradient and corona but does **not** include the sun ray shafts (those are in `drawSunRays`). Confirm the exact method boundaries.
+- [x] **2.2 — Identify the "sun body" draw surface** — the portion of `drawSun` that renders the plasma gradient and corona but does **not** include the sun ray shafts (those are in `drawSunRays`). Confirm the exact method boundaries.
+> **Agent note (2026-03-11):** Kept the cache scoped to `drawSun()` only. `drawSunRays()` was left untouched, so body caching cannot affect shaft/shadow compositing.
 
-- [ ] **2.3 — Add cache fields** to `SunRenderer` for a per-sun body cache keyed on a stable sun identifier:
+- [x] **2.3 — Add cache fields** to `SunRenderer` for a per-sun body cache keyed on a stable sun identifier:
   ```typescript
   private sunBodyCacheByKey = new Map<string, {
       canvas: HTMLCanvasElement;
@@ -127,34 +129,39 @@ Before marking this phase complete, confirm all of the following:
   }>();
   ```
   The key should be derived from the sun's world position (`sun.position.x + '_' + sun.position.y`) since sun positions are fixed for the duration of a match.
+> **Agent note (2026-03-11):** Added `sunBodyCacheByKey` and keyed it from the sun world position so each fixed-match sun keeps its own reusable offscreen body surface.
 
-- [ ] **2.4 — Add a per-quality sun body cache TTL constant:**
+- [x] **2.4 — Add a per-quality sun body cache TTL constant:**
   ```typescript
-  private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_MS: Record<string, number> = {
+  private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_Ms: Record<string, number> = {
       low:    100,
       medium:  50,
       high:    16,
       ultra:    0,  // no cache at ultra — full fidelity every frame
   };
   ```
+> **Agent note (2026-03-11):** Added the quality-based cache refresh interval constant using the repo's `Ms` naming convention for time units.
 
-- [ ] **2.5 — Wrap the sun body draw path** with cache logic at `low` and `medium` quality:
+- [x] **2.5 — Wrap the sun body draw path** with cache logic at `low` and `medium` quality:
   1. At `high`/`ultra`: execute existing draw path unchanged
   2. At `low`/`medium`: check if a valid cache entry exists for this sun key
   3. If stale (TTL expired or screen position moved more than 1px): redraw to an offscreen canvas, update cache entry
   4. Blit the cached canvas to the game `ctx` at the correct screen position
+> **Agent note (2026-03-11):** Extracted a shared `drawStandardSunBody(...)` helper and added a cached low/medium path that refreshes on TTL expiry, screen-position drift, or radius changes. `high` and `ultra` still use the direct render path.
 
-- [ ] **2.6 — Ensure `clearFrameCache()`** does NOT clear the sun body cache (it should only clear per-frame shadow quad caches, as it does now). The sun body cache persists across frames intentionally.
+- [x] **2.6 — Ensure `clearFrameCache()`** does NOT clear the sun body cache (it should only clear per-frame shadow quad caches, as it does now). The sun body cache persists across frames intentionally.
+> **Agent note (2026-03-11):** Left `clearFrameCache()` unchanged and verified in the browser that calling it clears the shadow cache while `sunBodyCacheByKey.size` remains unchanged.
 
-- [ ] **2.7 — Build and smoke test**: Confirm suns are visible. Pan the camera and confirm suns move correctly. Switch graphics quality settings in the in-game menu and confirm the sun appearance updates. Check no visual regression at `ultra`.
+- [x] **2.7 — Build and smoke test**: Confirm suns are visible. Pan the camera and confirm suns move correctly. Switch graphics quality settings in the in-game menu and confirm the sun appearance updates. Check no visual regression at `ultra`.
+> **Agent note (2026-03-11):** `npm run build` passed after the change. Smoke-tested the live page by rendering low/medium/high/ultra, forcing a medium-quality camera move, and checking the cache entry's updated screen position. Screenshot evidence: https://github.com/user-attachments/assets/78893313-ea6f-423d-8807-d909efe07ef5
 
 ### Phase 2 Verification
 
-- [ ] Suns render correctly at all four quality levels
-- [ ] Sun screen position tracks camera movement with no lag/ghosting artefacts
-- [ ] `clearFrameCache()` does not evict the sun body cache
-- [ ] No TypeScript strict-mode errors
-- [ ] `npm run build` passes cleanly
+- [x] Suns render correctly at all four quality levels
+- [x] Sun screen position tracks camera movement with no lag/ghosting artefacts
+- [x] `clearFrameCache()` does not evict the sun body cache
+- [x] No TypeScript strict-mode errors
+- [x] `npm run build` passes cleanly
 - [ ] FPS overlay shows improvement at `low`/`medium` when suns are on screen
 
 - [ ] **Phase 2 complete** ✓
@@ -448,6 +455,16 @@ This phase is **harder than Phase 3** due to two problems:
 **Steps completed this session**: 1.1 through 1.5
 **Steps remaining in current phase**: 1.7 and the remaining clean-build/full-smoke verification checkboxes
 **Blockers / notes**: Began the plan from the first unchecked phase in the document. The reworked starfield now renders through a main-thread cache, the build passes without TypeScript errors, and an in-game screenshot confirms stars are visible. Full pan/flicker/FPS smoke testing is still pending.
+```
+
+```text
+### Session 2026-03-11 — OpenAI Codex
+**Started**: 19:51 UTC
+**Ended**: 19:51 UTC
+**Phases touched**: Phase 2
+**Steps completed this session**: 2.1 through 2.7
+**Steps remaining in current phase**: FPS overlay verification and the final Phase 2 complete checkbox
+**Blockers / notes**: Added a low/medium sun-body cache in `SunRenderer`, kept `drawSunRays()` unchanged, and verified in-browser that `clearFrameCache()` does not evict the sun-body cache. The remaining Phase 2 item is a performance-overlay improvement check.
 ```
 
 ---
