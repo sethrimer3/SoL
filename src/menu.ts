@@ -119,6 +119,7 @@ export class MainMenu {
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
     private mainScreenRenderToken: number = 0;
+    private lobbyDetailRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
     private visibilityHandler: (() => void) | null = null;
     private blurHandler: (() => void) | null = null;
@@ -1650,6 +1651,7 @@ export class MainMenu {
 
 
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
+        const renderToken = ++this.lobbyDetailRenderToken;
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
@@ -1658,7 +1660,6 @@ export class MainMenu {
             this.factionCarousel.destroy();
             this.factionCarousel = null;
         }
-        container.innerHTML = '';
         this.setMenuParticleDensity(1.6);
 
         if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
@@ -1683,11 +1684,16 @@ export class MainMenu {
         const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
         const lobbyMaps = this.availableMaps;
         const roomSelectedMapId = room.game_settings?.selectedMapId;
         const selectedLobbyMap = lobbyMaps.find(map => map.id === roomSelectedMapId) || this.settings.selectedMap || lobbyMaps[0];
         this.settings.selectedMap = selectedLobbyMap;
 
+        container.innerHTML = '';
         renderLobbyDetailScreen(container, {
             roomId: room.id,
             roomName: room.name,
