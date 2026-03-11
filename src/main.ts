@@ -61,10 +61,11 @@ class GameController {
     private lastAdaptiveQualityChangeTimeMs = 0;
     private lastRenderTimeMs = 0;
     private adaptiveQualitySampledQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private adaptiveQualityEnabled: boolean = false;
     // Sample count for ~1.5 seconds at 60 FPS (90 frames), which is enough to avoid quality thrash on short spikes.
     private readonly ADAPTIVE_QUALITY_SAMPLE_COUNT = 90;
-    // Drop quality once sustained frame time rises above 20 ms, which corresponds to roughly 50 FPS.
-    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 20;
+    // Drop quality once sustained frame time rises above 33 ms, which corresponds to roughly 30 FPS.
+    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 33;
     // Wait two seconds between automatic downgrades so the renderer has time to settle after each step.
     private readonly ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS = 2000;
     private readonly ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS = 250;
@@ -1161,6 +1162,12 @@ class GameController {
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.adaptiveQualityEnabled = settings.isAdaptiveQualityEnabled;
+        // Reset adaptive quality state when starting a new game
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.lastAdaptiveQualityChangeTimeMs = 0;
+        this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
         
         // Set up network manager for LAN play
         this.localPlayerIndex = 0;
@@ -1703,6 +1710,10 @@ class GameController {
     }
 
     private maybeLowerGraphicsQuality(currentTimeMs: number): void {
+        if (!this.adaptiveQualityEnabled) {
+            return;
+        }
+
         if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
             return;
         }
