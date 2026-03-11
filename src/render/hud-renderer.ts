@@ -31,6 +31,11 @@ export interface HUDRendererContext {
     getBuildingDisplayName(building: Building): string;
 }
 
+interface ProductionEntry {
+    label: string;
+    progress: number;
+}
+
 export class HUDRenderer {
     public drawDamageNumbers(game: GameState, context: HUDRendererContext): void {
         for (const damageNumber of game.damageNumbers) {
@@ -528,7 +533,7 @@ export class HUDRenderer {
 
         if (player.stellarForge) {
             const forge = player.stellarForge;
-            const forgeProductionEntries: Array<{ label: string; progress: number }> = [];
+            const forgeProductionEntries: ProductionEntry[] = [];
 
             if (forge.heroProductionUnitType) {
                 const progress = forge.heroProductionDurationSec > 0
@@ -563,7 +568,7 @@ export class HUDRenderer {
 
         const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
         if (foundry) {
-            const foundryProductionEntries: Array<{ label: string; progress: number }> = [];
+            const foundryProductionEntries: ProductionEntry[] = [];
 
             if (foundry.currentProduction) {
                 foundryProductionEntries.push({
