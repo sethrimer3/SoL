@@ -41,6 +41,7 @@ export class AsteroidRenderer {
     // Constants for rim lighting effects
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
+    private readonly FACET_CULL_MARGIN_PX = 4;
 
     // Cache for generated asteroid facets (Delaunay triangulation is expensive)
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
@@ -173,6 +174,12 @@ export class AsteroidRenderer {
         const shadowHex = '#4A3218';
         const midToneHex = '#C48A2C';
         const lightHex = '#F6C65B';
+        const viewportWidth = ctx.canvas instanceof HTMLCanvasElement && ctx.canvas.clientWidth > 0
+            ? ctx.canvas.clientWidth
+            : ctx.canvas.width;
+        const viewportHeight = ctx.canvas instanceof HTMLCanvasElement && ctx.canvas.clientHeight > 0
+            ? ctx.canvas.clientHeight
+            : ctx.canvas.height;
 
         for (let i = 0; i < asteroidRenderCache.facets.length; i++) {
             const facet = asteroidRenderCache.facets[i];
@@ -202,6 +209,17 @@ export class AsteroidRenderer {
             const screenA = worldToScreen(worldA);
             const screenB = worldToScreen(worldB);
             const screenC = worldToScreen(worldC);
+            const minScreenX = Math.min(screenA.x, screenB.x, screenC.x);
+            const maxScreenX = Math.max(screenA.x, screenB.x, screenC.x);
+            const minScreenY = Math.min(screenA.y, screenB.y, screenC.y);
+            const maxScreenY = Math.max(screenA.y, screenB.y, screenC.y);
+
+            if (maxScreenX < -this.FACET_CULL_MARGIN_PX
+                || minScreenX > viewportWidth + this.FACET_CULL_MARGIN_PX
+                || maxScreenY < -this.FACET_CULL_MARGIN_PX
+                || minScreenY > viewportHeight + this.FACET_CULL_MARGIN_PX) {
+                continue;
+            }
 
             ctx.fillStyle = facetColor;
             ctx.strokeStyle = facetStrokeColor;

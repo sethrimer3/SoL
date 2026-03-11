@@ -12,7 +12,7 @@ import { renderLensFlare } from './rendering/LensFlare';
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
 import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 import { getFactionColor } from './render/faction-utilities';
-import { SpriteManager, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
+import { SpriteManager, SpriteDrawSource, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
 import { AsteroidRenderer } from './render/asteroid-renderer';
@@ -181,6 +181,9 @@ export class GameRenderer {
     private readonly MOVE_ORDER_DOT_RADIUS = 8.4;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
+    private readonly UNIT_BASE_SIZE_PX = 8;
+    private readonly LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 9;
+    private readonly STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 6.5;
     private readonly FORGE_MAX_HEALTH = 1000;
     private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
@@ -200,9 +203,14 @@ export class GameRenderer {
     private readonly glowRenderer = new GlowRenderer();
     private movementPointFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    // Device pixel ratio is dimensionless and does not use a unit suffix.
+    // Viewport dimensions represent pixels, so they continue to use the Px suffix.
     private lastAppliedDevicePixelRatio = 0;
     private lastAppliedViewportWidthPx = 0;
     private lastAppliedViewportHeightPx = 0;
+    private cachedDevicePixelRatio = 1;
+    private cachedViewportWidthPx = 0;
+    private cachedViewportHeightPx = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -211,8 +219,12 @@ export class GameRenderer {
             throw new Error('Could not get 2D context from canvas');
         }
         this.ctx = context;
+        this.updateViewportMetrics();
         this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('resize', () => {
+            this.updateViewportMetrics();
+            this.resizeCanvas();
+        });
 
         // Initialize starfield renderer
         this.starfieldRenderer = new StarfieldRenderer();
@@ -254,7 +266,7 @@ export class GameRenderer {
 
     private resizeCanvas(): void {
         // Cap render DPR to reduce fill-rate pressure on high-DPI devices.
-        const cappedDpr = Math.min(window.devicePixelRatio || 1, this.MAX_RENDER_PIXEL_RATIO);
+        const cappedDpr = Math.min(this.cachedDevicePixelRatio || 1, this.MAX_RENDER_PIXEL_RATIO);
         
         // Apply resolution scaling based on quality setting
         // Low quality: 0.75x resolution (56% pixel count)
@@ -275,20 +287,42 @@ export class GameRenderer {
         );
         
         // Set canvas physical size to match display size * effective DPR
-        this.canvas.width = window.innerWidth * effectiveDpr;
-        this.canvas.height = window.innerHeight * effectiveDpr;
+        this.canvas.width = this.cachedViewportWidthPx * effectiveDpr;
+        this.canvas.height = this.cachedViewportHeightPx * effectiveDpr;
         
         // Set canvas CSS size to match window size
-        this.canvas.style.width = `${window.innerWidth}px`;
-        this.canvas.style.height = `${window.innerHeight}px`;
+        this.canvas.style.width = `${this.cachedViewportWidthPx}px`;
+        this.canvas.style.height = `${this.cachedViewportHeightPx}px`;
         
         // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
         this.lastAppliedGraphicsQuality = this.graphicsQuality;
-        this.lastAppliedDevicePixelRatio = window.devicePixelRatio || 1;
-        this.lastAppliedViewportWidthPx = window.innerWidth;
-        this.lastAppliedViewportHeightPx = window.innerHeight;
+        this.lastAppliedDevicePixelRatio = this.cachedDevicePixelRatio;
+        this.lastAppliedViewportWidthPx = this.cachedViewportWidthPx;
+        this.lastAppliedViewportHeightPx = this.cachedViewportHeightPx;
+    }
+
+    private updateViewportMetrics(): void {
+        this.cachedDevicePixelRatio = window.devicePixelRatio || 1;
+        this.cachedViewportWidthPx = window.innerWidth;
+        this.cachedViewportHeightPx = window.innerHeight;
+    }
+
+    private getViewportWidthPx(): number {
+        return this.cachedViewportWidthPx;
+    }
+
+    private getViewportHeightPx(): number {
+        return this.cachedViewportHeightPx;
+    }
+
+    private getCanvasScreenWidthPx(): number {
+        return getCanvasScreenWidthPx(this.canvas);
+    }
+
+    private getCanvasScreenHeightPx(): number {
+        return getCanvasScreenHeightPx(this.canvas);
     }
 
     private getMaxEffectiveRenderPixelRatioForQuality(): number {
@@ -320,12 +354,23 @@ export class GameRenderer {
         return this.canvas.width * this.canvas.height > this.MAX_FANCY_FIELD_EFFECTS_CANVAS_PIXEL_AREA;
     }
 
+    private shouldUseSimpleUnitLod(unit: Unit): boolean {
+        const baseRadiusPx = this.UNIT_BASE_SIZE_PX * this.zoom * (unit.isHero ? this.HERO_SPRITE_SCALE * 0.5 : 1);
+        if (this.graphicsQuality === 'low') {
+            return baseRadiusPx <= this.LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
+        }
+        if (this.graphicsQuality === 'medium' || this.graphicsQuality === 'high') {
+            return baseRadiusPx <= this.STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
+        }
+        return false;
+    }
+
     /**
      * Convert world coordinates to screen coordinates
      */
     worldToScreen(worldPos: Vector2D): Vector2D {
-        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
-        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
         
         // Apply screen shake offset if enabled
         let shakeOffsetX = 0;
@@ -344,8 +389,8 @@ export class GameRenderer {
     }
 
     private worldToScreenCoords(worldX: number, worldY: number, out: Vector2D): void {
-        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
-        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
 
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
@@ -375,8 +420,8 @@ export class GameRenderer {
     }
 
     private updateViewBounds(): void {
-        const viewHalfWidth = getCanvasScreenWidthPx(this.canvas) / (2 * this.zoom);
-        const viewHalfHeight = getCanvasScreenHeightPx(this.canvas) / (2 * this.zoom);
+        const viewHalfWidth = this.getViewportWidthPx() / (2 * this.zoom);
+        const viewHalfHeight = this.getViewportHeightPx() / (2 * this.zoom);
 
         this.viewMinX = this.camera.x - viewHalfWidth;
         this.viewMaxX = this.camera.x + viewHalfWidth;
@@ -395,8 +440,8 @@ export class GameRenderer {
      * Check if screen position is within viewport bounds
      */
     private isScreenPosWithinViewBounds(screenPos: { x: number; y: number }, margin: number = 0): boolean {
-        const viewportWidth = getCanvasScreenWidthPx(this.canvas);
-        const viewportHeight = getCanvasScreenHeightPx(this.canvas);
+        const viewportWidth = this.getViewportWidthPx();
+        const viewportHeight = this.getViewportHeightPx();
         return screenPos.x >= -margin &&
                screenPos.x <= viewportWidth + margin &&
                screenPos.y >= -margin &&
@@ -407,8 +452,8 @@ export class GameRenderer {
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
-        const centerX = getCanvasScreenWidthPx(this.canvas) * 0.5;
-        const centerY = getCanvasScreenHeightPx(this.canvas) * 0.5;
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
         return new Vector2D(
             this.camera.x + (screenX - centerX) / this.zoom,
             this.camera.y + (screenY - centerY) / this.zoom
@@ -582,6 +627,14 @@ export class GameRenderer {
      */
     private getSolEnergyIcon(): HTMLImageElement {
         return this.spriteManager.getSolEnergyIcon();
+    }
+
+    private getSpriteDrawSource(path: string): SpriteDrawSource | null {
+        return this.spriteManager.getSpriteDrawSource(path);
+    }
+
+    private drawSpritePath(path: string, x: number, y: number, width: number, height: number): boolean {
+        return this.spriteManager.drawSprite(this.ctx, path, x, y, width, height);
     }
 
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
@@ -836,6 +889,7 @@ export class GameRenderer {
             worldToScreen: (worldPos) => this.worldToScreen(worldPos),
             getSpriteImage: (path) => this.getSpriteImage(path),
             getTintedSprite: (path, color) => this.getTintedSprite(path, color) as HTMLCanvasElement,
+            drawSpritePath: (path, x, y, width, height) => this.drawSpritePath(path, x, y, width, height),
             getGraphicAssetPath: (key) => this.getGraphicAssetPath(key as any),
             getCachedRadialGradient: (_key, _radius, _colorStops) => {
                 // Signature mismatch: context interface uses simplified form; caller handles directly
@@ -1017,7 +1071,8 @@ export class GameRenderer {
             VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
             canvas: this.canvas,
             camera: this.camera,
-            drawUnit: (unit, color, game, isEnemy, sizeMultiplier, context) => this.unitRenderer.drawUnit(unit, color, game, isEnemy, sizeMultiplier, context),
+            drawUnit: (unit, color, game, isEnemy, sizeMultiplier, context, useSimpleLod) =>
+                this.unitRenderer.drawUnit(unit, color, game, isEnemy, sizeMultiplier, context, useSimpleLod),
         };
     }
 
@@ -1244,7 +1299,7 @@ export class GameRenderer {
         const screenRadius = sun.radius * this.zoom;
         
         const sunSpritePath = this.getGraphicAssetPath('centralSun');
-        const sunSprite = sunSpritePath ? this.getSpriteImage(sunSpritePath) : null;
+        const sunSprite = sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
         
         this.sunRenderer.drawSun(
             this.ctx,
@@ -1268,8 +1323,8 @@ export class GameRenderer {
         const screenPos = this.worldToScreen(sun.position);
         const screenRadius = sun.radius * this.zoom;
         
-        const canvasWidth = getCanvasScreenWidthPx(this.canvas);
-        const canvasHeight = getCanvasScreenHeightPx(this.canvas);
+        const canvasWidth = this.getViewportWidthPx();
+        const canvasHeight = this.getViewportHeightPx();
         
         this.sunRenderer.drawLensFlare(
             this.ctx,
@@ -1407,8 +1462,8 @@ export class GameRenderer {
         const starlightBaseAlpha = 0.016;
         const starlightNoiseAlphaScale = 0.026;
         const starlightNoiseOctaves = 2;
-        const screenCenterX = getCanvasScreenWidthPx(this.canvas) * 0.5;
-        const screenCenterY = getCanvasScreenHeightPx(this.canvas) * 0.5;
+        const screenCenterX = this.getViewportWidthPx() * 0.5;
+        const screenCenterY = this.getViewportHeightPx() * 0.5;
 
         this.ctx.save();
         this.ctx.globalCompositeOperation = 'screen';
@@ -1779,10 +1834,11 @@ export class GameRenderer {
      * Render the entire game state
      */
     render(game: GameState): void {
-        const devicePixelRatio = window.devicePixelRatio || 1;
-        const viewportWidthPx = window.innerWidth;
-        const viewportHeightPx = window.innerHeight;
-        if (this.shouldResizeCanvasForCurrentDisplay(devicePixelRatio, viewportWidthPx, viewportHeightPx)) {
+        if (this.shouldResizeCanvasForCurrentDisplay(
+            this.cachedDevicePixelRatio,
+            this.cachedViewportWidthPx,
+            this.cachedViewportHeightPx
+        )) {
             this.resizeCanvas();
         }
 
@@ -1798,9 +1854,10 @@ export class GameRenderer {
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
         
-        // Draw camera-space values used by reworked parallax stars.
-        const screenWidth = getCanvasScreenWidthPx(this.canvas);
-        const screenHeight = getCanvasScreenHeightPx(this.canvas);
+        // Use actual canvas screen-space size for full-screen environment effects so
+        // quality-scaled rendering still covers the full visible playfield correctly.
+        const screenWidth = this.getCanvasScreenWidthPx();
+        const screenHeight = this.getCanvasScreenHeightPx();
 
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
@@ -1816,8 +1873,8 @@ export class GameRenderer {
 
         // Draw sun rays with raytracing (light and shadows)
         if (this.isSunsLayerEnabled) {
-            const canvasWidth = getCanvasScreenWidthPx(this.canvas);
-            const canvasHeight = getCanvasScreenHeightPx(this.canvas);
+            const canvasWidth = this.getCanvasScreenWidthPx();
+            const canvasHeight = this.getCanvasScreenHeightPx();
             
             this.sunRenderer.drawSunRays(
                 this.ctx,
@@ -1838,8 +1895,8 @@ export class GameRenderer {
         const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
-            const canvasWidth = getCanvasScreenWidthPx(this.canvas);
-            const canvasHeight = getCanvasScreenHeightPx(this.canvas);
+            const canvasWidth = this.getCanvasScreenWidthPx();
+            const canvasHeight = this.getCanvasScreenHeightPx();
             
             this.sunRenderer.drawUltraSunParticleLayers(
                 this.ctx,
@@ -1896,13 +1953,20 @@ export class GameRenderer {
 
         // Draw space dust particles on top of celestial environment layers.
         if (this.isSpaceDustLayerEnabled) {
+            const visibleSpaceDust: SpaceDustParticle[] = [];
             for (const particle of game.spaceDust) {
                 // Only render particles within map boundaries
                 if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
                     this.isWithinViewBounds(particle.position, 60)) {
-                    this.drawSpaceDust(particle, game, viewingPlayerIndex);
+                    visibleSpaceDust.push(particle);
                 }
             }
+            this.environmentRenderer.drawSpaceDustBatch(
+                visibleSpaceDust,
+                game,
+                viewingPlayerIndex,
+                this.getEnvironmentRendererContext()
+            );
         }
 
         // Draw influence circles (animated and merged by player color)
@@ -2012,6 +2076,11 @@ export class GameRenderer {
                 for (const unit of player.units) {
                     const unitMargin = unit.isHero ? 120 : 60;
                     if (!this.isWithinViewBounds(unit.position, unitMargin)) {
+                        continue;
+                    }
+                    const shouldUseSimpleLod = this.shouldUseSimpleUnitLod(unit);
+                    if (shouldUseSimpleLod) {
+                        this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx, true);
                         continue;
                     }
                     if (unit instanceof Grave) {
@@ -2533,7 +2602,7 @@ export class GameRenderer {
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
-        return getInGameMenuLayout(getCanvasScreenWidthPx(this.canvas), getCanvasScreenHeightPx(this.canvas));
+        return getInGameMenuLayout(this.getViewportWidthPx(), this.getViewportHeightPx());
     }
 
     /**
@@ -2709,8 +2778,8 @@ export class GameRenderer {
      */
     private clampCameraToLevelBounds(pos: Vector2D): Vector2D {
         // Calculate visible world dimensions based on screen-space canvas size and zoom
-        const viewWidth = getCanvasScreenWidthPx(this.canvas) / this.zoom;
-        const viewHeight = getCanvasScreenHeightPx(this.canvas) / this.zoom;
+        const viewWidth = this.getViewportWidthPx() / this.zoom;
+        const viewHeight = this.getViewportHeightPx() / this.zoom;
         
         // Calculate max camera offset based on map size and view size
         // The camera can move such that the view edges align with map boundaries
@@ -2728,8 +2797,8 @@ export class GameRenderer {
     }
 
     private getMinZoomForBounds(): number {
-        const viewWidth = getCanvasScreenWidthPx(this.canvas);
-        const viewHeight = getCanvasScreenHeightPx(this.canvas);
+        const viewWidth = this.getViewportWidthPx();
+        const viewHeight = this.getViewportHeightPx();
         const minZoomWidth = viewWidth / Constants.MAP_SIZE;
         const minZoomHeight = viewHeight / Constants.MAP_SIZE;
         return Math.max(0.5, minZoomWidth, minZoomHeight);

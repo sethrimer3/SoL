@@ -36,7 +36,25 @@ interface ProductionEntry {
     progress: number;
 }
 
+type CachedTextSprite = {
+    canvas: HTMLCanvasElement;
+    width: number;
+    height: number;
+    alphabeticBaselineOffsetPx: number;
+};
+
 export class HUDRenderer {
+    // Keep text caches bounded so long matches do not grow memory indefinitely; clearing on overflow
+    // is a simple reset strategy because the cached HUD strings are cheap to repopulate over a few frames.
+    private static readonly MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT = 512;
+    private static readonly MIN_TEXT_SPRITE_PADDING_PX = 4;
+    private static readonly TEXT_SPRITE_STROKE_PADDING_MULTIPLIER = 2;
+    private static readonly TEXT_SPRITE_BASE_PADDING_PX = 2;
+    private readonly cachedTextSprites = new Map<string, CachedTextSprite>();
+    private readonly cachedTextWidths = new Map<string, number>();
+    private readonly textMeasureCanvas = document.createElement('canvas');
+    private readonly textMeasureContext = this.textMeasureCanvas.getContext('2d');
+
     public drawDamageNumbers(game: GameState, context: HUDRendererContext): void {
         for (const damageNumber of game.damageNumbers) {
             if (!context.isWithinViewBounds(damageNumber.position, 100)) {
@@ -58,16 +76,21 @@ export class HUDRenderer {
                 : 13 + damageScale * 8;
 
             context.ctx.font = `bold ${fontSize}px Doto`;
-            context.ctx.fillStyle = damageNumber.textColor;
             context.ctx.globalAlpha = opacity;
-
-            context.ctx.textAlign = 'center';
-            context.ctx.textBaseline = 'middle';
-
-            context.ctx.strokeStyle = '#FFFFFF';
-            context.ctx.lineWidth = 1.5;
-            context.ctx.strokeText(displayText, screenPos.x, screenPos.y);
-            context.ctx.fillText(displayText, screenPos.x, screenPos.y);
+            this.drawCachedTextSprite(
+                displayText,
+                screenPos.x,
+                screenPos.y,
+                {
+                    font: `bold ${fontSize}px Doto`,
+                    fillStyle: damageNumber.textColor,
+                    strokeStyle: '#FFFFFF',
+                    lineWidth: 1.5,
+                    textAlign: 'center',
+                    textBaseline: 'middle'
+                },
+                context
+            );
             context.ctx.globalAlpha = 1;
         }
     }
@@ -124,14 +147,20 @@ export class HUDRenderer {
             const fontSize = Math.max(10, size * 1.5);
 
             context.ctx.font = `bold ${fontSize}px Doto`;
-            context.ctx.fillStyle = `rgb(${healthColor.r}, ${healthColor.g}, ${healthColor.b})`;
-            context.ctx.textAlign = 'center';
-            context.ctx.textBaseline = 'bottom';
-
-            context.ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-            context.ctx.lineWidth = 2;
-            context.ctx.strokeText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
-            context.ctx.fillText(Math.round(currentHealth).toString(), screenPos.x, screenPos.y + yOffset);
+            this.drawCachedTextSprite(
+                Math.round(currentHealth).toString(),
+                screenPos.x,
+                screenPos.y + yOffset,
+                {
+                    font: `bold ${fontSize}px Doto`,
+                    fillStyle: `rgb(${healthColor.r}, ${healthColor.g}, ${healthColor.b})`,
+                    strokeStyle: 'rgba(0, 0, 0, 0.8)',
+                    lineWidth: 2,
+                    textAlign: 'center',
+                    textBaseline: 'bottom'
+                },
+                context
+            );
 
             if (isRegenerating) {
                 const plusSize = fontSize * 0.6;
@@ -343,27 +372,26 @@ export class HUDRenderer {
             context.ctx.fillStyle = '#FFFFFF';
             context.ctx.font = `${infoFontSize}px Doto`;
             let infoY = 30;
-            context.ctx.fillText(`SoL - Speed of Light RTS`, 20, infoY);
+            this.drawCachedTextSprite('SoL - Speed of Light RTS', 20, infoY, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
             infoY += infoLineHeight;
-            context.ctx.fillText(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, infoY);
+            this.drawCachedTextSprite(`Game Time: ${game.gameTime.toFixed(1)}s`, 20, infoY, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
             infoY += infoLineHeight;
-            context.ctx.fillText(`Dust Particles: ${game.spaceDust.length}`, 20, infoY);
+            this.drawCachedTextSprite(`Dust Particles: ${game.spaceDust.length}`, 20, infoY, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
             infoY += infoLineHeight;
-            context.ctx.fillText(`Asteroids: ${game.asteroids.length}`, 20, infoY);
+            this.drawCachedTextSprite(`Asteroids: ${game.asteroids.length}`, 20, infoY, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
             infoY += infoLineHeight;
-            context.ctx.fillText(`Warp Gates: ${game.warpGates.length}`, 20, infoY);
+            this.drawCachedTextSprite(`Warp Gates: ${game.warpGates.length}`, 20, infoY, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
 
             let y = infoY + infoLineHeight;
             for (const player of game.players) {
                 const color = getFactionColor(player.faction);
                 context.ctx.fillStyle = color;
-                context.ctx.fillText(`${player.name} (${player.faction})`, 20, y);
-                context.ctx.fillStyle = '#FFFFFF';
-                context.ctx.fillText(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20);
+                this.drawCachedTextSprite(`${player.name} (${player.faction})`, 20, y, { font: `${infoFontSize}px Doto`, fillStyle: color, textAlign: 'left', textBaseline: 'alphabetic' }, context);
+                this.drawCachedTextSprite(`Energy: ${player.energy.toFixed(1)}`, 20, y + 20, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
 
                 if (player.stellarForge) {
                     const status = player.stellarForge.isReceivingLight ? '✓ Light' : '✗ No Light';
-                    context.ctx.fillText(`${status} | HP: ${player.stellarForge.health.toFixed(0)}`, 20, y + 40);
+                    this.drawCachedTextSprite(`${status} | HP: ${player.stellarForge.health.toFixed(0)}`, 20, y + 40, { font: `${infoFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
                 }
 
                 y += 60;
@@ -384,7 +412,7 @@ export class HUDRenderer {
             context.ctx.font = `${controlFontSize}px Doto`;
             let controlTextY = controlBoxY + controlLineHeight;
             for (const line of controlLines) {
-                context.ctx.fillText(line, 20, controlTextY);
+                this.drawCachedTextSprite(line, 20, controlTextY, { font: `${controlFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
                 controlTextY += controlLineHeight;
             }
         }
@@ -442,7 +470,7 @@ export class HUDRenderer {
         if (player.stellarForge) {
             const energyText = `${player.stellarForge.incomingLightPerSec.toFixed(1)}/s`;
             compactTextWidths.push(
-                compactTextPaddingLeft + compactIconSize + compactIconInset + context.ctx.measureText(energyText).width + compactTextPaddingRight
+                compactTextPaddingLeft + compactIconSize + compactIconInset + this.getCachedTextWidth(energyText, 'bold 14px Doto') + compactTextPaddingRight
             );
         }
 
@@ -461,8 +489,8 @@ export class HUDRenderer {
         const maxStarlingsText = `${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`;
 
         compactTextWidths.push(
-            compactTextPaddingLeft + context.ctx.measureText(starlingRateText).width + compactTextPaddingRight,
-            compactTextPaddingLeft + context.ctx.measureText(maxStarlingsText).width + compactTextPaddingRight
+            compactTextPaddingLeft + this.getCachedTextWidth(starlingRateText, 'bold 14px Doto') + compactTextPaddingRight,
+            compactTextPaddingLeft + this.getCachedTextWidth(maxStarlingsText, 'bold 14px Doto') + compactTextPaddingRight
         );
 
         const compactBoxWidth = Math.ceil(Math.max(...compactTextWidths));
@@ -488,14 +516,17 @@ export class HUDRenderer {
                 context.ctx.drawImage(solIcon, iconX, iconY, compactIconSize, compactIconSize);
             }
 
-            context.ctx.fillStyle = '#FFFFFF';
-            context.ctx.font = 'bold 14px Doto';
-            context.ctx.textAlign = 'left';
-            context.ctx.textBaseline = 'middle';
-            context.ctx.fillText(
+            this.drawCachedTextSprite(
                 `${energyRate.toFixed(1)}/s`,
                 compactX + compactTextPaddingLeft + compactIconSize + compactIconInset,
-                y + compactBoxHeight / 2
+                y + compactBoxHeight / 2,
+                {
+                    font: 'bold 14px Doto',
+                    fillStyle: '#FFFFFF',
+                    textAlign: 'left',
+                    textBaseline: 'middle'
+                },
+                context
             );
 
             y += compactBoxHeight + 5;
@@ -508,11 +539,18 @@ export class HUDRenderer {
         context.ctx.lineWidth = 2;
         context.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
 
-        context.ctx.fillStyle = '#FFFFFF';
-        context.ctx.font = 'bold 14px Doto';
-        context.ctx.textAlign = 'left';
-        context.ctx.textBaseline = 'middle';
-        context.ctx.fillText(starlingRateText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
+        this.drawCachedTextSprite(
+            starlingRateText,
+            compactX + compactTextPaddingLeft,
+            y + compactBoxHeight / 2,
+            {
+                font: 'bold 14px Doto',
+                fillStyle: '#FFFFFF',
+                textAlign: 'left',
+                textBaseline: 'middle'
+            },
+            context
+        );
 
         y += compactBoxHeight + 5;
 
@@ -523,11 +561,18 @@ export class HUDRenderer {
         context.ctx.lineWidth = 2;
         context.ctx.strokeRect(compactX, y, compactBoxWidth, compactBoxHeight);
 
-        context.ctx.fillStyle = '#FFFFFF';
-        context.ctx.font = 'bold 14px Doto';
-        context.ctx.textAlign = 'left';
-        context.ctx.textBaseline = 'middle';
-        context.ctx.fillText(maxStarlingsText, compactX + compactTextPaddingLeft, y + compactBoxHeight / 2);
+        this.drawCachedTextSprite(
+            maxStarlingsText,
+            compactX + compactTextPaddingLeft,
+            y + compactBoxHeight / 2,
+            {
+                font: 'bold 14px Doto',
+                fillStyle: '#FFFFFF',
+                textAlign: 'left',
+                textBaseline: 'middle'
+            },
+            context
+        );
 
         y += compactBoxHeight + 8;
 
@@ -607,13 +652,19 @@ export class HUDRenderer {
             context.ctx.lineWidth = 2;
             context.ctx.strokeRect(productionX, y, productionBoxWidth, boxHeight);
 
-            context.ctx.fillStyle = '#FFFFFF';
-            context.ctx.font = 'bold 14px Doto';
-            context.ctx.textAlign = 'left';
-            context.ctx.textBaseline = 'top';
-
             const buildingName = context.getBuildingDisplayName(buildingInProgress);
-            context.ctx.fillText(`Building ${buildingName}`, productionX + 8, y + 8);
+            this.drawCachedTextSprite(
+                `Building ${buildingName}`,
+                productionX + 8,
+                y + 8,
+                {
+                    font: 'bold 14px Doto',
+                    fillStyle: '#FFFFFF',
+                    textAlign: 'left',
+                    textBaseline: 'top'
+                },
+                context
+            );
 
             this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, buildingInProgress.buildProgress, context);
         }
@@ -637,7 +688,20 @@ export class HUDRenderer {
         const victoryFontSize = Math.max(28, Math.min(48, screenWidth * 0.12));
         context.ctx.font = `bold ${victoryFontSize}px Doto`;
         context.ctx.textAlign = 'center';
-        context.ctx.fillText(didLocalPlayerWin ? 'VICTORY' : 'DEFEAT', screenWidth / 2, 80);
+        const victoryText = didLocalPlayerWin ? 'VICTORY' : 'DEFEAT';
+        const victoryFillStyle = didLocalPlayerWin ? '#4CAF50' : '#F44336';
+        this.drawCachedTextSprite(
+            victoryText,
+            screenWidth / 2,
+            80,
+            {
+                font: `bold ${victoryFontSize}px Doto`,
+                fillStyle: victoryFillStyle,
+                textAlign: 'center',
+                textBaseline: 'alphabetic'
+            },
+            context
+        );
 
         const panelWidth = Math.min(700, screenWidth - 40);
         const panelHeight = Math.min(450, screenHeight - 200);
@@ -653,7 +717,7 @@ export class HUDRenderer {
         context.ctx.fillStyle = '#FFD700';
         const statsTitleSize = Math.max(18, Math.min(28, screenWidth * 0.07));
         context.ctx.font = `bold ${statsTitleSize}px Doto`;
-        context.ctx.fillText('MATCH STATISTICS', screenWidth / 2, panelY + 50);
+        this.drawCachedTextSprite('MATCH STATISTICS', screenWidth / 2, panelY + 50, { font: `bold ${statsTitleSize}px Doto`, fillStyle: '#FFD700', textAlign: 'center', textBaseline: 'alphabetic' }, context);
 
         const statsFontSize = Math.max(14, Math.min(20, screenWidth * 0.045));
         context.ctx.font = `${statsFontSize}px Doto`;
@@ -668,7 +732,7 @@ export class HUDRenderer {
 
         context.ctx.fillStyle = '#FFFFFF';
         context.ctx.textAlign = 'left';
-        context.ctx.fillText('Statistic', leftCol, y);
+        this.drawCachedTextSprite('Statistic', leftCol, y, { font: `${statsFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
         context.ctx.textAlign = 'right';
 
         for (let i = 0; i < game.players.length; i++) {
@@ -676,7 +740,7 @@ export class HUDRenderer {
             const color = getFactionColor(player.faction);
             context.ctx.fillStyle = color;
             const colX = playerStartX + playerColumnWidth * (i + 1);
-            context.ctx.fillText(player.name, colX, y);
+            this.drawCachedTextSprite(player.name, colX, y, { font: `${statsFontSize}px Doto`, fillStyle: color, textAlign: 'right', textBaseline: 'alphabetic' }, context);
         }
 
         y += isCompactLayout ? 32 : 40;
@@ -690,14 +754,14 @@ export class HUDRenderer {
         for (const stat of stats) {
             context.ctx.fillStyle = '#FFFFFF';
             context.ctx.textAlign = 'left';
-            context.ctx.fillText(stat.label, leftCol, y);
+            this.drawCachedTextSprite(stat.label, leftCol, y, { font: `${statsFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'left', textBaseline: 'alphabetic' }, context);
             context.ctx.textAlign = 'right';
 
             for (let i = 0; i < game.players.length; i++) {
                 const player = game.players[i] as any;
                 const value = stat.key === 'energyGathered' ? Math.round(player[stat.key]) : player[stat.key];
                 const colX = playerStartX + playerColumnWidth * (i + 1);
-                context.ctx.fillText(String(value), colX, y);
+                this.drawCachedTextSprite(String(value), colX, y, { font: `${statsFontSize}px Doto`, fillStyle: '#FFFFFF', textAlign: 'right', textBaseline: 'alphabetic' }, context);
             }
 
             y += isCompactLayout ? 28 : 35;
@@ -717,7 +781,7 @@ export class HUDRenderer {
         context.ctx.fillStyle = '#FFFFFF';
         context.ctx.font = `bold ${isCompactLayout ? 20 : 24}px Doto`;
         context.ctx.textAlign = 'center';
-        context.ctx.fillText('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65));
+        this.drawCachedTextSprite('Continue', screenWidth / 2, buttonY + (buttonHeight * 0.65), { font: `bold ${isCompactLayout ? 20 : 24}px Doto`, fillStyle: '#FFFFFF', textAlign: 'center', textBaseline: 'alphabetic' }, context);
 
         context.ctx.textAlign = 'left';
     }
@@ -787,11 +851,18 @@ export class HUDRenderer {
         context.ctx.lineWidth = 1;
         context.ctx.strokeRect(x, y, width, height);
 
-        context.ctx.fillStyle = '#FFFFFF';
-        context.ctx.font = 'bold 12px Doto';
-        context.ctx.textAlign = 'center';
-        context.ctx.textBaseline = 'middle';
-        context.ctx.fillText(`${Math.floor(progress * 100)}%`, x + width / 2, y + height / 2);
+        this.drawCachedTextSprite(
+            `${Math.floor(progress * 100)}%`,
+            x + width / 2,
+            y + height / 2,
+            {
+                font: 'bold 12px Doto',
+                fillStyle: '#FFFFFF',
+                textAlign: 'center',
+                textBaseline: 'middle'
+            },
+            context
+        );
     }
 
     private drawProductionEntry(
@@ -810,13 +881,175 @@ export class HUDRenderer {
         context.ctx.lineWidth = 2;
         context.ctx.strokeRect(x, y, width, height);
 
-        context.ctx.fillStyle = '#FFFFFF';
-        context.ctx.font = 'bold 14px Doto';
-        context.ctx.textAlign = 'left';
-        context.ctx.textBaseline = 'top';
-        context.ctx.fillText(label, x + 8, y + 8);
+        this.drawCachedTextSprite(
+            label,
+            x + 8,
+            y + 8,
+            {
+                font: 'bold 14px Doto',
+                fillStyle: '#FFFFFF',
+                textAlign: 'left',
+                textBaseline: 'top'
+            },
+            context
+        );
 
         this.drawProgressBar(x + 8, y + 32, width - 16, 16, progress, context);
+    }
+
+    private drawCachedTextSprite(
+        text: string,
+        x: number,
+        y: number,
+        options: {
+            font: string;
+            fillStyle: string;
+            strokeStyle?: string;
+            lineWidth?: number;
+            textAlign?: CanvasTextAlign;
+            textBaseline?: CanvasTextBaseline;
+        },
+        context: HUDRendererContext
+    ): void {
+        const sprite = this.getCachedTextSprite(
+            text,
+            options.font,
+            options.fillStyle,
+            options.strokeStyle,
+            options.lineWidth ?? 0
+        );
+
+        let drawX = x;
+        let drawY = y;
+
+        switch (options.textAlign) {
+            case 'center':
+                drawX -= sprite.width / 2;
+                break;
+            case 'right':
+            case 'end':
+                drawX -= sprite.width;
+                break;
+            case 'left':
+            case 'start':
+            default:
+                break;
+        }
+
+        switch (options.textBaseline) {
+            case 'middle':
+                drawY -= sprite.height / 2;
+                break;
+            case 'bottom':
+            case 'ideographic':
+                drawY -= sprite.height;
+                break;
+            case 'top':
+            case 'hanging':
+                break;
+            case 'alphabetic':
+                drawY -= sprite.alphabeticBaselineOffsetPx;
+                break;
+            default:
+                break;
+        }
+
+        context.ctx.drawImage(sprite.canvas, drawX, drawY);
+    }
+
+    private getCachedTextWidth(text: string, font: string): number {
+        const cacheKey = `${font}|${text}`;
+        const cachedWidth = this.cachedTextWidths.get(cacheKey);
+        if (cachedWidth !== undefined) {
+            return cachedWidth;
+        }
+
+        if (!this.textMeasureContext) {
+            return text.length * 8;
+        }
+
+        this.textMeasureContext.font = font;
+        const width = this.textMeasureContext.measureText(text).width;
+        this.cachedTextWidths.set(cacheKey, width);
+        if (this.cachedTextWidths.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT) {
+            this.cachedTextWidths.clear();
+        }
+        return width;
+    }
+
+    private getCachedTextSprite(
+        text: string,
+        font: string,
+        fillStyle: string,
+        strokeStyle?: string,
+        lineWidth: number = 0
+    ): CachedTextSprite {
+        const cacheKey = `${font}|${fillStyle}|${strokeStyle ?? ''}|${lineWidth}|${text}`;
+        const cached = this.cachedTextSprites.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const measureContext = this.textMeasureContext;
+        if (!measureContext) {
+            const fallbackCanvas = document.createElement('canvas');
+            fallbackCanvas.width = 1;
+            fallbackCanvas.height = 1;
+            return { canvas: fallbackCanvas, width: 1, height: 1, alphabeticBaselineOffsetPx: 0 };
+        }
+
+        measureContext.font = font;
+        measureContext.textAlign = 'left';
+        measureContext.textBaseline = 'alphabetic';
+        const metrics = measureContext.measureText(text);
+        // Keep at least a small border around the cached glyph, while expanding further
+        // when stroke width increases so outlines do not clip against the sprite edges.
+        const paddingPx = Math.max(
+            HUDRenderer.MIN_TEXT_SPRITE_PADDING_PX,
+            Math.ceil(lineWidth * HUDRenderer.TEXT_SPRITE_STROKE_PADDING_MULTIPLIER + HUDRenderer.TEXT_SPRITE_BASE_PADDING_PX)
+        );
+        const fontSizePx = this.getFontSizePx(font);
+        const leftPx = Math.ceil(metrics.actualBoundingBoxLeft || 0);
+        const rightPx = Math.ceil(metrics.actualBoundingBoxRight || metrics.width);
+        const ascentPx = Math.ceil(metrics.actualBoundingBoxAscent || fontSizePx);
+        const descentPx = Math.ceil(metrics.actualBoundingBoxDescent || Math.max(2, fontSizePx * 0.3));
+        const width = Math.max(1, leftPx + rightPx + paddingPx * 2);
+        const height = Math.max(1, ascentPx + descentPx + paddingPx * 2);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return { canvas, width, height, alphabeticBaselineOffsetPx: paddingPx + ascentPx };
+        }
+
+        ctx.font = font;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        const drawX = paddingPx + leftPx;
+        const drawY = paddingPx + ascentPx;
+
+        if (strokeStyle && lineWidth > 0) {
+            ctx.strokeStyle = strokeStyle;
+            ctx.lineWidth = lineWidth;
+            ctx.strokeText(text, drawX, drawY);
+        }
+
+        ctx.fillStyle = fillStyle;
+        ctx.fillText(text, drawX, drawY);
+
+        const sprite = { canvas, width, height, alphabeticBaselineOffsetPx: drawY };
+        this.cachedTextSprites.set(cacheKey, sprite);
+        if (this.cachedTextSprites.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT) {
+            this.cachedTextSprites.clear();
+        }
+        return sprite;
+    }
+
+    private getFontSizePx(font: string): number {
+        const match = font.match(/(\d+(?:\.\d+)?)px/);
+        return match ? Number(match[1]) : 14;
     }
 
     private getHealthColor(healthPercent: number): {r: number, g: number, b: number} {

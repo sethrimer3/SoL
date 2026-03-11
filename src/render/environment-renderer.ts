@@ -41,6 +41,76 @@ export interface EnvironmentRendererContext {
 export class EnvironmentRenderer {
     // Influence animation state (moved from GameRenderer)
     private influenceRadiusBySource: WeakMap<object, number> = new WeakMap();
+    private readonly SPACE_DUST_VIEWPORT_MARGIN_PX = 100;
+
+    public drawSpaceDustBatch(
+        particles: SpaceDustParticle[],
+        game: GameState,
+        viewingPlayerIndex: number | null,
+        context: EnvironmentRendererContext
+    ): void {
+        if (context.graphicsQuality === 'high' || context.graphicsQuality === 'ultra') {
+            for (const particle of particles) {
+                this.drawSpaceDust(particle, game, viewingPlayerIndex, context);
+            }
+            return;
+        }
+
+        const { ctx, canvas, zoom } = context;
+        const ladSun = game.suns.find(s => s.type === 'lad');
+        const viewportWidth = canvas.clientWidth > 0 ? canvas.clientWidth : canvas.width;
+        const viewportHeight = canvas.clientHeight > 0 ? canvas.clientHeight : canvas.height;
+        const circleBatchByColor = new Map<string, number[]>();
+
+        for (const particle of particles) {
+            const screenPos = context.worldToScreen(particle.position);
+            if (screenPos.x < -this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.x > viewportWidth + this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.y < -this.SPACE_DUST_VIEWPORT_MARGIN_PX
+                || screenPos.y > viewportHeight + this.SPACE_DUST_VIEWPORT_MARGIN_PX) {
+                continue;
+            }
+
+            const inShadow = game.isPointInShadow(particle.position);
+            if (viewingPlayerIndex !== null && inShadow) {
+                const viewingPlayer = game.players[viewingPlayerIndex];
+                if (!game.isObjectVisibleToPlayer(particle.position, viewingPlayer)) {
+                    continue;
+                }
+            }
+
+            const baseSize = Constants.DUST_PARTICLE_SIZE * zoom;
+            const isOnLightSide = ladSun ? particle.position.x < ladSun.position.x : false;
+            const dustColor = ladSun ? (isOnLightSide ? '#000000' : '#FFFFFF') : particle.currentColor;
+            const velocityX = particle.velocity.x;
+            const velocityY = particle.velocity.y;
+            const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+
+            if (speed > Constants.DUST_TRAIL_MIN_SPEED_PX_PER_SEC) {
+                this.drawSpaceDustTrail(ctx, screenPos, baseSize, dustColor, velocityX, velocityY, false);
+            }
+
+            let batch = circleBatchByColor.get(dustColor);
+            if (!batch) {
+                batch = [];
+                circleBatchByColor.set(dustColor, batch);
+            }
+            batch.push(screenPos.x, screenPos.y, baseSize);
+        }
+
+        for (const [dustColor, circleBatch] of circleBatchByColor) {
+            ctx.fillStyle = dustColor;
+            ctx.beginPath();
+            for (let index = 0; index < circleBatch.length; index += 3) {
+                const x = circleBatch[index];
+                const y = circleBatch[index + 1];
+                const radius = circleBatch[index + 2];
+                ctx.moveTo(x + radius, y);
+                ctx.arc(x, y, radius, 0, Math.PI * 2);
+            }
+            ctx.fill();
+        }
+    }
 
     public drawSpaceDust(
         particle: SpaceDustParticle,
@@ -119,59 +189,7 @@ export class EnvironmentRenderer {
         const velocityY = particle.velocity.y;
         const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
         if (speed > Constants.DUST_TRAIL_MIN_SPEED_PX_PER_SEC) {
-            const invSpeed = 1 / speed;
-            const dirX = velocityX * invSpeed;
-            const dirY = velocityY * invSpeed;
-            const perpX = -dirY;
-            const perpY = dirX;
-            const trailLengthPx = Math.min(
-                Constants.DUST_TRAIL_MAX_LENGTH_PX,
-                Math.max(Constants.DUST_TRAIL_MIN_LENGTH_PX, speed * Constants.DUST_TRAIL_LENGTH_PER_SPEED)
-            );
-            const trailLength = trailLengthPx * zoom;
-
-            // Teardrop / raindrop shaped trail: circle head at current position tapering to a tip behind
-            const tipX = screenPos.x - dirX * trailLength;
-            const tipY = screenPos.y - dirY * trailLength;
-            const movDir = Math.atan2(dirY, dirX);
-
-            // Control points for quadratic bezier sides: placed 55% back along the trail,
-            // offset 35% of the head radius outward to give the teardrop a smooth taper
-            const midTrailX = screenPos.x - dirX * trailLength * 0.55;
-            const midTrailY = screenPos.y - dirY * trailLength * 0.55;
-            const ctrlLeftX = midTrailX + perpX * baseSize * 0.35;
-            const ctrlLeftY = midTrailY + perpY * baseSize * 0.35;
-            const ctrlRightX = midTrailX - perpX * baseSize * 0.35;
-            const ctrlRightY = midTrailY - perpY * baseSize * 0.35;
-
-            ctx.beginPath();
-            // Arc sweeps the leading (front) half of the circle from right to left side
-            ctx.arc(screenPos.x, screenPos.y, baseSize, movDir - Math.PI / 2, movDir + Math.PI / 2, false);
-            // Left side curves back to tip
-            ctx.quadraticCurveTo(ctrlLeftX, ctrlLeftY, tipX, tipY);
-            // Right side curves from tip back to right attachment (closes the shape)
-            ctx.quadraticCurveTo(ctrlRightX, ctrlRightY, screenPos.x - perpX * baseSize, screenPos.y - perpY * baseSize);
-            ctx.closePath();
-
-            if (isFancyGraphicsEnabled && dustColor.startsWith('#')) {
-                let hex = dustColor.slice(1);
-                if (hex.length === 3) {
-                    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-                }
-                const colorInt = parseInt(hex, 16);
-                const trailR = (colorInt >> 16) & 0xff;
-                const trailG = (colorInt >> 8) & 0xff;
-                const trailB = colorInt & 0xff;
-                const trailGradient = ctx.createLinearGradient(screenPos.x, screenPos.y, tipX, tipY);
-                trailGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, 0.65)`);
-                trailGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
-                ctx.fillStyle = trailGradient;
-            } else {
-                ctx.fillStyle = dustColor;
-                ctx.globalAlpha = 0.45;
-            }
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
+            this.drawSpaceDustTrail(ctx, screenPos, baseSize, dustColor, velocityX, velocityY, isFancyGraphicsEnabled);
         }
 
         if (isHighGraphics && speed > Constants.DUST_SLOW_MOVEMENT_THRESHOLD) {
@@ -230,6 +248,68 @@ export class EnvironmentRenderer {
             ctx.arc(screenPos.x, screenPos.y, baseSize * 0.9, shadowAngle - sheenArc / 2, shadowAngle + sheenArc / 2);
             ctx.stroke();
         }
+    }
+
+    private drawSpaceDustTrail(
+        ctx: CanvasRenderingContext2D,
+        screenPos: Vector2D,
+        baseSize: number,
+        dustColor: string,
+        velocityX: number,
+        velocityY: number,
+        isFancyGraphicsEnabled: boolean
+    ): void {
+        const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+        if (speed <= 0) {
+            return;
+        }
+
+        const invSpeed = 1 / speed;
+        const dirX = velocityX * invSpeed;
+        const dirY = velocityY * invSpeed;
+        const perpX = -dirY;
+        const perpY = dirX;
+        const zoomFactor = baseSize / Constants.DUST_PARTICLE_SIZE;
+        const trailLength = Math.min(
+            Constants.DUST_TRAIL_MAX_LENGTH_PX,
+            Math.max(Constants.DUST_TRAIL_MIN_LENGTH_PX, speed * Constants.DUST_TRAIL_LENGTH_PER_SPEED)
+        ) * zoomFactor;
+        const tipX = screenPos.x - dirX * trailLength;
+        const tipY = screenPos.y - dirY * trailLength;
+        const movDir = Math.atan2(dirY, dirX);
+        const midTrailX = screenPos.x - dirX * trailLength * 0.55;
+        const midTrailY = screenPos.y - dirY * trailLength * 0.55;
+        const ctrlLeftX = midTrailX + perpX * baseSize * 0.35;
+        const ctrlLeftY = midTrailY + perpY * baseSize * 0.35;
+        const ctrlRightX = midTrailX - perpX * baseSize * 0.35;
+        const ctrlRightY = midTrailY - perpY * baseSize * 0.35;
+
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, baseSize, movDir - Math.PI / 2, movDir + Math.PI / 2, false);
+        ctx.quadraticCurveTo(ctrlLeftX, ctrlLeftY, tipX, tipY);
+        ctx.quadraticCurveTo(ctrlRightX, ctrlRightY, screenPos.x - perpX * baseSize, screenPos.y - perpY * baseSize);
+        ctx.closePath();
+
+        if (isFancyGraphicsEnabled && dustColor.startsWith('#')) {
+            let hex = dustColor.slice(1);
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            const colorInt = parseInt(hex, 16);
+            const trailR = (colorInt >> 16) & 0xff;
+            const trailG = (colorInt >> 8) & 0xff;
+            const trailB = colorInt & 0xff;
+            const trailGradient = ctx.createLinearGradient(screenPos.x, screenPos.y, tipX, tipY);
+            trailGradient.addColorStop(0, `rgba(${trailR}, ${trailG}, ${trailB}, 0.65)`);
+            trailGradient.addColorStop(1, `rgba(${trailR}, ${trailG}, ${trailB}, 0)`);
+            ctx.fillStyle = trailGradient;
+        } else {
+            ctx.fillStyle = dustColor;
+            ctx.globalAlpha = 0.45;
+        }
+
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
     }
 
     public drawAestheticSpriteShadow(
