@@ -34,6 +34,7 @@ import { GlowRenderer } from './render/glow-renderer';
 import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
+import { SunRayWorkerBridge } from './render/workers/sun-ray-worker-bridge';
 
 
 type InfluenceRenderCircle = {
@@ -191,6 +192,7 @@ export class GameRenderer {
     // Starfield renderer for background stars and nebula
     private readonly starfieldRenderer: StarfieldRenderer;
     private readonly starfieldWorkerBridge: StarfieldWorkerBridge | null;
+    private readonly sunRayWorkerBridge: SunRayWorkerBridge | null;
     private readonly sunRenderer: SunRenderer;
     private readonly asteroidRenderer: AsteroidRenderer;
     private readonly forgeRenderer: ForgeRenderer;
@@ -236,6 +238,9 @@ export class GameRenderer {
         
         // Initialize sun renderer
         this.sunRenderer = new SunRenderer();
+        this.sunRayWorkerBridge = SunRayWorkerBridge.isSupported()
+            ? new SunRayWorkerBridge()
+            : null;
 
         // Initialize asteroid renderer
         this.asteroidRenderer = new AsteroidRenderer();
@@ -324,6 +329,7 @@ export class GameRenderer {
 
     public destroy(): void {
         this.starfieldWorkerBridge?.dispose();
+        this.sunRayWorkerBridge?.dispose();
     }
 
     private getCanvasScreenWidthPx(): number {
@@ -377,7 +383,7 @@ export class GameRenderer {
     /**
      * Convert world coordinates to screen coordinates
      */
-    worldToScreen(worldPos: Vector2D): Vector2D {
+    worldToScreen(worldPos: { x: number; y: number }): Vector2D {
         const centerX = this.getViewportWidthPx() * 0.5;
         const centerY = this.getViewportHeightPx() * 0.5;
         
@@ -438,7 +444,7 @@ export class GameRenderer {
         this.viewMaxY = this.camera.y + viewHalfHeight;
     }
 
-    private isWithinViewBounds(worldPos: Vector2D, margin: number = 0): boolean {
+    private isWithinViewBounds(worldPos: { x: number; y: number }, margin: number = 0): boolean {
         return worldPos.x >= this.viewMinX - margin &&
                worldPos.x <= this.viewMaxX + margin &&
                worldPos.y >= this.viewMinY - margin &&
@@ -1884,39 +1890,90 @@ export class GameRenderer {
         if (this.isSunsLayerEnabled) {
             const canvasWidth = this.getCanvasScreenWidthPx();
             const canvasHeight = this.getCanvasScreenHeightPx();
-            
-            this.sunRenderer.drawSunRays(
-                this.ctx,
-                game,
-                canvasWidth,
-                canvasHeight,
-                this.graphicsQuality,
-                this.isFancyGraphicsEnabled,
-                this.worldToScreen.bind(this),
-                this.worldToScreenCoords.bind(this),
-                this.isWithinViewBounds.bind(this),
-                this.getCachedRadialGradient.bind(this),
-                this.SUN_RAY_RADIUS_BUCKET_SIZE,
-                this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
-            );
+            const shouldSkipUltraParticles = !this.isSunsLayerEnabled || this.graphicsQuality !== 'ultra' || !!ladSun;
+
+            if (this.sunRayWorkerBridge) {
+                // Off-main-thread path: request a worker frame and blit when ready.
+                this.sunRayWorkerBridge.requestFrame(game, {
+                    cameraX: this.camera.x,
+                    cameraY: this.camera.y,
+                    zoomLevel: this.zoom,
+                    canvasWidthPx: canvasWidth,
+                    canvasHeightPx: canvasHeight,
+                    viewMinX: this.viewMinX,
+                    viewMinY: this.viewMinY,
+                    viewMaxX: this.viewMaxX,
+                    viewMaxY: this.viewMaxY,
+                    graphicsQuality: this.graphicsQuality,
+                    isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                    gameTimeSec: game.gameTime,
+                    sunRayRadiusBucketSize: this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                    sunRayBloomRadiusMultiplier: this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER,
+                });
+                const sunRayBitmap = this.sunRayWorkerBridge.getLatestBitmap();
+                if (sunRayBitmap) {
+                    this.ctx.drawImage(sunRayBitmap, 0, 0, canvasWidth, canvasHeight);
+                } else {
+                    // Fallback: synchronous render until the first worker frame arrives.
+                    this.sunRenderer.drawSunRays(
+                        this.ctx,
+                        game,
+                        canvasWidth,
+                        canvasHeight,
+                        this.graphicsQuality,
+                        this.isFancyGraphicsEnabled,
+                        this.worldToScreen.bind(this),
+                        this.worldToScreenCoords.bind(this),
+                        this.isWithinViewBounds.bind(this),
+                        this.getCachedRadialGradient.bind(this),
+                        this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                        this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                    );
+                    // Also render ultra particles synchronously during warm-up so they aren't
+                    // missing on the first frame.
+                    if (!shouldSkipUltraParticles && !this.shouldSkipFancyFieldEffects()) {
+                        this.sunRenderer.drawUltraSunParticleLayers(
+                            this.ctx,
+                            game,
+                            this.zoom,
+                            canvasWidth,
+                            canvasHeight,
+                            this.graphicsQuality,
+                            this.worldToScreenCoords.bind(this)
+                        );
+                    }
+                }
+            } else {
+                // Synchronous main-thread path (worker not supported).
+                this.sunRenderer.drawSunRays(
+                    this.ctx,
+                    game,
+                    canvasWidth,
+                    canvasHeight,
+                    this.graphicsQuality,
+                    this.isFancyGraphicsEnabled,
+                    this.worldToScreen.bind(this),
+                    this.worldToScreenCoords.bind(this),
+                    this.isWithinViewBounds.bind(this),
+                    this.getCachedRadialGradient.bind(this),
+                    this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                    this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                );
+                if (!shouldSkipUltraParticles && !this.shouldSkipFancyFieldEffects()) {
+                    this.sunRenderer.drawUltraSunParticleLayers(
+                        this.ctx,
+                        game,
+                        this.zoom,
+                        canvasWidth,
+                        canvasHeight,
+                        this.graphicsQuality,
+                        this.worldToScreenCoords.bind(this)
+                    );
+                }
+            }
         }
 
         const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
-
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
-            const canvasWidth = this.getCanvasScreenWidthPx();
-            const canvasHeight = this.getCanvasScreenHeightPx();
-            
-            this.sunRenderer.drawUltraSunParticleLayers(
-                this.ctx,
-                game,
-                this.zoom,
-                canvasWidth,
-                canvasHeight,
-                this.graphicsQuality,
-                this.worldToScreenCoords.bind(this)
-            );
-        }
 
         // Draw lens flare effects for visible suns
         if (this.isSunsLayerEnabled) {
