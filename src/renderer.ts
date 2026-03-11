@@ -196,6 +196,10 @@ export class GameRenderer {
     private readonly environmentRenderer = new EnvironmentRenderer();
     private readonly glowRenderer = new GlowRenderer();
     private movementPointFramePaths: string[] = [];
+    private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
+    private lastAppliedDevicePixelRatio = 0;
+    private lastAppliedViewportWidthPx = 0;
+    private lastAppliedViewportHeightPx = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -260,7 +264,10 @@ export class GameRenderer {
             resolutionScale = 0.9;
         }
         
-        const effectiveDpr = cappedDpr * resolutionScale;
+        const effectiveDpr = Math.min(
+            cappedDpr * resolutionScale,
+            this.getMaxEffectiveRenderPixelRatioForQuality()
+        );
         
         // Set canvas physical size to match display size * effective DPR
         this.canvas.width = window.innerWidth * effectiveDpr;
@@ -273,6 +280,35 @@ export class GameRenderer {
         // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
+        this.lastAppliedGraphicsQuality = this.graphicsQuality;
+        this.lastAppliedDevicePixelRatio = window.devicePixelRatio || 1;
+        this.lastAppliedViewportWidthPx = window.innerWidth;
+        this.lastAppliedViewportHeightPx = window.innerHeight;
+    }
+
+    private getMaxEffectiveRenderPixelRatioForQuality(): number {
+        switch (this.graphicsQuality) {
+            case 'low':
+                return 1;
+            case 'medium':
+                return 1.25;
+            case 'high':
+                return 1.5;
+            case 'ultra':
+            default:
+                return 1.7;
+        }
+    }
+
+    private shouldResizeCanvasForCurrentDisplay(): boolean {
+        return this.lastAppliedGraphicsQuality !== this.graphicsQuality
+            || this.lastAppliedDevicePixelRatio !== (window.devicePixelRatio || 1)
+            || this.lastAppliedViewportWidthPx !== window.innerWidth
+            || this.lastAppliedViewportHeightPx !== window.innerHeight;
+    }
+
+    private shouldThrottleFancyFieldEffects(): boolean {
+        return this.canvas.width * this.canvas.height > 6_000_000;
     }
 
     /**
@@ -1734,6 +1770,10 @@ export class GameRenderer {
      * Render the entire game state
      */
     render(game: GameState): void {
+        if (this.shouldResizeCanvasForCurrentDisplay()) {
+            this.resizeCanvas();
+        }
+
         this.sunRenderer.clearFrameCache();
 
         // Clear canvas with color scheme background
@@ -1783,7 +1823,9 @@ export class GameRenderer {
             );
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
+        const shouldThrottleFancyFieldEffects = this.shouldThrottleFancyFieldEffects();
+
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldThrottleFancyFieldEffects) {
             const canvasWidth = getCanvasScreenWidthPx(this.canvas);
             const canvasHeight = getCanvasScreenHeightPx(this.canvas);
             
@@ -1832,11 +1874,11 @@ export class GameRenderer {
             }
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldThrottleFancyFieldEffects) {
             this.applyUltraWarmCoolGrade(game);
         }
 
-        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled) {
+        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldThrottleFancyFieldEffects) {
             this.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight);
         }
 
