@@ -759,11 +759,15 @@ When testing these optimizations:
 
 Additional optimizations that could be considered:
 
-1. **Particle batching**: Group particle rendering to reduce state changes
-2. **LOD for units**: Simpler rendering for distant units
-3. **Texture atlasing**: Reduce texture binding overhead
-4. **WebGL renderer**: Hardware-accelerated rendering for complex effects
-5. **Asteroid facet culling**: Skip rendering facets outside viewport
+1. **WebGL renderer**: Hardware-accelerated rendering for complex effects
+2. **Additional texture atlasing**: Expand atlas-backed draws beyond the current sprite-manager atlas path
+
+Recently implemented follow-up optimizations:
+
+- **Particle batching** for low/medium-quality space dust rendering
+- **LOD for units** using simple faction-colored circles for tiny/distant units
+- **Texture atlasing** support in `SpriteManager` with atlas-backed sprite draw sources
+- **Asteroid facet culling** to skip back-facing and off-screen facet triangles
 
 ## Conclusion
 

@@ -319,12 +319,12 @@ export class ForgeRenderer {
 
             if (coldAlpha > 0) {
                 context.ctx.globalAlpha = coldAlpha;
-                context.ctx.drawImage(coldSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
+                context.drawSpritePath(coldSpritePath, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
             }
 
             if (hotAlpha > 0) {
                 context.ctx.globalAlpha = hotAlpha;
-                context.ctx.drawImage(hotSprite, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
+                context.drawSpritePath(hotSpritePath, -flameSize / 2, -flameSize / 2, flameSize, flameSize);
             }
 
             context.ctx.restore();

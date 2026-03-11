@@ -8,6 +8,7 @@ import { Sun, Vector2D, GameState, Asteroid } from '../game-core';
 import * as Constants from '../constants';
 import { ColorScheme } from '../menu';
 import { renderLensFlare } from '../rendering/LensFlare';
+import type { SpriteDrawSource } from './sprite-manager';
 
 // Type definitions for sun rendering
 type SunRenderCache = {
@@ -106,7 +107,7 @@ export class SunRenderer {
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         isFancyGraphicsEnabled: boolean,
         colorScheme: ColorScheme,
-        sunSprite: HTMLImageElement | null,
+        sunSprite: SpriteDrawSource | null,
         drawFancyBloom: (screenPos: Vector2D, radius: number, color: string, intensity: number) => void,
         withAlpha: (color: string, alpha: number) => string
     ): void {
@@ -146,10 +147,14 @@ export class SunRenderer {
         ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
+        if (sunSprite) {
             const diameterPx = screenRadius * 2;
             ctx.drawImage(
-                sunSprite,
+                sunSprite.image,
+                sunSprite.sourceX,
+                sunSprite.sourceY,
+                sunSprite.sourceWidth,
+                sunSprite.sourceHeight,
                 screenPos.x - screenRadius,
                 screenPos.y - screenRadius,
                 diameterPx,

@@ -108,7 +108,7 @@ export interface UnitRendererContext {
     camera: { x: number; y: number };
 
     // Unit drawing (needed by HeroRenderer)
-    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext): void;
+    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext, useSimpleLod?: boolean): void;
 }
 
 /**

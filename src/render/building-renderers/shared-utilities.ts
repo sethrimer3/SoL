@@ -59,6 +59,7 @@ export interface BuildingRendererContext {
     // Sprite and texture access
     getSpriteImage(path: string): HTMLImageElement;
     getTintedSprite(path: string, color: string): HTMLCanvasElement;
+    drawSpritePath(path: string, x: number, y: number, width: number, height: number): boolean;
     getGraphicAssetPath(key: string): string | null;
     
     // Gradient caching

@@ -173,6 +173,13 @@ export class AsteroidRenderer {
         const shadowHex = '#4A3218';
         const midToneHex = '#C48A2C';
         const lightHex = '#F6C65B';
+        const viewportWidth = ctx.canvas instanceof HTMLCanvasElement && ctx.canvas.clientWidth > 0
+            ? ctx.canvas.clientWidth
+            : ctx.canvas.width;
+        const viewportHeight = ctx.canvas instanceof HTMLCanvasElement && ctx.canvas.clientHeight > 0
+            ? ctx.canvas.clientHeight
+            : ctx.canvas.height;
+        const facetCullMarginPx = 4;
 
         for (let i = 0; i < asteroidRenderCache.facets.length; i++) {
             const facet = asteroidRenderCache.facets[i];
@@ -188,6 +195,9 @@ export class AsteroidRenderer {
             const lambert = Math.max(0, pseudoNormal.x * lightDirection.x + pseudoNormal.y * lightDirection.y);
             const projection = (centroidWorld.x - asteroid.position.x) * lightDirection.x
                 + (centroidWorld.y - asteroid.position.y) * lightDirection.y;
+            if (projection < -asteroid.size * 0.18) {
+                continue;
+            }
             const normalizedProjection = Math.min(1, Math.max(0, (projection - minProjection) / projectionSpan));
             const directionalBrightness = 0.35 + 0.65 * normalizedProjection;
             const brightness = directionalBrightness * (0.8 + lambert * 0.2);
@@ -202,6 +212,17 @@ export class AsteroidRenderer {
             const screenA = worldToScreen(worldA);
             const screenB = worldToScreen(worldB);
             const screenC = worldToScreen(worldC);
+            const minScreenX = Math.min(screenA.x, screenB.x, screenC.x);
+            const maxScreenX = Math.max(screenA.x, screenB.x, screenC.x);
+            const minScreenY = Math.min(screenA.y, screenB.y, screenC.y);
+            const maxScreenY = Math.max(screenA.y, screenB.y, screenC.y);
+
+            if (maxScreenX < -facetCullMarginPx
+                || minScreenX > viewportWidth + facetCullMarginPx
+                || maxScreenY < -facetCullMarginPx
+                || minScreenY > viewportHeight + facetCullMarginPx) {
+                continue;
+            }
 
             ctx.fillStyle = facetColor;
             ctx.strokeStyle = facetStrokeColor;

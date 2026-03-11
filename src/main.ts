@@ -56,6 +56,15 @@ class GameController {
     private replayPlayer: ReplayPlayer | null = null;
     private isWatchingReplay: boolean = false;
     private currentGameSeed: number = 0;
+    private readonly adaptiveQualityFrameTimesMs: number[] = [];
+    private adaptiveQualityAccumulatedFrameTimeMs = 0;
+    private lastAdaptiveQualityChangeTimeMs = 0;
+    private lastRenderTimeMs = 0;
+    private adaptiveQualitySampledQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private readonly ADAPTIVE_QUALITY_SAMPLE_COUNT = 90;
+    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 20;
+    private readonly ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS = 2000;
+    private readonly LOW_QUALITY_RENDER_INTERVAL_MS = 1000 / 30;
 
 
     private getHeroUnitType(heroName: string): string | null {
@@ -1666,16 +1675,92 @@ class GameController {
         }
     }
 
+    private recordAdaptiveQualityFrameTime(frameTimeMs: number): void {
+        if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0 || frameTimeMs > 250) {
+            return;
+        }
+
+        if (this.adaptiveQualitySampledQuality !== this.renderer.graphicsQuality) {
+            this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
+            this.adaptiveQualityFrameTimesMs.length = 0;
+            this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        }
+
+        this.adaptiveQualityFrameTimesMs.push(frameTimeMs);
+        this.adaptiveQualityAccumulatedFrameTimeMs += frameTimeMs;
+
+        if (this.adaptiveQualityFrameTimesMs.length > this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            const removedFrameTimeMs = this.adaptiveQualityFrameTimesMs.shift();
+            if (removedFrameTimeMs !== undefined) {
+                this.adaptiveQualityAccumulatedFrameTimeMs -= removedFrameTimeMs;
+            }
+        }
+    }
+
+    private maybeLowerGraphicsQuality(currentTimeMs: number): void {
+        if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            return;
+        }
+
+        if (currentTimeMs - this.lastAdaptiveQualityChangeTimeMs < this.ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS) {
+            return;
+        }
+
+        const averageFrameTimeMs = this.adaptiveQualityAccumulatedFrameTimeMs / this.adaptiveQualityFrameTimesMs.length;
+        if (averageFrameTimeMs <= this.ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS) {
+            return;
+        }
+
+        const nextQuality = this.getNextLowerGraphicsQuality(this.renderer.graphicsQuality);
+        if (!nextQuality) {
+            return;
+        }
+
+        this.renderer.graphicsQuality = nextQuality;
+        this.lastAdaptiveQualityChangeTimeMs = currentTimeMs;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.adaptiveQualitySampledQuality = nextQuality;
+    }
+
+    private getNextLowerGraphicsQuality(
+        quality: 'low' | 'medium' | 'high' | 'ultra'
+    ): 'low' | 'medium' | 'high' | null {
+        switch (quality) {
+            case 'ultra':
+                return 'high';
+            case 'high':
+                return 'medium';
+            case 'medium':
+                return 'low';
+            case 'low':
+            default:
+                return null;
+        }
+    }
+
+    private getRenderIntervalMs(): number {
+        return this.renderer.graphicsQuality === 'low'
+            ? this.LOW_QUALITY_RENDER_INTERVAL_MS
+            : 0;
+    }
+
     private gameLoop(currentTime: number): void {
         if (!this.isRunning) return;
 
         // Calculate delta time in seconds
         const deltaTime = this.lastTime === 0 ? 0 : (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
+        this.recordAdaptiveQualityFrameTime(deltaTime * 1000);
+        this.maybeLowerGraphicsQuality(currentTime);
 
         // Update and render (cap delta time to prevent huge jumps)
         this.update(Math.min(deltaTime, 0.1));
-        this.render();
+        const renderIntervalMs = this.getRenderIntervalMs();
+        if (renderIntervalMs <= 0 || this.lastRenderTimeMs === 0 || currentTime - this.lastRenderTimeMs >= renderIntervalMs) {
+            this.render();
+            this.lastRenderTimeMs = currentTime;
+        }
 
         // Continue loop
         requestAnimationFrame((time) => this.gameLoop(time));
@@ -1686,6 +1771,11 @@ class GameController {
         
         this.isRunning = true;
         this.lastTime = 0;
+        this.lastRenderTimeMs = 0;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.lastAdaptiveQualityChangeTimeMs = 0;
+        this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
         requestAnimationFrame((time) => this.gameLoop(time));
     }
 
