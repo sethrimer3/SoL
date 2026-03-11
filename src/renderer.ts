@@ -120,6 +120,9 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_GRAPHEME_ALPHA_MAX = 0.3;
     private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
     private readonly MAX_RENDER_PIXEL_RATIO = 2;
+    // Skip the heaviest fancy field overlays once the physical canvas grows beyond roughly 6 MP
+    // (for example, a 1080p view rendered near ~1.7 effective DPR) to protect frame rate.
+    private readonly MAX_FANCY_FIELD_EFFECTS_CANVAS_PIXEL_AREA = 6_000_000;
     private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
     private readonly spriteManager = new SpriteManager();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number; pentagonRotationRad: number}>();
@@ -196,6 +199,10 @@ export class GameRenderer {
     private readonly environmentRenderer = new EnvironmentRenderer();
     private readonly glowRenderer = new GlowRenderer();
     private movementPointFramePaths: string[] = [];
+    private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private lastAppliedDevicePixelRatio = 0;
+    private lastAppliedViewportWidthPx = 0;
+    private lastAppliedViewportHeightPx = 0;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -260,7 +267,12 @@ export class GameRenderer {
             resolutionScale = 0.9;
         }
         
-        const effectiveDpr = cappedDpr * resolutionScale;
+        // Apply a second, quality-specific cap after the global safety cap above so
+        // ultra/high quality on dense displays does not recreate an excessively large canvas.
+        const effectiveDpr = Math.min(
+            cappedDpr * resolutionScale,
+            this.getMaxEffectiveRenderPixelRatioForQuality()
+        );
         
         // Set canvas physical size to match display size * effective DPR
         this.canvas.width = window.innerWidth * effectiveDpr;
@@ -273,6 +285,39 @@ export class GameRenderer {
         // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
+        this.lastAppliedGraphicsQuality = this.graphicsQuality;
+        this.lastAppliedDevicePixelRatio = window.devicePixelRatio || 1;
+        this.lastAppliedViewportWidthPx = window.innerWidth;
+        this.lastAppliedViewportHeightPx = window.innerHeight;
+    }
+
+    private getMaxEffectiveRenderPixelRatioForQuality(): number {
+        switch (this.graphicsQuality) {
+            case 'low':
+                return 1;
+            case 'medium':
+                return 1.25;
+            case 'high':
+                return 1.5;
+            case 'ultra':
+            default:
+                return 1.7;
+        }
+    }
+
+    private shouldResizeCanvasForCurrentDisplay(
+        devicePixelRatio: number,
+        viewportWidthPx: number,
+        viewportHeightPx: number
+    ): boolean {
+        return this.lastAppliedGraphicsQuality !== this.graphicsQuality
+            || this.lastAppliedDevicePixelRatio !== devicePixelRatio
+            || this.lastAppliedViewportWidthPx !== viewportWidthPx
+            || this.lastAppliedViewportHeightPx !== viewportHeightPx;
+    }
+
+    private shouldSkipFancyFieldEffects(): boolean {
+        return this.canvas.width * this.canvas.height > this.MAX_FANCY_FIELD_EFFECTS_CANVAS_PIXEL_AREA;
     }
 
     /**
@@ -1734,6 +1779,13 @@ export class GameRenderer {
      * Render the entire game state
      */
     render(game: GameState): void {
+        const devicePixelRatio = window.devicePixelRatio || 1;
+        const viewportWidthPx = window.innerWidth;
+        const viewportHeightPx = window.innerHeight;
+        if (this.shouldResizeCanvasForCurrentDisplay(devicePixelRatio, viewportWidthPx, viewportHeightPx)) {
+            this.resizeCanvas();
+        }
+
         this.sunRenderer.clearFrameCache();
 
         // Clear canvas with color scheme background
@@ -1783,7 +1835,9 @@ export class GameRenderer {
             );
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
+        const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
+
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
             const canvasWidth = getCanvasScreenWidthPx(this.canvas);
             const canvasHeight = getCanvasScreenHeightPx(this.canvas);
             
@@ -1832,11 +1886,11 @@ export class GameRenderer {
             }
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
             this.applyUltraWarmCoolGrade(game);
         }
 
-        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled) {
+        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
             this.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight);
         }
 
