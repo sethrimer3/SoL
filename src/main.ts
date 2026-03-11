@@ -1787,6 +1787,11 @@ class GameController {
     stop(): void {
         this.isRunning = false;
     }
+
+    public destroy(): void {
+        this.stop();
+        this.renderer.destroy();
+    }
 }
 
 const bootstrapGameController = (): void => {
@@ -1796,6 +1801,7 @@ const bootstrapGameController = (): void => {
     const controller = new GameController();
     // Expose for dev/testing purposes
     (window as any).gameController = controller;
+    window.addEventListener('beforeunload', () => controller.destroy(), { once: true });
 };
 
 // Start game when DOM is loaded. If this bundle executes after DOMContentLoaded

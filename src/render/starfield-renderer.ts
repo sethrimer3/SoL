@@ -218,7 +218,7 @@ export class StarfieldRenderer {
      * Renders cinematic orange stars with parallax depth
      */
     public drawReworkedParallaxStars(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         parallaxCamera: Vector2D,
         screenWidth: number,
         screenHeight: number,
@@ -462,7 +462,7 @@ export class StarfieldRenderer {
      * (Legacy system, currently unused)
      */
     public drawStarfield(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         parallaxCamera: Vector2D,
         screenWidth: number,
         screenHeight: number
