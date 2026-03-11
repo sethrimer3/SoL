@@ -1693,6 +1693,10 @@ export class MainMenu {
         const selectedLobbyMap = lobbyMaps.find(map => map.id === roomSelectedMapId) || this.settings.selectedMap || lobbyMaps[0];
         this.settings.selectedMap = selectedLobbyMap;
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
         container.innerHTML = '';
         renderLobbyDetailScreen(container, {
             roomId: room.id,
