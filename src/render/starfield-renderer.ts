@@ -59,7 +59,7 @@ export class StarfieldRenderer {
         [232, 239, 255],
     ];
 
-    private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
+    private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
         low: 200,
         medium: 100,
         high: 33,
@@ -242,7 +242,7 @@ export class StarfieldRenderer {
 
         const cameraChanged = cameraX !== this.reworkedStarCacheCameraX || cameraY !== this.reworkedStarCacheCameraY;
         const qualityChanged = graphicsQuality !== this.reworkedStarCacheQuality;
-        const refreshIntervalMs = this.REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS[graphicsQuality];
+        const refreshIntervalMs = this.REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms[graphicsQuality];
         const refreshIntervalElapsed = nowMs - this.reworkedStarCacheLastRefreshMs >= refreshIntervalMs;
         const shouldRefresh = dimensionsChanged || cameraChanged || qualityChanged || refreshIntervalElapsed;
 

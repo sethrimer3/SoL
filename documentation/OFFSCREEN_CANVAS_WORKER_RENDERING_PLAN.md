@@ -54,7 +54,7 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
 
 - [x] **1.3 — Add a per-quality refresh interval constant** inside the class body (near the top, after the palette declaration):
   ```typescript
-  private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS: Record<string, number> = {
+  private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms: Record<string, number> = {
       low:    200,  // ~5 fps — star flicker invisible at this rate
       medium: 100,  // ~10 fps
       high:    33,  // ~30 fps
@@ -67,7 +67,7 @@ Stars flicker at 0.08–0.18 Hz. At 30 fps this is imperceptible. At low quality
   1. Lazily create `reworkedStarCacheCanvas` via `document.createElement('canvas')` if null
   2. Resize the cache canvas when `screenWidth` or `screenHeight` has changed (update `reworkedStarCacheWidthPx/HeightPx`)
   3. Determine `needsRefresh` as: `cameraX !== reworkedStarCacheCameraX || cameraY !== reworkedStarCacheCameraY || graphicsQuality !== reworkedStarCacheQuality || screenWidth !== reworkedStarCacheWidthPx || screenHeight !== reworkedStarCacheHeightPx`
-  4. Also apply the time throttle: only allow a refresh when `performance.now() - reworkedStarCacheLastRefreshMs >= REWORKED_STAR_CACHE_REFRESH_INTERVAL_MS[graphicsQuality]`
+  4. Also apply the time throttle: only allow a refresh when `performance.now() - reworkedStarCacheLastRefreshMs >= REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms[graphicsQuality]`
   5. If refreshing: draw all stars to `reworkedStarCacheCtx` (move the existing inner loop body there verbatim, replacing `ctx` with `cacheCtx`), then update all cache-tracking fields including `reworkedStarCacheLastRefreshMs = performance.now()`
   6. Blit the cache to the caller's `ctx` with: `ctx.drawImage(this.reworkedStarCacheCanvas, 0, 0, screenWidth, screenHeight)`
 > **Agent note (2026-03-11):** Moved the expensive per-star work onto the cache context and left the caller path as a single cache blit. Camera/quality/resize invalidations refresh immediately, while the interval gate still updates star flicker over time.
