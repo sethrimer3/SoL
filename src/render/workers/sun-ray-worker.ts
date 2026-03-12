@@ -48,6 +48,13 @@ type SunRayWorkerMessage = SunRayWorkerRenderMessage | SunRayWorkerResizeMessage
 type SunRayWorkerFrameMessage = {
     type: 'frame';
     bitmap: ImageBitmap;
+    view: {
+        cameraX: number;
+        cameraY: number;
+        zoomLevel: number;
+        canvasWidthPx: number;
+        canvasHeightPx: number;
+    };
 };
 
 interface SunRayWorkerScope {
@@ -192,5 +199,15 @@ workerScope.addEventListener('message', (event) => {
     renderer.clearFrameCache();
 
     const bitmap = outputCanvas.transferToImageBitmap();
-    workerScope.postMessage({ type: 'frame', bitmap }, [bitmap]);
+    workerScope.postMessage({
+        type: 'frame',
+        bitmap,
+        view: {
+            cameraX,
+            cameraY,
+            zoomLevel,
+            canvasWidthPx,
+            canvasHeightPx,
+        },
+    }, [bitmap]);
 });

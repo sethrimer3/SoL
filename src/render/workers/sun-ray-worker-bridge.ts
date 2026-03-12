@@ -5,6 +5,22 @@ type GraphicsQuality = 'low' | 'medium' | 'high' | 'ultra';
 type SunRayWorkerFrameMessage = {
     type: 'frame';
     bitmap: ImageBitmap;
+    view: {
+        cameraX: number;
+        cameraY: number;
+        zoomLevel: number;
+        canvasWidthPx: number;
+        canvasHeightPx: number;
+    };
+};
+
+export type SunRayWorkerFrame = {
+    bitmap: ImageBitmap;
+    cameraX: number;
+    cameraY: number;
+    zoomLevel: number;
+    canvasWidthPx: number;
+    canvasHeightPx: number;
 };
 
 /**
@@ -43,7 +59,7 @@ export interface SunRayViewData {
 
 export class SunRayWorkerBridge {
     private readonly worker: Worker | null;
-    private latestBitmap: ImageBitmap | null = null;
+    private latestFrame: SunRayWorkerFrame | null = null;
     private lastSentWidthPx = 0;
     private lastSentHeightPx = 0;
     private isWorkerOperational = false;
@@ -67,8 +83,15 @@ export class SunRayWorkerBridge {
             if (event.data.type !== 'frame') {
                 return;
             }
-            this.latestBitmap?.close();
-            this.latestBitmap = event.data.bitmap;
+            this.latestFrame?.bitmap.close();
+            this.latestFrame = {
+                bitmap: event.data.bitmap,
+                cameraX: event.data.view.cameraX,
+                cameraY: event.data.view.cameraY,
+                zoomLevel: event.data.view.zoomLevel,
+                canvasWidthPx: event.data.view.canvasWidthPx,
+                canvasHeightPx: event.data.view.canvasHeightPx,
+            };
         };
         this.worker.onerror = () => {
             this.dispose();
@@ -77,7 +100,7 @@ export class SunRayWorkerBridge {
 
     /**
      * Serialize the game snapshot and send a render request to the worker.
-     * Returns immediately; the resulting bitmap is available via getLatestBitmap() on the next frame.
+     * Returns immediately; the resulting frame metadata is available via getLatestFrame() on the next frame.
      */
     public requestFrame(game: SunRayBridgeGameData, view: SunRayViewData): void {
         if (!this.worker || !this.isWorkerOperational) {
@@ -129,16 +152,16 @@ export class SunRayWorkerBridge {
         this.worker.postMessage(renderMessage);
     }
 
-    /** Returns the most recently delivered ImageBitmap, or null if no frame has arrived yet. */
-    public getLatestBitmap(): ImageBitmap | null {
-        return this.latestBitmap;
+    /** Returns the most recently delivered worker frame, or null if no frame has arrived yet. */
+    public getLatestFrame(): SunRayWorkerFrame | null {
+        return this.latestFrame;
     }
 
     /** Terminate the worker and release any held ImageBitmap. */
     public dispose(): void {
         this.isWorkerOperational = false;
         this.worker?.terminate();
-        this.latestBitmap?.close();
-        this.latestBitmap = null;
+        this.latestFrame?.bitmap.close();
+        this.latestFrame = null;
     }
 }
