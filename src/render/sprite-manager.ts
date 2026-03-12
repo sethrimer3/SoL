@@ -309,6 +309,7 @@ export class SpriteManager {
         };
 
         atlasContext.drawImage(image, region.x, region.y);
+        this.extrudeSpriteBorderIntoPadding(atlasContext, image, region, paddingPx);
         this.spriteAtlasRegionCache.set(resolvedPath, region);
 
         this.spriteAtlasCursorX += requiredWidthPx;
@@ -332,5 +333,82 @@ export class SpriteManager {
         this.spriteAtlasCanvas = canvas;
         this.spriteAtlasContext = ctx;
         return ctx;
+    }
+
+    private extrudeSpriteBorderIntoPadding(
+        atlasContext: CanvasRenderingContext2D,
+        image: HTMLImageElement,
+        region: SpriteAtlasRegion,
+        paddingPx: number
+    ): void {
+        if (paddingPx <= 0) {
+            return;
+        }
+
+        const sourceWidth = image.naturalWidth;
+        const sourceHeight = image.naturalHeight;
+
+        // Extend edge texels into the padding gutter so scaled atlas draws do not sample
+        // neighboring sprites (prevents corner bleed artifacts when image smoothing is enabled).
+        atlasContext.drawImage(image, 0, 0, sourceWidth, 1, region.x, region.y - paddingPx, region.width, paddingPx);
+        atlasContext.drawImage(
+            image,
+            0,
+            sourceHeight - 1,
+            sourceWidth,
+            1,
+            region.x,
+            region.y + region.height,
+            region.width,
+            paddingPx
+        );
+
+        atlasContext.drawImage(image, 0, 0, 1, sourceHeight, region.x - paddingPx, region.y, paddingPx, region.height);
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            0,
+            1,
+            sourceHeight,
+            region.x + region.width,
+            region.y,
+            paddingPx,
+            region.height
+        );
+
+        atlasContext.drawImage(image, 0, 0, 1, 1, region.x - paddingPx, region.y - paddingPx, paddingPx, paddingPx);
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            0,
+            1,
+            1,
+            region.x + region.width,
+            region.y - paddingPx,
+            paddingPx,
+            paddingPx
+        );
+        atlasContext.drawImage(
+            image,
+            0,
+            sourceHeight - 1,
+            1,
+            1,
+            region.x - paddingPx,
+            region.y + region.height,
+            paddingPx,
+            paddingPx
+        );
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            sourceHeight - 1,
+            1,
+            1,
+            region.x + region.width,
+            region.y + region.height,
+            paddingPx,
+            paddingPx
+        );
     }
 }
