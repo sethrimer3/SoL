@@ -2068,11 +2068,13 @@ export class GameRenderer {
                     const zoomScale = frameZoom > 0 ? this.zoom / frameZoom : 1;
                     const cameraDeltaScreenX = (sunRayFrame.cameraX - this.camera.x) * this.zoom;
                     const cameraDeltaScreenY = (sunRayFrame.cameraY - this.camera.y) * this.zoom;
-                    const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.08;
-                    const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= canvasWidth * 0.3
-                        && Math.abs(cameraDeltaScreenY) <= canvasHeight * 0.3;
+                    const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06;
+                    const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= canvasWidth * 0.12
+                        && Math.abs(cameraDeltaScreenY) <= canvasHeight * 0.12;
+                    const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx === canvasWidth
+                        && sunRayFrame.canvasHeightPx === canvasHeight;
 
-                    if (isFrameScaleCompatible && isFrameOffsetReasonable) {
+                    if (isFrameScaleCompatible && isFrameOffsetReasonable && isFrameCanvasCompatible) {
                         const centerX = canvasWidth * 0.5;
                         const centerY = canvasHeight * 0.5;
                         this.ctx.save();
@@ -2182,9 +2184,29 @@ export class GameRenderer {
                 screenHeight,
                 this.graphicsQuality
             );
-            const starBitmap = this.starfieldWorkerBridge?.getLatestBitmap();
-            if (starBitmap) {
-                this.ctx.drawImage(starBitmap, 0, 0, screenWidth, screenHeight);
+            const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
+            if (starFrame) {
+                const cameraDeltaScreenX = (starFrame.cameraX - this.parallaxCamera.x) * this.zoom;
+                const cameraDeltaScreenY = (starFrame.cameraY - this.parallaxCamera.y) * this.zoom;
+                const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= screenWidth * 0.12
+                    && Math.abs(cameraDeltaScreenY) <= screenHeight * 0.12;
+                const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
+                    && starFrame.screenHeightPx === screenHeight;
+
+                if (isFrameOffsetReasonable && isFrameCanvasCompatible) {
+                    this.ctx.save();
+                    this.ctx.translate(cameraDeltaScreenX, cameraDeltaScreenY);
+                    this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
+                    this.ctx.restore();
+                } else {
+                    this.starfieldRenderer.drawReworkedParallaxStars(
+                        this.ctx,
+                        this.parallaxCamera,
+                        screenWidth,
+                        screenHeight,
+                        this.graphicsQuality
+                    );
+                }
             } else {
                 this.starfieldRenderer.drawReworkedParallaxStars(
                     this.ctx,
