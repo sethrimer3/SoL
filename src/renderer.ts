@@ -2062,9 +2062,46 @@ export class GameRenderer {
                     sunRayRadiusBucketSize: this.SUN_RAY_RADIUS_BUCKET_SIZE,
                     sunRayBloomRadiusMultiplier: this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER,
                 });
-                const sunRayBitmap = this.sunRayWorkerBridge.getLatestBitmap();
-                if (sunRayBitmap) {
-                    this.ctx.drawImage(sunRayBitmap, 0, 0, canvasWidth, canvasHeight);
+                const sunRayFrame = this.sunRayWorkerBridge.getLatestFrame();
+                if (sunRayFrame) {
+                    const frameZoom = sunRayFrame.zoomLevel;
+                    const zoomScale = frameZoom > 0 ? this.zoom / frameZoom : 1;
+                    const cameraDeltaScreenX = (sunRayFrame.cameraX - this.camera.x) * this.zoom;
+                    const cameraDeltaScreenY = (sunRayFrame.cameraY - this.camera.y) * this.zoom;
+                    const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.08;
+                    const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= canvasWidth * 0.3
+                        && Math.abs(cameraDeltaScreenY) <= canvasHeight * 0.3;
+
+                    if (isFrameScaleCompatible && isFrameOffsetReasonable) {
+                        const centerX = canvasWidth * 0.5;
+                        const centerY = canvasHeight * 0.5;
+                        this.ctx.save();
+                        this.ctx.translate(centerX + cameraDeltaScreenX, centerY + cameraDeltaScreenY);
+                        this.ctx.scale(zoomScale, zoomScale);
+                        this.ctx.drawImage(
+                            sunRayFrame.bitmap,
+                            -sunRayFrame.canvasWidthPx * 0.5,
+                            -sunRayFrame.canvasHeightPx * 0.5,
+                            sunRayFrame.canvasWidthPx,
+                            sunRayFrame.canvasHeightPx
+                        );
+                        this.ctx.restore();
+                    } else {
+                        this.sunRenderer.drawSunRays(
+                            this.ctx,
+                            game,
+                            canvasWidth,
+                            canvasHeight,
+                            this.graphicsQuality,
+                            this.isFancyGraphicsEnabled,
+                            this._boundWorldToScreen,
+                            this._boundWorldToScreenCoords,
+                            this._boundIsWithinViewBounds,
+                            this._boundGetCachedRadialGradient,
+                            this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                            this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                        );
+                    }
                 } else {
                     // Fallback: synchronous render until the first worker frame arrives.
                     this.sunRenderer.drawSunRays(
