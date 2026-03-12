@@ -41,6 +41,7 @@ type CachedTextSprite = {
     width: number;
     height: number;
     alphabeticBaselineOffsetPx: number;
+    renderScale: number;
 };
 
 export class HUDRenderer {
@@ -54,6 +55,14 @@ export class HUDRenderer {
     private readonly cachedTextWidths = new Map<string, number>();
     private readonly textMeasureCanvas = document.createElement('canvas');
     private readonly textMeasureContext = this.textMeasureCanvas.getContext('2d');
+
+    private getTextRenderScale(context: HUDRendererContext): number {
+        const transformScale = context.ctx.getTransform().a;
+        if (!Number.isFinite(transformScale) || transformScale <= 0) {
+            return 1;
+        }
+        return Math.max(1, transformScale);
+    }
 
     public drawDamageNumbers(game: GameState, context: HUDRendererContext): void {
         for (const damageNumber of game.damageNumbers) {
@@ -911,24 +920,30 @@ export class HUDRenderer {
         },
         context: HUDRendererContext
     ): void {
+        const renderScale = this.getTextRenderScale(context);
         const sprite = this.getCachedTextSprite(
             text,
             options.font,
             options.fillStyle,
             options.strokeStyle,
-            options.lineWidth ?? 0
+            options.lineWidth ?? 0,
+            renderScale
         );
+
+        const spriteWidth = sprite.width / sprite.renderScale;
+        const spriteHeight = sprite.height / sprite.renderScale;
+        const baselineOffset = sprite.alphabeticBaselineOffsetPx / sprite.renderScale;
 
         let drawX = x;
         let drawY = y;
 
         switch (options.textAlign) {
             case 'center':
-                drawX -= sprite.width / 2;
+                drawX -= spriteWidth / 2;
                 break;
             case 'right':
             case 'end':
-                drawX -= sprite.width;
+                drawX -= spriteWidth;
                 break;
             case 'left':
             case 'start':
@@ -938,23 +953,23 @@ export class HUDRenderer {
 
         switch (options.textBaseline) {
             case 'middle':
-                drawY -= sprite.height / 2;
+                drawY -= spriteHeight / 2;
                 break;
             case 'bottom':
             case 'ideographic':
-                drawY -= sprite.height;
+                drawY -= spriteHeight;
                 break;
             case 'top':
             case 'hanging':
                 break;
             case 'alphabetic':
-                drawY -= sprite.alphabeticBaselineOffsetPx;
+                drawY -= baselineOffset;
                 break;
             default:
                 break;
         }
 
-        context.ctx.drawImage(sprite.canvas, drawX, drawY);
+        context.ctx.drawImage(sprite.canvas, drawX, drawY, spriteWidth, spriteHeight);
     }
 
     private getCachedTextWidth(text: string, font: string): number {
@@ -982,9 +997,11 @@ export class HUDRenderer {
         font: string,
         fillStyle: string,
         strokeStyle?: string,
-        lineWidth: number = 0
+        lineWidth: number = 0,
+        renderScale: number = 1
     ): CachedTextSprite {
-        const cacheKey = `${font}|${fillStyle}|${strokeStyle ?? ''}|${lineWidth}|${text}`;
+        const scaleBucket = Math.round(renderScale * 100) / 100;
+        const cacheKey = `${font}|${fillStyle}|${strokeStyle ?? ''}|${lineWidth}|${scaleBucket}|${text}`;
         const cached = this.cachedTextSprites.get(cacheKey);
         if (cached) {
             return cached;
@@ -995,7 +1012,7 @@ export class HUDRenderer {
             const fallbackCanvas = document.createElement('canvas');
             fallbackCanvas.width = 1;
             fallbackCanvas.height = 1;
-            return { canvas: fallbackCanvas, width: 1, height: 1, alphabeticBaselineOffsetPx: 0 };
+            return { canvas: fallbackCanvas, width: 1, height: 1, alphabeticBaselineOffsetPx: 0, renderScale: scaleBucket };
         }
 
         measureContext.font = font;
@@ -1013,17 +1030,18 @@ export class HUDRenderer {
         const rightPx = Math.ceil(metrics.actualBoundingBoxRight || metrics.width);
         const ascentPx = Math.ceil(metrics.actualBoundingBoxAscent || fontSizePx);
         const descentPx = Math.ceil(metrics.actualBoundingBoxDescent || Math.max(2, fontSizePx * 0.3));
-        const width = Math.max(1, leftPx + rightPx + paddingPx * 2);
-        const height = Math.max(1, ascentPx + descentPx + paddingPx * 2);
+        const width = Math.max(1, Math.ceil((leftPx + rightPx + paddingPx * 2) * scaleBucket));
+        const height = Math.max(1, Math.ceil((ascentPx + descentPx + paddingPx * 2) * scaleBucket));
 
         const canvas = document.createElement('canvas');
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-            return { canvas, width, height, alphabeticBaselineOffsetPx: paddingPx + ascentPx };
+            return { canvas, width, height, alphabeticBaselineOffsetPx: (paddingPx + ascentPx) * scaleBucket, renderScale: scaleBucket };
         }
 
+        ctx.setTransform(scaleBucket, 0, 0, scaleBucket, 0, 0);
         ctx.font = font;
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
@@ -1039,7 +1057,7 @@ export class HUDRenderer {
         ctx.fillStyle = fillStyle;
         ctx.fillText(text, drawX, drawY);
 
-        const sprite = { canvas, width, height, alphabeticBaselineOffsetPx: drawY };
+        const sprite = { canvas, width, height, alphabeticBaselineOffsetPx: drawY * scaleBucket, renderScale: scaleBucket };
         this.cachedTextSprites.set(cacheKey, sprite);
         if (this.cachedTextSprites.size > HUDRenderer.MAX_TEXT_SPRITE_CACHE_ENTRY_COUNT) {
             this.cachedTextSprites.clear();
