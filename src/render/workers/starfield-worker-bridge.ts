@@ -19,11 +19,23 @@ type StarfieldWorkerResizeMessage = {
 type StarfieldWorkerFrameMessage = {
     type: 'frame';
     bitmap: ImageBitmap;
+    cameraX: number;
+    cameraY: number;
+    screenWidthPx: number;
+    screenHeightPx: number;
+};
+
+export type StarfieldWorkerFrame = {
+    bitmap: ImageBitmap;
+    cameraX: number;
+    cameraY: number;
+    screenWidthPx: number;
+    screenHeightPx: number;
 };
 
 export class StarfieldWorkerBridge {
     private readonly worker: Worker | null;
-    private latestBitmap: ImageBitmap | null = null;
+    private latestFrame: StarfieldWorkerFrame | null = null;
     private lastSentCameraX = Number.NaN;
     private lastSentCameraY = Number.NaN;
     private lastSentQuality: GraphicsQuality | '' = '';
@@ -51,8 +63,14 @@ export class StarfieldWorkerBridge {
                 return;
             }
 
-            this.latestBitmap?.close();
-            this.latestBitmap = event.data.bitmap;
+            this.latestFrame?.bitmap.close();
+            this.latestFrame = {
+                bitmap: event.data.bitmap,
+                cameraX: event.data.cameraX,
+                cameraY: event.data.cameraY,
+                screenWidthPx: event.data.screenWidthPx,
+                screenHeightPx: event.data.screenHeightPx,
+            };
         };
         this.worker.onerror = () => {
             this.dispose();
@@ -97,14 +115,14 @@ export class StarfieldWorkerBridge {
         this.lastSentHeightPx = screenHeightPx;
     }
 
-    public getLatestBitmap(): ImageBitmap | null {
-        return this.latestBitmap;
+    public getLatestFrame(): StarfieldWorkerFrame | null {
+        return this.latestFrame;
     }
 
     public dispose(): void {
         this.isWorkerOperational = false;
         this.worker?.terminate();
-        this.latestBitmap?.close();
-        this.latestBitmap = null;
+        this.latestFrame?.bitmap.close();
+        this.latestFrame = null;
     }
 }

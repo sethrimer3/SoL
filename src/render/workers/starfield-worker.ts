@@ -24,6 +24,10 @@ type StarfieldWorkerMessage = StarfieldWorkerRenderMessage | StarfieldWorkerResi
 type StarfieldWorkerFrameMessage = {
     type: 'frame';
     bitmap: ImageBitmap;
+    cameraX: number;
+    cameraY: number;
+    screenWidthPx: number;
+    screenHeightPx: number;
 };
 
 interface StarfieldWorkerScope {
@@ -76,5 +80,12 @@ workerScope.addEventListener('message', (event) => {
     );
 
     const bitmap = outputCanvas.transferToImageBitmap();
-    workerScope.postMessage({ type: 'frame', bitmap }, [bitmap]);
+    workerScope.postMessage({
+        type: 'frame',
+        bitmap,
+        cameraX,
+        cameraY,
+        screenWidthPx,
+        screenHeightPx,
+    }, [bitmap]);
 });
