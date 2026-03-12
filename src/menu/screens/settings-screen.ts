@@ -22,6 +22,7 @@ export interface SettingsScreenParams {
     enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     isExperimentalGraphicsEnabled: boolean;
+    isAdaptiveQualityEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -38,6 +39,7 @@ export interface SettingsScreenParams {
     onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onExperimentalGraphicsEnabledChange: (value: boolean) => void;
+    onAdaptiveQualityEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -65,6 +67,7 @@ export function renderSettingsScreen(
         enemy2Color,
         graphicsQuality,
         isExperimentalGraphicsEnabled,
+        isAdaptiveQualityEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -81,6 +84,7 @@ export function renderSettingsScreen(
         onEnemy2ColorChange,
         onGraphicsQualityChange,
         onExperimentalGraphicsEnabledChange,
+        onAdaptiveQualityEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -219,6 +223,12 @@ export function renderSettingsScreen(
         )
     );
     settingsContainer.appendChild(graphicsQualitySection);
+
+    const adaptiveQualitySection = createSettingSection(
+        'Adaptive Quality',
+        createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
+    );
+    settingsContainer.appendChild(adaptiveQualitySection);
 
     const experimentalGraphicsSection = createSettingSection(
         'Experimental Graphics',

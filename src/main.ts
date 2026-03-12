@@ -59,14 +59,21 @@ class GameController {
     private readonly adaptiveQualityFrameTimesMs: number[] = [];
     private adaptiveQualityAccumulatedFrameTimeMs = 0;
     private lastAdaptiveQualityChangeTimeMs = 0;
+    private lastAdaptiveQualityUpgradeTimeMs = 0;
     private lastRenderTimeMs = 0;
     private adaptiveQualitySampledQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private adaptiveQualityEnabled: boolean = false;
+    private adaptiveQualityTargetQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     // Sample count for ~1.5 seconds at 60 FPS (90 frames), which is enough to avoid quality thrash on short spikes.
     private readonly ADAPTIVE_QUALITY_SAMPLE_COUNT = 90;
-    // Drop quality once sustained frame time rises above 20 ms, which corresponds to roughly 50 FPS.
-    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 20;
+    // Drop quality once sustained frame time rises above 33 ms, which corresponds to roughly 30 FPS.
+    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 33;
+    // Raise quality once sustained frame time falls below 20 ms, which corresponds to roughly 50 FPS — comfortably above the 30 FPS drop threshold.
+    private readonly ADAPTIVE_QUALITY_MIN_AVERAGE_FRAME_TIME_MS = 20;
     // Wait two seconds between automatic downgrades so the renderer has time to settle after each step.
     private readonly ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS = 2000;
+    // Wait ten seconds between automatic upgrades — much longer than downgrades — to avoid quality bouncing.
+    private readonly ADAPTIVE_QUALITY_UPGRADE_COOLDOWN_MS = 10000;
     private readonly ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS = 250;
     private readonly LOW_QUALITY_TARGET_RENDER_FPS = 30;
     private readonly LOW_QUALITY_RENDER_INTERVAL_MS = 1000 / this.LOW_QUALITY_TARGET_RENDER_FPS;
@@ -1161,6 +1168,14 @@ class GameController {
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.adaptiveQualityEnabled = settings.isAdaptiveQualityEnabled;
+        this.adaptiveQualityTargetQuality = settings.graphicsQuality;
+        // Reset adaptive quality state when starting a new game
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.lastAdaptiveQualityChangeTimeMs = 0;
+        this.lastAdaptiveQualityUpgradeTimeMs = 0;
+        this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
         
         // Set up network manager for LAN play
         this.localPlayerIndex = 0;
@@ -1703,6 +1718,10 @@ class GameController {
     }
 
     private maybeLowerGraphicsQuality(currentTimeMs: number): void {
+        if (!this.adaptiveQualityEnabled) {
+            return;
+        }
+
         if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
             return;
         }
@@ -1744,6 +1763,58 @@ class GameController {
         }
     }
 
+    private maybeRaiseGraphicsQuality(currentTimeMs: number): void {
+        if (!this.adaptiveQualityEnabled) {
+            return;
+        }
+
+        if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            return;
+        }
+
+        if (currentTimeMs - this.lastAdaptiveQualityUpgradeTimeMs < this.ADAPTIVE_QUALITY_UPGRADE_COOLDOWN_MS) {
+            return;
+        }
+
+        const averageFrameTimeMs = this.adaptiveQualityAccumulatedFrameTimeMs / this.adaptiveQualityFrameTimesMs.length;
+        if (averageFrameTimeMs > this.ADAPTIVE_QUALITY_MIN_AVERAGE_FRAME_TIME_MS) {
+            return;
+        }
+
+        const nextQuality = this.getNextHigherGraphicsQuality(this.renderer.graphicsQuality);
+        if (!nextQuality) {
+            return;
+        }
+
+        // Never auto-upgrade beyond the quality level the player chose in settings.
+        const qualityOrder: Array<'low' | 'medium' | 'high' | 'ultra'> = ['low', 'medium', 'high', 'ultra'];
+        if (qualityOrder.indexOf(nextQuality) > qualityOrder.indexOf(this.adaptiveQualityTargetQuality)) {
+            return;
+        }
+
+        this.renderer.graphicsQuality = nextQuality;
+        this.lastAdaptiveQualityUpgradeTimeMs = currentTimeMs;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.adaptiveQualitySampledQuality = nextQuality;
+    }
+
+    private getNextHigherGraphicsQuality(
+        quality: 'low' | 'medium' | 'high' | 'ultra'
+    ): 'medium' | 'high' | 'ultra' | null {
+        switch (quality) {
+            case 'low':
+                return 'medium';
+            case 'medium':
+                return 'high';
+            case 'high':
+                return 'ultra';
+            case 'ultra':
+            default:
+                return null;
+        }
+    }
+
     private getRenderIntervalMs(): number {
         return this.renderer.graphicsQuality === 'low'
             ? this.LOW_QUALITY_RENDER_INTERVAL_MS
@@ -1758,6 +1829,7 @@ class GameController {
         this.lastTime = currentTime;
         this.recordAdaptiveQualityFrameTime(deltaTime * 1000);
         this.maybeLowerGraphicsQuality(currentTime);
+        this.maybeRaiseGraphicsQuality(currentTime);
 
         // Update and render (cap delta time to prevent huge jumps)
         this.update(Math.min(deltaTime, 0.1));

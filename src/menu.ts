@@ -87,6 +87,7 @@ export interface GameSettings {
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
+    isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -167,6 +168,7 @@ export class MainMenu {
             healthDisplayMode: 'bar', // Default to showing health bars
             graphicsQuality: 'ultra', // Default to ultra graphics
             isExperimentalGraphicsEnabled: false,
+            isAdaptiveQualityEnabled: false, // Default to disabled
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
@@ -1975,6 +1977,7 @@ export class MainMenu {
             enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
             isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
+            isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
@@ -2030,6 +2033,9 @@ export class MainMenu {
             },
             onExperimentalGraphicsEnabledChange: (value) => {
                 this.settings.isExperimentalGraphicsEnabled = value;
+            },
+            onAdaptiveQualityEnabledChange: (value) => {
+                this.settings.isAdaptiveQualityEnabled = value;
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
