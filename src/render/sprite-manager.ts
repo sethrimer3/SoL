@@ -55,8 +55,9 @@ export class SpriteManager {
     // 2048px keeps the dynamic atlas broadly compatible with common browser texture/canvas limits
     // while still fitting the small sprite set used for repeated UI/building draws.
     private static readonly SPRITE_ATLAS_SIZE_PX = 2048;
-    // Small padding prevents neighboring atlas entries from bleeding into scaled draws.
-    private static readonly SPRITE_ATLAS_PADDING_PX = 2;
+    // Large padding + edge extrusion prevents neighboring atlas entries from bleeding into
+    // rotated/minified draws (this was causing sun texels to leak onto mirrors/forge sprites).
+    private static readonly SPRITE_ATLAS_PADDING_PX = 16;
 
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
