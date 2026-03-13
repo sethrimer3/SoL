@@ -23,6 +23,7 @@ export interface SettingsScreenParams {
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     isExperimentalGraphicsEnabled: boolean;
     isAdaptiveQualityEnabled: boolean;
+    isPauseOnFocusLossEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -40,6 +41,7 @@ export interface SettingsScreenParams {
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onExperimentalGraphicsEnabledChange: (value: boolean) => void;
     onAdaptiveQualityEnabledChange: (value: boolean) => void;
+    onPauseOnFocusLossEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -68,6 +70,7 @@ export function renderSettingsScreen(
         graphicsQuality,
         isExperimentalGraphicsEnabled,
         isAdaptiveQualityEnabled,
+        isPauseOnFocusLossEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -85,6 +88,7 @@ export function renderSettingsScreen(
         onGraphicsQualityChange,
         onExperimentalGraphicsEnabledChange,
         onAdaptiveQualityEnabledChange,
+        onPauseOnFocusLossEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -229,6 +233,12 @@ export function renderSettingsScreen(
         createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
     );
     settingsContainer.appendChild(adaptiveQualitySection);
+
+    const pauseOnFocusLossSection = createSettingSection(
+        'Pause When Unfocused',
+        createToggle(isPauseOnFocusLossEnabled, onPauseOnFocusLossEnabledChange)
+    );
+    settingsContainer.appendChild(pauseOnFocusLossSection);
 
     const experimentalGraphicsSection = createSettingSection(
         'Experimental Graphics',

@@ -88,6 +88,7 @@ export interface GameSettings {
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
     isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
+    isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -169,6 +170,7 @@ export class MainMenu {
             graphicsQuality: 'ultra', // Default to ultra graphics
             isExperimentalGraphicsEnabled: false,
             isAdaptiveQualityEnabled: false, // Default to disabled
+            isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
@@ -195,6 +197,9 @@ export class MainMenu {
         document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
         this.visibilityHandler = () => {
+            if (!this.settings.isPauseOnFocusLossEnabled) {
+                return;
+            }
             if (document.hidden || !document.hasFocus()) {
                 this.menuAudioController.setVisible(false);
                 this.pauseMenuAnimations();
@@ -204,11 +209,13 @@ export class MainMenu {
             this.resumeMenuAnimations();
         };
         this.blurHandler = () => {
-            this.menuAudioController.setVisible(false);
-            this.pauseMenuAnimations();
+            if (this.settings.isPauseOnFocusLossEnabled) {
+                this.menuAudioController.setVisible(false);
+                this.pauseMenuAnimations();
+            }
         };
         this.focusHandler = () => {
-            if (!document.hidden) {
+            if (this.settings.isPauseOnFocusLossEnabled && !document.hidden) {
                 this.menuAudioController.setVisible(true);
                 this.resumeMenuAnimations();
             }
@@ -1978,6 +1985,7 @@ export class MainMenu {
             graphicsQuality: this.settings.graphicsQuality,
             isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
             isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
+            isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
@@ -2036,6 +2044,9 @@ export class MainMenu {
             },
             onAdaptiveQualityEnabledChange: (value) => {
                 this.settings.isAdaptiveQualityEnabled = value;
+            },
+            onPauseOnFocusLossEnabledChange: (value) => {
+                this.settings.isPauseOnFocusLossEnabled = value;
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
