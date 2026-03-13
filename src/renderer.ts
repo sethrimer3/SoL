@@ -392,6 +392,12 @@ export class GameRenderer {
     }
 
     private shouldUseSimpleUnitLod(unit: Unit): boolean {
+        // Keep starlings on their dedicated renderer even at far zoom/low quality.
+        // The generic simple-LOD path draws legacy circles and causes visible sprite popping
+        // when crossing the zoom threshold.
+        if (unit instanceof Starling) {
+            return false;
+        }
         const baseRadiusPx = this.UNIT_BASE_SIZE_PX * this.zoom * (unit.isHero ? this.HERO_SPRITE_SCALE * 0.5 : 1);
         if (this.graphicsQuality === 'low') {
             return baseRadiusPx <= this.LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
