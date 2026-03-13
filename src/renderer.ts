@@ -2069,12 +2069,14 @@ export class GameRenderer {
                     const cameraDeltaScreenX = (sunRayFrame.cameraX - this.camera.x) * this.zoom;
                     const cameraDeltaScreenY = (sunRayFrame.cameraY - this.camera.y) * this.zoom;
                     const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06;
-                    const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= canvasWidth * 0.12
-                        && Math.abs(cameraDeltaScreenY) <= canvasHeight * 0.12;
                     const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx === canvasWidth
                         && sunRayFrame.canvasHeightPx === canvasHeight;
 
-                    if (isFrameScaleCompatible && isFrameOffsetReasonable && isFrameCanvasCompatible) {
+                    if (isFrameScaleCompatible && isFrameCanvasCompatible) {
+                        // The sun rays use world-to-screen projection (* zoom), so this
+                        // delta correctly repositions the glow over the current sun position.
+                        // Removing the old 12% offset threshold eliminates the visible jump
+                        // that occurred when switching between worker-frame and synchronous modes.
                         const centerX = canvasWidth * 0.5;
                         const centerY = canvasHeight * 0.5;
                         this.ctx.save();
@@ -2186,18 +2188,16 @@ export class GameRenderer {
             );
             const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
             if (starFrame) {
-                const cameraDeltaScreenX = (starFrame.cameraX - this.parallaxCamera.x) * this.zoom;
-                const cameraDeltaScreenY = (starFrame.cameraY - this.parallaxCamera.y) * this.zoom;
-                const isFrameOffsetReasonable = Math.abs(cameraDeltaScreenX) <= screenWidth * 0.12
-                    && Math.abs(cameraDeltaScreenY) <= screenHeight * 0.12;
+                // Draw the worker frame directly at (0,0) without any translation.
+                // The parallax stars use cameraX * parallaxFactor (not zoom) for positioning,
+                // so any zoom-based translation formula would be wrong. Since parallaxFactors
+                // range from 0.12–0.53, a 1–2 frame stale position is imperceptible.
+                // Translating the bitmap caused visible jumps when the threshold switched modes.
                 const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
                     && starFrame.screenHeightPx === screenHeight;
 
-                if (isFrameOffsetReasonable && isFrameCanvasCompatible) {
-                    this.ctx.save();
-                    this.ctx.translate(cameraDeltaScreenX, cameraDeltaScreenY);
+                if (isFrameCanvasCompatible) {
                     this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
-                    this.ctx.restore();
                 } else {
                     this.starfieldRenderer.drawReworkedParallaxStars(
                         this.ctx,
