@@ -13,6 +13,7 @@ export type InGameMenuAction =
     | { type: 'toggleRenderLayer'; layer: RenderLayerKey; isEnabled: boolean }
     | { type: 'offscreenIndicatorOpacity'; opacityPercent: number }
     | { type: 'infoBoxOpacity'; opacityPercent: number }
+    | { type: 'infoBoxSizePercent'; sizePercent: number }
     | { type: 'damageDisplayMode'; mode: 'damage' | 'remaining-life' }
     | { type: 'healthDisplayMode'; mode: 'bar' | 'number' }
     | { type: 'fancyGraphics'; isEnabled: boolean }
@@ -93,7 +94,7 @@ export function getInGameMenuLayout(screenWidth: number, screenHeight: number): 
     const graphicsSliderGap = isCompactLayout ? 10 : 12;
     const graphicsSliderLabelWidth = isCompactLayout ? 150 : 190;
     const graphicsSliderTrackHeight = isCompactLayout ? 8 : 10;
-    const graphicsSliderAreaHeight = graphicsSliderRowHeight * 3 + graphicsSliderGap * 2;
+    const graphicsSliderAreaHeight = graphicsSliderRowHeight * 4 + graphicsSliderGap * 3;
     const graphicsListY = graphicsSliderY + graphicsSliderAreaHeight + (isCompactLayout ? 12 : 14);
     const graphicsListWidth = panelWidth - panelPaddingX * 2;
     const graphicsListHeight = Math.max(0, contentBottomY - graphicsListY);

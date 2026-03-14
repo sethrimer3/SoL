@@ -309,6 +309,14 @@ export class SpriteManager {
             height: image.naturalHeight
         };
 
+        // Clear the full allocation (sprite + padding) to transparent to prevent any
+        // stale atlas data from bleeding into this sprite's extrusion gutter.
+        atlasContext.clearRect(
+            this.spriteAtlasCursorX,
+            this.spriteAtlasCursorY,
+            requiredWidthPx,
+            requiredHeightPx
+        );
         atlasContext.drawImage(image, region.x, region.y);
         this.extrudeSpriteBorderIntoPadding(atlasContext, image, region, paddingPx);
         this.spriteAtlasRegionCache.set(resolvedPath, region);
@@ -330,6 +338,11 @@ export class SpriteManager {
         if (!ctx) {
             throw new Error('Could not create sprite atlas context');
         }
+
+        // Disable image smoothing so that edge-extrusion draws are pixel-exact copies.
+        // This prevents bilinear filtering from blending neighboring atlas entries when
+        // sprites are subsequently drawn at non-integer positions or with transforms.
+        ctx.imageSmoothingEnabled = false;
 
         this.spriteAtlasCanvas = canvas;
         this.spriteAtlasContext = ctx;

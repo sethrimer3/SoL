@@ -18,6 +18,7 @@ export interface HUDRendererContext {
     colorblindMode: boolean;
     offscreenIndicatorOpacity: number;
     infoBoxOpacity: number;
+    infoBoxSize: number;
     damageDisplayMode: 'damage' | 'remaining-life';
     healthDisplayMode: 'bar' | 'number';
     showInfo: boolean;
@@ -452,9 +453,10 @@ export class HUDRenderer {
 
     public drawProductionProgress(game: GameState, context: HUDRendererContext): void {
         const screenWidth = getCanvasScreenWidthPx(context.canvas);
+        const sizeScale = context.infoBoxSize;
         const margin = 10;
-        const productionBoxWidth = 200;
-        const boxHeight = 60;
+        const productionBoxWidth = 200 * sizeScale;
+        const boxHeight = 60 * sizeScale;
         const rightX = screenWidth - margin;
         let y = margin;
 
@@ -468,18 +470,20 @@ export class HUDRenderer {
         context.ctx.save();
         context.ctx.globalAlpha = context.infoBoxOpacity;
 
-        const compactBoxHeight = 30;
-        const compactTextPaddingLeft = 8;
-        const compactTextPaddingRight = 8;
-        const compactIconInset = 4;
+        const compactBoxHeight = 30 * sizeScale;
+        const compactTextPaddingLeft = 8 * sizeScale;
+        const compactTextPaddingRight = 8 * sizeScale;
+        const compactIconInset = 4 * sizeScale;
         const compactIconSize = compactBoxHeight - compactIconInset * 2;
-        context.ctx.font = 'bold 14px Doto';
+        const fontSize = Math.round(14 * sizeScale);
+        context.ctx.font = `bold ${fontSize}px Doto`;
 
         const compactTextWidths: number[] = [];
+        const fontString = `bold ${fontSize}px Doto`;
         if (player.stellarForge) {
             const energyText = `${player.stellarForge.incomingLightPerSec.toFixed(1)}/s`;
             compactTextWidths.push(
-                compactTextPaddingLeft + compactIconSize + compactIconInset + this.getCachedTextWidth(energyText, 'bold 14px Doto') + compactTextPaddingRight
+                compactTextPaddingLeft + compactIconSize + compactIconInset + this.getCachedTextWidth(energyText, fontString) + compactTextPaddingRight
             );
         }
 
@@ -498,8 +502,8 @@ export class HUDRenderer {
         const maxStarlingsText = `${starlingSymbol} ${starlingCount}/${Constants.STARLING_MAX_COUNT}`;
 
         compactTextWidths.push(
-            compactTextPaddingLeft + this.getCachedTextWidth(starlingRateText, 'bold 14px Doto') + compactTextPaddingRight,
-            compactTextPaddingLeft + this.getCachedTextWidth(maxStarlingsText, 'bold 14px Doto') + compactTextPaddingRight
+            compactTextPaddingLeft + this.getCachedTextWidth(starlingRateText, fontString) + compactTextPaddingRight,
+            compactTextPaddingLeft + this.getCachedTextWidth(maxStarlingsText, fontString) + compactTextPaddingRight
         );
 
         const compactBoxWidth = Math.ceil(Math.max(...compactTextWidths));
@@ -530,7 +534,7 @@ export class HUDRenderer {
                 compactX + compactTextPaddingLeft + compactIconSize + compactIconInset,
                 y + compactBoxHeight / 2,
                 {
-                    font: 'bold 14px Doto',
+                    font: fontString,
                     fillStyle: '#FFFFFF',
                     textAlign: 'left',
                     textBaseline: 'middle'
@@ -538,7 +542,7 @@ export class HUDRenderer {
                 context
             );
 
-            y += compactBoxHeight + 5;
+            y += compactBoxHeight + 5 * sizeScale;
         }
 
         context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
@@ -553,7 +557,7 @@ export class HUDRenderer {
             compactX + compactTextPaddingLeft,
             y + compactBoxHeight / 2,
             {
-                font: 'bold 14px Doto',
+                font: fontString,
                 fillStyle: '#FFFFFF',
                 textAlign: 'left',
                 textBaseline: 'middle'
@@ -561,7 +565,7 @@ export class HUDRenderer {
             context
         );
 
-        y += compactBoxHeight + 5;
+        y += compactBoxHeight + 5 * sizeScale;
 
         context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         context.ctx.fillRect(compactX, y, compactBoxWidth, compactBoxHeight);
@@ -575,7 +579,7 @@ export class HUDRenderer {
             compactX + compactTextPaddingLeft,
             y + compactBoxHeight / 2,
             {
-                font: 'bold 14px Doto',
+                font: fontString,
                 fillStyle: '#FFFFFF',
                 textAlign: 'left',
                 textBaseline: 'middle'
@@ -583,7 +587,7 @@ export class HUDRenderer {
             context
         );
 
-        y += compactBoxHeight + 8;
+        y += compactBoxHeight + 8 * sizeScale;
 
         if (player.stellarForge) {
             const forge = player.stellarForge;
@@ -616,7 +620,7 @@ export class HUDRenderer {
                     forgeProductionEntry.progress,
                     context
                 );
-                y += boxHeight + 8;
+                y += boxHeight + 8 * sizeScale;
             }
         }
 
@@ -648,7 +652,7 @@ export class HUDRenderer {
                     foundryProductionEntry.progress,
                     context
                 );
-                y += boxHeight + 8;
+                y += boxHeight + 8 * sizeScale;
             }
         }
 
@@ -664,10 +668,10 @@ export class HUDRenderer {
             const buildingName = context.getBuildingDisplayName(buildingInProgress);
             this.drawCachedTextSprite(
                 `Building ${buildingName}`,
-                productionX + 8,
-                y + 8,
+                productionX + 8 * sizeScale,
+                y + 8 * sizeScale,
                 {
-                    font: 'bold 14px Doto',
+                    font: fontString,
                     fillStyle: '#FFFFFF',
                     textAlign: 'left',
                     textBaseline: 'top'
@@ -675,7 +679,7 @@ export class HUDRenderer {
                 context
             );
 
-            this.drawProgressBar(productionX + 8, y + 32, productionBoxWidth - 16, 16, buildingInProgress.buildProgress, context);
+            this.drawProgressBar(productionX + 8 * sizeScale, y + 32 * sizeScale, productionBoxWidth - 16 * sizeScale, 16 * sizeScale, buildingInProgress.buildProgress, context);
         }
 
         context.ctx.textAlign = 'left';
@@ -883,6 +887,7 @@ export class HUDRenderer {
         progress: number,
         context: HUDRendererContext
     ): void {
+        const sizeScale = context.infoBoxSize;
         context.ctx.fillStyle = 'rgba(50, 50, 50, 0.9)';
         context.ctx.fillRect(x, y, width, height);
 
@@ -890,12 +895,13 @@ export class HUDRenderer {
         context.ctx.lineWidth = 2;
         context.ctx.strokeRect(x, y, width, height);
 
+        const fontSize = Math.round(14 * sizeScale);
         this.drawCachedTextSprite(
             label,
-            x + 8,
-            y + 8,
+            x + 8 * sizeScale,
+            y + 8 * sizeScale,
             {
-                font: 'bold 14px Doto',
+                font: `bold ${fontSize}px Doto`,
                 fillStyle: '#FFFFFF',
                 textAlign: 'left',
                 textBaseline: 'top'
@@ -903,7 +909,7 @@ export class HUDRenderer {
             context
         );
 
-        this.drawProgressBar(x + 8, y + 32, width - 16, 16, progress, context);
+        this.drawProgressBar(x + 8 * sizeScale, y + 32 * sizeScale, width - 16 * sizeScale, 16 * sizeScale, progress, context);
     }
 
     private drawCachedTextSprite(
