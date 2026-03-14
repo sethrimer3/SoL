@@ -20,6 +20,7 @@ import {
 import { SelectionManager } from './selection-manager';
 import { WarpGateManager } from './warp-gate-manager';
 import { GameRenderer } from '../renderer';
+import { InGameMenuAction } from '../render/in-game-menu';
 import * as Constants from '../constants';
 
 export interface InputControllerContext {
@@ -80,6 +81,7 @@ export class InputController {
     public selectionStartScreen: Vector2D | null = null;
     public isDraggingHeroArrow: boolean = false;
     public isDraggingBuildingArrow: boolean = false;
+    public isDraggingMenuSlider: boolean = false;
     public isDrawingPath: boolean = false;
     public pathPoints: Vector2D[] = [];
     public moveOrderCounter: number = 0;
@@ -93,6 +95,39 @@ export class InputController {
 
     private isFoundryBuilding(building: Building): building is SubsidiaryFactory {
         return building instanceof SubsidiaryFactory || building.constructor.name === 'SubsidiaryFactory';
+    }
+
+    private isSliderAction(action: InGameMenuAction): boolean {
+        return action.type === 'offscreenIndicatorOpacity'
+            || action.type === 'infoBoxOpacity'
+            || action.type === 'infoBoxSizePercent'
+            || action.type === 'soundVolume'
+            || action.type === 'musicVolume';
+    }
+
+    private applyMenuAction(action: InGameMenuAction): void {
+        switch (action.type) {
+            case 'offscreenIndicatorOpacity':
+                this.ctx.renderer.offscreenIndicatorOpacity = action.opacityPercent / 100;
+                break;
+            case 'infoBoxOpacity':
+                this.ctx.renderer.infoBoxOpacity = action.opacityPercent / 100;
+                break;
+            case 'infoBoxSizePercent':
+                this.ctx.renderer.infoBoxSize = action.sizePercent / 100;
+                break;
+            case 'soundVolume':
+                this.ctx.renderer.soundVolume = action.volumePercent / 100;
+                this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
+                this.ctx.setSettingsSoundVolume(action.volumePercent);
+                break;
+            case 'musicVolume':
+                this.ctx.renderer.musicVolume = action.volumePercent / 100;
+                this.ctx.setSettingsMusicVolume(action.volumePercent);
+                break;
+            default:
+                break;
+        }
     }
 
     constructor(canvas: HTMLCanvasElement, context: InputControllerContext) {
@@ -176,6 +211,16 @@ export class InputController {
             lastY = y;
             this.selectionStartScreen = new Vector2D(x, y);
             this.isSelecting = false;
+
+            // Check if clicking on an in-game menu slider — start dragging
+            if (this.ctx.getShowInGameMenu()) {
+                const menuAction = this.ctx.renderer.getInGameMenuAction(x, y);
+                if (menuAction && this.isSliderAction(menuAction)) {
+                    this.isDraggingMenuSlider = true;
+                    this.applyMenuAction(menuAction);
+                    return;
+                }
+            }
             
             // Start warp gate hold timer
             const worldPos = this.ctx.renderer.screenToWorld(x, y);
@@ -185,6 +230,17 @@ export class InputController {
         const moveDrag = (x: number, y: number, isTwoFinger: boolean = false) => {
             if (!isMouseDown) {
                 // Not dragging, just tracking mouse position
+                lastX = x;
+                lastY = y;
+                return;
+            }
+
+            // Handle in-game menu slider dragging
+            if (this.isDraggingMenuSlider) {
+                const menuAction = this.ctx.renderer.getInGameMenuAction(x, y);
+                if (menuAction && this.isSliderAction(menuAction)) {
+                    this.applyMenuAction(menuAction);
+                }
                 lastX = x;
                 lastY = y;
                 return;
@@ -422,6 +478,19 @@ export class InputController {
         };
 
         const endDrag = () => {
+            // If we were dragging a menu slider, just stop
+            if (this.isDraggingMenuSlider) {
+                this.isDraggingMenuSlider = false;
+                isPanning = false;
+                isMouseDown = false;
+                this.isSelecting = false;
+                this.selectionStartScreen = null;
+                this.ctx.renderer.selectionStart = null;
+                this.ctx.renderer.selectionEnd = null;
+                this.endHold();
+                return;
+            }
+
             // Check if this was a simple click (no dragging)
             const wasClick = this.selectionStartScreen && 
                              Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
@@ -482,22 +551,8 @@ export class InputController {
                             case 'colorblindMode':
                                 this.ctx.renderer.colorblindMode = menuAction.isEnabled;
                                 break;
-                            case 'offscreenIndicatorOpacity':
-                                this.ctx.renderer.offscreenIndicatorOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'infoBoxOpacity':
-                                this.ctx.renderer.infoBoxOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'soundVolume':
-                                this.ctx.renderer.soundVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
-                                this.ctx.setSettingsSoundVolume(menuAction.volumePercent);
-                                break;
-                            case 'musicVolume':
-                                this.ctx.renderer.musicVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSettingsMusicVolume(menuAction.volumePercent);
-                                break;
                             default:
+                                this.applyMenuAction(menuAction);
                                 break;
                         }
 

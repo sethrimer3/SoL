@@ -41,6 +41,7 @@ export interface UIRendererContext {
     healthDisplayMode: 'bar' | 'number';
     offscreenIndicatorOpacity: number;
     infoBoxOpacity: number;
+    infoBoxSize: number;
     playerColor: string;
     enemyColor: string;
     colorblindMode: boolean;

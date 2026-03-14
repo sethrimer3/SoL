@@ -92,6 +92,7 @@ export class GameRenderer {
     public screenShakeEnabled: boolean = true; // Screen shake for explosions
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
     public infoBoxOpacity: number = 0.5; // Opacity for top-right info boxes
+    public infoBoxSize: number = 1.0; // Size multiplier for top-right info boxes (1.0 = 100%)
     public soundVolume: number = 1; // Sound effect volume for in-game controls
     public musicVolume: number = 1; // Music volume for in-game controls
     private screenShakeIntensity: number = 0; // Current screen shake intensity
@@ -539,6 +540,7 @@ export class GameRenderer {
                 healthDisplayMode: this.healthDisplayMode,
                 offscreenIndicatorOpacity: this.offscreenIndicatorOpacity,
                 infoBoxOpacity: this.infoBoxOpacity,
+                infoBoxSize: this.infoBoxSize,
                 playerColor: this.playerColor,
                 enemyColor: this.enemyColor,
                 colorblindMode: this.colorblindMode,
@@ -593,6 +595,7 @@ export class GameRenderer {
         c.healthDisplayMode = this.healthDisplayMode;
         c.offscreenIndicatorOpacity = this.offscreenIndicatorOpacity;
         c.infoBoxOpacity = this.infoBoxOpacity;
+        c.infoBoxSize = this.infoBoxSize;
         c.playerColor = this.playerColor;
         c.enemyColor = this.enemyColor;
         c.colorblindMode = this.colorblindMode;
