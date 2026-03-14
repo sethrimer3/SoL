@@ -551,25 +551,8 @@ export class InputController {
                             case 'colorblindMode':
                                 this.ctx.renderer.colorblindMode = menuAction.isEnabled;
                                 break;
-                            case 'offscreenIndicatorOpacity':
-                                this.ctx.renderer.offscreenIndicatorOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'infoBoxOpacity':
-                                this.ctx.renderer.infoBoxOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'infoBoxSizePercent':
-                                this.ctx.renderer.infoBoxSize = menuAction.sizePercent / 100;
-                                break;
-                            case 'soundVolume':
-                                this.ctx.renderer.soundVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
-                                this.ctx.setSettingsSoundVolume(menuAction.volumePercent);
-                                break;
-                            case 'musicVolume':
-                                this.ctx.renderer.musicVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSettingsMusicVolume(menuAction.volumePercent);
-                                break;
                             default:
+                                this.applyMenuAction(menuAction);
                                 break;
                         }
 
