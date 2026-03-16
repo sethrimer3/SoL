@@ -278,12 +278,14 @@ export class GameRenderer {
         this.warpGateRenderer = new WarpGateRenderer();
         this.uiRenderer = new UIRenderer();
 
-        const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
             this.graphicsOptionByKey.set(option.key, option);
-            const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
-            const shouldPreferPng = defaultPngKeys.includes(option.key) && option.pngPath;
-            this.graphicsVariantByKey.set(option.key, shouldPreferPng ? 'png' : defaultVariant);
+            const defaultVariant: GraphicVariant = option.pngPath
+                ? 'png'
+                : option.svgPath
+                    ? 'svg'
+                    : 'stub';
+            this.graphicsVariantByKey.set(option.key, defaultVariant);
         }
 
         for (let frameIndex = 1; frameIndex <= Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT; frameIndex++) {
@@ -776,6 +778,24 @@ export class GameRenderer {
 
     public setGraphicsVariant(key: GraphicKey, variant: GraphicVariant): void {
         this.graphicsVariantByKey.set(key, variant);
+    }
+
+    public setUseSvgSprites(isEnabled: boolean): void {
+        for (const option of this.graphicsOptions) {
+            if (isEnabled && option.svgPath) {
+                this.graphicsVariantByKey.set(option.key, 'svg');
+                continue;
+            }
+            if (option.pngPath) {
+                this.graphicsVariantByKey.set(option.key, 'png');
+                continue;
+            }
+            if (option.svgPath) {
+                this.graphicsVariantByKey.set(option.key, 'svg');
+                continue;
+            }
+            this.graphicsVariantByKey.set(option.key, 'stub');
+        }
     }
 
     public setInGameMenuTab(tab: InGameMenuTab): void {

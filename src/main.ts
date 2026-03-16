@@ -1167,6 +1167,7 @@ class GameController {
         
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         this.adaptiveQualityEnabled = settings.isAdaptiveQualityEnabled;
         this.adaptiveQualityTargetQuality = settings.graphicsQuality;
@@ -1397,6 +1398,7 @@ class GameController {
         this.game.damageDisplayMode = settings.damageDisplayMode;
         this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         
         // Set local player using the found index
