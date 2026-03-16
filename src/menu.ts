@@ -88,6 +88,7 @@ export interface GameSettings {
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
     isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
+    useSvgSprites: boolean; // Use SVG sprite variants when available (PNG remains default)
     isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
@@ -170,6 +171,7 @@ export class MainMenu {
             graphicsQuality: 'ultra', // Default to ultra graphics
             isExperimentalGraphicsEnabled: false,
             isAdaptiveQualityEnabled: false, // Default to disabled
+            useSvgSprites: false, // Default to PNG sprites
             isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
@@ -1985,6 +1987,7 @@ export class MainMenu {
             graphicsQuality: this.settings.graphicsQuality,
             isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
             isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
+            useSvgSprites: this.settings.useSvgSprites,
             isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
@@ -2044,6 +2047,9 @@ export class MainMenu {
             },
             onAdaptiveQualityEnabledChange: (value) => {
                 this.settings.isAdaptiveQualityEnabled = value;
+            },
+            onUseSvgSpritesChange: (value) => {
+                this.settings.useSvgSprites = value;
             },
             onPauseOnFocusLossEnabledChange: (value) => {
                 this.settings.isPauseOnFocusLossEnabled = value;

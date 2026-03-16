@@ -23,6 +23,7 @@ export interface SettingsScreenParams {
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     isExperimentalGraphicsEnabled: boolean;
     isAdaptiveQualityEnabled: boolean;
+    useSvgSprites: boolean;
     isPauseOnFocusLossEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
@@ -41,6 +42,7 @@ export interface SettingsScreenParams {
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onExperimentalGraphicsEnabledChange: (value: boolean) => void;
     onAdaptiveQualityEnabledChange: (value: boolean) => void;
+    onUseSvgSpritesChange: (value: boolean) => void;
     onPauseOnFocusLossEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
@@ -70,6 +72,7 @@ export function renderSettingsScreen(
         graphicsQuality,
         isExperimentalGraphicsEnabled,
         isAdaptiveQualityEnabled,
+        useSvgSprites,
         isPauseOnFocusLossEnabled,
         colorScheme,
         onDifficultyChange,
@@ -88,6 +91,7 @@ export function renderSettingsScreen(
         onGraphicsQualityChange,
         onExperimentalGraphicsEnabledChange,
         onAdaptiveQualityEnabledChange,
+        onUseSvgSpritesChange,
         onPauseOnFocusLossEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
@@ -233,6 +237,12 @@ export function renderSettingsScreen(
         createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
     );
     settingsContainer.appendChild(adaptiveQualitySection);
+
+    const svgSpriteSection = createSettingSection(
+        'Use SVG Sprites',
+        createToggle(useSvgSprites, onUseSvgSpritesChange)
+    );
+    settingsContainer.appendChild(svgSpriteSection);
 
     const pauseOnFocusLossSection = createSettingSection(
         'Pause When Unfocused',
