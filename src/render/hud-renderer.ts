@@ -428,6 +428,68 @@ export class HUDRenderer {
         }
     }
 
+    /**
+     * Draw the match timer in the bottom-left corner of the screen.
+     * Shows remaining time in MM:SS format, turns red when < 60s.
+     */
+    public drawMatchTimer(game: GameState, context: HUDRendererContext): void {
+        const screenHeight = getCanvasScreenHeightPx(context.canvas);
+        const remainingSec = Math.max(0, Constants.MATCH_TIME_LIMIT_SEC - game.gameTime);
+        const minutes = Math.floor(remainingSec / 60);
+        const seconds = Math.floor(remainingSec % 60);
+        const timerText = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+        const fontSize = 22;
+        const x = 20;
+        const y = screenHeight - 20;
+
+        // Urgent color when under 60 seconds
+        const fillColor = remainingSec < 60 ? '#FF4444' : '#FFFFFF';
+        const bgAlpha = remainingSec < 60 ? 0.6 : 0.4;
+
+        // Background pill
+        context.ctx.fillStyle = `rgba(0, 0, 0, ${bgAlpha})`;
+        context.ctx.beginPath();
+        const pillWidth = 90;
+        const pillHeight = 30;
+        const pillX = x - 6;
+        const pillY = y - fontSize + 2;
+        const pillRadius = 6;
+        context.ctx.moveTo(pillX + pillRadius, pillY);
+        context.ctx.lineTo(pillX + pillWidth - pillRadius, pillY);
+        context.ctx.arcTo(pillX + pillWidth, pillY, pillX + pillWidth, pillY + pillRadius, pillRadius);
+        context.ctx.lineTo(pillX + pillWidth, pillY + pillHeight - pillRadius);
+        context.ctx.arcTo(pillX + pillWidth, pillY + pillHeight, pillX + pillWidth - pillRadius, pillY + pillHeight, pillRadius);
+        context.ctx.lineTo(pillX + pillRadius, pillY + pillHeight);
+        context.ctx.arcTo(pillX, pillY + pillHeight, pillX, pillY + pillHeight - pillRadius, pillRadius);
+        context.ctx.lineTo(pillX, pillY + pillRadius);
+        context.ctx.arcTo(pillX, pillY, pillX + pillRadius, pillY, pillRadius);
+        context.ctx.fill();
+
+        this.drawCachedTextSprite(timerText, x, y, {
+            font: `bold ${fontSize}px Doto`,
+            fillStyle: fillColor,
+            textAlign: 'left',
+            textBaseline: 'alphabetic',
+        }, context);
+
+        // Show damage scores below timer when remaining time is under threshold
+        if (remainingSec < Constants.DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC && game.players.length >= 2) {
+            const scoreFontSize = 14;
+            let scoreY = y + scoreFontSize + 6;
+            for (const player of game.players) {
+                const color = getFactionColor(player.faction);
+                this.drawCachedTextSprite(
+                    `${player.name}: ${player.damageScore} pts`,
+                    x, scoreY,
+                    { font: `${scoreFontSize}px Doto`, fillStyle: color, textAlign: 'left', textBaseline: 'alphabetic' },
+                    context
+                );
+                scoreY += scoreFontSize + 4;
+            }
+        }
+    }
+
     public drawMenuButton(context: HUDRendererContext): void {
         const buttonSize = 50;
         const margin = 10;

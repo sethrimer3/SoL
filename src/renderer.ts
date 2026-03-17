@@ -1731,6 +1731,9 @@ export class GameRenderer {
             );
         }
 
+        // Draw photon particles from suns
+        this.drawPhotons(game);
+
         // Draw influence circles (animated and merged by player color)
         const influenceCircles = this._reusableInfluenceCircles;
         influenceCircles.length = 0;
@@ -2310,6 +2313,11 @@ export class GameRenderer {
         if (!game.isCountdownActive && !winner) {
             this.uiRenderer.drawMenuButton(uiCtx);
         }
+
+        // Draw match timer (bottom-left)
+        if (!game.isCountdownActive && !winner) {
+            this.uiRenderer.drawMatchTimer(game, uiCtx);
+        }
         
         // Draw production progress indicator (top-right)
         if (!game.isCountdownActive && !winner) {
@@ -2418,5 +2426,61 @@ export class GameRenderer {
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
         return interpolateHexColor(startHex, endHex, t);
+    }
+
+    // ─── Photon Rendering ───
+
+    /** Cached glow canvas for photon particles (avoids per-frame radialGradient creation) */
+    private _photonGlowCanvas: HTMLCanvasElement | null = null;
+    private _photonGlowSize: number = 0;
+
+    private getPhotonGlowCanvas(glowSizePx: number): HTMLCanvasElement {
+        if (this._photonGlowCanvas && this._photonGlowSize === glowSizePx) {
+            return this._photonGlowCanvas;
+        }
+        const size = glowSizePx * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const gradient = ctx.createRadialGradient(glowSizePx, glowSizePx, 0, glowSizePx, glowSizePx, glowSizePx);
+        gradient.addColorStop(0, 'rgba(255, 255, 220, 0.9)');
+        gradient.addColorStop(0.3, 'rgba(255, 240, 150, 0.5)');
+        gradient.addColorStop(0.7, 'rgba(255, 200, 80, 0.15)');
+        gradient.addColorStop(1, 'rgba(255, 180, 50, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        this._photonGlowCanvas = canvas;
+        this._photonGlowSize = glowSizePx;
+        return canvas;
+    }
+
+    private drawPhotons(game: GameState): void {
+        if (game.photons.length === 0) return;
+
+        const glowSizePx = Math.max(8, Math.round(Constants.PHOTON_RADIUS_PX * 4 * this.zoom));
+        const glowCanvas = this.getPhotonGlowCanvas(glowSizePx);
+        const halfGlow = glowSizePx;
+        const screenPos = new Vector2D(0, 0);
+
+        for (const photon of game.photons) {
+            if (!this.isWithinViewBounds(photon.position, 30)) continue;
+
+            this.worldToScreenCoords(photon.position.x, photon.position.y, screenPos);
+
+            // Draw cached glow sprite
+            this.ctx.drawImage(
+                glowCanvas,
+                screenPos.x - halfGlow,
+                screenPos.y - halfGlow
+            );
+
+            // Draw bright core
+            const coreRadius = Math.max(1.5, Constants.PHOTON_RADIUS_PX * this.zoom * 0.6);
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+            this.ctx.fillStyle = '#FFFDE8';
+            this.ctx.fill();
+        }
     }
 }

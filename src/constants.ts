@@ -791,6 +791,33 @@ export const SHROUD_UNFOLD_DURATION_SEC = 0.6;    // Duration of unfolding anima
 export const SHROUD_SMALL_UNFOLD_DELAY_SEC = 0.0; // Delay before small cubes start unfolding
 export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spawns before tiny cubes unfold
 
+// ─── Photon System Constants ───
+export const PHOTON_MAX_COUNT = 200;                     // Maximum photons on the field
+export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 1.5;       // Initial time between spawns (seconds)
+export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.15;       // Fastest spawn interval at end of match
+export const PHOTON_SPEED_MIN = 30;                      // Minimum photon ejection speed (px/sec)
+export const PHOTON_SPEED_MAX = 80;                      // Maximum photon ejection speed (px/sec)
+export const PHOTON_RADIUS_PX = 4;                       // Visual/collision radius
+export const PHOTON_REPULSION_RANGE_PX = 80;             // Range at which photons repel each other
+export const PHOTON_REPULSION_STRENGTH = 40;             // Repulsion force magnitude
+export const PHOTON_HERO_ABSORB_RANGE_PX = 120;          // Range at which heroes suck in photons
+export const PHOTON_HERO_ABSORB_STRENGTH = 250;          // Gravity pull strength (stronger when closer)
+export const PHOTON_HERO_CAPTURE_RANGE_PX = 12;          // Distance to actually absorb a photon
+export const PHOTON_LIFETIME_SEC = 60;                   // How long a photon lives before fading
+export const PHOTON_GOLDEN_ANGLE_RAD = 2.39996323;       // Golden angle ≈ 137.508° in radians
+export const PHOTON_ABILITY_COST = 3;                    // Default photons needed to cast an ability
+
+// ─── Match Timer Constants ───
+export const MATCH_TIME_LIMIT_SEC = 480;                 // 8-minute match time limit
+
+// ─── Damage Score Constants (for time-based victory) ───
+export const DAMAGE_SCORE_STARLING = 1;
+export const DAMAGE_SCORE_STRUCTURE = 3;
+export const DAMAGE_SCORE_SOLAR_MIRROR = 5;
+export const DAMAGE_SCORE_HERO = 5;
+export const DAMAGE_SCORE_FOUNDRY = 7;
+export const DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC = 120;   // Show damage scores when this many seconds remain
+
 // AI Strategy types
 export enum AIStrategy {
     ECONOMIC = "economic",       // Focus on building mirrors and economy
