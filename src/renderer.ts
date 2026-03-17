@@ -10,8 +10,17 @@ import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGr
 import { renderLensFlare } from './rendering/LensFlare';
 
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
-import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
 import { getFactionColor } from './render/faction-utilities';
+import {
+    getHeroSpritePath as _getHeroSpritePath,
+    getForgeSpritePath as _getForgeSpritePath,
+    getSolarMirrorSpritePath as _getSolarMirrorSpritePath,
+    getStarlingSpritePath as _getStarlingSpritePath,
+    getStarlingFacingRotationRad as _getStarlingFacingRotationRad,
+    getProductionDisplayName as _getProductionDisplayName,
+    getBuildingDisplayName as _getBuildingDisplayName,
+    detectAndDrawEdges as _detectAndDrawEdges,
+} from './render/asset-path-helpers';
 import { SpriteManager, SpriteDrawSource, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
@@ -867,31 +876,19 @@ export class GameRenderer {
     }
 
     private getForgeSpritePath(forge: StellarForge): string | null {
-        if (forge.owner.faction === Faction.RADIANT) {
-            return this.getGraphicAssetPath('stellarForge');
-        }
-        return null;
+        return _getForgeSpritePath(forge, (key) => this.getGraphicAssetPath(key as any));
     }
 
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
-        if (mirror.owner.faction === Faction.RADIANT) {
-            return this.getGraphicAssetPath('solarMirror');
-        }
-        return null;
+        return _getSolarMirrorSpritePath(mirror, (key) => this.getGraphicAssetPath(key as any));
     }
 
     private getStarlingSpritePath(starling: Starling): string | null {
-        if (starling.owner.faction === Faction.RADIANT) {
-            // Use starling sprite based on upgrade level (1-4)
-            const level = Math.min(4, Math.max(1, starling.spriteLevel));
-            return `ASSETS/sprites/RADIANT/starlings/starlingLevel (${level}).png`;
-        }
-        return null;
+        return _getStarlingSpritePath(starling);
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        // Preserve the unit's last simulation rotation so stopped starlings keep their final heading.
-        return starling.rotation;
+        return _getStarlingFacingRotationRad(starling);
     }
 
     /**
@@ -906,90 +903,11 @@ export class GameRenderer {
         minY: number,
         displayColor: string
     ): void {
-        // Skip expensive edge detection on low/medium quality for performance
-        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
-            return;
-        }
-
-        const data = imageData.data;
-
-        // Draw glowing outline where filled areas border empty areas
-        this.ctx.save();
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 10;
-        this.ctx.lineWidth = 2;
-        this.ctx.fillStyle = displayColor;
-
-        // Edge detection: draw pixels at the boundary of filled regions
-        for (let y = 1; y < cropHeight - 1; y++) {
-            for (let x = 1; x < cropWidth - 1; x++) {
-                const idx = (y * cropWidth + x) * 4;
-                const alpha = data[idx + 3];
-                
-                // Check if this pixel is filled
-                if (alpha > this.AURUM_EDGE_ALPHA_THRESHOLD) {
-                    // Check if any neighbor is empty
-                    const hasEmptyNeighbor = 
-                        data[((y - 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // top
-                        data[((y + 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // bottom
-                        data[(y * cropWidth + (x - 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // left
-                        data[(y * cropWidth + (x + 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD;    // right
-                    
-                    if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
-                    }
-                }
-            }
-        }
-        
-        this.ctx.restore();
+        _detectAndDrawEdges(this.ctx, imageData, cropWidth, cropHeight, minX, minY, displayColor, this.graphicsQuality, this.AURUM_EDGE_ALPHA_THRESHOLD);
     }
 
     private getHeroSpritePath(unit: Unit): string | null {
-        if (unit.owner.faction !== Faction.RADIANT) {
-            return null;
-        }
-        if (unit instanceof Marine) {
-            return this.getGraphicAssetPath('heroMarine');
-        }
-        if (unit instanceof Grave) {
-            return this.getGraphicAssetPath('heroGrave');
-        }
-        if (unit instanceof Dagger) {
-            return this.getGraphicAssetPath('heroDagger');
-        }
-        if (unit instanceof Beam) {
-            return this.getGraphicAssetPath('heroBeam');
-        }
-        if (unit instanceof Mortar) {
-            return this.getGraphicAssetPath('heroMortar');
-        }
-        if (unit instanceof Ray) {
-            return this.getGraphicAssetPath('heroRay');
-        }
-        if (unit instanceof Nova) {
-            return this.getGraphicAssetPath('heroNova');
-        }
-        if (unit instanceof InfluenceBall) {
-            return this.getGraphicAssetPath('heroInfluenceBall');
-        }
-        if (unit instanceof TurretDeployer) {
-            return this.getGraphicAssetPath('heroTurretDeployer');
-        }
-        if (unit instanceof Driller) {
-            return this.getGraphicAssetPath('heroDriller');
-        }
-        if (unit instanceof Preist) {
-            return this.getGraphicAssetPath('heroPreist');
-        }
-        if (unit instanceof Tank) {
-            return this.getGraphicAssetPath('heroTank');
-        }
-        if (unit instanceof Spotlight) {
-            return this.getGraphicAssetPath('heroBeam');
-        }
-        return null;
+        return _getHeroSpritePath(unit, (key) => this.getGraphicAssetPath(key as any));
     }
 
     /**
@@ -1618,238 +1536,7 @@ export class GameRenderer {
     }
 
     private drawExperimentalFieldAtmospherics(game: GameState, screenWidth: number, screenHeight: number): void {
-        // game.gameTime is maintained in simulation seconds.
-        const gameTimeSec = game.gameTime;
-        const isUltraQuality = this.graphicsQuality === 'ultra';
-        const isHighQuality = this.graphicsQuality === 'high';
-        const shouldRenderAtmosphericSunStreaks = isUltraQuality || isHighQuality;
-        const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : this.graphicsQuality === 'medium' ? 0.66 : 0.52;
-        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : this.graphicsQuality === 'medium' ? 14 : 8;
-        const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : this.graphicsQuality === 'medium' ? 0.1 : 0.08;
-        const causticLayerCount = isUltraQuality ? 3 : isHighQuality ? 2 : 1;
-        const causticAlphaBase = isUltraQuality ? 0.07 : isHighQuality ? 0.055 : this.graphicsQuality === 'medium' ? 0.045 : 0.035;
-        const edgeBloomAlpha = isUltraQuality ? 0.115 : isHighQuality ? 0.09 : this.graphicsQuality === 'medium' ? 0.072 : 0.058;
-        const causticDriftSpeedXPerSec = 0.03;
-        const causticDriftSpeedYPerSec = 0.024;
-        const causticDriftRangeXScale = 0.7;
-        const causticDriftRangeYScale = 0.4;
-        const causticBandBaseWidthScale = 0.2;
-        const causticBandLayerWidthScale = 0.05;
-        const causticBandQualityWidthScale = 0.05;
-        const causticSeedBase = 19.2;
-        const causticSeedLayerOffset = 31.5;
-        const causticLayerAlphaFalloff = 0.2;
-        const causticGradientTopOffsetScale = 0.35;
-        const causticGradientBottomOffsetScale = 1.35;
-        const causticMagentaBlendStop = 0.62;
-        const causticMagentaAlphaScale = 0.88;
-        const edgeBloomInnerRadiusScale = 0.2;
-        const edgeBloomOuterRadiusScale = 0.88;
-        const edgeBloomMidStop = 0.7;
-        const edgeBloomMidAlphaScale = 0.45;
-        const cameraNoiseWorldX = this.camera.x * 0.0012;
-        const cameraNoiseWorldY = this.camera.y * 0.0012;
-        const nebulaBaseRadiusScale = 0.78;
-        const nebulaQualityRadiusScale = 0.24;
-        const ribbonLayerCount = 2;
-        const nebulaBaseAlpha = 0.095;
-        const nebulaMidAlpha = 0.065;
-        const ribbonCenterAlpha = 0.065;
-        const starlightBaseAlpha = 0.016;
-        const starlightNoiseAlphaScale = 0.026;
-        const starlightNoiseOctaves = 2;
-        const screenCenterX = this.getViewportWidthPx() * 0.5;
-        const screenCenterY = this.getViewportHeightPx() * 0.5;
-
-        this.ctx.save();
-        this.ctx.globalCompositeOperation = 'screen';
-
-        const nebulaNoiseValue = fractalNoise2D(
-            cameraNoiseWorldX * 0.8 + gameTimeSec * 0.02,
-            cameraNoiseWorldY * 0.8 - gameTimeSec * 0.015,
-            3
-        );
-        const nebulaCenterScreenX = screenWidth * (0.5 + (nebulaNoiseValue - 0.5) * 0.28);
-        const nebulaCenterScreenY = screenHeight * (
-            0.44 + (valueNoise2D(cameraNoiseWorldX + 7.31, cameraNoiseWorldY + gameTimeSec * 0.01) - 0.5) * 0.22
-        );
-        const nebulaRadiusPx = Math.max(screenWidth, screenHeight) * (nebulaBaseRadiusScale + qualityIntensity * nebulaQualityRadiusScale);
-        const nebulaGradient = this.ctx.createRadialGradient(
-            nebulaCenterScreenX,
-            nebulaCenterScreenY,
-            0,
-            nebulaCenterScreenX,
-            nebulaCenterScreenY,
-            nebulaRadiusPx
-        );
-        nebulaGradient.addColorStop(0, `rgba(156, 228, 255, ${nebulaBaseAlpha * qualityIntensity})`);
-        nebulaGradient.addColorStop(0.55, `rgba(173, 130, 255, ${nebulaMidAlpha * qualityIntensity})`);
-        nebulaGradient.addColorStop(1, 'rgba(8, 18, 42, 0)');
-        this.ctx.fillStyle = nebulaGradient;
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-        for (let layerIndex = 0; layerIndex < ribbonLayerCount; layerIndex += 1) {
-            const layerSeed = layerIndex * 29.17;
-            const leftToRightDriftPx = (valueNoise2D(cameraNoiseWorldX + layerSeed + gameTimeSec * 0.04, cameraNoiseWorldY - layerSeed) - 0.5) * screenWidth * 0.24;
-            const ribbonCenterYPx = screenHeight * (
-                0.21 + layerIndex * 0.28
-                + (fractalNoise2D(cameraNoiseWorldX * 0.65 + layerSeed, cameraNoiseWorldY * 0.65 - gameTimeSec * 0.02, 3) - 0.5) * 0.18
-            );
-            const ribbonHeightPx = screenHeight * (0.1 + layerIndex * 0.03 + qualityIntensity * 0.02);
-            const waveMagnitudePx = screenHeight * (0.06 + layerIndex * 0.015);
-            const waveOffsetPx = Math.sin(gameTimeSec * (0.26 + layerIndex * 0.09) + layerSeed) * waveMagnitudePx;
-
-            const ribbonGradient = this.ctx.createLinearGradient(0, ribbonCenterYPx - ribbonHeightPx, 0, ribbonCenterYPx + ribbonHeightPx);
-            ribbonGradient.addColorStop(0, 'rgba(114, 243, 255, 0)');
-            ribbonGradient.addColorStop(0.5, `rgba(114, 243, 255, ${ribbonCenterAlpha * qualityIntensity})`);
-            ribbonGradient.addColorStop(1, 'rgba(195, 116, 255, 0)');
-
-            this.ctx.fillStyle = ribbonGradient;
-            this.ctx.beginPath();
-            this.ctx.moveTo(-screenWidth * 0.2 + leftToRightDriftPx, ribbonCenterYPx - waveOffsetPx);
-            this.ctx.bezierCurveTo(
-                screenWidth * 0.2 + leftToRightDriftPx,
-                ribbonCenterYPx - waveMagnitudePx,
-                screenWidth * 0.54 + leftToRightDriftPx,
-                ribbonCenterYPx + waveMagnitudePx,
-                screenWidth * 1.2 + leftToRightDriftPx,
-                ribbonCenterYPx + waveOffsetPx
-            );
-            this.ctx.lineTo(screenWidth * 1.2 + leftToRightDriftPx, ribbonCenterYPx + ribbonHeightPx + waveOffsetPx);
-            this.ctx.bezierCurveTo(
-                screenWidth * 0.54 + leftToRightDriftPx,
-                ribbonCenterYPx + ribbonHeightPx + waveMagnitudePx,
-                screenWidth * 0.2 + leftToRightDriftPx,
-                ribbonCenterYPx + ribbonHeightPx - waveMagnitudePx,
-                -screenWidth * 0.2 + leftToRightDriftPx,
-                ribbonCenterYPx + ribbonHeightPx - waveOffsetPx
-            );
-            this.ctx.closePath();
-            this.ctx.fill();
-        }
-
-        const starlightVeilAlpha = (
-            starlightBaseAlpha
-                + fractalNoise2D(
-                cameraNoiseWorldX + gameTimeSec * 0.013,
-                cameraNoiseWorldY - gameTimeSec * 0.011,
-                starlightNoiseOctaves
-            ) * starlightNoiseAlphaScale
-        ) * qualityIntensity;
-        this.ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-        for (let layerIndex = 0; layerIndex < causticLayerCount; layerIndex += 1) {
-            const causticSeed = causticSeedBase + layerIndex * causticSeedLayerOffset;
-            const driftXPx = (valueNoise2D(cameraNoiseWorldX + causticSeed + gameTimeSec * causticDriftSpeedXPerSec, cameraNoiseWorldY - causticSeed) - 0.5) * screenWidth * causticDriftRangeXScale;
-            const driftYPx = (valueNoise2D(cameraNoiseWorldX - causticSeed, cameraNoiseWorldY + causticSeed + gameTimeSec * causticDriftSpeedYPerSec) - 0.5) * screenHeight * causticDriftRangeYScale;
-            const bandWidthPx = Math.max(screenWidth, screenHeight) * (
-                causticBandBaseWidthScale
-                + layerIndex * causticBandLayerWidthScale
-                + qualityIntensity * causticBandQualityWidthScale
-            );
-            const bandAlpha = causticAlphaBase * (1 - layerIndex * causticLayerAlphaFalloff) * qualityIntensity;
-            const bandGradient = this.ctx.createLinearGradient(
-                screenCenterX - bandWidthPx + driftXPx,
-                -screenHeight * causticGradientTopOffsetScale + driftYPx,
-                screenCenterX + bandWidthPx + driftXPx,
-                screenHeight * causticGradientBottomOffsetScale + driftYPx
-            );
-            bandGradient.addColorStop(0, 'rgba(82, 220, 255, 0)');
-            bandGradient.addColorStop(0.3, `rgba(82, 220, 255, ${bandAlpha})`);
-            bandGradient.addColorStop(causticMagentaBlendStop, `rgba(222, 152, 255, ${bandAlpha * causticMagentaAlphaScale})`);
-            bandGradient.addColorStop(1, 'rgba(222, 152, 255, 0)');
-            this.ctx.fillStyle = bandGradient;
-            this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-        }
-
-        const edgeBloomGradient = this.ctx.createRadialGradient(
-            screenCenterX,
-            screenCenterY,
-            Math.min(screenWidth, screenHeight) * edgeBloomInnerRadiusScale,
-            screenCenterX,
-            screenCenterY,
-            Math.max(screenWidth, screenHeight) * edgeBloomOuterRadiusScale
-        );
-        edgeBloomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        edgeBloomGradient.addColorStop(edgeBloomMidStop, `rgba(83, 44, 154, ${edgeBloomAlpha * edgeBloomMidAlphaScale})`);
-        edgeBloomGradient.addColorStop(1, `rgba(16, 36, 88, ${edgeBloomAlpha})`);
-        this.ctx.fillStyle = edgeBloomGradient;
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-        for (const sun of game.suns) {
-            if (sun.type === 'lad') {
-                continue;
-            }
-            const sunScreenPos = this.worldToScreen(sun.position);
-            if (sunScreenPos.x < -220 || sunScreenPos.x > screenWidth + 220 || sunScreenPos.y < -220 || sunScreenPos.y > screenHeight + 220) {
-                continue;
-            }
-            const sunDistanceToCenterPx = Math.hypot(sunScreenPos.x - screenCenterX, sunScreenPos.y - screenCenterY);
-            const sunCenterFalloff = Math.max(0.12, 1 - sunDistanceToCenterPx / (Math.max(screenWidth, screenHeight) * 0.9));
-            const haloRadiusPx = Math.max(180, sun.radius * this.zoom * (4 + qualityIntensity * 2.4));
-            const haloGradient = this.ctx.createRadialGradient(
-                sunScreenPos.x,
-                sunScreenPos.y,
-                0,
-                sunScreenPos.x,
-                sunScreenPos.y,
-                haloRadiusPx
-            );
-            haloGradient.addColorStop(0, `rgba(255, 241, 198, ${0.09 * qualityIntensity * sunCenterFalloff})`);
-            haloGradient.addColorStop(0.55, `rgba(255, 183, 140, ${0.05 * qualityIntensity * sunCenterFalloff})`);
-            haloGradient.addColorStop(1, 'rgba(255, 120, 105, 0)');
-            this.ctx.fillStyle = haloGradient;
-            this.ctx.beginPath();
-            this.ctx.arc(sunScreenPos.x, sunScreenPos.y, haloRadiusPx, 0, Math.PI * 2);
-            this.ctx.fill();
-
-            if (shouldRenderAtmosphericSunStreaks) {
-                const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
-                const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
-                const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
-                const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
-                const streakGradient = this.ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
-                streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
-                streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
-                this.ctx.strokeStyle = streakGradient;
-                this.ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
-                this.ctx.beginPath();
-                this.ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
-                this.ctx.lineTo(streakEndX, streakEndY);
-                this.ctx.stroke();
-            }
-        }
-
-        for (let glintIndex = 0; glintIndex < glintCount; glintIndex += 1) {
-            const glintSeed = glintIndex * 73.941 + 14.287;
-            const glintPosX = valueNoise2D(cameraNoiseWorldX + glintSeed, cameraNoiseWorldY - glintSeed) * screenWidth;
-            const glintPosY = valueNoise2D(cameraNoiseWorldX - glintSeed * 0.7, cameraNoiseWorldY + glintSeed * 1.1) * screenHeight;
-            const glintNoise = fractalNoise2D(cameraNoiseWorldX + glintSeed * 0.11, cameraNoiseWorldY + glintSeed * 0.13, 2);
-            const pulseValue = 0.5 + 0.5 * Math.sin(gameTimeSec * (0.65 + glintNoise) + glintSeed);
-            const glintAlpha = (0.025 + pulseValue * 0.06) * qualityIntensity;
-            const glintRadiusPx = 0.8 + glintNoise * 1.6 + qualityIntensity * 0.7;
-            this.ctx.fillStyle = `rgba(228, 242, 255, ${glintAlpha})`;
-            this.ctx.beginPath();
-            this.ctx.arc(glintPosX, glintPosY, glintRadiusPx, 0, Math.PI * 2);
-            this.ctx.fill();
-        }
-
-        this.ctx.globalCompositeOperation = 'multiply';
-        const vignetteGradient = this.ctx.createRadialGradient(
-            screenCenterX,
-            screenCenterY,
-            Math.min(screenWidth, screenHeight) * 0.12,
-            screenCenterX,
-            screenCenterY,
-            Math.max(screenWidth, screenHeight) * 0.72
-        );
-        vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-        vignetteGradient.addColorStop(1, `rgba(8, 12, 28, ${vignetteAlpha})`);
-        this.ctx.fillStyle = vignetteGradient;
-        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
-
-        this.ctx.restore();
+        this.environmentRenderer.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight, this.getEnvironmentRendererContext());
     }
 
     /**
@@ -2765,7 +2452,7 @@ export class GameRenderer {
             }
 
             // Draw Shroud cubes (main cubes + unfolding child cubes)
-            this.drawShroudCubes(game);
+            this.projectileRenderer.drawShroudCubes(game, projCtx, (pos, margin) => this.isWithinViewBounds(pos, margin));
 
             for (const sphere of game.splendorSunSpheres) {
                 if (this.isWithinViewBounds(sphere.position, Constants.SPLENDOR_SUN_SPHERE_RADIUS * 4)) {
@@ -2903,47 +2590,14 @@ export class GameRenderer {
      * Get display name for building type
      */
     private getBuildingDisplayName(building: Building): string {
-        if (building instanceof GatlingTower) {
-            return 'Gatling Tower';
-        } else if (building instanceof Minigun) {
-            return 'Cannon';
-        } else if (building instanceof SpaceDustSwirler) {
-            return 'Cyclone';
-        } else if (building instanceof SubsidiaryFactory) {
-            return 'Foundry';
-        } else if (building instanceof StrikerTower) {
-            return 'Striker Tower';
-        } else if (building instanceof LockOnLaserTower) {
-            return 'Lock-on Tower';
-        } else if (building instanceof ShieldTower) {
-            return 'Shield Tower';
-        }
-        return 'Building';
+        return _getBuildingDisplayName(building);
     }
     
     /**
      * Get display name for production unit type
      */
     private getProductionDisplayName(unitType: string): string {
-        const nameMap: { [key: string]: string } = {
-            'marine': 'Marine',
-            'grave': 'Grave',
-            'ray': 'Ray',
-            'influenceball': 'Influence Ball',
-            'turretdeployer': 'Turret Deployer',
-            'driller': 'Driller',
-            'dagger': 'Dagger',
-            'beam': 'Beam',
-            'spotlight': 'Spotlight',
-            'splendor': 'Splendor',
-            'shroud': 'Shroud',
-            'solar-mirror': 'Solar Mirror',
-            'strafe-upgrade': 'Strafe Upgrade',
-            'regen-upgrade': 'Regen Upgrade',
-            'attack-upgrade': '+1 ATK',
-            'blink-upgrade': 'Blink Upgrade'
-        };
-        return nameMap[unitType.toLowerCase()] || unitType;
+        return _getProductionDisplayName(unitType);
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
@@ -2955,76 +2609,6 @@ export class GameRenderer {
      * Main cubes are drawn as solid dark squares when moving, transitioning to translucent when stopped.
      * Child cubes animate outward from the stopped position.
      */
-    private drawShroudCubes(game: GameState): void {
-        const ctx = this.ctx;
-
-        for (const cube of game.shroudCubes) {
-            if (!this.isWithinViewBounds(cube.position, cube.halfSizePx * 6)) continue;
-
-            const isStopped = cube.isStopped();
-            this.drawShroudCubeRect(ctx, cube.position.x, cube.position.y, cube.halfSizePx, isStopped, 1.0);
-
-            if (isStopped) {
-                // Draw child small cubes
-                for (const small of cube.smallCubes) {
-                    const cx = small.currentX;
-                    const cy = small.currentY;
-                    const alpha = 0.85;
-                    this.drawShroudCubeRect(ctx, cx, cy, small.halfSizePx, true, alpha);
-
-                    // Draw tiny cubes
-                    for (const tiny of small.tinyCubes) {
-                        const tcx = tiny.startPos.x + (tiny.finalPos.x - tiny.startPos.x) * tiny.unfoldProgress;
-                        const tcy = tiny.startPos.y + (tiny.finalPos.y - tiny.startPos.y) * tiny.unfoldProgress;
-                        this.drawShroudCubeRect(ctx, tcx, tcy, tiny.halfSizePx, true, 0.7);
-                    }
-                }
-            }
-        }
-    }
-
-    private drawShroudCubeRect(
-        ctx: CanvasRenderingContext2D,
-        worldX: number,
-        worldY: number,
-        halfSizePx: number,
-        isStopped: boolean,
-        alpha: number
-    ): void {
-        const screenPos = this.worldToScreen(new Vector2D(worldX, worldY));
-        const halfScreen = halfSizePx * this.zoom;
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-
-        if (isStopped) {
-            // Stopped cubes: dark semi-transparent fill with outline (blocks sunlight visually)
-            ctx.fillStyle = 'rgba(20, 15, 35, 0.82)';
-            ctx.strokeStyle = '#6633AA';
-            ctx.lineWidth = Math.max(1, 1.5 * this.zoom);
-        } else {
-            // Moving cubes: glowing golden/purple look proportional to speed
-            ctx.fillStyle = 'rgba(80, 40, 120, 0.9)';
-            ctx.strokeStyle = '#CC88FF';
-            ctx.lineWidth = Math.max(1, 2 * this.zoom);
-        }
-
-        ctx.fillRect(
-            screenPos.x - halfScreen,
-            screenPos.y - halfScreen,
-            halfScreen * 2,
-            halfScreen * 2
-        );
-        ctx.strokeRect(
-            screenPos.x - halfScreen,
-            screenPos.y - halfScreen,
-            halfScreen * 2,
-            halfScreen * 2
-        );
-
-        ctx.restore();
-    }
-
     private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
         return getGraphicsMenuMaxScroll(this.renderLayerOptions.length, layout);
     }
