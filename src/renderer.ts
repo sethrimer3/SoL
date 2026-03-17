@@ -49,6 +49,7 @@ import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
 import { SunRayWorkerBridge } from './render/workers/sun-ray-worker-bridge';
+import { StarNestRenderer } from './render/star-nest-renderer';
 
 
 type InfluenceRenderCircle = {
@@ -103,6 +104,7 @@ export class GameRenderer {
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
+    public isStarNestEnabled: boolean = false; // Star Nest flying-through-space star effect
     private readonly screenShake = new ScreenShakeController();
     get screenShakeEnabled(): boolean { return this.screenShake.isEnabled; }
     set screenShakeEnabled(value: boolean) { this.screenShake.isEnabled = value; }
@@ -219,6 +221,7 @@ export class GameRenderer {
     private readonly uiRenderer: UIRenderer;
     private readonly environmentRenderer = new EnvironmentRenderer();
     private readonly glowRenderer = new GlowRenderer();
+    private readonly starNestRenderer = new StarNestRenderer();
     private movementPointFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
     // Device pixel ratio is dimensionless and does not use a unit suffix.
@@ -1645,25 +1648,39 @@ export class GameRenderer {
 
         // Draw reworked parallax stars right behind asteroid silhouettes.
         if (this.isStarsLayerEnabled) {
-            this.starfieldWorkerBridge?.requestFrame(
-                this.parallaxCamera.x,
-                this.parallaxCamera.y,
-                screenWidth,
-                screenHeight,
-                this.graphicsQuality
-            );
-            const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
-            if (starFrame) {
-                // Draw the worker frame directly at (0,0) without any translation.
-                // The parallax stars use cameraX * parallaxFactor (not zoom) for positioning,
-                // so any zoom-based translation formula would be wrong. Since parallaxFactors
-                // range from 0.12–0.53, a 1–2 frame stale position is imperceptible.
-                // Translating the bitmap caused visible jumps when the threshold switched modes.
-                const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
-                    && starFrame.screenHeightPx === screenHeight;
+            if (this.isStarNestEnabled) {
+                const nowMs = performance.now();
+                this.starNestRenderer.update(nowMs);
+                this.starNestRenderer.draw(this.ctx, screenWidth, screenHeight);
+            } else {
+                this.starfieldWorkerBridge?.requestFrame(
+                    this.parallaxCamera.x,
+                    this.parallaxCamera.y,
+                    screenWidth,
+                    screenHeight,
+                    this.graphicsQuality
+                );
+                const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
+                if (starFrame) {
+                    // Draw the worker frame directly at (0,0) without any translation.
+                    // The parallax stars use cameraX * parallaxFactor (not zoom) for positioning,
+                    // so any zoom-based translation formula would be wrong. Since parallaxFactors
+                    // range from 0.12–0.53, a 1–2 frame stale position is imperceptible.
+                    // Translating the bitmap caused visible jumps when the threshold switched modes.
+                    const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
+                        && starFrame.screenHeightPx === screenHeight;
 
-                if (isFrameCanvasCompatible) {
-                    this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
+                    if (isFrameCanvasCompatible) {
+                        this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
+                    } else {
+                        this.starfieldRenderer.drawReworkedParallaxStars(
+                            this.ctx,
+                            this.parallaxCamera,
+                            screenWidth,
+                            screenHeight,
+                            this.graphicsQuality
+                        );
+                    }
                 } else {
                     this.starfieldRenderer.drawReworkedParallaxStars(
                         this.ctx,
@@ -1673,14 +1690,6 @@ export class GameRenderer {
                         this.graphicsQuality
                     );
                 }
-            } else {
-                this.starfieldRenderer.drawReworkedParallaxStars(
-                    this.ctx,
-                    this.parallaxCamera,
-                    screenWidth,
-                    screenHeight,
-                    this.graphicsQuality
-                );
             }
         }
 

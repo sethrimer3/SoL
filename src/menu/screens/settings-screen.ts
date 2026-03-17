@@ -22,6 +22,7 @@ export interface SettingsScreenParams {
     enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
     isExperimentalGraphicsEnabled: boolean;
+    isStarNestEnabled: boolean;
     isAdaptiveQualityEnabled: boolean;
     useSvgSprites: boolean;
     isPauseOnFocusLossEnabled: boolean;
@@ -41,6 +42,7 @@ export interface SettingsScreenParams {
     onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
     onExperimentalGraphicsEnabledChange: (value: boolean) => void;
+    onStarNestEnabledChange: (value: boolean) => void;
     onAdaptiveQualityEnabledChange: (value: boolean) => void;
     onUseSvgSpritesChange: (value: boolean) => void;
     onPauseOnFocusLossEnabledChange: (value: boolean) => void;
@@ -71,6 +73,7 @@ export function renderSettingsScreen(
         enemy2Color,
         graphicsQuality,
         isExperimentalGraphicsEnabled,
+        isStarNestEnabled,
         isAdaptiveQualityEnabled,
         useSvgSprites,
         isPauseOnFocusLossEnabled,
@@ -90,6 +93,7 @@ export function renderSettingsScreen(
         onEnemy2ColorChange,
         onGraphicsQualityChange,
         onExperimentalGraphicsEnabledChange,
+        onStarNestEnabledChange,
         onAdaptiveQualityEnabledChange,
         onUseSvgSpritesChange,
         onPauseOnFocusLossEnabledChange,
@@ -255,6 +259,12 @@ export function renderSettingsScreen(
         createToggle(isExperimentalGraphicsEnabled, onExperimentalGraphicsEnabledChange)
     );
     settingsContainer.appendChild(experimentalGraphicsSection);
+
+    const starNestSection = createSettingSection(
+        'Star Nest Effects',
+        createToggle(isStarNestEnabled, onStarNestEnabledChange)
+    );
+    settingsContainer.appendChild(starNestSection);
 
     // Color Scheme setting
     const colorSchemeSection = createSettingSection(

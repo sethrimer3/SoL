@@ -90,6 +90,7 @@ export interface GameSettings {
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
     isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
+    isStarNestEnabled: boolean; // Enables Star Nest flying-through-space star effect on menus and playing field
     isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
     useSvgSprites: boolean; // Use SVG sprite variants when available (PNG remains default)
     isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
@@ -174,6 +175,7 @@ export class MainMenu {
             healthDisplayMode: 'bar', // Default to showing health bars
             graphicsQuality: 'ultra', // Default to ultra graphics
             isExperimentalGraphicsEnabled: false,
+            isStarNestEnabled: false,
             isAdaptiveQualityEnabled: false, // Default to disabled
             useSvgSprites: false, // Default to PNG sprites
             isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
@@ -274,6 +276,7 @@ export class MainMenu {
             this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
         );
         this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
+        this.atmosphereLayer.setStarNestEnabled(this.settings.isStarNestEnabled);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
@@ -1784,6 +1787,7 @@ export class MainMenu {
             enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
             isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
+            isStarNestEnabled: this.settings.isStarNestEnabled,
             isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
             useSvgSprites: this.settings.useSvgSprites,
             isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
@@ -1842,6 +1846,10 @@ export class MainMenu {
             },
             onExperimentalGraphicsEnabledChange: (value) => {
                 this.settings.isExperimentalGraphicsEnabled = value;
+            },
+            onStarNestEnabledChange: (value) => {
+                this.settings.isStarNestEnabled = value;
+                this.atmosphereLayer?.setStarNestEnabled(value);
             },
             onAdaptiveQualityEnabledChange: (value) => {
                 this.settings.isAdaptiveQualityEnabled = value;
