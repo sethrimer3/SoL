@@ -12,6 +12,7 @@ import {
 import * as Constants from '../constants';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 import { valueNoise2D, fractalNoise2D } from './noise-utilities';
+import { GradientCache } from './gradient-cache';
 
 export interface EnvironmentRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -36,7 +37,7 @@ export interface EnvironmentRendererContext {
     getPseudoRandom(seed: number): number;
 
     // Gradient cache for color grading
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
 }
 
 export class EnvironmentRenderer {

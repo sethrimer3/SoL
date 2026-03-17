@@ -3,6 +3,7 @@
  */
 
 import { Vector2D, Unit } from '../../game-core';
+import { GradientCache } from '../gradient-cache';
 
 /**
  * Interface for accessing renderer context and state.
@@ -75,7 +76,7 @@ export interface UnitRendererContext {
     ): CanvasGradient;
 
     // Gradient cache (direct Map access for explosion effect)
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
 
     // Screen shake
     triggerScreenShake(intensity?: number): void;

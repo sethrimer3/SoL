@@ -18,7 +18,9 @@ import {
     createTextInput 
 } from './menu/ui-helpers';
 import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
+import { MatchmakingController } from './menu/matchmaking-controller';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -38,6 +40,7 @@ import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-scree
 import { renderMatchmaking1v1Screen } from './menu/screens/matchmaking-1v1-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
+import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/screens/match-loading-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
 import { MenuAudioController } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
@@ -117,7 +120,7 @@ export class MainMenu {
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
-    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
+    private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
@@ -128,7 +131,8 @@ export class MainMenu {
     private blurHandler: (() => void) | null = null;
     private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
-    private isMatchmakingSearching = false;
+    private get isMatchmakingSearching(): boolean { return this.matchmakingController.isMatchmakingSearching; }
+    private set isMatchmakingSearching(value: boolean) { this.matchmakingController.isMatchmakingSearching = value; }
     private developerMenuElementVisibility = {
         isBackgroundLayerVisible: true,
         isAtmosphereLayerVisible: true,
@@ -747,78 +751,11 @@ export class MainMenu {
     }
 
     private renderLanLobbyList(listContainer: HTMLElement): void {
-        listContainer.innerHTML = '';
-        const entries = this.lanLobbyManager.getFreshLobbies();
-
-        if (entries.length === 0) {
-            const emptyState = document.createElement('p');
-            emptyState.textContent = 'No LAN lobbies detected yet. Host a game to make it appear here.';
-            emptyState.style.color = '#888888';
-            emptyState.style.fontSize = '16px';
-            emptyState.style.textAlign = 'center';
-            emptyState.style.margin = '0';
-            listContainer.appendChild(emptyState);
-            return;
-        }
-
-        for (const entry of entries) {
-            const entryCard = document.createElement('div');
-            entryCard.style.display = 'flex';
-            entryCard.style.flexDirection = 'row';
-            entryCard.style.alignItems = 'center';
-            entryCard.style.justifyContent = 'space-between';
-            entryCard.style.gap = '16px';
-            entryCard.style.padding = '14px 18px';
-            entryCard.style.borderRadius = '8px';
-            entryCard.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
-            entryCard.style.border = '1px solid rgba(255, 215, 0, 0.3)';
-            entryCard.style.cursor = 'pointer';
-            entryCard.style.transition = 'transform 0.15s ease, border-color 0.15s ease';
-            entryCard.addEventListener('mouseenter', () => {
-                entryCard.style.transform = 'translateY(-2px)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.6)';
-            });
-            entryCard.addEventListener('mouseleave', () => {
-                entryCard.style.transform = 'translateY(0)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.3)';
-            });
-
-            const entryInfo = document.createElement('div');
-            entryInfo.style.display = 'flex';
-            entryInfo.style.flexDirection = 'column';
-            entryInfo.style.gap = '4px';
-            entryInfo.style.flex = '1';
-
-            const lobbyName = document.createElement('div');
-            lobbyName.textContent = entry.lobbyName;
-            lobbyName.style.color = '#FFD700';
-            lobbyName.style.fontSize = '18px';
-            lobbyName.style.fontWeight = '600';
-            entryInfo.appendChild(lobbyName);
-
-            const lobbyMeta = document.createElement('div');
-            lobbyMeta.textContent = `${entry.hostUsername} • ${entry.playerCount}/${entry.maxPlayerCount} players`;
-            lobbyMeta.style.color = '#CCCCCC';
-            lobbyMeta.style.fontSize = '14px';
-            entryInfo.appendChild(lobbyMeta);
-
-            const joinButton = this.createButton('JOIN', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            }, '#00AAFF');
-            joinButton.style.padding = '8px 18px';
-            joinButton.style.fontSize = '14px';
-            joinButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-
-            entryCard.addEventListener('click', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            });
-
-            entryCard.appendChild(entryInfo);
-            entryCard.appendChild(joinButton);
-            listContainer.appendChild(entryCard);
-        }
+        renderLanLobbyListHelper(listContainer, {
+            entries: this.lanLobbyManager.getFreshLobbies(),
+            onJoinLobby: (code) => { void this.joinLanLobbyWithCode(code); },
+            createButton: this.createButton.bind(this)
+        });
     }
 
     private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
@@ -1173,31 +1110,7 @@ export class MainMenu {
     }
 
     private updatePlayersList(playersList: HTMLElement): void {
-        playersList.innerHTML = '';
-        
-        for (const player of this.p2pMatchPlayers) {
-            const playerItem = document.createElement('div');
-            playerItem.style.padding = '10px';
-            playerItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            playerItem.style.borderRadius = '5px';
-            playerItem.style.display = 'flex';
-            playerItem.style.justifyContent = 'space-between';
-            playerItem.style.alignItems = 'center';
-
-            const playerName = document.createElement('span');
-            playerName.textContent = player.username;
-            playerName.style.fontSize = '18px';
-            playerName.style.color = '#FFFFFF';
-            playerItem.appendChild(playerName);
-
-            const playerRole = document.createElement('span');
-            playerRole.textContent = player.role === 'host' ? '(Host)' : '(Player)';
-            playerRole.style.fontSize = '14px';
-            playerRole.style.color = player.role === 'host' ? '#FFD700' : '#CCCCCC';
-            playerItem.appendChild(playerRole);
-
-            playersList.appendChild(playerItem);
-        }
+        renderPlayersList(playersList, this.p2pMatchPlayers);
     }
 
     private async fetchAndUpdatePlayers(playersList: HTMLElement): Promise<void> {
@@ -1402,11 +1315,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1419,11 +1328,7 @@ export class MainMenu {
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
@@ -1434,80 +1339,15 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        // TODO: Replace with Supabase real-time subscriptions for better UX
-        console.log('Starting matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                // No longer in queue, stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential matches
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
-            
-            if (candidates.length >= 3) {
-                // Found enough players for 2v2 (need 3 others + us = 4 total)
-                console.log('Match found! Candidates:', candidates);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Create balanced teams based on MMR
-                const allPlayers = [
-                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
-                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
-                ];
-                
-                // Sort by MMR and alternate teams for balance
-                allPlayers.sort((a, b) => b.mmr - a.mmr);
-                
-                // Create player configs (highest MMR with lowest, etc.)
-                // Ensure we have exactly 4 players
-                if (allPlayers.length === 4) {
-                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
-                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
-                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
-                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
-                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
-                    ];
-                    
-                    // Update settings
-                    this.settings.gameMode = '2v2-matchmaking';
-                    
-                    // Hide menu and start game
-                    this.hide();
-                    
-                    // Dispatch event to start 4-player game
-                    const event = new CustomEvent('start4PlayerGame', {
-                        detail: {
-                            playerConfigs: playerConfigs,
-                            settings: this.settings,
-                            roomId: null // No room for matchmaking
-                        }
-                    });
-                    window.dispatchEvent(event);
-                    
-                    return;
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start2v2Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => this.hide(),
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
     private render1v1MatchmakingScreen(container: HTMLElement): void {
@@ -1584,11 +1424,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling 1v1 matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1600,11 +1436,7 @@ export class MainMenu {
                 this.render1v1MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'online';
                 this.startMenuTransition();
@@ -1615,49 +1447,15 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        console.log('Starting 1v1 matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential 1v1 match
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr, '1v1');
-            
-            if (candidates.length >= 1) {
-                // Found a 1v1 opponent
-                console.log('1v1 match found! Opponent:', candidates[0]);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Start a standard 1v1 online game
-                this.settings.gameMode = 'online';
-                this.onlineMode = 'ranked';
-                
-                this.hide();
-                if (this.onStartCallback) {
-                    this.onStartCallback(this.settings);
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start1v1Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => this.hide(),
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
 
@@ -2346,125 +2144,11 @@ export class MainMenu {
      * Show the match loading screen
      */
     showMatchLoadingScreen(): void {
-        // Create loading screen overlay
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.id = 'match-loading-screen';
-        loadingOverlay.style.position = 'fixed';
-        loadingOverlay.style.top = '0';
-        loadingOverlay.style.left = '0';
-        loadingOverlay.style.width = '100vw';
-        loadingOverlay.style.height = '100vh';
-        loadingOverlay.style.backgroundColor = '#000011';
-        loadingOverlay.style.zIndex = '2000';
-        loadingOverlay.style.display = 'flex';
-        loadingOverlay.style.flexDirection = 'column';
-        loadingOverlay.style.justifyContent = 'flex-start';
-        loadingOverlay.style.alignItems = 'flex-start';
-        loadingOverlay.style.padding = '40px';
-
-        // Game mode display in top left
-        const gameModeContainer = document.createElement('div');
-        gameModeContainer.style.position = 'absolute';
-        gameModeContainer.style.top = '40px';
-        gameModeContainer.style.left = '40px';
-        gameModeContainer.style.fontSize = '36px';
-        gameModeContainer.style.color = '#FFD700';
-        gameModeContainer.style.fontWeight = '300';
-
-        const gameModeText = document.createElement('div');
-        let displayMode = this.settings.gameMode === 'ai' ? 'Vs. AI' : 
-                          this.settings.gameMode === 'lan' ? 'LAN' : 
-                          this.settings.gameMode === 'online' ? (this.onlineMode === 'ranked' ? 'Ranked' : 'Unranked') : 'Vs. AI';
-        gameModeText.textContent = displayMode;
-        gameModeContainer.appendChild(gameModeText);
-
-        // For Ranked mode, show MMR and win/loss info
-        if (this.settings.gameMode === 'online' && this.onlineMode === 'ranked') {
-            const mmrData = getPlayerMMRData();
-            const currentMMR = mmrData.mmr;
-            const estimatedWin = calculateMMRChange(currentMMR, currentMMR, true);
-            const estimatedLoss = calculateMMRChange(currentMMR, currentMMR, false);
-
-            const mmrText = document.createElement('div');
-            mmrText.textContent = `MMR: ${currentMMR}`;
-            mmrText.style.fontSize = '24px';
-            mmrText.style.marginTop = '10px';
-            mmrText.style.color = '#D0D0D0';
-            gameModeContainer.appendChild(mmrText);
-
-            const winText = document.createElement('div');
-            winText.textContent = `Win: +${estimatedWin}`;
-            winText.style.fontSize = '20px';
-            winText.style.marginTop = '8px';
-            winText.style.color = '#00FF00';
-            gameModeContainer.appendChild(winText);
-
-            const lossText = document.createElement('div');
-            lossText.textContent = `Loss: ${estimatedLoss}`;
-            lossText.style.fontSize = '20px';
-            lossText.style.marginTop = '4px';
-            lossText.style.color = '#FF6666';
-            gameModeContainer.appendChild(lossText);
-        }
-
-        loadingOverlay.appendChild(gameModeContainer);
-
-        // Loading animation in bottom left
-        const loadingContainer = document.createElement('div');
-        loadingContainer.style.position = 'absolute';
-        loadingContainer.style.bottom = '40px';
-        loadingContainer.style.left = '40px';
-        loadingContainer.style.display = 'flex';
-        loadingContainer.style.alignItems = 'center';
-        loadingContainer.style.gap = '20px';
-
-        const loadingAnimation = document.createElement('img');
-        loadingAnimation.id = 'match-loading-animation';
-        loadingAnimation.src = this.resolveAssetPath('ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png');
-        loadingAnimation.style.width = '60px'; // 25% of 240px
-        loadingAnimation.style.height = 'auto';
-        loadingContainer.appendChild(loadingAnimation);
-
-        const loadingText = document.createElement('div');
-        loadingText.textContent = 'Loading...';
-        loadingText.style.fontSize = '24px';
-        loadingText.style.color = '#D0D0D0';
-        loadingText.style.fontWeight = '300';
-        loadingContainer.appendChild(loadingText);
-
-        loadingOverlay.appendChild(loadingContainer);
-
-        document.body.appendChild(loadingOverlay);
-
-        // Start animation at 60fps
-        const animationFrameCount = 25;
-        const animationFrameDurationMs = 1000 / 60;
-        let animationFrameIndex = 0;
-        let lastAnimationTimestamp = performance.now();
-        let animationRemainderMs = 0;
-
-        const updateAnimation = (timestamp: number) => {
-            if (!loadingAnimation.parentElement) {
-                return; // Animation stopped
-            }
-            const deltaMs = timestamp - lastAnimationTimestamp;
-            lastAnimationTimestamp = timestamp;
-            animationRemainderMs += deltaMs;
-            while (animationRemainderMs >= animationFrameDurationMs) {
-                animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
-                animationRemainderMs -= animationFrameDurationMs;
-            }
-            const frameNumber = animationFrameIndex + 1;
-            loadingAnimation.src = this.resolveAssetPath(`ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`);
-            requestAnimationFrame(updateAnimation);
-        };
-
-        requestAnimationFrame(updateAnimation);
-
-        // Remove loading screen after a short delay to allow game to initialize
-        setTimeout(() => {
-            loadingOverlay.remove();
-        }, 1500);
+        showMatchLoadingScreenImpl({
+            gameMode: this.settings.gameMode,
+            onlineMode: this.onlineMode,
+            resolveAssetPath: this.resolveAssetPath.bind(this),
+        });
     }
 
     /**
