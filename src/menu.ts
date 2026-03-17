@@ -19,6 +19,7 @@ import {
 } from './menu/ui-helpers';
 import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
 import { PlayerProfileManager } from './menu/player-profile-manager';
+import { MatchmakingController } from './menu/matchmaking-controller';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -118,7 +119,7 @@ export class MainMenu {
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
-    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
+    private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
@@ -129,7 +130,8 @@ export class MainMenu {
     private blurHandler: (() => void) | null = null;
     private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
-    private isMatchmakingSearching = false;
+    private get isMatchmakingSearching(): boolean { return this.matchmakingController.isMatchmakingSearching; }
+    private set isMatchmakingSearching(value: boolean) { this.matchmakingController.isMatchmakingSearching = value; }
     private developerMenuElementVisibility = {
         isBackgroundLayerVisible: true,
         isAtmosphereLayerVisible: true,
@@ -1403,11 +1405,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1420,11 +1418,7 @@ export class MainMenu {
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
@@ -1435,80 +1429,15 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        // TODO: Replace with Supabase real-time subscriptions for better UX
-        console.log('Starting matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                // No longer in queue, stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential matches
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
-            
-            if (candidates.length >= 3) {
-                // Found enough players for 2v2 (need 3 others + us = 4 total)
-                console.log('Match found! Candidates:', candidates);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Create balanced teams based on MMR
-                const allPlayers = [
-                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
-                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
-                ];
-                
-                // Sort by MMR and alternate teams for balance
-                allPlayers.sort((a, b) => b.mmr - a.mmr);
-                
-                // Create player configs (highest MMR with lowest, etc.)
-                // Ensure we have exactly 4 players
-                if (allPlayers.length === 4) {
-                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
-                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
-                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
-                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
-                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
-                    ];
-                    
-                    // Update settings
-                    this.settings.gameMode = '2v2-matchmaking';
-                    
-                    // Hide menu and start game
-                    this.hide();
-                    
-                    // Dispatch event to start 4-player game
-                    const event = new CustomEvent('start4PlayerGame', {
-                        detail: {
-                            playerConfigs: playerConfigs,
-                            settings: this.settings,
-                            roomId: null // No room for matchmaking
-                        }
-                    });
-                    window.dispatchEvent(event);
-                    
-                    return;
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start2v2Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => this.hide(),
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
     private render1v1MatchmakingScreen(container: HTMLElement): void {
@@ -1585,11 +1514,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling 1v1 matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1601,11 +1526,7 @@ export class MainMenu {
                 this.render1v1MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'online';
                 this.startMenuTransition();
@@ -1616,49 +1537,15 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        console.log('Starting 1v1 matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential 1v1 match
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr, '1v1');
-            
-            if (candidates.length >= 1) {
-                // Found a 1v1 opponent
-                console.log('1v1 match found! Opponent:', candidates[0]);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Start a standard 1v1 online game
-                this.settings.gameMode = 'online';
-                this.onlineMode = 'ranked';
-                
-                this.hide();
-                if (this.onStartCallback) {
-                    this.onStartCallback(this.settings);
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start1v1Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => this.hide(),
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
 
