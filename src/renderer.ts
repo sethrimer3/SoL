@@ -1309,51 +1309,6 @@ export class GameRenderer {
         this.glowRenderer.drawBuildingSelectionIndicator(screenPos, radius, { ctx: this.ctx, zoom: this.zoom });
     }
 
-    /**
-     * Draw a sun
-     */
-    private drawSun(sun: Sun, gameTimeSec: number = 0): void {
-        const screenPos = this.worldToScreen(sun.position);
-        const screenRadius = sun.radius * this.zoom;
-        
-        const sunSpritePath = this.getGraphicAssetPath('centralSun');
-        const sunSprite = sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
-        
-        this.sunRenderer.drawSun(
-            this.ctx,
-            sun,
-            screenPos,
-            screenRadius,
-            gameTimeSec,
-            this.graphicsQuality,
-            this.isFancyGraphicsEnabled,
-            this.colorScheme,
-            sunSprite,
-            this._boundDrawFancyBloom,
-            withAlpha
-        );
-    }
-
-    /**
-     * Draw cinematic lens flare for visible suns in screen space.
-     */
-    private drawLensFlare(sun: Sun): void {
-        const screenPos = this.worldToScreen(sun.position);
-        const screenRadius = sun.radius * this.zoom;
-        
-        const canvasWidth = this.getViewportWidthPx();
-        const canvasHeight = this.getViewportHeightPx();
-        
-        this.sunRenderer.drawLensFlare(
-            this.ctx,
-            sun,
-            screenPos,
-            screenRadius,
-            canvasWidth,
-            canvasHeight,
-            this.graphicsQuality
-        );
-    }
 
     private getPseudoRandom(seed: number): number {
         const value = Math.sin(seed) * 43758.5453;
@@ -1369,12 +1324,6 @@ export class GameRenderer {
         return seed;
     }
 
-    /**
-     * Draw space dust particle with lightweight circle rendering
-     */
-    private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
-        this.environmentRenderer.drawSpaceDust(particle, game, viewingPlayerIndex, this.getEnvironmentRendererContext());
-    }
 
     private drawAestheticSpriteShadow(
         worldPos: Vector2D,
@@ -1394,18 +1343,6 @@ export class GameRenderer {
         this.environmentRenderer.drawAestheticSpriteShadow(worldPos, screenPos, screenSize, game, options, this.getEnvironmentRendererContext());
     }
 
-    private drawSpriteSunShadowSilhouette(
-        worldPos: Vector2D,
-        screenPos: Vector2D,
-        spriteMask: HTMLCanvasElement,
-        spriteSize: number,
-        rotationRad: number,
-        suns: Sun[],
-        opacity: number,
-        alphaScale: number
-    ): void {
-        this.environmentRenderer.drawSpriteSunShadowSilhouette(worldPos, screenPos, spriteMask, spriteSize, rotationRad, suns, opacity, alphaScale, this.getEnvironmentRendererContext());
-    }
 
     private drawParticleSunShadowTrail(
         worldPos: Vector2D,
@@ -1419,13 +1356,6 @@ export class GameRenderer {
         this.environmentRenderer.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale, this.getEnvironmentRendererContext());
     }
 
-    /**
-     * Draw an asteroid
-     */
-
-    private updateEnemyVisibilityFadeClock(gameTimeSec: number): void {
-        this.visibilityTracker.updateFrameDelta(gameTimeSec);
-    }
 
     private getEnemyVisibilityAlpha(entity: object, isVisible: boolean, _gameTimeSec: number): number {
         return this.visibilityTracker.getEntityVisibilityAlpha(entity, isVisible);
@@ -1435,75 +1365,11 @@ export class GameRenderer {
         return this.visibilityTracker.getEntityShadeGlowAlpha(entity, shouldGlowInShade);
     }
 
-    private applyUltraWarmCoolGrade(game: GameState): void {
-        this.environmentRenderer.applyUltraWarmCoolGrade(game, this.getEnvironmentRendererContext());
-    }
-
-    private drawExperimentalFieldAtmospherics(game: GameState, screenWidth: number, screenHeight: number): void {
-        this.environmentRenderer.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight, this.getEnvironmentRendererContext());
-    }
-
-    /**
-     * Draw influence circle for a base
-     */
-    private drawInfluenceCircle(position: Vector2D, radius: number, color: string): void {
-        this.environmentRenderer.drawInfluenceCircle(position, radius, color, this.getEnvironmentRendererContext());
-    }
-
-    private getInfluenceTargetRadius(source: StellarForge | Building): number {
-        return this.environmentRenderer.getInfluenceTargetRadius(source);
-    }
-
-    private isInfluenceSourceActive(source: StellarForge | Building): boolean {
-        return this.environmentRenderer.isInfluenceSourceActive(source);
-    }
-
-    private updateInfluenceRadius(source: StellarForge | Building, deltaTimeSec: number): number {
-        return this.environmentRenderer.updateInfluenceRadius(source, deltaTimeSec);
-    }
-
-    private drawMergedInfluenceOutlines(circles: Array<{ position: Vector2D; radius: number }>, color: string): void {
-        this.environmentRenderer.drawMergedInfluenceOutlines(circles, color, this.getEnvironmentRendererContext());
-    }
 
     /**
      * Draw a unit
      */
 
-    /**
-     * Draw connection lines with visual indicators for line of sight
-     */
-    private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[], players: Player[]): void {
-        this.environmentRenderer.drawConnections(player, suns, asteroids, players, this.getEnvironmentRendererContext());
-    }
-
-    /**
-     * Draw UI overlay
-     */
-    private drawUI(game: GameState): void {
-        this.uiRenderer.drawUI(game, this.getUIRendererContext());
-    }
-
-    /**
-     * Draw selection rectangle
-     */
-    private drawSelectionRectangle(): void {
-        this.uiRenderer.drawSelectionRectangle(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw ability arrow for hero units
-     */
-    private drawAbilityArrow(): void {
-        this.uiRenderer.drawAbilityArrow(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw ability arrow for building production/abilities
-     */
-    private drawBuildingAbilityArrow(): void {
-        this.uiRenderer.drawBuildingAbilityArrow(this.getUIRendererContext());
-    }
 
     /**
      * Set building ability arrow direction and cache angle calculation
@@ -1513,12 +1379,6 @@ export class GameRenderer {
         this.uiRenderer.setBuildingAbilityArrowDirection(direction, this.getUIRendererContext());
     }
 
-    /**
-     * Draw a path preview for selected units (not from base)
-     */
-    private drawUnitPathPreview(): void {
-        this.uiRenderer.drawUnitPathPreview(this.getUIRendererContext());
-    }
 
     public createPathCommitEffect(startWorld: Vector2D, waypoints: Vector2D[], gameTimeSec: number): void {
         this.uiRenderer.createPathCommitEffect(startWorld, waypoints, gameTimeSec);
@@ -1528,9 +1388,6 @@ export class GameRenderer {
         this.uiRenderer.createPathPreviewFadeEffect(startWorld, waypoints, endWorld, gameTimeSec);
     }
 
-    private updateAndDrawPathCommitEffects(gameTimeSec: number): void {
-        this.uiRenderer.updateAndDrawPathCommitEffects(gameTimeSec, this.getUIRendererContext());
-    }
 
     /**
      * Create a tap visual effect at screen position
@@ -1560,40 +1417,6 @@ export class GameRenderer {
         this.uiRenderer.createProductionButtonWave(position);
     }
 
-    /**
-     * Update and draw tap effects (expanding ripple)
-     */
-    private updateAndDrawTapEffects(): void {
-        this.uiRenderer.updateAndDrawTapEffects(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw swipe effects (directional trail)
-     */
-    private updateAndDrawSwipeEffects(): void {
-        this.uiRenderer.updateAndDrawSwipeEffects(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw warp gate shockwave effects
-     */
-    private updateAndDrawWarpGateShockwaves(): void {
-        this.uiRenderer.updateAndDrawWarpGateShockwaves(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw production button wave effects
-     */
-    private updateAndDrawProductionButtonWaves(): void {
-        this.uiRenderer.updateAndDrawProductionButtonWaves(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw damage numbers floating up from damaged units
-     */
-    private drawDamageNumbers(game: GameState): void {
-        this.uiRenderer.drawDamageNumbers(game, this.getUIRendererContext());
-    }
 
     /**
      * Draw health display (bar or number) for an entity
@@ -1610,12 +1433,6 @@ export class GameRenderer {
         this.uiRenderer.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor, this.getUIRendererContext());
     }
 
-    /**
-     * Draw off-screen unit indicators
-     */
-    private drawOffScreenUnitIndicators(game: GameState): void {
-        this.uiRenderer.drawOffScreenUnitIndicators(game, this.getUIRendererContext());
-    }
 
     /**
      * Render the entire game state
@@ -1637,7 +1454,7 @@ export class GameRenderer {
 
         this.updateViewBounds();
         const ladSun = game.suns.find(s => s.type === 'lad');
-        this.updateEnemyVisibilityFadeClock(game.gameTime);
+        this.visibilityTracker.updateFrameDelta(game.gameTime);
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
         
@@ -1646,6 +1463,9 @@ export class GameRenderer {
         const screenWidth = this.getCanvasScreenWidthPx();
         const screenHeight = this.getCanvasScreenHeightPx();
 
+        const uiCtx = this.getUIRendererContext();
+        const envCtx = this.getEnvironmentRendererContext();
+
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
 
@@ -1653,7 +1473,23 @@ export class GameRenderer {
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
                 if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
-                    this.drawSun(sun, game.gameTime);
+                    const sunScreenPos = this.worldToScreen(sun.position);
+                    const sunScreenRadius = sun.radius * this.zoom;
+                    const sunSpritePath = this.getGraphicAssetPath('centralSun');
+                    const sunSprite = sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
+                    this.sunRenderer.drawSun(
+                        this.ctx,
+                        sun,
+                        sunScreenPos,
+                        sunScreenRadius,
+                        game.gameTime,
+                        this.graphicsQuality,
+                        this.isFancyGraphicsEnabled,
+                        this.colorScheme,
+                        sunSprite,
+                        this._boundDrawFancyBloom,
+                        withAlpha
+                    );
                 }
             }
         }
@@ -1792,7 +1628,17 @@ export class GameRenderer {
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
                 if (this.isWithinViewBounds(sun.position, sun.radius * 5)) {
-                    this.drawLensFlare(sun);
+                    const flareScreenPos = this.worldToScreen(sun.position);
+                    const flareScreenRadius = sun.radius * this.zoom;
+                    this.sunRenderer.drawLensFlare(
+                        this.ctx,
+                        sun,
+                        flareScreenPos,
+                        flareScreenRadius,
+                        this.getViewportWidthPx(),
+                        this.getViewportHeightPx(),
+                        this.graphicsQuality
+                    );
                 }
             }
         }
@@ -1859,11 +1705,11 @@ export class GameRenderer {
         }
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
-            this.applyUltraWarmCoolGrade(game);
+            this.environmentRenderer.applyUltraWarmCoolGrade(game, envCtx);
         }
 
         if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
-            this.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight);
+            this.environmentRenderer.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight, envCtx);
         }
 
         // Draw space dust particles on top of celestial environment layers.
@@ -1905,14 +1751,14 @@ export class GameRenderer {
             const color = i === 0 ? this.playerColor : this.enemyColor;
             const forge = player.stellarForge;
             if (forge) {
-                const forgeRadius = this.updateInfluenceRadius(forge, influenceDeltaTimeSec);
+                const forgeRadius = this.environmentRenderer.updateInfluenceRadius(forge, influenceDeltaTimeSec);
                 if (forgeRadius > 0.5) {
                     influenceCircles.push({ position: forge.position, radius: forgeRadius, color });
                 }
             }
 
             for (const building of player.buildings) {
-                const buildingRadius = this.updateInfluenceRadius(building, influenceDeltaTimeSec);
+                const buildingRadius = this.environmentRenderer.updateInfluenceRadius(building, influenceDeltaTimeSec);
                 if (buildingRadius > 0.5) {
                     influenceCircles.push({ position: building.position, radius: buildingRadius, color });
                 }
@@ -1932,13 +1778,13 @@ export class GameRenderer {
         }
 
         for (const [color, circles] of circlesByColor) {
-            this.drawMergedInfluenceOutlines(circles, color);
+            this.environmentRenderer.drawMergedInfluenceOutlines(circles, color, envCtx);
         }
 
         // Draw connections first (so they appear behind structures)
         for (const player of game.players) {
             if (!player.isDefeated()) {
-                this.drawConnections(player, game.suns, game.asteroids, game.players);
+                this.environmentRenderer.drawConnections(player, game.suns, game.asteroids, game.players, envCtx);
             }
         }
 
@@ -1982,7 +1828,7 @@ export class GameRenderer {
         }
 
         // Draw warp gate shockwaves
-        this.updateAndDrawWarpGateShockwaves();
+        this.uiRenderer.updateAndDrawWarpGateShockwaves(uiCtx);
 
         // Draw merged range outlines for selected starlings before drawing units
         const unitCtx = this.getUnitRendererContext();
@@ -2384,13 +2230,13 @@ export class GameRenderer {
         }
 
         // Draw damage numbers
-        this.drawDamageNumbers(game);
+        this.uiRenderer.drawDamageNumbers(game, uiCtx);
 
         // Draw border fade to black effect
-        this.drawBorderFade(game.mapSize);
+        this.uiRenderer.drawBorderFade(game.mapSize, uiCtx);
         
         // Draw off-screen unit indicators
-        this.drawOffScreenUnitIndicators(game);
+        this.uiRenderer.drawOffScreenUnitIndicators(game, uiCtx);
         
         // Draw striker tower target highlighting
         this.towerRenderer.drawStrikerTowerTargetHighlighting(game, buildingCtx);
@@ -2411,32 +2257,32 @@ export class GameRenderer {
         this.warpGateRenderer.drawWarpGatePlacementPreview(game, warpGateCtx);
 
         // Draw UI
-        this.drawUI(game);
+        this.uiRenderer.drawUI(game, uiCtx);
 
         // Draw selection rectangle
-        this.drawSelectionRectangle();
+        this.uiRenderer.drawSelectionRectangle(uiCtx);
 
         // Draw ability arrow for hero units
-        this.drawAbilityArrow();
+        this.uiRenderer.drawAbilityArrow(uiCtx);
         
         // Draw building ability arrow
-        this.drawBuildingAbilityArrow();
+        this.uiRenderer.drawBuildingAbilityArrow(uiCtx);
 
         // Draw unit path preview
-        this.drawUnitPathPreview();
+        this.uiRenderer.drawUnitPathPreview(uiCtx);
 
         // Draw temporary path confirmation effects
-        this.updateAndDrawPathCommitEffects(game.gameTime);
+        this.uiRenderer.updateAndDrawPathCommitEffects(game.gameTime, uiCtx);
 
         // Draw tap and swipe visual effects
-        this.updateAndDrawProductionButtonWaves();
-        this.updateAndDrawTapEffects();
-        this.updateAndDrawSwipeEffects();
+        this.uiRenderer.updateAndDrawProductionButtonWaves(uiCtx);
+        this.uiRenderer.updateAndDrawTapEffects(uiCtx);
+        this.uiRenderer.updateAndDrawSwipeEffects(uiCtx);
 
         // Check for victory
         const winner = game.checkVictoryConditions();
         if (winner) {
-            this.drawEndGameStatsScreen(game, winner);
+            this.uiRenderer.drawEndGameStatsScreen(game, winner, uiCtx);
         }
 
         // Draw countdown overlay
@@ -2462,33 +2308,21 @@ export class GameRenderer {
         
         // Draw in-game menu button (top-left, always visible when not in countdown)
         if (!game.isCountdownActive && !winner) {
-            this.drawMenuButton();
+            this.uiRenderer.drawMenuButton(uiCtx);
         }
         
         // Draw production progress indicator (top-right)
         if (!game.isCountdownActive && !winner) {
-            this.drawProductionProgress(game);
+            this.uiRenderer.drawProductionProgress(game, uiCtx);
         }
         
         // Draw in-game menu overlay if open
         if (this.showInGameMenu && !winner) {
-            this.drawInGameMenuOverlay();
+            this.uiRenderer.drawInGameMenuOverlay(uiCtx);
         }
     }
 
-    /**
-     * Draw in-game menu button in top-left corner
-     */
-    private drawMenuButton(): void {
-        this.uiRenderer.drawMenuButton(this.getUIRendererContext());
-    }
 
-    /**
-     * Draw production progress indicator in top-right corner
-     */
-    private drawProductionProgress(game: GameState): void {
-        this.uiRenderer.drawProductionProgress(game, this.getUIRendererContext());
-    }
     
     /**
      * Get display name for building type
@@ -2529,26 +2363,6 @@ export class GameRenderer {
         return this.uiRenderer.getInGameMenuAction(this.getUIRendererContext(), screenX, screenY);
     }
 
-    /**
-     * Draw in-game menu overlay
-     */
-    private drawInGameMenuOverlay(): void {
-        this.uiRenderer.drawInGameMenuOverlay(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw end-game statistics screen
-     */
-    private drawEndGameStatsScreen(game: GameState, winner: Player): void {
-        this.uiRenderer.drawEndGameStatsScreen(game, winner, this.getUIRendererContext());
-    }
-
-    /**
-     * Draw border fade effect - fades to black at map edges
-     */
-    private drawBorderFade(mapSize: number): void {
-        this.uiRenderer.drawBorderFade(mapSize, this.getUIRendererContext());
-    }
 
     /**
      * Set camera zoom
