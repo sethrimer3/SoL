@@ -1169,6 +1169,7 @@ class GameController {
         this.renderer.graphicsQuality = settings.graphicsQuality;
         this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
         this.adaptiveQualityEnabled = settings.isAdaptiveQualityEnabled;
         this.adaptiveQualityTargetQuality = settings.graphicsQuality;
         // Reset adaptive quality state when starting a new game
@@ -1400,6 +1401,7 @@ class GameController {
         this.renderer.graphicsQuality = settings.graphicsQuality;
         this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
         
         // Set local player using the found index
         this.localPlayerIndex = localPlayerIndex;
