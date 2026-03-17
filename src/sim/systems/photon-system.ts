@@ -181,7 +181,8 @@ export class PhotonSystem {
                     if (distSq < absorbRangeSq && distSq > 0.01) {
                         const dist = Math.sqrt(distSq);
                         const invDist = 1 / dist;
-                        // Gravity: force ∝ 1/dist (stronger when closer)
+                        // Gravity: net acceleration ∝ 1/dist² (direction × invDist, magnitude × invDist)
+                        // Matches hero absorption behavior intentionally.
                         const forceMag = Constants.PHOTON_MIRROR_ABSORB_STRENGTH * invDist * deltaTime;
                         photon.velocity.x += dx * invDist * forceMag;
                         photon.velocity.y += dy * invDist * forceMag;

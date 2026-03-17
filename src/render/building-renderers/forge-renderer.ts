@@ -22,6 +22,8 @@ interface ForgeSunlightState {
     dotAnimProgress: number[];
     /** Whether a crunch animation is currently playing */
     isCrunching: boolean;
+    /** Game time at last frame – used to compute deltaTime inside the renderer */
+    lastGameTime: number;
 }
 
 /**
@@ -45,6 +47,14 @@ export class ForgeRenderer {
     private readonly AURUM_FORGE_SHAPE_COUNT = 8;
     private readonly AURUM_EDGE_DETECTION_FILL_COLOR = '#FFFFFF';
     private readonly AURUM_EDGE_DETECTION_THRESHOLD = 128;
+
+    // Sunlight ring indicator animation constants
+    /** Energy units drained per second during crunch animation */
+    private readonly RING_DRAIN_RATE_PER_SEC = Constants.STARLING_COST_PER_ENERGY * 8;
+    /** Seconds of stagger between each dot's fly-in animation start */
+    private readonly DOT_ANIMATION_STAGGER_DELAY_SEC = 0.08;
+    /** Speed multiplier applied to crunch progress to drive dot fly-in */
+    private readonly DOT_ANIMATION_SPEED_MULTIPLIER = 2.5;
 
     // State caches for animations
     private readonly forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
@@ -200,7 +210,7 @@ export class ForgeRenderer {
     /**
      * Render-side animation state accessor – lazily creates state for each forge.
      */
-    private getSunlightState(forge: StellarForge): ForgeSunlightState {
+    private getSunlightState(forge: StellarForge, gameTime: number): ForgeSunlightState {
         let state = this.forgeSunlightStates.get(forge);
         if (!state) {
             state = {
@@ -208,6 +218,7 @@ export class ForgeRenderer {
                 preCrunchDotCount: 0,
                 dotAnimProgress: [],
                 isCrunching: false,
+                lastGameTime: gameTime,
             };
             this.forgeSunlightStates.set(forge, state);
         }
@@ -232,8 +243,12 @@ export class ForgeRenderer {
         gameTime: number,
         context: BuildingRendererContext
     ): void {
-        const state = this.getSunlightState(forge);
+        const state = this.getSunlightState(forge, gameTime);
         const ctx = context.ctx;
+
+        // Compute frame deltaTime for time-based animations
+        const deltaTime = Math.min(gameTime - state.lastGameTime, 0.1); // clamp to 100 ms max
+        state.lastGameTime = gameTime;
 
         const ringRadius = size * 1.65;
         const ringLineWidth = Math.max(2, size * 0.12);
@@ -257,16 +272,18 @@ export class ForgeRenderer {
         }
 
         if (state.isCrunching) {
-            // Drain ring energy rapidly during crunch (suck phase ~0.8 s)
-            const drainRate = (starlingCost * 20) * (1 / 16); // fast drain per frame at ~60fps
-            state.visualPendingEnergy = Math.max(0, state.visualPendingEnergy - drainRate);
+            // Drain ring energy rapidly during crunch – time-based so frame rate independent
+            state.visualPendingEnergy = Math.max(
+                0,
+                state.visualPendingEnergy - this.RING_DRAIN_RATE_PER_SEC * deltaTime
+            );
 
             // Advance dot fly-in animations (later dots start slightly delayed)
             for (let i = 0; i < state.dotAnimProgress.length; i++) {
-                const delay = i * 0.08; // stagger start per dot
+                const delaySec = i * this.DOT_ANIMATION_STAGGER_DELAY_SEC;
                 const crunchProgress = crunch ? crunch.getPhaseProgress() : 1;
-                const effectiveProgress = Math.max(0, crunchProgress - delay);
-                state.dotAnimProgress[i] = Math.min(1, effectiveProgress * 2.5);
+                const effectiveProgress = Math.max(0, crunchProgress - delaySec);
+                state.dotAnimProgress[i] = Math.min(1, effectiveProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER);
             }
 
             if (!crunchIsActive) {
