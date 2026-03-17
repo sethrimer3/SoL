@@ -5,6 +5,7 @@
 import { SolarMirror, StellarForge, Vector2D, Faction, GameState, LightRay } from '../game-core';
 import * as Constants from '../constants';
 import { getRadialButtonOffsets } from './render-utilities';
+import { GradientCache } from './gradient-cache';
 
 export interface SolarMirrorRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -21,7 +22,7 @@ export interface SolarMirrorRendererContext {
     hasActiveFoundry: boolean;
     highlightedButtonIndex: number;
     MIRROR_MAX_HEALTH: number;
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
     VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: string[];
     worldToScreen(worldPos: Vector2D): Vector2D;
     getEnemyVisibilityAlpha(entity: object, isVisible: boolean, gameTime: number): number;

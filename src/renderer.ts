@@ -24,6 +24,7 @@ import {
     detectAndDrawEdges as _detectAndDrawEdges,
 } from './render/asset-path-helpers';
 import { SpriteManager, SpriteDrawSource, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
+import { GradientCache } from './render/gradient-cache';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
 import { AsteroidRenderer } from './render/asteroid-renderer';
@@ -168,7 +169,7 @@ export class GameRenderer {
 
     private readonly visibilityTracker = new VisibilityAlphaTracker();
     private influenceRadiusLastUpdateSec = Number.NaN;
-    private gradientCache = new Map<string, CanvasGradient>();
+    private readonly gradientCache = new GradientCache();
 
     // Gradient caching bucket sizes for performance optimization
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
@@ -1277,56 +1278,22 @@ export class GameRenderer {
         }
     }
 
-    /**
-     * Get or create a cached radial gradient
-     * 
-     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
-     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
-     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
-     */
     private getCachedRadialGradient(
         key: string,
         x0: number, y0: number, r0: number,
         x1: number, y1: number, r1: number,
         stops: Array<{offset: number, color: string}>
     ): CanvasGradient {
-        const cached = this.gradientCache.get(key);
-        if (cached) {
-            return cached;
-        }
-
-        const gradient = this.ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
-        for (const stop of stops) {
-            gradient.addColorStop(stop.offset, stop.color);
-        }
-        this.gradientCache.set(key, gradient);
-        return gradient;
+        return this.gradientCache.getCachedRadialGradient(this.ctx, key, x0, y0, r0, x1, y1, r1, stops);
     }
 
-    /**
-     * Get or create a cached linear gradient
-     * 
-     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
-     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
-     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
-     */
     private getCachedLinearGradient(
         key: string,
         x0: number, y0: number,
         x1: number, y1: number,
         stops: Array<{offset: number, color: string}>
     ): CanvasGradient {
-        const cached = this.gradientCache.get(key);
-        if (cached) {
-            return cached;
-        }
-
-        const gradient = this.ctx.createLinearGradient(x0, y0, x1, y1);
-        for (const stop of stops) {
-            gradient.addColorStop(stop.offset, stop.color);
-        }
-        this.gradientCache.set(key, gradient);
-        return gradient;
+        return this.gradientCache.getCachedLinearGradient(this.ctx, key, x0, y0, x1, y1, stops);
     }
 
     /**
