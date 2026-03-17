@@ -384,17 +384,20 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             let currentHeroCount = 0;
             for (const u of player.units) { if (u.isHero) currentHeroCount++; }
 
-            const killedStarlings = Math.max(0, (pre.unitCount - pre.heroCount) - (player.units.length - currentHeroCount));
+            const preStarlingCount = pre.unitCount - pre.heroCount;
+            const currentStarlingCount = player.units.length - currentHeroCount;
+            const killedStarlings = Math.max(0, preStarlingCount - currentStarlingCount);
             const killedHeroes = Math.max(0, pre.heroCount - currentHeroCount);
             const destroyedBuildings = Math.max(0, pre.buildingCount - player.buildings.length);
-            const destroyedMirrors = Math.max(0, pre.mirrorCount - player.solarMirrors.filter(m => m.health > 0).length);
-            const forgeDestroyed = pre.isForgeAlive && (player.stellarForge === null || player.stellarForge.health <= 0);
+            const currentMirrorCount = player.solarMirrors.filter(m => m.health > 0).length;
+            const destroyedMirrors = Math.max(0, pre.mirrorCount - currentMirrorCount);
+            const isForgeDestroyed = pre.isForgeAlive && (player.stellarForge === null || player.stellarForge.health <= 0);
 
             const totalScore = killedStarlings * Constants.DAMAGE_SCORE_STARLING
                 + killedHeroes * Constants.DAMAGE_SCORE_HERO
                 + destroyedBuildings * Constants.DAMAGE_SCORE_STRUCTURE
                 + destroyedMirrors * Constants.DAMAGE_SCORE_SOLAR_MIRROR
-                + (forgeDestroyed ? Constants.DAMAGE_SCORE_FOUNDRY : 0);
+                + (isForgeDestroyed ? Constants.DAMAGE_SCORE_FOUNDRY : 0);
 
             if (totalScore > 0) {
                 // Award score to opposing players
@@ -642,7 +645,9 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         if (this.isMatchTimerExpired && activePlayers.length > 1) {
             let bestPlayer = activePlayers[0];
             for (let i = 1; i < activePlayers.length; i++) {
-                if (activePlayers[i].damageScore > bestPlayer.damageScore) {
+                if (activePlayers[i].damageScore > bestPlayer.damageScore ||
+                    (activePlayers[i].damageScore === bestPlayer.damageScore &&
+                     activePlayers[i].name < bestPlayer.name)) {
                     bestPlayer = activePlayers[i];
                 }
             }

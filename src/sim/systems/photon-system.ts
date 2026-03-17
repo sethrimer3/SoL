@@ -142,7 +142,7 @@ export class PhotonSystem {
                         const dist = Math.sqrt(distSq);
                         const invDist = 1 / dist;
                         // Gravity: force ∝ 1/dist (stronger when closer)
-                        const forceMag = Constants.PHOTON_HERO_ABSORB_STRENGTH * (1 / dist) * deltaTime;
+                        const forceMag = Constants.PHOTON_HERO_ABSORB_STRENGTH * invDist * deltaTime;
                         photon.velocity.x += dx * invDist * forceMag;
                         photon.velocity.y += dy * invDist * forceMag;
                     }

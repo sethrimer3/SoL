@@ -473,8 +473,8 @@ export class HUDRenderer {
             textBaseline: 'alphabetic',
         }, context);
 
-        // Show damage scores below timer when < 2 minutes remain
-        if (remainingSec < 120 && game.players.length >= 2) {
+        // Show damage scores below timer when remaining time is under threshold
+        if (remainingSec < Constants.DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC && game.players.length >= 2) {
             const scoreFontSize = 14;
             let scoreY = y + scoreFontSize + 6;
             for (const player of game.players) {

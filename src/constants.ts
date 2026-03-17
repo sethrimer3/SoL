@@ -816,6 +816,7 @@ export const DAMAGE_SCORE_STRUCTURE = 3;
 export const DAMAGE_SCORE_SOLAR_MIRROR = 5;
 export const DAMAGE_SCORE_HERO = 5;
 export const DAMAGE_SCORE_FOUNDRY = 7;
+export const DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC = 120;   // Show damage scores when this many seconds remain
 
 // AI Strategy types
 export enum AIStrategy {
