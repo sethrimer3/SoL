@@ -10,6 +10,7 @@ import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGr
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha, interpolateHexColor } from './render/color-utilities';
 import { ScreenShakeController } from './render/screen-shake';
 import { getFactionColor } from './render/faction-utilities';
+import { clampCameraToLevelBounds as _clampCameraToLevelBounds, getMinZoomForBounds as _getMinZoomForBounds } from './render/camera-controller';
 import {
     getShadeBrightnessBoost as _getShadeBrightnessBoost,
     applyShadeBrightening as _applyShadeBrightening,
@@ -2594,31 +2595,11 @@ export class GameRenderer {
      * Clamp camera position to level boundaries
      */
     private clampCameraToLevelBounds(pos: Vector2D): Vector2D {
-        // Calculate visible world dimensions based on screen-space canvas size and zoom
-        const viewWidth = this.getViewportWidthPx() / this.zoom;
-        const viewHeight = this.getViewportHeightPx() / this.zoom;
-        
-        // Calculate max camera offset based on map size and view size
-        // The camera can move such that the view edges align with map boundaries
-        const halfMapSize = Constants.MAP_SIZE / 2;
-        const maxX = halfMapSize - viewWidth / 2;
-        const maxY = halfMapSize - viewHeight / 2;
-        const minX = -maxX;
-        const minY = -maxY;
-        
-        // Clamp camera position
-        const clampedX = Math.max(minX, Math.min(maxX, pos.x));
-        const clampedY = Math.max(minY, Math.min(maxY, pos.y));
-        
-        return new Vector2D(clampedX, clampedY);
+        return _clampCameraToLevelBounds(pos, this.getViewportWidthPx(), this.getViewportHeightPx(), this.zoom);
     }
 
     private getMinZoomForBounds(): number {
-        const viewWidth = this.getViewportWidthPx();
-        const viewHeight = this.getViewportHeightPx();
-        const minZoomWidth = viewWidth / Constants.MAP_SIZE;
-        const minZoomHeight = viewHeight / Constants.MAP_SIZE;
-        return Math.max(0.5, minZoomWidth, minZoomHeight);
+        return _getMinZoomForBounds(this.getViewportWidthPx(), this.getViewportHeightPx());
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
