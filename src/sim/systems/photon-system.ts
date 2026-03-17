@@ -14,6 +14,7 @@ import { Sun } from '../entities/sun';
 import { Player } from '../entities/player';
 import { Unit } from '../entities/unit';
 import { Photon } from '../entities/photon';
+import { SolarMirror } from '../entities/solar-mirror';
 
 /**
  * Minimal context required by the PhotonSystem
@@ -36,6 +37,7 @@ export class PhotonSystem {
         PhotonSystem.spawnPhotons(ctx, deltaTime);
         PhotonSystem.applyRepulsion(ctx, deltaTime);
         PhotonSystem.applyHeroAbsorption(ctx, deltaTime);
+        PhotonSystem.applyMirrorAbsorption(ctx, deltaTime);
         PhotonSystem.updateAndCleanup(ctx, deltaTime);
     }
 
@@ -143,6 +145,44 @@ export class PhotonSystem {
                         const invDist = 1 / dist;
                         // Gravity: force ∝ 1/dist (stronger when closer)
                         const forceMag = Constants.PHOTON_HERO_ABSORB_STRENGTH * invDist * deltaTime;
+                        photon.velocity.x += dx * invDist * forceMag;
+                        photon.velocity.y += dy * invDist * forceMag;
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Apply gravity-like absorption of photons toward solar mirrors.
+     * Mirrors absorb photons that come within capture range and become overcharged.
+     */
+    private static applyMirrorAbsorption(ctx: PhotonSystemContext, deltaTime: number): void {
+        const absorbRangeSq = Constants.PHOTON_MIRROR_ABSORB_RANGE_PX * Constants.PHOTON_MIRROR_ABSORB_RANGE_PX;
+        const captureRangeSq = Constants.PHOTON_MIRROR_CAPTURE_RANGE_PX * Constants.PHOTON_MIRROR_CAPTURE_RANGE_PX;
+
+        for (const player of ctx.players) {
+            if (player.isDefeated()) continue;
+
+            for (const mirror of player.solarMirrors) {
+                for (let i = ctx.photons.length - 1; i >= 0; i--) {
+                    const photon = ctx.photons[i];
+                    const dx = mirror.position.x - photon.position.x;
+                    const dy = mirror.position.y - photon.position.y;
+                    const distSq = dx * dx + dy * dy;
+
+                    if (distSq < captureRangeSq) {
+                        // Absorb the photon and trigger overcharge
+                        mirror.absorbPhoton();
+                        ctx.photons.splice(i, 1);
+                        continue;
+                    }
+
+                    if (distSq < absorbRangeSq && distSq > 0.01) {
+                        const dist = Math.sqrt(distSq);
+                        const invDist = 1 / dist;
+                        // Gravity: force ∝ 1/dist (stronger when closer)
+                        const forceMag = Constants.PHOTON_MIRROR_ABSORB_STRENGTH * invDist * deltaTime;
                         photon.velocity.x += dx * invDist * forceMag;
                         photon.velocity.y += dy * invDist * forceMag;
                     }

@@ -34,6 +34,7 @@ export class SolarMirror {
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     isMovingToSun: boolean = false; // True when mirror was commanded to find nearest sunlight
+    overchargeRemainingSec: number = 0; // Remaining overcharge duration after absorbing a photon
 
     // Pathfinding waypoints for obstacle avoidance
     private waypoints: Vector2D[] = [];
@@ -252,7 +253,22 @@ export class SolarMirror {
         // At distance 0: MIRROR_PROXIMITY_MULTIPLIER, at MIRROR_MAX_GLOW_DISTANCE: 1x multiplier
         const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER - (this.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE));
 
-        return baseGenerationRatePerSec * this.efficiency * distanceMultiplier;
+        const overchargeMultiplier = this.isOvercharged() ? Constants.MIRROR_OVERCHARGE_ENERGY_MULTIPLIER : 1.0;
+        return baseGenerationRatePerSec * this.efficiency * distanceMultiplier * overchargeMultiplier;
+    }
+
+    /**
+     * Whether the mirror is currently overcharged (absorbed a photon recently)
+     */
+    isOvercharged(): boolean {
+        return this.overchargeRemainingSec > 0;
+    }
+
+    /**
+     * Called when the mirror absorbs a photon – triggers overcharge for a fixed duration
+     */
+    absorbPhoton(): void {
+        this.overchargeRemainingSec = Constants.MIRROR_OVERCHARGE_DURATION_SEC;
     }
 
     /**
@@ -624,6 +640,11 @@ export class SolarMirror {
      * Update mirror position based on target and velocity with obstacle avoidance
      */
     update(deltaTime: number, gameState: MirrorMovementContext | null = null): void {
+        // Decay overcharge timer
+        if (this.overchargeRemainingSec > 0) {
+            this.overchargeRemainingSec = Math.max(0, this.overchargeRemainingSec - deltaTime);
+        }
+
         // Apply knockback velocity from asteroid rotation
         updateKnockbackMotion(
             this.position,

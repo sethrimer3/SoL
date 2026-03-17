@@ -160,6 +160,7 @@ export function computeStateHash(state: StateHashContext): number {
             }
             mix(mirror.velocity.x);
             mix(mirror.velocity.y);
+            mix(mirror.overchargeRemainingSec);
         }
 
         for (const unit of player.units) {
