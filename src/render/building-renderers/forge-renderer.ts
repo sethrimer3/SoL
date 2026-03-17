@@ -10,6 +10,23 @@ import * as Constants from '../../constants';
 import type { ForgeFlameState, ForgeScriptState, AurumShapeState, BuildingRendererContext } from './shared-utilities';
 
 /**
+ * Render-side animation state for the forge sunlight ring indicator.
+ * Tracks animated energy value and crunch dot animations.
+ */
+interface ForgeSunlightState {
+    /** Visually smoothed pending energy – animates quickly to zero on crunch */
+    visualPendingEnergy: number;
+    /** Dot count captured just before the last crunch, for fly-in animation */
+    preCrunchDotCount: number;
+    /** Progress per dot (0 → at circle edge, 1 → reached forge center) */
+    dotAnimProgress: number[];
+    /** Whether a crunch animation is currently playing */
+    isCrunching: boolean;
+    /** Game time at last frame – used to compute deltaTime inside the renderer */
+    lastGameTime: number;
+}
+
+/**
  * ForgeRenderer encapsulates all StellarForge rendering logic including:
  * - Base forge rendering with faction-specific sprites
  * - Animated flame effects
@@ -31,10 +48,19 @@ export class ForgeRenderer {
     private readonly AURUM_EDGE_DETECTION_FILL_COLOR = '#FFFFFF';
     private readonly AURUM_EDGE_DETECTION_THRESHOLD = 128;
 
+    // Sunlight ring indicator animation constants
+    /** Energy units drained per second during crunch animation */
+    private readonly RING_DRAIN_RATE_PER_SEC = Constants.STARLING_COST_PER_ENERGY * 8;
+    /** Seconds of stagger between each dot's fly-in animation start */
+    private readonly DOT_ANIMATION_STAGGER_DELAY_SEC = 0.08;
+    /** Speed multiplier applied to crunch progress to drive dot fly-in */
+    private readonly DOT_ANIMATION_SPEED_MULTIPLIER = 2.5;
+
     // State caches for animations
     private readonly forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
     private readonly velarisForgeScriptStates = new Map<StellarForge, ForgeScriptState>();
     private readonly aurumForgeShapeStates = new WeakMap<StellarForge, AurumShapeState>();
+    private readonly forgeSunlightStates = new Map<StellarForge, ForgeSunlightState>();
     
     // Offscreen canvas for Aurum edge detection
     private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
@@ -171,7 +197,177 @@ export class ForgeRenderer {
             this.drawRadiantForge(forge, screenPos, size, displayColor, game, shouldDim, context);
         }
 
+        // Draw sunlight accumulation indicator (own forge only)
+        if (!isEnemy) {
+            this.drawSunlightIndicator(forge, screenPos, size, color, game.gameTime, context);
+        }
+
         context.ctx.restore();
+    }
+
+    // ── Sunlight Ring Indicator ────────────────────────────────────────────────
+
+    /**
+     * Render-side animation state accessor – lazily creates state for each forge.
+     */
+    private getSunlightState(forge: StellarForge, gameTime: number): ForgeSunlightState {
+        let state = this.forgeSunlightStates.get(forge);
+        if (!state) {
+            state = {
+                visualPendingEnergy: forge.pendingEnergy,
+                preCrunchDotCount: 0,
+                dotAnimProgress: [],
+                isCrunching: false,
+                lastGameTime: gameTime,
+            };
+            this.forgeSunlightStates.set(forge, state);
+        }
+        return state;
+    }
+
+    /**
+     * Draw the clockwise sunlight-accumulation ring and per-starling dots around a forge.
+     *
+     * Visual design:
+     *  - A thin arc ring fills clockwise from –π/2 (top) as sunlight accumulates.
+     *  - Each completed STARLING_COST_PER_ENERGY unit of energy adds a small dot
+     *    equidistant around the ring.
+     *  - If a hero/mirror is being produced the ring is drawn dimmed (paused state).
+     *  - On forge crunch: dots fly toward the centre and the ring depletes quickly.
+     */
+    private drawSunlightIndicator(
+        forge: StellarForge,
+        screenPos: Vector2D,
+        size: number,
+        color: string,
+        gameTime: number,
+        context: BuildingRendererContext
+    ): void {
+        const state = this.getSunlightState(forge, gameTime);
+        const ctx = context.ctx;
+
+        // Compute frame deltaTime for time-based animations
+        const deltaTime = Math.min(gameTime - state.lastGameTime, 0.1); // clamp to 100 ms max
+        state.lastGameTime = gameTime;
+
+        const ringRadius = size * 1.65;
+        const ringLineWidth = Math.max(2, size * 0.12);
+        const dotRadius = Math.max(3, size * 0.13);
+        const dotOrbitRadius = ringRadius + dotRadius + 2;
+        const startAngle = -Math.PI / 2; // top of circle
+
+        const starlingCost = Constants.STARLING_COST_PER_ENERGY;
+        const isProducing = forge.hasQueuedProduction();
+
+        // ── Update animation state ────────────────────────────────────────────
+        const crunch = forge.getCurrentCrunch();
+        const crunchIsActive = crunch !== null && crunch.isActive();
+
+        if (crunchIsActive && !state.isCrunching) {
+            // Crunch just triggered – capture current dot count and start animation
+            state.isCrunching = true;
+            const capturedDotCount = Math.floor(state.visualPendingEnergy / starlingCost);
+            state.preCrunchDotCount = capturedDotCount;
+            state.dotAnimProgress = new Array<number>(capturedDotCount).fill(0);
+        }
+
+        if (state.isCrunching) {
+            // Drain ring energy rapidly during crunch – time-based so frame rate independent
+            state.visualPendingEnergy = Math.max(
+                0,
+                state.visualPendingEnergy - this.RING_DRAIN_RATE_PER_SEC * deltaTime
+            );
+
+            // Advance dot fly-in animations (later dots start slightly delayed)
+            for (let i = 0; i < state.dotAnimProgress.length; i++) {
+                const delaySec = i * this.DOT_ANIMATION_STAGGER_DELAY_SEC;
+                const crunchProgress = crunch ? crunch.getPhaseProgress() : 1;
+                const effectiveProgress = Math.max(0, crunchProgress - delaySec);
+                state.dotAnimProgress[i] = Math.min(1, effectiveProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER);
+            }
+
+            if (!crunchIsActive) {
+                // Crunch finished – reset
+                state.isCrunching = false;
+                state.visualPendingEnergy = forge.pendingEnergy;
+                state.preCrunchDotCount = 0;
+                state.dotAnimProgress = [];
+            }
+        } else {
+            // Normal state – snap visual energy toward actual pending energy
+            state.visualPendingEnergy = forge.pendingEnergy;
+        }
+
+        // ── Derived display values ────────────────────────────────────────────
+        const visualEnergy = state.visualPendingEnergy;
+        const completeDots = state.isCrunching
+            ? state.preCrunchDotCount
+            : Math.floor(visualEnergy / starlingCost);
+        const ringFill = (visualEnergy % starlingCost) / starlingCost; // 0–1
+
+        // ── Draw background track ─────────────────────────────────────────────
+        ctx.save();
+        ctx.globalAlpha = isProducing ? 0.25 : 0.35;
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = ringLineWidth;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(screenPos.x, screenPos.y, ringRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // ── Draw filled arc ───────────────────────────────────────────────────
+        if (ringFill > 0.002 && !state.isCrunching) {
+            const fillAlpha = isProducing ? 0.3 : 0.85;
+            ctx.globalAlpha = fillAlpha;
+            ctx.strokeStyle = isProducing ? '#888888' : color;
+            ctx.lineWidth = ringLineWidth;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(
+                screenPos.x, screenPos.y,
+                ringRadius,
+                startAngle,
+                startAngle + ringFill * Math.PI * 2
+            );
+            ctx.stroke();
+        }
+
+        // ── Draw starling dots ────────────────────────────────────────────────
+        for (let dotIndex = 0; dotIndex < completeDots; dotIndex++) {
+            const dotAngle = startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
+
+            if (state.isCrunching && dotIndex < state.dotAnimProgress.length) {
+                // Animate dot flying from orbit toward forge centre
+                const progress = state.dotAnimProgress[dotIndex];
+                const currentRadius = dotOrbitRadius * (1 - progress);
+                const dotX = screenPos.x + Math.cos(dotAngle) * currentRadius;
+                const dotY = screenPos.y + Math.sin(dotAngle) * currentRadius;
+                const dotAlpha = 1 - progress;
+
+                ctx.globalAlpha = dotAlpha * 0.9;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (!state.isCrunching) {
+                const dotX = screenPos.x + Math.cos(dotAngle) * dotOrbitRadius;
+                const dotY = screenPos.y + Math.sin(dotAngle) * dotOrbitRadius;
+
+                ctx.globalAlpha = isProducing ? 0.4 : 0.9;
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bright outline
+                ctx.globalAlpha = isProducing ? 0.2 : 0.5;
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
     }
 
     /**

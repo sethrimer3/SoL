@@ -806,6 +806,11 @@ export const PHOTON_HERO_CAPTURE_RANGE_PX = 12;          // Distance to actually
 export const PHOTON_LIFETIME_SEC = 60;                   // How long a photon lives before fading
 export const PHOTON_GOLDEN_ANGLE_RAD = 2.39996323;       // Golden angle ≈ 137.508° in radians
 export const PHOTON_ABILITY_COST = 3;                    // Default photons needed to cast an ability
+export const PHOTON_MIRROR_ABSORB_RANGE_PX = 120;        // Range at which mirrors suck in photons
+export const PHOTON_MIRROR_ABSORB_STRENGTH = 250;        // Gravity pull strength for mirrors
+export const PHOTON_MIRROR_CAPTURE_RANGE_PX = 15;        // Distance to actually absorb a photon into a mirror
+export const MIRROR_OVERCHARGE_DURATION_SEC = 5.0;       // How long a mirror stays overcharged after absorbing a photon
+export const MIRROR_OVERCHARGE_ENERGY_MULTIPLIER = 2.0;  // Energy rate multiplier when mirror is overcharged
 
 // ─── Match Timer Constants ───
 export const MATCH_TIME_LIMIT_SEC = 480;                 // 8-minute match time limit
