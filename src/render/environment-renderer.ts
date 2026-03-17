@@ -865,8 +865,8 @@ export class EnvironmentRenderer {
         const starlightBaseAlpha = 0.016;
         const starlightNoiseAlphaScale = 0.026;
         const starlightNoiseOctaves = 2;
-        const viewportWidthPx = context.canvas.clientWidth > 0 ? context.canvas.clientWidth : context.canvas.width;
-        const viewportHeightPx = context.canvas.clientHeight > 0 ? context.canvas.clientHeight : context.canvas.height;
+        const viewportWidthPx = getCanvasScreenWidthPx(context.canvas);
+        const viewportHeightPx = getCanvasScreenHeightPx(context.canvas);
         const screenCenterX = viewportWidthPx * 0.5;
         const screenCenterY = viewportHeightPx * 0.5;
 
