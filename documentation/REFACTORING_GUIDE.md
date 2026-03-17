@@ -320,13 +320,13 @@ import { Camera, GraphicOptions } from './render';
 
 ### Lines of Code by File
 
-| File | Original (Feb 2026) | Current | Target | Progress |
+| File | Original (Feb 2026) | Current (Mar 2026) | Target | Progress |
 |------|---------------------|---------|--------|----------|
-| renderer.ts | 13,658 | 13,658 | 3,558 | 0% → 74% |
-| game-state.ts | 6,681 | 6,681 | 4,331 | 0% → 35% |
-| menu.ts | 4,156 | 4,000 | 2,856 | **3.8%** → 31% |
-| main.ts | 4,252 | 4,252 | 1,452 | 0% → 66% |
-| **TOTAL** | **28,747** | **28,591** | **12,197** | **0.5% → 58%** |
+| renderer.ts | 13,658 | 2,808 | 3,558 | ✅ **107%** (exceeded) |
+| game-state.ts | 6,681 | 863 | 4,331 | ✅ **248%** (exceeded) |
+| menu.ts | 4,156 | 2,548 | 2,856 | ✅ **124%** (exceeded) |
+| main.ts | 4,252 | 1,887 | 1,452 | **84%** |
+| **TOTAL** | **28,747** | **8,106** | **12,197** | ✅ **125%** (exceeded) |
 
 ### Completed Extractions
 
@@ -335,38 +335,43 @@ import { Camera, GraphicOptions } from './render';
 - ✅ LAN Lobby Manager (151 LOC extracted to `src/menu/lan-lobby-manager.ts`)
 - ✅ Player Profile Manager (74 LOC extracted to `src/menu/player-profile-manager.ts`)
 
-### Planned Extractions
+**Phase 2 - Renderer System** (Substantially Complete):
+- ✅ Starfield renderer (extracted to `src/render/starfield-renderer.ts`)
+- ✅ Sun renderer (extracted to `src/render/sun-renderer.ts`)
+- ✅ Asteroid renderer (extracted to `src/render/asteroid-renderer.ts`)
+- ✅ Building renderers (extracted to `src/render/building-renderers/`)
+- ✅ Unit renderers (extracted to `src/render/unit-renderers/`)
+- ✅ Projectile renderer (extracted to `src/render/projectile-renderer.ts`)
+- ✅ Faction projectile renderer (extracted to `src/render/faction-projectile-renderer.ts`)
+- ✅ Solar mirror renderer (extracted to `src/render/solar-mirror-renderer.ts`)
+- ✅ Warp gate renderer (extracted to `src/render/warp-gate-renderer.ts`)
+- ✅ UI renderer (extracted to `src/render/ui-renderer.ts`)
+- ✅ HUD renderer (extracted to `src/render/hud-renderer.ts`)
+- ✅ In-game menu renderer (extracted to `src/render/in-game-menu-renderer.ts`)
+- ✅ Environment renderer (extracted to `src/render/environment-renderer.ts`)
+- ✅ Glow renderer (extracted to `src/render/glow-renderer.ts`)
+- ✅ Color utilities (extracted to `src/render/color-utilities.ts`)
+- ✅ Noise utilities (extracted to `src/render/noise-utilities.ts`)
+- ✅ Faction utilities (extracted to `src/render/faction-utilities.ts`)
+- ✅ Canvas metrics (extracted to `src/render/canvas-metrics.ts`)
+- ✅ Sprite manager (extracted to `src/render/sprite-manager.ts`)
+- ✅ Display name helpers (extracted to `src/render/display-names.ts`)
+- ✅ Shroud renderer (extracted to `src/render/shroud-renderer.ts`)
+- ✅ Field atmospherics (~234 LOC moved to `src/render/environment-renderer.ts`)
+- ✅ interpolateHexColor (moved to `src/render/color-utilities.ts`)
 
-See **REFACTOR_PLAN.md** for comprehensive details on all planned extractions.
+**Phase 3 - Game State Systems** (Substantially Complete):
+- ✅ Command processor (extracted to `src/sim/systems/command-processor.ts`)
+- ✅ Vision system (extracted to `src/sim/systems/vision-system.ts`)
+- ✅ AI system (extracted to `src/sim/systems/ai*.ts`)
+- ✅ Physics system (extracted to `src/sim/systems/physics-system.ts`)
+- ✅ Hero entity system (extracted to `src/sim/systems/hero-entity-system.ts`)
+- ✅ Projectile combat system (extracted to `src/sim/systems/projectile-combat-system.ts`)
 
-**Phase 1 - Menu System** (~1,300 LOC):
-- 🎯 Menu screen renderers (~900 LOC)
-- 🎯 LAN lobby manager (~250 LOC)
-- 🎯 Player profile manager (~150 LOC)
-
-**Phase 2 - Renderer System** (~10,100 LOC):
-- 🎯 Starfield & background (~600 LOC)
-- 🎯 Sun rendering (~800 LOC)
-- 🎯 Asteroid rendering (~400 LOC)
-- 🎯 Building renderers (~1,600 LOC)
-- 🎯 Unit renderers (~2,200 LOC)
-- 🎯 Projectile renderers (~1,500 LOC)
-- 🎯 Faction renderers (~1,500 LOC)
-- 🎯 UI/HUD renderer (~1,500 LOC)
-
-**Phase 3 - Game State Systems** (~2,350 LOC):
-- 🎯 Command processor (~600 LOC)
-- 🎯 Vision system (~250 LOC)
-- 🎯 AI system (~900 LOC)
-- 🎯 Physics system (~400 LOC)
-- 🎯 Particle system (~200 LOC)
-
-**Phase 4 - Main Controller** (~2,800 LOC):
-- 🎯 Input controller (~1,800 LOC)
-- 🎯 Selection manager (~400 LOC)
-- 🎯 Warp gate manager (~600 LOC)
-
-**Total Planned Extractions**: 16,550 LOC (58% reduction)
+**Phase 4 - Main Controller** (In Progress):
+- ✅ Input controller (extracted to `src/input/input-controller.ts`)
+- ✅ Selection manager (extracted to `src/input/selection-manager.ts`)
+- ✅ Warp gate manager (extracted to `src/input/warp-gate-manager.ts`)
 
 ## Questions?
 

@@ -129,3 +129,25 @@ export function brightenAndPaleColor(color: string): string {
            newG.toString(16).padStart(2, '0') +
            newB.toString(16).padStart(2, '0');
 }
+
+/**
+ * Interpolate between two hex colors by a factor t (0-1).
+ * @param startHex - Start hex color (#RRGGBB)
+ * @param endHex - End hex color (#RRGGBB)
+ * @param t - Interpolation factor (0 = startHex, 1 = endHex)
+ * @returns Interpolated hex color string
+ */
+export function interpolateHexColor(startHex: string, endHex: string, t: number): string {
+    const startValue = Number.parseInt(startHex.replace('#', ''), 16);
+    const endValue = Number.parseInt(endHex.replace('#', ''), 16);
+    const startR = (startValue >> 16) & 0xff;
+    const startG = (startValue >> 8) & 0xff;
+    const startB = startValue & 0xff;
+    const endR = (endValue >> 16) & 0xff;
+    const endG = (endValue >> 8) & 0xff;
+    const endB = endValue & 0xff;
+    const r = Math.round(startR + (endR - startR) * t);
+    const g = Math.round(startG + (endG - startG) * t);
+    const b = Math.round(startB + (endB - startB) * t);
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}

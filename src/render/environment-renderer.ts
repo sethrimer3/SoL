@@ -11,6 +11,7 @@ import {
 } from '../game-core';
 import * as Constants from '../constants';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
+import { valueNoise2D, fractalNoise2D } from './noise-utilities';
 
 export interface EnvironmentRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -27,6 +28,10 @@ export interface EnvironmentRendererContext {
     // Coordinate transform
     worldToScreen(worldPos: Vector2D): Vector2D;
     isWithinViewBounds(worldPos: Vector2D, margin?: number): boolean;
+
+    // Viewport helpers
+    getViewportWidthPx(): number;
+    getViewportHeightPx(): number;
 
     // Drawing helpers passed from GameRenderer
     getFactionColor(faction: any): string;
@@ -808,6 +813,252 @@ export class EnvironmentRenderer {
             ctx.fillRect(-sunScreenPos.x, -sunScreenPos.y, width, height);
             ctx.restore();
         }
+
+        ctx.restore();
+    }
+
+    /**
+     * Draw experimental field atmospheric effects.
+     * Renders nebula overlays, aurora ribbons, caustic light bands, sun halos/streaks,
+     * sparkle glints, starlight veil, edge bloom, and a soft vignette.
+     */
+    public drawExperimentalFieldAtmospherics(
+        game: GameState,
+        screenWidth: number,
+        screenHeight: number,
+        context: EnvironmentRendererContext
+    ): void {
+        const ctx = context.ctx;
+        // game.gameTime is maintained in simulation seconds.
+        const gameTimeSec = game.gameTime;
+        const isUltraQuality = context.graphicsQuality === 'ultra';
+        const isHighQuality = context.graphicsQuality === 'high';
+        const shouldRenderAtmosphericSunStreaks = isUltraQuality || isHighQuality;
+        const qualityIntensity = isUltraQuality ? 1 : isHighQuality ? 0.82 : context.graphicsQuality === 'medium' ? 0.66 : 0.52;
+        const glintCount = isUltraQuality ? 32 : isHighQuality ? 24 : context.graphicsQuality === 'medium' ? 14 : 8;
+        const vignetteAlpha = isUltraQuality ? 0.16 : isHighQuality ? 0.13 : context.graphicsQuality === 'medium' ? 0.1 : 0.08;
+        const causticLayerCount = isUltraQuality ? 3 : isHighQuality ? 2 : 1;
+        const causticAlphaBase = isUltraQuality ? 0.07 : isHighQuality ? 0.055 : context.graphicsQuality === 'medium' ? 0.045 : 0.035;
+        const edgeBloomAlpha = isUltraQuality ? 0.115 : isHighQuality ? 0.09 : context.graphicsQuality === 'medium' ? 0.072 : 0.058;
+        const causticDriftSpeedXPerSec = 0.03;
+        const causticDriftSpeedYPerSec = 0.024;
+        const causticDriftRangeXScale = 0.7;
+        const causticDriftRangeYScale = 0.4;
+        const causticBandBaseWidthScale = 0.2;
+        const causticBandLayerWidthScale = 0.05;
+        const causticBandQualityWidthScale = 0.05;
+        const causticSeedBase = 19.2;
+        const causticSeedLayerOffset = 31.5;
+        const causticLayerAlphaFalloff = 0.2;
+        const causticGradientTopOffsetScale = 0.35;
+        const causticGradientBottomOffsetScale = 1.35;
+        const causticMagentaBlendStop = 0.62;
+        const causticMagentaAlphaScale = 0.88;
+        const edgeBloomInnerRadiusScale = 0.2;
+        const edgeBloomOuterRadiusScale = 0.88;
+        const edgeBloomMidStop = 0.7;
+        const edgeBloomMidAlphaScale = 0.45;
+        const cameraNoiseWorldX = context.camera.x * 0.0012;
+        const cameraNoiseWorldY = context.camera.y * 0.0012;
+        const nebulaBaseRadiusScale = 0.78;
+        const nebulaQualityRadiusScale = 0.24;
+        const ribbonLayerCount = 2;
+        const nebulaBaseAlpha = 0.095;
+        const nebulaMidAlpha = 0.065;
+        const ribbonCenterAlpha = 0.065;
+        const starlightBaseAlpha = 0.016;
+        const starlightNoiseAlphaScale = 0.026;
+        const starlightNoiseOctaves = 2;
+        const screenCenterX = context.getViewportWidthPx() * 0.5;
+        const screenCenterY = context.getViewportHeightPx() * 0.5;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+
+        const nebulaNoiseValue = fractalNoise2D(
+            cameraNoiseWorldX * 0.8 + gameTimeSec * 0.02,
+            cameraNoiseWorldY * 0.8 - gameTimeSec * 0.015,
+            3
+        );
+        const nebulaCenterScreenX = screenWidth * (0.5 + (nebulaNoiseValue - 0.5) * 0.28);
+        const nebulaCenterScreenY = screenHeight * (
+            0.44 + (valueNoise2D(cameraNoiseWorldX + 7.31, cameraNoiseWorldY + gameTimeSec * 0.01) - 0.5) * 0.22
+        );
+        const nebulaRadiusPx = Math.max(screenWidth, screenHeight) * (nebulaBaseRadiusScale + qualityIntensity * nebulaQualityRadiusScale);
+        const nebulaGradient = ctx.createRadialGradient(
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            0,
+            nebulaCenterScreenX,
+            nebulaCenterScreenY,
+            nebulaRadiusPx
+        );
+        nebulaGradient.addColorStop(0, `rgba(156, 228, 255, ${nebulaBaseAlpha * qualityIntensity})`);
+        nebulaGradient.addColorStop(0.55, `rgba(173, 130, 255, ${nebulaMidAlpha * qualityIntensity})`);
+        nebulaGradient.addColorStop(1, 'rgba(8, 18, 42, 0)');
+        ctx.fillStyle = nebulaGradient;
+        ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (let layerIndex = 0; layerIndex < ribbonLayerCount; layerIndex += 1) {
+            const layerSeed = layerIndex * 29.17;
+            const leftToRightDriftPx = (valueNoise2D(cameraNoiseWorldX + layerSeed + gameTimeSec * 0.04, cameraNoiseWorldY - layerSeed) - 0.5) * screenWidth * 0.24;
+            const ribbonCenterYPx = screenHeight * (
+                0.21 + layerIndex * 0.28
+                + (fractalNoise2D(cameraNoiseWorldX * 0.65 + layerSeed, cameraNoiseWorldY * 0.65 - gameTimeSec * 0.02, 3) - 0.5) * 0.18
+            );
+            const ribbonHeightPx = screenHeight * (0.1 + layerIndex * 0.03 + qualityIntensity * 0.02);
+            const waveMagnitudePx = screenHeight * (0.06 + layerIndex * 0.015);
+            const waveOffsetPx = Math.sin(gameTimeSec * (0.26 + layerIndex * 0.09) + layerSeed) * waveMagnitudePx;
+
+            const ribbonGradient = ctx.createLinearGradient(0, ribbonCenterYPx - ribbonHeightPx, 0, ribbonCenterYPx + ribbonHeightPx);
+            ribbonGradient.addColorStop(0, 'rgba(114, 243, 255, 0)');
+            ribbonGradient.addColorStop(0.5, `rgba(114, 243, 255, ${ribbonCenterAlpha * qualityIntensity})`);
+            ribbonGradient.addColorStop(1, 'rgba(195, 116, 255, 0)');
+
+            ctx.fillStyle = ribbonGradient;
+            ctx.beginPath();
+            ctx.moveTo(-screenWidth * 0.2 + leftToRightDriftPx, ribbonCenterYPx - waveOffsetPx);
+            ctx.bezierCurveTo(
+                screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx - waveMagnitudePx,
+                screenWidth * 0.54 + leftToRightDriftPx,
+                ribbonCenterYPx + waveMagnitudePx,
+                screenWidth * 1.2 + leftToRightDriftPx,
+                ribbonCenterYPx + waveOffsetPx
+            );
+            ctx.lineTo(screenWidth * 1.2 + leftToRightDriftPx, ribbonCenterYPx + ribbonHeightPx + waveOffsetPx);
+            ctx.bezierCurveTo(
+                screenWidth * 0.54 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx + waveMagnitudePx,
+                screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx - waveMagnitudePx,
+                -screenWidth * 0.2 + leftToRightDriftPx,
+                ribbonCenterYPx + ribbonHeightPx - waveOffsetPx
+            );
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        const starlightVeilAlpha = (
+            starlightBaseAlpha
+                + fractalNoise2D(
+                cameraNoiseWorldX + gameTimeSec * 0.013,
+                cameraNoiseWorldY - gameTimeSec * 0.011,
+                starlightNoiseOctaves
+            ) * starlightNoiseAlphaScale
+        ) * qualityIntensity;
+        ctx.fillStyle = `rgba(208, 222, 255, ${starlightVeilAlpha})`;
+        ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (let layerIndex = 0; layerIndex < causticLayerCount; layerIndex += 1) {
+            const causticSeed = causticSeedBase + layerIndex * causticSeedLayerOffset;
+            const driftXPx = (valueNoise2D(cameraNoiseWorldX + causticSeed + gameTimeSec * causticDriftSpeedXPerSec, cameraNoiseWorldY - causticSeed) - 0.5) * screenWidth * causticDriftRangeXScale;
+            const driftYPx = (valueNoise2D(cameraNoiseWorldX - causticSeed, cameraNoiseWorldY + causticSeed + gameTimeSec * causticDriftSpeedYPerSec) - 0.5) * screenHeight * causticDriftRangeYScale;
+            const bandWidthPx = Math.max(screenWidth, screenHeight) * (
+                causticBandBaseWidthScale
+                + layerIndex * causticBandLayerWidthScale
+                + qualityIntensity * causticBandQualityWidthScale
+            );
+            const bandAlpha = causticAlphaBase * (1 - layerIndex * causticLayerAlphaFalloff) * qualityIntensity;
+            const bandGradient = ctx.createLinearGradient(
+                screenCenterX - bandWidthPx + driftXPx,
+                -screenHeight * causticGradientTopOffsetScale + driftYPx,
+                screenCenterX + bandWidthPx + driftXPx,
+                screenHeight * causticGradientBottomOffsetScale + driftYPx
+            );
+            bandGradient.addColorStop(0, 'rgba(82, 220, 255, 0)');
+            bandGradient.addColorStop(0.3, `rgba(82, 220, 255, ${bandAlpha})`);
+            bandGradient.addColorStop(causticMagentaBlendStop, `rgba(222, 152, 255, ${bandAlpha * causticMagentaAlphaScale})`);
+            bandGradient.addColorStop(1, 'rgba(222, 152, 255, 0)');
+            ctx.fillStyle = bandGradient;
+            ctx.fillRect(0, 0, screenWidth, screenHeight);
+        }
+
+        const edgeBloomGradient = ctx.createRadialGradient(
+            screenCenterX,
+            screenCenterY,
+            Math.min(screenWidth, screenHeight) * edgeBloomInnerRadiusScale,
+            screenCenterX,
+            screenCenterY,
+            Math.max(screenWidth, screenHeight) * edgeBloomOuterRadiusScale
+        );
+        edgeBloomGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        edgeBloomGradient.addColorStop(edgeBloomMidStop, `rgba(83, 44, 154, ${edgeBloomAlpha * edgeBloomMidAlphaScale})`);
+        edgeBloomGradient.addColorStop(1, `rgba(16, 36, 88, ${edgeBloomAlpha})`);
+        ctx.fillStyle = edgeBloomGradient;
+        ctx.fillRect(0, 0, screenWidth, screenHeight);
+
+        for (const sun of game.suns) {
+            if (sun.type === 'lad') {
+                continue;
+            }
+            const sunScreenPos = context.worldToScreen(sun.position);
+            if (sunScreenPos.x < -220 || sunScreenPos.x > screenWidth + 220 || sunScreenPos.y < -220 || sunScreenPos.y > screenHeight + 220) {
+                continue;
+            }
+            const sunDistanceToCenterPx = Math.hypot(sunScreenPos.x - screenCenterX, sunScreenPos.y - screenCenterY);
+            const sunCenterFalloff = Math.max(0.12, 1 - sunDistanceToCenterPx / (Math.max(screenWidth, screenHeight) * 0.9));
+            const haloRadiusPx = Math.max(180, sun.radius * context.zoom * (4 + qualityIntensity * 2.4));
+            const haloGradient = ctx.createRadialGradient(
+                sunScreenPos.x,
+                sunScreenPos.y,
+                0,
+                sunScreenPos.x,
+                sunScreenPos.y,
+                haloRadiusPx
+            );
+            haloGradient.addColorStop(0, `rgba(255, 241, 198, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(0.55, `rgba(255, 183, 140, ${0.05 * qualityIntensity * sunCenterFalloff})`);
+            haloGradient.addColorStop(1, 'rgba(255, 120, 105, 0)');
+            ctx.fillStyle = haloGradient;
+            ctx.beginPath();
+            ctx.arc(sunScreenPos.x, sunScreenPos.y, haloRadiusPx, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (shouldRenderAtmosphericSunStreaks) {
+                const streakLengthPx = Math.max(screenWidth, screenHeight) * (0.2 + 0.18 * qualityIntensity * sunCenterFalloff);
+                const streakAngleRad = Math.atan2(screenCenterY - sunScreenPos.y, screenCenterX - sunScreenPos.x);
+                const streakEndX = sunScreenPos.x + Math.cos(streakAngleRad) * streakLengthPx;
+                const streakEndY = sunScreenPos.y + Math.sin(streakAngleRad) * streakLengthPx;
+                const streakGradient = ctx.createLinearGradient(sunScreenPos.x, sunScreenPos.y, streakEndX, streakEndY);
+                streakGradient.addColorStop(0, `rgba(255, 223, 176, ${0.09 * qualityIntensity * sunCenterFalloff})`);
+                streakGradient.addColorStop(1, 'rgba(255, 223, 176, 0)');
+                ctx.strokeStyle = streakGradient;
+                ctx.lineWidth = 2.2 + qualityIntensity * 1.8;
+                ctx.beginPath();
+                ctx.moveTo(sunScreenPos.x, sunScreenPos.y);
+                ctx.lineTo(streakEndX, streakEndY);
+                ctx.stroke();
+            }
+        }
+
+        for (let glintIndex = 0; glintIndex < glintCount; glintIndex += 1) {
+            const glintSeed = glintIndex * 73.941 + 14.287;
+            const glintPosX = valueNoise2D(cameraNoiseWorldX + glintSeed, cameraNoiseWorldY - glintSeed) * screenWidth;
+            const glintPosY = valueNoise2D(cameraNoiseWorldX - glintSeed * 0.7, cameraNoiseWorldY + glintSeed * 1.1) * screenHeight;
+            const glintNoise = fractalNoise2D(cameraNoiseWorldX + glintSeed * 0.11, cameraNoiseWorldY + glintSeed * 0.13, 2);
+            const pulseValue = 0.5 + 0.5 * Math.sin(gameTimeSec * (0.65 + glintNoise) + glintSeed);
+            const glintAlpha = (0.025 + pulseValue * 0.06) * qualityIntensity;
+            const glintRadiusPx = 0.8 + glintNoise * 1.6 + qualityIntensity * 0.7;
+            ctx.fillStyle = `rgba(228, 242, 255, ${glintAlpha})`;
+            ctx.beginPath();
+            ctx.arc(glintPosX, glintPosY, glintRadiusPx, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.globalCompositeOperation = 'multiply';
+        const vignetteGradient = ctx.createRadialGradient(
+            screenCenterX,
+            screenCenterY,
+            Math.min(screenWidth, screenHeight) * 0.12,
+            screenCenterX,
+            screenCenterY,
+            Math.max(screenWidth, screenHeight) * 0.72
+        );
+        vignetteGradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
+        vignetteGradient.addColorStop(1, `rgba(8, 12, 28, ${vignetteAlpha})`);
+        ctx.fillStyle = vignetteGradient;
+        ctx.fillRect(0, 0, screenWidth, screenHeight);
 
         ctx.restore();
     }
