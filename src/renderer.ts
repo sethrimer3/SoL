@@ -7,7 +7,8 @@ import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
 
-import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
+import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha, interpolateHexColor } from './render/color-utilities';
+import { ScreenShakeController } from './render/screen-shake';
 import { getFactionColor } from './render/faction-utilities';
 import {
     getShadeBrightnessBoost as _getShadeBrightnessBoost,
@@ -101,15 +102,14 @@ export class GameRenderer {
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
-    public screenShakeEnabled: boolean = true; // Screen shake for explosions
+    private readonly screenShake = new ScreenShakeController();
+    get screenShakeEnabled(): boolean { return this.screenShake.isEnabled; }
+    set screenShakeEnabled(value: boolean) { this.screenShake.isEnabled = value; }
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
     public infoBoxOpacity: number = 0.5; // Opacity for top-right info boxes
     public infoBoxSize: number = 1.0; // Size multiplier for top-right info boxes (1.0 = 100%)
     public soundVolume: number = 1; // Sound effect volume for in-game controls
     public musicVolume: number = 1; // Music volume for in-game controls
-    private screenShakeIntensity: number = 0; // Current screen shake intensity
-    private screenShakeTimer: number = 0; // Screen shake timer
-    private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
     public colorblindMode: boolean = true; // Colorblind mode - shows enemies as diamonds instead of circles
 
     private readonly HERO_SPRITE_SCALE = 4.2;
@@ -433,11 +433,11 @@ export class GameRenderer {
         // Apply screen shake offset if enabled
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
-        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+        if (this.screenShakeEnabled && this.screenShake.getIntensity() > 0) {
             // Random shake direction
             const angle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
-            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+            shakeOffsetX = Math.cos(angle) * this.screenShake.getIntensity();
+            shakeOffsetY = Math.sin(angle) * this.screenShake.getIntensity();
         }
         
         return new Vector2D(
@@ -452,10 +452,10 @@ export class GameRenderer {
 
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
-        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+        if (this.screenShakeEnabled && this.screenShake.getIntensity() > 0) {
             const angle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
-            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+            shakeOffsetX = Math.cos(angle) * this.screenShake.getIntensity();
+            shakeOffsetY = Math.sin(angle) * this.screenShake.getIntensity();
         }
 
         out.x = centerX + (worldX - this.camera.x) * this.zoom + shakeOffsetX;
@@ -966,7 +966,7 @@ export class GameRenderer {
                 detectAndDrawEdges: (imageData, width, height, offsetX, offsetY, color) =>
                     this.detectAndDrawEdges(imageData, width, height, offsetX, offsetY, color),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-                shakenExplosions: this.shakenExplosions,
+                shakenExplosions: this.screenShake.getShakenExplosions(),
                 triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
             };
             return this._cachedBuildingCtx;
@@ -981,7 +981,7 @@ export class GameRenderer {
         c.canvasHeight = this.canvas.height;
         c.viewingPlayer = this.viewingPlayer;
         c.highlightedButtonIndex = this.highlightedButtonIndex;
-        c.shakenExplosions = this.shakenExplosions;
+        c.shakenExplosions = this.screenShake.getShakenExplosions();
         return c;
     }
 
@@ -2580,29 +2580,14 @@ export class GameRenderer {
      * Trigger screen shake effect
      */
     triggerScreenShake(intensity: number = Constants.SCREEN_SHAKE_INTENSITY): void {
-        if (!this.screenShakeEnabled) return;
-        
-        // Set shake intensity (don't override if already shaking with higher intensity)
-        this.screenShakeIntensity = Math.max(this.screenShakeIntensity, intensity);
-        this.screenShakeTimer = Constants.SCREEN_SHAKE_DURATION;
+        this.screenShake.trigger(intensity);
     }
 
     /**
      * Update screen shake effect
      */
     updateScreenShake(deltaTime: number): void {
-        if (this.screenShakeTimer > 0) {
-            this.screenShakeTimer -= deltaTime;
-            
-            // Apply decay to shake intensity
-            this.screenShakeIntensity *= Constants.SCREEN_SHAKE_DECAY;
-            
-            // Stop shaking when timer runs out or intensity is too low
-            if (this.screenShakeTimer <= 0 || this.screenShakeIntensity < 0.1) {
-                this.screenShakeIntensity = 0;
-                this.screenShakeTimer = 0;
-            }
-        }
+        this.screenShake.update(deltaTime);
     }
 
     /**
@@ -2637,17 +2622,6 @@ export class GameRenderer {
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
-        const startValue = Number.parseInt(startHex.replace('#', ''), 16);
-        const endValue = Number.parseInt(endHex.replace('#', ''), 16);
-        const startR = (startValue >> 16) & 0xff;
-        const startG = (startValue >> 8) & 0xff;
-        const startB = startValue & 0xff;
-        const endR = (endValue >> 16) & 0xff;
-        const endG = (endValue >> 8) & 0xff;
-        const endB = endValue & 0xff;
-        const r = Math.round(startR + (endR - startR) * t);
-        const g = Math.round(startG + (endG - startG) * t);
-        const b = Math.round(startB + (endB - startB) * t);
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+        return interpolateHexColor(startHex, endHex, t);
     }
 }
