@@ -34,6 +34,7 @@ export class Unit {
     stunDuration: number = 0; // Duration of stun effect in seconds
     isFrozen: boolean = false; // Flag to mark unit as frozen (immune to damage, can't be targeted)
     lineOfSight: number; // Line of sight range (calculated from attack range)
+    photonCount: number = 0; // Absorbed photons available for abilities (hero units only)
     
     constructor(
         public position: Vector2D,
@@ -428,7 +429,19 @@ export class Unit {
      * @returns true if ability was used, false if on cooldown
      */
     useAbility(direction: Vector2D): boolean {
-        // Check if ability is ready
+        // Hero units require photons to cast abilities
+        if (this.isHero) {
+            if (this.photonCount < Constants.PHOTON_ABILITY_COST) {
+                return false;
+            }
+            // Spend photons
+            this.photonCount -= Constants.PHOTON_ABILITY_COST;
+            // Set a short visual cooldown so the bar shows briefly
+            this.abilityCooldown = 0.5;
+            return true;
+        }
+
+        // Non-hero units use time-based cooldown
         if (this.abilityCooldown > 0) {
             return false;
         }

@@ -45,6 +45,7 @@ export class Player {
     unitsCreated: number = 0;
     unitsLost: number = 0;
     energyGathered: number = 0;
+    damageScore: number = 0; // Score accumulated by destroying enemy entities (for time-based victory)
 
     constructor(
         public name: string,

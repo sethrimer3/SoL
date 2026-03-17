@@ -513,6 +513,10 @@ export class UIRenderer {
         this.hudRenderer.drawProductionProgress(game, context);
     }
 
+    public drawMatchTimer(game: GameState, context: UIRendererContext): void {
+        this.hudRenderer.drawMatchTimer(game, context);
+    }
+
     public drawInGameMenuOverlay(context: UIRendererContext): void {
         this.menuRenderer.drawInGameMenuOverlay(context);
     }
