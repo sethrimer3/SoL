@@ -2,15 +2,17 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
-import { SparkleParticle, DeathParticle } from './sim/entities/particles';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, Unit, Marine, Grave, Starling, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, Driller, Dagger, Beam, Mortar, Preist, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
-import { renderLensFlare } from './rendering/LensFlare';
 
 import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
 import { getFactionColor } from './render/faction-utilities';
+import {
+    getShadeBrightnessBoost as _getShadeBrightnessBoost,
+    applyShadeBrightening as _applyShadeBrightening,
+} from './render/shade-brightness';
 import {
     getHeroSpritePath as _getHeroSpritePath,
     getForgeSpritePath as _getForgeSpritePath,
@@ -1197,78 +1199,12 @@ export class GameRenderer {
         return adjustColorBrightness(color, factor);
     }
 
-    /**
-     * Calculate brightness boost for a position in shade based on proximity to player units/structures
-     * Returns a factor from 0 (no boost) to 1 (maximum boost)
-     */
     private getShadeBrightnessBoost(position: Vector2D, game: GameState, player: Player): number {
-        if (!player) {
-            return 0;
-        }
-
-        let minDistance = Infinity;
-
-        // Check distance to player units
-        for (const unit of player.units) {
-            const distance = unit.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                // Early exit if we're already very close (optimization)
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Check distance to player forge
-        if (player.stellarForge) {
-            const distance = player.stellarForge.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Check distance to player buildings (mirrors, etc.)
-        for (const building of player.buildings) {
-            const distance = building.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Calculate brightness boost based on distance (smooth falloff)
-        if (minDistance >= Constants.SHADE_BRIGHTNESS_RADIUS) {
-            return 0;
-        }
-
-        // Smooth falloff: 1.0 at distance 0, 0.0 at SHADE_BRIGHTNESS_RADIUS
-        const falloff = 1.0 - (minDistance / Constants.SHADE_BRIGHTNESS_RADIUS);
-        return falloff * falloff; // Quadratic falloff for smoother transition
+        return _getShadeBrightnessBoost(position, game, player);
     }
 
-    /**
-     * Apply shade brightening effect to a color based on proximity to player units
-     * Only applies the boost if the position is in shade
-     */
     private applyShadeBrightening(color: string, position: Vector2D, game: GameState, isInShade: boolean): string {
-        if (!isInShade || !this.viewingPlayer) {
-            return color;
-        }
-
-        const brightnessBoost = this.getShadeBrightnessBoost(position, game, this.viewingPlayer);
-        if (brightnessBoost <= 0) {
-            return color;
-        }
-
-        // Apply brightness boost (1.0 = original, higher = brighter)
-        const boostFactor = 1.0 + (Constants.SHADE_BRIGHTNESS_BOOST * brightnessBoost);
-        return this.adjustColorBrightness(color, boostFactor);
+        return _applyShadeBrightening(color, position, game, isInShade, this.viewingPlayer);
     }
 
     /**

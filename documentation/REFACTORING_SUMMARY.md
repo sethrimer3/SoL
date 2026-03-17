@@ -43,8 +43,9 @@ Successfully refactored large monolithic files in the SoL codebase to improve or
 ## Metrics
 
 ### Code Reduction
+- **renderer.ts**: 3,166 → 2,686 LOC (-480 lines, -15%) *(March 2026 session)*
 - **menu.ts**: 4,665 → 4,544 LOC (-121 lines, -2.6%)
-- **Total Extracted**: 331 LOC into reusable modules
+- **Total Extracted**: 811+ LOC into reusable modules
 
 ### Future Potential
 Identified ~10,000 LOC of extraction opportunities:
@@ -68,6 +69,8 @@ Identified ~10,000 LOC of extraction opportunities:
 src/
 ├── render/
 │   ├── camera.ts ✅ NEW
+│   ├── asset-path-helpers.ts ✅ NEW (March 2026)
+│   ├── shade-brightness.ts ✅ NEW (March 2026)
 │   └── index.ts (updated exports)
 ├── menu/
 │   ├── ui-helpers.ts ✅ NEW
