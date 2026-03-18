@@ -55,10 +55,10 @@ export class ForgeRenderer {
     // Sunlight ring indicator animation constants
     /** Energy units drained per second during crunch animation */
     private readonly RING_DRAIN_RATE_PER_SEC = Constants.STARLING_COST_PER_ENERGY * 8;
-    /** Seconds of stagger between each dot's fly-in animation start */
-    private readonly DOT_ANIMATION_STAGGER_DELAY_SEC = 0.08;
     /** Speed multiplier applied to crunch progress to drive dot fly-in */
     private readonly DOT_ANIMATION_SPEED_MULTIPLIER = 2.5;
+    /** Clockwise rotations each dot sweeps through as it spirals to the centre */
+    private readonly DOT_SWIRL_ROTATIONS = 0.75;
     /** Angular speed (radians/sec) at which dots slide to their target positions */
     private readonly DOT_SLIDE_SPEED_RAD_PER_SEC = 12;
 
@@ -286,17 +286,13 @@ export class ForgeRenderer {
                 state.visualPendingEnergy - this.RING_DRAIN_RATE_PER_SEC * deltaTime
             );
 
-            // Advance dot fly-in animations (later dots start slightly delayed).
+            // Advance dot fly-in animations – all dots fly simultaneously.
             // Use Math.max to prevent progress from decreasing when the crunch
             // transitions from 'suck' to 'wave' phase (which resets getPhaseProgress()).
+            const crunchProgress = crunch ? crunch.getPhaseProgress() : 1;
+            const sharedProgress = Math.min(1, crunchProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER);
             for (let i = 0; i < state.dotAnimProgress.length; i++) {
-                const delaySec = i * this.DOT_ANIMATION_STAGGER_DELAY_SEC;
-                const crunchProgress = crunch ? crunch.getPhaseProgress() : 1;
-                const effectiveProgress = Math.max(0, crunchProgress - delaySec);
-                state.dotAnimProgress[i] = Math.max(
-                    state.dotAnimProgress[i],
-                    Math.min(1, effectiveProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER)
-                );
+                state.dotAnimProgress[i] = Math.max(state.dotAnimProgress[i], sharedProgress);
             }
 
             if (!crunchIsActive) {
@@ -388,11 +384,12 @@ export class ForgeRenderer {
             if (state.isCrunching && dotIndex < state.dotAnimProgress.length) {
                 // Use static target angle during crunch (no sliding)
                 const dotAngle = startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
-                // Animate dot flying from orbit toward forge centre
+                // Animate dot spiralling clockwise toward forge centre
                 const progress = state.dotAnimProgress[dotIndex];
+                const swirlAngle = dotAngle + progress * this.DOT_SWIRL_ROTATIONS * Math.PI * 2;
                 const currentRadius = dotOrbitRadius * (1 - progress);
-                const dotX = screenPos.x + Math.cos(dotAngle) * currentRadius;
-                const dotY = screenPos.y + Math.sin(dotAngle) * currentRadius;
+                const dotX = screenPos.x + Math.cos(swirlAngle) * currentRadius;
+                const dotY = screenPos.y + Math.sin(swirlAngle) * currentRadius;
                 const dotAlpha = 1 - progress;
 
                 ctx.globalAlpha = dotAlpha * 0.9;
