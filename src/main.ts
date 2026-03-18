@@ -26,7 +26,7 @@ import {
     getPlayerMMRData,
     updatePlayerMMR
 } from './replay';
-import { savePersistedSettings } from './menu/settings-persistence';
+import { savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 
 class GameController {
     public game: GameState | null = null;
@@ -705,34 +705,13 @@ class GameController {
     }
 
     /**
-     * Persist current in-game settings (graphics quality, volumes, etc.)
-     * back to the menu settings object and localStorage.
+     * Sync renderer state back to the menu settings object, then persist
+     * everything to localStorage so that in-game changes survive restarts.
      */
-    private persistInGameSettings(): void {
+    private syncAndPersistInGameSettings(): void {
         const settings = this.menu.getSettings();
         settings.graphicsQuality = this.renderer.graphicsQuality;
-        savePersistedSettings({
-            difficulty: settings.difficulty,
-            soundEnabled: settings.soundEnabled,
-            musicEnabled: settings.musicEnabled,
-            soundVolume: settings.soundVolume,
-            musicVolume: settings.musicVolume,
-            isBattleStatsInfoEnabled: settings.isBattleStatsInfoEnabled,
-            screenShakeEnabled: settings.screenShakeEnabled,
-            playerColor: settings.playerColor,
-            enemyColor: settings.enemyColor,
-            allyColor: settings.allyColor,
-            enemy2Color: settings.enemy2Color,
-            colorScheme: settings.colorScheme,
-            damageDisplayMode: settings.damageDisplayMode,
-            healthDisplayMode: settings.healthDisplayMode,
-            graphicsQuality: settings.graphicsQuality,
-            isExperimentalGraphicsEnabled: settings.isExperimentalGraphicsEnabled,
-            isStarNestEnabled: settings.isStarNestEnabled,
-            isAdaptiveQualityEnabled: settings.isAdaptiveQualityEnabled,
-            useSvgSprites: settings.useSvgSprites,
-            isPauseOnFocusLossEnabled: settings.isPauseOnFocusLossEnabled,
-        });
+        savePersistedSettings(extractPersistedSettings(settings));
     }
 
     private getWarpGateManagerContext(): WarpGateManagerContext {
@@ -810,7 +789,7 @@ class GameController {
             getBuildingAbilityAnchorScreen: () => this.getBuildingAbilityAnchorScreen(),
             cancelMirrorWarpGateModeAndDeselectMirrors: () => this.cancelMirrorWarpGateModeAndDeselectMirrors(),
             clearPathPreview: () => this.clearPathPreview(),
-            onInGameSettingsChanged: () => this.persistInGameSettings(),
+            onInGameSettingsChanged: () => this.syncAndPersistInGameSettings(),
         };
     }
 

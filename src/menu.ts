@@ -21,7 +21,7 @@ import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
 import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
 import { MatchmakingController } from './menu/matchmaking-controller';
-import { loadPersistedSettings, savePersistedSettings, PersistedSettings } from './menu/settings-persistence';
+import { loadPersistedSettings, savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -672,28 +672,7 @@ export class MainMenu {
      * Save the current persistable settings to localStorage.
      */
     private persistSettings(): void {
-        savePersistedSettings({
-            difficulty: this.settings.difficulty,
-            soundEnabled: this.settings.soundEnabled,
-            musicEnabled: this.settings.musicEnabled,
-            soundVolume: this.settings.soundVolume,
-            musicVolume: this.settings.musicVolume,
-            isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
-            screenShakeEnabled: this.settings.screenShakeEnabled,
-            playerColor: this.settings.playerColor,
-            enemyColor: this.settings.enemyColor,
-            allyColor: this.settings.allyColor,
-            enemy2Color: this.settings.enemy2Color,
-            colorScheme: this.settings.colorScheme,
-            damageDisplayMode: this.settings.damageDisplayMode,
-            healthDisplayMode: this.settings.healthDisplayMode,
-            graphicsQuality: this.settings.graphicsQuality,
-            isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
-            isStarNestEnabled: this.settings.isStarNestEnabled,
-            isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
-            useSvgSprites: this.settings.useSvgSprites,
-            isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
-        });
+        savePersistedSettings(extractPersistedSettings(this.settings));
     }
 
     /**

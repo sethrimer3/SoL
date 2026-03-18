@@ -66,6 +66,35 @@ export function savePersistedSettings(settings: PersistedSettings): void {
 }
 
 /**
+ * Extract the persistable subset from a full settings object.
+ * Accepts any object that has at least the PersistedSettings fields.
+ */
+export function extractPersistedSettings(settings: PersistedSettings): PersistedSettings {
+    return {
+        difficulty: settings.difficulty,
+        soundEnabled: settings.soundEnabled,
+        musicEnabled: settings.musicEnabled,
+        soundVolume: settings.soundVolume,
+        musicVolume: settings.musicVolume,
+        isBattleStatsInfoEnabled: settings.isBattleStatsInfoEnabled,
+        screenShakeEnabled: settings.screenShakeEnabled,
+        playerColor: settings.playerColor,
+        enemyColor: settings.enemyColor,
+        allyColor: settings.allyColor,
+        enemy2Color: settings.enemy2Color,
+        colorScheme: settings.colorScheme,
+        damageDisplayMode: settings.damageDisplayMode,
+        healthDisplayMode: settings.healthDisplayMode,
+        graphicsQuality: settings.graphicsQuality,
+        isExperimentalGraphicsEnabled: settings.isExperimentalGraphicsEnabled,
+        isStarNestEnabled: settings.isStarNestEnabled,
+        isAdaptiveQualityEnabled: settings.isAdaptiveQualityEnabled,
+        useSvgSprites: settings.useSvgSprites,
+        isPauseOnFocusLossEnabled: settings.isPauseOnFocusLossEnabled,
+    };
+}
+
+/**
  * Check whether previously saved settings exist in localStorage.
  */
 export function hasSavedSettings(): boolean {
