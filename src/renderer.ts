@@ -1475,7 +1475,7 @@ export class GameRenderer {
         // Draw suns
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
-                if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
+                if (this.isWithinViewBounds(sun.position, sun.radius * 12)) {
                     const sunScreenPos = this.worldToScreen(sun.position);
                     const sunScreenRadius = sun.radius * this.zoom;
                     const sunSpritePath = this.getGraphicAssetPath('centralSun');
@@ -1530,8 +1530,13 @@ export class GameRenderer {
                     const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06;
                     const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx === canvasWidth
                         && sunRayFrame.canvasHeightPx === canvasHeight;
+                    // Reject stale frames where the camera has panned so far that the
+                    // reprojected bitmap would leave uncovered (unlit) regions of the viewport.
+                    const maxAllowedShiftPx = Math.min(canvasWidth, canvasHeight) * 0.25;
+                    const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
+                        && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;
 
-                    if (isFrameScaleCompatible && isFrameCanvasCompatible) {
+                    if (isFrameScaleCompatible && isFrameCanvasCompatible && isFramePositionCompatible) {
                         // The sun rays use world-to-screen projection (* zoom), so this
                         // delta correctly repositions the glow over the current sun position.
                         // Removing the old 12% offset threshold eliminates the visible jump

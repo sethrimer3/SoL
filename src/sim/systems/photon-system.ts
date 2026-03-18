@@ -197,8 +197,8 @@ export class PhotonSystem {
      */
     private static updateAndCleanup(ctx: PhotonSystemContext, deltaTime: number): void {
         for (let i = ctx.photons.length - 1; i >= 0; i--) {
-            ctx.photons[i].update(deltaTime);
-            if (ctx.photons[i].shouldDespawn(ctx.mapSize)) {
+            ctx.photons[i].update(deltaTime, ctx.mapSize);
+            if (ctx.photons[i].shouldDespawn()) {
                 ctx.photons.splice(i, 1);
             }
         }

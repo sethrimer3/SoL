@@ -655,6 +655,18 @@ export class HUDRenderer {
             const forge = player.stellarForge;
             const forgeProductionEntries: ProductionEntry[] = [];
 
+            if (forge.isMirrorActivelyProducing()) {
+                forgeProductionEntries.push({
+                    label: context.getProductionDisplayName('Solar Mirror'),
+                    progress: forge.getMirrorProductionProgress()
+                });
+            } else if (forge.isMirrorQueuedOrProducing()) {
+                forgeProductionEntries.push({
+                    label: context.getProductionDisplayName('Solar Mirror'),
+                    progress: 0
+                });
+            }
+
             if (forge.heroProductionUnitType) {
                 const progress = forge.heroProductionDurationSec > 0
                     ? 1 - (forge.heroProductionRemainingSec / forge.heroProductionDurationSec)
