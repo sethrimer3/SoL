@@ -24,8 +24,8 @@ interface ForgeSunlightState {
     isCrunching: boolean;
     /** Game time at last frame – used to compute deltaTime inside the renderer */
     lastGameTime: number;
-    /** Current animated angle (in radians) per dot – used for smooth repositioning */
-    dotAngles: number[];
+    /** Current animated angle in radians per dot – used for smooth repositioning */
+    dotAnglesRad: number[];
     /** Previous dot count – used to detect when dots need to slide */
     previousDotCount: number;
 }
@@ -225,7 +225,7 @@ export class ForgeRenderer {
                 dotAnimProgress: [],
                 isCrunching: false,
                 lastGameTime: gameTime,
-                dotAngles: [],
+                dotAnglesRad: [],
                 previousDotCount: 0,
             };
             this.forgeSunlightStates.set(forge, state);
@@ -305,7 +305,7 @@ export class ForgeRenderer {
                 state.visualPendingEnergy = forge.pendingEnergy;
                 state.preCrunchDotCount = 0;
                 state.dotAnimProgress = [];
-                state.dotAngles = [];
+                state.dotAnglesRad = [];
                 state.previousDotCount = 0;
             }
         } else {
@@ -349,36 +349,36 @@ export class ForgeRenderer {
 
         // ── Update dot angles for smooth repositioning ──────────────────────
         if (!state.isCrunching && completeDots > 0) {
-            // Ensure dotAngles array is the right size
+            // Ensure dotAnglesRad array is the right size
             if (completeDots !== state.previousDotCount) {
                 // Dot count changed – add new dots at their target angle
                 const newAngles: number[] = [];
                 for (let i = 0; i < completeDots; i++) {
                     const targetAngle = startAngle + (i / completeDots) * Math.PI * 2;
-                    if (i < state.dotAngles.length) {
+                    if (i < state.dotAnglesRad.length) {
                         // Keep existing dot's current animated angle
-                        newAngles.push(state.dotAngles[i]);
+                        newAngles.push(state.dotAnglesRad[i]);
                     } else {
                         // New dot starts at its target position
                         newAngles.push(targetAngle);
                     }
                 }
-                state.dotAngles = newAngles;
+                state.dotAnglesRad = newAngles;
                 state.previousDotCount = completeDots;
             }
 
             // Smoothly interpolate each dot's angle toward its target
             for (let i = 0; i < completeDots; i++) {
                 const targetAngle = startAngle + (i / completeDots) * Math.PI * 2;
-                let diff = targetAngle - state.dotAngles[i];
+                let diff = targetAngle - state.dotAnglesRad[i];
                 // Normalize angle difference to [-π, π]
                 while (diff > Math.PI) diff -= Math.PI * 2;
                 while (diff < -Math.PI) diff += Math.PI * 2;
                 const maxStep = this.DOT_SLIDE_SPEED_RAD_PER_SEC * deltaTime;
                 if (Math.abs(diff) <= maxStep) {
-                    state.dotAngles[i] = targetAngle;
+                    state.dotAnglesRad[i] = targetAngle;
                 } else {
-                    state.dotAngles[i] += Math.sign(diff) * maxStep;
+                    state.dotAnglesRad[i] += Math.sign(diff) * maxStep;
                 }
             }
         }
@@ -402,8 +402,8 @@ export class ForgeRenderer {
                 ctx.fill();
             } else if (!state.isCrunching) {
                 // Use smooth animated angle
-                const dotAngle = dotIndex < state.dotAngles.length
-                    ? state.dotAngles[dotIndex]
+                const dotAngle = dotIndex < state.dotAnglesRad.length
+                    ? state.dotAnglesRad[dotIndex]
                     : startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
                 const dotX = screenPos.x + Math.cos(dotAngle) * dotOrbitRadius;
                 const dotY = screenPos.y + Math.sin(dotAngle) * dotOrbitRadius;

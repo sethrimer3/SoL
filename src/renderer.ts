@@ -2655,6 +2655,8 @@ export class GameRenderer {
     }
 
     private spawnFizzleSparksAt(worldPos: Vector2D): void {
+        // Math.random() is acceptable here: these are render-only visual particles
+        // that do not affect simulation state or determinism.
         const sparkCount = 3 + Math.floor(Math.random() * 3); // 3-5 sparks
         for (let i = 0; i < sparkCount; i++) {
             if (this._photonFizzleSparks.length >= this.MAX_FIZZLE_SPARKS) {
