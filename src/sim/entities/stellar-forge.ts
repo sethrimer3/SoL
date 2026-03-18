@@ -143,6 +143,27 @@ export class StellarForge {
         return false;
     }
 
+    /**
+     * Returns 0..1 progress of the mirror currently being actively produced, or 0 if none.
+     */
+    getMirrorProductionProgress(): number {
+        if (this.activeProduction?.productionType !== 'mirror') {
+            return 0;
+        }
+        const cost = this.activeProduction.costEnergy;
+        if (cost <= 0) {
+            return 0;
+        }
+        return Math.min(1, this.activeProductionProgressEnergy / cost);
+    }
+
+    /**
+     * Returns true when a mirror production item is the active (in-progress) production.
+     */
+    isMirrorActivelyProducing(): boolean {
+        return this.activeProduction?.productionType === 'mirror';
+    }
+
     enqueueMirror(costEnergy: number, spawnPosition: Vector2D): boolean {
         this.mirrorQueueCount++;
         this.productionQueue.push({

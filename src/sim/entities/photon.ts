@@ -20,27 +20,49 @@ export class Photon {
     ) {}
 
     /**
-     * Update photon position based on velocity
+     * Update photon position, apply friction, and bounce off map walls.
      */
-    update(deltaTime: number): void {
+    update(deltaTime: number, mapSize: number): void {
         this.position.x += this.velocity.x * deltaTime;
         this.position.y += this.velocity.y * deltaTime;
         this.lifetimeSec += deltaTime;
+
+        // Bounce off map walls (map spans -mapHalfSize to +mapHalfSize)
+        const mapHalfSize = mapSize / 2;
+        if (this.position.x < -mapHalfSize) {
+            this.position.x = -mapHalfSize;
+            this.velocity.x = Math.abs(this.velocity.x) * Constants.PHOTON_WALL_BOUNCE_RESTITUTION;
+        } else if (this.position.x > mapHalfSize) {
+            this.position.x = mapHalfSize;
+            this.velocity.x = -Math.abs(this.velocity.x) * Constants.PHOTON_WALL_BOUNCE_RESTITUTION;
+        }
+        if (this.position.y < -mapHalfSize) {
+            this.position.y = -mapHalfSize;
+            this.velocity.y = Math.abs(this.velocity.y) * Constants.PHOTON_WALL_BOUNCE_RESTITUTION;
+        } else if (this.position.y > mapHalfSize) {
+            this.position.y = mapHalfSize;
+            this.velocity.y = -Math.abs(this.velocity.y) * Constants.PHOTON_WALL_BOUNCE_RESTITUTION;
+        }
+
+        // Apply friction to gradually decelerate toward a stop
+        if (this.velocity.x !== 0 || this.velocity.y !== 0) {
+            const speed = Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.y * this.velocity.y);
+            if (speed > 0.01) {
+                const newSpeed = Math.max(0, speed - Constants.PHOTON_FRICTION_PX_PER_SEC_SQ * deltaTime);
+                const factor = newSpeed / speed;
+                this.velocity.x *= factor;
+                this.velocity.y *= factor;
+            } else {
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+            }
+        }
     }
 
     /**
      * Check if photon should be removed
      */
-    shouldDespawn(mapSize: number): boolean {
-        if (this.lifetimeSec > Constants.PHOTON_LIFETIME_SEC) {
-            return true;
-        }
-        // Remove if far outside map bounds
-        const margin = 200;
-        if (this.position.x < -margin || this.position.x > mapSize + margin ||
-            this.position.y < -margin || this.position.y > mapSize + margin) {
-            return true;
-        }
-        return false;
+    shouldDespawn(): boolean {
+        return this.lifetimeSec > Constants.PHOTON_LIFETIME_SEC;
     }
 }
