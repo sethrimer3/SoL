@@ -792,7 +792,7 @@ export const SHROUD_SMALL_UNFOLD_DELAY_SEC = 0.0; // Delay before small cubes st
 export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spawns before tiny cubes unfold
 
 // ─── Photon System Constants ───
-export const PHOTON_MAX_COUNT = 200;                     // Maximum photons on the field
+export const PHOTON_MAX_COUNT = 500;                     // Maximum photons on the field
 export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 1.5;       // Initial time between spawns (seconds)
 export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.15;       // Fastest spawn interval at end of match
 export const PHOTON_SPEED_MIN = 30;                      // Minimum photon ejection speed (px/sec)
@@ -804,6 +804,7 @@ export const PHOTON_HERO_ABSORB_RANGE_PX = 200;          // Range at which heroe
 export const PHOTON_HERO_ABSORB_STRENGTH = 3000;         // Gravity pull strength (stronger when closer)
 export const PHOTON_HERO_CAPTURE_RANGE_PX = 12;          // Distance to actually absorb a photon
 export const PHOTON_LIFETIME_SEC = 60;                   // How long a photon lives before fading
+export const PHOTON_AGING_START_SEC = 50;                // Seconds into lifetime when aging visuals begin (last 10 seconds)
 export const PHOTON_WALL_BOUNCE_RESTITUTION = 0.65;      // Speed retained after bouncing off a map wall (0..1)
 export const PHOTON_FRICTION_PX_PER_SEC_SQ = 6;          // Deceleration applied to photons each second (px/s²)
 export const PHOTON_GOLDEN_ANGLE_RAD = 2.39996323;       // Golden angle ≈ 137.508° in radians
