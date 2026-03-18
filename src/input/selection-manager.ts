@@ -199,6 +199,59 @@ export class SelectionManager {
         console.log(`Double-tap: Selected all ${this.selectedBuildings.size} buildings of type ${buildingType.name}`);
     }
 
+    /**
+     * Double-tap on a hero unit: select all hero units of the exact same type/class.
+     */
+    public selectAllHeroesOfType(clickedHero: Unit): void {
+        const game = this.ctx.getGame();
+        if (!game) return;
+
+        const player = this.ctx.getLocalPlayer();
+        if (!player) return;
+
+        this.clearAllSelections();
+
+        const heroType = clickedHero.constructor;
+        for (const unit of player.units) {
+            if (unit.constructor === heroType) {
+                this.selectedUnits.add(unit);
+            }
+        }
+
+        this.ctx.renderer.selectedUnits = this.selectedUnits;
+        console.log(`Double-tap: Selected all ${this.selectedUnits.size} heroes of type ${heroType.name}`);
+    }
+
+    /**
+     * Tap-deselect: if multiple items are selected and the player taps directly on one
+     * of the selected units, deselect just that unit and leave the others selected.
+     * Returns true if a deselection happened (caller should suppress any move order).
+     */
+    public tryDeselectUnitAtPosition(worldPos: Vector2D): boolean {
+        const totalSelected =
+            this.selectedUnits.size +
+            this.selectedMirrors.size +
+            (this.selectedBase ? 1 : 0) +
+            this.selectedBuildings.size;
+
+        // Only activate when more than one distinct item (or more than one unit) is selected
+        if (totalSelected <= 1 && this.selectedUnits.size <= 1) return false;
+
+        const radiusSqPx = Constants.PHOTON_UNIT_TAP_DESELECT_RADIUS_PX * Constants.PHOTON_UNIT_TAP_DESELECT_RADIUS_PX;
+        for (const unit of this.selectedUnits) {
+            const dx = unit.position.x - worldPos.x;
+            const dy = unit.position.y - worldPos.y;
+            if (dx * dx + dy * dy <= radiusSqPx) {
+                unit.isSelected = false;
+                this.selectedUnits.delete(unit);
+                this.ctx.renderer.selectedUnits = this.selectedUnits;
+                console.log(`Tap-deselect: deselected unit, ${this.selectedUnits.size} remaining`);
+                return true;
+            }
+        }
+        return false;
+    }
+
     public selectUnitsInRectangle(screenStart: Vector2D, screenEnd: Vector2D): void {
         const game = this.ctx.getGame();
         if (!game) return;
@@ -222,11 +275,24 @@ export class SelectionManager {
         }
 
         if (isDoubleTap) {
+            // Double-tap on a unit: select all units of the same type across the map
             for (const unit of player.units) {
-                if (unit instanceof Starling &&
-                    unit.position.x >= minX && unit.position.x <= maxX &&
+                if (unit.position.x >= minX && unit.position.x <= maxX &&
                     unit.position.y >= minY && unit.position.y <= maxY) {
-                    this.selectAllStarlings();
+                    if (unit instanceof Starling) {
+                        this.selectAllStarlings();
+                        return;
+                    } else if (unit.isHero) {
+                        this.selectAllHeroesOfType(unit);
+                        return;
+                    }
+                }
+            }
+            // Double-tap on a building: select all buildings of that type
+            for (const building of player.buildings) {
+                if (building.position.x >= minX && building.position.x <= maxX &&
+                    building.position.y >= minY && building.position.y <= maxY) {
+                    this.selectAllBuildingsOfType(building);
                     return;
                 }
             }
@@ -259,19 +325,54 @@ export class SelectionManager {
             }
         }
 
-        if (player.stellarForge &&
+        // Determine whether the foundry is in the box (foundry has a sub-menu and
+        // takes priority over other buildings but yields to the stellar forge).
+        let foundryInBox: SubsidiaryFactory | null = null;
+        for (const building of player.buildings) {
+            if (building instanceof SubsidiaryFactory &&
+                building.position.x >= minX && building.position.x <= maxX &&
+                building.position.y >= minY && building.position.y <= maxY) {
+                foundryInBox = building;
+                break;
+            }
+        }
+
+        // Stellar forge selection rules:
+        //  • Units or solar mirrors in the box → forge NOT selected (they take priority).
+        //  • Foundry in the box → forge NOT selected (foundry has a sub-menu that would
+        //    conflict; forge takes precedence in other combinations).
+        const forgeInBox = player.stellarForge &&
             player.stellarForge.position.x >= minX && player.stellarForge.position.x <= maxX &&
-            player.stellarForge.position.y >= minY && player.stellarForge.position.y <= maxY &&
-            this.selectedUnits.size === 0) {
+            player.stellarForge.position.y >= minY && player.stellarForge.position.y <= maxY;
+
+        const canSelectForge = forgeInBox &&
+            this.selectedUnits.size === 0 &&
+            this.selectedMirrors.size === 0 &&
+            foundryInBox === null;
+
+        if (canSelectForge) {
             this.selectedBase = player.stellarForge;
-            player.stellarForge.isSelected = true;
+            player.stellarForge!.isSelected = true;
         } else if (player.stellarForge) {
             player.stellarForge.isSelected = false;
+        }
+
+        // Foundry selection rules:
+        //  • Units or solar mirrors in the box → foundry NOT selected.
+        //  • Stellar forge in the box → foundry NOT selected (forge takes precedence).
+        const canSelectFoundry = foundryInBox !== null &&
+            this.selectedUnits.size === 0 &&
+            this.selectedMirrors.size === 0 &&
+            !canSelectForge;
+
+        if (canSelectFoundry && foundryInBox) {
+            foundryInBox.isSelected = true;
+            this.selectedBuildings.add(foundryInBox);
         }
 
         this.ctx.renderer.selectedUnits = this.selectedUnits;
         this.ctx.renderer.selectedMirrors = this.selectedMirrors;
 
-        console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}`);
+        console.log(`Selected ${this.selectedUnits.size} units, ${this.selectedMirrors.size} mirrors, ${this.selectedBase ? '1 base' : '0 bases'}, ${this.selectedBuildings.size} buildings`);
     }
 }
