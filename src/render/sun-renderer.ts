@@ -813,11 +813,6 @@ export class SunRenderer {
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
     ): ShadowQuad[] {
-        // Skip shadow calculations entirely on low quality for performance
-        if (graphicsQuality === 'low') {
-            return [];
-        }
-
         const sunId = this.getSunBodyCacheKey(sun);
         const cached = this.sunShadowQuadFrameCache.get(sunId);
         if (cached) {
@@ -901,7 +896,10 @@ export class SunRenderer {
             const sunPassCtx = this.ensureLightingSunPassLayer(canvasWidth, canvasHeight);
 
             const sunScreenPos = worldToScreen(sun.position);
-            const maxRadius = Math.max(canvasWidth, canvasHeight) * 2;
+            // Use 3× the viewport dimension so the gradient reaches every corner of the
+            // playing field even at maximum zoom with the camera panned to the map edge,
+            // preventing the ambient glow from "popping" into existence as the camera moves.
+            const maxRadius = Math.max(canvasWidth, canvasHeight) * 3;
             const shadowQuads = this.getSunShadowQuadsCached(sun, game, graphicsQuality, worldToScreenCoords);
 
             // Create cached radial gradient centered on the sun using named constant for bucket size

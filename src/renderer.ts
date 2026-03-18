@@ -1483,20 +1483,23 @@ export class GameRenderer {
 
         this.sunRenderer.clearFrameCache();
 
+        // Use actual canvas screen-space size (CSS pixels) for all full-screen fills.
+        // canvas.width/height are physical pixels and, when the context is scaled by
+        // effectiveDpr (e.g. 0.75 on low quality), using them in fillRect only covers
+        // ~56% of the physical canvas, leaving transparent edges that expose the page
+        // background colour.
+        const screenWidth = this.getCanvasScreenWidthPx();
+        const screenHeight = this.getCanvasScreenHeightPx();
+
         // Clear canvas with color scheme background
         this.ctx.fillStyle = this.colorScheme.background;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
         this.updateViewBounds();
         const ladSun = game.suns.find(s => s.type === 'lad');
         this.visibilityTracker.updateFrameDelta(game.gameTime);
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
-        
-        // Use actual canvas screen-space size for full-screen environment effects so
-        // quality-scaled rendering still covers the full visible playfield correctly.
-        const screenWidth = this.getCanvasScreenWidthPx();
-        const screenHeight = this.getCanvasScreenHeightPx();
 
         const uiCtx = this.getUIRendererContext();
         const envCtx = this.getEnvironmentRendererContext();
