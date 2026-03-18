@@ -70,6 +70,9 @@ interface GravitySource {
 /** Base grid spacing in world pixels (twice as fine as original 27 px). */
 const GRID_SPACING_WORLD_PX = 14;
 
+/** Grid spacing used for high quality (slightly coarser than ultra). */
+const GRID_SPACING_HIGH_PX = 18;
+
 /** Grid spacing used for medium quality (coarser to save performance). */
 const GRID_SPACING_MEDIUM_PX = 28;
 
@@ -190,7 +193,9 @@ export class GravityGridRenderer {
         }
 
         // ── Compute world-space viewport bounds ───────────────────────────────
-        const spacing = graphicsQuality === 'medium' ? GRID_SPACING_MEDIUM_PX : GRID_SPACING_WORLD_PX;
+        const spacing = graphicsQuality === 'medium' ? GRID_SPACING_MEDIUM_PX
+            : graphicsQuality === 'high' ? GRID_SPACING_HIGH_PX
+            : GRID_SPACING_WORLD_PX;
 
         const halfW = screenWidth / (2 * zoom);
         const halfH = screenHeight / (2 * zoom);

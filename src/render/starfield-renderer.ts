@@ -65,7 +65,7 @@ export class StarfieldRenderer {
     private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
         low: 200,
         medium: 100,
-        high: 33,
+        high: 50,
         ultra: 16,
     };
 

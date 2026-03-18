@@ -72,6 +72,7 @@ export interface InputControllerContext {
     getBuildingAbilityAnchorScreen: () => Vector2D | null;
     cancelMirrorWarpGateModeAndDeselectMirrors: () => void;
     clearPathPreview: () => void;
+    onInGameSettingsChanged: () => void;
 }
 
 export class InputController {
@@ -120,10 +121,12 @@ export class InputController {
                 this.ctx.renderer.soundVolume = action.volumePercent / 100;
                 this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
                 this.ctx.setSettingsSoundVolume(action.volumePercent);
+                this.ctx.onInGameSettingsChanged();
                 break;
             case 'musicVolume':
                 this.ctx.renderer.musicVolume = action.volumePercent / 100;
                 this.ctx.setSettingsMusicVolume(action.volumePercent);
+                this.ctx.onInGameSettingsChanged();
                 break;
             default:
                 break;
@@ -538,15 +541,19 @@ export class InputController {
                                 if (this.ctx.getGame()) {
                                     this.ctx.getGame()!.damageDisplayMode = menuAction.mode;
                                 }
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'healthDisplayMode':
                                 this.ctx.renderer.healthDisplayMode = menuAction.mode;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'fancyGraphics':
                                 this.ctx.renderer.isFancyGraphicsEnabled = menuAction.isEnabled;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'graphicsQuality':
                                 this.ctx.renderer.graphicsQuality = menuAction.quality;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'colorblindMode':
                                 this.ctx.renderer.colorblindMode = menuAction.isEnabled;

@@ -335,12 +335,15 @@ export class GameRenderer {
         // Apply resolution scaling based on quality setting
         // Low quality: 0.75x resolution (56% pixel count)
         // Medium quality: 0.9x resolution (81% pixel count)
-        // High/Ultra: Full resolution
+        // High: 0.95x resolution (~90% pixel count) – subtle reduction for better performance
+        // Ultra: Full resolution
         let resolutionScale = 1.0;
         if (this.graphicsQuality === 'low') {
             resolutionScale = 0.75;
         } else if (this.graphicsQuality === 'medium') {
             resolutionScale = 0.9;
+        } else if (this.graphicsQuality === 'high') {
+            resolutionScale = 0.95;
         }
         
         // Apply a second, quality-specific cap after the global safety cap above so
@@ -401,7 +404,7 @@ export class GameRenderer {
             case 'medium':
                 return 1.25;
             case 'high':
-                return 1.5;
+                return 1.35;
             case 'ultra':
             default:
                 return 1.7;

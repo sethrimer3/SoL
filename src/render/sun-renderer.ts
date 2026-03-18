@@ -427,8 +427,10 @@ export class SunRenderer {
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
         
-        for (let stepIndex = 0; stepIndex < this.ULTRA_SUN_BLOOM_STEPS; stepIndex++) {
-            const stepT = stepIndex / Math.max(1, this.ULTRA_SUN_BLOOM_STEPS - 1);
+        // Use fewer bloom steps on high quality to reduce draw calls
+        const bloomStepCount = graphicsQuality === 'ultra' ? this.ULTRA_SUN_BLOOM_STEPS : 3;
+        for (let stepIndex = 0; stepIndex < bloomStepCount; stepIndex++) {
+            const stepT = stepIndex / Math.max(1, bloomStepCount - 1);
             const radius = screenRadius * (1.15 + stepT * 2.65);
             const alpha = 0.2 * (1 - stepT);
             

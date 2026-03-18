@@ -21,6 +21,7 @@ import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
 import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
 import { MatchmakingController } from './menu/matchmaking-controller';
+import { loadPersistedSettings, savePersistedSettings, PersistedSettings } from './menu/settings-persistence';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -173,7 +174,7 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'ultra', // Default to ultra graphics
+            graphicsQuality: 'high', // Default to high graphics for new players
             isExperimentalGraphicsEnabled: false,
             isStarNestEnabled: false,
             isAdaptiveQualityEnabled: false, // Default to disabled
@@ -182,6 +183,13 @@ export class MainMenu {
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
+
+        // Restore any previously saved settings from localStorage
+        const saved = loadPersistedSettings();
+        if (saved) {
+            Object.assign(this.settings, saved);
+        }
+
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
@@ -658,6 +666,34 @@ export class MainMenu {
             }
         }
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
+    }
+
+    /**
+     * Save the current persistable settings to localStorage.
+     */
+    private persistSettings(): void {
+        savePersistedSettings({
+            difficulty: this.settings.difficulty,
+            soundEnabled: this.settings.soundEnabled,
+            musicEnabled: this.settings.musicEnabled,
+            soundVolume: this.settings.soundVolume,
+            musicVolume: this.settings.musicVolume,
+            isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
+            screenShakeEnabled: this.settings.screenShakeEnabled,
+            playerColor: this.settings.playerColor,
+            enemyColor: this.settings.enemyColor,
+            allyColor: this.settings.allyColor,
+            enemy2Color: this.settings.enemy2Color,
+            colorScheme: this.settings.colorScheme,
+            damageDisplayMode: this.settings.damageDisplayMode,
+            healthDisplayMode: this.settings.healthDisplayMode,
+            graphicsQuality: this.settings.graphicsQuality,
+            isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
+            isStarNestEnabled: this.settings.isStarNestEnabled,
+            isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
+            useSvgSprites: this.settings.useSvgSprites,
+            isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
+        });
     }
 
     /**
@@ -1802,6 +1838,7 @@ export class MainMenu {
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
+                this.persistSettings();
             },
             onUsernameChange: (value) => {
                 this.playerProfileManager.saveUsername(value);
@@ -1810,25 +1847,31 @@ export class MainMenu {
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
                 this.menuAudioController.setSoundEnabled(value);
+                this.persistSettings();
             },
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
                 this.menuAudioController.setMusicEnabled(value);
+                this.persistSettings();
             },
             onSoundVolumeChange: (value) => {
                 this.settings.soundVolume = value;
                 this.menuAudioController.setSoundVolume(value / 100);
                 this.menuAudioController.playUiSound('setting-change');
+                this.persistSettings();
             },
             onMusicVolumeChange: (value) => {
                 this.settings.musicVolume = value;
                 this.menuAudioController.setMusicVolume(value / 100);
+                this.persistSettings();
             },
             onBattleStatsInfoChange: (value) => {
                 this.settings.isBattleStatsInfoEnabled = value;
+                this.persistSettings();
             },
             onScreenShakeChange: (value) => {
                 this.settings.screenShakeEnabled = value;
+                this.persistSettings();
             },
             onDeveloperModeEnabledChange: (value) => {
                 this.settings.developerModeEnabled = value;
@@ -1839,40 +1882,51 @@ export class MainMenu {
             },
             onPlayerColorChange: (value) => {
                 this.settings.playerColor = value;
+                this.persistSettings();
             },
             onEnemyColorChange: (value) => {
                 this.settings.enemyColor = value;
+                this.persistSettings();
             },
             onAllyColorChange: (value) => {
                 this.settings.allyColor = value;
+                this.persistSettings();
             },
             onEnemy2ColorChange: (value) => {
                 this.settings.enemy2Color = value;
+                this.persistSettings();
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
                 this.backgroundParticleLayer?.setGraphicsQuality(value);
                 this.atmosphereLayer?.setGraphicsQuality(value);
                 this.menuParticleLayer?.setGraphicsQuality(value);
+                this.persistSettings();
             },
             onExperimentalGraphicsEnabledChange: (value) => {
                 this.settings.isExperimentalGraphicsEnabled = value;
+                this.persistSettings();
             },
             onStarNestEnabledChange: (value) => {
                 this.settings.isStarNestEnabled = value;
                 this.atmosphereLayer?.setStarNestEnabled(value);
+                this.persistSettings();
             },
             onAdaptiveQualityEnabledChange: (value) => {
                 this.settings.isAdaptiveQualityEnabled = value;
+                this.persistSettings();
             },
             onUseSvgSpritesChange: (value) => {
                 this.settings.useSvgSprites = value;
+                this.persistSettings();
             },
             onPauseOnFocusLossEnabledChange: (value) => {
                 this.settings.isPauseOnFocusLossEnabled = value;
+                this.persistSettings();
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
+                this.persistSettings();
             },
             onClearDataAndCache: () => this.clearPlayerDataAndCache(),
             onBack: () => {
