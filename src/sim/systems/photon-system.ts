@@ -15,6 +15,7 @@ import { Player } from '../entities/player';
 import { Unit } from '../entities/unit';
 import { Photon } from '../entities/photon';
 import { SolarMirror } from '../entities/solar-mirror';
+import { Asteroid } from '../entities/asteroid';
 
 /**
  * Minimal context required by the PhotonSystem
@@ -23,6 +24,7 @@ export interface PhotonSystemContext {
     suns: Sun[];
     photons: Photon[];
     players: Player[];
+    asteroids: Asteroid[];
     gameTime: number;
     mapSize: number;
     photonSpawnAccumulator: number;
@@ -198,6 +200,34 @@ export class PhotonSystem {
     private static updateAndCleanup(ctx: PhotonSystemContext, deltaTime: number): void {
         for (let i = ctx.photons.length - 1; i >= 0; i--) {
             ctx.photons[i].update(deltaTime, ctx.mapSize);
+
+            // Bounce off asteroids (photons should not pass through solid bodies)
+            const photon = ctx.photons[i];
+            for (const asteroid of ctx.asteroids) {
+                const dx = photon.position.x - asteroid.position.x;
+                const dy = photon.position.y - asteroid.position.y;
+                const distSq = dx * dx + dy * dy;
+                const collisionRadiusPx = asteroid.size + Constants.PHOTON_RADIUS_PX;
+                if (distSq < collisionRadiusPx * collisionRadiusPx && distSq > 0.0001) {
+                    const dist = Math.sqrt(distSq);
+                    const normalX = dx / dist;
+                    const normalY = dy / dist;
+
+                    // Push photon outside the asteroid surface
+                    const penetrationPx = collisionRadiusPx - dist;
+                    photon.position.x += normalX * penetrationPx;
+                    photon.position.y += normalY * penetrationPx;
+
+                    // Reflect velocity component along the normal
+                    const normalVelocity = photon.velocity.x * normalX + photon.velocity.y * normalY;
+                    if (normalVelocity < 0) {
+                        photon.velocity.x -= 2 * normalVelocity * normalX;
+                        photon.velocity.y -= 2 * normalVelocity * normalY;
+                    }
+                    break; // One collision per tick is sufficient
+                }
+            }
+
             if (ctx.photons[i].shouldDespawn()) {
                 ctx.photons.splice(i, 1);
             }

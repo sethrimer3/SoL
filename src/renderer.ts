@@ -1730,6 +1730,18 @@ export class GameRenderer {
             }
         }
 
+        // Draw gravity-well grid behind environment objects (after parallax stars, before asteroids).
+        {
+            const gravityGridPlayerColorMap = this._reusableGravityGridColorMap;
+            gravityGridPlayerColorMap.clear();
+            for (const player of game.players) {
+                if (!player.isDefeated()) {
+                    gravityGridPlayerColorMap.set(player, this.getLadPlayerColor(player, ladSun, game));
+                }
+            }
+            this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
+        }
+
         // Draw asteroids (with culling - skip rendering beyond map bounds)
         if (this.isAsteroidsLayerEnabled) {
             for (const asteroid of game.asteroids) {
@@ -1752,18 +1764,6 @@ export class GameRenderer {
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
             this.environmentRenderer.applyUltraWarmCoolGrade(game, envCtx);
-        }
-
-        // Draw gravity-well grid (faint light-orange grid warped by entity gravity).
-        {
-            const gravityGridPlayerColorMap = this._reusableGravityGridColorMap;
-            gravityGridPlayerColorMap.clear();
-            for (const player of game.players) {
-                if (!player.isDefeated()) {
-                    gravityGridPlayerColorMap.set(player, this.getLadPlayerColor(player, ladSun, game));
-                }
-            }
-            this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
         }
 
         if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
