@@ -24,6 +24,10 @@ interface ForgeSunlightState {
     isCrunching: boolean;
     /** Game time at last frame – used to compute deltaTime inside the renderer */
     lastGameTime: number;
+    /** Current animated angle in radians per dot – used for smooth repositioning */
+    dotAnglesRad: number[];
+    /** Previous dot count – used to detect when dots need to slide */
+    previousDotCount: number;
 }
 
 /**
@@ -55,6 +59,8 @@ export class ForgeRenderer {
     private readonly DOT_ANIMATION_STAGGER_DELAY_SEC = 0.08;
     /** Speed multiplier applied to crunch progress to drive dot fly-in */
     private readonly DOT_ANIMATION_SPEED_MULTIPLIER = 2.5;
+    /** Angular speed (radians/sec) at which dots slide to their target positions */
+    private readonly DOT_SLIDE_SPEED_RAD_PER_SEC = 12;
 
     // State caches for animations
     private readonly forgeFlameStates = new Map<StellarForge, ForgeFlameState>();
@@ -219,6 +225,8 @@ export class ForgeRenderer {
                 dotAnimProgress: [],
                 isCrunching: false,
                 lastGameTime: gameTime,
+                dotAnglesRad: [],
+                previousDotCount: 0,
             };
             this.forgeSunlightStates.set(forge, state);
         }
@@ -278,12 +286,17 @@ export class ForgeRenderer {
                 state.visualPendingEnergy - this.RING_DRAIN_RATE_PER_SEC * deltaTime
             );
 
-            // Advance dot fly-in animations (later dots start slightly delayed)
+            // Advance dot fly-in animations (later dots start slightly delayed).
+            // Use Math.max to prevent progress from decreasing when the crunch
+            // transitions from 'suck' to 'wave' phase (which resets getPhaseProgress()).
             for (let i = 0; i < state.dotAnimProgress.length; i++) {
                 const delaySec = i * this.DOT_ANIMATION_STAGGER_DELAY_SEC;
                 const crunchProgress = crunch ? crunch.getPhaseProgress() : 1;
                 const effectiveProgress = Math.max(0, crunchProgress - delaySec);
-                state.dotAnimProgress[i] = Math.min(1, effectiveProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER);
+                state.dotAnimProgress[i] = Math.max(
+                    state.dotAnimProgress[i],
+                    Math.min(1, effectiveProgress * this.DOT_ANIMATION_SPEED_MULTIPLIER)
+                );
             }
 
             if (!crunchIsActive) {
@@ -292,6 +305,8 @@ export class ForgeRenderer {
                 state.visualPendingEnergy = forge.pendingEnergy;
                 state.preCrunchDotCount = 0;
                 state.dotAnimProgress = [];
+                state.dotAnglesRad = [];
+                state.previousDotCount = 0;
             }
         } else {
             // Normal state – snap visual energy toward actual pending energy
@@ -332,11 +347,47 @@ export class ForgeRenderer {
             ctx.stroke();
         }
 
+        // ── Update dot angles for smooth repositioning ──────────────────────
+        if (!state.isCrunching && completeDots > 0) {
+            // Ensure dotAnglesRad array is the right size
+            if (completeDots !== state.previousDotCount) {
+                // Dot count changed – add new dots at their target angle
+                const newAngles: number[] = [];
+                for (let i = 0; i < completeDots; i++) {
+                    const targetAngle = startAngle + (i / completeDots) * Math.PI * 2;
+                    if (i < state.dotAnglesRad.length) {
+                        // Keep existing dot's current animated angle
+                        newAngles.push(state.dotAnglesRad[i]);
+                    } else {
+                        // New dot starts at its target position
+                        newAngles.push(targetAngle);
+                    }
+                }
+                state.dotAnglesRad = newAngles;
+                state.previousDotCount = completeDots;
+            }
+
+            // Smoothly interpolate each dot's angle toward its target
+            for (let i = 0; i < completeDots; i++) {
+                const targetAngle = startAngle + (i / completeDots) * Math.PI * 2;
+                let diff = targetAngle - state.dotAnglesRad[i];
+                // Normalize angle difference to [-π, π]
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                const maxStep = this.DOT_SLIDE_SPEED_RAD_PER_SEC * deltaTime;
+                if (Math.abs(diff) <= maxStep) {
+                    state.dotAnglesRad[i] = targetAngle;
+                } else {
+                    state.dotAnglesRad[i] += Math.sign(diff) * maxStep;
+                }
+            }
+        }
+
         // ── Draw starling dots ────────────────────────────────────────────────
         for (let dotIndex = 0; dotIndex < completeDots; dotIndex++) {
-            const dotAngle = startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
-
             if (state.isCrunching && dotIndex < state.dotAnimProgress.length) {
+                // Use static target angle during crunch (no sliding)
+                const dotAngle = startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
                 // Animate dot flying from orbit toward forge centre
                 const progress = state.dotAnimProgress[dotIndex];
                 const currentRadius = dotOrbitRadius * (1 - progress);
@@ -350,6 +401,10 @@ export class ForgeRenderer {
                 ctx.arc(dotX, dotY, dotRadius, 0, Math.PI * 2);
                 ctx.fill();
             } else if (!state.isCrunching) {
+                // Use smooth animated angle
+                const dotAngle = dotIndex < state.dotAnglesRad.length
+                    ? state.dotAnglesRad[dotIndex]
+                    : startAngle + (dotIndex / Math.max(1, completeDots)) * Math.PI * 2;
                 const dotX = screenPos.x + Math.cos(dotAngle) * dotOrbitRadius;
                 const dotY = screenPos.y + Math.sin(dotAngle) * dotOrbitRadius;
 

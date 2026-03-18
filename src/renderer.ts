@@ -59,6 +59,16 @@ type InfluenceRenderCircle = {
     color: string;
 };
 
+/** Render-side spark particle for photon fizzle-out effect */
+interface PhotonFizzleSpark {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    lifetimeSec: number;
+    maxLifetimeSec: number;
+}
+
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
     private ctx: CanvasRenderingContext2D;
@@ -2494,6 +2504,15 @@ export class GameRenderer {
     /** Cached glow canvas for photon particles (avoids per-frame radialGradient creation) */
     private _photonGlowCanvas: HTMLCanvasElement | null = null;
     private _photonGlowSize: number = 0;
+    /** Cached orange glow canvas for aging photons */
+    private _photonOrangeGlowCanvas: HTMLCanvasElement | null = null;
+    private _photonOrangeGlowSize: number = 0;
+
+    /** Render-side fizzle sparks for expired photons */
+    private readonly _photonFizzleSparks: PhotonFizzleSpark[] = [];
+    private readonly MAX_FIZZLE_SPARKS = 200;
+    /** Set of photon instances that have already spawned fizzle sparks */
+    private readonly _photonFizzleSpawned = new WeakSet<object>();
 
     private getPhotonGlowCanvas(glowSizePx: number): HTMLCanvasElement {
         if (this._photonGlowCanvas && this._photonGlowSize === glowSizePx) {
@@ -2516,32 +2535,190 @@ export class GameRenderer {
         return canvas;
     }
 
+    private getPhotonOrangeGlowCanvas(glowSizePx: number): HTMLCanvasElement {
+        if (this._photonOrangeGlowCanvas && this._photonOrangeGlowSize === glowSizePx) {
+            return this._photonOrangeGlowCanvas;
+        }
+        const size = glowSizePx * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const gradient = ctx.createRadialGradient(glowSizePx, glowSizePx, 0, glowSizePx, glowSizePx, glowSizePx);
+        gradient.addColorStop(0, 'rgba(255, 160, 50, 0.9)');
+        gradient.addColorStop(0.3, 'rgba(255, 130, 30, 0.5)');
+        gradient.addColorStop(0.7, 'rgba(220, 100, 20, 0.15)');
+        gradient.addColorStop(1, 'rgba(200, 80, 10, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        this._photonOrangeGlowCanvas = canvas;
+        this._photonOrangeGlowSize = glowSizePx;
+        return canvas;
+    }
+
     private drawPhotons(game: GameState): void {
-        if (game.photons.length === 0) return;
+        if (game.photons.length === 0 && this._photonFizzleSparks.length === 0) return;
 
         const glowSizePx = Math.max(8, Math.round(Constants.PHOTON_RADIUS_PX * 4 * this.zoom));
         const glowCanvas = this.getPhotonGlowCanvas(glowSizePx);
+        const orangeGlowCanvas = this.getPhotonOrangeGlowCanvas(glowSizePx);
         const halfGlow = glowSizePx;
         const screenPos = new Vector2D(0, 0);
+        const agingStartSec = Constants.PHOTON_AGING_START_SEC;
+        const lifetimeSec = Constants.PHOTON_LIFETIME_SEC;
+        const agingDurationSec = lifetimeSec - agingStartSec;
 
         for (const photon of game.photons) {
+
             if (!this.isWithinViewBounds(photon.position, 30)) continue;
 
             this.worldToScreenCoords(photon.position.x, photon.position.y, screenPos);
 
-            // Draw cached glow sprite
-            this.ctx.drawImage(
-                glowCanvas,
-                screenPos.x - halfGlow,
-                screenPos.y - halfGlow
-            );
+            // Determine aging state
+            const isAging = photon.lifetimeSec >= agingStartSec;
+            let agingProgress = 0; // 0 = just started aging, 1 = about to expire
+            if (isAging) {
+                agingProgress = Math.min(1, (photon.lifetimeSec - agingStartSec) / agingDurationSec);
+            }
 
-            // Draw bright core
+            // Flicker effect: increasing frequency and intensity as photon ages
+            let flickerAlpha = 1;
+            if (isAging) {
+                const flickerFreq = 4 + agingProgress * 20; // 4 Hz to 24 Hz
+                const flickerDepth = 0.15 + agingProgress * 0.5; // 15% to 65% depth
+                flickerAlpha = 1 - flickerDepth * (0.5 + 0.5 * Math.sin(photon.lifetimeSec * flickerFreq * Math.PI * 2));
+            }
+
+            this.ctx.globalAlpha = flickerAlpha;
+
+            // Draw glow: blend between normal and orange based on aging progress
+            if (isAging && agingProgress > 0) {
+                // Draw orange glow with aging intensity
+                this.ctx.globalAlpha = flickerAlpha * agingProgress;
+                this.ctx.drawImage(
+                    orangeGlowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+                // Draw normal glow fading out
+                this.ctx.globalAlpha = flickerAlpha * (1 - agingProgress);
+                this.ctx.drawImage(
+                    glowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+            } else {
+                this.ctx.drawImage(
+                    glowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+            }
+
+            // Draw bright core – color shifts to orange as photon ages
             const coreRadius = Math.max(1.5, Constants.PHOTON_RADIUS_PX * this.zoom * 0.6);
+            this.ctx.globalAlpha = flickerAlpha;
             this.ctx.beginPath();
             this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
-            this.ctx.fillStyle = '#FFFDE8';
+            if (isAging) {
+                // Interpolate from pale yellow (#FFFDE8) to deep orange (#FF8820)
+                const r = 255;
+                const g = Math.round(253 - agingProgress * 135); // 253 → 118
+                const b = Math.round(232 - agingProgress * 200); // 232 → 32
+                this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+            } else {
+                this.ctx.fillStyle = '#FFFDE8';
+            }
             this.ctx.fill();
         }
+
+        this.ctx.globalAlpha = 1;
+
+        // Spawn fizzle sparks for photons about to expire
+        this.spawnFizzleSparksForExpiredPhotons(game);
+
+        // Update and draw fizzle sparks
+        this.updateAndDrawFizzleSparks(game.gameTime);
+    }
+
+    /**
+     * Spawn fizzle sparks for photons that have expired (lifetime exceeded).
+     * Checks each photon's lifetime and spawns sparks once per photon when near expiry.
+     */
+    private spawnFizzleSparksForExpiredPhotons(game: GameState): void {
+        for (const photon of game.photons) {
+            if (photon.lifetimeSec >= Constants.PHOTON_LIFETIME_SEC - 0.05 && !this._photonFizzleSpawned.has(photon)) {
+                this.spawnFizzleSparksAt(photon.position);
+                this._photonFizzleSpawned.add(photon);
+            }
+        }
+    }
+
+    private spawnFizzleSparksAt(worldPos: Vector2D): void {
+        // Math.random() is acceptable here: these are render-only visual particles
+        // that do not affect simulation state or determinism.
+        const sparkCount = 3 + Math.floor(Math.random() * 3); // 3-5 sparks
+        for (let i = 0; i < sparkCount; i++) {
+            if (this._photonFizzleSparks.length >= this.MAX_FIZZLE_SPARKS) {
+                // Remove oldest spark to make room
+                this._photonFizzleSparks.shift();
+            }
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 40 + Math.random() * 80; // 40-120 px/sec
+            this._photonFizzleSparks.push({
+                x: worldPos.x,
+                y: worldPos.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                lifetimeSec: 0,
+                maxLifetimeSec: 0.3 + Math.random() * 0.4 // 0.3-0.7 sec
+            });
+        }
+    }
+
+    private updateAndDrawFizzleSparks(gameTime: number): void {
+        if (this._photonFizzleSparks.length === 0) return;
+
+        // Use a fixed dt approximation (render-side only, not sim-critical)
+        const dt = 1 / 60;
+        const screenPos = new Vector2D(0, 0);
+
+        for (let i = this._photonFizzleSparks.length - 1; i >= 0; i--) {
+            const spark = this._photonFizzleSparks[i];
+            spark.lifetimeSec += dt;
+
+            if (spark.lifetimeSec >= spark.maxLifetimeSec) {
+                this._photonFizzleSparks.splice(i, 1);
+                continue;
+            }
+
+            // Update position
+            spark.x += spark.vx * dt;
+            spark.y += spark.vy * dt;
+            // Apply drag
+            spark.vx *= 0.95;
+            spark.vy *= 0.95;
+
+            if (!this.isWithinViewBounds(new Vector2D(spark.x, spark.y), 10)) continue;
+
+            this.worldToScreenCoords(spark.x, spark.y, screenPos);
+
+            const progress = spark.lifetimeSec / spark.maxLifetimeSec;
+            const alpha = 1 - progress;
+            const sparkRadius = Math.max(1, (1.5 - progress * 0.8) * this.zoom);
+
+            // Orange spark fading to transparent
+            const r = 255;
+            const g = Math.round(160 - progress * 80); // 160 → 80
+            const b = Math.round(50 - progress * 40); // 50 → 10
+
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, sparkRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.globalAlpha = 1;
     }
 }
