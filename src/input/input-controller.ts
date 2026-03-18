@@ -941,6 +941,20 @@ export class InputController {
                     return;
                 }
 
+                // Tap-deselect: if multiple things are selected and the player taps directly
+                // on one of the selected units, deselect that unit and keep others selected
+                // (do not issue a move order).
+                if (this.ctx.getSelectionManager().tryDeselectUnitAtPosition(worldPos)) {
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.ctx.renderer.selectionStart = null;
+                    this.ctx.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+
                 // Check if clicked on mirror command buttons
                 if (this.ctx.getSelectionManager().selectedMirrors.size > 0) {
                     const firstMirror = Array.from(this.ctx.getSelectionManager().selectedMirrors)[0] as any;

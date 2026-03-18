@@ -811,6 +811,9 @@ export const PHOTON_ABILITY_COST = 3;                    // Default photons need
 export const PHOTON_MIRROR_ABSORB_RANGE_PX = 120;        // Range at which mirrors suck in photons
 export const PHOTON_MIRROR_ABSORB_STRENGTH = 250;        // Gravity pull strength for mirrors
 export const PHOTON_MIRROR_CAPTURE_RANGE_PX = 15;        // Distance to actually absorb a photon into a mirror
+export const PHOTON_SUN_REPULSION_RANGE_PX = 90;         // Distance from sun center at which photons start being repelled
+export const PHOTON_SUN_REPULSION_STRENGTH = 120;        // Repulsion force that pushes photons away from the sun
+export const PHOTON_UNIT_TAP_DESELECT_RADIUS_PX = 24;   // World-space tap radius for deselecting an individual unit by tapping it
 export const MIRROR_OVERCHARGE_DURATION_SEC = 5.0;       // How long a mirror stays overcharged after absorbing a photon
 export const MIRROR_OVERCHARGE_ENERGY_MULTIPLIER = 2.0;  // Energy rate multiplier when mirror is overcharged
 
