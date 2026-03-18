@@ -9,11 +9,17 @@
  *   - Player-owned entities  → that player's colour
  *   - Suns / asteroids        → deep gold (#B8860B)
  *
- * When a vertex is in sunlight the base colour is a blazing pale yellow (almost
- * white); in shadow it is a bright orange.  Opacity is 0% when there is no
- * gravity influence and rises to 30% at extreme distortion.
+ * Opacity is 0% when there is no gravity influence and rises to 25% at extreme
+ * distortion.  Displacement is capped to produce a gentle "stretch into the
+ * background" rather than violent warping.
  *
- * Each source's influence radius equals 8 × radius (doubled from original).
+ * Optimised for performance:
+ *   - Pre-parsed RGB on sources (no hex parsing in hot loop)
+ *   - Mutable scratch result for displacement (no per-vertex allocation)
+ *   - Quantised alpha → pre-built colour LUT (minimal string creation)
+ *   - Per-line early-skip when no source is in range
+ *   - Viewport-filtered sources
+ *   - No per-vertex sunlight ray tests
  */
 
 import { GameState, Player, Vector2D } from '../game-core';
@@ -47,25 +53,36 @@ interface GravitySource {
     worldY: number;
     /** Radius (world units) within which this source influences the grid. */
     influenceRadiusWorld: number;
+    /** Squared influence radius (pre-computed). */
+    influenceRadiusSq: number;
+    /** 1 / influenceRadiusWorld (pre-computed). */
+    invInfluenceRadius: number;
     /** Maximum displacement (world units) at the source centre. */
     maxDisplacementWorld: number;
-    /** Hex colour to blend toward at full stretch (e.g. player colour or gold). */
-    blendColor: string;
+    /** Pre-parsed blend colour RGB components (0-255). */
+    blendR: number;
+    blendG: number;
+    blendB: number;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-/** Spacing of grid lines in world pixels (3× denser than original 80 px). */
-const GRID_SPACING_WORLD_PX = 27;
+/** Base grid spacing in world pixels (twice as fine as original 27 px). */
+const GRID_SPACING_WORLD_PX = 14;
 
-/** Base opacity when there is no gravity influence (fully invisible). */
-const BASE_OPACITY = 0.0;
+/** Grid spacing used for medium quality (coarser to save performance). */
+const GRID_SPACING_MEDIUM_PX = 28;
 
-/** Colour used for suns / environment objects. */
-const ENV_GOLD_COLOR = '#B8860B';
+/** Maximum opacity at full stretch. */
+const MAX_EXTRA_OPACITY = 0.25;
 
-/** Maximum opacity at full stretch (0 base + up to 30% at extreme gravity). */
-const MAX_EXTRA_OPACITY = 0.30;
+/** Hard cap on total displacement magnitude (world px) to prevent violent warping. */
+const MAX_DISPLACEMENT_CAP_PX = 20;
+
+/** Reference displacement for normalising stretch to 0-1.
+ *  Chosen so that typical displacements (sun ~25px capped to 20, photon 8px)
+ *  map to a visually pleasing 0.6–1.0 stretch range. */
+const REF_DISP_PX = 12.0;
 
 /** Radius of the solar mirror for gravity-well purposes (world pixels). */
 const MIRROR_GRAVITY_RADIUS_PX = Constants.SOLAR_MIRROR_COLLISION_RADIUS;
@@ -76,34 +93,77 @@ const HERO_GRAVITY_RADIUS_PX = 22;
 /** Starling radius for gravity-well purposes (world pixels). */
 const STARLING_GRAVITY_RADIUS_PX = Constants.UNIT_RADIUS_PX;
 
-/** Gravity influence radius for photons – immense, belying their tiny size (world px). */
-const PHOTON_GRAVITY_INFLUENCE_PX = 200;
+/** Gravity influence radius for photons (world px). */
+const PHOTON_GRAVITY_INFLUENCE_PX = 60;
 
 /** Maximum grid displacement caused by a photon (world px). */
-const PHOTON_GRAVITY_DISPLACEMENT_PX = 80;
+const PHOTON_GRAVITY_DISPLACEMENT_PX = 8;
 
-/** Gravity influence radius for warp gates – immense relative to their size (world px). */
-const WARP_GATE_GRAVITY_INFLUENCE_PX = 600;
+/** Gravity influence radius for warp gates (world px). */
+const WARP_GATE_GRAVITY_INFLUENCE_PX = 400;
 
 /** Maximum grid displacement caused by a warp gate (world px). */
-const WARP_GATE_GRAVITY_DISPLACEMENT_PX = 200;
+const WARP_GATE_GRAVITY_DISPLACEMENT_PX = 60;
+
+/** Influence multiplier for generic sources (influence = radius × this). */
+const SOURCE_INFLUENCE_MULTIPLIER = 4;
+
+/** Max displacement multiplier for generic sources (displacement = radius × this). */
+const SOURCE_DISPLACEMENT_MULTIPLIER = 0.25;
+
+/** Deep gold colour RGB for suns / environment objects. */
+const ENV_GOLD_R = 184;
+const ENV_GOLD_G = 134;
+const ENV_GOLD_B = 11;
+
+/** Line width scale factor (thinner than 1.0 to keep fine grid subtle). */
+const LINE_WIDTH_SCALE = 0.8;
+
+/** Number of quantised alpha levels for colour LUT. */
+const ALPHA_LEVELS = 32;
+
+/** Base colour for the grid (warm pale gold). */
+const BASE_R = 255;
+const BASE_G = 220;
+const BASE_B = 180;
+
+// ─── Pre-built colour LUT ─────────────────────────────────────────────────────
+
+/**
+ * Build a look-up table of rgba strings for each quantised alpha level.
+ * This avoids per-vertex string construction entirely.
+ */
+function buildColorLut(): string[] {
+    const lut: string[] = new Array(ALPHA_LEVELS);
+    for (let i = 0; i < ALPHA_LEVELS; i++) {
+        const t = i / (ALPHA_LEVELS - 1);
+        const alpha = t * MAX_EXTRA_OPACITY;
+        lut[i] = `rgba(${BASE_R},${BASE_G},${BASE_B},${alpha.toFixed(3)})`;
+    }
+    return lut;
+}
+
+const COLOR_LUT = buildColorLut();
 
 // ─── Renderer class ───────────────────────────────────────────────────────────
 
 export class GravityGridRenderer {
-    // Reusable scratch vectors to avoid per-frame allocations.
+    // Reusable scratch vector to avoid per-frame allocations.
     private readonly _scratchVec: Vector2D = new Vector2D(0, 0);
 
-    // Reusable sources array – populated each frame.
+    // Reusable sources array – populated each frame, then filtered.
     private readonly _sources: GravitySource[] = [];
+
+    // Viewport-filtered sources for the current frame.
+    private readonly _viewSources: GravitySource[] = [];
+
+    // Mutable scratch result for _displace (avoids per-vertex allocation).
+    private readonly _dispResult = { dispWorldX: 0, dispWorldY: 0, stretch: 0 };
 
     // Reusable per-line vertex arrays.
     private readonly _lineVerticesX: number[] = [];
     private readonly _lineVerticesY: number[] = [];
-    private readonly _lineColors: string[] = [];
-
-    // Temporary reference to game state during a draw call (avoids threading through every helper).
-    private _currentGame: GameState | null = null;
+    private readonly _lineAlphaIdx: number[] = [];
 
     // ── Public draw entry point ───────────────────────────────────────────────
 
@@ -123,42 +183,47 @@ export class GravityGridRenderer {
         const screenHeight = getCanvasScreenHeightPx(canvas);
 
         // ── Collect gravity sources ───────────────────────────────────────────
-        this._currentGame = game;
         this._collectSources(game, playerColorMap);
 
         if (this._sources.length === 0) {
-            // No gravity sources → grid is at 0% opacity, nothing to draw.
-            this._currentGame = null;
             return;
         }
 
         // ── Compute world-space viewport bounds ───────────────────────────────
+        const spacing = graphicsQuality === 'medium' ? GRID_SPACING_MEDIUM_PX : GRID_SPACING_WORLD_PX;
+
         const halfW = screenWidth / (2 * zoom);
         const halfH = screenHeight / (2 * zoom);
         const camX = context.camera.x;
         const camY = context.camera.y;
 
-        const margin = GRID_SPACING_WORLD_PX * 1.5;
+        const margin = spacing * 1.5;
         const worldMinX = camX - halfW - margin;
         const worldMaxX = camX + halfW + margin;
         const worldMinY = camY - halfH - margin;
         const worldMaxY = camY + halfH + margin;
 
-        const startGridX = Math.floor(worldMinX / GRID_SPACING_WORLD_PX) * GRID_SPACING_WORLD_PX;
-        const endGridX = Math.ceil(worldMaxX / GRID_SPACING_WORLD_PX) * GRID_SPACING_WORLD_PX;
-        const startGridY = Math.floor(worldMinY / GRID_SPACING_WORLD_PX) * GRID_SPACING_WORLD_PX;
-        const endGridY = Math.ceil(worldMaxY / GRID_SPACING_WORLD_PX) * GRID_SPACING_WORLD_PX;
+        // ── Filter sources to those overlapping viewport ──────────────────────
+        this._filterSourcesToViewport(worldMinX, worldMaxX, worldMinY, worldMaxY);
+
+        if (this._viewSources.length === 0) {
+            return;
+        }
+
+        const startGridX = Math.floor(worldMinX / spacing) * spacing;
+        const endGridX = Math.ceil(worldMaxX / spacing) * spacing;
+        const startGridY = Math.floor(worldMinY / spacing) * spacing;
+        const endGridY = Math.ceil(worldMaxY / spacing) * spacing;
 
         // ── Draw displaced grid ───────────────────────────────────────────────
         ctx.save();
-        ctx.lineWidth = Math.max(1.0, zoom * 1.0);
-        ctx.lineCap = 'round';
+        ctx.lineWidth = Math.max(1.0, zoom * LINE_WIDTH_SCALE);
+        ctx.lineCap = 'butt';
 
-        this._drawLines(context, startGridX, endGridX, startGridY, endGridY, true);
-        this._drawLines(context, startGridX, endGridX, startGridY, endGridY, false);
+        this._drawLines(context, startGridX, endGridX, startGridY, endGridY, true, spacing);
+        this._drawLines(context, startGridX, endGridX, startGridY, endGridY, false, spacing);
 
         ctx.restore();
-        this._currentGame = null;
     }
 
     // ─── Source collection ────────────────────────────────────────────────────
@@ -168,104 +233,126 @@ export class GravityGridRenderer {
         sources.length = 0;
 
         // Suns
-        for (const sun of game.suns) {
-            this._pushSource(sun.position.x, sun.position.y, sun.radius, ENV_GOLD_COLOR);
+        for (let i = 0, len = game.suns.length; i < len; i++) {
+            const sun = game.suns[i];
+            this._pushSource(sun.position.x, sun.position.y, sun.radius, ENV_GOLD_R, ENV_GOLD_G, ENV_GOLD_B);
         }
 
         // Asteroids
-        for (const asteroid of game.asteroids) {
-            this._pushSource(asteroid.position.x, asteroid.position.y, asteroid.size, ENV_GOLD_COLOR);
+        for (let i = 0, len = game.asteroids.length; i < len; i++) {
+            const asteroid = game.asteroids[i];
+            this._pushSource(asteroid.position.x, asteroid.position.y, asteroid.size, ENV_GOLD_R, ENV_GOLD_G, ENV_GOLD_B);
         }
 
-        // Photons – immense gravity that belies their tiny size
-        for (const photon of game.photons) {
+        // Photons – subtle gravity
+        for (let i = 0, len = game.photons.length; i < len; i++) {
+            const photon = game.photons[i];
             this._pushSourceCustom(
-                photon.position.x,
-                photon.position.y,
-                PHOTON_GRAVITY_INFLUENCE_PX,
-                PHOTON_GRAVITY_DISPLACEMENT_PX,
-                ENV_GOLD_COLOR
+                photon.position.x, photon.position.y,
+                PHOTON_GRAVITY_INFLUENCE_PX, PHOTON_GRAVITY_DISPLACEMENT_PX,
+                ENV_GOLD_R, ENV_GOLD_G, ENV_GOLD_B
             );
         }
 
-        // Warp gates – immense gravity relative to their size (only when active)
-        for (const gate of game.warpGates) {
+        // Warp gates (only when active)
+        for (let i = 0, len = game.warpGates.length; i < len; i++) {
+            const gate = game.warpGates[i];
             if (!gate.hasDissipated) {
                 this._pushSourceCustom(
-                    gate.position.x,
-                    gate.position.y,
-                    WARP_GATE_GRAVITY_INFLUENCE_PX,
-                    WARP_GATE_GRAVITY_DISPLACEMENT_PX,
-                    ENV_GOLD_COLOR
+                    gate.position.x, gate.position.y,
+                    WARP_GATE_GRAVITY_INFLUENCE_PX, WARP_GATE_GRAVITY_DISPLACEMENT_PX,
+                    ENV_GOLD_R, ENV_GOLD_G, ENV_GOLD_B
                 );
             }
         }
 
         // Per-player entities
-        for (const player of game.players) {
+        for (let p = 0, pLen = game.players.length; p < pLen; p++) {
+            const player = game.players[p];
             if (player.isDefeated()) continue;
 
-            const color = playerColorMap.get(player) ?? '#FFFFFF';
+            const colorHex = playerColorMap.get(player) ?? '#FFFFFF';
+            const rgb = this._hexToRgb(colorHex);
+            const cr = rgb.r;
+            const cg = rgb.g;
+            const cb = rgb.b;
 
             // Stellar Forge
             if (player.stellarForge) {
                 const forge = player.stellarForge;
-                this._pushSource(forge.position.x, forge.position.y, forge.radius, color);
+                this._pushSource(forge.position.x, forge.position.y, forge.radius, cr, cg, cb);
             }
 
-            // Buildings (towers etc.)
-            for (const building of player.buildings) {
-                this._pushSource(building.position.x, building.position.y, building.radius, color);
+            // Buildings
+            for (let i = 0, len = player.buildings.length; i < len; i++) {
+                const building = player.buildings[i];
+                this._pushSource(building.position.x, building.position.y, building.radius, cr, cg, cb);
             }
 
             // Solar Mirrors
-            for (const mirror of player.solarMirrors) {
-                this._pushSource(mirror.position.x, mirror.position.y, MIRROR_GRAVITY_RADIUS_PX, color);
+            for (let i = 0, len = player.solarMirrors.length; i < len; i++) {
+                const mirror = player.solarMirrors[i];
+                this._pushSource(mirror.position.x, mirror.position.y, MIRROR_GRAVITY_RADIUS_PX, cr, cg, cb);
             }
 
             // Units (heroes and starlings)
-            for (const unit of player.units) {
+            for (let i = 0, len = player.units.length; i < len; i++) {
+                const unit = player.units[i];
                 const r = unit.isHero ? HERO_GRAVITY_RADIUS_PX : STARLING_GRAVITY_RADIUS_PX;
-                this._pushSource(unit.position.x, unit.position.y, r, color);
+                this._pushSource(unit.position.x, unit.position.y, r, cr, cg, cb);
             }
         }
     }
 
-    private _pushSource(worldX: number, worldY: number, radiusPx: number, blendColor: string): void {
-        // influenceRadius = 8 × radius (doubled from original 4×)
-        const influenceRadiusWorld = radiusPx * 8;
-        // Maximum displacement: 80% of the object's radius (doubled from original 40%)
-        const maxDisplacementWorld = radiusPx * 0.8;
+    private _pushSource(worldX: number, worldY: number, radiusPx: number, r: number, g: number, b: number): void {
+        const influenceRadiusWorld = radiusPx * SOURCE_INFLUENCE_MULTIPLIER;
+        const maxDisplacementWorld = radiusPx * SOURCE_DISPLACEMENT_MULTIPLIER;
         this._sources.push({
-            worldX,
-            worldY,
+            worldX, worldY,
             influenceRadiusWorld,
+            influenceRadiusSq: influenceRadiusWorld * influenceRadiusWorld,
+            invInfluenceRadius: 1 / influenceRadiusWorld,
             maxDisplacementWorld,
-            blendColor,
+            blendR: r, blendG: g, blendB: b,
         });
     }
 
     private _pushSourceCustom(
-        worldX: number,
-        worldY: number,
-        influenceRadiusWorld: number,
-        maxDisplacementWorld: number,
-        blendColor: string
+        worldX: number, worldY: number,
+        influenceRadiusWorld: number, maxDisplacementWorld: number,
+        r: number, g: number, b: number
     ): void {
         this._sources.push({
-            worldX,
-            worldY,
+            worldX, worldY,
             influenceRadiusWorld,
+            influenceRadiusSq: influenceRadiusWorld * influenceRadiusWorld,
+            invInfluenceRadius: 1 / influenceRadiusWorld,
             maxDisplacementWorld,
-            blendColor,
+            blendR: r, blendG: g, blendB: b,
         });
+    }
+
+    // ─── Viewport filtering ───────────────────────────────────────────────────
+
+    private _filterSourcesToViewport(
+        minX: number, maxX: number, minY: number, maxY: number
+    ): void {
+        const out = this._viewSources;
+        out.length = 0;
+        for (let i = 0, len = this._sources.length; i < len; i++) {
+            const src = this._sources[i];
+            const r = src.influenceRadiusWorld;
+            if (src.worldX + r < minX || src.worldX - r > maxX) continue;
+            if (src.worldY + r < minY || src.worldY - r > maxY) continue;
+            out.push(src);
+        }
     }
 
     // ─── Grid drawing ─────────────────────────────────────────────────────────
 
     /**
      * Draw vertical (isVertical=true) or horizontal (isVertical=false) grid lines
-     * with gravity-well displacement and colour blending.
+     * with gravity-well displacement.  Uses quantised alpha and batched paths.
      */
     private _drawLines(
         context: GravityGridContext,
@@ -273,88 +360,98 @@ export class GravityGridRenderer {
         endGridX: number,
         startGridY: number,
         endGridY: number,
-        isVertical: boolean
+        isVertical: boolean,
+        spacing: number
     ): void {
         const { ctx } = context;
+        const sources = this._viewSources;
+        const srcLen = sources.length;
 
-        // Outer loop: each grid line (constant-x for vertical, constant-y for horizontal)
         const outerStart = isVertical ? startGridX : startGridY;
         const outerEnd = isVertical ? endGridX : endGridY;
         const innerStart = isVertical ? startGridY : startGridX;
         const innerEnd = isVertical ? endGridY : endGridX;
 
-        for (let outer = outerStart; outer <= outerEnd; outer += GRID_SPACING_WORLD_PX) {
-            // Collect displaced vertices along this line
+        for (let outer = outerStart; outer <= outerEnd; outer += spacing) {
+            // Per-line early skip: check if any source could influence this line.
+            let hasNearby = false;
+            for (let s = 0; s < srcLen; s++) {
+                const src = sources[s];
+                const perpDist = isVertical
+                    ? Math.abs(src.worldX - outer)
+                    : Math.abs(src.worldY - outer);
+                if (perpDist < src.influenceRadiusWorld) {
+                    hasNearby = true;
+                    break;
+                }
+            }
+            if (!hasNearby) continue;
+
+            // Collect displaced vertices along this line.
             const vx = this._lineVerticesX;
             const vy = this._lineVerticesY;
-            const vc = this._lineColors;
+            const va = this._lineAlphaIdx;
             vx.length = 0;
             vy.length = 0;
-            vc.length = 0;
+            va.length = 0;
 
-            for (let inner = innerStart; inner <= innerEnd; inner += GRID_SPACING_WORLD_PX) {
+            for (let inner = innerStart; inner <= innerEnd; inner += spacing) {
                 const worldX = isVertical ? outer : inner;
                 const worldY = isVertical ? inner : outer;
 
-                const result = this._displace(worldX, worldY);
+                this._displace(worldX, worldY);
+                const stretch = this._dispResult.stretch;
 
-                // Skip invisible vertices (zero stretch → opacity 0) to reduce draw calls.
-                if (result.stretch < 0.001) {
-                    // Still record a NaN sentinel so we don't draw a segment here.
+                if (stretch < 0.001) {
                     vx.push(NaN);
                     vy.push(NaN);
-                    vc.push('');
+                    va.push(-1);
                     continue;
                 }
 
-                // Determine sunlight state for colour selection.
-                const inSunlight = this._isInSunlight(worldX, worldY);
+                // Smoothstep interpolation for a smoother alpha transition.
+                const t = stretch * stretch * (3 - 2 * stretch);
+                const alphaIdx = Math.min(ALPHA_LEVELS - 1, (t * (ALPHA_LEVELS - 1) + 0.5) | 0);
 
-                // Convert displaced world position to screen
-                this._scratchVec.x = result.dispWorldX;
-                this._scratchVec.y = result.dispWorldY;
+                // Convert displaced world position to screen.
+                this._scratchVec.x = this._dispResult.dispWorldX;
+                this._scratchVec.y = this._dispResult.dispWorldY;
                 const screen = context.worldToScreen(this._scratchVec);
 
                 vx.push(screen.x);
                 vy.push(screen.y);
-                vc.push(this._blendedColor(result.stretch, result.blendR, result.blendG, result.blendB, inSunlight));
+                va.push(alphaIdx);
             }
 
-            // Draw segments – each adjacent pair of vertices forms one segment.
-            // We batch segments with the same colour to minimise draw calls.
-            // NaN sentinels (invisible vertices) break the path to avoid
-            // inadvertently connecting segments across invisible areas.
+            // Draw segments batched by quantised alpha level.
             const count = vx.length;
             if (count < 2) continue;
 
             let inBatch = false;
-            let batchColor = '';
+            let batchAlpha = -1;
 
             for (let i = 0; i < count; i++) {
                 const curX = vx[i];
-                const curColor = vc[i];
+                const curA = va[i];
 
-                if (Number.isNaN(curX) || curColor === '') {
-                    // Flush and close any open batch at this break point.
+                if (curA < 0) {
                     if (inBatch) {
-                        ctx.strokeStyle = batchColor;
                         ctx.stroke();
                         inBatch = false;
-                        batchColor = '';
                     }
                     continue;
                 }
 
                 if (!inBatch) {
-                    batchColor = curColor;
+                    batchAlpha = curA;
+                    ctx.strokeStyle = COLOR_LUT[curA];
                     ctx.beginPath();
                     ctx.moveTo(curX, vy[i]);
                     inBatch = true;
-                } else if (curColor !== batchColor) {
-                    // Colour change – flush the old batch and start a new one.
-                    ctx.strokeStyle = batchColor;
+                } else if (curA !== batchAlpha) {
                     ctx.stroke();
-                    batchColor = curColor;
+                    batchAlpha = curA;
+                    ctx.strokeStyle = COLOR_LUT[curA];
                     ctx.beginPath();
                     ctx.moveTo(vx[i - 1], vy[i - 1]);
                     ctx.lineTo(curX, vy[i]);
@@ -363,9 +460,7 @@ export class GravityGridRenderer {
                 }
             }
 
-            // Flush the final batch.
             if (inBatch) {
-                ctx.strokeStyle = batchColor;
                 ctx.stroke();
             }
         }
@@ -373,146 +468,49 @@ export class GravityGridRenderer {
 
     /**
      * Compute the displaced world position for a grid vertex at (worldX, worldY).
-     * Returns the displaced coords plus a blended colour component (stretch 0-1
-     * and weighted average RGB of influencing sources).
+     * Writes results to the mutable _dispResult scratch (no allocation).
      */
-    private _displace(worldX: number, worldY: number): {
-        dispWorldX: number;
-        dispWorldY: number;
-        stretch: number;
-        blendR: number;
-        blendG: number;
-        blendB: number;
-    } {
+    private _displace(worldX: number, worldY: number): void {
         let dx = 0;
         let dy = 0;
-        let weightedR = 0;
-        let weightedG = 0;
-        let weightedB = 0;
-        let totalWeight = 0;
 
-        for (const src of this._sources) {
+        const sources = this._viewSources;
+        for (let i = 0, len = sources.length; i < len; i++) {
+            const src = sources[i];
             const ddx = src.worldX - worldX;
             const ddy = src.worldY - worldY;
             const distSq = ddx * ddx + ddy * ddy;
-            const influenceSq = src.influenceRadiusWorld * src.influenceRadiusWorld;
 
-            if (distSq >= influenceSq) continue;
+            if (distSq >= src.influenceRadiusSq) continue;
 
             const dist = Math.sqrt(distSq);
-            const t = 1.0 - dist / src.influenceRadiusWorld; // 1 at centre, 0 at edge
+            const t = 1.0 - dist * src.invInfluenceRadius; // 1 at centre, 0 at edge
             const falloff = t * t * t; // cubic falloff
 
             // Displacement toward source
             const strength = (falloff * src.maxDisplacementWorld) / (dist + 0.1);
             dx += ddx * strength;
             dy += ddy * strength;
+        }
 
-            // Colour contribution
-            const colorWeight = falloff;
-            const rgb = this._hexToRgb(src.blendColor);
-            weightedR += rgb.r * colorWeight;
-            weightedG += rgb.g * colorWeight;
-            weightedB += rgb.b * colorWeight;
-            totalWeight += colorWeight;
+        // Cap displacement to prevent violent warping.
+        const dispMagSq = dx * dx + dy * dy;
+        if (dispMagSq > MAX_DISPLACEMENT_CAP_PX * MAX_DISPLACEMENT_CAP_PX) {
+            const scale = MAX_DISPLACEMENT_CAP_PX / Math.sqrt(dispMagSq);
+            dx *= scale;
+            dy *= scale;
         }
 
         const dispMag = Math.sqrt(dx * dx + dy * dy);
-        // Normalise stretch to 0-1 using a reference displacement distance
-        // Normalise stretch to 0-1 using a reference displacement distance (world pixels)
-        const refDispPx = 15.0; // world pixels – tune for visual feel
-        const stretch = Math.min(1.0, dispMag / refDispPx);
+        const stretch = Math.min(1.0, dispMag / REF_DISP_PX);
 
-        // Weighted average source colour (falls back to base orange if no influence)
-        const blendR = totalWeight > 0 ? weightedR / totalWeight : 255;
-        const blendG = totalWeight > 0 ? weightedG / totalWeight : 165;
-        const blendB = totalWeight > 0 ? weightedB / totalWeight : 0;
-
-        return {
-            dispWorldX: worldX + dx,
-            dispWorldY: worldY + dy,
-            stretch,
-            blendR,
-            blendG,
-            blendB,
-        };
+        const out = this._dispResult;
+        out.dispWorldX = worldX + dx;
+        out.dispWorldY = worldY + dy;
+        out.stretch = stretch;
     }
 
     // ─── Colour helpers ───────────────────────────────────────────────────────
-
-    /**
-     * Return an rgba string blended from the base colour toward the influence
-     * source colour, based on the stretch factor (0–1).
-     *
-     * In sunlight the base is a blazing pale yellow (almost white).
-     * In shadow the base is a bright orange.
-     */
-    private _blendedColor(
-        stretch: number,
-        srcR: number,
-        srcG: number,
-        srcB: number,
-        isInSunlight: boolean
-    ): string {
-        // Sunlit: blazing pale yellow almost white; shadow: bright orange
-        const baseR = 255;
-        const baseG = isInSunlight ? 255 : 120;
-        const baseB = isInSunlight ? 230 :   0;
-
-        // Smoothstep stretch for a nicer visual transition
-        const t = stretch * stretch * (3 - 2 * stretch);
-
-        const r = Math.round(baseR + (srcR - baseR) * t);
-        const g = Math.round(baseG + (srcG - baseG) * t);
-        const b = Math.round(baseB + (srcB - baseB) * t);
-
-        // Opacity is 0 at zero stretch and rises to MAX_EXTRA_OPACITY at full stretch.
-        const alpha = BASE_OPACITY + t * MAX_EXTRA_OPACITY;
-
-        return `rgba(${r},${g},${b},${alpha.toFixed(3)})`;
-    }
-
-    /**
-     * Quick approximate sunlight check for a world-space point.
-     *
-     * Uses circle-approximation for asteroid occlusion rather than the full
-     * polygon intersection used by VisionSystem, keeping per-vertex cost low.
-     * Returns true if at least one sun has line-of-sight to the point.
-     */
-    private _isInSunlight(worldX: number, worldY: number): boolean {
-        const game = this._currentGame;
-        if (!game || game.suns.length === 0) return false;
-
-        for (const sun of game.suns) {
-            const dx = sun.position.x - worldX;
-            const dy = sun.position.y - worldY;
-            const distToSun = Math.sqrt(dx * dx + dy * dy);
-            if (distToSun < 0.001) return true;
-
-            const invDist = 1 / distToSun;
-            const dirX = dx * invDist;
-            const dirY = dy * invDist;
-
-            let blocked = false;
-            for (const asteroid of game.asteroids) {
-                // Project the asteroid centre onto the ray from vertex → sun.
-                const ax = asteroid.position.x - worldX;
-                const ay = asteroid.position.y - worldY;
-                const t = ax * dirX + ay * dirY;
-                if (t < 0 || t > distToSun) continue;
-                // Closest point on the ray to the asteroid centre
-                const perp2 = (ax - dirX * t) * (ax - dirX * t) + (ay - dirY * t) * (ay - dirY * t);
-                if (perp2 < asteroid.size * asteroid.size) {
-                    blocked = true;
-                    break;
-                }
-            }
-
-            if (!blocked) return true;
-        }
-
-        return false;
-    }
 
     /** Simple hex colour to RGB. Caches results to avoid repeated parsing. */
     private readonly _rgbCache = new Map<string, { r: number; g: number; b: number }>();
