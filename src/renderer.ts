@@ -50,6 +50,7 @@ import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas
 import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
 import { SunRayWorkerBridge } from './render/workers/sun-ray-worker-bridge';
 import { StarNestRenderer } from './render/star-nest-renderer';
+import { GravityGridRenderer, GravityGridContext } from './render/gravity-grid-renderer';
 
 
 type InfluenceRenderCircle = {
@@ -222,6 +223,7 @@ export class GameRenderer {
     private readonly environmentRenderer = new EnvironmentRenderer();
     private readonly glowRenderer = new GlowRenderer();
     private readonly starNestRenderer = new StarNestRenderer();
+    private readonly gravityGridRenderer = new GravityGridRenderer();
     private movementPointFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
     // Device pixel ratio is dimensionless and does not use a unit suffix.
@@ -254,6 +256,7 @@ export class GameRenderer {
     private readonly _reusableVisibleSpaceDust: SpaceDustParticle[] = [];
     private readonly _reusableInfluenceCircles: InfluenceRenderCircle[] = [];
     private readonly _reusableCirclesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
+    private readonly _reusableGravityGridColorMap = new Map<Player, string>();
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -667,6 +670,35 @@ export class GameRenderer {
         c.enemyColor = this.enemyColor;
         c.viewingPlayer = this.viewingPlayer;
         c.colorblindMode = this.colorblindMode;
+        return c;
+    }
+
+    private _cachedGravityGridCtx: GravityGridContext | null = null;
+
+    private getGravityGridContext(): GravityGridContext {
+        if (!this._cachedGravityGridCtx) {
+            this._cachedGravityGridCtx = {
+                ctx: this.ctx,
+                canvas: this.canvas,
+                camera: this.camera,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                viewingPlayer: this.viewingPlayer,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            };
+            return this._cachedGravityGridCtx;
+        }
+        const c = this._cachedGravityGridCtx;
+        c.ctx = this.ctx;
+        c.canvas = this.canvas;
+        c.camera = this.camera;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.viewingPlayer = this.viewingPlayer;
         return c;
     }
 
@@ -1720,6 +1752,18 @@ export class GameRenderer {
 
         if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
             this.environmentRenderer.applyUltraWarmCoolGrade(game, envCtx);
+        }
+
+        // Draw gravity-well grid (faint light-orange grid warped by entity gravity).
+        {
+            const gravityGridPlayerColorMap = this._reusableGravityGridColorMap;
+            gravityGridPlayerColorMap.clear();
+            for (const player of game.players) {
+                if (!player.isDefeated()) {
+                    gravityGridPlayerColorMap.set(player, this.getLadPlayerColor(player, ladSun, game));
+                }
+            }
+            this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
         }
 
         if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
