@@ -42,7 +42,7 @@ import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
 import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/screens/match-loading-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
-import { MenuAudioController } from './menu/menu-audio';
+import { MenuAudioController, UiSoundType } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
 import { FactionCarouselView } from './menu/faction-carousel-view';
 import { BUILD_NUMBER } from './build-info';
@@ -193,6 +193,8 @@ export class MainMenu {
         document.body.appendChild(this.menuElement);
         this.menuAudioController.setMusicEnabled(this.settings.musicEnabled);
         this.menuAudioController.setMusicVolume(this.settings.musicVolume / 100);
+        this.menuAudioController.setSoundEnabled(this.settings.soundEnabled);
+        this.menuAudioController.setSoundVolume(this.settings.soundVolume / 100);
         this.menuAudioController.setVisible(true);
         this.updateMenuAudioState();
 
@@ -1347,7 +1349,10 @@ export class MainMenu {
             getSettings: () => this.settings,
             getUsername: () => this.settings.username,
             getSelectedFaction: () => this.settings.selectedFaction,
-            hideMenu: () => this.hide(),
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
+                this.hide();
+            },
             onStartCallback: this.onStartCallback,
             setOnlineMode: (mode) => { this.onlineMode = mode; }
         });
@@ -1455,7 +1460,10 @@ export class MainMenu {
             getSettings: () => this.settings,
             getUsername: () => this.settings.username,
             getSelectedFaction: () => this.settings.selectedFaction,
-            hideMenu: () => this.hide(),
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
+                this.hide();
+            },
             onStartCallback: this.onStartCallback,
             setOnlineMode: (mode) => { this.onlineMode = mode; }
         });
@@ -1801,6 +1809,7 @@ export class MainMenu {
             },
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
+                this.menuAudioController.setSoundEnabled(value);
             },
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
@@ -1808,6 +1817,8 @@ export class MainMenu {
             },
             onSoundVolumeChange: (value) => {
                 this.settings.soundVolume = value;
+                this.menuAudioController.setSoundVolume(value / 100);
+                this.menuAudioController.playUiSound('setting-change');
             },
             onMusicVolumeChange: (value) => {
                 this.settings.musicVolume = value;
