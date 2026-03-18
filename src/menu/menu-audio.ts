@@ -17,6 +17,14 @@ export type MenuScreenAudioState =
     | '1v1-matchmaking'
     | 'lobby-detail';
 
+/** One-shot UI sound identifiers. */
+export type UiSoundType =
+    | 'screen-navigate'
+    | 'button-click'
+    | 'error'
+    | 'match-found'
+    | 'setting-change';
+
 type TrackId =
     | 'constant-piano'
     | 'main-menu'
@@ -38,6 +46,24 @@ const TRACK_PATH_BY_ID: Record<TrackId, string> = {
     'sun-rumble-right': 'ASSETS/SFX/environment/SoL_Ambient_Sun_Rumble.mp3',
 };
 
+// Stub SFX paths – mapped to existing assets as placeholders until dedicated sounds are created
+const UI_SFX_PATH_BY_TYPE: Record<UiSoundType, string> = {
+    'screen-navigate': 'ASSETS/SFX/SFX_Menu_Standard.mp3',
+    'button-click': 'ASSETS/SFX/SFX_Menu_Fast.wav',
+    'error': 'ASSETS/SFX/SFX_Menu_Error.mp3',
+    'match-found': 'ASSETS/SFX/THERO/enterGameMode.mp3',
+    'setting-change': 'ASSETS/SFX/THERO/settingChange.mp3',
+};
+
+// Volume levels for each UI sound type
+const UI_SFX_VOLUME_BY_TYPE: Record<UiSoundType, number> = {
+    'screen-navigate': 0.5,
+    'button-click': 0.4,
+    'error': 0.55,
+    'match-found': 0.7,
+    'setting-change': 0.45,
+};
+
 interface AudioTrack {
     element: HTMLAudioElement;
     crossfadeElement: HTMLAudioElement | null;
@@ -55,10 +81,13 @@ const FALLBACK_LOOP_DURATION_SEC = 26;
 export class MenuAudioController {
     private readonly resolveAssetPath: (path: string) => string;
     private readonly tracksById: Record<TrackId, AudioTrack>;
+    private readonly uiSfxByType: Record<UiSoundType, HTMLAudioElement>;
     private animationFrameId: number | null = null;
     private hasInteractionUnlock = false;
     private isMusicEnabled = true;
     private musicVolume = 1;
+    private isSoundEnabled = true;
+    private soundVolume = 1;
     private isVisible = false;
     private currentScreen: MenuScreenAudioState = 'main';
     private isMatchmakingSearching = false;
@@ -69,6 +98,7 @@ export class MenuAudioController {
     constructor(resolveAssetPath: (path: string) => string) {
         this.resolveAssetPath = resolveAssetPath;
         this.tracksById = this.createTracks();
+        this.uiSfxByType = this.createUiSfx();
     }
 
 
@@ -92,6 +122,14 @@ export class MenuAudioController {
         this.ensurePlaybackState();
     }
 
+    public setSoundEnabled(isSoundEnabled: boolean): void {
+        this.isSoundEnabled = isSoundEnabled;
+    }
+
+    public setSoundVolume(volume: number): void {
+        this.soundVolume = Math.max(0, Math.min(1, volume));
+    }
+
     public setMusicVolume(volume: number): void {
         this.musicVolume = Math.max(0, Math.min(1, volume));
         this.updateTargetVolumes();
@@ -99,9 +137,24 @@ export class MenuAudioController {
     }
 
     public setScreen(screen: MenuScreenAudioState, isMatchmakingSearching: boolean): void {
+        const isScreenChange = screen !== this.currentScreen;
         this.currentScreen = screen;
         this.isMatchmakingSearching = isMatchmakingSearching;
         this.updateTargetVolumes();
+        if (isScreenChange) {
+            this.playUiSound('screen-navigate');
+        }
+    }
+
+    /** Play a one-shot UI sound effect. Requires a prior call to {@link unlockFromUserGesture}. */
+    public playUiSound(type: UiSoundType): void {
+        if (!this.isSoundEnabled || !this.hasInteractionUnlock || this.soundVolume <= 0) {
+            return;
+        }
+        const audio = this.uiSfxByType[type];
+        audio.volume = UI_SFX_VOLUME_BY_TYPE[type] * this.soundVolume;
+        audio.currentTime = 0;
+        void audio.play().catch(() => undefined);
     }
 
     public setSunRumbleContext(sunFocusLevel: number, sunCenterNormalizedX: number, sunCenterNormalizedY: number): void {
@@ -134,6 +187,21 @@ export class MenuAudioController {
                 track.crossfadeElement.src = '';
             }
         }
+        for (const type of Object.keys(this.uiSfxByType) as UiSoundType[]) {
+            this.uiSfxByType[type].pause();
+            this.uiSfxByType[type].src = '';
+        }
+    }
+
+    private createUiSfx(): Record<UiSoundType, HTMLAudioElement> {
+        const sfxByType = {} as Record<UiSoundType, HTMLAudioElement>;
+        for (const type of Object.keys(UI_SFX_PATH_BY_TYPE) as UiSoundType[]) {
+            const audio = new Audio(this.resolveAssetPath(UI_SFX_PATH_BY_TYPE[type]));
+            audio.preload = 'auto';
+            audio.volume = UI_SFX_VOLUME_BY_TYPE[type];
+            sfxByType[type] = audio;
+        }
+        return sfxByType;
     }
 
     private createTracks(): Record<TrackId, AudioTrack> {
