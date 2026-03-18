@@ -79,7 +79,9 @@ const MAX_EXTRA_OPACITY = 0.25;
 /** Hard cap on total displacement magnitude (world px) to prevent violent warping. */
 const MAX_DISPLACEMENT_CAP_PX = 20;
 
-/** Reference displacement for normalising stretch to 0-1. */
+/** Reference displacement for normalising stretch to 0-1.
+ *  Chosen so that typical displacements (sun ~25px capped to 20, photon 8px)
+ *  map to a visually pleasing 0.6–1.0 stretch range. */
 const REF_DISP_PX = 12.0;
 
 /** Radius of the solar mirror for gravity-well purposes (world pixels). */
@@ -113,6 +115,9 @@ const SOURCE_DISPLACEMENT_MULTIPLIER = 0.25;
 const ENV_GOLD_R = 184;
 const ENV_GOLD_G = 134;
 const ENV_GOLD_B = 11;
+
+/** Line width scale factor (thinner than 1.0 to keep fine grid subtle). */
+const LINE_WIDTH_SCALE = 0.8;
 
 /** Number of quantised alpha levels for colour LUT. */
 const ALPHA_LEVELS = 32;
@@ -212,7 +217,7 @@ export class GravityGridRenderer {
 
         // ── Draw displaced grid ───────────────────────────────────────────────
         ctx.save();
-        ctx.lineWidth = Math.max(1.0, zoom * 0.8);
+        ctx.lineWidth = Math.max(1.0, zoom * LINE_WIDTH_SCALE);
         ctx.lineCap = 'butt';
 
         this._drawLines(context, startGridX, endGridX, startGridY, endGridY, true, spacing);
@@ -404,7 +409,7 @@ export class GravityGridRenderer {
                     continue;
                 }
 
-                // Quantise alpha to LUT index.
+                // Smoothstep interpolation for a smoother alpha transition.
                 const t = stretch * stretch * (3 - 2 * stretch);
                 const alphaIdx = Math.min(ALPHA_LEVELS - 1, (t * (ALPHA_LEVELS - 1) + 0.5) | 0);
 
