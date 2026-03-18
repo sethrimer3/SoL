@@ -496,11 +496,10 @@ export class SolarMirror {
     }
 
     /**
-     * Find the nearest position around the closest sun that:
-     *  1. Has line-of-sight to the sun
-     *  2. Does not collide with any obstacle
-     *  3. Preferentially has line-of-sight to the player's forge (base)
-     * Returns null when no valid position is found.
+     * Find the nearest sunlight position by casting 30 evenly-spaced rays from the mirror.
+     * The ray that first touches the sun at the shortest distance determines the target spot:
+     * the orbit position at SUN_ORBIT_DISTANCE_PX beyond the sun's edge in that direction.
+     * Returns null when no ray intersects the sun or the resulting position is invalid.
      */
     findNearestSunlightPosition(gameState: MirrorMovementContext): Vector2D | null {
         if (gameState.suns.length === 0) return null;
@@ -516,52 +515,60 @@ export class SolarMirror {
         }
         if (!nearestSun) return null;
 
-        const forge = this.owner.stellarForge;
-        const targetDist = nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX;
-        const baseAngle = Math.atan2(
-            this.position.y - nearestSun.position.y,
-            this.position.x - nearestSun.position.x
-        );
-        const sampleCount = 24;
-        let fallback: Vector2D | null = null;
+        const rayCount = 30;
+        let bestTarget: Vector2D | null = null;
+        let bestRayDistPx = Infinity;
 
-        for (let i = 0; i < sampleCount; i++) {
-            const angle = baseAngle + (Math.PI * 2 * i) / sampleCount;
-            const candidate = new Vector2D(
-                nearestSun.position.x + Math.cos(angle) * targetDist,
-                nearestSun.position.y + Math.sin(angle) * targetDist
-            );
-            if (gameState.checkCollision(candidate, 20)) continue;
-            if (!SolarMirror.positionHasLineOfSightToSun(candidate, gameState.suns, gameState.asteroids)) continue;
+        // Cast rayCount evenly-spaced rays from the mirror and find which one
+        // first touches the sun at the closest distance.
+        for (let i = 0; i < rayCount; i++) {
+            const angle = (Math.PI * 2 * i) / rayCount;
+            const dirX = Math.cos(angle);
+            const dirY = Math.sin(angle);
 
-            if (!fallback) fallback = candidate;
+            // Ray-circle intersection (a = 1 because direction is unit-length):
+            //   ray: P + t*D,  circle: |Q - C|^2 = R^2
+            const ocX = this.position.x - nearestSun.position.x;
+            const ocY = this.position.y - nearestSun.position.y;
+            const b = 2 * (ocX * dirX + ocY * dirY);
+            const c = ocX * ocX + ocY * ocY - nearestSun.radius * nearestSun.radius;
+            const discriminant = b * b - 4 * c;
+            if (discriminant < 0) continue; // Ray misses the sun
 
-            if (forge) {
-                // Prefer positions that also have LOS to the player's forge
-                const fdx = forge.position.x - candidate.x;
-                const fdy = forge.position.y - candidate.y;
-                const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
-                if (fdist > 0) {
-                    const fdir = new Vector2D(fdx / fdist, fdy / fdist);
-                    const fray = new LightRay(candidate, fdir);
-                    let forgeBlocked = false;
-                    for (const asteroid of gameState.asteroids) {
-                        const d = fray.getIntersectionDistance(asteroid.getWorldVertices());
-                        if (d !== null && d < fdist) {
-                            forgeBlocked = true;
-                            break;
-                        }
-                    }
-                    if (!forgeBlocked) return candidate;
-                } else {
-                    return candidate;
+            const sqrtDisc = Math.sqrt(discriminant);
+            const t0Px = (-b - sqrtDisc) * 0.5;
+            const t1Px = (-b + sqrtDisc) * 0.5;
+            // Nearest positive t = first contact point in front of the mirror
+            const tPx = t0Px > 0 ? t0Px : (t1Px > 0 ? t1Px : -1);
+            if (tPx < 0) continue; // Sun is entirely behind the mirror
+
+            if (tPx < bestRayDistPx) {
+                bestRayDistPx = tPx;
+                // Intersection point on the sun's boundary
+                const intX = this.position.x + dirX * tPx;
+                const intY = this.position.y + dirY * tPx;
+                // Orbit target: move outward from sun center through the intersection
+                const toDirX = intX - nearestSun.position.x;
+                const toDirY = intY - nearestSun.position.y;
+                const toDirLen = Math.sqrt(toDirX * toDirX + toDirY * toDirY);
+                if (toDirLen > 0) {
+                    bestTarget = new Vector2D(
+                        nearestSun.position.x + (toDirX / toDirLen) * (nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX),
+                        nearestSun.position.y + (toDirY / toDirLen) * (nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX)
+                    );
                 }
-            } else {
-                return candidate;
             }
         }
 
-        return fallback; // Return sunniest spot found even without forge LOS
+        if (
+            bestTarget &&
+            !gameState.checkCollision(bestTarget, 20) &&
+            SolarMirror.positionHasLineOfSightToSun(bestTarget, gameState.suns, gameState.asteroids)
+        ) {
+            return bestTarget;
+        }
+
+        return null;
     }
 
     setLinkedStructure(structure: StellarForge | Building | WarpGate | null): void {
