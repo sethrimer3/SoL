@@ -26,6 +26,7 @@ import {
     getPlayerMMRData,
     updatePlayerMMR
 } from './replay';
+import { savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 
 class GameController {
     public game: GameState | null = null;
@@ -703,6 +704,16 @@ class GameController {
         this.renderer.showInfo = this.showInfo;
     }
 
+    /**
+     * Sync renderer state back to the menu settings object, then persist
+     * everything to localStorage so that in-game changes survive restarts.
+     */
+    private syncAndPersistInGameSettings(): void {
+        const settings = this.menu.getSettings();
+        settings.graphicsQuality = this.renderer.graphicsQuality;
+        savePersistedSettings(extractPersistedSettings(settings));
+    }
+
     private getWarpGateManagerContext(): WarpGateManagerContext {
         return {
             renderer: this.renderer,
@@ -778,6 +789,7 @@ class GameController {
             getBuildingAbilityAnchorScreen: () => this.getBuildingAbilityAnchorScreen(),
             cancelMirrorWarpGateModeAndDeselectMirrors: () => this.cancelMirrorWarpGateModeAndDeselectMirrors(),
             clearPathPreview: () => this.clearPathPreview(),
+            onInGameSettingsChanged: () => this.syncAndPersistInGameSettings(),
         };
     }
 
