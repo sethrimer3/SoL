@@ -16,6 +16,7 @@
 
 import { Vector2D, GameState, Asteroid } from '../game-core';
 import * as Constants from '../constants';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 import { valueNoise2D, fractalNoise2D } from './noise-utilities';
 
 type StarData = {
@@ -46,6 +47,9 @@ type ReworkedStarLayer = {
     parallaxFactor: number;
 };
 
+type StarfieldCanvasType = HTMLCanvasElement | OffscreenCanvas;
+type Starfield2DContextType = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
 export class StarfieldRenderer {
     // Cinematic orange palette for reworked parallax stars
     private readonly cinematicOrangePaletteRgb: Array<[number, number, number]> = [
@@ -58,20 +62,35 @@ export class StarfieldRenderer {
         [232, 239, 255],
     ];
 
+    private readonly REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
+        low: 200,
+        medium: 100,
+        high: 50,
+        ultra: 16,
+    };
+
     // Star layers (reworked parallax system - active)
     private reworkedParallaxStarLayers: ReworkedStarLayer[] = [];
-    private readonly reworkedStarCoreCacheByPalette: HTMLCanvasElement[];
-    private readonly reworkedStarHaloCacheByPalette: HTMLCanvasElement[];
+    private readonly reworkedStarCoreCacheByPalette: StarfieldCanvasType[];
+    private readonly reworkedStarHaloCacheByPalette: StarfieldCanvasType[];
+    private reworkedStarCacheCanvas: StarfieldCanvasType | null = null;
+    private reworkedStarCacheCtx: Starfield2DContextType | null = null;
+    private reworkedStarCacheWidthPx = 0;
+    private reworkedStarCacheHeightPx = 0;
+    private reworkedStarCacheCameraX = Number.NaN;
+    private reworkedStarCacheCameraY = Number.NaN;
+    private reworkedStarCacheQuality: 'low' | 'medium' | 'high' | 'ultra' | '' = '';
+    private reworkedStarCacheLastRefreshMs = 0;
 
     // Star layers (traditional temperature-based system - legacy, unused)
     private starLayers: StarLayer[] = [];
     private readonly starColorTemperatureLut: Array<[number, number, number]>;
-    private readonly starCoreCacheByTemperature: HTMLCanvasElement[];
-    private readonly starHaloCacheByTemperature: HTMLCanvasElement[];
+    private readonly starCoreCacheByTemperature: StarfieldCanvasType[];
+    private readonly starHaloCacheByTemperature: StarfieldCanvasType[];
 
     // Starfield cache (for traditional system)
-    private starfieldCacheCanvas: HTMLCanvasElement | null = null;
-    private starfieldCacheCtx: CanvasRenderingContext2D | null = null;
+    private starfieldCacheCanvas: StarfieldCanvasType | null = null;
+    private starfieldCacheCtx: Starfield2DContextType | null = null;
     private starfieldCacheWidth = 0;
     private starfieldCacheHeight = 0;
     private starfieldCacheCameraX = Number.NaN;
@@ -80,7 +99,15 @@ export class StarfieldRenderer {
     // Gradient cache (shared)
     private gradientCache = new Map<string, CanvasGradient>();
 
-    constructor() {
+    constructor(
+        private readonly canvasFactory: (widthPx: number, heightPx: number) => StarfieldCanvasType =
+            (widthPx, heightPx) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = widthPx;
+                canvas.height = heightPx;
+                return canvas;
+            }
+    ) {
         // Initialize temperature-based caches (for traditional system)
         this.starColorTemperatureLut = this.createStarTemperatureLookup();
         this.starCoreCacheByTemperature = this.createStarCoreCacheByTemperature();
@@ -108,9 +135,14 @@ export class StarfieldRenderer {
         };
 
         const layerConfigs = [
-            { count: 2400, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
-            { count: 1700, parallaxFactor: 0.3, sizeMinPx: 1.0, sizeMaxPx: 2.5 },
-            { count: 1100, parallaxFactor: 0.38, sizeMinPx: 1.2, sizeMaxPx: 2.9 },
+            { count: 1300, parallaxFactor: 0.12, sizeMinPx: 0.65, sizeMaxPx: 1.6 },
+            { count: 1000, parallaxFactor: 0.17, sizeMinPx: 0.72, sizeMaxPx: 1.85 },
+            { count: 850, parallaxFactor: 0.22, sizeMinPx: 0.8, sizeMaxPx: 2.1 },
+            { count: 650, parallaxFactor: 0.27, sizeMinPx: 0.9, sizeMaxPx: 2.3 },
+            { count: 450, parallaxFactor: 0.32, sizeMinPx: 1.0, sizeMaxPx: 2.55 },
+            { count: 300, parallaxFactor: 0.38, sizeMinPx: 1.12, sizeMaxPx: 2.8 },
+            { count: 180, parallaxFactor: 0.45, sizeMinPx: 1.26, sizeMaxPx: 3.05 },
+            { count: 110, parallaxFactor: 0.53, sizeMinPx: 1.4, sizeMaxPx: 3.3 },
         ];
         for (const layerConfig of layerConfigs) {
             const stars: ReworkedStarData[] = [];
@@ -170,14 +202,14 @@ export class StarfieldRenderer {
     /**
      * Create star core caches for reworked palette
      */
-    private createReworkedStarCoreCacheByPalette(): HTMLCanvasElement[] {
+    private createReworkedStarCoreCacheByPalette(): StarfieldCanvasType[] {
         return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarCoreCacheCanvas(colorRgb));
     }
 
     /**
      * Create star halo caches for reworked palette
      */
-    private createReworkedStarHaloCacheByPalette(): HTMLCanvasElement[] {
+    private createReworkedStarHaloCacheByPalette(): StarfieldCanvasType[] {
         return this.cinematicOrangePaletteRgb.map((colorRgb) => this.createStarHaloCacheCanvas(colorRgb));
     }
 
@@ -186,76 +218,113 @@ export class StarfieldRenderer {
      * Renders cinematic orange stars with parallax depth
      */
     public drawReworkedParallaxStars(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         parallaxCamera: Vector2D,
         screenWidth: number,
         screenHeight: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'
     ): void {
+        if (!this.reworkedStarCacheCanvas) {
+            this.reworkedStarCacheCanvas = this.canvasFactory(screenWidth, screenHeight);
+            this.reworkedStarCacheCtx = this.reworkedStarCacheCanvas.getContext('2d');
+        }
+
+        if (!this.reworkedStarCacheCanvas || !this.reworkedStarCacheCtx) {
+            return;
+        }
+
+        const shouldRenderStarChromaticAberration = graphicsQuality === 'high' || graphicsQuality === 'ultra';
         const centerX = screenWidth * 0.5;
         const centerY = screenHeight * 0.5;
         const wrapSpanX = centerX * 2 + Constants.STAR_WRAP_SIZE;
         const wrapSpanY = centerY * 2 + Constants.STAR_WRAP_SIZE;
         const cameraX = parallaxCamera.x;
         const cameraY = parallaxCamera.y;
-        const nowSeconds = performance.now() * 0.001;
+        const nowMs = performance.now();
+        const nowSeconds = nowMs * 0.001;
+        const dimensionsChanged = this.reworkedStarCacheWidthPx !== screenWidth || this.reworkedStarCacheHeightPx !== screenHeight;
 
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-
-        for (const layer of this.reworkedParallaxStarLayers) {
-            const parallaxX = cameraX * layer.parallaxFactor;
-            const parallaxY = cameraY * layer.parallaxFactor;
-            const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
-            
-            // Pre-compute depth-based alpha and size multipliers
-            const depthAlpha = 0.5 + depthScale * 0.5;
-            const depthSizeMultiplier = 0.84 + depthScale * 0.62;
-            const haloAlphaMultiplier = 0.56 + depthScale * 0.44;
-
-            for (const star of layer.stars) {
-                const screenX = centerX + (star.x - parallaxX);
-                const screenY = centerY + (star.y - parallaxY);
-                const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
-                const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
-
-                if (wrappedX < -140 || wrappedX > screenWidth + 140 || wrappedY < -140 || wrappedY > screenHeight + 140) {
-                    continue;
-                }
-
-                const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
-                const alpha = star.brightness * flicker * depthAlpha;
-                const renderedSizePx = star.sizePx * depthSizeMultiplier;
-                const cacheIndex = star.colorIndex;
-
-                const haloRadiusPx = renderedSizePx * star.haloScale;
-                ctx.globalAlpha = alpha * haloAlphaMultiplier;
-                ctx.drawImage(
-                    this.reworkedStarHaloCacheByPalette[cacheIndex],
-                    wrappedX - haloRadiusPx,
-                    wrappedY - haloRadiusPx,
-                    haloRadiusPx * 2,
-                    haloRadiusPx * 2
-                );
-
-                const coreRadiusPx = renderedSizePx * 0.95;
-                ctx.globalAlpha = alpha;
-                ctx.drawImage(
-                    this.reworkedStarCoreCacheByPalette[cacheIndex],
-                    wrappedX - coreRadiusPx,
-                    wrappedY - coreRadiusPx,
-                    coreRadiusPx * 2,
-                    coreRadiusPx * 2
-                );
-
-                // Only render chromatic aberration on medium+ quality
-                if (star.hasChromaticAberration && graphicsQuality !== 'low') {
-                    this.renderStarChromaticAberration(ctx, wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb);
-                }
-            }
+        if (dimensionsChanged) {
+            this.reworkedStarCacheCanvas.width = screenWidth;
+            this.reworkedStarCacheCanvas.height = screenHeight;
+            this.reworkedStarCacheWidthPx = screenWidth;
+            this.reworkedStarCacheHeightPx = screenHeight;
         }
 
-        ctx.restore();
+        const cameraChanged = cameraX !== this.reworkedStarCacheCameraX || cameraY !== this.reworkedStarCacheCameraY;
+        const qualityChanged = graphicsQuality !== this.reworkedStarCacheQuality;
+        const refreshIntervalMs = this.REWORKED_STAR_CACHE_REFRESH_INTERVAL_Ms[graphicsQuality];
+        const refreshIntervalElapsed = nowMs - this.reworkedStarCacheLastRefreshMs >= refreshIntervalMs;
+        const shouldRefresh = dimensionsChanged || cameraChanged || qualityChanged || refreshIntervalElapsed;
+
+        if (shouldRefresh) {
+            const cacheCtx = this.reworkedStarCacheCtx;
+            cacheCtx.globalCompositeOperation = 'source-over';
+            cacheCtx.clearRect(0, 0, screenWidth, screenHeight);
+            cacheCtx.save();
+            cacheCtx.globalCompositeOperation = 'lighter';
+
+            for (const layer of this.reworkedParallaxStarLayers) {
+                const parallaxX = cameraX * layer.parallaxFactor;
+                const parallaxY = cameraY * layer.parallaxFactor;
+                const depthScale = Math.min(1, 0.48 + layer.parallaxFactor * 1.08);
+
+                const depthAlpha = 0.5 + depthScale * 0.5;
+                const depthSizeMultiplier = 0.84 + depthScale * 0.62;
+                const haloAlphaMultiplier = 0.56 + depthScale * 0.44;
+
+                for (const star of layer.stars) {
+                    const screenX = centerX + (star.x - parallaxX);
+                    const screenY = centerY + (star.y - parallaxY);
+                    const wrappedX = ((screenX + centerX) % wrapSpanX) - centerX;
+                    const wrappedY = ((screenY + centerY) % wrapSpanY) - centerY;
+
+                    if (wrappedX < -140 || wrappedX > screenWidth + 140 || wrappedY < -140 || wrappedY > screenHeight + 140) {
+                        continue;
+                    }
+
+                    const flicker = 1 + 0.03 * Math.sin(star.phase + nowSeconds * Math.PI * 2 * star.flickerHz);
+                    const alpha = star.brightness * flicker * depthAlpha;
+                    const renderedSizePx = star.sizePx * depthSizeMultiplier;
+                    const cacheIndex = star.colorIndex;
+
+                    const haloRadiusPx = renderedSizePx * star.haloScale;
+                    cacheCtx.globalAlpha = alpha * haloAlphaMultiplier;
+                    cacheCtx.drawImage(
+                        this.reworkedStarHaloCacheByPalette[cacheIndex],
+                        wrappedX - haloRadiusPx,
+                        wrappedY - haloRadiusPx,
+                        haloRadiusPx * 2,
+                        haloRadiusPx * 2
+                    );
+
+                    const coreRadiusPx = renderedSizePx * 0.95;
+                    cacheCtx.globalAlpha = alpha;
+                    cacheCtx.drawImage(
+                        this.reworkedStarCoreCacheByPalette[cacheIndex],
+                        wrappedX - coreRadiusPx,
+                        wrappedY - coreRadiusPx,
+                        coreRadiusPx * 2,
+                        coreRadiusPx * 2
+                    );
+
+                    if (star.hasChromaticAberration && shouldRenderStarChromaticAberration) {
+                        this.renderStarChromaticAberration(cacheCtx, wrappedX, wrappedY, renderedSizePx, alpha * 0.17, star.colorRgb);
+                    }
+                }
+            }
+
+            cacheCtx.restore();
+            cacheCtx.filter = 'none';
+            cacheCtx.globalAlpha = 1;
+            cacheCtx.globalCompositeOperation = 'source-over';
+            this.reworkedStarCacheCameraX = cameraX;
+            this.reworkedStarCacheCameraY = cameraY;
+            this.reworkedStarCacheQuality = graphicsQuality;
+            this.reworkedStarCacheLastRefreshMs = nowMs;
+        }
+
+        ctx.drawImage(this.reworkedStarCacheCanvas, 0, 0, screenWidth, screenHeight);
         ctx.globalAlpha = 1;
     }
 
@@ -393,13 +462,13 @@ export class StarfieldRenderer {
      * (Legacy system, currently unused)
      */
     public drawStarfield(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         parallaxCamera: Vector2D,
         screenWidth: number,
         screenHeight: number
     ): void {
         if (!this.starfieldCacheCanvas) {
-            this.starfieldCacheCanvas = document.createElement('canvas');
+            this.starfieldCacheCanvas = this.canvasFactory(screenWidth, screenHeight);
             this.starfieldCacheCtx = this.starfieldCacheCanvas.getContext('2d');
         }
 
@@ -505,7 +574,7 @@ export class StarfieldRenderer {
     /**
      * Create star core caches for temperature-based system
      */
-    private createStarCoreCacheByTemperature(): HTMLCanvasElement[] {
+    private createStarCoreCacheByTemperature(): StarfieldCanvasType[] {
         return [
             this.createStarCoreCacheCanvas([255, 191, 130]),
             this.createStarCoreCacheCanvas([255, 226, 181]),
@@ -517,7 +586,7 @@ export class StarfieldRenderer {
     /**
      * Create star halo caches for temperature-based system
      */
-    private createStarHaloCacheByTemperature(): HTMLCanvasElement[] {
+    private createStarHaloCacheByTemperature(): StarfieldCanvasType[] {
         return [
             this.createStarHaloCacheCanvas([255, 184, 120]),
             this.createStarHaloCacheCanvas([255, 214, 154]),
@@ -529,10 +598,8 @@ export class StarfieldRenderer {
     /**
      * Create star core cache canvas with radial gradient
      */
-    private createStarCoreCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
-        const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = 64;
-        cacheCanvas.height = 64;
+    private createStarCoreCacheCanvas(colorRgb: [number, number, number]): StarfieldCanvasType {
+        const cacheCanvas = this.canvasFactory(64, 64);
         const cacheContext = cacheCanvas.getContext('2d');
         if (!cacheContext) {
             return cacheCanvas;
@@ -555,10 +622,8 @@ export class StarfieldRenderer {
     /**
      * Create star halo cache canvas with radial gradient
      */
-    private createStarHaloCacheCanvas(colorRgb: [number, number, number]): HTMLCanvasElement {
-        const cacheCanvas = document.createElement('canvas');
-        cacheCanvas.width = 96;
-        cacheCanvas.height = 96;
+    private createStarHaloCacheCanvas(colorRgb: [number, number, number]): StarfieldCanvasType {
+        const cacheCanvas = this.canvasFactory(96, 96);
         const cacheContext = cacheCanvas.getContext('2d');
         if (!cacheContext) {
             return cacheCanvas;
@@ -598,7 +663,7 @@ export class StarfieldRenderer {
      * Render chromatic aberration effect for bright stars
      */
     private renderStarChromaticAberration(
-        ctx: CanvasRenderingContext2D,
+        ctx: Starfield2DContextType,
         x: number,
         y: number,
         sizePx: number,
@@ -662,9 +727,8 @@ export class StarfieldRenderer {
         ctx.globalCompositeOperation = 'screen';
         ctx.globalAlpha = graphicsQuality === 'ultra' ? 0.82 : 0.68;
 
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = canvas.width / dpr;
-        const screenHeight = canvas.height / dpr;
+        const screenWidth = getCanvasScreenWidthPx(canvas);
+        const screenHeight = getCanvasScreenHeightPx(canvas);
         ctx.drawImage(this.starfieldCacheCanvas, 0, 0, screenWidth, screenHeight);
         ctx.restore();
     }

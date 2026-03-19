@@ -3,6 +3,8 @@
  */
 
 import { Vector2D, Unit } from '../../game-core';
+import * as Constants from '../../constants';
+import { GradientCache } from '../gradient-cache';
 
 /**
  * Interface for accessing renderer context and state.
@@ -75,7 +77,7 @@ export interface UnitRendererContext {
     ): CanvasGradient;
 
     // Gradient cache (direct Map access for explosion effect)
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
 
     // Screen shake
     triggerScreenShake(intensity?: number): void;
@@ -108,7 +110,7 @@ export interface UnitRendererContext {
     camera: { x: number; y: number };
 
     // Unit drawing (needed by HeroRenderer)
-    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext): void;
+    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext, useSimpleLod?: boolean): void;
 }
 
 /**
@@ -124,6 +126,12 @@ export function drawAbilityCooldownBar(
     barWidth: number,
     context: UnitRendererContext
 ): void {
+    // Hero units show photon count instead of time-based cooldown
+    if (unit.isHero) {
+        drawPhotonCountIndicator(screenPos, unit, yOffset, barWidth, context);
+        return;
+    }
+
     if (unit.abilityCooldownTime <= 0) {
         return;
     }
@@ -146,4 +154,40 @@ export function drawAbilityCooldownBar(
     context.ctx.fillRect(barX, barY, barWidth, barHeight);
     context.ctx.fillStyle = fillColor;
     context.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
+}
+
+/**
+ * Draw photon count indicator below a hero unit.
+ * Shows small circles (filled = available, empty = needed).
+ */
+function drawPhotonCountIndicator(
+    screenPos: Vector2D,
+    unit: Unit,
+    yOffset: number,
+    barWidth: number,
+    context: UnitRendererContext
+): void {
+    const cost = Constants.PHOTON_ABILITY_COST;
+    const count = Math.min(unit.photonCount, cost);
+    const dotRadius = Math.max(2, 3 * context.zoom);
+    const spacing = dotRadius * 2.5;
+    const totalWidth = (cost - 1) * spacing;
+    const startX = screenPos.x - totalWidth / 2;
+    const y = screenPos.y + yOffset + dotRadius;
+
+    for (let i = 0; i < cost; i++) {
+        const cx = startX + i * spacing;
+        context.ctx.beginPath();
+        context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
+        if (i < count) {
+            // Filled = available photon
+            context.ctx.fillStyle = '#FFE680';
+            context.ctx.fill();
+        } else {
+            // Empty = still needed
+            context.ctx.strokeStyle = '#665500';
+            context.ctx.lineWidth = 1;
+            context.ctx.stroke();
+        }
+    }
 }

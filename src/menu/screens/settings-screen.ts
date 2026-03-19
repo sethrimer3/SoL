@@ -15,11 +15,17 @@ export interface SettingsScreenParams {
     musicVolume: number;
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean;
+    developerModeEnabled: boolean;
     playerColor: string;
     enemyColor: string;
     allyColor: string;
     enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
+    isExperimentalGraphicsEnabled: boolean;
+    isStarNestEnabled: boolean;
+    isAdaptiveQualityEnabled: boolean;
+    useSvgSprites: boolean;
+    isPauseOnFocusLossEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -29,11 +35,17 @@ export interface SettingsScreenParams {
     onMusicVolumeChange: (value: number) => void;
     onBattleStatsInfoChange: (value: boolean) => void;
     onScreenShakeChange: (value: boolean) => void;
+    onDeveloperModeEnabledChange: (value: boolean) => void;
     onPlayerColorChange: (value: string) => void;
     onEnemyColorChange: (value: string) => void;
     onAllyColorChange: (value: string) => void;
     onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
+    onExperimentalGraphicsEnabledChange: (value: boolean) => void;
+    onStarNestEnabledChange: (value: boolean) => void;
+    onAdaptiveQualityEnabledChange: (value: boolean) => void;
+    onUseSvgSpritesChange: (value: boolean) => void;
+    onPauseOnFocusLossEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -54,11 +66,17 @@ export function renderSettingsScreen(
         musicVolume,
         isBattleStatsInfoEnabled,
         screenShakeEnabled,
+        developerModeEnabled,
         playerColor,
         enemyColor,
         allyColor,
         enemy2Color,
         graphicsQuality,
+        isExperimentalGraphicsEnabled,
+        isStarNestEnabled,
+        isAdaptiveQualityEnabled,
+        useSvgSprites,
+        isPauseOnFocusLossEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -68,11 +86,17 @@ export function renderSettingsScreen(
         onMusicVolumeChange,
         onBattleStatsInfoChange,
         onScreenShakeChange,
+        onDeveloperModeEnabledChange,
         onPlayerColorChange,
         onEnemyColorChange,
         onAllyColorChange,
         onEnemy2ColorChange,
         onGraphicsQualityChange,
+        onExperimentalGraphicsEnabledChange,
+        onStarNestEnabledChange,
+        onAdaptiveQualityEnabledChange,
+        onUseSvgSpritesChange,
+        onPauseOnFocusLossEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -165,6 +189,12 @@ export function renderSettingsScreen(
     );
     settingsContainer.appendChild(screenShakeSection);
 
+    const developerModeSection = createSettingSection(
+        'Developer Mode',
+        createToggle(developerModeEnabled, onDeveloperModeEnabledChange)
+    );
+    settingsContainer.appendChild(developerModeSection);
+
     // Player Color setting
     const playerColorSection = createSettingSection(
         'Player Color',
@@ -205,6 +235,36 @@ export function renderSettingsScreen(
         )
     );
     settingsContainer.appendChild(graphicsQualitySection);
+
+    const adaptiveQualitySection = createSettingSection(
+        'Adaptive Quality',
+        createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
+    );
+    settingsContainer.appendChild(adaptiveQualitySection);
+
+    const svgSpriteSection = createSettingSection(
+        'Use SVG Sprites',
+        createToggle(useSvgSprites, onUseSvgSpritesChange)
+    );
+    settingsContainer.appendChild(svgSpriteSection);
+
+    const pauseOnFocusLossSection = createSettingSection(
+        'Pause When Unfocused',
+        createToggle(isPauseOnFocusLossEnabled, onPauseOnFocusLossEnabledChange)
+    );
+    settingsContainer.appendChild(pauseOnFocusLossSection);
+
+    const experimentalGraphicsSection = createSettingSection(
+        'Experimental Graphics',
+        createToggle(isExperimentalGraphicsEnabled, onExperimentalGraphicsEnabledChange)
+    );
+    settingsContainer.appendChild(experimentalGraphicsSection);
+
+    const starNestSection = createSettingSection(
+        'Star Nest Effects',
+        createToggle(isStarNestEnabled, onStarNestEnabledChange)
+    );
+    settingsContainer.appendChild(starNestSection);
 
     // Color Scheme setting
     const colorSchemeSection = createSettingSection(

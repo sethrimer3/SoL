@@ -252,7 +252,11 @@ export class AiMirrorSystem {
             return;
         }
 
-        if (player.solarMirrors.length >= Constants.AI_MAX_MIRRORS) {
+        if (player.solarMirrors.length >= Math.min(Constants.AI_MAX_MIRRORS, Constants.MAX_SOLAR_MIRRORS_PER_PLAYER)) {
+            return;
+        }
+
+        if (player.stellarForge.isMirrorQueuedOrProducing()) {
             return;
         }
 

@@ -269,7 +269,7 @@ export class AISystem {
      * Check if a hero unit is queued or producing in the forge
      */
     private static isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+        return forge.hasQueuedOrProducingHeroUnit(heroUnitType);
     }
 
     /**

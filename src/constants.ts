@@ -325,6 +325,7 @@ export const HERO_UNIT_BASE_COST = 300;
 export const HERO_UNIT_COST_INCREMENT = 200;
 export const SOLAR_MIRROR_COST = 50; // Cost to build additional solar mirrors
 export const STELLAR_FORGE_SOLAR_MIRROR_COST = 500; // Required incoming sunlight/sec to produce a solar mirror from the main stellar forge
+export const MAX_SOLAR_MIRRORS_PER_PLAYER = 10;
 
 // Foundry upgrade costs
 export const FOUNDRY_STRAFE_UPGRADE_COST = 1000; // Cost to unlock Strafe upgrade
@@ -789,6 +790,44 @@ export const SHROUD_TINY_CUBE_HALF_SIZE_PX = 7;   // Half-size of tiny cubes (14
 export const SHROUD_UNFOLD_DURATION_SEC = 0.6;    // Duration of unfolding animation
 export const SHROUD_SMALL_UNFOLD_DELAY_SEC = 0.0; // Delay before small cubes start unfolding
 export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spawns before tiny cubes unfold
+
+// ─── Photon System Constants ───
+export const PHOTON_MAX_COUNT = 500;                     // Maximum photons on the field
+export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 1.5;       // Initial time between spawns (seconds)
+export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.15;       // Fastest spawn interval at end of match
+export const PHOTON_SPEED_MIN = 30;                      // Minimum photon ejection speed (px/sec)
+export const PHOTON_SPEED_MAX = 80;                      // Maximum photon ejection speed (px/sec)
+export const PHOTON_RADIUS_PX = 4;                       // Visual/collision radius
+export const PHOTON_REPULSION_RANGE_PX = 80;             // Range at which photons repel each other
+export const PHOTON_REPULSION_STRENGTH = 40;             // Repulsion force magnitude
+export const PHOTON_HERO_ABSORB_RANGE_PX = 200;          // Range at which heroes suck in photons
+export const PHOTON_HERO_ABSORB_STRENGTH = 3000;         // Gravity pull strength (stronger when closer)
+export const PHOTON_HERO_CAPTURE_RANGE_PX = 12;          // Distance to actually absorb a photon
+export const PHOTON_LIFETIME_SEC = 60;                   // How long a photon lives before fading
+export const PHOTON_AGING_START_SEC = 50;                // Seconds into lifetime when aging visuals begin (last 10 seconds)
+export const PHOTON_WALL_BOUNCE_RESTITUTION = 0.65;      // Speed retained after bouncing off a map wall (0..1)
+export const PHOTON_FRICTION_PX_PER_SEC_SQ = 6;          // Deceleration applied to photons each second (px/s²)
+export const PHOTON_GOLDEN_ANGLE_RAD = 2.39996323;       // Golden angle ≈ 137.508° in radians
+export const PHOTON_ABILITY_COST = 3;                    // Default photons needed to cast an ability
+export const PHOTON_MIRROR_ABSORB_RANGE_PX = 120;        // Range at which mirrors suck in photons
+export const PHOTON_MIRROR_ABSORB_STRENGTH = 250;        // Gravity pull strength for mirrors
+export const PHOTON_MIRROR_CAPTURE_RANGE_PX = 15;        // Distance to actually absorb a photon into a mirror
+export const PHOTON_SUN_REPULSION_RANGE_PX = 90;         // Distance from sun center at which photons start being repelled
+export const PHOTON_SUN_REPULSION_STRENGTH = 120;        // Repulsion force that pushes photons away from the sun
+export const PHOTON_UNIT_TAP_DESELECT_RADIUS_PX = 24;   // World-space tap radius for deselecting an individual unit by tapping it
+export const MIRROR_OVERCHARGE_DURATION_SEC = 5.0;       // How long a mirror stays overcharged after absorbing a photon
+export const MIRROR_OVERCHARGE_ENERGY_MULTIPLIER = 2.0;  // Energy rate multiplier when mirror is overcharged
+
+// ─── Match Timer Constants ───
+export const MATCH_TIME_LIMIT_SEC = 480;                 // 8-minute match time limit
+
+// ─── Damage Score Constants (for time-based victory) ───
+export const DAMAGE_SCORE_STARLING = 1;
+export const DAMAGE_SCORE_STRUCTURE = 3;
+export const DAMAGE_SCORE_SOLAR_MIRROR = 5;
+export const DAMAGE_SCORE_HERO = 5;
+export const DAMAGE_SCORE_FOUNDRY = 7;
+export const DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC = 120;   // Show damage scores when this many seconds remain
 
 // AI Strategy types
 export enum AIStrategy {

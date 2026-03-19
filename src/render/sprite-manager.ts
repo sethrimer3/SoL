@@ -34,11 +34,41 @@ export const VELARIS_FORGE_GRAPHEME_SPRITE_PATHS = [
     'ASSETS/sprites/VELARIS/velarisAncientScript/grapheme-Z.png'
 ];
 
+export type SpriteDrawSource = {
+    image: CanvasImageSource;
+    sourceX: number;
+    sourceY: number;
+    sourceWidth: number;
+    sourceHeight: number;
+    width: number;
+    height: number;
+};
+
+type SpriteAtlasRegion = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+};
+
 export class SpriteManager {
+    // 2048px keeps the dynamic atlas broadly compatible with common browser texture/canvas limits
+    // while still fitting the small sprite set used for repeated UI/building draws.
+    private static readonly SPRITE_ATLAS_SIZE_PX = 2048;
+    // Large padding + edge extrusion prevents neighboring atlas entries from bleeding into
+    // rotated/minified draws (this was causing sun texels to leak onto mirrors/forge sprites).
+    private static readonly SPRITE_ATLAS_PADDING_PX = 16;
+
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
     private graphemeMaskCache = new Map<string, ImageData>();
+    private spriteAtlasRegionCache = new Map<string, SpriteAtlasRegion>();
     private solEnergyIcon: HTMLImageElement | null = null;
+    private spriteAtlasCanvas: HTMLCanvasElement | null = null;
+    private spriteAtlasContext: CanvasRenderingContext2D | null = null;
+    private spriteAtlasCursorX = 0;
+    private spriteAtlasCursorY = 0;
+    private spriteAtlasRowHeight = 0;
 
     getSpriteImage(path: string): HTMLImageElement {
         const resolvedPath = resolveAssetPath(path);
@@ -59,6 +89,64 @@ export class SpriteManager {
         return this.solEnergyIcon;
     }
 
+    getSpriteDrawSource(path: string): SpriteDrawSource | null {
+        const resolvedPath = resolveAssetPath(path);
+        const image = this.getSpriteImage(resolvedPath);
+        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+            return null;
+        }
+
+        const atlasRegion = this.getOrCreateAtlasRegion(resolvedPath, image);
+        if (atlasRegion && this.spriteAtlasCanvas) {
+            return {
+                image: this.spriteAtlasCanvas,
+                sourceX: atlasRegion.x,
+                sourceY: atlasRegion.y,
+                sourceWidth: atlasRegion.width,
+                sourceHeight: atlasRegion.height,
+                width: atlasRegion.width,
+                height: atlasRegion.height
+            };
+        }
+
+        return {
+            image,
+            sourceX: 0,
+            sourceY: 0,
+            sourceWidth: image.naturalWidth,
+            sourceHeight: image.naturalHeight,
+            width: image.naturalWidth,
+            height: image.naturalHeight
+        };
+    }
+
+    drawSprite(
+        ctx: CanvasRenderingContext2D,
+        path: string,
+        x: number,
+        y: number,
+        width: number,
+        height: number
+    ): boolean {
+        const spriteSource = this.getSpriteDrawSource(path);
+        if (!spriteSource) {
+            return false;
+        }
+
+        ctx.drawImage(
+            spriteSource.image,
+            spriteSource.sourceX,
+            spriteSource.sourceY,
+            spriteSource.sourceWidth,
+            spriteSource.sourceHeight,
+            x,
+            y,
+            width,
+            height
+        );
+        return true;
+    }
+
     getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
         const resolvedPath = resolveAssetPath(path);
         const cacheKey = `${resolvedPath}|${color}`;
@@ -67,25 +155,45 @@ export class SpriteManager {
             return cached;
         }
 
-        const image = this.getSpriteImage(resolvedPath);
-        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+        const spriteSource = this.getSpriteDrawSource(resolvedPath);
+        if (!spriteSource) {
             return null;
         }
 
         const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
+        canvas.width = spriteSource.width;
+        canvas.height = spriteSource.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
             return null;
         }
 
-        ctx.drawImage(image, 0, 0);
+        ctx.drawImage(
+            spriteSource.image,
+            spriteSource.sourceX,
+            spriteSource.sourceY,
+            spriteSource.sourceWidth,
+            spriteSource.sourceHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
         ctx.globalCompositeOperation = 'multiply';
         ctx.fillStyle = color;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.globalCompositeOperation = 'destination-in';
-        ctx.drawImage(image, 0, 0);
+        ctx.drawImage(
+            spriteSource.image,
+            spriteSource.sourceX,
+            spriteSource.sourceY,
+            spriteSource.sourceWidth,
+            spriteSource.sourceHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
         ctx.globalCompositeOperation = 'source-over';
 
         this.tintedSpriteCache.set(cacheKey, canvas);
@@ -103,19 +211,29 @@ export class SpriteManager {
             return cached;
         }
 
-        const image = this.getSpriteImage(resolvedPath);
-        if (!image.complete || image.naturalWidth === 0 || image.naturalHeight === 0) {
+        const spriteSource = this.getSpriteDrawSource(resolvedPath);
+        if (!spriteSource) {
             return null;
         }
 
         const canvas = document.createElement('canvas');
-        canvas.width = image.naturalWidth;
-        canvas.height = image.naturalHeight;
+        canvas.width = spriteSource.width;
+        canvas.height = spriteSource.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
             return null;
         }
-        ctx.drawImage(image, 0, 0);
+        ctx.drawImage(
+            spriteSource.image,
+            spriteSource.sourceX,
+            spriteSource.sourceY,
+            spriteSource.sourceWidth,
+            spriteSource.sourceHeight,
+            0,
+            0,
+            canvas.width,
+            canvas.height
+        );
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         this.graphemeMaskCache.set(resolvedPath, imageData);
         return imageData;
@@ -156,5 +274,155 @@ export class SpriteManager {
             drawHeight
         );
         return true;
+    }
+
+    private getOrCreateAtlasRegion(resolvedPath: string, image: HTMLImageElement): SpriteAtlasRegion | null {
+        const cached = this.spriteAtlasRegionCache.get(resolvedPath);
+        if (cached) {
+            return cached;
+        }
+
+        const atlasContext = this.getOrCreateAtlasContext();
+        const paddingPx = SpriteManager.SPRITE_ATLAS_PADDING_PX;
+        const atlasSizePx = SpriteManager.SPRITE_ATLAS_SIZE_PX;
+        const requiredWidthPx = image.naturalWidth + paddingPx * 2;
+        const requiredHeightPx = image.naturalHeight + paddingPx * 2;
+
+        if (requiredWidthPx > atlasSizePx || requiredHeightPx > atlasSizePx) {
+            return null;
+        }
+
+        if (this.spriteAtlasCursorX + requiredWidthPx > atlasSizePx) {
+            this.spriteAtlasCursorX = 0;
+            this.spriteAtlasCursorY += this.spriteAtlasRowHeight;
+            this.spriteAtlasRowHeight = 0;
+        }
+
+        if (this.spriteAtlasCursorY + requiredHeightPx > atlasSizePx) {
+            return null;
+        }
+
+        const region: SpriteAtlasRegion = {
+            x: this.spriteAtlasCursorX + paddingPx,
+            y: this.spriteAtlasCursorY + paddingPx,
+            width: image.naturalWidth,
+            height: image.naturalHeight
+        };
+
+        // Clear the full allocation (sprite + padding) to transparent to prevent any
+        // stale atlas data from bleeding into this sprite's extrusion gutter.
+        atlasContext.clearRect(
+            this.spriteAtlasCursorX,
+            this.spriteAtlasCursorY,
+            requiredWidthPx,
+            requiredHeightPx
+        );
+        atlasContext.drawImage(image, region.x, region.y);
+        this.extrudeSpriteBorderIntoPadding(atlasContext, image, region, paddingPx);
+        this.spriteAtlasRegionCache.set(resolvedPath, region);
+
+        this.spriteAtlasCursorX += requiredWidthPx;
+        this.spriteAtlasRowHeight = Math.max(this.spriteAtlasRowHeight, requiredHeightPx);
+        return region;
+    }
+
+    private getOrCreateAtlasContext(): CanvasRenderingContext2D {
+        if (this.spriteAtlasContext && this.spriteAtlasCanvas) {
+            return this.spriteAtlasContext;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = SpriteManager.SPRITE_ATLAS_SIZE_PX;
+        canvas.height = SpriteManager.SPRITE_ATLAS_SIZE_PX;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            throw new Error('Could not create sprite atlas context');
+        }
+
+        // Disable image smoothing so that edge-extrusion draws are pixel-exact copies.
+        // This prevents bilinear filtering from blending neighboring atlas entries when
+        // sprites are subsequently drawn at non-integer positions or with transforms.
+        ctx.imageSmoothingEnabled = false;
+
+        this.spriteAtlasCanvas = canvas;
+        this.spriteAtlasContext = ctx;
+        return ctx;
+    }
+
+    private extrudeSpriteBorderIntoPadding(
+        atlasContext: CanvasRenderingContext2D,
+        image: HTMLImageElement,
+        region: SpriteAtlasRegion,
+        paddingPx: number
+    ): void {
+        if (paddingPx <= 0) {
+            return;
+        }
+
+        const sourceWidth = image.naturalWidth;
+        const sourceHeight = image.naturalHeight;
+
+        // Extend edge texels into the padding gutter so scaled atlas draws do not sample
+        // neighboring sprites (prevents corner bleed artifacts when image smoothing is enabled).
+        atlasContext.drawImage(image, 0, 0, sourceWidth, 1, region.x, region.y - paddingPx, region.width, paddingPx);
+        atlasContext.drawImage(
+            image,
+            0,
+            sourceHeight - 1,
+            sourceWidth,
+            1,
+            region.x,
+            region.y + region.height,
+            region.width,
+            paddingPx
+        );
+
+        atlasContext.drawImage(image, 0, 0, 1, sourceHeight, region.x - paddingPx, region.y, paddingPx, region.height);
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            0,
+            1,
+            sourceHeight,
+            region.x + region.width,
+            region.y,
+            paddingPx,
+            region.height
+        );
+
+        atlasContext.drawImage(image, 0, 0, 1, 1, region.x - paddingPx, region.y - paddingPx, paddingPx, paddingPx);
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            0,
+            1,
+            1,
+            region.x + region.width,
+            region.y - paddingPx,
+            paddingPx,
+            paddingPx
+        );
+        atlasContext.drawImage(
+            image,
+            0,
+            sourceHeight - 1,
+            1,
+            1,
+            region.x - paddingPx,
+            region.y + region.height,
+            paddingPx,
+            paddingPx
+        );
+        atlasContext.drawImage(
+            image,
+            sourceWidth - 1,
+            sourceHeight - 1,
+            1,
+            1,
+            region.x + region.width,
+            region.y + region.height,
+            paddingPx,
+            paddingPx
+        );
     }
 }

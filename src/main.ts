@@ -9,6 +9,7 @@ import { InputController, InputControllerContext } from './input/input-controlle
 import { GameRenderer } from './renderer';
 import { MainMenu, GameSettings, COLOR_SCHEMES } from './menu';
 import { GameAudioController } from './game-audio';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
@@ -25,6 +26,7 @@ import {
     getPlayerMMRData,
     updatePlayerMMR
 } from './replay';
+import { savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 
 class GameController {
     public game: GameState | null = null;
@@ -55,6 +57,27 @@ class GameController {
     private replayPlayer: ReplayPlayer | null = null;
     private isWatchingReplay: boolean = false;
     private currentGameSeed: number = 0;
+    private readonly adaptiveQualityFrameTimesMs: number[] = [];
+    private adaptiveQualityAccumulatedFrameTimeMs = 0;
+    private lastAdaptiveQualityChangeTimeMs = 0;
+    private lastAdaptiveQualityUpgradeTimeMs = 0;
+    private lastRenderTimeMs = 0;
+    private adaptiveQualitySampledQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private adaptiveQualityEnabled: boolean = false;
+    private adaptiveQualityTargetQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
+    // Sample count for ~1.5 seconds at 60 FPS (90 frames), which is enough to avoid quality thrash on short spikes.
+    private readonly ADAPTIVE_QUALITY_SAMPLE_COUNT = 90;
+    // Drop quality once sustained frame time rises above 33 ms, which corresponds to roughly 30 FPS.
+    private readonly ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS = 33;
+    // Raise quality once sustained frame time falls below 20 ms, which corresponds to roughly 50 FPS — comfortably above the 30 FPS drop threshold.
+    private readonly ADAPTIVE_QUALITY_MIN_AVERAGE_FRAME_TIME_MS = 20;
+    // Wait two seconds between automatic downgrades so the renderer has time to settle after each step.
+    private readonly ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS = 2000;
+    // Wait ten seconds between automatic upgrades — much longer than downgrades — to avoid quality bouncing.
+    private readonly ADAPTIVE_QUALITY_UPGRADE_COOLDOWN_MS = 10000;
+    private readonly ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS = 250;
+    private readonly LOW_QUALITY_TARGET_RENDER_FPS = 30;
+    private readonly LOW_QUALITY_RENDER_INTERVAL_MS = 1000 / this.LOW_QUALITY_TARGET_RENDER_FPS;
 
 
     private getHeroUnitType(heroName: string): string | null {
@@ -127,7 +150,7 @@ class GameController {
     }
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+        return forge.hasQueuedOrProducingHeroUnit(heroUnitType);
     }
 
 
@@ -214,6 +237,11 @@ class GameController {
         return null;
     }
 
+
+    private isFoundryBuilding(building: Building): building is SubsidiaryFactory {
+        return building instanceof SubsidiaryFactory || building.constructor.name === 'SubsidiaryFactory';
+    }
+
     private getFriendlySacrificeTargetAtPosition(
         worldPos: Vector2D,
         player: Player
@@ -234,7 +262,7 @@ class GameController {
 
         for (let buildingIndex = 0; buildingIndex < player.buildings.length; buildingIndex++) {
             const building = player.buildings[buildingIndex];
-            if (!(building instanceof SubsidiaryFactory)) {
+            if (!this.isFoundryBuilding(building)) {
                 continue;
             }
             if (!building.currentProduction) {
@@ -337,8 +365,32 @@ class GameController {
         return [...heroLabels, 'Solar Mirror'];
     }
 
+    private getAliveSolarMirrorCount(player: Player): number {
+        return player.solarMirrors.length;
+    }
+
+    private canQueueSolarMirrorFromForge(player: Player): boolean {
+        if (!player.stellarForge) {
+            return false;
+        }
+
+        if (this.getAliveSolarMirrorCount(player) >= Constants.MAX_SOLAR_MIRRORS_PER_PLAYER) {
+            return false;
+        }
+
+        if (player.stellarForge.isMirrorQueuedOrProducing()) {
+            return false;
+        }
+
+        return true;
+    }
+
     private trySpawnSolarMirrorFromForge(player: Player): boolean {
         if (!this.game || !player.stellarForge) {
+            return false;
+        }
+
+        if (!this.canQueueSolarMirrorFromForge(player)) {
             return false;
         }
 
@@ -602,7 +654,7 @@ class GameController {
 
         if (this.selectionManager.selectedBuildings.size === 1) {
             const selectedBuilding = Array.from(this.selectionManager.selectedBuildings)[0];
-            if (selectedBuilding instanceof SubsidiaryFactory) {
+            if (this.isFoundryBuilding(selectedBuilding)) {
                 return this.renderer.worldToScreen(selectedBuilding.position);
             }
         }
@@ -624,6 +676,14 @@ class GameController {
     }
 
     private clearPathPreview(): void {
+        if (this.inputController.isDrawingPath && this.inputController.pathPoints.length > 0 && this.renderer.pathPreviewStartWorld) {
+            this.renderer.createPathPreviewFadeEffect(
+                this.renderer.pathPreviewStartWorld,
+                this.inputController.pathPoints,
+                this.renderer.pathPreviewEnd,
+                this.game ? this.game.gameTime : 0
+            );
+        }
         this.inputController.pathPoints = [];
         this.inputController.isDrawingPath = false;
         this.renderer.pathPreviewForge = null;
@@ -642,6 +702,16 @@ class GameController {
     private toggleInfo(): void {
         this.showInfo = !this.showInfo;
         this.renderer.showInfo = this.showInfo;
+    }
+
+    /**
+     * Sync renderer state back to the menu settings object, then persist
+     * everything to localStorage so that in-game changes survive restarts.
+     */
+    private syncAndPersistInGameSettings(): void {
+        const settings = this.menu.getSettings();
+        settings.graphicsQuality = this.renderer.graphicsQuality;
+        savePersistedSettings(extractPersistedSettings(settings));
     }
 
     private getWarpGateManagerContext(): WarpGateManagerContext {
@@ -709,6 +779,7 @@ class GameController {
             hasSelectedStarlingsOnly: () => this.hasSelectedStarlingsOnly(),
             getForgeButtonLabels: () => this.getForgeButtonLabels(),
             trySpawnSolarMirrorFromForge: (player) => this.trySpawnSolarMirrorFromForge(player),
+            canQueueSolarMirrorFromForge: (player) => this.canQueueSolarMirrorFromForge(player),
             getClickedHeroButton: (screenX, screenY, forge, heroNames) => this.getClickedHeroButton(screenX, screenY, forge, heroNames),
             getClickedFoundryButtonIndex: (screenX, screenY, foundry) => this.getClickedFoundryButtonIndex(screenX, screenY, foundry),
             getNearestButtonIndexFromAngle: (dragAngleRad, buttonCount) => this.getNearestButtonIndexFromAngle(dragAngleRad, buttonCount),
@@ -718,6 +789,7 @@ class GameController {
             getBuildingAbilityAnchorScreen: () => this.getBuildingAbilityAnchorScreen(),
             cancelMirrorWarpGateModeAndDeselectMirrors: () => this.cancelMirrorWarpGateModeAndDeselectMirrors(),
             clearPathPreview: () => this.clearPathPreview(),
+            onInGameSettingsChanged: () => this.syncAndPersistInGameSettings(),
         };
     }
 
@@ -1107,6 +1179,17 @@ class GameController {
         
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.setUseSvgSprites(settings.useSvgSprites);
+        this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
+        this.adaptiveQualityEnabled = settings.isAdaptiveQualityEnabled;
+        this.adaptiveQualityTargetQuality = settings.graphicsQuality;
+        // Reset adaptive quality state when starting a new game
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.lastAdaptiveQualityChangeTimeMs = 0;
+        this.lastAdaptiveQualityUpgradeTimeMs = 0;
+        this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
         
         // Set up network manager for LAN play
         this.localPlayerIndex = 0;
@@ -1328,6 +1411,9 @@ class GameController {
         this.game.damageDisplayMode = settings.damageDisplayMode;
         this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.setUseSvgSprites(settings.useSvgSprites);
+        this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
+        this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
         
         // Set local player using the found index
         this.localPlayerIndex = localPlayerIndex;
@@ -1416,7 +1502,7 @@ class GameController {
             return;
         }
 
-        const hasActiveFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasActiveFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (hasActiveFoundry) {
             this.hasSeenFoundry = true;
         }
@@ -1466,12 +1552,11 @@ class GameController {
         
         if (this.game.isRunning) {
             this.game.update(deltaTime);
-            const dpr = window.devicePixelRatio || 1;
             this.gameAudioController.update(this.game, deltaTime, {
                 cameraWorld: this.renderer.camera,
                 zoom: this.renderer.zoom,
-                viewportWidthPx: this.renderer.canvas.width / dpr,
-                viewportHeightPx: this.renderer.canvas.height / dpr
+                viewportWidthPx: getCanvasScreenWidthPx(this.renderer.canvas),
+                viewportHeightPx: getCanvasScreenHeightPx(this.renderer.canvas)
             });
         }
 
@@ -1544,12 +1629,11 @@ class GameController {
                 if (this.game.isRunning) {
                     const tickDeltaTimeSec = this.TICK_INTERVAL_MS / 1000;
                     this.game.update(tickDeltaTimeSec);
-                    const dpr = window.devicePixelRatio || 1;
                     this.gameAudioController.update(this.game, tickDeltaTimeSec, {
                         cameraWorld: this.renderer.camera,
                         zoom: this.renderer.zoom,
-                        viewportWidthPx: this.renderer.canvas.width / dpr,
-                        viewportHeightPx: this.renderer.canvas.height / dpr
+                        viewportWidthPx: getCanvasScreenWidthPx(this.renderer.canvas),
+                        viewportHeightPx: getCanvasScreenHeightPx(this.renderer.canvas)
                     });
                 }
 
@@ -1627,16 +1711,149 @@ class GameController {
         }
     }
 
+    private recordAdaptiveQualityFrameTime(frameTimeMs: number): void {
+        if (!Number.isFinite(frameTimeMs) || frameTimeMs <= 0 || frameTimeMs > this.ADAPTIVE_QUALITY_MAX_VALID_FRAME_TIME_MS) {
+            return;
+        }
+
+        if (this.adaptiveQualitySampledQuality !== this.renderer.graphicsQuality) {
+            this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
+            this.adaptiveQualityFrameTimesMs.length = 0;
+            this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        }
+
+        this.adaptiveQualityFrameTimesMs.push(frameTimeMs);
+        this.adaptiveQualityAccumulatedFrameTimeMs += frameTimeMs;
+
+        if (this.adaptiveQualityFrameTimesMs.length > this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            const removedFrameTimeMs = this.adaptiveQualityFrameTimesMs.shift();
+            if (removedFrameTimeMs !== undefined) {
+                this.adaptiveQualityAccumulatedFrameTimeMs -= removedFrameTimeMs;
+            }
+        }
+    }
+
+    private maybeLowerGraphicsQuality(currentTimeMs: number): void {
+        if (!this.adaptiveQualityEnabled) {
+            return;
+        }
+
+        if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            return;
+        }
+
+        if (currentTimeMs - this.lastAdaptiveQualityChangeTimeMs < this.ADAPTIVE_QUALITY_CHANGE_COOLDOWN_MS) {
+            return;
+        }
+
+        const averageFrameTimeMs = this.adaptiveQualityAccumulatedFrameTimeMs / this.adaptiveQualityFrameTimesMs.length;
+        if (averageFrameTimeMs <= this.ADAPTIVE_QUALITY_MAX_AVERAGE_FRAME_TIME_MS) {
+            return;
+        }
+
+        const nextQuality = this.getNextLowerGraphicsQuality(this.renderer.graphicsQuality);
+        if (!nextQuality) {
+            return;
+        }
+
+        this.renderer.graphicsQuality = nextQuality;
+        this.lastAdaptiveQualityChangeTimeMs = currentTimeMs;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.adaptiveQualitySampledQuality = nextQuality;
+    }
+
+    private getNextLowerGraphicsQuality(
+        quality: 'low' | 'medium' | 'high' | 'ultra'
+    ): 'low' | 'medium' | 'high' | null {
+        switch (quality) {
+            case 'ultra':
+                return 'high';
+            case 'high':
+                return 'medium';
+            case 'medium':
+                return 'low';
+            case 'low':
+            default:
+                return null;
+        }
+    }
+
+    private maybeRaiseGraphicsQuality(currentTimeMs: number): void {
+        if (!this.adaptiveQualityEnabled) {
+            return;
+        }
+
+        if (this.adaptiveQualityFrameTimesMs.length < this.ADAPTIVE_QUALITY_SAMPLE_COUNT) {
+            return;
+        }
+
+        if (currentTimeMs - this.lastAdaptiveQualityUpgradeTimeMs < this.ADAPTIVE_QUALITY_UPGRADE_COOLDOWN_MS) {
+            return;
+        }
+
+        const averageFrameTimeMs = this.adaptiveQualityAccumulatedFrameTimeMs / this.adaptiveQualityFrameTimesMs.length;
+        if (averageFrameTimeMs > this.ADAPTIVE_QUALITY_MIN_AVERAGE_FRAME_TIME_MS) {
+            return;
+        }
+
+        const nextQuality = this.getNextHigherGraphicsQuality(this.renderer.graphicsQuality);
+        if (!nextQuality) {
+            return;
+        }
+
+        // Never auto-upgrade beyond the quality level the player chose in settings.
+        const qualityOrder: Array<'low' | 'medium' | 'high' | 'ultra'> = ['low', 'medium', 'high', 'ultra'];
+        if (qualityOrder.indexOf(nextQuality) > qualityOrder.indexOf(this.adaptiveQualityTargetQuality)) {
+            return;
+        }
+
+        this.renderer.graphicsQuality = nextQuality;
+        this.lastAdaptiveQualityUpgradeTimeMs = currentTimeMs;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.adaptiveQualitySampledQuality = nextQuality;
+    }
+
+    private getNextHigherGraphicsQuality(
+        quality: 'low' | 'medium' | 'high' | 'ultra'
+    ): 'medium' | 'high' | 'ultra' | null {
+        switch (quality) {
+            case 'low':
+                return 'medium';
+            case 'medium':
+                return 'high';
+            case 'high':
+                return 'ultra';
+            case 'ultra':
+            default:
+                return null;
+        }
+    }
+
+    private getRenderIntervalMs(): number {
+        return this.renderer.graphicsQuality === 'low'
+            ? this.LOW_QUALITY_RENDER_INTERVAL_MS
+            : 0;
+    }
+
     private gameLoop(currentTime: number): void {
         if (!this.isRunning) return;
 
         // Calculate delta time in seconds
         const deltaTime = this.lastTime === 0 ? 0 : (currentTime - this.lastTime) / 1000;
         this.lastTime = currentTime;
+        this.recordAdaptiveQualityFrameTime(deltaTime * 1000);
+        this.maybeLowerGraphicsQuality(currentTime);
+        this.maybeRaiseGraphicsQuality(currentTime);
 
         // Update and render (cap delta time to prevent huge jumps)
         this.update(Math.min(deltaTime, 0.1));
-        this.render();
+        const renderIntervalMs = this.getRenderIntervalMs();
+        if (renderIntervalMs <= 0 || this.lastRenderTimeMs === 0 || currentTime - this.lastRenderTimeMs >= renderIntervalMs) {
+            this.render();
+            this.lastRenderTimeMs = currentTime;
+        }
 
         // Continue loop
         requestAnimationFrame((time) => this.gameLoop(time));
@@ -1647,11 +1864,21 @@ class GameController {
         
         this.isRunning = true;
         this.lastTime = 0;
+        this.lastRenderTimeMs = 0;
+        this.adaptiveQualityFrameTimesMs.length = 0;
+        this.adaptiveQualityAccumulatedFrameTimeMs = 0;
+        this.lastAdaptiveQualityChangeTimeMs = 0;
+        this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
         requestAnimationFrame((time) => this.gameLoop(time));
     }
 
     stop(): void {
         this.isRunning = false;
+    }
+
+    public destroy(): void {
+        this.stop();
+        this.renderer.destroy();
     }
 }
 
@@ -1662,6 +1889,7 @@ const bootstrapGameController = (): void => {
     const controller = new GameController();
     // Expose for dev/testing purposes
     (window as any).gameController = controller;
+    window.addEventListener('beforeunload', () => controller.destroy(), { once: true });
 };
 
 // Start game when DOM is loaded. If this bundle executes after DOMContentLoaded

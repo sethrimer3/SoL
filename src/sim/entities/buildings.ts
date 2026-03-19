@@ -123,6 +123,11 @@ export class Building {
         _mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
     ): void {
         // Base implementation
+        if ('takeDamage' in target && typeof target.takeDamage === 'function') {
+            target.takeDamage(this.attackDamage);
+            return;
+        }
+
         if ('health' in target) {
             target.health -= this.attackDamage;
         }
@@ -244,6 +249,11 @@ export class Minigun extends Building {
         let stopStructure: CombatTarget | null = null;
 
         for (const structure of structures) {
+            // Ignore self: otherwise the ray intersects this tower's own radius,
+            // truncating the beam to ~tower radius and preventing normal damage.
+            if (structure === this) {
+                continue;
+            }
             const radius = this.getStructureRadius(structure);
             const hitDistance = this.getRayCircleHitDistance(
                 this.position.x,
@@ -871,4 +881,3 @@ export class SubsidiaryFactory extends Building {
         return true;
     }
 }
-

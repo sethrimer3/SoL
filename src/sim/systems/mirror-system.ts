@@ -41,6 +41,62 @@ export interface MirrorSystemContext extends MirrorMovementContext, PhysicsConte
  * Mirror System – static methods for mirror initialization and light calculations.
  */
 export class MirrorSystem {
+    private static separateOverlappingMirrorsForPlayer(game: MirrorSystemContext, player: Player, deltaTime: number): void {
+        const mirrors = player.solarMirrors;
+        if (mirrors.length < 2) {
+            return;
+        }
+
+        const mirrorRadiusPx = Constants.AI_MIRROR_COLLISION_RADIUS_PX;
+        const minDistancePx = mirrorRadiusPx * 2;
+        const minDistanceSq = minDistancePx * minDistancePx;
+        const pushSpeedPxPerSec = 50;
+
+        for (let firstMirrorIndex = 0; firstMirrorIndex < mirrors.length - 1; firstMirrorIndex++) {
+            const firstMirror = mirrors[firstMirrorIndex];
+            for (let secondMirrorIndex = firstMirrorIndex + 1; secondMirrorIndex < mirrors.length; secondMirrorIndex++) {
+                const secondMirror = mirrors[secondMirrorIndex];
+                const deltaX = secondMirror.position.x - firstMirror.position.x;
+                const deltaY = secondMirror.position.y - firstMirror.position.y;
+                const distanceSq = deltaX * deltaX + deltaY * deltaY;
+
+                if (distanceSq >= minDistanceSq) {
+                    continue;
+                }
+
+                const distancePx = Math.sqrt(Math.max(distanceSq, 0.0001));
+                let normalX = deltaX / distancePx;
+                let normalY = deltaY / distancePx;
+                if (distancePx < 0.01) {
+                    normalX = 1;
+                    normalY = 0;
+                }
+
+                const overlapPx = minDistancePx - distancePx;
+                const separationStepPx = Math.min(overlapPx * 0.5, pushSpeedPxPerSec * deltaTime);
+                if (separationStepPx <= 0) {
+                    continue;
+                }
+
+                const firstCandidate = new Vector2D(
+                    firstMirror.position.x - normalX * separationStepPx,
+                    firstMirror.position.y - normalY * separationStepPx
+                );
+                if (!game.checkCollision(firstCandidate, mirrorRadiusPx, firstMirror)) {
+                    firstMirror.position = firstCandidate;
+                }
+
+                const secondCandidate = new Vector2D(
+                    secondMirror.position.x + normalX * separationStepPx,
+                    secondMirror.position.y + normalY * separationStepPx
+                );
+                if (!game.checkCollision(secondCandidate, mirrorRadiusPx, secondMirror)) {
+                    secondMirror.position = secondCandidate;
+                }
+            }
+        }
+    }
+
     /**
      * Initialize mirror movement at the start of countdown.
      * Moves mirrors perpendicular to the sun-forge axis so they can reach sunlight.
@@ -244,7 +300,14 @@ export class MirrorSystem {
                 mirror.setLinkedStructure(null);
             }
 
-            const linkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            const initialLinkedStructure = mirror.getLinkedStructure(player.stellarForge);
+            const shouldRelinkToForge = initialLinkedStructure instanceof Building &&
+                initialLinkedStructure.isComplete &&
+                player.stellarForge !== null;
+            if (shouldRelinkToForge) {
+                mirror.setLinkedStructure(player.stellarForge);
+            }
+            const linkedStructure = shouldRelinkToForge ? player.stellarForge : initialLinkedStructure;
             mirror.updateReflectionAngle(linkedStructure, game.suns, game.asteroids, deltaTime);
 
             // Check if light path is blocked by Velaris orb fields
@@ -279,10 +342,12 @@ export class MirrorSystem {
                                 console.log(`${player.name} forged hero ${completedItem.heroUnitType}`);
                             }
                         } else if (completedItem.productionType === 'mirror' && completedItem.spawnPosition) {
-                            player.solarMirrors.push(new SolarMirror(
-                                new Vector2D(completedItem.spawnPosition.x, completedItem.spawnPosition.y),
-                                player
-                            ));
+                            if (player.solarMirrors.length < Constants.MAX_SOLAR_MIRRORS_PER_PLAYER) {
+                                player.solarMirrors.push(new SolarMirror(
+                                    new Vector2D(completedItem.spawnPosition.x, completedItem.spawnPosition.y),
+                                    player
+                                ));
+                            }
                         }
                     }
 
@@ -343,5 +408,7 @@ export class MirrorSystem {
                 }
             }
         }
+
+        this.separateOverlappingMirrorsForPlayer(game, player, deltaTime);
     }
 }

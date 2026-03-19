@@ -29,6 +29,7 @@ export interface UIRendererContext {
     pathPreviewPoints: Vector2D[];
     pathPreviewEnd: Vector2D | null;
     pathPreviewStartWorld: Vector2D | null;
+    uiTimeSec: number;
     selectedUnits: Set<Unit>;
     selectedMirrors: Set<any>;
     highlightedButtonIndex: number;
@@ -40,6 +41,7 @@ export interface UIRendererContext {
     healthDisplayMode: 'bar' | 'number';
     offscreenIndicatorOpacity: number;
     infoBoxOpacity: number;
+    infoBoxSize: number;
     playerColor: string;
     enemyColor: string;
     colorblindMode: boolean;
@@ -77,6 +79,8 @@ export class UIRenderer {
     private warpGateShockwaves: Array<{position: Vector2D, progress: number}> = [];
     private productionButtonWaves: Array<{position: Vector2D, progress: number}> = [];
     private pathCommitEffects: Array<{pointsWorld: Vector2D[], startTimeSec: number, durationSec: number}> = [];
+    private pathPreviewFadeEffects: Array<{pointsWorld: Vector2D[], startTimeSec: number, durationSec: number}> = [];
+    private pathDrawSparks: Array<{positionScreen: Vector2D, velocityScreen: Vector2D, ageSec: number, lifetimeSec: number, radiusPx: number}> = [];
     private buildingAbilityArrowAngle: number = 0;
     private readonly menuRenderer = new InGameMenuRenderer();
     private readonly hudRenderer = new HUDRenderer();
@@ -129,6 +133,25 @@ export class UIRenderer {
             pointsWorld,
             startTimeSec: gameTimeSec,
             durationSec: 1.1
+        });
+    }
+
+    public createPathPreviewFadeEffect(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null, gameTimeSec: number): void {
+        const pointsWorld: Vector2D[] = [new Vector2D(startWorld.x, startWorld.y)];
+        for (let waypointIndex = 0; waypointIndex < waypoints.length; waypointIndex++) {
+            const waypoint = waypoints[waypointIndex];
+            pointsWorld.push(new Vector2D(waypoint.x, waypoint.y));
+        }
+        if (endWorld) {
+            pointsWorld.push(new Vector2D(endWorld.x, endWorld.y));
+        }
+        if (pointsWorld.length < 2) {
+            return;
+        }
+        this.pathPreviewFadeEffects.push({
+            pointsWorld,
+            startTimeSec: gameTimeSec,
+            durationSec: 0.28
         });
     }
 
@@ -244,7 +267,9 @@ export class UIRenderer {
     }
 
     public drawUnitPathPreview(context: UIRendererContext): void {
-        if (!context.pathPreviewForge && context.pathPreviewPoints.length > 0) {
+        this.updateAndDrawPathPreviewFadeEffects(context);
+
+        if (context.pathPreviewPoints.length > 0) {
             let avgX = 0;
             let avgY = 0;
             let count = 0;
@@ -488,6 +513,10 @@ export class UIRenderer {
         this.hudRenderer.drawProductionProgress(game, context);
     }
 
+    public drawMatchTimer(game: GameState, context: UIRendererContext): void {
+        this.hudRenderer.drawMatchTimer(game, context);
+    }
+
     public drawInGameMenuOverlay(context: UIRendererContext): void {
         this.menuRenderer.drawInGameMenuOverlay(context);
     }
@@ -536,9 +565,19 @@ export class UIRenderer {
         endWorld: Vector2D | null,
         context: UIRendererContext
     ): void {
-        context.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
-        context.ctx.lineWidth = 3;
-        context.ctx.setLineDash([6, 6]);
+        const pointsWorld: Vector2D[] = [startWorld];
+        for (let waypointIndex = 0; waypointIndex < waypoints.length; waypointIndex++) {
+            pointsWorld.push(waypoints[waypointIndex]);
+        }
+        if (endWorld) {
+            pointsWorld.push(endWorld);
+        }
+        this.drawGlowingPath(pointsWorld, context, 1);
+
+        context.ctx.strokeStyle = 'rgba(255, 240, 120, 0.95)';
+        context.ctx.lineWidth = 2.2;
+        context.ctx.setLineDash([10, 8]);
+        context.ctx.lineDashOffset = -context.uiTimeSec * 90;
         context.ctx.beginPath();
 
         const startScreen = context.worldToScreen(startWorld);
@@ -556,6 +595,12 @@ export class UIRenderer {
 
         context.ctx.stroke();
         context.ctx.setLineDash([]);
+        context.ctx.lineDashOffset = 0;
+
+        if (endWorld) {
+            this.emitPathDrawSparks(context.worldToScreen(endWorld));
+        }
+        this.updateAndDrawPathDrawSparks(context);
 
         context.ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
         for (let i = 0; i < waypoints.length; i++) {
@@ -573,6 +618,96 @@ export class UIRenderer {
             context.ctx.arc(endScreen.x, endScreen.y, 6, 0, Math.PI * 2);
             context.ctx.stroke();
         }
+    }
+
+    private drawGlowingPath(pointsWorld: Vector2D[], context: UIRendererContext, alphaMultiplier: number): void {
+        if (pointsWorld.length < 2) {
+            return;
+        }
+
+        context.ctx.save();
+        context.ctx.strokeStyle = `rgba(255, 212, 110, ${0.24 * alphaMultiplier})`;
+        context.ctx.lineWidth = 11;
+        context.ctx.shadowColor = `rgba(255, 200, 80, ${0.75 * alphaMultiplier})`;
+        context.ctx.shadowBlur = 14;
+        context.ctx.lineCap = 'round';
+        context.ctx.lineJoin = 'round';
+        context.ctx.beginPath();
+        const firstPointScreen = context.worldToScreen(pointsWorld[0]);
+        context.ctx.moveTo(firstPointScreen.x, firstPointScreen.y);
+        for (let pointIndex = 1; pointIndex < pointsWorld.length; pointIndex++) {
+            const pointScreen = context.worldToScreen(pointsWorld[pointIndex]);
+            context.ctx.lineTo(pointScreen.x, pointScreen.y);
+        }
+        context.ctx.stroke();
+        context.ctx.restore();
+    }
+
+    private emitPathDrawSparks(endScreen: Vector2D): void {
+        for (let sparkIndex = 0; sparkIndex < 3; sparkIndex++) {
+            const angleRad = Math.random() * Math.PI * 2;
+            const speedPxPerSec = 30 + Math.random() * 70;
+            const jitterRadiusPx = 6;
+            const spawnX = endScreen.x + (Math.random() - 0.5) * jitterRadiusPx;
+            const spawnY = endScreen.y + (Math.random() - 0.5) * jitterRadiusPx;
+            this.pathDrawSparks.push({
+                positionScreen: new Vector2D(spawnX, spawnY),
+                velocityScreen: new Vector2D(Math.cos(angleRad) * speedPxPerSec, Math.sin(angleRad) * speedPxPerSec),
+                ageSec: 0,
+                lifetimeSec: 0.16 + Math.random() * 0.16,
+                radiusPx: 1 + Math.random() * 2
+            });
+        }
+    }
+
+    private updateAndDrawPathDrawSparks(context: UIRendererContext): void {
+        const deltaTimeSec = 1 / 60;
+        for (let sparkIndex = this.pathDrawSparks.length - 1; sparkIndex >= 0; sparkIndex--) {
+            const spark = this.pathDrawSparks[sparkIndex];
+            spark.ageSec += deltaTimeSec;
+            if (spark.ageSec >= spark.lifetimeSec) {
+                this.pathDrawSparks.splice(sparkIndex, 1);
+                continue;
+            }
+
+            spark.positionScreen.x += spark.velocityScreen.x * deltaTimeSec;
+            spark.positionScreen.y += spark.velocityScreen.y * deltaTimeSec;
+            spark.velocityScreen.x *= 0.92;
+            spark.velocityScreen.y *= 0.92;
+
+            const lifeAlpha = 1 - (spark.ageSec / spark.lifetimeSec);
+            const gradient = context.ctx.createRadialGradient(
+                spark.positionScreen.x,
+                spark.positionScreen.y,
+                0,
+                spark.positionScreen.x,
+                spark.positionScreen.y,
+                spark.radiusPx * 4
+            );
+            gradient.addColorStop(0, `rgba(255, 248, 195, ${0.95 * lifeAlpha})`);
+            gradient.addColorStop(1, 'rgba(255, 248, 195, 0)');
+            context.ctx.fillStyle = gradient;
+            context.ctx.beginPath();
+            context.ctx.arc(spark.positionScreen.x, spark.positionScreen.y, spark.radiusPx * 4, 0, Math.PI * 2);
+            context.ctx.fill();
+        }
+    }
+
+    private updateAndDrawPathPreviewFadeEffects(context: UIRendererContext): void {
+        if (this.pathPreviewFadeEffects.length === 0) {
+            return;
+        }
+
+        this.pathPreviewFadeEffects = this.pathPreviewFadeEffects.filter((effect) => {
+            const ageSec = context.uiTimeSec - effect.startTimeSec;
+            const progress = ageSec / effect.durationSec;
+            if (progress >= 1) {
+                return false;
+            }
+
+            this.drawGlowingPath(effect.pointsWorld, context, 1 - progress);
+            return true;
+        });
     }
 
 

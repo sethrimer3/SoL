@@ -3,6 +3,7 @@
  */
 
 import { MenuAsteroid, MenuAsteroidPoint } from './background-particles';
+import { StarNestRenderer } from '../render/star-nest-renderer';
 
 export class MenuAtmosphereLayer {
     private static readonly ASTEROID_COUNT = 14;
@@ -81,6 +82,8 @@ export class MenuAtmosphereLayer {
     private sunGlowGradient: CanvasGradient | null = null;
     private sunPlasmaGradient: CanvasGradient | null = null;
     private asteroidLightGradient: CanvasGradient | null = null;
+    private isStarNestEnabled: boolean = false;
+    private readonly starNestRenderer: StarNestRenderer = new StarNestRenderer();
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -122,6 +125,10 @@ export class MenuAtmosphereLayer {
         this.initializeStars();
     }
 
+    public setStarNestEnabled(isEnabled: boolean): void {
+        this.isStarNestEnabled = isEnabled;
+    }
+
     public start(): void {
         if (this.isActive) {
             return;
@@ -136,6 +143,10 @@ export class MenuAtmosphereLayer {
             cancelAnimationFrame(this.animationFrameId);
             this.animationFrameId = null;
         }
+    }
+
+    public setVisible(isVisible: boolean): void {
+        this.canvas.style.display = isVisible ? 'block' : 'none';
     }
 
     public resize(): void {
@@ -308,10 +319,11 @@ export class MenuAtmosphereLayer {
         if (!this.isActive) {
             return;
         }
+
+        const nowMs = performance.now();
         
         // Throttle frame rate on low/medium quality to reduce CPU load
         if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
-            const nowMs = performance.now();
             const targetFrameTimeMs = this.graphicsQuality === 'low'
                 ? MenuAtmosphereLayer.LOW_QUALITY_FRAME_TIME_MS
                 : MenuAtmosphereLayer.MEDIUM_QUALITY_FRAME_TIME_MS;
@@ -325,7 +337,7 @@ export class MenuAtmosphereLayer {
         }
         
         this.updateAsteroids();
-        this.render();
+        this.render(nowMs);
         this.animationFrameId = requestAnimationFrame(() => this.animate());
     }
 
@@ -352,9 +364,14 @@ export class MenuAtmosphereLayer {
         }
     }
 
-    private render(): void {
+    private render(nowMs: number): void {
         this.context.clearRect(0, 0, this.widthPx, this.heightPx);
-        this.renderStars();
+        if (this.isStarNestEnabled) {
+            this.starNestRenderer.update(nowMs);
+            this.starNestRenderer.draw(this.context, this.widthPx, this.heightPx);
+        } else {
+            this.renderStars(nowMs);
+        }
         this.renderSunGlow();
         this.renderAsteroids();
     }
@@ -395,8 +412,7 @@ export class MenuAtmosphereLayer {
         }
     }
 
-    private renderStars(): void {
-        const nowMs = performance.now();
+    private renderStars(nowMs: number): void {
         if (this.graphicsQuality === 'low') {
             this.renderStarsCachedLow(nowMs);
             return;

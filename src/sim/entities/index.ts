@@ -15,3 +15,4 @@ export * from './starling';
 export * from './starling-merge-gate';
 export * from './warp-gate';
 export * from './damage-number';
+export * from './photon';

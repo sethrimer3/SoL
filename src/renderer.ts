@@ -2,17 +2,31 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, StarlingMergeGate, Asteroid, LightRay, Unit, Marine, Mothership, Grave, Starling, GraveProjectile, GraveSmallParticle, GraveBlackHole, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, RayBeamSegment, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, DeployedTurret, Driller, Dagger, DamageNumber, Beam, Mortar, Preist, HealingBombParticle, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, Dash, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
-import { SparkleParticle, DeathParticle } from './sim/entities/particles';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, Unit, Marine, Grave, Starling, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, Driller, Dagger, Beam, Mortar, Preist, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
 import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
-import { renderLensFlare } from './rendering/LensFlare';
 
-import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha } from './render/color-utilities';
-import { valueNoise2D, fractalNoise2D } from './render/noise-utilities';
+import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha, interpolateHexColor } from './render/color-utilities';
+import { ScreenShakeController } from './render/screen-shake';
 import { getFactionColor } from './render/faction-utilities';
-import { SpriteManager, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
+import { clampCameraToLevelBounds as _clampCameraToLevelBounds, getMinZoomForBounds as _getMinZoomForBounds } from './render/camera-controller';
+import {
+    getShadeBrightnessBoost as _getShadeBrightnessBoost,
+    applyShadeBrightening as _applyShadeBrightening,
+} from './render/shade-brightness';
+import {
+    getHeroSpritePath as _getHeroSpritePath,
+    getForgeSpritePath as _getForgeSpritePath,
+    getSolarMirrorSpritePath as _getSolarMirrorSpritePath,
+    getStarlingSpritePath as _getStarlingSpritePath,
+    getStarlingFacingRotationRad as _getStarlingFacingRotationRad,
+    getProductionDisplayName as _getProductionDisplayName,
+    getBuildingDisplayName as _getBuildingDisplayName,
+    detectAndDrawEdges as _detectAndDrawEdges,
+} from './render/asset-path-helpers';
+import { SpriteManager, SpriteDrawSource, VELARIS_FORGE_GRAPHEME_SPRITE_PATHS } from './render/sprite-manager';
+import { GradientCache } from './render/gradient-cache';
 import { StarfieldRenderer } from './render/starfield-renderer';
 import { SunRenderer } from './render/sun-renderer';
 import { AsteroidRenderer } from './render/asteroid-renderer';
@@ -32,6 +46,11 @@ import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 import { GlowRenderer } from './render/glow-renderer';
 import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
+import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
+import { SunRayWorkerBridge } from './render/workers/sun-ray-worker-bridge';
+import { StarNestRenderer } from './render/star-nest-renderer';
+import { GravityGridRenderer, GravityGridContext } from './render/gravity-grid-renderer';
 
 
 type InfluenceRenderCircle = {
@@ -39,6 +58,16 @@ type InfluenceRenderCircle = {
     radius: number;
     color: string;
 };
+
+/** Render-side spark particle for photon fizzle-out effect */
+interface PhotonFizzleSpark {
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    lifetimeSec: number;
+    maxLifetimeSec: number;
+}
 
 export class GameRenderer {
     public canvas: HTMLCanvasElement;
@@ -86,14 +115,15 @@ export class GameRenderer {
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra'; // Graphics quality setting
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
-    public screenShakeEnabled: boolean = true; // Screen shake for explosions
+    public isStarNestEnabled: boolean = false; // Star Nest flying-through-space star effect
+    private readonly screenShake = new ScreenShakeController();
+    get screenShakeEnabled(): boolean { return this.screenShake.isEnabled; }
+    set screenShakeEnabled(value: boolean) { this.screenShake.isEnabled = value; }
     public offscreenIndicatorOpacity: number = 0.25; // Opacity for off-screen indicators
     public infoBoxOpacity: number = 0.5; // Opacity for top-right info boxes
+    public infoBoxSize: number = 1.0; // Size multiplier for top-right info boxes (1.0 = 100%)
     public soundVolume: number = 1; // Sound effect volume for in-game controls
     public musicVolume: number = 1; // Music volume for in-game controls
-    private screenShakeIntensity: number = 0; // Current screen shake intensity
-    private screenShakeTimer: number = 0; // Screen shake timer
-    private shakenExplosions: WeakSet<any> = new WeakSet(); // Track which explosions have triggered screen shake
     public colorblindMode: boolean = true; // Colorblind mode - shows enemies as diamonds instead of circles
 
     private readonly HERO_SPRITE_SCALE = 4.2;
@@ -118,6 +148,10 @@ export class GameRenderer {
     private readonly VELARIS_STARLING_SHAPE_BLEND_SPEED = 1.4;
     private readonly VELARIS_STARLING_GRAPHEME_ALPHA_MAX = 0.3;
     private readonly VELARIS_STARLING_GRAPHEME_PULSE_SPEED = 1.4;
+    private readonly MAX_RENDER_PIXEL_RATIO = 2;
+    // Skip the heaviest fancy field overlays once the physical canvas grows beyond roughly 6 MP
+    // (for example, a 1080p view rendered near ~1.7 effective DPR) to protect frame rate.
+    private readonly MAX_FANCY_FIELD_EFFECTS_CANVAS_PIXEL_AREA = 6_000_000;
     private readonly VELARIS_STARLING_GRAPHEME_SIZE_SCALE = 1.15;
     private readonly spriteManager = new SpriteManager();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number; pentagonRotationRad: number}>();
@@ -149,7 +183,7 @@ export class GameRenderer {
 
     private readonly visibilityTracker = new VisibilityAlphaTracker();
     private influenceRadiusLastUpdateSec = Number.NaN;
-    private gradientCache = new Map<string, CanvasGradient>();
+    private readonly gradientCache = new GradientCache();
 
     // Gradient caching bucket sizes for performance optimization
     private readonly SUN_RAY_RADIUS_BUCKET_SIZE = 500; // px - bucket size for sun ray gradient caching
@@ -176,11 +210,16 @@ export class GameRenderer {
     private readonly MOVE_ORDER_DOT_RADIUS = 8.4;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
+    private readonly UNIT_BASE_SIZE_PX = 8;
+    private readonly LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 9;
+    private readonly STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 6.5;
     private readonly FORGE_MAX_HEALTH = 1000;
     private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
     // Starfield renderer for background stars and nebula
     private readonly starfieldRenderer: StarfieldRenderer;
+    private readonly starfieldWorkerBridge: StarfieldWorkerBridge | null;
+    private readonly sunRayWorkerBridge: SunRayWorkerBridge | null;
     private readonly sunRenderer: SunRenderer;
     private readonly asteroidRenderer: AsteroidRenderer;
     private readonly forgeRenderer: ForgeRenderer;
@@ -193,7 +232,41 @@ export class GameRenderer {
     private readonly uiRenderer: UIRenderer;
     private readonly environmentRenderer = new EnvironmentRenderer();
     private readonly glowRenderer = new GlowRenderer();
+    private readonly starNestRenderer = new StarNestRenderer();
+    private readonly gravityGridRenderer = new GravityGridRenderer();
     private movementPointFramePaths: string[] = [];
+    private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    // Device pixel ratio is dimensionless and does not use a unit suffix.
+    // Viewport dimensions represent pixels, so they continue to use the Px suffix.
+    private lastAppliedDevicePixelRatio = 0;
+    private lastAppliedViewportWidthPx = 0;
+    private lastAppliedViewportHeightPx = 0;
+    private cachedDevicePixelRatio = 1;
+    private cachedViewportWidthPx = 0;
+    private cachedViewportHeightPx = 0;
+
+    // Cached renderer context objects to avoid per-frame closure allocations
+    private _cachedUICtx: UIRendererContext | null = null;
+    private _cachedEnvCtx: EnvironmentRendererContext | null = null;
+    private _cachedBuildingCtx: BuildingRendererContext | null = null;
+    private _cachedMirrorCtx: SolarMirrorRendererContext | null = null;
+    private _cachedWarpGateCtx: WarpGateRendererContext | null = null;
+    private _cachedProjectileCtx: ProjectileRendererContext | null = null;
+    private _cachedUnitCtx: UnitRendererContext | null = null;
+
+    // Pre-bound methods to avoid per-frame .bind() allocations in rendering calls
+    private readonly _boundWorldToScreen = (pos: { x: number; y: number }) => this.worldToScreen(pos as Vector2D);
+    private readonly _boundWorldToScreenCoords = (x: number, y: number, out?: Vector2D) => this.worldToScreenCoords(x, y, out as Vector2D);
+    private readonly _boundIsWithinViewBounds = (pos: { x: number; y: number }, margin?: number) => this.isWithinViewBounds(pos as Vector2D, margin);
+    private readonly _boundGetCachedRadialGradient = (key: string, x0: number, y0: number, r0: number, x1: number, y1: number, r1: number, stops: Array<{ offset: number; color: string }>) => this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops);
+    private readonly _boundInterpolateHexColor = (startHex: string, endHex: string, t: number): string => this.interpolateHexColor(startHex, endHex, t);
+    private readonly _boundDrawFancyBloom = (screenPos: Vector2D, radius: number, color: string, intensity: number) => this.drawFancyBloom(screenPos, radius, color, intensity);
+
+    // Reusable per-frame arrays to avoid GC pressure from per-frame allocations
+    private readonly _reusableVisibleSpaceDust: SpaceDustParticle[] = [];
+    private readonly _reusableInfluenceCircles: InfluenceRenderCircle[] = [];
+    private readonly _reusableCirclesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
+    private readonly _reusableGravityGridColorMap = new Map<Player, string>();
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -202,14 +275,24 @@ export class GameRenderer {
             throw new Error('Could not get 2D context from canvas');
         }
         this.ctx = context;
+        this.updateViewportMetrics();
         this.resizeCanvas();
-        window.addEventListener('resize', () => this.resizeCanvas());
+        window.addEventListener('resize', () => {
+            this.updateViewportMetrics();
+            this.resizeCanvas();
+        });
 
         // Initialize starfield renderer
         this.starfieldRenderer = new StarfieldRenderer();
+        this.starfieldWorkerBridge = StarfieldWorkerBridge.isSupported()
+            ? new StarfieldWorkerBridge()
+            : null;
         
         // Initialize sun renderer
         this.sunRenderer = new SunRenderer();
+        this.sunRayWorkerBridge = SunRayWorkerBridge.isSupported()
+            ? new SunRayWorkerBridge()
+            : null;
 
         // Initialize asteroid renderer
         this.asteroidRenderer = new AsteroidRenderer();
@@ -224,12 +307,14 @@ export class GameRenderer {
         this.warpGateRenderer = new WarpGateRenderer();
         this.uiRenderer = new UIRenderer();
 
-        const defaultPngKeys: GraphicKey[] = ['stellarForge', 'solarMirror'];
         for (const option of this.graphicsOptions) {
             this.graphicsOptionByKey.set(option.key, option);
-            const defaultVariant: GraphicVariant = option.svgPath ? 'svg' : option.pngPath ? 'png' : 'stub';
-            const shouldPreferPng = defaultPngKeys.includes(option.key) && option.pngPath;
-            this.graphicsVariantByKey.set(option.key, shouldPreferPng ? 'png' : defaultVariant);
+            const defaultVariant: GraphicVariant = option.pngPath
+                ? 'png'
+                : option.svgPath
+                    ? 'svg'
+                    : 'stub';
+            this.graphicsVariantByKey.set(option.key, defaultVariant);
         }
 
         for (let frameIndex = 1; frameIndex <= Constants.MOVEMENT_POINT_ANIMATION_FRAME_COUNT; frameIndex++) {
@@ -244,51 +329,135 @@ export class GameRenderer {
     }
 
     private resizeCanvas(): void {
-        // Get device pixel ratio for high-DPI displays (retina, mobile, etc.)
-        const dpr = window.devicePixelRatio || 1;
+        // Cap render DPR to reduce fill-rate pressure on high-DPI devices.
+        const cappedDpr = Math.min(this.cachedDevicePixelRatio || 1, this.MAX_RENDER_PIXEL_RATIO);
         
         // Apply resolution scaling based on quality setting
         // Low quality: 0.75x resolution (56% pixel count)
         // Medium quality: 0.9x resolution (81% pixel count)
-        // High/Ultra: Full resolution
+        // High: 0.95x resolution (~90% pixel count) – subtle reduction for better performance
+        // Ultra: Full resolution
         let resolutionScale = 1.0;
         if (this.graphicsQuality === 'low') {
             resolutionScale = 0.75;
         } else if (this.graphicsQuality === 'medium') {
             resolutionScale = 0.9;
+        } else if (this.graphicsQuality === 'high') {
+            resolutionScale = 0.95;
         }
         
-        const effectiveDpr = dpr * resolutionScale;
+        // Apply a second, quality-specific cap after the global safety cap above so
+        // ultra/high quality on dense displays does not recreate an excessively large canvas.
+        const effectiveDpr = Math.min(
+            cappedDpr * resolutionScale,
+            this.getMaxEffectiveRenderPixelRatioForQuality()
+        );
         
         // Set canvas physical size to match display size * effective DPR
-        this.canvas.width = window.innerWidth * effectiveDpr;
-        this.canvas.height = window.innerHeight * effectiveDpr;
+        this.canvas.width = this.cachedViewportWidthPx * effectiveDpr;
+        this.canvas.height = this.cachedViewportHeightPx * effectiveDpr;
         
         // Set canvas CSS size to match window size
-        this.canvas.style.width = `${window.innerWidth}px`;
-        this.canvas.style.height = `${window.innerHeight}px`;
+        this.canvas.style.width = `${this.cachedViewportWidthPx}px`;
+        this.canvas.style.height = `${this.cachedViewportHeightPx}px`;
         
         // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
+        this.lastAppliedGraphicsQuality = this.graphicsQuality;
+        this.lastAppliedDevicePixelRatio = this.cachedDevicePixelRatio;
+        this.lastAppliedViewportWidthPx = this.cachedViewportWidthPx;
+        this.lastAppliedViewportHeightPx = this.cachedViewportHeightPx;
+    }
+
+    private updateViewportMetrics(): void {
+        this.cachedDevicePixelRatio = window.devicePixelRatio || 1;
+        this.cachedViewportWidthPx = window.innerWidth;
+        this.cachedViewportHeightPx = window.innerHeight;
+    }
+
+    private getViewportWidthPx(): number {
+        return this.cachedViewportWidthPx;
+    }
+
+    private getViewportHeightPx(): number {
+        return this.cachedViewportHeightPx;
+    }
+
+    public destroy(): void {
+        this.starfieldWorkerBridge?.dispose();
+        this.sunRayWorkerBridge?.dispose();
+    }
+
+    private getCanvasScreenWidthPx(): number {
+        return getCanvasScreenWidthPx(this.canvas);
+    }
+
+    private getCanvasScreenHeightPx(): number {
+        return getCanvasScreenHeightPx(this.canvas);
+    }
+
+    private getMaxEffectiveRenderPixelRatioForQuality(): number {
+        switch (this.graphicsQuality) {
+            case 'low':
+                return 1;
+            case 'medium':
+                return 1.25;
+            case 'high':
+                return 1.35;
+            case 'ultra':
+            default:
+                return 1.7;
+        }
+    }
+
+    private shouldResizeCanvasForCurrentDisplay(
+        devicePixelRatio: number,
+        viewportWidthPx: number,
+        viewportHeightPx: number
+    ): boolean {
+        return this.lastAppliedGraphicsQuality !== this.graphicsQuality
+            || this.lastAppliedDevicePixelRatio !== devicePixelRatio
+            || this.lastAppliedViewportWidthPx !== viewportWidthPx
+            || this.lastAppliedViewportHeightPx !== viewportHeightPx;
+    }
+
+    private shouldSkipFancyFieldEffects(): boolean {
+        return this.canvas.width * this.canvas.height > this.MAX_FANCY_FIELD_EFFECTS_CANVAS_PIXEL_AREA;
+    }
+
+    private shouldUseSimpleUnitLod(unit: Unit): boolean {
+        // Keep starlings on their dedicated renderer even at far zoom/low quality.
+        // The generic simple-LOD path draws legacy circles and causes visible sprite popping
+        // when crossing the zoom threshold.
+        if (unit instanceof Starling) {
+            return false;
+        }
+        const baseRadiusPx = this.UNIT_BASE_SIZE_PX * this.zoom * (unit.isHero ? this.HERO_SPRITE_SCALE * 0.5 : 1);
+        if (this.graphicsQuality === 'low') {
+            return baseRadiusPx <= this.LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
+        }
+        if (this.graphicsQuality === 'medium' || this.graphicsQuality === 'high') {
+            return baseRadiusPx <= this.STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX;
+        }
+        return false;
     }
 
     /**
      * Convert world coordinates to screen coordinates
      */
-    worldToScreen(worldPos: Vector2D): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+    worldToScreen(worldPos: { x: number; y: number }): Vector2D {
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
         
         // Apply screen shake offset if enabled
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
-        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+        if (this.screenShakeEnabled && this.screenShake.getIntensity() > 0) {
             // Random shake direction
             const angle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
-            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+            shakeOffsetX = Math.cos(angle) * this.screenShake.getIntensity();
+            shakeOffsetY = Math.sin(angle) * this.screenShake.getIntensity();
         }
         
         return new Vector2D(
@@ -298,16 +467,15 @@ export class GameRenderer {
     }
 
     private worldToScreenCoords(worldX: number, worldY: number, out: Vector2D): void {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
 
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
-        if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
+        if (this.screenShakeEnabled && this.screenShake.getIntensity() > 0) {
             const angle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
-            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+            shakeOffsetX = Math.cos(angle) * this.screenShake.getIntensity();
+            shakeOffsetY = Math.sin(angle) * this.screenShake.getIntensity();
         }
 
         out.x = centerX + (worldX - this.camera.x) * this.zoom + shakeOffsetX;
@@ -330,9 +498,8 @@ export class GameRenderer {
     }
 
     private updateViewBounds(): void {
-        const dpr = window.devicePixelRatio || 1;
-        const viewHalfWidth = (this.canvas.width / dpr) / (2 * this.zoom);
-        const viewHalfHeight = (this.canvas.height / dpr) / (2 * this.zoom);
+        const viewHalfWidth = this.getViewportWidthPx() / (2 * this.zoom);
+        const viewHalfHeight = this.getViewportHeightPx() / (2 * this.zoom);
 
         this.viewMinX = this.camera.x - viewHalfWidth;
         this.viewMaxX = this.camera.x + viewHalfWidth;
@@ -340,7 +507,7 @@ export class GameRenderer {
         this.viewMaxY = this.camera.y + viewHalfHeight;
     }
 
-    private isWithinViewBounds(worldPos: Vector2D, margin: number = 0): boolean {
+    private isWithinViewBounds(worldPos: { x: number; y: number }, margin: number = 0): boolean {
         return worldPos.x >= this.viewMinX - margin &&
                worldPos.x <= this.viewMaxX + margin &&
                worldPos.y >= this.viewMinY - margin &&
@@ -351,9 +518,8 @@ export class GameRenderer {
      * Check if screen position is within viewport bounds
      */
     private isScreenPosWithinViewBounds(screenPos: { x: number; y: number }, margin: number = 0): boolean {
-        const dpr = window.devicePixelRatio || 1;
-        const viewportWidth = this.canvas.width / dpr;
-        const viewportHeight = this.canvas.height / dpr;
+        const viewportWidth = this.getViewportWidthPx();
+        const viewportHeight = this.getViewportHeightPx();
         return screenPos.x >= -margin &&
                screenPos.x <= viewportWidth + margin &&
                screenPos.y >= -margin &&
@@ -364,9 +530,8 @@ export class GameRenderer {
      * Convert screen coordinates to world coordinates
      */
     screenToWorld(screenX: number, screenY: number): Vector2D {
-        const dpr = window.devicePixelRatio || 1;
-        const centerX = (this.canvas.width / dpr) / 2;
-        const centerY = (this.canvas.height / dpr) / 2;
+        const centerX = this.getViewportWidthPx() * 0.5;
+        const centerY = this.getViewportHeightPx() * 0.5;
         return new Vector2D(
             this.camera.x + (screenX - centerX) / this.zoom,
             this.camera.y + (screenY - centerY) / this.zoom
@@ -381,80 +546,173 @@ export class GameRenderer {
     }
 
     private getUIRendererContext(): UIRendererContext {
-        return {
-            ctx: this.ctx,
-            canvas: this.canvas,
-            zoom: this.zoom,
-            selectionStart: this.selectionStart,
-            selectionEnd: this.selectionEnd,
-            abilityArrowStarts: this.abilityArrowStarts,
-            abilityArrowDirection: this.abilityArrowDirection,
-            abilityArrowLengthPx: this.abilityArrowLengthPx,
-            buildingAbilityArrowStart: this.buildingAbilityArrowStart,
-            buildingAbilityArrowDirection: this.buildingAbilityArrowDirection,
-            buildingAbilityArrowLengthPx: this.buildingAbilityArrowLengthPx,
-            pathPreviewForge: this.pathPreviewForge,
-            pathPreviewPoints: this.pathPreviewPoints,
-            pathPreviewEnd: this.pathPreviewEnd,
-            pathPreviewStartWorld: this.pathPreviewStartWorld,
-            selectedUnits: this.selectedUnits,
-            selectedMirrors: this.selectedMirrors,
-            highlightedButtonIndex: this.highlightedButtonIndex,
-            showInfo: this.showInfo,
-            showInGameMenu: this.showInGameMenu,
-            inGameMenuTab: this.inGameMenuTab,
-            damageDisplayMode: this.damageDisplayMode,
-            healthDisplayMode: this.healthDisplayMode,
-            offscreenIndicatorOpacity: this.offscreenIndicatorOpacity,
-            infoBoxOpacity: this.infoBoxOpacity,
-            playerColor: this.playerColor,
-            enemyColor: this.enemyColor,
-            colorblindMode: this.colorblindMode,
-            graphicsQuality: this.graphicsQuality,
-            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
-            screenShakeEnabled: this.screenShakeEnabled,
-            soundVolume: this.soundVolume,
-            musicVolume: this.musicVolume,
-            graphicsMenuScrollOffset: this.graphicsMenuScrollOffset,
-            renderLayerOptions: this.renderLayerOptions,
-            isSunsLayerEnabled: this.isSunsLayerEnabled,
-            isStarsLayerEnabled: this.isStarsLayerEnabled,
-            isAsteroidsLayerEnabled: this.isAsteroidsLayerEnabled,
-            isSpaceDustLayerEnabled: this.isSpaceDustLayerEnabled,
-            isBuildingsLayerEnabled: this.isBuildingsLayerEnabled,
-            isUnitsLayerEnabled: this.isUnitsLayerEnabled,
-            isProjectilesLayerEnabled: this.isProjectilesLayerEnabled,
-            worldToScreen: (pos) => this.worldToScreen(pos),
-            isWithinViewBounds: (pos, margin) => this.isWithinViewBounds(pos, margin),
-            getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
-            getSolEnergyIcon: () => this.getSolEnergyIcon(),
-            getProductionDisplayName: (unitType) => this.getProductionDisplayName(unitType),
-            getBuildingDisplayName: (building) => this.getBuildingDisplayName(building),
-            viewingPlayer: this.viewingPlayer,
-            CONTROL_LINES_FULL: GameRenderer.CONTROL_LINES_FULL,
-            CONTROL_LINES_COMPACT: GameRenderer.CONTROL_LINES_COMPACT,
-        };
+        if (!this._cachedUICtx) {
+            this._cachedUICtx = {
+                ctx: this.ctx,
+                canvas: this.canvas,
+                zoom: this.zoom,
+                selectionStart: this.selectionStart,
+                selectionEnd: this.selectionEnd,
+                abilityArrowStarts: this.abilityArrowStarts,
+                abilityArrowDirection: this.abilityArrowDirection,
+                abilityArrowLengthPx: this.abilityArrowLengthPx,
+                buildingAbilityArrowStart: this.buildingAbilityArrowStart,
+                buildingAbilityArrowDirection: this.buildingAbilityArrowDirection,
+                buildingAbilityArrowLengthPx: this.buildingAbilityArrowLengthPx,
+                pathPreviewForge: this.pathPreviewForge,
+                pathPreviewPoints: this.pathPreviewPoints,
+                pathPreviewEnd: this.pathPreviewEnd,
+                pathPreviewStartWorld: this.pathPreviewStartWorld,
+                uiTimeSec: performance.now() * 0.001,
+                selectedUnits: this.selectedUnits,
+                selectedMirrors: this.selectedMirrors,
+                highlightedButtonIndex: this.highlightedButtonIndex,
+                showInfo: this.showInfo,
+                showInGameMenu: this.showInGameMenu,
+                inGameMenuTab: this.inGameMenuTab,
+                damageDisplayMode: this.damageDisplayMode,
+                healthDisplayMode: this.healthDisplayMode,
+                offscreenIndicatorOpacity: this.offscreenIndicatorOpacity,
+                infoBoxOpacity: this.infoBoxOpacity,
+                infoBoxSize: this.infoBoxSize,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                colorblindMode: this.colorblindMode,
+                graphicsQuality: this.graphicsQuality,
+                isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                screenShakeEnabled: this.screenShakeEnabled,
+                soundVolume: this.soundVolume,
+                musicVolume: this.musicVolume,
+                graphicsMenuScrollOffset: this.graphicsMenuScrollOffset,
+                renderLayerOptions: this.renderLayerOptions,
+                isSunsLayerEnabled: this.isSunsLayerEnabled,
+                isStarsLayerEnabled: this.isStarsLayerEnabled,
+                isAsteroidsLayerEnabled: this.isAsteroidsLayerEnabled,
+                isSpaceDustLayerEnabled: this.isSpaceDustLayerEnabled,
+                isBuildingsLayerEnabled: this.isBuildingsLayerEnabled,
+                isUnitsLayerEnabled: this.isUnitsLayerEnabled,
+                isProjectilesLayerEnabled: this.isProjectilesLayerEnabled,
+                worldToScreen: (pos) => this.worldToScreen(pos),
+                isWithinViewBounds: (pos, margin) => this.isWithinViewBounds(pos, margin),
+                getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
+                getSolEnergyIcon: () => this.getSolEnergyIcon(),
+                getProductionDisplayName: (unitType) => this.getProductionDisplayName(unitType),
+                getBuildingDisplayName: (building) => this.getBuildingDisplayName(building),
+                viewingPlayer: this.viewingPlayer,
+                CONTROL_LINES_FULL: GameRenderer.CONTROL_LINES_FULL,
+                CONTROL_LINES_COMPACT: GameRenderer.CONTROL_LINES_COMPACT,
+            };
+            return this._cachedUICtx;
+        }
+        const c = this._cachedUICtx;
+        c.zoom = this.zoom;
+        c.selectionStart = this.selectionStart;
+        c.selectionEnd = this.selectionEnd;
+        c.abilityArrowStarts = this.abilityArrowStarts;
+        c.abilityArrowDirection = this.abilityArrowDirection;
+        c.abilityArrowLengthPx = this.abilityArrowLengthPx;
+        c.buildingAbilityArrowStart = this.buildingAbilityArrowStart;
+        c.buildingAbilityArrowDirection = this.buildingAbilityArrowDirection;
+        c.buildingAbilityArrowLengthPx = this.buildingAbilityArrowLengthPx;
+        c.pathPreviewForge = this.pathPreviewForge;
+        c.pathPreviewPoints = this.pathPreviewPoints;
+        c.pathPreviewEnd = this.pathPreviewEnd;
+        c.pathPreviewStartWorld = this.pathPreviewStartWorld;
+        c.uiTimeSec = performance.now() * 0.001;
+        c.selectedUnits = this.selectedUnits;
+        c.selectedMirrors = this.selectedMirrors;
+        c.highlightedButtonIndex = this.highlightedButtonIndex;
+        c.showInfo = this.showInfo;
+        c.showInGameMenu = this.showInGameMenu;
+        c.inGameMenuTab = this.inGameMenuTab;
+        c.damageDisplayMode = this.damageDisplayMode;
+        c.healthDisplayMode = this.healthDisplayMode;
+        c.offscreenIndicatorOpacity = this.offscreenIndicatorOpacity;
+        c.infoBoxOpacity = this.infoBoxOpacity;
+        c.infoBoxSize = this.infoBoxSize;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.colorblindMode = this.colorblindMode;
+        c.graphicsQuality = this.graphicsQuality;
+        c.isFancyGraphicsEnabled = this.isFancyGraphicsEnabled;
+        c.screenShakeEnabled = this.screenShakeEnabled;
+        c.soundVolume = this.soundVolume;
+        c.musicVolume = this.musicVolume;
+        c.graphicsMenuScrollOffset = this.graphicsMenuScrollOffset;
+        c.isSunsLayerEnabled = this.isSunsLayerEnabled;
+        c.isStarsLayerEnabled = this.isStarsLayerEnabled;
+        c.isAsteroidsLayerEnabled = this.isAsteroidsLayerEnabled;
+        c.isSpaceDustLayerEnabled = this.isSpaceDustLayerEnabled;
+        c.isBuildingsLayerEnabled = this.isBuildingsLayerEnabled;
+        c.isUnitsLayerEnabled = this.isUnitsLayerEnabled;
+        c.isProjectilesLayerEnabled = this.isProjectilesLayerEnabled;
+        c.viewingPlayer = this.viewingPlayer;
+        return c;
     }
     private getEnvironmentRendererContext(): EnvironmentRendererContext {
-        return {
-            ctx: this.ctx,
-            canvas: this.canvas,
-            camera: this.camera,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
-            playerColor: this.playerColor,
-            enemyColor: this.enemyColor,
-            viewingPlayer: this.viewingPlayer,
-            colorblindMode: this.colorblindMode,
-            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
-            isWithinViewBounds: (worldPos, margin) => this.isWithinViewBounds(worldPos, margin),
-            getFactionColor: (faction) => this.getFactionColor(faction),
-            getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
-            drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
-            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-            gradientCache: this.gradientCache,
-        };
+        if (!this._cachedEnvCtx) {
+            this._cachedEnvCtx = {
+                ctx: this.ctx,
+                canvas: this.canvas,
+                camera: this.camera,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                viewingPlayer: this.viewingPlayer,
+                colorblindMode: this.colorblindMode,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+                isWithinViewBounds: (worldPos, margin) => this.isWithinViewBounds(worldPos, margin),
+                getFactionColor: (faction) => this.getFactionColor(faction),
+                getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
+                drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
+                getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+                gradientCache: this.gradientCache,
+            };
+            return this._cachedEnvCtx;
+        }
+        const c = this._cachedEnvCtx;
+        c.ctx = this.ctx;
+        c.canvas = this.canvas;
+        c.camera = this.camera;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.isFancyGraphicsEnabled = this.isFancyGraphicsEnabled;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.viewingPlayer = this.viewingPlayer;
+        c.colorblindMode = this.colorblindMode;
+        return c;
+    }
+
+    private _cachedGravityGridCtx: GravityGridContext | null = null;
+
+    private getGravityGridContext(): GravityGridContext {
+        if (!this._cachedGravityGridCtx) {
+            this._cachedGravityGridCtx = {
+                ctx: this.ctx,
+                canvas: this.canvas,
+                camera: this.camera,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                viewingPlayer: this.viewingPlayer,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+            };
+            return this._cachedGravityGridCtx;
+        }
+        const c = this._cachedGravityGridCtx;
+        c.ctx = this.ctx;
+        c.canvas = this.canvas;
+        c.camera = this.camera;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.viewingPlayer = this.viewingPlayer;
+        return c;
     }
 
     private getLadPlayerColor(player: Player, ladSun: Sun | undefined, game: GameState): string {
@@ -541,6 +799,14 @@ export class GameRenderer {
         return this.spriteManager.getSolEnergyIcon();
     }
 
+    private getSpriteDrawSource(path: string): SpriteDrawSource | null {
+        return this.spriteManager.getSpriteDrawSource(path);
+    }
+
+    private drawSpritePath(path: string, x: number, y: number, width: number, height: number): boolean {
+        return this.spriteManager.drawSprite(this.ctx, path, x, y, width, height);
+    }
+
     private getTintedSprite(path: string, color: string): HTMLCanvasElement | null {
         return this.spriteManager.getTintedSprite(path, color);
     }
@@ -573,6 +839,24 @@ export class GameRenderer {
 
     public setGraphicsVariant(key: GraphicKey, variant: GraphicVariant): void {
         this.graphicsVariantByKey.set(key, variant);
+    }
+
+    public setUseSvgSprites(isEnabled: boolean): void {
+        for (const option of this.graphicsOptions) {
+            if (isEnabled && option.svgPath) {
+                this.graphicsVariantByKey.set(option.key, 'svg');
+                continue;
+            }
+            if (option.pngPath) {
+                this.graphicsVariantByKey.set(option.key, 'png');
+                continue;
+            }
+            if (option.svgPath) {
+                this.graphicsVariantByKey.set(option.key, 'svg');
+                continue;
+            }
+            this.graphicsVariantByKey.set(option.key, 'stub');
+        }
     }
 
     public setInGameMenuTab(tab: InGameMenuTab): void {
@@ -644,31 +928,19 @@ export class GameRenderer {
     }
 
     private getForgeSpritePath(forge: StellarForge): string | null {
-        if (forge.owner.faction === Faction.RADIANT) {
-            return this.getGraphicAssetPath('stellarForge');
-        }
-        return null;
+        return _getForgeSpritePath(forge, (key) => this.getGraphicAssetPath(key as any));
     }
 
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
-        if (mirror.owner.faction === Faction.RADIANT) {
-            return this.getGraphicAssetPath('solarMirror');
-        }
-        return null;
+        return _getSolarMirrorSpritePath(mirror, (key) => this.getGraphicAssetPath(key as any));
     }
 
     private getStarlingSpritePath(starling: Starling): string | null {
-        if (starling.owner.faction === Faction.RADIANT) {
-            // Use starling sprite based on upgrade level (1-4)
-            const level = Math.min(4, Math.max(1, starling.spriteLevel));
-            return `ASSETS/sprites/RADIANT/starlings/starlingLevel (${level}).png`;
-        }
-        return null;
+        return _getStarlingSpritePath(starling);
     }
 
     private getStarlingFacingRotationRad(starling: Starling): number | null {
-        // Preserve the unit's last simulation rotation so stopped starlings keep their final heading.
-        return starling.rotation;
+        return _getStarlingFacingRotationRad(starling);
     }
 
     /**
@@ -683,90 +955,11 @@ export class GameRenderer {
         minY: number,
         displayColor: string
     ): void {
-        // Skip expensive edge detection on low/medium quality for performance
-        if (this.graphicsQuality === 'low' || this.graphicsQuality === 'medium') {
-            return;
-        }
-
-        const data = imageData.data;
-
-        // Draw glowing outline where filled areas border empty areas
-        this.ctx.save();
-        this.ctx.strokeStyle = displayColor;
-        this.ctx.shadowColor = displayColor;
-        this.ctx.shadowBlur = 10;
-        this.ctx.lineWidth = 2;
-        this.ctx.fillStyle = displayColor;
-
-        // Edge detection: draw pixels at the boundary of filled regions
-        for (let y = 1; y < cropHeight - 1; y++) {
-            for (let x = 1; x < cropWidth - 1; x++) {
-                const idx = (y * cropWidth + x) * 4;
-                const alpha = data[idx + 3];
-                
-                // Check if this pixel is filled
-                if (alpha > this.AURUM_EDGE_ALPHA_THRESHOLD) {
-                    // Check if any neighbor is empty
-                    const hasEmptyNeighbor = 
-                        data[((y - 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // top
-                        data[((y + 1) * cropWidth + x) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // bottom
-                        data[(y * cropWidth + (x - 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD ||  // left
-                        data[(y * cropWidth + (x + 1)) * 4 + 3] < this.AURUM_EDGE_ALPHA_THRESHOLD;    // right
-                    
-                    if (hasEmptyNeighbor) {
-                        this.ctx.fillRect(minX + x, minY + y, 1, 1);
-                    }
-                }
-            }
-        }
-        
-        this.ctx.restore();
+        _detectAndDrawEdges(this.ctx, imageData, cropWidth, cropHeight, minX, minY, displayColor, this.graphicsQuality, this.AURUM_EDGE_ALPHA_THRESHOLD);
     }
 
     private getHeroSpritePath(unit: Unit): string | null {
-        if (unit.owner.faction !== Faction.RADIANT) {
-            return null;
-        }
-        if (unit instanceof Marine) {
-            return this.getGraphicAssetPath('heroMarine');
-        }
-        if (unit instanceof Grave) {
-            return this.getGraphicAssetPath('heroGrave');
-        }
-        if (unit instanceof Dagger) {
-            return this.getGraphicAssetPath('heroDagger');
-        }
-        if (unit instanceof Beam) {
-            return this.getGraphicAssetPath('heroBeam');
-        }
-        if (unit instanceof Mortar) {
-            return this.getGraphicAssetPath('heroMortar');
-        }
-        if (unit instanceof Ray) {
-            return this.getGraphicAssetPath('heroRay');
-        }
-        if (unit instanceof Nova) {
-            return this.getGraphicAssetPath('heroNova');
-        }
-        if (unit instanceof InfluenceBall) {
-            return this.getGraphicAssetPath('heroInfluenceBall');
-        }
-        if (unit instanceof TurretDeployer) {
-            return this.getGraphicAssetPath('heroTurretDeployer');
-        }
-        if (unit instanceof Driller) {
-            return this.getGraphicAssetPath('heroDriller');
-        }
-        if (unit instanceof Preist) {
-            return this.getGraphicAssetPath('heroPreist');
-        }
-        if (unit instanceof Tank) {
-            return this.getGraphicAssetPath('heroTank');
-        }
-        if (unit instanceof Spotlight) {
-            return this.getGraphicAssetPath('heroBeam');
-        }
-        return null;
+        return _getHeroSpritePath(unit, (key) => this.getGraphicAssetPath(key as any));
     }
 
     /**
@@ -780,202 +973,273 @@ export class GameRenderer {
      * Creates a BuildingRendererContext object for use by extracted building renderers.
      */
     private getBuildingRendererContext(): BuildingRendererContext {
-        return {
-            ctx: this.ctx,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            playerColor: this.playerColor,
-            enemyColor: this.enemyColor,
-            canvasWidth: this.canvas.width,
-            canvasHeight: this.canvas.height,
-            viewingPlayer: this.viewingPlayer,
-            highlightedButtonIndex: this.highlightedButtonIndex,
-            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
-            getSpriteImage: (path) => this.getSpriteImage(path),
-            getTintedSprite: (path, color) => this.getTintedSprite(path, color) as HTMLCanvasElement,
-            getGraphicAssetPath: (key) => this.getGraphicAssetPath(key as any),
-            getCachedRadialGradient: (_key, _radius, _colorStops) => {
-                // Signature mismatch: context interface uses simplified form; caller handles directly
-                throw new Error('getCachedRadialGradient not supported via context');
-            },
-            darkenColor: (color, opacity) => this.darkenColor(color, opacity),
-            applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
-            getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
-            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
-                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
-            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
-                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
-            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
-            drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset) =>
-                this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
-            drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
-            drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
-                this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
-            drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
-                this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, color, this.getUnitRendererContext()),
-            isWithinViewBounds: (worldPos, margin) => this.isWithinViewBounds(worldPos, margin),
-            getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
-            getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
-            drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
-            detectAndDrawEdges: (imageData, width, height, offsetX, offsetY, color) =>
-                this.detectAndDrawEdges(imageData, width, height, offsetX, offsetY, color),
-            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-            shakenExplosions: this.shakenExplosions,
-            triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
-        };
+        if (!this._cachedBuildingCtx) {
+            this._cachedBuildingCtx = {
+                ctx: this.ctx,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                canvasWidth: this.canvas.width,
+                canvasHeight: this.canvas.height,
+                viewingPlayer: this.viewingPlayer,
+                highlightedButtonIndex: this.highlightedButtonIndex,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+                getSpriteImage: (path) => this.getSpriteImage(path),
+                getTintedSprite: (path, color) => this.getTintedSprite(path, color) as HTMLCanvasElement,
+                drawSpritePath: (path, x, y, width, height) => this.drawSpritePath(path, x, y, width, height),
+                getGraphicAssetPath: (key) => this.getGraphicAssetPath(key as any),
+                getCachedRadialGradient: (_key, _radius, _colorStops) => {
+                    // Signature mismatch: context interface uses simplified form; caller handles directly
+                    throw new Error('getCachedRadialGradient not supported via context');
+                },
+                darkenColor: (color, opacity) => this.darkenColor(color, opacity),
+                applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
+                getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
+                drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                    this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+                drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                    this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+                drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset) =>
+                    this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
+                drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
+                    this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
+                drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
+                    this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, color, this.getUnitRendererContext()),
+                isWithinViewBounds: (worldPos, margin) => this.isWithinViewBounds(worldPos, margin),
+                getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
+                getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
+                drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
+                detectAndDrawEdges: (imageData, width, height, offsetX, offsetY, color) =>
+                    this.detectAndDrawEdges(imageData, width, height, offsetX, offsetY, color),
+                getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+                shakenExplosions: this.screenShake.getShakenExplosions(),
+                triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
+            };
+            return this._cachedBuildingCtx;
+        }
+        const c = this._cachedBuildingCtx;
+        c.ctx = this.ctx;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.canvasWidth = this.canvas.width;
+        c.canvasHeight = this.canvas.height;
+        c.viewingPlayer = this.viewingPlayer;
+        c.highlightedButtonIndex = this.highlightedButtonIndex;
+        c.shakenExplosions = this.screenShake.getShakenExplosions();
+        return c;
     }
 
     private getSolarMirrorRendererContext(): SolarMirrorRendererContext {
-        return {
-            ctx: this.ctx,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
-            playerColor: this.playerColor,
-            enemyColor: this.enemyColor,
-            viewingPlayer: this.viewingPlayer,
-            isWarpGatePlacementMode: this.isWarpGatePlacementMode,
-            canCreateWarpGateFromMirrors: this.canCreateWarpGateFromMirrors,
-            isSelectedMirrorInSunlight: this.isSelectedMirrorInSunlight,
-            hasSeenFoundry: this.hasSeenFoundry,
-            hasActiveFoundry: this.hasActiveFoundry,
-            highlightedButtonIndex: this.highlightedButtonIndex,
-            MIRROR_MAX_HEALTH: this.MIRROR_MAX_HEALTH,
-            gradientCache: this.gradientCache,
-            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
-            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
-            getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
-            darkenColor: (color, factor) => this.darkenColor(color, factor),
-            applyShadeBrightening: (color, pos, game, isInShade) => this.applyShadeBrightening(color, pos, game, isInShade),
-            brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
-            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
-                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
-            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
-                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
-            drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
-            getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
-                this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
-            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
-            drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor) =>
-                this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
-            drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
-            drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
-                this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
-            getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
-            getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
-            drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
-            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-            getSolarMirrorSpritePath: (mirror) => this.getSolarMirrorSpritePath(mirror),
-            getTintedSprite: (path, color) => this.getTintedSprite(path, color),
-            getSolEnergyIcon: () => this.getSolEnergyIcon(),
-        };
+        if (!this._cachedMirrorCtx) {
+            this._cachedMirrorCtx = {
+                ctx: this.ctx,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                viewingPlayer: this.viewingPlayer,
+                isWarpGatePlacementMode: this.isWarpGatePlacementMode,
+                canCreateWarpGateFromMirrors: this.canCreateWarpGateFromMirrors,
+                isSelectedMirrorInSunlight: this.isSelectedMirrorInSunlight,
+                hasSeenFoundry: this.hasSeenFoundry,
+                hasActiveFoundry: this.hasActiveFoundry,
+                highlightedButtonIndex: this.highlightedButtonIndex,
+                MIRROR_MAX_HEALTH: this.MIRROR_MAX_HEALTH,
+                gradientCache: this.gradientCache,
+                VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+                getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
+                darkenColor: (color, factor) => this.darkenColor(color, factor),
+                applyShadeBrightening: (color, pos, game, isInShade) => this.applyShadeBrightening(color, pos, game, isInShade),
+                brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
+                drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                    this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+                drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                    this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+                drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
+                getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
+                    this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
+                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+                drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor) =>
+                    this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
+                drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
+                    this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
+                getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
+                getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
+                drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
+                getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+                getSolarMirrorSpritePath: (mirror) => this.getSolarMirrorSpritePath(mirror),
+                getTintedSprite: (path, color) => this.getTintedSprite(path, color),
+                getSolEnergyIcon: () => this.getSolEnergyIcon(),
+            };
+            return this._cachedMirrorCtx;
+        }
+        const c = this._cachedMirrorCtx;
+        c.ctx = this.ctx;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.isFancyGraphicsEnabled = this.isFancyGraphicsEnabled;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.viewingPlayer = this.viewingPlayer;
+        c.isWarpGatePlacementMode = this.isWarpGatePlacementMode;
+        c.canCreateWarpGateFromMirrors = this.canCreateWarpGateFromMirrors;
+        c.isSelectedMirrorInSunlight = this.isSelectedMirrorInSunlight;
+        c.hasSeenFoundry = this.hasSeenFoundry;
+        c.hasActiveFoundry = this.hasActiveFoundry;
+        c.highlightedButtonIndex = this.highlightedButtonIndex;
+        return c;
     }
 
     private getWarpGateRendererContext(): WarpGateRendererContext {
-        return {
-            ctx: this.ctx,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            selectedWarpGate: this.selectedWarpGate,
-            highlightedButtonIndex: this.highlightedButtonIndex,
-            isWarpGatePlacementMode: this.isWarpGatePlacementMode,
-            warpGatePreviewWorldPos: this.warpGatePreviewWorldPos,
-            isWarpGatePreviewValid: this.isWarpGatePreviewValid,
-            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
-            getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
-            drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
-                this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
-            drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
-                this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
-            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
-            drawWarpGateProductionEffect: (screenPos, radius, game, displayColor) =>
-                this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, displayColor, this.getUnitRendererContext()),
-            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-        };
+        if (!this._cachedWarpGateCtx) {
+            this._cachedWarpGateCtx = {
+                ctx: this.ctx,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                selectedWarpGate: this.selectedWarpGate,
+                highlightedButtonIndex: this.highlightedButtonIndex,
+                isWarpGatePlacementMode: this.isWarpGatePlacementMode,
+                warpGatePreviewWorldPos: this.warpGatePreviewWorldPos,
+                isWarpGatePreviewValid: this.isWarpGatePreviewValid,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+                getLadPlayerColor: (player, ladSun, game) => this.getLadPlayerColor(player, ladSun, game),
+                drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
+                    this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
+                drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
+                    this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
+                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+                drawWarpGateProductionEffect: (screenPos, radius, game, displayColor) =>
+                    this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, displayColor, this.getUnitRendererContext()),
+                getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+            };
+            return this._cachedWarpGateCtx;
+        }
+        const c = this._cachedWarpGateCtx;
+        c.ctx = this.ctx;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.selectedWarpGate = this.selectedWarpGate;
+        c.highlightedButtonIndex = this.highlightedButtonIndex;
+        c.isWarpGatePlacementMode = this.isWarpGatePlacementMode;
+        c.warpGatePreviewWorldPos = this.warpGatePreviewWorldPos;
+        c.isWarpGatePreviewValid = this.isWarpGatePreviewValid;
+        return c;
     }
 
     private getProjectileRendererContext(): ProjectileRendererContext {
-        return {
-            ctx: this.ctx,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            worldToScreen: (worldPos) => this.worldToScreen(worldPos),
-            getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
-                this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
-            drawParticleSunShadowTrail: (worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale) =>
-                this.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale),
-        };
+        if (!this._cachedProjectileCtx) {
+            this._cachedProjectileCtx = {
+                ctx: this.ctx,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                worldToScreen: (worldPos) => this.worldToScreen(worldPos),
+                getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
+                    this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
+                drawParticleSunShadowTrail: (worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale) =>
+                    this.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale),
+            };
+            return this._cachedProjectileCtx;
+        }
+        const c = this._cachedProjectileCtx;
+        c.ctx = this.ctx;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        return c;
     }
 
     private getUnitRendererContext(): UnitRendererContext {
-        return {
-            ctx: this.ctx,
-            zoom: this.zoom,
-            graphicsQuality: this.graphicsQuality,
-            isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
-            playerColor: this.playerColor,
-            enemyColor: this.enemyColor,
-            viewingPlayer: this.viewingPlayer,
-            selectedUnits: this.selectedUnits,
-            HERO_SPRITE_SCALE: this.HERO_SPRITE_SCALE,
-            ENTITY_SHADE_GLOW_SCALE: this.ENTITY_SHADE_GLOW_SCALE,
-            MOVE_ORDER_DOT_RADIUS: this.MOVE_ORDER_DOT_RADIUS,
-            MOVE_ORDER_FRAME_DURATION_MS: this.MOVE_ORDER_FRAME_DURATION_MS,
-            MOVE_ORDER_FALLBACK_SPRITE_PATH: this.MOVE_ORDER_FALLBACK_SPRITE_PATH,
-            movementPointFramePaths: this.movementPointFramePaths,
-            worldToScreen: (pos) => this.worldToScreen(pos),
-            getMinZoomForBounds: () => this.getMinZoomForBounds(),
-            isWithinViewBounds: (pos, margin) => this.isWithinViewBounds(pos, margin),
-            isScreenPosWithinViewBounds: (pos, margin) => this.isScreenPosWithinViewBounds(pos, margin),
-            getHeroSpritePath: (unit) => this.getHeroSpritePath(unit),
-            getStarlingSpritePath: (s) => this.getStarlingSpritePath(s),
-            getStarlingFacingRotationRad: (s) => this.getStarlingFacingRotationRad(s),
-            getTintedSprite: (path, color) => this.getTintedSprite(path, color),
-            getSpriteImage: (path) => this.getSpriteImage(path),
-            getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
-            getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
-            drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
-            darkenColor: (color, opacity) => this.darkenColor(color, opacity),
-            getFactionColor: (faction) => this.getFactionColor(faction),
-            applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
-            brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
-            getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
-            getShadeGlowAlpha: (entity, shouldGlow) => this.getShadeGlowAlpha(entity, shouldGlow),
-            drawCachedUnitGlow: (screenPos, radiusPx, color, alphaScale) => this.drawCachedUnitGlow(screenPos, radiusPx, color, alphaScale),
-            drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
-            drawHealthDisplay: (screenPos, current, max, size, yOffset) => this.drawHealthDisplay(screenPos, current, max, size, yOffset),
-            drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
-            drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
-            getPseudoRandom: (seed) => this.getPseudoRandom(seed),
-            getStarlingParticleSeed: (s) => this.getStarlingParticleSeed(s),
-            getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) => this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
-            gradientCache: this.gradientCache,
-            triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
-            starlingParticleStates: this.starlingParticleStates,
-            VELARIS_STARLING_SHAPE_BLEND_SPEED: this.VELARIS_STARLING_SHAPE_BLEND_SPEED,
-            VELARIS_STARLING_PARTICLE_RADIUS_PX: this.VELARIS_STARLING_PARTICLE_RADIUS_PX,
-            VELARIS_STARLING_GRAPHEME_PULSE_SPEED: this.VELARIS_STARLING_GRAPHEME_PULSE_SPEED,
-            VELARIS_STARLING_GRAPHEME_ALPHA_MAX: this.VELARIS_STARLING_GRAPHEME_ALPHA_MAX,
-            VELARIS_STARLING_GRAPHEME_SIZE_SCALE: this.VELARIS_STARLING_GRAPHEME_SIZE_SCALE,
-            VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE: this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE,
-            VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE: this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE,
-            VELARIS_STARLING_CLOUD_TIME_SCALE: this.VELARIS_STARLING_CLOUD_TIME_SCALE,
-            VELARIS_STARLING_PARTICLE_COUNT: this.VELARIS_STARLING_PARTICLE_COUNT,
-            VELARIS_STARLING_TRIANGLE_RADIUS_SCALE: this.VELARIS_STARLING_TRIANGLE_RADIUS_SCALE,
-            VELARIS_STARLING_PENTAGON_RADIUS_SCALE: this.VELARIS_STARLING_PENTAGON_RADIUS_SCALE,
-            VELARIS_STARLING_CLOUD_RADIUS_SCALE: this.VELARIS_STARLING_CLOUD_RADIUS_SCALE,
-            VELARIS_STARLING_CLOUD_SWIRL_SCALE: this.VELARIS_STARLING_CLOUD_SWIRL_SCALE,
-            VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE: this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE,
-            VELARIS_STARLING_TRIANGLE_FLOW_SPEED: this.VELARIS_STARLING_TRIANGLE_FLOW_SPEED,
-            VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED: this.VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED,
-            VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE,
-            VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE,
-            VELARIS_STARLING_CLOUD_PULL_SPEED: this.VELARIS_STARLING_CLOUD_PULL_SPEED,
-            VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
-            canvas: this.canvas,
-            camera: this.camera,
-            drawUnit: (unit, color, game, isEnemy, sizeMultiplier, context) => this.unitRenderer.drawUnit(unit, color, game, isEnemy, sizeMultiplier, context),
-        };
+        if (!this._cachedUnitCtx) {
+            this._cachedUnitCtx = {
+                ctx: this.ctx,
+                zoom: this.zoom,
+                graphicsQuality: this.graphicsQuality,
+                isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                playerColor: this.playerColor,
+                enemyColor: this.enemyColor,
+                viewingPlayer: this.viewingPlayer,
+                selectedUnits: this.selectedUnits,
+                HERO_SPRITE_SCALE: this.HERO_SPRITE_SCALE,
+                ENTITY_SHADE_GLOW_SCALE: this.ENTITY_SHADE_GLOW_SCALE,
+                MOVE_ORDER_DOT_RADIUS: this.MOVE_ORDER_DOT_RADIUS,
+                MOVE_ORDER_FRAME_DURATION_MS: this.MOVE_ORDER_FRAME_DURATION_MS,
+                MOVE_ORDER_FALLBACK_SPRITE_PATH: this.MOVE_ORDER_FALLBACK_SPRITE_PATH,
+                movementPointFramePaths: this.movementPointFramePaths,
+                worldToScreen: (pos) => this.worldToScreen(pos),
+                getMinZoomForBounds: () => this.getMinZoomForBounds(),
+                isWithinViewBounds: (pos, margin) => this.isWithinViewBounds(pos, margin),
+                isScreenPosWithinViewBounds: (pos, margin) => this.isScreenPosWithinViewBounds(pos, margin),
+                getHeroSpritePath: (unit) => this.getHeroSpritePath(unit),
+                getStarlingSpritePath: (s) => this.getStarlingSpritePath(s),
+                getStarlingFacingRotationRad: (s) => this.getStarlingFacingRotationRad(s),
+                getTintedSprite: (path, color) => this.getTintedSprite(path, color),
+                getSpriteImage: (path) => this.getSpriteImage(path),
+                getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
+                getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
+                drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
+                darkenColor: (color, opacity) => this.darkenColor(color, opacity),
+                getFactionColor: (faction) => this.getFactionColor(faction),
+                applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
+                brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
+                getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
+                getShadeGlowAlpha: (entity, shouldGlow) => this.getShadeGlowAlpha(entity, shouldGlow),
+                drawCachedUnitGlow: (screenPos, radiusPx, color, alphaScale) => this.drawCachedUnitGlow(screenPos, radiusPx, color, alphaScale),
+                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+                drawHealthDisplay: (screenPos, current, max, size, yOffset) => this.drawHealthDisplay(screenPos, current, max, size, yOffset),
+                drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
+                getPseudoRandom: (seed) => this.getPseudoRandom(seed),
+                getStarlingParticleSeed: (s) => this.getStarlingParticleSeed(s),
+                getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) => this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
+                gradientCache: this.gradientCache,
+                triggerScreenShake: (intensity) => this.triggerScreenShake(intensity),
+                starlingParticleStates: this.starlingParticleStates,
+                VELARIS_STARLING_SHAPE_BLEND_SPEED: this.VELARIS_STARLING_SHAPE_BLEND_SPEED,
+                VELARIS_STARLING_PARTICLE_RADIUS_PX: this.VELARIS_STARLING_PARTICLE_RADIUS_PX,
+                VELARIS_STARLING_GRAPHEME_PULSE_SPEED: this.VELARIS_STARLING_GRAPHEME_PULSE_SPEED,
+                VELARIS_STARLING_GRAPHEME_ALPHA_MAX: this.VELARIS_STARLING_GRAPHEME_ALPHA_MAX,
+                VELARIS_STARLING_GRAPHEME_SIZE_SCALE: this.VELARIS_STARLING_GRAPHEME_SIZE_SCALE,
+                VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE: this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_BASE,
+                VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE: this.VELARIS_STARLING_TRIANGLE_TIME_SCALE_RANGE,
+                VELARIS_STARLING_CLOUD_TIME_SCALE: this.VELARIS_STARLING_CLOUD_TIME_SCALE,
+                VELARIS_STARLING_PARTICLE_COUNT: this.VELARIS_STARLING_PARTICLE_COUNT,
+                VELARIS_STARLING_TRIANGLE_RADIUS_SCALE: this.VELARIS_STARLING_TRIANGLE_RADIUS_SCALE,
+                VELARIS_STARLING_PENTAGON_RADIUS_SCALE: this.VELARIS_STARLING_PENTAGON_RADIUS_SCALE,
+                VELARIS_STARLING_CLOUD_RADIUS_SCALE: this.VELARIS_STARLING_CLOUD_RADIUS_SCALE,
+                VELARIS_STARLING_CLOUD_SWIRL_SCALE: this.VELARIS_STARLING_CLOUD_SWIRL_SCALE,
+                VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE: this.VELARIS_STARLING_TRIANGLE_WOBBLE_SCALE,
+                VELARIS_STARLING_TRIANGLE_FLOW_SPEED: this.VELARIS_STARLING_TRIANGLE_FLOW_SPEED,
+                VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED: this.VELARIS_STARLING_TRIANGLE_WOBBLE_SPEED,
+                VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_BASE,
+                VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE: this.VELARIS_STARLING_CLOUD_ORBIT_SPEED_VARIANCE,
+                VELARIS_STARLING_CLOUD_PULL_SPEED: this.VELARIS_STARLING_CLOUD_PULL_SPEED,
+                VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
+                canvas: this.canvas,
+                camera: this.camera,
+                drawUnit: (unit, color, game, isEnemy, sizeMultiplier, context, useSimpleLod) =>
+                    this.unitRenderer.drawUnit(unit, color, game, isEnemy, sizeMultiplier, context, useSimpleLod),
+            };
+            return this._cachedUnitCtx;
+        }
+        const c = this._cachedUnitCtx;
+        c.ctx = this.ctx;
+        c.zoom = this.zoom;
+        c.graphicsQuality = this.graphicsQuality;
+        c.isFancyGraphicsEnabled = this.isFancyGraphicsEnabled;
+        c.playerColor = this.playerColor;
+        c.enemyColor = this.enemyColor;
+        c.viewingPlayer = this.viewingPlayer;
+        c.selectedUnits = this.selectedUnits;
+        c.canvas = this.canvas;
+        c.camera = this.camera;
+        return c;
     }
 
     /**
@@ -985,78 +1249,12 @@ export class GameRenderer {
         return adjustColorBrightness(color, factor);
     }
 
-    /**
-     * Calculate brightness boost for a position in shade based on proximity to player units/structures
-     * Returns a factor from 0 (no boost) to 1 (maximum boost)
-     */
     private getShadeBrightnessBoost(position: Vector2D, game: GameState, player: Player): number {
-        if (!player) {
-            return 0;
-        }
-
-        let minDistance = Infinity;
-
-        // Check distance to player units
-        for (const unit of player.units) {
-            const distance = unit.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                // Early exit if we're already very close (optimization)
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Check distance to player forge
-        if (player.stellarForge) {
-            const distance = player.stellarForge.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Check distance to player buildings (mirrors, etc.)
-        for (const building of player.buildings) {
-            const distance = building.position.distanceTo(position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                if (minDistance < 10) {
-                    return 1.0;
-                }
-            }
-        }
-
-        // Calculate brightness boost based on distance (smooth falloff)
-        if (minDistance >= Constants.SHADE_BRIGHTNESS_RADIUS) {
-            return 0;
-        }
-
-        // Smooth falloff: 1.0 at distance 0, 0.0 at SHADE_BRIGHTNESS_RADIUS
-        const falloff = 1.0 - (minDistance / Constants.SHADE_BRIGHTNESS_RADIUS);
-        return falloff * falloff; // Quadratic falloff for smoother transition
+        return _getShadeBrightnessBoost(position, game, player);
     }
 
-    /**
-     * Apply shade brightening effect to a color based on proximity to player units
-     * Only applies the boost if the position is in shade
-     */
     private applyShadeBrightening(color: string, position: Vector2D, game: GameState, isInShade: boolean): string {
-        if (!isInShade || !this.viewingPlayer) {
-            return color;
-        }
-
-        const brightnessBoost = this.getShadeBrightnessBoost(position, game, this.viewingPlayer);
-        if (brightnessBoost <= 0) {
-            return color;
-        }
-
-        // Apply brightness boost (1.0 = original, higher = brighter)
-        const boostFactor = 1.0 + (Constants.SHADE_BRIGHTNESS_BOOST * brightnessBoost);
-        return this.adjustColorBrightness(color, boostFactor);
+        return _applyShadeBrightening(color, position, game, isInShade, this.viewingPlayer);
     }
 
     /**
@@ -1129,56 +1327,22 @@ export class GameRenderer {
         }
     }
 
-    /**
-     * Get or create a cached radial gradient
-     * 
-     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
-     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
-     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
-     */
     private getCachedRadialGradient(
         key: string,
         x0: number, y0: number, r0: number,
         x1: number, y1: number, r1: number,
         stops: Array<{offset: number, color: string}>
     ): CanvasGradient {
-        const cached = this.gradientCache.get(key);
-        if (cached) {
-            return cached;
-        }
-
-        const gradient = this.ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
-        for (const stop of stops) {
-            gradient.addColorStop(stop.offset, stop.color);
-        }
-        this.gradientCache.set(key, gradient);
-        return gradient;
+        return this.gradientCache.getCachedRadialGradient(this.ctx, key, x0, y0, r0, x1, y1, r1, stops);
     }
 
-    /**
-     * Get or create a cached linear gradient
-     * 
-     * NOTE: Gradients are bound to the canvas coordinate system at creation time.
-     * Only use this for gradients that don't depend on screen positions (e.g., textures at origin).
-     * Include viewport/zoom state in the key if gradients depend on dynamic positions.
-     */
     private getCachedLinearGradient(
         key: string,
         x0: number, y0: number,
         x1: number, y1: number,
         stops: Array<{offset: number, color: string}>
     ): CanvasGradient {
-        const cached = this.gradientCache.get(key);
-        if (cached) {
-            return cached;
-        }
-
-        const gradient = this.ctx.createLinearGradient(x0, y0, x1, y1);
-        for (const stop of stops) {
-            gradient.addColorStop(stop.offset, stop.color);
-        }
-        this.gradientCache.set(key, gradient);
-        return gradient;
+        return this.gradientCache.getCachedLinearGradient(this.ctx, key, x0, y0, x1, y1, stops);
     }
 
     /**
@@ -1193,52 +1357,6 @@ export class GameRenderer {
         this.glowRenderer.drawBuildingSelectionIndicator(screenPos, radius, { ctx: this.ctx, zoom: this.zoom });
     }
 
-    /**
-     * Draw a sun
-     */
-    private drawSun(sun: Sun, gameTimeSec: number = 0): void {
-        const screenPos = this.worldToScreen(sun.position);
-        const screenRadius = sun.radius * this.zoom;
-        
-        const sunSpritePath = this.getGraphicAssetPath('centralSun');
-        const sunSprite = sunSpritePath ? this.getSpriteImage(sunSpritePath) : null;
-        
-        this.sunRenderer.drawSun(
-            this.ctx,
-            sun,
-            screenPos,
-            screenRadius,
-            gameTimeSec,
-            this.graphicsQuality,
-            this.isFancyGraphicsEnabled,
-            this.colorScheme,
-            sunSprite,
-            this.drawFancyBloom.bind(this),
-            withAlpha
-        );
-    }
-
-    /**
-     * Draw cinematic lens flare for visible suns in screen space.
-     */
-    private drawLensFlare(sun: Sun): void {
-        const screenPos = this.worldToScreen(sun.position);
-        const screenRadius = sun.radius * this.zoom;
-        
-        const dpr = window.devicePixelRatio || 1;
-        const canvasWidth = this.canvas.width / dpr;
-        const canvasHeight = this.canvas.height / dpr;
-        
-        this.sunRenderer.drawLensFlare(
-            this.ctx,
-            sun,
-            screenPos,
-            screenRadius,
-            canvasWidth,
-            canvasHeight,
-            this.graphicsQuality
-        );
-    }
 
     private getPseudoRandom(seed: number): number {
         const value = Math.sin(seed) * 43758.5453;
@@ -1254,12 +1372,6 @@ export class GameRenderer {
         return seed;
     }
 
-    /**
-     * Draw space dust particle with lightweight circle rendering
-     */
-    private drawSpaceDust(particle: SpaceDustParticle, game: GameState, viewingPlayerIndex: number | null): void {
-        this.environmentRenderer.drawSpaceDust(particle, game, viewingPlayerIndex, this.getEnvironmentRendererContext());
-    }
 
     private drawAestheticSpriteShadow(
         worldPos: Vector2D,
@@ -1279,18 +1391,6 @@ export class GameRenderer {
         this.environmentRenderer.drawAestheticSpriteShadow(worldPos, screenPos, screenSize, game, options, this.getEnvironmentRendererContext());
     }
 
-    private drawSpriteSunShadowSilhouette(
-        worldPos: Vector2D,
-        screenPos: Vector2D,
-        spriteMask: HTMLCanvasElement,
-        spriteSize: number,
-        rotationRad: number,
-        suns: Sun[],
-        opacity: number,
-        alphaScale: number
-    ): void {
-        this.environmentRenderer.drawSpriteSunShadowSilhouette(worldPos, screenPos, spriteMask, spriteSize, rotationRad, suns, opacity, alphaScale, this.getEnvironmentRendererContext());
-    }
 
     private drawParticleSunShadowTrail(
         worldPos: Vector2D,
@@ -1304,13 +1404,6 @@ export class GameRenderer {
         this.environmentRenderer.drawParticleSunShadowTrail(worldPos, screenPos, screenSize, suns, maxDistance, opacity, alphaScale, this.getEnvironmentRendererContext());
     }
 
-    /**
-     * Draw an asteroid
-     */
-
-    private updateEnemyVisibilityFadeClock(gameTimeSec: number): void {
-        this.visibilityTracker.updateFrameDelta(gameTimeSec);
-    }
 
     private getEnemyVisibilityAlpha(entity: object, isVisible: boolean, _gameTimeSec: number): number {
         return this.visibilityTracker.getEntityVisibilityAlpha(entity, isVisible);
@@ -1320,71 +1413,11 @@ export class GameRenderer {
         return this.visibilityTracker.getEntityShadeGlowAlpha(entity, shouldGlowInShade);
     }
 
-    private applyUltraWarmCoolGrade(game: GameState): void {
-        this.environmentRenderer.applyUltraWarmCoolGrade(game, this.getEnvironmentRendererContext());
-    }
-
-    /**
-     * Draw influence circle for a base
-     */
-    private drawInfluenceCircle(position: Vector2D, radius: number, color: string): void {
-        this.environmentRenderer.drawInfluenceCircle(position, radius, color, this.getEnvironmentRendererContext());
-    }
-
-    private getInfluenceTargetRadius(source: StellarForge | Building): number {
-        return this.environmentRenderer.getInfluenceTargetRadius(source);
-    }
-
-    private isInfluenceSourceActive(source: StellarForge | Building): boolean {
-        return this.environmentRenderer.isInfluenceSourceActive(source);
-    }
-
-    private updateInfluenceRadius(source: StellarForge | Building, deltaTimeSec: number): number {
-        return this.environmentRenderer.updateInfluenceRadius(source, deltaTimeSec);
-    }
-
-    private drawMergedInfluenceOutlines(circles: Array<{ position: Vector2D; radius: number }>, color: string): void {
-        this.environmentRenderer.drawMergedInfluenceOutlines(circles, color, this.getEnvironmentRendererContext());
-    }
 
     /**
      * Draw a unit
      */
 
-    /**
-     * Draw connection lines with visual indicators for line of sight
-     */
-    private drawConnections(player: Player, suns: Sun[], asteroids: Asteroid[], players: Player[]): void {
-        this.environmentRenderer.drawConnections(player, suns, asteroids, players, this.getEnvironmentRendererContext());
-    }
-
-    /**
-     * Draw UI overlay
-     */
-    private drawUI(game: GameState): void {
-        this.uiRenderer.drawUI(game, this.getUIRendererContext());
-    }
-
-    /**
-     * Draw selection rectangle
-     */
-    private drawSelectionRectangle(): void {
-        this.uiRenderer.drawSelectionRectangle(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw ability arrow for hero units
-     */
-    private drawAbilityArrow(): void {
-        this.uiRenderer.drawAbilityArrow(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw ability arrow for building production/abilities
-     */
-    private drawBuildingAbilityArrow(): void {
-        this.uiRenderer.drawBuildingAbilityArrow(this.getUIRendererContext());
-    }
 
     /**
      * Set building ability arrow direction and cache angle calculation
@@ -1394,20 +1427,15 @@ export class GameRenderer {
         this.uiRenderer.setBuildingAbilityArrowDirection(direction, this.getUIRendererContext());
     }
 
-    /**
-     * Draw a path preview for selected units (not from base)
-     */
-    private drawUnitPathPreview(): void {
-        this.uiRenderer.drawUnitPathPreview(this.getUIRendererContext());
-    }
 
     public createPathCommitEffect(startWorld: Vector2D, waypoints: Vector2D[], gameTimeSec: number): void {
         this.uiRenderer.createPathCommitEffect(startWorld, waypoints, gameTimeSec);
     }
 
-    private updateAndDrawPathCommitEffects(gameTimeSec: number): void {
-        this.uiRenderer.updateAndDrawPathCommitEffects(gameTimeSec, this.getUIRendererContext());
+    public createPathPreviewFadeEffect(startWorld: Vector2D, waypoints: Vector2D[], endWorld: Vector2D | null, gameTimeSec: number): void {
+        this.uiRenderer.createPathPreviewFadeEffect(startWorld, waypoints, endWorld, gameTimeSec);
     }
+
 
     /**
      * Create a tap visual effect at screen position
@@ -1437,40 +1465,6 @@ export class GameRenderer {
         this.uiRenderer.createProductionButtonWave(position);
     }
 
-    /**
-     * Update and draw tap effects (expanding ripple)
-     */
-    private updateAndDrawTapEffects(): void {
-        this.uiRenderer.updateAndDrawTapEffects(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw swipe effects (directional trail)
-     */
-    private updateAndDrawSwipeEffects(): void {
-        this.uiRenderer.updateAndDrawSwipeEffects(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw warp gate shockwave effects
-     */
-    private updateAndDrawWarpGateShockwaves(): void {
-        this.uiRenderer.updateAndDrawWarpGateShockwaves(this.getUIRendererContext());
-    }
-
-    /**
-     * Update and draw production button wave effects
-     */
-    private updateAndDrawProductionButtonWaves(): void {
-        this.uiRenderer.updateAndDrawProductionButtonWaves(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw damage numbers floating up from damaged units
-     */
-    private drawDamageNumbers(game: GameState): void {
-        this.uiRenderer.drawDamageNumbers(game, this.getUIRendererContext());
-    }
 
     /**
      * Draw health display (bar or number) for an entity
@@ -1487,33 +1481,41 @@ export class GameRenderer {
         this.uiRenderer.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor, this.getUIRendererContext());
     }
 
-    /**
-     * Draw off-screen unit indicators
-     */
-    private drawOffScreenUnitIndicators(game: GameState): void {
-        this.uiRenderer.drawOffScreenUnitIndicators(game, this.getUIRendererContext());
-    }
 
     /**
      * Render the entire game state
      */
     render(game: GameState): void {
+        if (this.shouldResizeCanvasForCurrentDisplay(
+            this.cachedDevicePixelRatio,
+            this.cachedViewportWidthPx,
+            this.cachedViewportHeightPx
+        )) {
+            this.resizeCanvas();
+        }
+
         this.sunRenderer.clearFrameCache();
+
+        // Use actual canvas screen-space size (CSS pixels) for all full-screen fills.
+        // canvas.width/height are physical pixels and, when the context is scaled by
+        // effectiveDpr (e.g. 0.75 on low quality), using them in fillRect only covers
+        // ~56% of the physical canvas, leaving transparent edges that expose the page
+        // background colour.
+        const screenWidth = this.getCanvasScreenWidthPx();
+        const screenHeight = this.getCanvasScreenHeightPx();
 
         // Clear canvas with color scheme background
         this.ctx.fillStyle = this.colorScheme.background;
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        this.ctx.fillRect(0, 0, screenWidth, screenHeight);
 
         this.updateViewBounds();
         const ladSun = game.suns.find(s => s.type === 'lad');
-        this.updateEnemyVisibilityFadeClock(game.gameTime);
+        this.visibilityTracker.updateFrameDelta(game.gameTime);
 
         const viewingPlayerIndex = this.viewingPlayer ? game.players.indexOf(this.viewingPlayer) : null;
-        
-        // Draw camera-space values used by reworked parallax stars.
-        const dpr = window.devicePixelRatio || 1;
-        const screenWidth = this.canvas.width / dpr;
-        const screenHeight = this.canvas.height / dpr;
+
+        const uiCtx = this.getUIRendererContext();
+        const envCtx = this.getEnvironmentRendererContext();
 
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
@@ -1521,60 +1523,239 @@ export class GameRenderer {
         // Draw suns
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
-                if (this.isWithinViewBounds(sun.position, sun.radius * 2)) {
-                    this.drawSun(sun, game.gameTime);
+                if (this.isWithinViewBounds(sun.position, sun.radius * 12)) {
+                    const sunScreenPos = this.worldToScreen(sun.position);
+                    const sunScreenRadius = sun.radius * this.zoom;
+                    const sunSpritePath = this.getGraphicAssetPath('centralSun');
+                    const sunSprite = sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
+                    this.sunRenderer.drawSun(
+                        this.ctx,
+                        sun,
+                        sunScreenPos,
+                        sunScreenRadius,
+                        game.gameTime,
+                        this.graphicsQuality,
+                        this.isFancyGraphicsEnabled,
+                        this.colorScheme,
+                        sunSprite,
+                        this._boundDrawFancyBloom,
+                        withAlpha
+                    );
                 }
             }
         }
 
         // Draw sun rays with raytracing (light and shadows)
         if (this.isSunsLayerEnabled) {
-            const dpr = window.devicePixelRatio || 1;
-            const canvasWidth = this.canvas.width / dpr;
-            const canvasHeight = this.canvas.height / dpr;
-            
-            this.sunRenderer.drawSunRays(
-                this.ctx,
-                game,
-                canvasWidth,
-                canvasHeight,
-                this.graphicsQuality,
-                this.isFancyGraphicsEnabled,
-                this.worldToScreen.bind(this),
-                this.worldToScreenCoords.bind(this),
-                this.isWithinViewBounds.bind(this),
-                this.getCachedRadialGradient.bind(this),
-                this.SUN_RAY_RADIUS_BUCKET_SIZE,
-                this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
-            );
+            const canvasWidth = this.getCanvasScreenWidthPx();
+            const canvasHeight = this.getCanvasScreenHeightPx();
+            const shouldSkipUltraParticles = !this.isSunsLayerEnabled || this.graphicsQuality !== 'ultra' || !!ladSun;
+
+            if (this.sunRayWorkerBridge) {
+                // Off-main-thread path: request a worker frame and blit when ready.
+                this.sunRayWorkerBridge.requestFrame(game, {
+                    cameraX: this.camera.x,
+                    cameraY: this.camera.y,
+                    zoomLevel: this.zoom,
+                    canvasWidthPx: canvasWidth,
+                    canvasHeightPx: canvasHeight,
+                    viewMinX: this.viewMinX,
+                    viewMinY: this.viewMinY,
+                    viewMaxX: this.viewMaxX,
+                    viewMaxY: this.viewMaxY,
+                    graphicsQuality: this.graphicsQuality,
+                    isFancyGraphicsEnabled: this.isFancyGraphicsEnabled,
+                    gameTimeSec: game.gameTime,
+                    sunRayRadiusBucketSize: this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                    sunRayBloomRadiusMultiplier: this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER,
+                });
+                const sunRayFrame = this.sunRayWorkerBridge.getLatestFrame();
+                if (sunRayFrame) {
+                    const frameZoom = sunRayFrame.zoomLevel;
+                    const zoomScale = frameZoom > 0 ? this.zoom / frameZoom : 1;
+                    const cameraDeltaScreenX = (sunRayFrame.cameraX - this.camera.x) * this.zoom;
+                    const cameraDeltaScreenY = (sunRayFrame.cameraY - this.camera.y) * this.zoom;
+                    const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06;
+                    const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx === canvasWidth
+                        && sunRayFrame.canvasHeightPx === canvasHeight;
+                    // Reject stale frames where the camera has panned so far that the
+                    // reprojected bitmap would leave uncovered (unlit) regions of the viewport.
+                    const maxAllowedShiftPx = Math.min(canvasWidth, canvasHeight) * 0.25;
+                    const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
+                        && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;
+
+                    if (isFrameScaleCompatible && isFrameCanvasCompatible && isFramePositionCompatible) {
+                        // The sun rays use world-to-screen projection (* zoom), so this
+                        // delta correctly repositions the glow over the current sun position.
+                        // Removing the old 12% offset threshold eliminates the visible jump
+                        // that occurred when switching between worker-frame and synchronous modes.
+                        const centerX = canvasWidth * 0.5;
+                        const centerY = canvasHeight * 0.5;
+                        this.ctx.save();
+                        this.ctx.translate(centerX + cameraDeltaScreenX, centerY + cameraDeltaScreenY);
+                        this.ctx.scale(zoomScale, zoomScale);
+                        this.ctx.drawImage(
+                            sunRayFrame.bitmap,
+                            -sunRayFrame.canvasWidthPx * 0.5,
+                            -sunRayFrame.canvasHeightPx * 0.5,
+                            sunRayFrame.canvasWidthPx,
+                            sunRayFrame.canvasHeightPx
+                        );
+                        this.ctx.restore();
+                    } else {
+                        this.sunRenderer.drawSunRays(
+                            this.ctx,
+                            game,
+                            canvasWidth,
+                            canvasHeight,
+                            this.graphicsQuality,
+                            this.isFancyGraphicsEnabled,
+                            this._boundWorldToScreen,
+                            this._boundWorldToScreenCoords,
+                            this._boundIsWithinViewBounds,
+                            this._boundGetCachedRadialGradient,
+                            this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                            this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                        );
+                    }
+                } else {
+                    // Fallback: synchronous render until the first worker frame arrives.
+                    this.sunRenderer.drawSunRays(
+                        this.ctx,
+                        game,
+                        canvasWidth,
+                        canvasHeight,
+                        this.graphicsQuality,
+                        this.isFancyGraphicsEnabled,
+                        this._boundWorldToScreen,
+                        this._boundWorldToScreenCoords,
+                        this._boundIsWithinViewBounds,
+                        this._boundGetCachedRadialGradient,
+                        this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                        this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                    );
+                    // Also render ultra particles synchronously during warm-up so they aren't
+                    // missing on the first frame.
+                    if (!shouldSkipUltraParticles && !this.shouldSkipFancyFieldEffects()) {
+                        this.sunRenderer.drawUltraSunParticleLayers(
+                            this.ctx,
+                            game,
+                            this.zoom,
+                            canvasWidth,
+                            canvasHeight,
+                            this.graphicsQuality,
+                            this._boundWorldToScreenCoords
+                        );
+                    }
+                }
+            } else {
+                // Synchronous main-thread path (worker not supported).
+                this.sunRenderer.drawSunRays(
+                    this.ctx,
+                    game,
+                    canvasWidth,
+                    canvasHeight,
+                    this.graphicsQuality,
+                    this.isFancyGraphicsEnabled,
+                    this._boundWorldToScreen,
+                    this._boundWorldToScreenCoords,
+                    this._boundIsWithinViewBounds,
+                    this._boundGetCachedRadialGradient,
+                    this.SUN_RAY_RADIUS_BUCKET_SIZE,
+                    this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
+                );
+                if (!shouldSkipUltraParticles && !this.shouldSkipFancyFieldEffects()) {
+                    this.sunRenderer.drawUltraSunParticleLayers(
+                        this.ctx,
+                        game,
+                        this.zoom,
+                        canvasWidth,
+                        canvasHeight,
+                        this.graphicsQuality,
+                        this._boundWorldToScreenCoords
+                    );
+                }
+            }
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
-            const dpr = window.devicePixelRatio || 1;
-            const canvasWidth = this.canvas.width / dpr;
-            const canvasHeight = this.canvas.height / dpr;
-            
-            this.sunRenderer.drawUltraSunParticleLayers(
-                this.ctx,
-                game,
-                this.zoom,
-                canvasWidth,
-                canvasHeight,
-                this.graphicsQuality,
-                this.worldToScreenCoords.bind(this)
-            );
-        }
+        const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
 
         // Draw lens flare effects for visible suns
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
-                this.drawLensFlare(sun);
+                if (this.isWithinViewBounds(sun.position, sun.radius * 5)) {
+                    const flareScreenPos = this.worldToScreen(sun.position);
+                    const flareScreenRadius = sun.radius * this.zoom;
+                    this.sunRenderer.drawLensFlare(
+                        this.ctx,
+                        sun,
+                        flareScreenPos,
+                        flareScreenRadius,
+                        this.getViewportWidthPx(),
+                        this.getViewportHeightPx(),
+                        this.graphicsQuality
+                    );
+                }
             }
         }
 
         // Draw reworked parallax stars right behind asteroid silhouettes.
         if (this.isStarsLayerEnabled) {
-            this.starfieldRenderer.drawReworkedParallaxStars(this.ctx, this.parallaxCamera, screenWidth, screenHeight, this.graphicsQuality);
+            if (this.isStarNestEnabled) {
+                const nowMs = performance.now();
+                this.starNestRenderer.update(nowMs);
+                this.starNestRenderer.draw(this.ctx, screenWidth, screenHeight);
+            } else {
+                this.starfieldWorkerBridge?.requestFrame(
+                    this.parallaxCamera.x,
+                    this.parallaxCamera.y,
+                    screenWidth,
+                    screenHeight,
+                    this.graphicsQuality
+                );
+                const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
+                if (starFrame) {
+                    // Draw the worker frame directly at (0,0) without any translation.
+                    // The parallax stars use cameraX * parallaxFactor (not zoom) for positioning,
+                    // so any zoom-based translation formula would be wrong. Since parallaxFactors
+                    // range from 0.12–0.53, a 1–2 frame stale position is imperceptible.
+                    // Translating the bitmap caused visible jumps when the threshold switched modes.
+                    const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
+                        && starFrame.screenHeightPx === screenHeight;
+
+                    if (isFrameCanvasCompatible) {
+                        this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
+                    } else {
+                        this.starfieldRenderer.drawReworkedParallaxStars(
+                            this.ctx,
+                            this.parallaxCamera,
+                            screenWidth,
+                            screenHeight,
+                            this.graphicsQuality
+                        );
+                    }
+                } else {
+                    this.starfieldRenderer.drawReworkedParallaxStars(
+                        this.ctx,
+                        this.parallaxCamera,
+                        screenWidth,
+                        screenHeight,
+                        this.graphicsQuality
+                    );
+                }
+            }
+        }
+
+        // Draw gravity-well grid behind environment objects (after parallax stars, before asteroids).
+        {
+            const gravityGridPlayerColorMap = this._reusableGravityGridColorMap;
+            gravityGridPlayerColorMap.clear();
+            for (const player of game.players) {
+                if (!player.isDefeated()) {
+                    gravityGridPlayerColorMap.set(player, this.getLadPlayerColor(player, ladSun, game));
+                }
+            }
+            this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
         }
 
         // Draw asteroids (with culling - skip rendering beyond map bounds)
@@ -1590,30 +1771,46 @@ export class GameRenderer {
                         this.zoom,
                         this.graphicsQuality,
                         this.colorScheme,
-                        this.worldToScreen.bind(this),
-                        this.interpolateHexColor.bind(this)
+                        this._boundWorldToScreen,
+                        this._boundInterpolateHexColor
                     );
                 }
             }
         }
 
-        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun) {
-            this.applyUltraWarmCoolGrade(game);
+        if (this.isSunsLayerEnabled && this.graphicsQuality === 'ultra' && !ladSun && !shouldSkipFancyFieldEffects) {
+            this.environmentRenderer.applyUltraWarmCoolGrade(game, envCtx);
+        }
+
+        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
+            this.environmentRenderer.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight, envCtx);
         }
 
         // Draw space dust particles on top of celestial environment layers.
         if (this.isSpaceDustLayerEnabled) {
+            const visibleSpaceDust = this._reusableVisibleSpaceDust;
+            visibleSpaceDust.length = 0;
             for (const particle of game.spaceDust) {
                 // Only render particles within map boundaries
                 if (this.isWithinRenderBounds(particle.position, game.mapSize, 10) &&
                     this.isWithinViewBounds(particle.position, 60)) {
-                    this.drawSpaceDust(particle, game, viewingPlayerIndex);
+                    visibleSpaceDust.push(particle);
                 }
             }
+            this.environmentRenderer.drawSpaceDustBatch(
+                visibleSpaceDust,
+                game,
+                viewingPlayerIndex,
+                this.getEnvironmentRendererContext()
+            );
         }
 
+        // Draw photon particles from suns
+        this.drawPhotons(game);
+
         // Draw influence circles (animated and merged by player color)
-        const influenceCircles: InfluenceRenderCircle[] = [];
+        const influenceCircles = this._reusableInfluenceCircles;
+        influenceCircles.length = 0;
         const influenceDeltaTimeSec = Number.isNaN(this.influenceRadiusLastUpdateSec)
             ? 0
             : Math.max(0, game.gameTime - this.influenceRadiusLastUpdateSec);
@@ -1631,14 +1828,14 @@ export class GameRenderer {
             const color = i === 0 ? this.playerColor : this.enemyColor;
             const forge = player.stellarForge;
             if (forge) {
-                const forgeRadius = this.updateInfluenceRadius(forge, influenceDeltaTimeSec);
+                const forgeRadius = this.environmentRenderer.updateInfluenceRadius(forge, influenceDeltaTimeSec);
                 if (forgeRadius > 0.5) {
                     influenceCircles.push({ position: forge.position, radius: forgeRadius, color });
                 }
             }
 
             for (const building of player.buildings) {
-                const buildingRadius = this.updateInfluenceRadius(building, influenceDeltaTimeSec);
+                const buildingRadius = this.environmentRenderer.updateInfluenceRadius(building, influenceDeltaTimeSec);
                 if (buildingRadius > 0.5) {
                     influenceCircles.push({ position: building.position, radius: buildingRadius, color });
                 }
@@ -1646,26 +1843,32 @@ export class GameRenderer {
         }
 
         // Draw influence circles grouped by color to render only outer merged outlines.
-        const circlesByColor = new Map<string, Array<{position: Vector2D, radius: number}>>();
+        const circlesByColor = this._reusableCirclesByColor;
+        circlesByColor.clear();
         for (const circle of influenceCircles) {
-            if (!circlesByColor.has(circle.color)) {
-                circlesByColor.set(circle.color, []);
+            let bucket = circlesByColor.get(circle.color);
+            if (!bucket) {
+                bucket = [];
+                circlesByColor.set(circle.color, bucket);
             }
-            circlesByColor.get(circle.color)!.push({position: circle.position, radius: circle.radius});
+            bucket.push({position: circle.position, radius: circle.radius});
         }
 
         for (const [color, circles] of circlesByColor) {
-            this.drawMergedInfluenceOutlines(circles, color);
+            this.environmentRenderer.drawMergedInfluenceOutlines(circles, color, envCtx);
         }
 
         // Draw connections first (so they appear behind structures)
         for (const player of game.players) {
             if (!player.isDefeated()) {
-                this.drawConnections(player, game.suns, game.asteroids, game.players);
+                this.environmentRenderer.drawConnections(player, game.suns, game.asteroids, game.players, envCtx);
             }
         }
 
         // Draw structures
+        const mirrorCtx = this.getSolarMirrorRendererContext();
+        const buildingCtx = this.getBuildingRendererContext();
+        const warpGateCtx = this.getWarpGateRendererContext();
         for (const player of game.players) {
             if (player.isDefeated()) continue;
 
@@ -1675,14 +1878,14 @@ export class GameRenderer {
             // Draw Solar Mirrors (including enemy mirrors with visibility checks)
             for (const mirror of player.solarMirrors) {
                 if (this.isWithinViewBounds(mirror.position, 120)) {
-                    this.solarMirrorRenderer.drawSolarMirror(mirror, color, game, isEnemy, game.gameTime, this.getSolarMirrorRendererContext());
+                    this.solarMirrorRenderer.drawSolarMirror(mirror, color, game, isEnemy, game.gameTime, mirrorCtx);
                 }
             }
 
             // Draw Stellar Forge
             if (player.stellarForge) {
                 if (this.isWithinViewBounds(player.stellarForge.position, player.stellarForge.radius * 3)) {
-                    this.forgeRenderer.drawStellarForge(player.stellarForge, color, game, isEnemy, this.getBuildingRendererContext());
+                    this.forgeRenderer.drawStellarForge(player.stellarForge, color, game, isEnemy, buildingCtx);
                 }
             }
         }
@@ -1690,19 +1893,19 @@ export class GameRenderer {
         // Draw warp gates
         for (const gate of game.warpGates) {
             if (this.isWithinViewBounds(gate.position, Constants.WARP_GATE_RADIUS * 2)) {
-                this.warpGateRenderer.drawWarpGate(gate, game, ladSun, this.getWarpGateRendererContext());
+                this.warpGateRenderer.drawWarpGate(gate, game, ladSun, warpGateCtx);
             }
         }
 
         // Draw starling merge gates
         for (const gate of game.starlingMergeGates) {
             if (this.isWithinViewBounds(gate.position, Constants.STARLING_MERGE_GATE_RADIUS_PX * 4)) {
-                this.warpGateRenderer.drawStarlingMergeGate(gate, game, this.getWarpGateRendererContext());
+                this.warpGateRenderer.drawStarlingMergeGate(gate, game, warpGateCtx);
             }
         }
 
         // Draw warp gate shockwaves
-        this.updateAndDrawWarpGateShockwaves();
+        this.uiRenderer.updateAndDrawWarpGateShockwaves(uiCtx);
 
         // Draw merged range outlines for selected starlings before drawing units
         const unitCtx = this.getUnitRendererContext();
@@ -1719,6 +1922,11 @@ export class GameRenderer {
                 for (const unit of player.units) {
                     const unitMargin = unit.isHero ? 120 : 60;
                     if (!this.isWithinViewBounds(unit.position, unitMargin)) {
+                        continue;
+                    }
+                    const shouldUseSimpleLod = this.shouldUseSimpleUnitLod(unit);
+                    if (shouldUseSimpleLod) {
+                        this.unitRenderer.drawUnit(unit, color, game, isEnemy, 1.0, unitCtx, true);
                         continue;
                     }
                     if (unit instanceof Grave) {
@@ -1789,17 +1997,17 @@ export class GameRenderer {
                         continue;
                     }
                     if (building instanceof Minigun || building instanceof GatlingTower) {
-                        this.towerRenderer.drawMinigun(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.towerRenderer.drawMinigun(building, color, game, isEnemy, buildingCtx);
                     } else if (building instanceof SpaceDustSwirler) {
-                        this.towerRenderer.drawSpaceDustSwirler(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.towerRenderer.drawSpaceDustSwirler(building, color, game, isEnemy, buildingCtx);
                     } else if (building instanceof SubsidiaryFactory) {
-                        this.foundryRenderer.drawSubsidiaryFactory(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.foundryRenderer.drawSubsidiaryFactory(building, color, game, isEnemy, buildingCtx);
                     } else if (building instanceof StrikerTower) {
-                        this.towerRenderer.drawStrikerTower(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.towerRenderer.drawStrikerTower(building, color, game, isEnemy, buildingCtx);
                     } else if (building instanceof LockOnLaserTower) {
-                        this.towerRenderer.drawLockOnLaserTower(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.towerRenderer.drawLockOnLaserTower(building, color, game, isEnemy, buildingCtx);
                     } else if (building instanceof ShieldTower) {
-                        this.towerRenderer.drawShieldTower(building, color, game, isEnemy, this.getBuildingRendererContext());
+                        this.towerRenderer.drawShieldTower(building, color, game, isEnemy, buildingCtx);
                     }
                 }
             }
@@ -1908,7 +2116,7 @@ export class GameRenderer {
 
             for (const explosion of game.strikerTowerExplosions) {
                 if (this.isWithinViewBounds(explosion.position, Constants.STRIKER_TOWER_EXPLOSION_RADIUS * 2)) {
-                    this.towerRenderer.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp, this.getBuildingRendererContext());
+                    this.towerRenderer.drawStrikerTowerExplosion(explosion, game.gameTime - explosion.timestamp, buildingCtx);
                 }
             }
 
@@ -1987,14 +2195,19 @@ export class GameRenderer {
             
             // Draw Radiant laser fields
             for (let i = 0; i < game.radiantOrbs.length; i++) {
+                const orb1 = game.radiantOrbs[i];
                 for (let j = i + 1; j < game.radiantOrbs.length; j++) {
-                    const orb1 = game.radiantOrbs[i];
                     const orb2 = game.radiantOrbs[j];
                     
                     if (orb1.owner !== orb2.owner) continue;
                     
-                    const distance = orb1.position.distanceTo(orb2.position);
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+
+                    // Skip pairs where both orbs are outside the viewport
+                    if (!this.isWithinViewBounds(orb1.position, maxRange) &&
+                        !this.isWithinViewBounds(orb2.position, maxRange)) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
                     
                     if (distance <= maxRange) {
                         this.projectileRenderer.drawRadiantLaserField(orb1, orb2, projCtx);
@@ -2011,14 +2224,18 @@ export class GameRenderer {
             
             // Draw Velaris light-blocking fields
             for (let i = 0; i < game.velarisOrbs.length; i++) {
+                const orb1 = game.velarisOrbs[i];
                 for (let j = i + 1; j < game.velarisOrbs.length; j++) {
-                    const orb1 = game.velarisOrbs[i];
                     const orb2 = game.velarisOrbs[j];
                     
                     if (orb1.owner !== orb2.owner) continue;
                     
-                    const distance = orb1.position.distanceTo(orb2.position);
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+
+                    if (!this.isWithinViewBounds(orb1.position, maxRange) &&
+                        !this.isWithinViewBounds(orb2.position, maxRange)) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
                     
                     if (distance <= maxRange) {
                         this.projectileRenderer.drawVelarisLightBlockingField(orb1, orb2, game.gameTime, projCtx);
@@ -2035,14 +2252,18 @@ export class GameRenderer {
             
             // Draw Aurum shield fields
             for (let i = 0; i < game.aurumOrbs.length; i++) {
+                const orb1 = game.aurumOrbs[i];
                 for (let j = i + 1; j < game.aurumOrbs.length; j++) {
-                    const orb1 = game.aurumOrbs[i];
                     const orb2 = game.aurumOrbs[j];
                     
                     if (orb1.owner !== orb2.owner) continue;
                     
-                    const distance = orb1.position.distanceTo(orb2.position);
                     const maxRange = Math.min(orb1.getRange(), orb2.getRange());
+
+                    if (!this.isWithinViewBounds(orb1.position, maxRange) &&
+                        !this.isWithinViewBounds(orb2.position, maxRange)) continue;
+                    
+                    const distance = orb1.position.distanceTo(orb2.position);
                     
                     if (distance <= maxRange) {
                         this.projectileRenderer.drawAurumShieldField(orb1, orb2, projCtx);
@@ -2058,7 +2279,7 @@ export class GameRenderer {
             }
 
             // Draw Shroud cubes (main cubes + unfolding child cubes)
-            this.drawShroudCubes(game);
+            this.projectileRenderer.drawShroudCubes(game, projCtx, (pos, margin) => this.isWithinViewBounds(pos, margin));
 
             for (const sphere of game.splendorSunSpheres) {
                 if (this.isWithinViewBounds(sphere.position, Constants.SPLENDOR_SUN_SPHERE_RADIUS * 4)) {
@@ -2086,19 +2307,19 @@ export class GameRenderer {
         }
 
         // Draw damage numbers
-        this.drawDamageNumbers(game);
+        this.uiRenderer.drawDamageNumbers(game, uiCtx);
 
         // Draw border fade to black effect
-        this.drawBorderFade(game.mapSize);
+        this.uiRenderer.drawBorderFade(game.mapSize, uiCtx);
         
         // Draw off-screen unit indicators
-        this.drawOffScreenUnitIndicators(game);
+        this.uiRenderer.drawOffScreenUnitIndicators(game, uiCtx);
         
         // Draw striker tower target highlighting
-        this.towerRenderer.drawStrikerTowerTargetHighlighting(game, this.getBuildingRendererContext());
+        this.towerRenderer.drawStrikerTowerTargetHighlighting(game, buildingCtx);
         
         // Draw mirror command buttons if mirrors are selected
-        this.solarMirrorRenderer.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime, this.getSolarMirrorRendererContext());
+        this.solarMirrorRenderer.drawMirrorCommandButtons(this.selectedMirrors, game.gameTime, mirrorCtx);
 
         // Draw forge hero/mirror buttons if the viewing player's forge is selected
         if (this.viewingPlayer && this.viewingPlayer.stellarForge && this.viewingPlayer.stellarForge.isSelected) {
@@ -2110,35 +2331,35 @@ export class GameRenderer {
         }
 
         // Draw warp gate placement preview if in placement mode
-        this.warpGateRenderer.drawWarpGatePlacementPreview(game, this.getWarpGateRendererContext());
+        this.warpGateRenderer.drawWarpGatePlacementPreview(game, warpGateCtx);
 
         // Draw UI
-        this.drawUI(game);
+        this.uiRenderer.drawUI(game, uiCtx);
 
         // Draw selection rectangle
-        this.drawSelectionRectangle();
+        this.uiRenderer.drawSelectionRectangle(uiCtx);
 
         // Draw ability arrow for hero units
-        this.drawAbilityArrow();
+        this.uiRenderer.drawAbilityArrow(uiCtx);
         
         // Draw building ability arrow
-        this.drawBuildingAbilityArrow();
+        this.uiRenderer.drawBuildingAbilityArrow(uiCtx);
 
         // Draw unit path preview
-        this.drawUnitPathPreview();
+        this.uiRenderer.drawUnitPathPreview(uiCtx);
 
         // Draw temporary path confirmation effects
-        this.updateAndDrawPathCommitEffects(game.gameTime);
+        this.uiRenderer.updateAndDrawPathCommitEffects(game.gameTime, uiCtx);
 
         // Draw tap and swipe visual effects
-        this.updateAndDrawProductionButtonWaves();
-        this.updateAndDrawTapEffects();
-        this.updateAndDrawSwipeEffects();
+        this.uiRenderer.updateAndDrawProductionButtonWaves(uiCtx);
+        this.uiRenderer.updateAndDrawTapEffects(uiCtx);
+        this.uiRenderer.updateAndDrawSwipeEffects(uiCtx);
 
         // Check for victory
         const winner = game.checkVictoryConditions();
         if (winner) {
-            this.drawEndGameStatsScreen(game, winner);
+            this.uiRenderer.drawEndGameStatsScreen(game, winner, uiCtx);
         }
 
         // Draw countdown overlay
@@ -2164,83 +2385,43 @@ export class GameRenderer {
         
         // Draw in-game menu button (top-left, always visible when not in countdown)
         if (!game.isCountdownActive && !winner) {
-            this.drawMenuButton();
+            this.uiRenderer.drawMenuButton(uiCtx);
+        }
+
+        // Draw match timer (bottom-left)
+        if (!game.isCountdownActive && !winner) {
+            this.uiRenderer.drawMatchTimer(game, uiCtx);
         }
         
         // Draw production progress indicator (top-right)
         if (!game.isCountdownActive && !winner) {
-            this.drawProductionProgress(game);
+            this.uiRenderer.drawProductionProgress(game, uiCtx);
         }
         
         // Draw in-game menu overlay if open
         if (this.showInGameMenu && !winner) {
-            this.drawInGameMenuOverlay();
+            this.uiRenderer.drawInGameMenuOverlay(uiCtx);
         }
     }
 
-    /**
-     * Draw in-game menu button in top-left corner
-     */
-    private drawMenuButton(): void {
-        this.uiRenderer.drawMenuButton(this.getUIRendererContext());
-    }
 
-    /**
-     * Draw production progress indicator in top-right corner
-     */
-    private drawProductionProgress(game: GameState): void {
-        this.uiRenderer.drawProductionProgress(game, this.getUIRendererContext());
-    }
     
     /**
      * Get display name for building type
      */
     private getBuildingDisplayName(building: Building): string {
-        if (building instanceof GatlingTower) {
-            return 'Gatling Tower';
-        } else if (building instanceof Minigun) {
-            return 'Cannon';
-        } else if (building instanceof SpaceDustSwirler) {
-            return 'Cyclone';
-        } else if (building instanceof SubsidiaryFactory) {
-            return 'Foundry';
-        } else if (building instanceof StrikerTower) {
-            return 'Striker Tower';
-        } else if (building instanceof LockOnLaserTower) {
-            return 'Lock-on Tower';
-        } else if (building instanceof ShieldTower) {
-            return 'Shield Tower';
-        }
-        return 'Building';
+        return _getBuildingDisplayName(building);
     }
     
     /**
      * Get display name for production unit type
      */
     private getProductionDisplayName(unitType: string): string {
-        const nameMap: { [key: string]: string } = {
-            'marine': 'Marine',
-            'grave': 'Grave',
-            'ray': 'Ray',
-            'influenceball': 'Influence Ball',
-            'turretdeployer': 'Turret Deployer',
-            'driller': 'Driller',
-            'dagger': 'Dagger',
-            'beam': 'Beam',
-            'spotlight': 'Spotlight',
-            'splendor': 'Splendor',
-            'shroud': 'Shroud',
-            'solar-mirror': 'Solar Mirror',
-            'strafe-upgrade': 'Strafe Upgrade',
-            'regen-upgrade': 'Regen Upgrade',
-            'attack-upgrade': '+1 ATK',
-            'blink-upgrade': 'Blink Upgrade'
-        };
-        return nameMap[unitType.toLowerCase()] || unitType;
+        return _getProductionDisplayName(unitType);
     }
 
     private getInGameMenuLayout(): InGameMenuLayout {
-        return getInGameMenuLayout(this.canvas.width, this.canvas.height);
+        return getInGameMenuLayout(this.getViewportWidthPx(), this.getViewportHeightPx());
     }
 
     /**
@@ -2248,76 +2429,6 @@ export class GameRenderer {
      * Main cubes are drawn as solid dark squares when moving, transitioning to translucent when stopped.
      * Child cubes animate outward from the stopped position.
      */
-    private drawShroudCubes(game: GameState): void {
-        const ctx = this.ctx;
-
-        for (const cube of game.shroudCubes) {
-            if (!this.isWithinViewBounds(cube.position, cube.halfSizePx * 6)) continue;
-
-            const isStopped = cube.isStopped();
-            this.drawShroudCubeRect(ctx, cube.position.x, cube.position.y, cube.halfSizePx, isStopped, 1.0);
-
-            if (isStopped) {
-                // Draw child small cubes
-                for (const small of cube.smallCubes) {
-                    const cx = small.currentX;
-                    const cy = small.currentY;
-                    const alpha = 0.85;
-                    this.drawShroudCubeRect(ctx, cx, cy, small.halfSizePx, true, alpha);
-
-                    // Draw tiny cubes
-                    for (const tiny of small.tinyCubes) {
-                        const tcx = tiny.startPos.x + (tiny.finalPos.x - tiny.startPos.x) * tiny.unfoldProgress;
-                        const tcy = tiny.startPos.y + (tiny.finalPos.y - tiny.startPos.y) * tiny.unfoldProgress;
-                        this.drawShroudCubeRect(ctx, tcx, tcy, tiny.halfSizePx, true, 0.7);
-                    }
-                }
-            }
-        }
-    }
-
-    private drawShroudCubeRect(
-        ctx: CanvasRenderingContext2D,
-        worldX: number,
-        worldY: number,
-        halfSizePx: number,
-        isStopped: boolean,
-        alpha: number
-    ): void {
-        const screenPos = this.worldToScreen(new Vector2D(worldX, worldY));
-        const halfScreen = halfSizePx * this.zoom;
-
-        ctx.save();
-        ctx.globalAlpha = alpha;
-
-        if (isStopped) {
-            // Stopped cubes: dark semi-transparent fill with outline (blocks sunlight visually)
-            ctx.fillStyle = 'rgba(20, 15, 35, 0.82)';
-            ctx.strokeStyle = '#6633AA';
-            ctx.lineWidth = Math.max(1, 1.5 * this.zoom);
-        } else {
-            // Moving cubes: glowing golden/purple look proportional to speed
-            ctx.fillStyle = 'rgba(80, 40, 120, 0.9)';
-            ctx.strokeStyle = '#CC88FF';
-            ctx.lineWidth = Math.max(1, 2 * this.zoom);
-        }
-
-        ctx.fillRect(
-            screenPos.x - halfScreen,
-            screenPos.y - halfScreen,
-            halfScreen * 2,
-            halfScreen * 2
-        );
-        ctx.strokeRect(
-            screenPos.x - halfScreen,
-            screenPos.y - halfScreen,
-            halfScreen * 2,
-            halfScreen * 2
-        );
-
-        ctx.restore();
-    }
-
     private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
         return getGraphicsMenuMaxScroll(this.renderLayerOptions.length, layout);
     }
@@ -2334,26 +2445,6 @@ export class GameRenderer {
         return this.uiRenderer.getInGameMenuAction(this.getUIRendererContext(), screenX, screenY);
     }
 
-    /**
-     * Draw in-game menu overlay
-     */
-    private drawInGameMenuOverlay(): void {
-        this.uiRenderer.drawInGameMenuOverlay(this.getUIRendererContext());
-    }
-
-    /**
-     * Draw end-game statistics screen
-     */
-    private drawEndGameStatsScreen(game: GameState, winner: Player): void {
-        this.uiRenderer.drawEndGameStatsScreen(game, winner, this.getUIRendererContext());
-    }
-
-    /**
-     * Draw border fade effect - fades to black at map edges
-     */
-    private drawBorderFade(mapSize: number): void {
-        this.uiRenderer.drawBorderFade(mapSize, this.getUIRendererContext());
-    }
 
     /**
      * Set camera zoom
@@ -2386,78 +2477,251 @@ export class GameRenderer {
      * Trigger screen shake effect
      */
     triggerScreenShake(intensity: number = Constants.SCREEN_SHAKE_INTENSITY): void {
-        if (!this.screenShakeEnabled) return;
-        
-        // Set shake intensity (don't override if already shaking with higher intensity)
-        this.screenShakeIntensity = Math.max(this.screenShakeIntensity, intensity);
-        this.screenShakeTimer = Constants.SCREEN_SHAKE_DURATION;
+        this.screenShake.trigger(intensity);
     }
 
     /**
      * Update screen shake effect
      */
     updateScreenShake(deltaTime: number): void {
-        if (this.screenShakeTimer > 0) {
-            this.screenShakeTimer -= deltaTime;
-            
-            // Apply decay to shake intensity
-            this.screenShakeIntensity *= Constants.SCREEN_SHAKE_DECAY;
-            
-            // Stop shaking when timer runs out or intensity is too low
-            if (this.screenShakeTimer <= 0 || this.screenShakeIntensity < 0.1) {
-                this.screenShakeIntensity = 0;
-                this.screenShakeTimer = 0;
-            }
-        }
+        this.screenShake.update(deltaTime);
     }
 
     /**
      * Clamp camera position to level boundaries
      */
     private clampCameraToLevelBounds(pos: Vector2D): Vector2D {
-        // Get device pixel ratio
-        const dpr = window.devicePixelRatio || 1;
-        
-        // Calculate visible world dimensions based on canvas size and zoom
-        const viewWidth = (this.canvas.width / dpr) / this.zoom;
-        const viewHeight = (this.canvas.height / dpr) / this.zoom;
-        
-        // Calculate max camera offset based on map size and view size
-        // The camera can move such that the view edges align with map boundaries
-        const halfMapSize = Constants.MAP_SIZE / 2;
-        const maxX = halfMapSize - viewWidth / 2;
-        const maxY = halfMapSize - viewHeight / 2;
-        const minX = -maxX;
-        const minY = -maxY;
-        
-        // Clamp camera position
-        const clampedX = Math.max(minX, Math.min(maxX, pos.x));
-        const clampedY = Math.max(minY, Math.min(maxY, pos.y));
-        
-        return new Vector2D(clampedX, clampedY);
+        return _clampCameraToLevelBounds(pos, this.getViewportWidthPx(), this.getViewportHeightPx(), this.zoom);
     }
 
     private getMinZoomForBounds(): number {
-        const dpr = window.devicePixelRatio || 1;
-        const viewWidth = this.canvas.width / dpr;
-        const viewHeight = this.canvas.height / dpr;
-        const minZoomWidth = viewWidth / Constants.MAP_SIZE;
-        const minZoomHeight = viewHeight / Constants.MAP_SIZE;
-        return Math.max(0.5, minZoomWidth, minZoomHeight);
+        return _getMinZoomForBounds(this.getViewportWidthPx(), this.getViewportHeightPx());
     }
 
     private interpolateHexColor(startHex: string, endHex: string, t: number): string {
-        const startValue = Number.parseInt(startHex.replace('#', ''), 16);
-        const endValue = Number.parseInt(endHex.replace('#', ''), 16);
-        const startR = (startValue >> 16) & 0xff;
-        const startG = (startValue >> 8) & 0xff;
-        const startB = startValue & 0xff;
-        const endR = (endValue >> 16) & 0xff;
-        const endG = (endValue >> 8) & 0xff;
-        const endB = endValue & 0xff;
-        const r = Math.round(startR + (endR - startR) * t);
-        const g = Math.round(startG + (endG - startG) * t);
-        const b = Math.round(startB + (endB - startB) * t);
-        return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+        return interpolateHexColor(startHex, endHex, t);
+    }
+
+    // ─── Photon Rendering ───
+
+    /** Cached glow canvas for photon particles (avoids per-frame radialGradient creation) */
+    private _photonGlowCanvas: HTMLCanvasElement | null = null;
+    private _photonGlowSize: number = 0;
+    /** Cached orange glow canvas for aging photons */
+    private _photonOrangeGlowCanvas: HTMLCanvasElement | null = null;
+    private _photonOrangeGlowSize: number = 0;
+
+    /** Render-side fizzle sparks for expired photons */
+    private readonly _photonFizzleSparks: PhotonFizzleSpark[] = [];
+    private readonly MAX_FIZZLE_SPARKS = 200;
+    /** Set of photon instances that have already spawned fizzle sparks */
+    private readonly _photonFizzleSpawned = new WeakSet<object>();
+
+    private getPhotonGlowCanvas(glowSizePx: number): HTMLCanvasElement {
+        if (this._photonGlowCanvas && this._photonGlowSize === glowSizePx) {
+            return this._photonGlowCanvas;
+        }
+        const size = glowSizePx * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const gradient = ctx.createRadialGradient(glowSizePx, glowSizePx, 0, glowSizePx, glowSizePx, glowSizePx);
+        gradient.addColorStop(0, 'rgba(255, 255, 220, 0.9)');
+        gradient.addColorStop(0.3, 'rgba(255, 240, 150, 0.5)');
+        gradient.addColorStop(0.7, 'rgba(255, 200, 80, 0.15)');
+        gradient.addColorStop(1, 'rgba(255, 180, 50, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        this._photonGlowCanvas = canvas;
+        this._photonGlowSize = glowSizePx;
+        return canvas;
+    }
+
+    private getPhotonOrangeGlowCanvas(glowSizePx: number): HTMLCanvasElement {
+        if (this._photonOrangeGlowCanvas && this._photonOrangeGlowSize === glowSizePx) {
+            return this._photonOrangeGlowCanvas;
+        }
+        const size = glowSizePx * 2;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d')!;
+        const gradient = ctx.createRadialGradient(glowSizePx, glowSizePx, 0, glowSizePx, glowSizePx, glowSizePx);
+        gradient.addColorStop(0, 'rgba(255, 160, 50, 0.9)');
+        gradient.addColorStop(0.3, 'rgba(255, 130, 30, 0.5)');
+        gradient.addColorStop(0.7, 'rgba(220, 100, 20, 0.15)');
+        gradient.addColorStop(1, 'rgba(200, 80, 10, 0)');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        this._photonOrangeGlowCanvas = canvas;
+        this._photonOrangeGlowSize = glowSizePx;
+        return canvas;
+    }
+
+    private drawPhotons(game: GameState): void {
+        if (game.photons.length === 0 && this._photonFizzleSparks.length === 0) return;
+
+        const glowSizePx = Math.max(8, Math.round(Constants.PHOTON_RADIUS_PX * 4 * this.zoom));
+        const glowCanvas = this.getPhotonGlowCanvas(glowSizePx);
+        const orangeGlowCanvas = this.getPhotonOrangeGlowCanvas(glowSizePx);
+        const halfGlow = glowSizePx;
+        const screenPos = new Vector2D(0, 0);
+        const agingStartSec = Constants.PHOTON_AGING_START_SEC;
+        const lifetimeSec = Constants.PHOTON_LIFETIME_SEC;
+        const agingDurationSec = lifetimeSec - agingStartSec;
+
+        for (const photon of game.photons) {
+
+            if (!this.isWithinViewBounds(photon.position, 30)) continue;
+
+            this.worldToScreenCoords(photon.position.x, photon.position.y, screenPos);
+
+            // Determine aging state
+            const isAging = photon.lifetimeSec >= agingStartSec;
+            let agingProgress = 0; // 0 = just started aging, 1 = about to expire
+            if (isAging) {
+                agingProgress = Math.min(1, (photon.lifetimeSec - agingStartSec) / agingDurationSec);
+            }
+
+            // Flicker effect: increasing frequency and intensity as photon ages
+            let flickerAlpha = 1;
+            if (isAging) {
+                const flickerFreq = 4 + agingProgress * 20; // 4 Hz to 24 Hz
+                const flickerDepth = 0.15 + agingProgress * 0.5; // 15% to 65% depth
+                flickerAlpha = 1 - flickerDepth * (0.5 + 0.5 * Math.sin(photon.lifetimeSec * flickerFreq * Math.PI * 2));
+            }
+
+            this.ctx.globalAlpha = flickerAlpha;
+
+            // Draw glow: blend between normal and orange based on aging progress
+            if (isAging && agingProgress > 0) {
+                // Draw orange glow with aging intensity
+                this.ctx.globalAlpha = flickerAlpha * agingProgress;
+                this.ctx.drawImage(
+                    orangeGlowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+                // Draw normal glow fading out
+                this.ctx.globalAlpha = flickerAlpha * (1 - agingProgress);
+                this.ctx.drawImage(
+                    glowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+            } else {
+                this.ctx.drawImage(
+                    glowCanvas,
+                    screenPos.x - halfGlow,
+                    screenPos.y - halfGlow
+                );
+            }
+
+            // Draw bright core – color shifts to orange as photon ages
+            const coreRadius = Math.max(1.5, Constants.PHOTON_RADIUS_PX * this.zoom * 0.6);
+            this.ctx.globalAlpha = flickerAlpha;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, coreRadius, 0, Math.PI * 2);
+            if (isAging) {
+                // Interpolate from pale yellow (#FFFDE8) to deep orange (#FF8820)
+                const r = 255;
+                const g = Math.round(253 - agingProgress * 135); // 253 → 118
+                const b = Math.round(232 - agingProgress * 200); // 232 → 32
+                this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+            } else {
+                this.ctx.fillStyle = '#FFFDE8';
+            }
+            this.ctx.fill();
+        }
+
+        this.ctx.globalAlpha = 1;
+
+        // Spawn fizzle sparks for photons about to expire
+        this.spawnFizzleSparksForExpiredPhotons(game);
+
+        // Update and draw fizzle sparks
+        this.updateAndDrawFizzleSparks(game.gameTime);
+    }
+
+    /**
+     * Spawn fizzle sparks for photons that have expired (lifetime exceeded).
+     * Checks each photon's lifetime and spawns sparks once per photon when near expiry.
+     */
+    private spawnFizzleSparksForExpiredPhotons(game: GameState): void {
+        for (const photon of game.photons) {
+            if (photon.lifetimeSec >= Constants.PHOTON_LIFETIME_SEC - 0.05 && !this._photonFizzleSpawned.has(photon)) {
+                this.spawnFizzleSparksAt(photon.position);
+                this._photonFizzleSpawned.add(photon);
+            }
+        }
+    }
+
+    private spawnFizzleSparksAt(worldPos: Vector2D): void {
+        // Math.random() is acceptable here: these are render-only visual particles
+        // that do not affect simulation state or determinism.
+        const sparkCount = 3 + Math.floor(Math.random() * 3); // 3-5 sparks
+        for (let i = 0; i < sparkCount; i++) {
+            if (this._photonFizzleSparks.length >= this.MAX_FIZZLE_SPARKS) {
+                // Remove oldest spark to make room
+                this._photonFizzleSparks.shift();
+            }
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 40 + Math.random() * 80; // 40-120 px/sec
+            this._photonFizzleSparks.push({
+                x: worldPos.x,
+                y: worldPos.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                lifetimeSec: 0,
+                maxLifetimeSec: 0.3 + Math.random() * 0.4 // 0.3-0.7 sec
+            });
+        }
+    }
+
+    private updateAndDrawFizzleSparks(gameTime: number): void {
+        if (this._photonFizzleSparks.length === 0) return;
+
+        // Use a fixed dt approximation (render-side only, not sim-critical)
+        const dt = 1 / 60;
+        const screenPos = new Vector2D(0, 0);
+
+        for (let i = this._photonFizzleSparks.length - 1; i >= 0; i--) {
+            const spark = this._photonFizzleSparks[i];
+            spark.lifetimeSec += dt;
+
+            if (spark.lifetimeSec >= spark.maxLifetimeSec) {
+                this._photonFizzleSparks.splice(i, 1);
+                continue;
+            }
+
+            // Update position
+            spark.x += spark.vx * dt;
+            spark.y += spark.vy * dt;
+            // Apply drag
+            spark.vx *= 0.95;
+            spark.vy *= 0.95;
+
+            if (!this.isWithinViewBounds(new Vector2D(spark.x, spark.y), 10)) continue;
+
+            this.worldToScreenCoords(spark.x, spark.y, screenPos);
+
+            const progress = spark.lifetimeSec / spark.maxLifetimeSec;
+            const alpha = 1 - progress;
+            const sparkRadius = Math.max(1, (1.5 - progress * 0.8) * this.zoom);
+
+            // Orange spark fading to transparent
+            const r = 255;
+            const g = Math.round(160 - progress * 80); // 160 → 80
+            const b = Math.round(50 - progress * 40); // 50 → 10
+
+            this.ctx.globalAlpha = alpha;
+            this.ctx.fillStyle = `rgb(${r},${g},${b})`;
+            this.ctx.beginPath();
+            this.ctx.arc(screenPos.x, screenPos.y, sparkRadius, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.globalAlpha = 1;
     }
 }

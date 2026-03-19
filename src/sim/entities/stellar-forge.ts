@@ -100,22 +100,78 @@ export class StellarForge {
         return true;
     }
 
-    enqueueHeroUnit(unitType: string, costEnergy: number): void {
+    hasQueuedOrProducingHeroUnit(unitType: string): boolean {
+        if (this.heroProductionUnitType === unitType) {
+            return true;
+        }
+
+        for (const productionItem of this.productionQueue) {
+            if (productionItem.productionType === 'hero' && productionItem.heroUnitType === unitType) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    enqueueHeroUnit(unitType: string, costEnergy: number): boolean {
+        const isHeroAlive = this.owner.units.some((unit) => unit.isHero && unit.constructor.name === unitType);
+        if (isHeroAlive || this.hasQueuedOrProducingHeroUnit(unitType)) {
+            return false;
+        }
+
         this.unitQueue.push(unitType);
         this.productionQueue.push({
             productionType: 'hero',
             heroUnitType: unitType,
             costEnergy
         });
+        return true;
     }
 
-    enqueueMirror(costEnergy: number, spawnPosition: Vector2D): void {
+    isMirrorQueuedOrProducing(): boolean {
+        if (this.activeProduction?.productionType === 'mirror') {
+            return true;
+        }
+
+        for (const productionItem of this.productionQueue) {
+            if (productionItem.productionType === 'mirror') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Returns 0..1 progress of the mirror currently being actively produced, or 0 if none.
+     */
+    getMirrorProductionProgress(): number {
+        if (this.activeProduction?.productionType !== 'mirror') {
+            return 0;
+        }
+        const cost = this.activeProduction.costEnergy;
+        if (cost <= 0) {
+            return 0;
+        }
+        return Math.min(1, this.activeProductionProgressEnergy / cost);
+    }
+
+    /**
+     * Returns true when a mirror production item is the active (in-progress) production.
+     */
+    isMirrorActivelyProducing(): boolean {
+        return this.activeProduction?.productionType === 'mirror';
+    }
+
+    enqueueMirror(costEnergy: number, spawnPosition: Vector2D): boolean {
         this.mirrorQueueCount++;
         this.productionQueue.push({
             productionType: 'mirror',
             costEnergy,
             spawnPosition: new Vector2D(spawnPosition.x, spawnPosition.y)
         });
+        return true;
     }
 
     private startProductionIfIdle(): void {

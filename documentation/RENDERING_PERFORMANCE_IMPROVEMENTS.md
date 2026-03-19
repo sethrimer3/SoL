@@ -135,20 +135,22 @@ Test on different devices and quality settings:
 3. Toggle between quality settings
 4. Verify performance improvement on lower settings
 
-## Future Improvements
+## Implemented Follow-Up Optimizations
 
-Potential additional optimizations:
-1. **Text rendering caching**: Pre-render common text strings
-2. **Particle batching**: Group particles by sprite/texture
-3. **LOD (Level of Detail)**: Simpler rendering for distant entities
-4. **Dynamic quality adjustment**: Automatically lower quality if FPS drops
+Additional rendering optimizations now in place:
+1. **Text rendering caching**: HUD text sprites and text width measurements are cached and reused
+2. **Particle batching**: Low/medium quality space dust now batches base particle fills by color
+3. **LOD (Level of Detail)**: Distant or tiny-on-screen units fall back to simple circle rendering
+4. **Dynamic quality adjustment**: Runtime frame-time monitoring can step graphics quality down automatically
 
 ## Files Modified
 
-- `src/main.ts`: Added influence field validation for warp gate placement
-- `src/renderer.ts`: Added resolution scaling, blur quality gates, warp gate preview
-- `src/build-info.ts`: Incremented to build 351
+- `src/main.ts`: Added adaptive quality monitoring and low-quality render throttling
+- `src/renderer.ts`: Added cached viewport metrics, unit LOD routing, and batched space dust dispatch
+- `src/render/hud-renderer.ts`: Added cached text sprite rendering and width caching
+- `src/render/environment-renderer.ts`: Added batched low/medium space dust rendering
+- `src/build-info.ts`: Incremented to build 437
 
 ## Build Number
 
-Build 350 → **Build 351**
+Build 436 → **Build 437**

@@ -700,6 +700,59 @@ Each phase should be a separate PR that can be reverted if issues arise:
 
 ---
 
+## Progress Log
+
+### Session: March 17, 2026 – Renderer.ts Phase 2 Continued
+
+**BUILD_NUMBER**: 451 → 452  
+**renderer.ts**: 3,166 → 2,686 LOC (**-480 lines, 15% reduction**)
+
+#### Extractions Completed
+
+| Extraction | Lines Moved | Target Module | Description |
+|---|---|---|---|
+| `drawExperimentalFieldAtmospherics` | ~232 | `environment-renderer.ts` | Nebulae, ribbons, caustics, sun halos, glints, vignettes |
+| Asset path helpers | ~114 | `asset-path-helpers.ts` (NEW) | `getHeroSpritePath`, `getForgeSpritePath`, `getSolarMirrorSpritePath`, `getStarlingSpritePath`, `getStarlingFacingRotationRad`, `getProductionDisplayName`, `getBuildingDisplayName`, `detectAndDrawEdges` |
+| Shroud cube rendering | ~70 | `projectile-renderer.ts` | `drawShroudCubes`, `drawShroudCubeRect` |
+| Shade brightness utilities | ~62 | `shade-brightness.ts` (NEW) | `getShadeBrightnessBoost`, `applyShadeBrightening` |
+| Unused imports cleanup | ~2 | `renderer.ts` | Removed 13 unused entity imports + `renderLensFlare` + particle imports |
+
+#### New Modules Created
+
+- **`src/render/asset-path-helpers.ts`** (224 LOC) – Pure functions mapping entity types to sprite paths and display names.  Uses a `GraphicAssetPathResolver` callback to avoid coupling to the `GraphicOption` infrastructure.
+- **`src/render/shade-brightness.ts`** (96 LOC) – Proximity-based shade brightness calculations with quadratic falloff, extracted from `GameRenderer`.
+
+#### Approach
+
+All extractions followed the Strangler Fig pattern:
+1. Created new module with extracted logic
+2. Replaced inline implementations with thin delegators
+3. Built and verified after each extraction
+4. Zero functionality changes
+
+#### Current Monolithic File Status
+
+| File | LOC (Before Session) | LOC (After Session) | Change |
+|------|---------------------|---------------------|--------|
+| **renderer.ts** | 3,166 | 2,686 | **-480 (-15%)** |
+| **menu.ts** | 2,548 | 2,548 | unchanged |
+| **input-controller.ts** | 2,076 | 2,076 | unchanged |
+| **main.ts** | 1,887 | 1,887 | unchanged |
+
+#### Remaining Extraction Opportunities in renderer.ts
+
+The remaining 2,686 LOC in renderer.ts consists of:
+- **Main `render()` orchestration** (~600 LOC) – core rendering pipeline, difficult to extract further
+- **Context builder methods** (~230 LOC) – 7 `get*Context()` methods that bridge GameRenderer state to sub-renderers
+- **Camera/viewport management** (~80 LOC) – resize, viewport metrics, zoom clamping
+- **Graphics option management** (~80 LOC) – variant handling, layer toggles
+- **~45 thin delegator methods** (~180 LOC) – single-line forwards to sub-renderers; kept for readability
+- **Player/team color logic** (~50 LOC) – `getTeamColor`, `getLadPlayerColor`, `isEnemyPlayer`
+- **Remaining utility methods** (~100 LOC) – gradient caching, interpolation, pseudo-random
+
+
+---
+
 ## Maintenance & Documentation
 
 ### During Refactoring

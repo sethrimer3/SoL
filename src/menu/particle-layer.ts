@@ -24,10 +24,20 @@ export class ParticleMenuLayer {
     private static readonly ULTRA_BASE_HALO_ALPHA = 0.2;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MIN = 3.3;
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
+    private static readonly HALO_COLOR_CACHE_QUANTIZATION_STEP = 8;
+    private static readonly HALO_ALPHA_CACHE_PRECISION = 20; // 0.05 precision
     private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
     private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
+    private static readonly LOW_QUALITY_RENDER_SCALE = 0.55;
+    private static readonly MEDIUM_QUALITY_RENDER_SCALE = 0.7;
+    private static readonly HIGH_QUALITY_RENDER_SCALE = 0.85;
+    private static readonly MAX_PARTICLES_LOW = 220;
+    private static readonly MAX_PARTICLES_MEDIUM = 420;
+    private static readonly MAX_PARTICLES_HIGH = 720;
+    private static readonly MAX_PARTICLES_ULTRA = 1050;
+    private static readonly ULTRA_HALO_MAX_PARTICLES = 380;
 
     private container: HTMLElement;
     private canvas: HTMLCanvasElement;
@@ -113,14 +123,20 @@ export class ParticleMenuLayer {
         }
     }
 
+    public setVisible(isVisible: boolean): void {
+        this.canvas.style.display = isVisible ? 'block' : 'none';
+    }
+
     public resize(): void {
         const rect = this.container.getBoundingClientRect();
         const devicePixelRatio = window.devicePixelRatio || 1;
+        const renderScale = this.getRenderScale();
+        const effectivePixelRatio = devicePixelRatio * renderScale;
         const width = rect.width || window.innerWidth;
         const height = rect.height || window.innerHeight;
-        this.canvas.width = Math.round(width * devicePixelRatio);
-        this.canvas.height = Math.round(height * devicePixelRatio);
-        this.context.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+        this.canvas.width = Math.max(1, Math.round(width * effectivePixelRatio));
+        this.canvas.height = Math.max(1, Math.round(height * effectivePixelRatio));
+        this.context.setTransform(effectivePixelRatio, 0, 0, effectivePixelRatio, 0, 0);
         // Cache dimensions for rendering
         this.cachedWidthPx = width;
         this.cachedHeightPx = height;
@@ -145,7 +161,11 @@ export class ParticleMenuLayer {
     }
 
     public setGraphicsQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
+        if (this.graphicsQuality === quality) {
+            return;
+        }
         this.graphicsQuality = quality;
+        this.resize();
     }
 
     public startTransition(): void {
@@ -195,7 +215,11 @@ export class ParticleMenuLayer {
 
     private setTargets(targets: ParticleTarget[]): void {
         const updatedParticles: Particle[] = [];
-        const targetCount = targets.length;
+        const maxParticleCount = this.getMaxParticleCount();
+        const selectedTargets = targets.length > maxParticleCount
+            ? this.downsampleTargets(targets, maxParticleCount)
+            : targets;
+        const targetCount = selectedTargets.length;
 
         if (targetCount === 0) {
             this.particles = updatedParticles;
@@ -217,7 +241,7 @@ export class ParticleMenuLayer {
         }
 
         for (let i = 0; i < desiredCount; i++) {
-            const target = targets[i % targetCount];
+            const target = selectedTargets[i % targetCount];
             const particle = existingParticles[i];
             const relocatedTarget = this.getRelocatedTarget(target);
             particle.targetX = relocatedTarget.x;
@@ -380,12 +404,13 @@ export class ParticleMenuLayer {
         this.context.globalAlpha = this.particleOpacity;
 
         const isUltraQuality = this.graphicsQuality === 'ultra';
+        const shouldRenderUltraHalo = isUltraQuality && this.particles.length <= ParticleMenuLayer.ULTRA_HALO_MAX_PARTICLES;
         for (const particle of this.particles) {
-            const red = Math.min(255, Math.max(0, Math.round(particle.colorR)));
-            const green = Math.min(255, Math.max(0, Math.round(particle.colorG)));
-            const blue = Math.min(255, Math.max(0, Math.round(particle.colorB)));
+            const red = this.quantizeColorChannel(particle.colorR);
+            const green = this.quantizeColorChannel(particle.colorG);
+            const blue = this.quantizeColorChannel(particle.colorB);
 
-            if (isUltraQuality) {
+            if (shouldRenderUltraHalo) {
                 const haloAlpha = Math.min(0.7, Math.max(0.06,
                     ParticleMenuLayer.ULTRA_BASE_HALO_ALPHA
                     + particle.colorLightnessShift * 0.45
@@ -404,7 +429,7 @@ export class ParticleMenuLayer {
                 // Create cache key using rounded integers to avoid toFixed() calls
                 // Round radius and alpha to reduce cache key variations
                 const radiusKey = Math.round(haloRadiusPx * 10); // 0.1px precision
-                const alphaKey = Math.round(haloAlpha * 100); // 0.01 precision
+                const alphaKey = Math.round(haloAlpha * ParticleMenuLayer.HALO_ALPHA_CACHE_PRECISION);
                 const cacheKey = `${red},${green},${blue},${radiusKey},${alphaKey}`;
                 let haloGradient = this.haloGradientCache.get(cacheKey);
                 
@@ -450,6 +475,49 @@ export class ParticleMenuLayer {
         this.context.globalCompositeOperation = 'source-over';
     }
 
+    private getRenderScale(): number {
+        if (this.graphicsQuality === 'low') {
+            return ParticleMenuLayer.LOW_QUALITY_RENDER_SCALE;
+        }
+        if (this.graphicsQuality === 'medium') {
+            return ParticleMenuLayer.MEDIUM_QUALITY_RENDER_SCALE;
+        }
+        if (this.graphicsQuality === 'high') {
+            return ParticleMenuLayer.HIGH_QUALITY_RENDER_SCALE;
+        }
+        return 1;
+    }
+
+    private getMaxParticleCount(): number {
+        if (this.graphicsQuality === 'low') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_LOW * this.densityMultiplier);
+        }
+        if (this.graphicsQuality === 'medium') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_MEDIUM * this.densityMultiplier);
+        }
+        if (this.graphicsQuality === 'high') {
+            return Math.round(ParticleMenuLayer.MAX_PARTICLES_HIGH * this.densityMultiplier);
+        }
+        return Math.round(ParticleMenuLayer.MAX_PARTICLES_ULTRA * this.densityMultiplier);
+    }
+
+    private downsampleTargets(targets: ParticleTarget[], desiredCount: number): ParticleTarget[] {
+        if (targets.length <= desiredCount) {
+            return targets;
+        }
+
+        const sampledTargets: ParticleTarget[] = [];
+        const step = targets.length / desiredCount;
+        let cursor = Math.random() * step;
+
+        for (let index = 0; index < desiredCount; index++) {
+            sampledTargets.push(targets[Math.floor(cursor)]);
+            cursor += step;
+        }
+
+        return sampledTargets;
+    }
+
     private collectTargets(container: HTMLElement): ParticleTarget[] {
         const elements = Array.from(
             container.querySelectorAll<HTMLElement>('[data-particle-text], [data-particle-box]')
@@ -486,16 +554,21 @@ export class ParticleMenuLayer {
         const textColor = element.dataset.particleColor || '#FFFFFF';
         const baseSpacingPx = Math.max(3, Math.round(fontSizePx / 7.5));
         const spacingPx = Math.max(2, Math.round(baseSpacingPx / this.densityMultiplier));
+        const sampleScale = this.getTextSamplingScale();
+        const sampleWidth = Math.max(1, Math.ceil(rect.width * sampleScale));
+        const sampleHeight = Math.max(1, Math.ceil(rect.height * sampleScale));
 
-        this.offscreenCanvas.width = Math.ceil(rect.width);
-        this.offscreenCanvas.height = Math.ceil(rect.height);
+        this.offscreenCanvas.width = sampleWidth;
+        this.offscreenCanvas.height = sampleHeight;
 
-        this.offscreenContext.clearRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
+        this.offscreenContext.setTransform(1, 0, 0, 1, 0, 0);
+        this.offscreenContext.setTransform(sampleScale, 0, 0, sampleScale, 0, 0);
+        this.offscreenContext.clearRect(0, 0, rect.width, rect.height);
         this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
         this.offscreenContext.textAlign = 'center';
         this.offscreenContext.textBaseline = 'middle';
         this.offscreenContext.fillStyle = '#FFFFFF';
-        this.offscreenContext.fillText(text, this.offscreenCanvas.width / 2, this.offscreenCanvas.height / 2);
+        this.offscreenContext.fillText(text, rect.width / 2, rect.height / 2);
 
         const imageData = this.offscreenContext.getImageData(
             0,
@@ -508,9 +581,11 @@ export class ParticleMenuLayer {
         const startX = spacingPx / 2;
         const startY = spacingPx / 2;
 
-        for (let y = startY; y < this.offscreenCanvas.height; y += spacingPx) {
-            for (let x = startX; x < this.offscreenCanvas.width; x += spacingPx) {
-                const index = (Math.floor(y) * this.offscreenCanvas.width + Math.floor(x)) * 4 + 3;
+        for (let y = startY; y < rect.height; y += spacingPx) {
+            for (let x = startX; x < rect.width; x += spacingPx) {
+                const sampleX = Math.min(sampleWidth - 1, Math.floor(x * sampleScale));
+                const sampleY = Math.min(sampleHeight - 1, Math.floor(y * sampleScale));
+                const index = (sampleY * sampleWidth + sampleX) * 4 + 3;
                 if (data[index] > 80) {
                     targets.push({
                         x: rect.left + x,
@@ -550,6 +625,19 @@ export class ParticleMenuLayer {
         }
 
         return targets;
+    }
+
+    private getTextSamplingScale(): number {
+        if (this.graphicsQuality === 'low') {
+            return 0.6;
+        }
+        if (this.graphicsQuality === 'medium') {
+            return 0.75;
+        }
+        if (this.graphicsQuality === 'high') {
+            return 0.9;
+        }
+        return 1;
     }
 
 
@@ -649,6 +737,11 @@ export class ParticleMenuLayer {
 
     private randomRange(min: number, max: number): number {
         return min + Math.random() * (max - min);
+    }
+
+    private quantizeColorChannel(channel: number): number {
+        const step = ParticleMenuLayer.HALO_COLOR_CACHE_QUANTIZATION_STEP;
+        return Math.min(255, Math.max(0, Math.round(channel / step) * step));
     }
 
     private parseColor(color: string): { r: number; g: number; b: number } {

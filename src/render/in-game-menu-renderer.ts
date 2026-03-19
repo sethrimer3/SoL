@@ -10,6 +10,7 @@ import {
 import * as Constants from '../constants';
 import { getRadialButtonOffsets, getHeroUnitType, getHeroUnitCost } from './render-utilities';
 import { getInGameMenuLayout, getGraphicsMenuMaxScroll, InGameMenuTab, InGameMenuAction, RenderLayerKey } from './in-game-menu';
+import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 
 export interface InGameMenuRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -27,6 +28,7 @@ export interface InGameMenuRendererContext {
     musicVolume: number;
     offscreenIndicatorOpacity: number;
     infoBoxOpacity: number;
+    infoBoxSize: number;
     graphicsMenuScrollOffset: number;
     renderLayerOptions: Array<{ key: RenderLayerKey; label: string }>;
     isSunsLayerEnabled: boolean;
@@ -41,7 +43,7 @@ export interface InGameMenuRendererContext {
 
 export class InGameMenuRenderer {
     public drawInGameMenuOverlay(context: InGameMenuRendererContext): void {
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         const screenWidth = layout.screenWidth;
         const screenHeight = layout.screenHeight;
         const isCompactLayout = layout.isCompactLayout;
@@ -334,17 +336,21 @@ export class InGameMenuRenderer {
             const sliderGap = layout.graphicsSliderGap;
             const sliderTrackHeight = layout.graphicsSliderTrackHeight;
             const sliderBaseY = qualityY + qualityRowHeight + sliderGap;
+            const INFO_BOX_SIZE_MIN = 50;
+            const INFO_BOX_SIZE_MAX = 400;
+            const infoBoxSizePercent = Math.round(context.infoBoxSize * 100);
             const sliderRows = [
-                { label: 'Offscreen Indicators', valuePercent: Math.round(context.offscreenIndicatorOpacity * 100) },
-                { label: 'Info Box Opacity', valuePercent: Math.round(context.infoBoxOpacity * 100) }
+                { label: 'Offscreen Indicators', displayPercent: Math.round(context.offscreenIndicatorOpacity * 100), trackFraction: context.offscreenIndicatorOpacity },
+                { label: 'Info Box Opacity', displayPercent: Math.round(context.infoBoxOpacity * 100), trackFraction: context.infoBoxOpacity },
+                { label: 'Info Box Size', displayPercent: infoBoxSizePercent, trackFraction: (infoBoxSizePercent - INFO_BOX_SIZE_MIN) / (INFO_BOX_SIZE_MAX - INFO_BOX_SIZE_MIN) }
             ];
 
             for (let i = 0; i < sliderRows.length; i += 1) {
                 const row = sliderRows[i];
                 const rowY = sliderBaseY + i * (sliderRowHeight + sliderGap);
-                const clampedPercent = Math.max(0, Math.min(100, row.valuePercent));
+                const clampedFraction = Math.max(0, Math.min(1, row.trackFraction));
                 const trackY = rowY + (sliderRowHeight - sliderTrackHeight) / 2;
-                const knobX = sliderTrackX + (sliderTrackWidth * clampedPercent) / 100;
+                const knobX = sliderTrackX + sliderTrackWidth * clampedFraction;
                 const knobRadius = sliderTrackHeight * 1.1;
 
                 context.ctx.fillStyle = '#FFFFFF';
@@ -356,7 +362,7 @@ export class InGameMenuRenderer {
                 context.ctx.fillStyle = 'rgba(60, 60, 60, 0.9)';
                 context.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
                 context.ctx.fillStyle = 'rgba(255, 215, 0, 0.35)';
-                context.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * (clampedPercent / 100), sliderTrackHeight);
+                context.ctx.fillRect(sliderTrackX, trackY, sliderTrackWidth * clampedFraction, sliderTrackHeight);
                 context.ctx.strokeStyle = '#FFD700';
                 context.ctx.lineWidth = 1.5;
                 context.ctx.strokeRect(sliderTrackX, trackY, sliderTrackWidth, sliderTrackHeight);
@@ -372,7 +378,7 @@ export class InGameMenuRenderer {
                 context.ctx.fillStyle = '#FFFFFF';
                 context.ctx.font = `bold ${isCompactLayout ? 12 : 13}px Doto`;
                 context.ctx.textAlign = 'right';
-                context.ctx.fillText(`${clampedPercent}%`, layout.graphicsSliderX + layout.graphicsSliderWidth, rowY + sliderRowHeight * 0.5);
+                context.ctx.fillText(`${row.displayPercent}%`, layout.graphicsSliderX + layout.graphicsSliderWidth, rowY + sliderRowHeight * 0.5);
             }
 
             context.ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
@@ -448,7 +454,7 @@ export class InGameMenuRenderer {
         if (!context.showInGameMenu || context.inGameMenuTab !== 'graphics') {
             return noChange;
         }
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         const isWithinList =
             screenX >= layout.graphicsListX &&
             screenX <= layout.graphicsListX + layout.graphicsListWidth &&
@@ -473,7 +479,7 @@ export class InGameMenuRenderer {
         if (!context.showInGameMenu) {
             return null;
         }
-        const layout = getInGameMenuLayout(context.canvas.width, context.canvas.height);
+        const layout = getInGameMenuLayout(getCanvasScreenWidthPx(context.canvas), getCanvasScreenHeightPx(context.canvas));
         for (const tab of layout.tabs) {
             const isWithinTab =
                 screenX >= tab.x &&
@@ -620,9 +626,12 @@ export class InGameMenuRenderer {
             const sliderRowHeight = layout.graphicsSliderRowHeight;
             const sliderGap = layout.graphicsSliderGap;
             const sliderBaseY = qualityY + qualityRowHeight + sliderGap;
-            const sliderActionTypes: Array<InGameMenuAction['type']> = [
+            const INFO_BOX_SIZE_MIN = 50;
+            const INFO_BOX_SIZE_MAX = 400;
+            const sliderActionTypes: Array<'offscreenIndicatorOpacity' | 'infoBoxOpacity' | 'infoBoxSizePercent'> = [
                 'offscreenIndicatorOpacity',
-                'infoBoxOpacity'
+                'infoBoxOpacity',
+                'infoBoxSizePercent'
             ];
             for (let i = 0; i < sliderActionTypes.length; i += 1) {
                 const rowY = sliderBaseY + i * (sliderRowHeight + sliderGap);
@@ -631,9 +640,15 @@ export class InGameMenuRenderer {
                     continue;
                 }
                 if (screenX >= sliderTrackX && screenX <= sliderTrackX + sliderTrackWidth) {
+                    const actionType = sliderActionTypes[i];
+                    if (actionType === 'infoBoxSizePercent') {
+                        const rawFraction = (screenX - sliderTrackX) / sliderTrackWidth;
+                        const rawSizePercent = INFO_BOX_SIZE_MIN + rawFraction * (INFO_BOX_SIZE_MAX - INFO_BOX_SIZE_MIN);
+                        const snappedSizePercent = Math.max(INFO_BOX_SIZE_MIN, Math.min(INFO_BOX_SIZE_MAX, Math.round(rawSizePercent / 10) * 10));
+                        return { type: 'infoBoxSizePercent', sizePercent: snappedSizePercent };
+                    }
                     const rawPercent = ((screenX - sliderTrackX) / sliderTrackWidth) * 100;
                     const snappedPercent = Math.max(0, Math.min(100, Math.round(rawPercent / 5) * 5));
-                    const actionType = sliderActionTypes[i];
                     if (actionType === 'offscreenIndicatorOpacity') {
                         return { type: 'offscreenIndicatorOpacity', opacityPercent: snappedPercent };
                     }
@@ -702,9 +717,11 @@ export class InGameMenuRenderer {
             const heroUnitType = isMirrorOption ? null : getHeroUnitType(heroName);
             const isHeroAlive = heroUnitType ? this.isHeroUnitAlive(forge.owner, heroUnitType) : false;
             const isHeroProducing = heroUnitType ? this.isHeroUnitQueuedOrProducing(forge, heroUnitType) : false;
+            const isMirrorProducing = isMirrorOption ? forge.isMirrorQueuedOrProducing() : false;
+            const hasMaxMirrorCount = isMirrorOption ? forge.owner.solarMirrors.length >= Constants.MAX_SOLAR_MIRRORS_PER_PLAYER : false;
             const buttonCost = isMirrorOption ? Constants.STELLAR_FORGE_SOLAR_MIRROR_COST : getHeroUnitCost(forge.owner);
             const isAvailable = isMirrorOption
-                ? true
+                ? !isMirrorProducing && !hasMaxMirrorCount
                 : (heroUnitType ? !isHeroAlive && !isHeroProducing : false);
             const isHighlighted = context.highlightedButtonIndex === i;
 
@@ -729,7 +746,13 @@ export class InGameMenuRenderer {
 
             this.drawRadialButtonCostLabel(buttonX, buttonY, pos.x, pos.y, buttonRadius, buttonCost, isAvailable, context);
 
-            if (!isMirrorOption && isHeroProducing) {
+            if (isMirrorOption) {
+                if (isMirrorProducing) {
+                    this.drawHeroHourglass(buttonX, buttonY, buttonRadius, context);
+                } else if (hasMaxMirrorCount) {
+                    this.drawHeroCheckmark(buttonX, buttonY, buttonRadius, context);
+                }
+            } else if (isHeroProducing) {
                 this.drawHeroHourglass(buttonX, buttonY, buttonRadius, context);
             } else if (isHeroAlive) {
                 this.drawHeroCheckmark(buttonX, buttonY, buttonRadius, context);
@@ -856,7 +879,7 @@ export class InGameMenuRenderer {
     }
 
     private isHeroUnitQueuedOrProducing(forge: StellarForge, heroUnitType: string): boolean {
-        return forge.heroProductionUnitType === heroUnitType || forge.unitQueue.includes(heroUnitType);
+        return forge.hasQueuedOrProducingHeroUnit(heroUnitType);
     }
 
     private isRenderLayerEnabled(layer: RenderLayerKey, context: InGameMenuRendererContext): boolean {

@@ -18,7 +18,10 @@ import {
     createTextInput 
 } from './menu/ui-helpers';
 import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
+import { MatchmakingController } from './menu/matchmaking-controller';
+import { loadPersistedSettings, savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
@@ -38,8 +41,9 @@ import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-scree
 import { renderMatchmaking1v1Screen } from './menu/screens/matchmaking-1v1-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
+import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/screens/match-loading-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
-import { MenuAudioController } from './menu/menu-audio';
+import { MenuAudioController, UiSoundType } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
 import { FactionCarouselView } from './menu/faction-carousel-view';
 import { BUILD_NUMBER } from './build-info';
@@ -72,6 +76,7 @@ export interface GameSettings {
     musicVolume: number; // Music volume percentage (0-100)
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean; // Screen shake for explosions and splash damage
+    developerModeEnabled: boolean;
     selectedFaction: Faction | null;
     selectedHeroes: string[]; // Hero IDs
     selectedHeroNames: string[];
@@ -85,6 +90,11 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
+    isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
+    isStarNestEnabled: boolean; // Enables Star Nest flying-through-space star effect on menus and playing field
+    isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
+    useSvgSprites: boolean; // Use SVG sprite variants when available (PNG remains default)
+    isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -105,22 +115,35 @@ export class MainMenu {
     private factionCarousel: FactionCarouselView | null = null;
     private testLevelButton: HTMLButtonElement | null = null;
     private ladButton: HTMLButtonElement | null = null;
+    private buildNumberLabel: HTMLDivElement | null = null;
+    private developerMenuControlsPanel: HTMLDivElement | null = null;
     private lanLobbyManager: LanLobbyManager = new LanLobbyManager(); // LAN lobby discovery manager
     private playerProfileManager: PlayerProfileManager = new PlayerProfileManager(); // Player profile manager
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
-    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
+    private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
     private mainScreenRenderToken: number = 0;
+    private lobbyDetailRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
     private visibilityHandler: (() => void) | null = null;
     private blurHandler: (() => void) | null = null;
     private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
-    private isMatchmakingSearching = false;
+    private get isMatchmakingSearching(): boolean { return this.matchmakingController.isMatchmakingSearching; }
+    private set isMatchmakingSearching(value: boolean) { this.matchmakingController.isMatchmakingSearching = value; }
+    private developerMenuElementVisibility = {
+        isBackgroundLayerVisible: true,
+        isAtmosphereLayerVisible: true,
+        isParticleLayerVisible: true,
+        isBuildLabelVisible: true,
+        isTestLevelButtonVisible: true,
+        isLadButtonVisible: true,
+        isMainMenuContentVisible: true
+    };
     
     private heroUnits: HeroUnit[] = HERO_UNITS;
     private availableMaps: MapConfig[] = AVAILABLE_MAPS;
@@ -138,6 +161,7 @@ export class MainMenu {
             musicVolume: 100,
             isBattleStatsInfoEnabled: false,
             screenShakeEnabled: true, // Default to enabled
+            developerModeEnabled: false,
             selectedFaction: Faction.RADIANT,
             selectedHeroes: ['radiant-marine'],
             selectedHeroNames: [],
@@ -150,10 +174,22 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'ultra', // Default to ultra graphics
+            graphicsQuality: 'high', // Default to high graphics for new players
+            isExperimentalGraphicsEnabled: false,
+            isStarNestEnabled: false,
+            isAdaptiveQualityEnabled: false, // Default to disabled
+            useSvgSprites: false, // Default to PNG sprites
+            isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
+
+        // Restore any previously saved settings from localStorage
+        const saved = loadPersistedSettings();
+        if (saved) {
+            Object.assign(this.settings, saved);
+        }
+
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
@@ -165,6 +201,8 @@ export class MainMenu {
         document.body.appendChild(this.menuElement);
         this.menuAudioController.setMusicEnabled(this.settings.musicEnabled);
         this.menuAudioController.setMusicVolume(this.settings.musicVolume / 100);
+        this.menuAudioController.setSoundEnabled(this.settings.soundEnabled);
+        this.menuAudioController.setSoundVolume(this.settings.soundVolume / 100);
         this.menuAudioController.setVisible(true);
         this.updateMenuAudioState();
 
@@ -177,6 +215,9 @@ export class MainMenu {
         document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
         this.visibilityHandler = () => {
+            if (!this.settings.isPauseOnFocusLossEnabled) {
+                return;
+            }
             if (document.hidden || !document.hasFocus()) {
                 this.menuAudioController.setVisible(false);
                 this.pauseMenuAnimations();
@@ -186,11 +227,13 @@ export class MainMenu {
             this.resumeMenuAnimations();
         };
         this.blurHandler = () => {
-            this.menuAudioController.setVisible(false);
-            this.pauseMenuAnimations();
+            if (this.settings.isPauseOnFocusLossEnabled) {
+                this.menuAudioController.setVisible(false);
+                this.pauseMenuAnimations();
+            }
         };
         this.focusHandler = () => {
-            if (!document.hidden) {
+            if (this.settings.isPauseOnFocusLossEnabled && !document.hidden) {
                 this.menuAudioController.setVisible(true);
                 this.resumeMenuAnimations();
             }
@@ -243,14 +286,19 @@ export class MainMenu {
             this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
         );
         this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
+        this.atmosphereLayer.setStarNestEnabled(this.settings.isStarNestEnabled);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
-        menu.appendChild(this.createBuildNumberLabel());
+        this.buildNumberLabel = this.createBuildNumberLabel();
+        menu.appendChild(this.buildNumberLabel);
         this.testLevelButton = this.createTestLevelButton();
         menu.appendChild(this.testLevelButton);
         this.ladButton = this.createLadButton();
         menu.appendChild(this.ladButton);
+        this.developerMenuControlsPanel = this.createDeveloperMenuControlsPanel();
+        menu.appendChild(this.developerMenuControlsPanel);
+        this.updateDeveloperMenuControlsVisibility();
 
         // Menu images are now preloaded in index.html, so we can render directly
         this.renderMainScreenContent(content);
@@ -421,6 +469,168 @@ export class MainMenu {
         this.ladButton.style.display = isVisible ? 'block' : 'none';
     }
 
+    private setBuildNumberLabelVisible(isVisible: boolean): void {
+        if (!this.buildNumberLabel) {
+            return;
+        }
+        this.buildNumberLabel.style.display = isVisible ? 'block' : 'none';
+    }
+
+    private setMainMenuContentVisible(isVisible: boolean): void {
+        if (!this.contentElement) {
+            return;
+        }
+        this.contentElement.style.display = isVisible ? 'flex' : 'none';
+    }
+
+    private setBackgroundLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.backgroundParticleLayer?.setVisible(true);
+            this.backgroundParticleLayer?.start();
+            return;
+        }
+        this.backgroundParticleLayer?.stop();
+        this.backgroundParticleLayer?.setVisible(false);
+    }
+
+    private setAtmosphereLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.atmosphereLayer?.setVisible(true);
+            this.atmosphereLayer?.start();
+            return;
+        }
+        this.atmosphereLayer?.stop();
+        this.atmosphereLayer?.setVisible(false);
+    }
+
+    private setParticleLayerVisible(isVisible: boolean): void {
+        if (isVisible) {
+            this.menuParticleLayer?.setVisible(true);
+            this.menuParticleLayer?.start();
+            return;
+        }
+        this.menuParticleLayer?.stop();
+        this.menuParticleLayer?.setVisible(false);
+    }
+
+    private applyDeveloperMenuElementVisibility(): void {
+        this.setBackgroundLayerVisible(this.developerMenuElementVisibility.isBackgroundLayerVisible);
+        this.setAtmosphereLayerVisible(this.developerMenuElementVisibility.isAtmosphereLayerVisible);
+        this.setParticleLayerVisible(this.developerMenuElementVisibility.isParticleLayerVisible);
+        this.setBuildNumberLabelVisible(this.developerMenuElementVisibility.isBuildLabelVisible);
+        this.setTestLevelButtonVisible(this.developerMenuElementVisibility.isTestLevelButtonVisible);
+        this.setLadButtonVisible(this.developerMenuElementVisibility.isLadButtonVisible);
+        this.setMainMenuContentVisible(this.developerMenuElementVisibility.isMainMenuContentVisible);
+    }
+
+    private resetDeveloperMenuElementVisibility(): void {
+        this.developerMenuElementVisibility.isBackgroundLayerVisible = true;
+        this.developerMenuElementVisibility.isAtmosphereLayerVisible = true;
+        this.developerMenuElementVisibility.isParticleLayerVisible = true;
+        this.developerMenuElementVisibility.isBuildLabelVisible = true;
+        this.developerMenuElementVisibility.isTestLevelButtonVisible = true;
+        this.developerMenuElementVisibility.isLadButtonVisible = true;
+        this.developerMenuElementVisibility.isMainMenuContentVisible = true;
+        this.applyDeveloperMenuElementVisibility();
+    }
+
+    private createDeveloperToggleControl(
+        labelText: string,
+        isChecked: boolean,
+        onChange: (isEnabled: boolean) => void
+    ): HTMLDivElement {
+        const row = document.createElement('div');
+        row.style.display = 'flex';
+        row.style.alignItems = 'center';
+        row.style.justifyContent = 'space-between';
+        row.style.gap = '8px';
+
+        const label = document.createElement('span');
+        label.textContent = labelText;
+        label.style.fontSize = '12px';
+        label.style.color = '#FFFFFF';
+        label.style.fontFamily = 'Arial, sans-serif';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = isChecked;
+        checkbox.style.cursor = 'pointer';
+        checkbox.addEventListener('change', () => {
+            onChange(checkbox.checked);
+        });
+
+        row.appendChild(label);
+        row.appendChild(checkbox);
+        return row;
+    }
+
+    private createDeveloperMenuControlsPanel(): HTMLDivElement {
+        const panel = document.createElement('div');
+        panel.style.position = 'absolute';
+        panel.style.top = '64px';
+        panel.style.right = '20px';
+        panel.style.width = '220px';
+        panel.style.padding = '10px';
+        panel.style.borderRadius = '8px';
+        panel.style.border = '1px solid rgba(255, 255, 255, 0.5)';
+        panel.style.backgroundColor = 'rgba(12, 12, 12, 0.82)';
+        panel.style.zIndex = '3';
+        panel.style.display = 'none';
+
+        const title = document.createElement('div');
+        title.textContent = 'DEV MENU ELEMENTS';
+        title.style.color = '#FFD700';
+        title.style.fontFamily = 'Arial, sans-serif';
+        title.style.fontSize = '11px';
+        title.style.fontWeight = '600';
+        title.style.letterSpacing = '0.1em';
+        title.style.marginBottom = '8px';
+        panel.appendChild(title);
+
+        panel.appendChild(this.createDeveloperToggleControl('Background Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isBackgroundLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Atmosphere Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isAtmosphereLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Particle Layer', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isParticleLayerVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Build Label', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isBuildLabelVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Test Button', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isTestLevelButtonVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('LaD Button', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isLadButtonVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+        panel.appendChild(this.createDeveloperToggleControl('Main Content', true, (isEnabled) => {
+            this.developerMenuElementVisibility.isMainMenuContentVisible = isEnabled;
+            this.applyDeveloperMenuElementVisibility();
+        }));
+
+        return panel;
+    }
+
+    private updateDeveloperMenuControlsVisibility(): void {
+        if (!this.developerMenuControlsPanel) {
+            return;
+        }
+        const isMainScreen = this.currentScreen === 'main';
+        const isVisible = this.settings.developerModeEnabled && isMainScreen;
+        this.developerMenuControlsPanel.style.display = isVisible ? 'block' : 'none';
+        if (!isVisible) {
+            this.resetDeveloperMenuElementVisibility();
+        }
+    }
+
     private getSelectedHeroNames(): string[] {
         return this.heroUnits
             .filter(hero => this.settings.selectedHeroes.includes(hero.id))
@@ -456,6 +666,13 @@ export class MainMenu {
             }
         }
         this.settings.selectedHeroNames = this.getSelectedHeroNames();
+    }
+
+    /**
+     * Save the current persistable settings to localStorage.
+     */
+    private persistSettings(): void {
+        savePersistedSettings(extractPersistedSettings(this.settings));
     }
 
     /**
@@ -515,6 +732,7 @@ export class MainMenu {
         this.lanLobbyManager.cleanup();
         this.setTestLevelButtonVisible(false);
         this.setLadButtonVisible(false);
+        this.updateDeveloperMenuControlsVisibility();
         this.updateAtmosphereOpacityForCurrentScreen();
         this.updateSunRumbleAudioContext();
         this.updateMenuAudioState();
@@ -553,78 +771,11 @@ export class MainMenu {
     }
 
     private renderLanLobbyList(listContainer: HTMLElement): void {
-        listContainer.innerHTML = '';
-        const entries = this.lanLobbyManager.getFreshLobbies();
-
-        if (entries.length === 0) {
-            const emptyState = document.createElement('p');
-            emptyState.textContent = 'No LAN lobbies detected yet. Host a game to make it appear here.';
-            emptyState.style.color = '#888888';
-            emptyState.style.fontSize = '16px';
-            emptyState.style.textAlign = 'center';
-            emptyState.style.margin = '0';
-            listContainer.appendChild(emptyState);
-            return;
-        }
-
-        for (const entry of entries) {
-            const entryCard = document.createElement('div');
-            entryCard.style.display = 'flex';
-            entryCard.style.flexDirection = 'row';
-            entryCard.style.alignItems = 'center';
-            entryCard.style.justifyContent = 'space-between';
-            entryCard.style.gap = '16px';
-            entryCard.style.padding = '14px 18px';
-            entryCard.style.borderRadius = '8px';
-            entryCard.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
-            entryCard.style.border = '1px solid rgba(255, 215, 0, 0.3)';
-            entryCard.style.cursor = 'pointer';
-            entryCard.style.transition = 'transform 0.15s ease, border-color 0.15s ease';
-            entryCard.addEventListener('mouseenter', () => {
-                entryCard.style.transform = 'translateY(-2px)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.6)';
-            });
-            entryCard.addEventListener('mouseleave', () => {
-                entryCard.style.transform = 'translateY(0)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.3)';
-            });
-
-            const entryInfo = document.createElement('div');
-            entryInfo.style.display = 'flex';
-            entryInfo.style.flexDirection = 'column';
-            entryInfo.style.gap = '4px';
-            entryInfo.style.flex = '1';
-
-            const lobbyName = document.createElement('div');
-            lobbyName.textContent = entry.lobbyName;
-            lobbyName.style.color = '#FFD700';
-            lobbyName.style.fontSize = '18px';
-            lobbyName.style.fontWeight = '600';
-            entryInfo.appendChild(lobbyName);
-
-            const lobbyMeta = document.createElement('div');
-            lobbyMeta.textContent = `${entry.hostUsername} • ${entry.playerCount}/${entry.maxPlayerCount} players`;
-            lobbyMeta.style.color = '#CCCCCC';
-            lobbyMeta.style.fontSize = '14px';
-            entryInfo.appendChild(lobbyMeta);
-
-            const joinButton = this.createButton('JOIN', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            }, '#00AAFF');
-            joinButton.style.padding = '8px 18px';
-            joinButton.style.fontSize = '14px';
-            joinButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-
-            entryCard.addEventListener('click', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            });
-
-            entryCard.appendChild(entryInfo);
-            entryCard.appendChild(joinButton);
-            listContainer.appendChild(entryCard);
-        }
+        renderLanLobbyListHelper(listContainer, {
+            entries: this.lanLobbyManager.getFreshLobbies(),
+            onJoinLobby: (code) => { void this.joinLanLobbyWithCode(code); },
+            createButton: this.createButton.bind(this)
+        });
     }
 
     private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
@@ -681,8 +832,8 @@ export class MainMenu {
     }
 
     private renderMainScreenContent(container: HTMLElement): void {
-        this.setTestLevelButtonVisible(true);
-        this.setLadButtonVisible(true);
+        this.applyDeveloperMenuElementVisibility();
+        this.updateDeveloperMenuControlsVisibility();
         this.setMenuParticleDensity(1.6);
         this.updateAtmosphereOpacityForCurrentScreen();
 
@@ -979,31 +1130,7 @@ export class MainMenu {
     }
 
     private updatePlayersList(playersList: HTMLElement): void {
-        playersList.innerHTML = '';
-        
-        for (const player of this.p2pMatchPlayers) {
-            const playerItem = document.createElement('div');
-            playerItem.style.padding = '10px';
-            playerItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            playerItem.style.borderRadius = '5px';
-            playerItem.style.display = 'flex';
-            playerItem.style.justifyContent = 'space-between';
-            playerItem.style.alignItems = 'center';
-
-            const playerName = document.createElement('span');
-            playerName.textContent = player.username;
-            playerName.style.fontSize = '18px';
-            playerName.style.color = '#FFFFFF';
-            playerItem.appendChild(playerName);
-
-            const playerRole = document.createElement('span');
-            playerRole.textContent = player.role === 'host' ? '(Host)' : '(Player)';
-            playerRole.style.fontSize = '14px';
-            playerRole.style.color = player.role === 'host' ? '#FFD700' : '#CCCCCC';
-            playerItem.appendChild(playerRole);
-
-            playersList.appendChild(playerItem);
-        }
+        renderPlayersList(playersList, this.p2pMatchPlayers);
     }
 
     private async fetchAndUpdatePlayers(playersList: HTMLElement): Promise<void> {
@@ -1208,11 +1335,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1225,11 +1348,7 @@ export class MainMenu {
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
@@ -1240,80 +1359,18 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        // TODO: Replace with Supabase real-time subscriptions for better UX
-        console.log('Starting matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                // No longer in queue, stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential matches
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
-            
-            if (candidates.length >= 3) {
-                // Found enough players for 2v2 (need 3 others + us = 4 total)
-                console.log('Match found! Candidates:', candidates);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Create balanced teams based on MMR
-                const allPlayers = [
-                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
-                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
-                ];
-                
-                // Sort by MMR and alternate teams for balance
-                allPlayers.sort((a, b) => b.mmr - a.mmr);
-                
-                // Create player configs (highest MMR with lowest, etc.)
-                // Ensure we have exactly 4 players
-                if (allPlayers.length === 4) {
-                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
-                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
-                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
-                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
-                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
-                    ];
-                    
-                    // Update settings
-                    this.settings.gameMode = '2v2-matchmaking';
-                    
-                    // Hide menu and start game
-                    this.hide();
-                    
-                    // Dispatch event to start 4-player game
-                    const event = new CustomEvent('start4PlayerGame', {
-                        detail: {
-                            playerConfigs: playerConfigs,
-                            settings: this.settings,
-                            roomId: null // No room for matchmaking
-                        }
-                    });
-                    window.dispatchEvent(event);
-                    
-                    return;
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start2v2Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
+                this.hide();
+            },
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
     private render1v1MatchmakingScreen(container: HTMLElement): void {
@@ -1390,11 +1447,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling 1v1 matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1406,11 +1459,7 @@ export class MainMenu {
                 this.render1v1MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'online';
                 this.startMenuTransition();
@@ -1421,53 +1470,23 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        console.log('Starting 1v1 matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential 1v1 match
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr, '1v1');
-            
-            if (candidates.length >= 1) {
-                // Found a 1v1 opponent
-                console.log('1v1 match found! Opponent:', candidates[0]);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Start a standard 1v1 online game
-                this.settings.gameMode = 'online';
-                this.onlineMode = 'ranked';
-                
+        this.matchmakingController.start1v1Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
                 this.hide();
-                if (this.onStartCallback) {
-                    this.onStartCallback(this.settings);
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+            },
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
 
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
+        const renderToken = ++this.lobbyDetailRenderToken;
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
@@ -1476,7 +1495,6 @@ export class MainMenu {
             this.factionCarousel.destroy();
             this.factionCarousel = null;
         }
-        container.innerHTML = '';
         this.setMenuParticleDensity(1.6);
 
         if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
@@ -1501,11 +1519,20 @@ export class MainMenu {
         const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
         const lobbyMaps = this.availableMaps;
         const roomSelectedMapId = room.game_settings?.selectedMapId;
         const selectedLobbyMap = lobbyMaps.find(map => map.id === roomSelectedMapId) || this.settings.selectedMap || lobbyMaps[0];
         this.settings.selectedMap = selectedLobbyMap;
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
+        container.innerHTML = '';
         renderLobbyDetailScreen(container, {
             roomId: room.id,
             roomName: room.name,
@@ -1776,14 +1803,21 @@ export class MainMenu {
             musicVolume: this.settings.musicVolume,
             isBattleStatsInfoEnabled: this.settings.isBattleStatsInfoEnabled,
             screenShakeEnabled: this.settings.screenShakeEnabled,
+            developerModeEnabled: this.settings.developerModeEnabled,
             playerColor: this.settings.playerColor,
             enemyColor: this.settings.enemyColor,
             allyColor: this.settings.allyColor,
             enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
+            isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
+            isStarNestEnabled: this.settings.isStarNestEnabled,
+            isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
+            useSvgSprites: this.settings.useSvgSprites,
+            isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
+                this.persistSettings();
             },
             onUsernameChange: (value) => {
                 this.playerProfileManager.saveUsername(value);
@@ -1791,44 +1825,87 @@ export class MainMenu {
             },
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
+                this.menuAudioController.setSoundEnabled(value);
+                this.persistSettings();
             },
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
                 this.menuAudioController.setMusicEnabled(value);
+                this.persistSettings();
             },
             onSoundVolumeChange: (value) => {
                 this.settings.soundVolume = value;
+                this.menuAudioController.setSoundVolume(value / 100);
+                this.menuAudioController.playUiSound('setting-change');
+                this.persistSettings();
             },
             onMusicVolumeChange: (value) => {
                 this.settings.musicVolume = value;
                 this.menuAudioController.setMusicVolume(value / 100);
+                this.persistSettings();
             },
             onBattleStatsInfoChange: (value) => {
                 this.settings.isBattleStatsInfoEnabled = value;
+                this.persistSettings();
             },
             onScreenShakeChange: (value) => {
                 this.settings.screenShakeEnabled = value;
+                this.persistSettings();
+            },
+            onDeveloperModeEnabledChange: (value) => {
+                this.settings.developerModeEnabled = value;
+                if (!value) {
+                    this.resetDeveloperMenuElementVisibility();
+                }
+                this.updateDeveloperMenuControlsVisibility();
             },
             onPlayerColorChange: (value) => {
                 this.settings.playerColor = value;
+                this.persistSettings();
             },
             onEnemyColorChange: (value) => {
                 this.settings.enemyColor = value;
+                this.persistSettings();
             },
             onAllyColorChange: (value) => {
                 this.settings.allyColor = value;
+                this.persistSettings();
             },
             onEnemy2ColorChange: (value) => {
                 this.settings.enemy2Color = value;
+                this.persistSettings();
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
                 this.backgroundParticleLayer?.setGraphicsQuality(value);
                 this.atmosphereLayer?.setGraphicsQuality(value);
                 this.menuParticleLayer?.setGraphicsQuality(value);
+                this.persistSettings();
+            },
+            onExperimentalGraphicsEnabledChange: (value) => {
+                this.settings.isExperimentalGraphicsEnabled = value;
+                this.persistSettings();
+            },
+            onStarNestEnabledChange: (value) => {
+                this.settings.isStarNestEnabled = value;
+                this.atmosphereLayer?.setStarNestEnabled(value);
+                this.persistSettings();
+            },
+            onAdaptiveQualityEnabledChange: (value) => {
+                this.settings.isAdaptiveQualityEnabled = value;
+                this.persistSettings();
+            },
+            onUseSvgSpritesChange: (value) => {
+                this.settings.useSvgSprites = value;
+                this.persistSettings();
+            },
+            onPauseOnFocusLossEnabledChange: (value) => {
+                this.settings.isPauseOnFocusLossEnabled = value;
+                this.persistSettings();
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
+                this.persistSettings();
             },
             onClearDataAndCache: () => this.clearPlayerDataAndCache(),
             onBack: () => {
@@ -2119,125 +2196,11 @@ export class MainMenu {
      * Show the match loading screen
      */
     showMatchLoadingScreen(): void {
-        // Create loading screen overlay
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.id = 'match-loading-screen';
-        loadingOverlay.style.position = 'fixed';
-        loadingOverlay.style.top = '0';
-        loadingOverlay.style.left = '0';
-        loadingOverlay.style.width = '100vw';
-        loadingOverlay.style.height = '100vh';
-        loadingOverlay.style.backgroundColor = '#000011';
-        loadingOverlay.style.zIndex = '2000';
-        loadingOverlay.style.display = 'flex';
-        loadingOverlay.style.flexDirection = 'column';
-        loadingOverlay.style.justifyContent = 'flex-start';
-        loadingOverlay.style.alignItems = 'flex-start';
-        loadingOverlay.style.padding = '40px';
-
-        // Game mode display in top left
-        const gameModeContainer = document.createElement('div');
-        gameModeContainer.style.position = 'absolute';
-        gameModeContainer.style.top = '40px';
-        gameModeContainer.style.left = '40px';
-        gameModeContainer.style.fontSize = '36px';
-        gameModeContainer.style.color = '#FFD700';
-        gameModeContainer.style.fontWeight = '300';
-
-        const gameModeText = document.createElement('div');
-        let displayMode = this.settings.gameMode === 'ai' ? 'Vs. AI' : 
-                          this.settings.gameMode === 'lan' ? 'LAN' : 
-                          this.settings.gameMode === 'online' ? (this.onlineMode === 'ranked' ? 'Ranked' : 'Unranked') : 'Vs. AI';
-        gameModeText.textContent = displayMode;
-        gameModeContainer.appendChild(gameModeText);
-
-        // For Ranked mode, show MMR and win/loss info
-        if (this.settings.gameMode === 'online' && this.onlineMode === 'ranked') {
-            const mmrData = getPlayerMMRData();
-            const currentMMR = mmrData.mmr;
-            const estimatedWin = calculateMMRChange(currentMMR, currentMMR, true);
-            const estimatedLoss = calculateMMRChange(currentMMR, currentMMR, false);
-
-            const mmrText = document.createElement('div');
-            mmrText.textContent = `MMR: ${currentMMR}`;
-            mmrText.style.fontSize = '24px';
-            mmrText.style.marginTop = '10px';
-            mmrText.style.color = '#D0D0D0';
-            gameModeContainer.appendChild(mmrText);
-
-            const winText = document.createElement('div');
-            winText.textContent = `Win: +${estimatedWin}`;
-            winText.style.fontSize = '20px';
-            winText.style.marginTop = '8px';
-            winText.style.color = '#00FF00';
-            gameModeContainer.appendChild(winText);
-
-            const lossText = document.createElement('div');
-            lossText.textContent = `Loss: ${estimatedLoss}`;
-            lossText.style.fontSize = '20px';
-            lossText.style.marginTop = '4px';
-            lossText.style.color = '#FF6666';
-            gameModeContainer.appendChild(lossText);
-        }
-
-        loadingOverlay.appendChild(gameModeContainer);
-
-        // Loading animation in bottom left
-        const loadingContainer = document.createElement('div');
-        loadingContainer.style.position = 'absolute';
-        loadingContainer.style.bottom = '40px';
-        loadingContainer.style.left = '40px';
-        loadingContainer.style.display = 'flex';
-        loadingContainer.style.alignItems = 'center';
-        loadingContainer.style.gap = '20px';
-
-        const loadingAnimation = document.createElement('img');
-        loadingAnimation.id = 'match-loading-animation';
-        loadingAnimation.src = this.resolveAssetPath('ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png');
-        loadingAnimation.style.width = '60px'; // 25% of 240px
-        loadingAnimation.style.height = 'auto';
-        loadingContainer.appendChild(loadingAnimation);
-
-        const loadingText = document.createElement('div');
-        loadingText.textContent = 'Loading...';
-        loadingText.style.fontSize = '24px';
-        loadingText.style.color = '#D0D0D0';
-        loadingText.style.fontWeight = '300';
-        loadingContainer.appendChild(loadingText);
-
-        loadingOverlay.appendChild(loadingContainer);
-
-        document.body.appendChild(loadingOverlay);
-
-        // Start animation at 60fps
-        const animationFrameCount = 25;
-        const animationFrameDurationMs = 1000 / 60;
-        let animationFrameIndex = 0;
-        let lastAnimationTimestamp = performance.now();
-        let animationRemainderMs = 0;
-
-        const updateAnimation = (timestamp: number) => {
-            if (!loadingAnimation.parentElement) {
-                return; // Animation stopped
-            }
-            const deltaMs = timestamp - lastAnimationTimestamp;
-            lastAnimationTimestamp = timestamp;
-            animationRemainderMs += deltaMs;
-            while (animationRemainderMs >= animationFrameDurationMs) {
-                animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
-                animationRemainderMs -= animationFrameDurationMs;
-            }
-            const frameNumber = animationFrameIndex + 1;
-            loadingAnimation.src = this.resolveAssetPath(`ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`);
-            requestAnimationFrame(updateAnimation);
-        };
-
-        requestAnimationFrame(updateAnimation);
-
-        // Remove loading screen after a short delay to allow game to initialize
-        setTimeout(() => {
-            loadingOverlay.remove();
-        }, 1500);
+        showMatchLoadingScreenImpl({
+            gameMode: this.settings.gameMode,
+            onlineMode: this.onlineMode,
+            resolveAssetPath: this.resolveAssetPath.bind(this),
+        });
     }
 
     /**
