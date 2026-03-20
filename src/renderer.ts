@@ -49,6 +49,7 @@ import { VisibilityAlphaTracker } from './render/visibility-alpha-tracker';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './render/canvas-metrics';
 import { StarfieldWorkerBridge } from './render/workers/starfield-worker-bridge';
 import { SunRayWorkerBridge } from './render/workers/sun-ray-worker-bridge';
+import { GravityGridWorkerBridge } from './render/workers/gravity-grid-worker-bridge';
 import { StarNestRenderer } from './render/star-nest-renderer';
 import { GravityGridRenderer, GravityGridContext } from './render/gravity-grid-renderer';
 
@@ -222,6 +223,7 @@ export class GameRenderer {
     private readonly starfieldRenderer: StarfieldRenderer;
     private readonly starfieldWorkerBridge: StarfieldWorkerBridge | null;
     private readonly sunRayWorkerBridge: SunRayWorkerBridge | null;
+    private readonly gravityGridWorkerBridge: GravityGridWorkerBridge | null;
     private readonly sunRenderer: SunRenderer;
     private readonly asteroidRenderer: AsteroidRenderer;
     private readonly forgeRenderer: ForgeRenderer;
@@ -295,6 +297,11 @@ export class GameRenderer {
         this.sunRenderer = new SunRenderer();
         this.sunRayWorkerBridge = SunRayWorkerBridge.isSupported()
             ? new SunRayWorkerBridge()
+            : null;
+
+        // Initialize gravity grid worker
+        this.gravityGridWorkerBridge = GravityGridWorkerBridge.isSupported()
+            ? new GravityGridWorkerBridge()
             : null;
 
         // Initialize asteroid renderer
@@ -396,6 +403,7 @@ export class GameRenderer {
     public destroy(): void {
         this.starfieldWorkerBridge?.dispose();
         this.sunRayWorkerBridge?.dispose();
+        this.gravityGridWorkerBridge?.dispose();
     }
 
     private getCanvasScreenWidthPx(): number {
@@ -1761,17 +1769,48 @@ export class GameRenderer {
                 );
                 const starFrame = this.starfieldWorkerBridge?.getLatestFrame();
                 if (starFrame) {
-                    // Draw the worker frame directly at (0,0) without any translation.
-                    // The parallax stars use cameraX * parallaxFactor (not zoom) for positioning,
-                    // so any zoom-based translation formula would be wrong. Since parallaxFactors
-                    // range from 0.12–0.53, a 1–2 frame stale position is imperceptible.
-                    // Translating the bitmap caused visible jumps when the threshold switched modes.
-                    const isFrameCanvasCompatible = starFrame.screenWidthPx === screenWidth
-                        && starFrame.screenHeightPx === screenHeight;
+                    // The worker renders an overscan canvas (1.3× viewport).  We blit
+                    // it with a parallax-weighted translation to compensate for camera
+                    // movement between when the frame was rendered and now.  Using the
+                    // weighted-average parallax factor (0.25) is an approximation – the
+                    // error is at most a few pixels and disappears on the next frame.
+                    const isFrameViewportCompatible = starFrame.viewportWidthPx === screenWidth
+                        && starFrame.viewportHeightPx === screenHeight;
 
-                    if (isFrameCanvasCompatible) {
-                        this.ctx.drawImage(starFrame.bitmap, 0, 0, screenWidth, screenHeight);
+                    if (isFrameViewportCompatible) {
+                        const effectiveParallaxFactor = StarfieldWorkerBridge.EFFECTIVE_PARALLAX_FACTOR;
+                        const starDeltaX = (starFrame.cameraX - this.parallaxCamera.x) * effectiveParallaxFactor;
+                        const starDeltaY = (starFrame.cameraY - this.parallaxCamera.y) * effectiveParallaxFactor;
+                        // The overscan margin on each side in screen pixels.
+                        const overscanMarginXPx = (starFrame.screenWidthPx  - screenWidth)  * 0.5;
+                        const overscanMarginYPx = (starFrame.screenHeightPx - screenHeight) * 0.5;
+                        const maxAllowedShiftPx = Math.min(overscanMarginXPx, overscanMarginYPx);
+                        const isFramePositionCompatible = Math.abs(starDeltaX) <= maxAllowedShiftPx
+                            && Math.abs(starDeltaY) <= maxAllowedShiftPx;
+
+                        if (isFramePositionCompatible) {
+                            // Offset so the overscan bitmap is centered on the viewport, then
+                            // apply the parallax delta to shift towards correct star positions.
+                            const blitX = -overscanMarginXPx + starDeltaX;
+                            const blitY = -overscanMarginYPx + starDeltaY;
+                            this.ctx.drawImage(
+                                starFrame.bitmap,
+                                blitX, blitY,
+                                starFrame.screenWidthPx,
+                                starFrame.screenHeightPx
+                            );
+                        } else {
+                            // Camera has panned beyond the overscan margin; fall back to sync.
+                            this.starfieldRenderer.drawReworkedParallaxStars(
+                                this.ctx,
+                                this.parallaxCamera,
+                                screenWidth,
+                                screenHeight,
+                                this.graphicsQuality
+                            );
+                        }
                     } else {
+                        // Viewport dimensions changed (resize); fall back to sync.
                         this.starfieldRenderer.drawReworkedParallaxStars(
                             this.ctx,
                             this.parallaxCamera,
@@ -1801,7 +1840,67 @@ export class GameRenderer {
                     gravityGridPlayerColorMap.set(player, this.getLadPlayerColor(player, ladSun, game));
                 }
             }
-            this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
+
+            if (this.gravityGridWorkerBridge) {
+                // Off-main-thread path: request a worker frame and blit when ready.
+                // The worker renders with 30% overscan so the bitmap can be translated
+                // by the camera delta (world-to-screen, * zoom) during panning without
+                // revealing uncovered edges – identical to the sun ray worker pattern.
+                this.gravityGridWorkerBridge.requestFrame(
+                    game,
+                    gravityGridPlayerColorMap,
+                    this.camera.x,
+                    this.camera.y,
+                    this.zoom,
+                    screenWidth,
+                    screenHeight,
+                    this.graphicsQuality
+                );
+                const gridFrame = this.gravityGridWorkerBridge.getLatestFrame();
+                if (gridFrame) {
+                    const frameZoom = gridFrame.zoomLevel;
+                    const zoomScale = frameZoom > 0 ? this.zoom / frameZoom : 1;
+                    const cameraDeltaScreenX = (gridFrame.cameraX - this.camera.x) * this.zoom;
+                    const cameraDeltaScreenY = (gridFrame.cameraY - this.camera.y) * this.zoom;
+                    const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06; // accept up to ±6% zoom drift
+                    const isFrameCanvasCompatible = gridFrame.canvasWidthPx >= screenWidth
+                        && gridFrame.canvasHeightPx >= screenHeight;
+                    const overscanMarginXPx = (gridFrame.canvasWidthPx  - screenWidth)  * 0.5;
+                    const overscanMarginYPx = (gridFrame.canvasHeightPx - screenHeight) * 0.5;
+                    const maxAllowedShiftPx = overscanMarginXPx > 0 && overscanMarginYPx > 0
+                        ? Math.min(overscanMarginXPx, overscanMarginYPx)
+                        : Math.min(screenWidth, screenHeight) * 0.5;
+                    const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
+                        && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;
+
+                    if (isFrameScaleCompatible && isFrameCanvasCompatible && isFramePositionCompatible) {
+                        // Center the overscan bitmap on the viewport and shift by the camera delta
+                        // so world-space grid lines appear at their correct screen positions.
+                        const centerX = screenWidth  * 0.5;
+                        const centerY = screenHeight * 0.5;
+                        this.ctx.save();
+                        this.ctx.translate(centerX + cameraDeltaScreenX, centerY + cameraDeltaScreenY);
+                        this.ctx.scale(zoomScale, zoomScale);
+                        this.ctx.drawImage(
+                            gridFrame.bitmap,
+                            -gridFrame.canvasWidthPx  * 0.5,
+                            -gridFrame.canvasHeightPx * 0.5,
+                            gridFrame.canvasWidthPx,
+                            gridFrame.canvasHeightPx
+                        );
+                        this.ctx.restore();
+                    } else {
+                        // Worker frame rejected (stale or wrong zoom) – fall back to sync.
+                        this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
+                    }
+                } else {
+                    // No worker frame yet (warm-up) – fall back to sync.
+                    this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
+                }
+            } else {
+                // Worker not supported – synchronous main-thread path.
+                this.gravityGridRenderer.drawGravityGrid(game, gravityGridPlayerColorMap, this.getGravityGridContext());
+            }
         }
 
         // Draw asteroids (with culling - skip rendering beyond map bounds)
