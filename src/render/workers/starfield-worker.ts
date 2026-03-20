@@ -11,6 +11,10 @@ type StarfieldWorkerRenderMessage = {
     screenHeightPx: number;
     graphicsQuality: GraphicsQuality;
     nowSec: number;
+    /** Viewport width before overscan inflation (for the main thread blit). */
+    viewportWidthPx: number;
+    /** Viewport height before overscan inflation (for the main thread blit). */
+    viewportHeightPx: number;
 };
 
 type StarfieldWorkerResizeMessage = {
@@ -28,6 +32,8 @@ type StarfieldWorkerFrameMessage = {
     cameraY: number;
     screenWidthPx: number;
     screenHeightPx: number;
+    viewportWidthPx: number;
+    viewportHeightPx: number;
 };
 
 interface StarfieldWorkerScope {
@@ -61,7 +67,12 @@ workerScope.addEventListener('message', (event) => {
         return;
     }
 
-    const { cameraX, cameraY, screenWidthPx, screenHeightPx, graphicsQuality, nowSec } = message;
+    const {
+        cameraX, cameraY,
+        screenWidthPx, screenHeightPx,
+        graphicsQuality, nowSec,
+        viewportWidthPx, viewportHeightPx,
+    } = message;
     // Reserved for future worker-side animation timing if star flicker is decoupled from performance.now().
     void nowSec;
 
@@ -87,5 +98,7 @@ workerScope.addEventListener('message', (event) => {
         cameraY,
         screenWidthPx,
         screenHeightPx,
+        viewportWidthPx,
+        viewportHeightPx,
     }, [bitmap]);
 });
