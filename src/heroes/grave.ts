@@ -278,6 +278,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
                 5.0 // Default ability cooldown
             );
             this.isHero = true; // Grave is a hero unit for Velaris faction
+            this.photonsPerCharge = 3;
 
             // Initialize large projectiles in polygon formation
             for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {

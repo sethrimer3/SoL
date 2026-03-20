@@ -314,6 +314,7 @@ export const createSlyHero = (deps: SlyHeroDeps) => {
                 Constants.SLY_ABILITY_COOLDOWN
             );
             this.isHero = true; // Sly is a hero unit
+            this.photonsPerCharge = 2;
         }
 
         /**

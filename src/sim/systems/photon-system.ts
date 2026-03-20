@@ -158,6 +158,10 @@ export class PhotonSystem {
             for (const unit of player.units) {
                 if (!unit.isHero) continue;
 
+                // Skip gravitational pull if hero is at max photon capacity
+                const maxPhotons = unit.maxCharges * unit.photonsPerCharge;
+                const isAtMaxPhotons = unit.photonCount >= maxPhotons;
+
                 for (let i = ctx.photons.length - 1; i >= 0; i--) {
                     const photon = ctx.photons[i];
                     const dx = unit.position.x - photon.position.x;
@@ -165,13 +169,16 @@ export class PhotonSystem {
                     const distSq = dx * dx + dy * dy;
 
                     if (distSq < captureRangeSq) {
+                        if (isAtMaxPhotons) {
+                            continue; // Already at max, don't absorb
+                        }
                         // Absorb the photon
                         unit.photonCount += 1;
                         ctx.photons.splice(i, 1);
                         continue;
                     }
 
-                    if (distSq < absorbRangeSq && distSq > 0.01) {
+                    if (!isAtMaxPhotons && distSq < absorbRangeSq && distSq > 0.01) {
                         const dist = Math.sqrt(distSq);
                         const invDist = 1 / dist;
                         // Gravity: force ∝ 1/dist (stronger when closer)

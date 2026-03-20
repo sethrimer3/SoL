@@ -147,6 +147,7 @@ export const createAurumHero = (deps: AurumHeroDeps) => {
                 Constants.AURUM_HERO_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 3;
         }
 
         // Override attack to do nothing

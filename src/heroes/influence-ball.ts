@@ -76,6 +76,7 @@ export const createInfluenceBallHero = (deps: InfluenceBallHeroDeps) => {
                 Constants.INFLUENCE_BALL_ABILITY_COOLDOWN
             );
             this.isHero = true; // InfluenceBall is a hero unit for Velaris faction
+            this.photonsPerCharge = 2;
         }
 
         /**

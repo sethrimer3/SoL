@@ -67,6 +67,7 @@ export const createChronoHero = (deps: ChronoDeps) => {
                 Constants.CHRONO_ABILITY_BASE_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
         }
 
         /**

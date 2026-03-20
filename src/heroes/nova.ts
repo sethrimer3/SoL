@@ -190,6 +190,7 @@ export const createNovaHero = (deps: NovaHeroDeps) => {
                 Constants.NOVA_ABILITY_COOLDOWN
             );
             this.isHero = true; // Nova is a hero unit for Velaris faction
+            this.photonsPerCharge = 2;
         }
 
         /**

@@ -149,12 +149,11 @@ export const createShadowHero = (deps: ShadowHeroDeps) => {
                 Constants.SHADOW_COLLISION_RADIUS_PX
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
         }
 
         /**
          * Override update to track beam duration
-         */
-        update(
             deltaTime: number,
             enemies: CombatTarget[],
             allUnits: Unit[],

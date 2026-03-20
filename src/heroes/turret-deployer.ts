@@ -115,6 +115,7 @@ export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
                 Constants.TURRET_DEPLOYER_ABILITY_COOLDOWN
             );
             this.isHero = true; // TurretDeployer is a hero unit for Velaris faction
+            this.photonsPerCharge = 2;
         }
 
         /**

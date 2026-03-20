@@ -157,8 +157,9 @@ export function drawAbilityCooldownBar(
 }
 
 /**
- * Draw photon count indicator below a hero unit.
- * Shows small circles (filled = available, empty = needed).
+ * Draw ability charge indicator below a hero unit.
+ * Shows circles representing charges. Each circle fills progressively
+ * as photons are collected (partial fill for incomplete charges).
  */
 function drawPhotonCountIndicator(
     screenPos: Vector2D,
@@ -167,24 +168,49 @@ function drawPhotonCountIndicator(
     barWidth: number,
     context: UnitRendererContext
 ): void {
-    const cost = Constants.PHOTON_ABILITY_COST;
-    const count = Math.min(unit.photonCount, cost);
+    const maxCharges = unit.maxCharges;
+    const photonsPerCharge = unit.photonsPerCharge;
+    const photonCount = Math.min(unit.photonCount, maxCharges * photonsPerCharge);
     const dotRadius = Math.max(2, 3 * context.zoom);
     const spacing = dotRadius * 2.5;
-    const totalWidth = (cost - 1) * spacing;
+    const totalWidth = (maxCharges - 1) * spacing;
     const startX = screenPos.x - totalWidth / 2;
     const y = screenPos.y + yOffset + dotRadius;
 
-    for (let i = 0; i < cost; i++) {
+    for (let i = 0; i < maxCharges; i++) {
         const cx = startX + i * spacing;
-        context.ctx.beginPath();
-        context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
-        if (i < count) {
-            // Filled = available photon
+        // Calculate how many photons apply to this charge
+        const chargeStart = i * photonsPerCharge;
+        const photonsInThisCharge = Math.max(0, Math.min(photonsPerCharge, photonCount - chargeStart));
+        const fillFraction = photonsInThisCharge / photonsPerCharge;
+
+        if (fillFraction >= 1) {
+            // Fully charged - bright filled circle
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
             context.ctx.fillStyle = '#FFE680';
             context.ctx.fill();
+        } else if (fillFraction > 0) {
+            // Partially charged - draw empty ring then filled arc (pie slice)
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
+            context.ctx.strokeStyle = '#665500';
+            context.ctx.lineWidth = 1;
+            context.ctx.stroke();
+
+            // Draw filled pie slice for partial charge (clockwise from top)
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + fillFraction * Math.PI * 2;
+            context.ctx.beginPath();
+            context.ctx.moveTo(cx, y);
+            context.ctx.arc(cx, y, dotRadius, startAngle, endAngle);
+            context.ctx.closePath();
+            context.ctx.fillStyle = '#998844';
+            context.ctx.fill();
         } else {
-            // Empty = still needed
+            // Empty - outline only
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
             context.ctx.strokeStyle = '#665500';
             context.ctx.lineWidth = 1;
             context.ctx.stroke();

@@ -30,6 +30,7 @@ export const createDrillerHero = (deps: DrillerHeroDeps) => {
                 Constants.DRILLER_ABILITY_COOLDOWN
             );
             this.isHero = true; // Driller is a hero unit for Aurum faction
+            this.photonsPerCharge = 2;
         }
 
         /**
