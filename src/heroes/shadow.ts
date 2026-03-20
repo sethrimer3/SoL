@@ -154,6 +154,8 @@ export const createShadowHero = (deps: ShadowHeroDeps) => {
 
         /**
          * Override update to track beam duration
+         */
+        update(
             deltaTime: number,
             enemies: CombatTarget[],
             allUnits: Unit[],
