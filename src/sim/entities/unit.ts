@@ -1,6 +1,37 @@
 /**
  * Unit base class for SoL game
  * Base class for all combat units (heroes and minions)
+ *
+ * --- Movement inertia system (build 470) ---
+ * What changed:
+ *   Units now have StarCraft-2-style movement inertia. Rather than snapping instantly to
+ *   max speed or stopping dead, they accelerate, decelerate, and arc into new headings.
+ *
+ * Files touched:
+ *   src/constants.ts                  — added inertia constants (accel, decel, arrive radius, tanky preset)
+ *   src/sim/entities/unit.ts          — this file: movement state fields, rewritten moveTowardRallyPoint
+ *   src/sim/entities/starling.ts      — migrated to base-class movement params; removed manual accel code
+ *   src/heroes/tank.ts                — applies tanky movement preset in constructor
+ *   src/heroes/blink.ts, dash.ts,     — removed now-redundant duplicate rotation code
+ *   src/heroes/preist.ts              — uses this.turnRateRadPerSec for healing-target rotation
+ *
+ * How to tune acceleration / deceleration / turn rate:
+ *   Each unit archetype sets its own values in the constructor:
+ *     this.maxSpeedPxPerSec         — top movement speed (px/s)
+ *     this.accelerationPxPerSec2    — rate of speed increase (px/s²)
+ *     this.decelerationPxPerSec2    — rate of speed decrease (px/s²); usually >= acceleration
+ *     this.turnRateRadPerSec        — max angular speed when rotating toward desired heading (rad/s)
+ *     this.arriveSlowdownRadiusPx   — distance at which the unit begins slowing for arrival (px)
+ *   Default constants in src/constants.ts define the "hero agile" preset.
+ *   Tank uses HERO_TANKY_* constants. Starlings use STARLING_* constants.
+ *   For crisp feel: keep acceleration >= 400 px/s² and deceleration >= acceleration.
+ *   For floaty feel: lower acceleration and deceleration values.
+ *
+ * Edge cases to monitor:
+ *   - Units with very low acceleration may circle waypoints slightly on arrival (see arriveSlowdownRadiusPx).
+ *   - Preist's healing-target facing overrides movement rotation; this is intentional.
+ *   - The group-stop check in Starling.moveTowardRallyPoint instantly zeroes speed (correct).
+ *   - currentSpeedPxPerSec is public for debug overlays (render reads it safely; sim writes it).
  */
 
 import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
@@ -37,6 +68,16 @@ export class Unit {
     photonCount: number = 0; // Absorbed photons available for abilities (hero units only)
     photonsPerCharge: number = 1; // Number of photons needed to fill one ability charge
     maxCharges: number = 3; // Maximum ability charges a hero can hold
+
+    // --- Movement inertia state (SC2-style: crisp but physically grounded) ---
+    // Subclasses set these protected fields in their constructors to tune per-archetype feel.
+    // Debug: read currentSpeedPxPerSec / velocity / rotation from outside for overlays.
+    currentSpeedPxPerSec: number = 0;           // Current movement speed (actual, not max)
+    protected maxSpeedPxPerSec: number;         // Maximum movement speed
+    protected accelerationPxPerSec2: number;    // Rate of speed increase (px/s²)
+    protected decelerationPxPerSec2: number;    // Rate of speed decrease (px/s²)
+    protected turnRateRadPerSec: number;        // Max angular speed when rotating toward desired heading (rad/s)
+    protected arriveSlowdownRadiusPx: number;   // Distance at which the unit begins slowing for arrival (px)
     
     constructor(
         public position: Vector2D,
@@ -53,6 +94,12 @@ export class Unit {
         this.collisionRadiusPx = collisionRadiusPx;
         // Line of sight is 20% more than attack range
         this.lineOfSight = attackRange * Constants.UNIT_LINE_OF_SIGHT_MULTIPLIER;
+        // Default movement params (hero agile preset); subclasses override in their constructors
+        this.maxSpeedPxPerSec = Constants.UNIT_MOVE_SPEED;
+        this.accelerationPxPerSec2 = Constants.UNIT_ACCELERATION_PX_PER_SEC2;
+        this.decelerationPxPerSec2 = Constants.UNIT_DECELERATION_PX_PER_SEC2;
+        this.turnRateRadPerSec = Constants.UNIT_TURN_SPEED_RAD_PER_SEC;
+        this.arriveSlowdownRadiusPx = Constants.UNIT_ARRIVE_SLOWDOWN_RADIUS_PX;
     }
 
     setManualTarget(target: CombatTarget, rallyPoint: Vector2D | null): void {
@@ -77,6 +124,9 @@ export class Unit {
         this.rallyPoint = null;
         this.waypoints = [];
         this.currentWaypointIndex = 0;
+        // NOTE: currentSpeedPxPerSec is intentionally NOT zeroed here.
+        // When no rallyPoint is set, the "no destination" branch of moveTowardRallyPoint
+        // decelerates the unit over the next few ticks for a responsive-but-not-instant stop.
         this.velocity.x = 0;
         this.velocity.y = 0;
     }
@@ -115,7 +165,7 @@ export class Unit {
             return;
         }
 
-        this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
+        this.moveTowardRallyPoint(deltaTime, 0 /* ignored — uses this.maxSpeedPxPerSec */, allUnits, asteroids);
 
         if (this.manualTarget && this.isTargetDead(this.manualTarget)) {
             this.manualTarget = null;
@@ -149,7 +199,7 @@ export class Unit {
                 const dy = this.target.position.y - this.position.y;
                 const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
                 const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                const maxRotationStep = this.turnRateRadPerSec * deltaTime;
                 
                 if (Math.abs(rotationDelta) <= maxRotationStep) {
                     this.rotation = targetRotation;
@@ -211,13 +261,30 @@ export class Unit {
 
     protected moveTowardRallyPoint(
         deltaTime: number,
-        moveSpeed: number,
+        _moveSpeed: number, // Kept for signature compatibility with subclass overrides; ignored — uses instance fields (maxSpeedPxPerSec, etc.) instead
         allUnits: Unit[],
         asteroids: Asteroid[] = []
     ): void {
+        // ── Branch 1: No destination — decelerate to a stop ────────────────────────
         if (!this.rallyPoint) {
-            this.velocity.x = 0;
-            this.velocity.y = 0;
+            if (this.currentSpeedPxPerSec > 0) {
+                this.currentSpeedPxPerSec = Math.max(
+                    0,
+                    this.currentSpeedPxPerSec - this.decelerationPxPerSec2 * deltaTime
+                );
+                // Continue coasting in the current facing direction while slowing down
+                const facingRad = this.rotation - Math.PI / 2;
+                this.velocity.x = Math.cos(facingRad) * this.currentSpeedPxPerSec;
+                this.velocity.y = Math.sin(facingRad) * this.currentSpeedPxPerSec;
+                this.position.x += this.velocity.x * deltaTime;
+                this.position.y += this.velocity.y * deltaTime;
+                const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+                this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
+                this.position.y = Math.max(-boundary, Math.min(boundary, this.position.y));
+            } else {
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+            }
             return;
         }
 
@@ -225,24 +292,23 @@ export class Unit {
         const dy = this.rallyPoint.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
 
+        // ── Branch 2: Arrival check ───────────────────────────────────────────────
         if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
-            // Check if there are more waypoints to follow
             if (this.waypoints.length > 0 && this.currentWaypointIndex < this.waypoints.length - 1) {
-                // Move to next waypoint
+                // Advance to next waypoint in the path
                 this.currentWaypointIndex++;
                 this.rallyPoint = this.waypoints[this.currentWaypointIndex];
                 return;
             } else {
-                // No more waypoints, clear everything
+                // Final destination reached — clear path; speed decelerates via Branch 1 next tick
                 this.rallyPoint = null;
                 this.waypoints = [];
                 this.currentWaypointIndex = 0;
-                this.velocity.x = 0;
-                this.velocity.y = 0;
                 return;
             }
         }
 
+        // ── Compute desired direction (toward rally point + avoidance steering) ───
         let directionX = dx / distanceToTarget;
         let directionY = dy / distanceToTarget;
 
@@ -342,30 +408,63 @@ export class Unit {
             directionY /= directionLength;
         }
 
-        // Update rotation to face movement direction with smooth turning
+        // ── Rotate facing toward desired heading using per-unit turn rate ─────────
+        // This produces smooth visual arcing; velocity is later derived from this facing.
         if (directionLength > 0) {
-            // Add π/2 so the TOP of the sprite is treated as the FRONT (not the bottom/right side)
+            // Add π/2 so the TOP of the sprite is treated as the FRONT
             const targetRotation = Math.atan2(directionY, directionX) + Math.PI / 2;
             const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-            const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
-            
+            const maxRotationStep = this.turnRateRadPerSec * deltaTime;
+
             if (Math.abs(rotationDelta) <= maxRotationStep) {
                 this.rotation = targetRotation;
             } else {
                 this.rotation += Math.sign(rotationDelta) * maxRotationStep;
             }
-            
+
             // Normalize rotation to [0, 2π) using modulo
             this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         }
 
-        const moveDistance = moveSpeed * deltaTime;
-        const moveX = directionX * moveDistance;
-        const moveY = directionY * moveDistance;
-        this.position.x += moveX;
-        this.position.y += moveY;
-        this.velocity.x = directionX * moveSpeed;
-        this.velocity.y = directionY * moveSpeed;
+        // ── Desired speed with arrival slowdown ───────────────────────────────────
+        // Taper speed linearly as the unit approaches its destination so it eases in
+        // without a hard stop, keeping the feel crisp rather than floaty.
+        let desiredSpeed = this.maxSpeedPxPerSec;
+        if (distanceToTarget < this.arriveSlowdownRadiusPx) {
+            desiredSpeed = this.maxSpeedPxPerSec * (distanceToTarget / this.arriveSlowdownRadiusPx);
+        }
+
+        // ── Accelerate / decelerate current speed toward desired speed ────────────
+        if (this.currentSpeedPxPerSec < desiredSpeed) {
+            this.currentSpeedPxPerSec = Math.min(
+                desiredSpeed,
+                this.currentSpeedPxPerSec + this.accelerationPxPerSec2 * deltaTime
+            );
+        } else if (this.currentSpeedPxPerSec > desiredSpeed) {
+            this.currentSpeedPxPerSec = Math.max(
+                desiredSpeed,
+                this.currentSpeedPxPerSec - this.decelerationPxPerSec2 * deltaTime
+            );
+        }
+
+        // ── Derive velocity and update position ───────────────────────────────────
+        // Close to destination: move directly toward it (prevents orbiting on final approach).
+        // Further out: velocity follows current facing, creating a natural arc when turning.
+        let velDirX: number;
+        let velDirY: number;
+        if (distanceToTarget <= this.arriveSlowdownRadiusPx) {
+            velDirX = directionX;
+            velDirY = directionY;
+        } else {
+            const facingRad = this.rotation - Math.PI / 2;
+            velDirX = Math.cos(facingRad);
+            velDirY = Math.sin(facingRad);
+        }
+
+        this.velocity.x = velDirX * this.currentSpeedPxPerSec;
+        this.velocity.y = velDirY * this.currentSpeedPxPerSec;
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;

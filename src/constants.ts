@@ -393,9 +393,28 @@ export const CASING_SPACEDUST_FORCE = 50;
 export const CASING_COLLISION_DAMPING = 0.3;
 
 // Unit movement constants
-export const UNIT_MOVE_SPEED = 100; // Pixels per second
-export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning
+export const UNIT_MOVE_SPEED = 100; // Pixels per second (hero agile default max speed)
+export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning (hero agile default)
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
+
+// Movement inertia parameters (StarCraft 2 style: crisp but physically grounded)
+// Units accelerate to max speed and decelerate smoothly rather than snapping instantly.
+// Velocity is derived from current facing direction, producing natural arcing on sharp turns.
+export const UNIT_ACCELERATION_PX_PER_SEC2 = 500;   // px/s² — default acceleration (reaches max in ~0.2 s)
+export const UNIT_DECELERATION_PX_PER_SEC2 = 800;   // px/s² — default deceleration (stops from max in ~0.125 s)
+export const UNIT_ARRIVE_SLOWDOWN_RADIUS_PX = 40;   // px — begin tapering speed within this distance of destination
+
+// Starling minion (light infantry) inertia tuning
+// Acceleration already defined as STARLING_MOVE_ACCELERATION_PX_PER_SEC (120 px/s²)
+export const STARLING_DECELERATION_PX_PER_SEC2 = 240;  // px/s² — 2× acceleration for responsive stop
+export const STARLING_ARRIVE_SLOWDOWN_RADIUS_PX = 20;  // px — tighter arrival footprint for small units
+
+// Hero tanky preset (Tank hero) — slower, harder to redirect
+export const HERO_TANKY_MOVE_SPEED = 80;                   // px/s
+export const HERO_TANKY_ACCELERATION_PX_PER_SEC2 = 300;    // px/s²
+export const HERO_TANKY_DECELERATION_PX_PER_SEC2 = 600;    // px/s²
+export const HERO_TANKY_TURN_RATE_RAD_PER_SEC = 5.0;       // rad/s
+export const HERO_TANKY_ARRIVE_SLOWDOWN_RADIUS_PX = 50;    // px
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
 export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)

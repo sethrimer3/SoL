@@ -84,6 +84,12 @@ export const createTankHero = (deps: TankHeroDeps) => {
             );
             this.isHero = true;
             this.photonsPerCharge = 3;
+            // Tanky hero preset: slower and harder to redirect than agile heroes
+            this.maxSpeedPxPerSec = Constants.HERO_TANKY_MOVE_SPEED;
+            this.accelerationPxPerSec2 = Constants.HERO_TANKY_ACCELERATION_PX_PER_SEC2;
+            this.decelerationPxPerSec2 = Constants.HERO_TANKY_DECELERATION_PX_PER_SEC2;
+            this.turnRateRadPerSec = Constants.HERO_TANKY_TURN_RATE_RAD_PER_SEC;
+            this.arriveSlowdownRadiusPx = Constants.HERO_TANKY_ARRIVE_SLOWDOWN_RADIUS_PX;
         }
 
         /**
@@ -116,36 +122,18 @@ export const createTankHero = (deps: TankHeroDeps) => {
                 return;
             }
 
-            this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
+            this.moveTowardRallyPoint(deltaTime, 0 /* ignored */, allUnits, asteroids);
 
-            // Update rotation based on movement or face nearest enemy
-            if (this.rallyPoint) {
-                // Face movement direction
-                const dx = this.rallyPoint.x - this.position.x;
-                const dy = this.rallyPoint.y - this.position.y;
-                if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-                    const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
-                    const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                    const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
-                    
-                    if (Math.abs(rotationDelta) <= maxRotationStep) {
-                        this.rotation = targetRotation;
-                    } else {
-                        this.rotation += Math.sign(rotationDelta) * maxRotationStep;
-                    }
-                    
-                    // Normalize rotation to [0, 2π)
-                    this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-                }
-            } else {
-                // Face nearest enemy when not moving
+            // When stationary, face the nearest enemy (Tank has no normal attack but needs
+            // to orient its shield arc correctly). Movement rotation is handled by moveTowardRallyPoint.
+            if (!this.rallyPoint) {
                 const nearestEnemy = this.findNearestEnemy(enemies);
                 if (nearestEnemy && !this.isTargetDead(nearestEnemy)) {
                     const dx = nearestEnemy.position.x - this.position.x;
                     const dy = nearestEnemy.position.y - this.position.y;
                     const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
                     const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                    const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                    const maxRotationStep = this.turnRateRadPerSec * deltaTime;
                     
                     if (Math.abs(rotationDelta) <= maxRotationStep) {
                         this.rotation = targetRotation;

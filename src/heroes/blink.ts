@@ -98,27 +98,8 @@ export const createBlinkHero = (deps: BlinkHeroDeps) => {
                 return;
             }
 
-            // Normal movement
-            this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
-
-            // Update rotation based on movement or face nearest enemy
-            if (this.rallyPoint) {
-                const dx = this.rallyPoint.x - this.position.x;
-                const dy = this.rallyPoint.y - this.position.y;
-                if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-                    const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
-                    const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                    const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
-                    
-                    if (Math.abs(rotationDelta) <= maxRotationStep) {
-                        this.rotation = targetRotation;
-                    } else {
-                        this.rotation += Math.sign(rotationDelta) * maxRotationStep;
-                    }
-                    
-                    this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-                }
-            }
+            // Normal movement — moveTowardRallyPoint handles both rotation and speed inertia
+            this.moveTowardRallyPoint(deltaTime, 0 /* ignored */, allUnits, asteroids);
         }
 
         /**

@@ -32,7 +32,6 @@ export class Starling extends Unit {
     private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
-    private currentMoveSpeedPxPerSec: number = Constants.STARLING_MOVE_SPEED;
     public spriteLevel: number = 1; // Sprite level (1-4)
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
@@ -46,6 +45,12 @@ export class Starling extends Unit {
             Constants.STARLING_BLINK_COOLDOWN_SEC,
             Constants.STARLING_COLLISION_RADIUS_PX
         );
+        // Starling (light infantry) movement preset — starts from rest, accelerates briskly
+        this.maxSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
+        this.accelerationPxPerSec2 = Constants.STARLING_MOVE_ACCELERATION_PX_PER_SEC;
+        this.decelerationPxPerSec2 = Constants.STARLING_DECELERATION_PX_PER_SEC2;
+        this.arriveSlowdownRadiusPx = Constants.STARLING_ARRIVE_SLOWDOWN_RADIUS_PX;
+        // Use the default hero turn rate; starlings are nimble
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
     }
@@ -136,7 +141,7 @@ export class Starling extends Unit {
     }
 
     getCurrentMoveSpeedPxPerSec(): number {
-        return this.currentMoveSpeedPxPerSec;
+        return this.currentSpeedPxPerSec;
     }
 
     hasActiveManualOrder(): boolean {
@@ -317,6 +322,7 @@ export class Starling extends Unit {
 
             if (distanceToRally <= stopRadiusPx) {
                 this.rallyPoint = null;
+                this.currentSpeedPxPerSec = 0; // Immediate stop at group formation point
                 this.velocity.x = 0;
                 this.velocity.y = 0;
                 this.hasReachedFinalWaypoint = true;
@@ -361,15 +367,13 @@ export class Starling extends Unit {
         }
 
         if (this.owner.hasStrafeUpgrade) {
-            this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
-        } else if (this.currentMoveSpeedPxPerSec < Constants.STARLING_MOVE_SPEED) {
-            this.currentMoveSpeedPxPerSec = Math.min(
-                Constants.STARLING_MOVE_SPEED,
-                this.currentMoveSpeedPxPerSec + Constants.STARLING_MOVE_ACCELERATION_PX_PER_SEC * deltaTime
-            );
+            // Strafe upgrade: keep full speed at all times (no attack-induced slow)
+            this.currentSpeedPxPerSec = Math.max(this.currentSpeedPxPerSec, Constants.STARLING_MOVE_SPEED);
         }
+        // No else branch needed: the base class moveTowardRallyPoint handles acceleration from rest
+        // (attack() zeroes currentSpeedPxPerSec when no strafe upgrade, and the base re-accelerates)
 
-        this.moveTowardRallyPoint(deltaTime, this.currentMoveSpeedPxPerSec, allUnits, asteroids);
+        this.moveTowardRallyPoint(deltaTime, 0 /* ignored */, allUnits, asteroids);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -470,7 +474,8 @@ export class Starling extends Unit {
         }
 
         if (!this.owner.hasStrafeUpgrade) {
-            this.currentMoveSpeedPxPerSec = 0;
+            // No strafe upgrade: stop moving when firing so the unit aims properly
+            this.currentSpeedPxPerSec = 0;
         }
     }
 }
