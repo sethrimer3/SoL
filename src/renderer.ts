@@ -209,6 +209,8 @@ export class GameRenderer {
     // Movement order indicator constants
     private readonly MOVE_ORDER_DOT_RADIUS = 8.4;
     private readonly MOVE_ORDER_FRAME_DURATION_MS = 1000 / Constants.MOVEMENT_POINT_ANIMATION_FPS;
+    private readonly SUN_ANIMATION_FPS = 30;
+    private readonly SUN_ANIMATION_FRAME_COUNT = 300;
     private readonly MOVE_ORDER_FALLBACK_SPRITE_PATH = 'ASSETS/sprites/interface/movementPoint.png';
     private readonly UNIT_BASE_SIZE_PX = 8;
     private readonly LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 9;
@@ -235,6 +237,7 @@ export class GameRenderer {
     private readonly starNestRenderer = new StarNestRenderer();
     private readonly gravityGridRenderer = new GravityGridRenderer();
     private movementPointFramePaths: string[] = [];
+    private sunAnimationFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
     // Device pixel ratio is dimensionless and does not use a unit suffix.
     // Viewport dimensions represent pixels, so they continue to use the Px suffix.
@@ -324,6 +327,12 @@ export class GameRenderer {
             }
             this.movementPointFramePaths.push(
                 `ASSETS/sprites/interface/movementPointAnimation/movementPoint_frame${frameIndex}.png`
+            );
+        }
+
+        for (let frameIndex = 0; frameIndex < this.SUN_ANIMATION_FRAME_COUNT; frameIndex++) {
+            this.sunAnimationFramePaths.push(
+                `ASSETS/sprites/environment/sun/sun_animation/sun_animation_${frameIndex.toString().padStart(5, '0')}.png`
             );
         }
     }
@@ -801,6 +810,21 @@ export class GameRenderer {
 
     private getSpriteDrawSource(path: string): SpriteDrawSource | null {
         return this.spriteManager.getSpriteDrawSource(path);
+    }
+
+    private getSunFallbackSpriteDrawSource(): SpriteDrawSource | null {
+        const sunSpritePath = this.getGraphicAssetPath('centralSun');
+        return sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
+    }
+
+    private getSunSpriteDrawSource(gameTimeSec: number): SpriteDrawSource | null {
+        if ((this.graphicsQuality !== 'high' && this.graphicsQuality !== 'ultra') || this.sunAnimationFramePaths.length === 0) {
+            return this.getSunFallbackSpriteDrawSource();
+        }
+
+        const frameIndex = Math.floor(gameTimeSec * this.SUN_ANIMATION_FPS) % this.sunAnimationFramePaths.length;
+        const animatedFramePath = this.sunAnimationFramePaths[frameIndex];
+        return this.getSpriteDrawSource(animatedFramePath) ?? this.getSunFallbackSpriteDrawSource();
     }
 
     private drawSpritePath(path: string, x: number, y: number, width: number, height: number): boolean {
@@ -1526,8 +1550,7 @@ export class GameRenderer {
                 if (this.isWithinViewBounds(sun.position, sun.radius * 12)) {
                     const sunScreenPos = this.worldToScreen(sun.position);
                     const sunScreenRadius = sun.radius * this.zoom;
-                    const sunSpritePath = this.getGraphicAssetPath('centralSun');
-                    const sunSprite = sunSpritePath ? this.getSpriteDrawSource(sunSpritePath) : null;
+                    const sunSprite = this.getSunSpriteDrawSource(game.gameTime);
                     this.sunRenderer.drawSun(
                         this.ctx,
                         sun,
