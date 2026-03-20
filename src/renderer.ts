@@ -1603,7 +1603,7 @@ export class GameRenderer {
                         && sunRayFrame.canvasHeightPx === canvasHeight;
                     // Reject stale frames where the camera has panned so far that the
                     // reprojected bitmap would leave uncovered (unlit) regions of the viewport.
-                    const maxAllowedShiftPx = Math.min(canvasWidth, canvasHeight) * 0.25;
+                    const maxAllowedShiftPx = Math.min(canvasWidth, canvasHeight) * 0.5;
                     const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
                         && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;
 
@@ -1626,6 +1626,7 @@ export class GameRenderer {
                         );
                         this.ctx.restore();
                     } else {
+                        // Worker frame rejected (stale) – fall back to synchronous rendering.
                         this.sunRenderer.drawSunRays(
                             this.ctx,
                             game,
@@ -1640,6 +1641,19 @@ export class GameRenderer {
                             this.SUN_RAY_RADIUS_BUCKET_SIZE,
                             this.SUN_RAY_BLOOM_RADIUS_MULTIPLIER
                         );
+                        // Render ultra particles synchronously when falling back so they
+                        // don't disappear during fast panning.
+                        if (!shouldSkipUltraParticles && !this.shouldSkipFancyFieldEffects()) {
+                            this.sunRenderer.drawUltraSunParticleLayers(
+                                this.ctx,
+                                game,
+                                this.zoom,
+                                canvasWidth,
+                                canvasHeight,
+                                this.graphicsQuality,
+                                this._boundWorldToScreenCoords
+                            );
+                        }
                     }
                 } else {
                     // Fallback: synchronous render until the first worker frame arrives.

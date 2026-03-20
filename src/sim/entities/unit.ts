@@ -35,6 +35,8 @@ export class Unit {
     isFrozen: boolean = false; // Flag to mark unit as frozen (immune to damage, can't be targeted)
     lineOfSight: number; // Line of sight range (calculated from attack range)
     photonCount: number = 0; // Absorbed photons available for abilities (hero units only)
+    photonsPerCharge: number = 1; // Number of photons needed to fill one ability charge
+    maxCharges: number = 3; // Maximum ability charges a hero can hold
     
     constructor(
         public position: Vector2D,
@@ -429,13 +431,13 @@ export class Unit {
      * @returns true if ability was used, false if on cooldown
      */
     useAbility(direction: Vector2D): boolean {
-        // Hero units require photons to cast abilities
+        // Hero units require photons to cast abilities (charge-based system)
         if (this.isHero) {
-            if (this.photonCount < Constants.PHOTON_ABILITY_COST) {
+            if (this.photonCount < this.photonsPerCharge) {
                 return false;
             }
-            // Spend photons
-            this.photonCount -= Constants.PHOTON_ABILITY_COST;
+            // Spend one charge worth of photons
+            this.photonCount -= this.photonsPerCharge;
             // Set a short visual cooldown so the bar shows briefly
             this.abilityCooldown = 0.5;
             return true;

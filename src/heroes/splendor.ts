@@ -155,6 +155,7 @@ export const createSplendorHero = (deps: SplendorHeroDeps) => {
                 Constants.SPLENDOR_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 3;
         }
 
         update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[], asteroids: Asteroid[] = []): void {

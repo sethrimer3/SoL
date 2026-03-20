@@ -61,6 +61,7 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
                 Constants.PREIST_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
 
             // Initialize beam targets
             for (let i = 0; i < Constants.PREIST_NUM_BEAMS; i++) {

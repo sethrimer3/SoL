@@ -215,6 +215,7 @@ export const createMothershipHero = (deps: MothershipHeroDeps) => {
                 Constants.MOTHERSHIP_ABILITY_COOLDOWN
             );
             this.isHero = true; // Mothership is a hero unit for Radiant faction
+            this.photonsPerCharge = 3;
         }
 
         /**

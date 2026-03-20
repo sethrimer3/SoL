@@ -46,6 +46,7 @@ export const createRayHero = (deps: RayHeroDeps) => {
                 Constants.RAY_ABILITY_COOLDOWN
             );
             this.isHero = true; // Ray is a hero unit for Velaris faction
+            this.photonsPerCharge = 2;
         }
 
         /**

@@ -83,6 +83,7 @@ export const createTankHero = (deps: TankHeroDeps) => {
                 Constants.TANK_COLLISION_RADIUS_PX
             );
             this.isHero = true;
+            this.photonsPerCharge = 3;
         }
 
         /**

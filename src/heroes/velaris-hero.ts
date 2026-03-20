@@ -111,6 +111,7 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
                 Constants.VELARIS_HERO_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 3;
         }
 
         // Override attack to do nothing

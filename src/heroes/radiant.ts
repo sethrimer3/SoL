@@ -113,6 +113,7 @@ export const createRadiantHero = (deps: RadiantHeroDeps) => {
                 Constants.RADIANT_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 3;
         }
 
         // Override attack to do nothing
