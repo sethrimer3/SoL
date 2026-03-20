@@ -171,7 +171,8 @@ export class SunRenderer {
                 screenPos,
                 screenRadius,
                 gameTimeSec,
-                sun
+                sun,
+                sunSprite
             );
             return;
         }
@@ -318,7 +319,8 @@ export class SunRenderer {
         screenPos: Vector2D,
         screenRadius: number,
         gameTimeSec: number,
-        sun: SunLike
+        sun: SunLike,
+        sunSprite: SpriteDrawSource | null
     ): void {
         const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
         const pulseAmount = 1 + Math.sin(gameTimeSec * 1.2) * 0.012;
@@ -342,6 +344,23 @@ export class SunRenderer {
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, animatedRadius, 0, Math.PI * 2);
         ctx.clip();
+
+        if (sunSprite) {
+            ctx.save();
+            ctx.globalAlpha = 0.92;
+            ctx.drawImage(
+                sunSprite.image,
+                sunSprite.sourceX,
+                sunSprite.sourceY,
+                sunSprite.sourceWidth,
+                sunSprite.sourceHeight,
+                screenPos.x - animatedRadius,
+                screenPos.y - animatedRadius,
+                animatedRadius * 2,
+                animatedRadius * 2
+            );
+            ctx.restore();
+        }
 
         ctx.save();
         ctx.translate(screenPos.x, screenPos.y);
