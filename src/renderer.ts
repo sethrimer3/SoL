@@ -1599,19 +1599,28 @@ export class GameRenderer {
                     const cameraDeltaScreenX = (sunRayFrame.cameraX - this.camera.x) * this.zoom;
                     const cameraDeltaScreenY = (sunRayFrame.cameraY - this.camera.y) * this.zoom;
                     const isFrameScaleCompatible = Math.abs(zoomScale - 1) <= 0.06;
-                    const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx === canvasWidth
-                        && sunRayFrame.canvasHeightPx === canvasHeight;
+                    // The worker frame may include overscan (larger canvas) to provide
+                    // buffer content during panning, so check it covers the viewport.
+                    const isFrameCanvasCompatible = sunRayFrame.canvasWidthPx >= canvasWidth
+                        && sunRayFrame.canvasHeightPx >= canvasHeight;
                     // Reject stale frames where the camera has panned so far that the
                     // reprojected bitmap would leave uncovered (unlit) regions of the viewport.
-                    const maxAllowedShiftPx = Math.min(canvasWidth, canvasHeight) * 0.5;
+                    // With overscan the max shift equals the overscan margin on each side.
+                    const overscanMarginXPx = (sunRayFrame.canvasWidthPx - canvasWidth) * 0.5;
+                    const overscanMarginYPx = (sunRayFrame.canvasHeightPx - canvasHeight) * 0.5;
+                    // When the worker provides overscan, use the actual margin; otherwise
+                    // fall back to 50% of the smaller viewport dimension (legacy tolerance).
+                    const maxAllowedShiftPx = overscanMarginXPx > 0 && overscanMarginYPx > 0
+                        ? Math.min(overscanMarginXPx, overscanMarginYPx)
+                        : Math.min(canvasWidth, canvasHeight) * 0.5;
                     const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
                         && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;
 
                     if (isFrameScaleCompatible && isFrameCanvasCompatible && isFramePositionCompatible) {
                         // The sun rays use world-to-screen projection (* zoom), so this
                         // delta correctly repositions the glow over the current sun position.
-                        // Removing the old 12% offset threshold eliminates the visible jump
-                        // that occurred when switching between worker-frame and synchronous modes.
+                        // The overscan bitmap extends beyond the viewport edges, so the
+                        // shifted frame still fully covers the screen during panning.
                         const centerX = canvasWidth * 0.5;
                         const centerY = canvasHeight * 0.5;
                         this.ctx.save();

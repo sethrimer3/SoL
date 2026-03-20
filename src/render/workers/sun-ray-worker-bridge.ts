@@ -58,6 +58,13 @@ export interface SunRayViewData {
 }
 
 export class SunRayWorkerBridge {
+    /**
+     * Fraction of viewport to render beyond each edge so panning doesn't reveal
+     * unlit regions before the next worker frame arrives. 0.25 = 25% on each side,
+     * giving 1.5× each dimension (2.25× total pixel area) rendered in the worker.
+     */
+    public static readonly OVERSCAN_FRACTION = 0.25;
+
     private readonly worker: Worker | null;
     private latestFrame: SunRayWorkerFrame | null = null;
     private lastSentWidthPx = 0;
@@ -107,17 +114,24 @@ export class SunRayWorkerBridge {
             return;
         }
 
-        const { canvasWidthPx, canvasHeightPx } = view;
-        const dimensionsChanged = canvasWidthPx !== this.lastSentWidthPx || canvasHeightPx !== this.lastSentHeightPx;
+        // Inflate canvas dimensions with overscan so the worker renders beyond
+        // the viewport edges, providing buffer content during camera panning.
+        const overscanFraction = SunRayWorkerBridge.OVERSCAN_FRACTION;
+        const overscanX = Math.ceil(view.canvasWidthPx * overscanFraction);
+        const overscanY = Math.ceil(view.canvasHeightPx * overscanFraction);
+        const workerWidthPx = view.canvasWidthPx + 2 * overscanX;
+        const workerHeightPx = view.canvasHeightPx + 2 * overscanY;
+
+        const dimensionsChanged = workerWidthPx !== this.lastSentWidthPx || workerHeightPx !== this.lastSentHeightPx;
         if (dimensionsChanged) {
             const resizeMessage: SunRayWorkerResizeMessage = {
                 type: 'resize',
-                canvasWidthPx,
-                canvasHeightPx,
+                canvasWidthPx: workerWidthPx,
+                canvasHeightPx: workerHeightPx,
             };
             this.worker.postMessage(resizeMessage);
-            this.lastSentWidthPx = canvasWidthPx;
-            this.lastSentHeightPx = canvasHeightPx;
+            this.lastSentWidthPx = workerWidthPx;
+            this.lastSentHeightPx = workerHeightPx;
         }
 
         // Serialize suns.
@@ -143,11 +157,21 @@ export class SunRayWorkerBridge {
             };
         });
 
+        // Extend view bounds to cover the overscan area for proper shadow culling.
+        const viewExtensionWorldX = overscanX / view.zoomLevel;
+        const viewExtensionWorldY = overscanY / view.zoomLevel;
+
         const renderMessage: SunRayWorkerRenderMessage = {
             type: 'render',
             suns,
             asteroids,
             ...view,
+            canvasWidthPx: workerWidthPx,
+            canvasHeightPx: workerHeightPx,
+            viewMinX: view.viewMinX - viewExtensionWorldX,
+            viewMinY: view.viewMinY - viewExtensionWorldY,
+            viewMaxX: view.viewMaxX + viewExtensionWorldX,
+            viewMaxY: view.viewMaxY + viewExtensionWorldY,
         };
         this.worker.postMessage(renderMessage);
     }
