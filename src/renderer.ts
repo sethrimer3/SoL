@@ -1606,10 +1606,12 @@ export class GameRenderer {
                     // Reject stale frames where the camera has panned so far that the
                     // reprojected bitmap would leave uncovered (unlit) regions of the viewport.
                     // With overscan the max shift equals the overscan margin on each side.
-                    const overscanMarginX = (sunRayFrame.canvasWidthPx - canvasWidth) * 0.5;
-                    const overscanMarginY = (sunRayFrame.canvasHeightPx - canvasHeight) * 0.5;
-                    const maxAllowedShiftPx = overscanMarginX > 0 && overscanMarginY > 0
-                        ? Math.min(overscanMarginX, overscanMarginY)
+                    const overscanMarginXPx = (sunRayFrame.canvasWidthPx - canvasWidth) * 0.5;
+                    const overscanMarginYPx = (sunRayFrame.canvasHeightPx - canvasHeight) * 0.5;
+                    // When the worker provides overscan, use the actual margin; otherwise
+                    // fall back to 50% of the smaller viewport dimension (legacy tolerance).
+                    const maxAllowedShiftPx = overscanMarginXPx > 0 && overscanMarginYPx > 0
+                        ? Math.min(overscanMarginXPx, overscanMarginYPx)
                         : Math.min(canvasWidth, canvasHeight) * 0.5;
                     const isFramePositionCompatible = Math.abs(cameraDeltaScreenX) <= maxAllowedShiftPx
                         && Math.abs(cameraDeltaScreenY) <= maxAllowedShiftPx;

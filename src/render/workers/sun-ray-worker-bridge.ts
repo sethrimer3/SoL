@@ -158,8 +158,8 @@ export class SunRayWorkerBridge {
         });
 
         // Extend view bounds to cover the overscan area for proper shadow culling.
-        const viewExtensionX = overscanX / view.zoomLevel;
-        const viewExtensionY = overscanY / view.zoomLevel;
+        const viewExtensionWorldX = overscanX / view.zoomLevel;
+        const viewExtensionWorldY = overscanY / view.zoomLevel;
 
         const renderMessage: SunRayWorkerRenderMessage = {
             type: 'render',
@@ -168,10 +168,10 @@ export class SunRayWorkerBridge {
             ...view,
             canvasWidthPx: workerWidthPx,
             canvasHeightPx: workerHeightPx,
-            viewMinX: view.viewMinX - viewExtensionX,
-            viewMinY: view.viewMinY - viewExtensionY,
-            viewMaxX: view.viewMaxX + viewExtensionX,
-            viewMaxY: view.viewMaxY + viewExtensionY,
+            viewMinX: view.viewMinX - viewExtensionWorldX,
+            viewMinY: view.viewMinY - viewExtensionWorldY,
+            viewMaxX: view.viewMaxX + viewExtensionWorldX,
+            viewMaxY: view.viewMaxY + viewExtensionWorldY,
         };
         this.worker.postMessage(renderMessage);
     }
