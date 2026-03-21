@@ -497,9 +497,11 @@ export class SolarMirror {
 
     /**
      * Find the nearest sunlight position by casting 30 evenly-spaced rays from the mirror.
-     * The ray that first touches the sun at the shortest distance determines the target spot:
-     * the orbit position at SUN_ORBIT_DISTANCE_PX beyond the sun's edge in that direction.
-     * Returns null when no ray intersects the sun or the resulting position is invalid.
+     * Orbit candidates are collected for all rays that hit the sun, sorted by distance
+     * (closest first), and the first candidate that is unobstructed and has line-of-sight
+     * to the sun is returned. Trying multiple candidates ensures a second mirror can still
+     * find a valid target even when another mirror is already at the closest orbit position.
+     * Returns null when no valid unblocked orbit position exists.
      */
     findNearestSunlightPosition(gameState: MirrorMovementContext): Vector2D | null {
         if (gameState.suns.length === 0) return null;
@@ -516,11 +518,9 @@ export class SolarMirror {
         if (!nearestSun) return null;
 
         const rayCount = 30;
-        let bestTarget: Vector2D | null = null;
-        let bestRayDistPx = Infinity;
+        // Collect all orbit candidates from rays that hit the sun, sorted by distance.
+        const candidates: { rayDistancePx: number; target: Vector2D }[] = [];
 
-        // Cast rayCount evenly-spaced rays from the mirror and find which one
-        // first touches the sun at the closest distance.
         for (let i = 0; i < rayCount; i++) {
             const angle = (Math.PI * 2 * i) / rayCount;
             const dirX = Math.cos(angle);
@@ -539,33 +539,40 @@ export class SolarMirror {
             const t0Px = (-b - sqrtDisc) * 0.5;
             const t1Px = (-b + sqrtDisc) * 0.5;
             // Nearest positive t = first contact point in front of the mirror
-            const tPx = t0Px > 0 ? t0Px : (t1Px > 0 ? t1Px : -1);
-            if (tPx < 0) continue; // Sun is entirely behind the mirror
+            const rayDistancePx = t0Px > 0 ? t0Px : (t1Px > 0 ? t1Px : -1);
+            if (rayDistancePx < 0) continue; // Sun is entirely behind the mirror
 
-            if (tPx < bestRayDistPx) {
-                bestRayDistPx = tPx;
-                // Intersection point on the sun's boundary
-                const intX = this.position.x + dirX * tPx;
-                const intY = this.position.y + dirY * tPx;
-                // Orbit target: move outward from sun center through the intersection
-                const toDirX = intX - nearestSun.position.x;
-                const toDirY = intY - nearestSun.position.y;
-                const toDirLen = Math.sqrt(toDirX * toDirX + toDirY * toDirY);
-                if (toDirLen > 0) {
-                    bestTarget = new Vector2D(
+            // Intersection point on the sun's boundary
+            const intX = this.position.x + dirX * rayDistancePx;
+            const intY = this.position.y + dirY * rayDistancePx;
+            // Orbit target: move outward from sun center through the intersection
+            const toDirX = intX - nearestSun.position.x;
+            const toDirY = intY - nearestSun.position.y;
+            const toDirLen = Math.sqrt(toDirX * toDirX + toDirY * toDirY);
+            if (toDirLen > 0) {
+                candidates.push({
+                    rayDistancePx,
+                    target: new Vector2D(
                         nearestSun.position.x + (toDirX / toDirLen) * (nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX),
                         nearestSun.position.y + (toDirY / toDirLen) * (nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX)
-                    );
-                }
+                    ),
+                });
             }
         }
 
-        if (
-            bestTarget &&
-            !gameState.checkCollision(bestTarget, 20) &&
-            SolarMirror.positionHasLineOfSightToSun(bestTarget, gameState.suns, gameState.asteroids)
-        ) {
-            return bestTarget;
+        // Try candidates in order of increasing distance to the sun, returning the first
+        // that is clear of obstacles and has line-of-sight to the sun.  This lets a second
+        // mirror find an unblocked orbit position even when the closest spot is already
+        // occupied by the first mirror.
+        candidates.sort((a, b) => a.rayDistancePx - b.rayDistancePx);
+
+        for (const candidate of candidates) {
+            if (
+                !gameState.checkCollision(candidate.target, 20) &&
+                SolarMirror.positionHasLineOfSightToSun(candidate.target, gameState.suns, gameState.asteroids)
+            ) {
+                return candidate.target;
+            }
         }
 
         return null;
