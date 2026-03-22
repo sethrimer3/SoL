@@ -826,7 +826,12 @@ export class GameRenderer {
     }
 
     private getSunSpriteDrawSource(gameTimeSec: number): SpriteDrawSource | null {
-        if ((this.graphicsQuality !== 'high' && this.graphicsQuality !== 'ultra') || this.sunAnimationFramePaths.length === 0) {
+        const sunSpriteVariant = this.getGraphicVariant('centralSun');
+        if (
+            sunSpriteVariant === 'svg'
+            || (this.graphicsQuality !== 'high' && this.graphicsQuality !== 'ultra')
+            || this.sunAnimationFramePaths.length === 0
+        ) {
             return this.getSunFallbackSpriteDrawSource();
         }
 
