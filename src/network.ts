@@ -441,6 +441,7 @@ export class NetworkManager {
                 if (this.lobby) {
                     this.lobby.gameStarted = true;
                 }
+                this.emit(NetworkEvent.MESSAGE_RECEIVED, message);
                 break;
 
             case MessageType.GAME_COMMAND:
