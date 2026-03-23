@@ -78,7 +78,9 @@ export class Unit {
     protected decelerationPxPerSec2: number;    // Rate of speed decrease (px/s²)
     protected turnRateRadPerSec: number;        // Max angular speed when rotating toward desired heading (rad/s)
     protected arriveSlowdownRadiusPx: number;   // Distance at which the unit begins slowing for arrival (px)
-    protected isIntermediateWaypoint: boolean = false; // Set by subclasses to indicate the current rallyPoint is not the final destination
+    protected isIntermediateWaypoint: boolean = false; // When true, the current rallyPoint is a pass-through waypoint rather than the final destination.
+    // Can be set by subclasses that manage their own path arrays, or detected automatically by Unit
+    // from its own this.waypoints / this.currentWaypointIndex state.
     
     constructor(
         public position: Vector2D,
