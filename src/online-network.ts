@@ -340,6 +340,9 @@ export class OnlineNetworkManager {
             // Subscribe to room channel
             await this.subscribeToRoom(roomId);
 
+            // Broadcast join so all existing members refresh their lobby UI
+            await this.broadcastLobbyChange('joined', { playerId: this.localPlayerId, username });
+
             console.log('Joined room:', roomId);
             this.clearLastError();
             return true;
@@ -614,7 +617,10 @@ export class OnlineNetworkManager {
     }
 
     /**
-     * Handle player events (join, leave, ready)
+     * Handle player events (join, leave, ready, team_changed, etc.).
+     * All events arriving on the 'player_event' broadcast channel represent
+     * lobby state changes, so LOBBY_CHANGED is always emitted to let UI
+     * listeners refresh the lobby screen.
      */
     private handlePlayerEvent(event: any): void {
         switch (event.type) {
@@ -624,14 +630,12 @@ export class OnlineNetworkManager {
             case 'left':
                 this.emit(NetworkEvent.PLAYER_LEFT, event.data);
                 break;
-            case 'ready':
-                // Emit lobby update
-                this.emit(NetworkEvent.MESSAGE_RECEIVED, {
-                    type: MessageType.LOBBY_UPDATE,
-                    data: event.data
-                });
+            default:
                 break;
         }
+        // Every 'player_event' broadcast represents a lobby state change; emit
+        // LOBBY_CHANGED so any registered UI listener can refresh the lobby screen.
+        this.emit(NetworkEvent.LOBBY_CHANGED, event);
     }
 
     /**
@@ -840,6 +844,16 @@ export class OnlineNetworkManager {
         this.eventListeners.get(event)!.push(callback);
     }
 
+    off(event: NetworkEvent, callback: NetworkEventCallback): void {
+        const listeners = this.eventListeners.get(event);
+        if (listeners) {
+            const index = listeners.indexOf(callback);
+            if (index !== -1) {
+                listeners.splice(index, 1);
+            }
+        }
+    }
+
     /**
      * Emit event to listeners
      */
@@ -848,6 +862,20 @@ export class OnlineNetworkManager {
         if (listeners) {
             listeners.forEach(callback => callback(data));
         }
+    }
+
+    /**
+     * Broadcast a lobby change event to all peers in the room channel.
+     * Used by host actions that modify lobby state so that all connected clients
+     * can refresh their lobby UI.
+     */
+    private async broadcastLobbyChange(type: string, data?: any): Promise<void> {
+        if (!this.channel) return;
+        await this.channel.send({
+            type: 'broadcast',
+            event: 'player_event',
+            payload: { type, data: data ?? {} }
+        });
     }
 
     /**
@@ -990,6 +1018,10 @@ export class OnlineNetworkManager {
 
             this.clearLastError();
             console.log('AI player added');
+
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('ai_added', { aiPlayerId, teamId });
+
             return true;
         } catch (error) {
             this.setLastError('Error adding AI player', error);
@@ -1020,6 +1052,10 @@ export class OnlineNetworkManager {
             }
 
             console.log('Player removed');
+
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('player_removed', { playerId });
+
             return true;
         } catch (error) {
             console.error('Error removing player:', error);
@@ -1368,6 +1404,9 @@ export class OnlineNetworkManager {
                 return false;
             }
 
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('slot_changed', { playerId, slotType });
+
             return true;
         } catch (error) {
             console.error('Error setting slot type:', error);
@@ -1396,6 +1435,9 @@ export class OnlineNetworkManager {
                 console.error('Failed to set AI difficulty:', error);
                 return false;
             }
+
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('ai_difficulty_changed', { playerId, difficulty });
 
             return true;
         } catch (error) {
@@ -1426,6 +1468,9 @@ export class OnlineNetworkManager {
                 return false;
             }
 
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('ai_faction_changed', { playerId, faction });
+
             return true;
         } catch (error) {
             console.error('Error setting AI faction:', error);
@@ -1454,6 +1499,9 @@ export class OnlineNetworkManager {
                 return false;
             }
 
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('color_changed', { playerId: this.localPlayerId, color });
+
             return true;
         } catch (error) {
             console.error('Error setting player color:', error);
@@ -1481,6 +1529,9 @@ export class OnlineNetworkManager {
                 console.error('Failed to set player faction:', error);
                 return false;
             }
+
+            // Broadcast to all peers so they refresh the lobby
+            await this.broadcastLobbyChange('faction_changed', { playerId: this.localPlayerId, faction });
 
             return true;
         } catch (error) {
