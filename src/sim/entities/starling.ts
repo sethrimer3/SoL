@@ -191,12 +191,15 @@ export class Starling extends Unit {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = rallyTarget;
                     this.hasReachedFinalWaypoint = true;
+                    this.isIntermediateWaypoint = false;
                     return;
                 }
             } else {
                 // Set rally point to current waypoint
                 this.rallyPoint = rallyTarget;
             }
+            // Inform the base movement physics whether this is an intermediate stop or the final destination.
+            this.isIntermediateWaypoint = this.currentPathWaypointIndex < this.assignedPath.length - 1;
         } else {
             // No path defined, fall back to original AI behavior
             // No need to update exploration timer here, it's updated in the main update loop

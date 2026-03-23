@@ -312,11 +312,14 @@ export class UIRenderer {
             const alpha = Math.max(0, 1 - progress);
             const pathPointsScreen = effect.pointsWorld.map((point) => context.worldToScreen(point));
 
+            const zoom = context.zoom;
             context.ctx.save();
-            context.ctx.lineWidth = 2.5;
+            context.ctx.lineWidth = Math.max(1, Math.min(5, 2.5 * zoom));
             context.ctx.strokeStyle = `rgba(255, 225, 120, ${0.55 * alpha})`;
-            context.ctx.setLineDash([14, 10]);
-            context.ctx.lineDashOffset = -progress * 80;
+            const dashSize = Math.max(8, Math.min(22, 14 * zoom));
+            const gapSize = Math.max(6, Math.min(18, 10 * zoom));
+            context.ctx.setLineDash([dashSize, gapSize]);
+            context.ctx.lineDashOffset = -progress * 80 * zoom;
             context.ctx.beginPath();
             context.ctx.moveTo(pathPointsScreen[0].x, pathPointsScreen[0].y);
             for (let i = 1; i < pathPointsScreen.length; i++) {
@@ -574,10 +577,15 @@ export class UIRenderer {
         }
         this.drawGlowingPath(pointsWorld, context, 1);
 
+        // Dashed line — scale thickness and dash pattern with zoom so the marching-ants
+        // animation looks consistent at any zoom level.
+        const zoom = context.zoom;
+        const dashSize = Math.max(6, Math.min(18, 10 * zoom));
+        const gapSize = Math.max(4, Math.min(14, 8 * zoom));
         context.ctx.strokeStyle = 'rgba(255, 240, 120, 0.95)';
-        context.ctx.lineWidth = 2.2;
-        context.ctx.setLineDash([10, 8]);
-        context.ctx.lineDashOffset = -context.uiTimeSec * 90;
+        context.ctx.lineWidth = Math.max(1, Math.min(4, 2 * zoom));
+        context.ctx.setLineDash([dashSize, gapSize]);
+        context.ctx.lineDashOffset = -context.uiTimeSec * 90 * zoom;
         context.ctx.beginPath();
 
         const startScreen = context.worldToScreen(startWorld);
@@ -602,21 +610,16 @@ export class UIRenderer {
         }
         this.updateAndDrawPathDrawSparks(context);
 
-        context.ctx.fillStyle = 'rgba(255, 255, 0, 0.9)';
+        // Intermediate waypoint nodes — SC2-style ring + inner dot, zoom-scaled
         for (let i = 0; i < waypoints.length; i++) {
             const waypointScreen = context.worldToScreen(waypoints[i]);
-            context.ctx.beginPath();
-            context.ctx.arc(waypointScreen.x, waypointScreen.y, 4, 0, Math.PI * 2);
-            context.ctx.fill();
+            this.drawWaypointNode(waypointScreen, false, context);
         }
 
+        // End node — larger double-ring design, clearly distinct from intermediate nodes
         if (endWorld) {
             const endScreen = context.worldToScreen(endWorld);
-            context.ctx.strokeStyle = 'rgba(255, 255, 0, 0.9)';
-            context.ctx.lineWidth = 2;
-            context.ctx.beginPath();
-            context.ctx.arc(endScreen.x, endScreen.y, 6, 0, Math.PI * 2);
-            context.ctx.stroke();
+            this.drawWaypointNode(endScreen, true, context);
         }
     }
 
@@ -625,11 +628,12 @@ export class UIRenderer {
             return;
         }
 
+        const zoom = context.zoom;
         context.ctx.save();
         context.ctx.strokeStyle = `rgba(255, 212, 110, ${0.24 * alphaMultiplier})`;
-        context.ctx.lineWidth = 11;
+        context.ctx.lineWidth = Math.max(5, Math.min(16, 9 * zoom));
         context.ctx.shadowColor = `rgba(255, 200, 80, ${0.75 * alphaMultiplier})`;
-        context.ctx.shadowBlur = 14;
+        context.ctx.shadowBlur = Math.max(8, Math.min(22, 14 * zoom));
         context.ctx.lineCap = 'round';
         context.ctx.lineJoin = 'round';
         context.ctx.beginPath();
@@ -641,6 +645,73 @@ export class UIRenderer {
         }
         context.ctx.stroke();
         context.ctx.restore();
+    }
+
+    /**
+     * Draw a single SC2-style waypoint node: outer ring + inner dot with per-node glow.
+     * All sizes scale with zoom so nodes look consistent at any camera zoom level.
+     */
+    private drawWaypointNode(screenPos: Vector2D, isEndNode: boolean, context: UIRendererContext): void {
+        const zoom = context.zoom;
+        const ctx = context.ctx;
+
+        if (isEndNode) {
+            // End node: double ring + center dot with strong glow — visually distinct from intermediate nodes
+            const outerRadius = Math.max(5, Math.min(14, 7 * zoom));
+            const innerRadius = Math.max(2.5, Math.min(7, 3.5 * zoom));
+            const centerRadius = Math.max(1.5, Math.min(4, 2 * zoom));
+            const lineWidthOuter = Math.max(1.5, Math.min(3.5, 2 * zoom));
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(255, 230, 100, 0.9)';
+            ctx.shadowBlur = Math.max(6, Math.min(22, 13 * zoom));
+
+            // Outer ring
+            ctx.strokeStyle = 'rgba(255, 255, 200, 0.92)';
+            ctx.lineWidth = lineWidthOuter;
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, outerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner ring
+            ctx.strokeStyle = 'rgba(255, 230, 100, 0.75)';
+            ctx.lineWidth = lineWidthOuter * 0.7;
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, innerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore(); // remove shadow before center dot
+
+            // Center dot
+            ctx.fillStyle = 'rgba(255, 255, 230, 0.95)';
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, centerRadius, 0, Math.PI * 2);
+            ctx.fill();
+        } else {
+            // Intermediate node: outer ring + inner dot with subtle glow
+            const outerRadius = Math.max(2.5, Math.min(9, 4 * zoom));
+            const dotRadius = Math.max(1.2, Math.min(4, 2 * zoom));
+            const lineWidth = Math.max(1, Math.min(2.5, 1.5 * zoom));
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(255, 200, 80, 0.7)';
+            ctx.shadowBlur = Math.max(3, Math.min(12, 6 * zoom));
+
+            // Outer ring
+            ctx.strokeStyle = 'rgba(255, 240, 120, 0.88)';
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, outerRadius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore(); // remove shadow before inner dot
+
+            // Inner dot
+            ctx.fillStyle = 'rgba(255, 255, 210, 0.95)';
+            ctx.beginPath();
+            ctx.arc(screenPos.x, screenPos.y, dotRadius, 0, Math.PI * 2);
+            ctx.fill();
+        }
     }
 
     private emitPathDrawSparks(endScreen: Vector2D): void {
