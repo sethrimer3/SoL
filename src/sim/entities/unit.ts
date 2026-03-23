@@ -78,6 +78,9 @@ export class Unit {
     protected decelerationPxPerSec2: number;    // Rate of speed decrease (px/s²)
     protected turnRateRadPerSec: number;        // Max angular speed when rotating toward desired heading (rad/s)
     protected arriveSlowdownRadiusPx: number;   // Distance at which the unit begins slowing for arrival (px)
+    protected isIntermediateWaypoint: boolean = false; // When true, the current rallyPoint is a pass-through waypoint rather than the final destination.
+    // Can be set by subclasses that manage their own path arrays, or detected automatically by Unit
+    // from its own this.waypoints / this.currentWaypointIndex state.
     
     constructor(
         public position: Vector2D,
@@ -410,11 +413,24 @@ export class Unit {
 
         // ── Rotate facing toward desired heading using per-unit turn rate ─────────
         // This produces smooth visual arcing; velocity is later derived from this facing.
+        // At intermediate waypoints, a faster turn rate is applied so units quickly align with
+        // the new heading instead of sweeping through a wide arc before each waypoint.
+
+        // Detect whether the current rally point is an intermediate waypoint (not the final destination).
+        // For Unit-managed waypoints: check if more waypoints remain after the current one.
+        // For subclass-managed paths (e.g. Starling): isIntermediateWaypoint is set by the subclass.
+        const isIntermediate = this.isIntermediateWaypoint ||
+            (this.waypoints.length > 0 && this.currentWaypointIndex >= 0 && this.currentWaypointIndex < this.waypoints.length - 1);
+
         if (directionLength > 0) {
             // Add π/2 so the TOP of the sprite is treated as the FRONT
             const targetRotation = Math.atan2(directionY, directionX) + Math.PI / 2;
             const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-            const maxRotationStep = this.turnRateRadPerSec * deltaTime;
+            // Intermediate waypoints use a faster turn rate so the unit snaps to the new heading quickly.
+            const effectiveTurnRate = isIntermediate
+                ? this.turnRateRadPerSec * Constants.UNIT_WAYPOINT_TRANSIT_TURN_RATE_MULTIPLIER
+                : this.turnRateRadPerSec;
+            const maxRotationStep = effectiveTurnRate * deltaTime;
 
             if (Math.abs(rotationDelta) <= maxRotationStep) {
                 this.rotation = targetRotation;
@@ -427,10 +443,10 @@ export class Unit {
         }
 
         // ── Desired speed with arrival slowdown ───────────────────────────────────
-        // Taper speed linearly as the unit approaches its destination so it eases in
-        // without a hard stop, keeping the feel crisp rather than floaty.
+        // Only taper speed for the final destination — intermediate waypoints are passed
+        // at full speed so the unit never decelerates mid-path.
         let desiredSpeed = this.maxSpeedPxPerSec;
-        if (distanceToTarget < this.arriveSlowdownRadiusPx) {
+        if (!isIntermediate && distanceToTarget < this.arriveSlowdownRadiusPx) {
             desiredSpeed = this.maxSpeedPxPerSec * (distanceToTarget / this.arriveSlowdownRadiusPx);
         }
 
@@ -448,11 +464,14 @@ export class Unit {
         }
 
         // ── Derive velocity and update position ───────────────────────────────────
-        // Close to destination: move directly toward it (prevents orbiting on final approach).
-        // Further out: velocity follows current facing, creating a natural arc when turning.
+        // Intermediate waypoints: velocity points directly in the desired direction so the unit
+        // can start moving toward the next point before it finishes turning (the sprite rotates
+        // to face the direction over time).
+        // Final approach: velocity also points directly toward target to prevent orbiting.
+        // Further from final destination: velocity follows current facing for a natural arc.
         let velDirX: number;
         let velDirY: number;
-        if (distanceToTarget <= this.arriveSlowdownRadiusPx) {
+        if (isIntermediate || distanceToTarget <= this.arriveSlowdownRadiusPx) {
             velDirX = directionX;
             velDirY = directionY;
         } else {

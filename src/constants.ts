@@ -403,6 +403,7 @@ export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at
 export const UNIT_ACCELERATION_PX_PER_SEC2 = 500;   // px/s² — default acceleration (reaches max in ~0.2 s)
 export const UNIT_DECELERATION_PX_PER_SEC2 = 800;   // px/s² — default deceleration (stops from max in ~0.125 s)
 export const UNIT_ARRIVE_SLOWDOWN_RADIUS_PX = 40;   // px — begin tapering speed within this distance of destination
+export const UNIT_WAYPOINT_TRANSIT_TURN_RATE_MULTIPLIER = 4.0; // Faster turn rate at intermediate (non-final) waypoints
 
 // Starling minion (light infantry) inertia tuning
 // Acceleration already defined as STARLING_MOVE_ACCELERATION_PX_PER_SEC (120 px/s²)
