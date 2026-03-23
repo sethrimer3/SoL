@@ -4,7 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
-import { NetworkManager, LANSignaling, LobbyInfo } from './network';
+import { NetworkManager, LANSignaling, LobbyInfo, NetworkEvent, MessageType } from './network';
 import { MenuOption, FactionCarouselOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
 import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
@@ -129,6 +129,9 @@ export class MainMenu {
     private mainScreenRenderToken: number = 0;
     private lobbyDetailRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
+    private lobbyUpdateCallback: ((data?: any) => void) | null = null; // Listener for real-time lobby state changes
+    private lobbyGameStartCallback: ((data?: any) => void) | null = null; // Listener for game-start broadcast (non-host)
+    private static readonly LOBBY_REFRESH_DEBOUNCE_MS = 150;
     private visibilityHandler: (() => void) | null = null;
     private blurHandler: (() => void) | null = null;
     private focusHandler: (() => void) | null = null;
@@ -1485,6 +1488,111 @@ export class MainMenu {
     }
 
 
+    /** Clear the real-time lobby update listener, if one is registered. */
+    private clearLobbyUpdateListener(): void {
+        if (this.onlineNetworkManager) {
+            if (this.lobbyUpdateCallback) {
+                this.onlineNetworkManager.off(NetworkEvent.LOBBY_CHANGED, this.lobbyUpdateCallback);
+                this.onlineNetworkManager.off(NetworkEvent.PLAYER_JOINED, this.lobbyUpdateCallback);
+                this.onlineNetworkManager.off(NetworkEvent.PLAYER_LEFT, this.lobbyUpdateCallback);
+                this.lobbyUpdateCallback = null;
+            }
+            if (this.lobbyGameStartCallback) {
+                this.onlineNetworkManager.off(NetworkEvent.MESSAGE_RECEIVED, this.lobbyGameStartCallback);
+                this.lobbyGameStartCallback = null;
+            }
+        }
+    }
+
+    /**
+     * Register event listeners on the online network manager so that any
+     * real-time lobby change (player join/leave, ready toggle, AI added, etc.)
+     * automatically refreshes the lobby detail UI.
+     *
+     * For non-host clients, also listens for the game_start broadcast so that
+     * the game launches without any manual action from the client.
+     */
+    private setupLobbyUpdateListener(): void {
+        this.clearLobbyUpdateListener();
+        if (!this.onlineNetworkManager) return;
+
+        let refreshPending = false;
+        this.lobbyUpdateCallback = async () => {
+            if (this.currentScreen !== 'lobby-detail' || refreshPending) return;
+            refreshPending = true;
+            // Small debounce so rapid back-to-back events only trigger one refresh
+            await new Promise<void>(resolve => setTimeout(resolve, MainMenu.LOBBY_REFRESH_DEBOUNCE_MS));
+            refreshPending = false;
+            if (this.currentScreen === 'lobby-detail') {
+                await this.renderLobbyDetailScreen(this.contentElement);
+            }
+        };
+
+        this.onlineNetworkManager.on(NetworkEvent.LOBBY_CHANGED, this.lobbyUpdateCallback);
+        this.onlineNetworkManager.on(NetworkEvent.PLAYER_JOINED, this.lobbyUpdateCallback);
+        this.onlineNetworkManager.on(NetworkEvent.PLAYER_LEFT, this.lobbyUpdateCallback);
+
+        // Non-host clients: react to the game_start broadcast and launch the game
+        if (!this.onlineNetworkManager.isRoomHost()) {
+            this.lobbyGameStartCallback = async (message?: any) => {
+                if (message?.type !== MessageType.GAME_START) return;
+                await this.startClientGame();
+            };
+            this.onlineNetworkManager.on(NetworkEvent.MESSAGE_RECEIVED, this.lobbyGameStartCallback);
+        }
+    }
+
+    /**
+     * Start the game as a non-host client after receiving the game_start broadcast.
+     * Mirrors the host-side onStartGame logic to build player configs from room state.
+     */
+    private async startClientGame(): Promise<void> {
+        if (!this.onlineNetworkManager) return;
+        this.clearLobbyUpdateListener();
+
+        const room = this.onlineNetworkManager.getCurrentRoom();
+        if (!room) return;
+
+        const allPlayers = await this.onlineNetworkManager.getRoomPlayers();
+        const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
+        const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
+
+        const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+        const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+
+        for (const player of team0Players.slice(0, 2)) {
+            playerConfigs.push([
+                player.username,
+                (player.faction as Faction) || Faction.RADIANT,
+                0,
+                player.slot_type as 'player' | 'ai',
+                player.ai_difficulty || 'normal',
+                player.player_id === localPlayerId
+            ]);
+        }
+        for (const player of team1Players.slice(0, 2)) {
+            playerConfigs.push([
+                player.username,
+                (player.faction as Faction) || Faction.RADIANT,
+                1,
+                player.slot_type as 'player' | 'ai',
+                player.ai_difficulty || 'normal',
+                player.player_id === localPlayerId
+            ]);
+        }
+        while (playerConfigs.length < 4) {
+            const teamId = playerConfigs.length < 2 ? 0 : 1;
+            playerConfigs.push([`AI Player ${playerConfigs.length + 1}`, Faction.RADIANT, teamId, 'ai', 'normal', false]);
+        }
+
+        this.settings.gameMode = 'custom-lobby';
+        this.hide();
+
+        window.dispatchEvent(new CustomEvent('start4PlayerGame', {
+            detail: { playerConfigs, settings: this.settings, roomId: room.id }
+        }));
+    }
+
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
         const renderToken = ++this.lobbyDetailRenderToken;
         if (this.carouselMenu) {
@@ -1703,6 +1811,7 @@ export class MainMenu {
                 
                 // Hide menu and start game
                 this.hide();
+                this.clearLobbyUpdateListener();
                 
                 // Dispatch event to start 4-player game
                 const event = new CustomEvent('start4PlayerGame', {
@@ -1741,6 +1850,7 @@ export class MainMenu {
             onLeave: async () => {
                 if (!this.onlineNetworkManager) return;
                 await this.onlineNetworkManager.leaveRoom();
+                this.clearLobbyUpdateListener();
                 this.currentScreen = 'custom-lobby';
                 this.startMenuTransition();
                 await this.renderCustomLobbyScreen(this.contentElement);
@@ -1751,6 +1861,12 @@ export class MainMenu {
             createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer
         });
+
+        // Register real-time listener so all lobby changes (from host or peers)
+        // automatically refresh this screen without requiring manual interaction.
+        // Called after rendering so any re-render triggered by the listener finds
+        // a fully-initialised screen.
+        this.setupLobbyUpdateListener();
     }
 
     private renderMatchHistoryScreen(container: HTMLElement): void {

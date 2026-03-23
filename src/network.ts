@@ -68,6 +68,7 @@ export enum NetworkEvent {
     MESSAGE_RECEIVED = 'message_received',
     PLAYER_JOINED = 'player_joined',
     PLAYER_LEFT = 'player_left',
+    LOBBY_CHANGED = 'lobby_changed',
     ERROR = 'error'
 }
 
