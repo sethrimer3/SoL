@@ -611,4 +611,51 @@ export class PhysicsSystem {
             particle.applyForceXY(pushX * forceMagnitude * deltaTime, pushY * forceMagnitude * deltaTime);
         }
     }
+
+    /**
+     * Find a free spawn position near a forge, avoiding overlap with existing units.
+     * Scans outward in rings at increasing radii, trying 12 evenly-spaced angles each time.
+     * Returns the first candidate that does not overlap any existing unit, or a fallback
+     * directly below the forge if no clear spot is found within the search range.
+     */
+    static findFreeSpawnPosition(
+        forgePosition: Vector2D,
+        forgeRadius: number,
+        unitCollisionRadius: number,
+        allUnits: Unit[]
+    ): Vector2D {
+        const baseRadius = forgeRadius + unitCollisionRadius + 5;
+        const anglesCount = 12;
+        const maxExtraRings = 6;
+
+        for (let ring = 0; ring <= maxExtraRings; ring++) {
+            const radius = baseRadius + ring * unitCollisionRadius * 2;
+            for (let j = 0; j < anglesCount; j++) {
+                const angle = (Math.PI * 2 * j) / anglesCount;
+                const candidateX = forgePosition.x + Math.cos(angle) * radius;
+                const candidateY = forgePosition.y + Math.sin(angle) * radius;
+
+                let isFree = true;
+                for (let k = 0; k < allUnits.length; k++) {
+                    const unit = allUnits[k];
+                    if (unit.isDead()) continue;
+                    const dx = candidateX - unit.position.x;
+                    const dy = candidateY - unit.position.y;
+                    const distSq = dx * dx + dy * dy;
+                    const minDist = unitCollisionRadius + unit.collisionRadiusPx;
+                    if (distSq < minDist * minDist) {
+                        isFree = false;
+                        break;
+                    }
+                }
+
+                if (isFree) {
+                    return new Vector2D(candidateX, candidateY);
+                }
+            }
+        }
+
+        // Fallback: directly below the forge
+        return new Vector2D(forgePosition.x, forgePosition.y + baseRadius);
+    }
 }

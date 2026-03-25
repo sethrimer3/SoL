@@ -266,7 +266,8 @@ export class Unit {
         deltaTime: number,
         _moveSpeed: number, // Kept for signature compatibility with subclass overrides; ignored — uses instance fields (maxSpeedPxPerSec, etc.) instead
         allUnits: Unit[],
-        asteroids: Asteroid[] = []
+        asteroids: Asteroid[] = [],
+        circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
     ): void {
         // ── Branch 1: No destination — decelerate to a stop ────────────────────────
         if (!this.rallyPoint) {
@@ -356,13 +357,14 @@ export class Unit {
         let asteroidAvoidanceY = 0;
         const lookaheadPx = Constants.UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX;
         const bufferPx = Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
+        const radiusMultiplier = Constants.UNIT_ASTEROID_AVOIDANCE_RADIUS_MULTIPLIER;
 
         for (let i = 0; i < asteroids.length; i++) {
             const asteroid = asteroids[i];
             const toAsteroidX = asteroid.position.x - this.position.x;
             const toAsteroidY = asteroid.position.y - this.position.y;
             const projection = toAsteroidX * directionX + toAsteroidY * directionY;
-            const avoidanceRadius = asteroid.size + this.collisionRadiusPx + bufferPx;
+            const avoidanceRadius = asteroid.size * radiusMultiplier + this.collisionRadiusPx + bufferPx;
             const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
 
             if (projection > 0 && projection < lookaheadPx) {
@@ -394,6 +396,60 @@ export class Unit {
             }
         }
 
+        // ── Building / structure circular obstacle avoidance ────────────────────
+        // Uses the same lookahead + close-range push pattern as asteroid avoidance.
+        // Applied with its own accumulator and UNIT_BUILDING_AVOIDANCE_STRENGTH.
+        let buildingAvoidanceX = 0;
+        let buildingAvoidanceY = 0;
+        if (circularObstacles.length > 0) {
+            const buildingLookaheadPx = Constants.UNIT_BUILDING_AVOIDANCE_LOOKAHEAD_PX;
+            const buildingBufferPx = Constants.UNIT_BUILDING_AVOIDANCE_BUFFER_PX;
+
+            for (let i = 0; i < circularObstacles.length; i++) {
+                const obs = circularObstacles[i];
+                const toObsX = obs.position.x - this.position.x;
+                const toObsY = obs.position.y - this.position.y;
+                const projection = toObsX * directionX + toObsY * directionY;
+                const avoidanceRadius = obs.radius + this.collisionRadiusPx + buildingBufferPx;
+                const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
+
+                // Lookahead steer
+                if (projection > 0 && projection < buildingLookaheadPx) {
+                    const perpendicularX = toObsX - directionX * projection;
+                    const perpendicularY = toObsY - directionY * projection;
+                    const perpendicularDistanceSq = perpendicularX * perpendicularX + perpendicularY * perpendicularY;
+
+                    if (perpendicularDistanceSq < avoidanceRadiusSq) {
+                        const cross = directionX * toObsY - directionY * toObsX;
+                        const steerX = cross > 0 ? directionY : -directionY;
+                        const steerY = cross > 0 ? -directionX : directionX;
+                        const strength = (avoidanceRadius - Math.sqrt(perpendicularDistanceSq)) / avoidanceRadius;
+                        buildingAvoidanceX += steerX * strength;
+                        buildingAvoidanceY += steerY * strength;
+                    }
+                }
+
+                // Close-range push
+                const offsetX = this.position.x - obs.position.x;
+                const offsetY = this.position.y - obs.position.y;
+                const distanceSq = offsetX * offsetX + offsetY * offsetY;
+                if (distanceSq < avoidanceRadiusSq) {
+                    const distance = Math.sqrt(distanceSq);
+                    if (distance > 0) {
+                        const pushStrength = (avoidanceRadius - distance) / avoidanceRadius;
+                        buildingAvoidanceX += (offsetX / distance) * pushStrength;
+                        buildingAvoidanceY += (offsetY / distance) * pushStrength;
+                    }
+                }
+            }
+
+            const buildingAvoidanceLength = Math.sqrt(buildingAvoidanceX * buildingAvoidanceX + buildingAvoidanceY * buildingAvoidanceY);
+            if (buildingAvoidanceLength > 0) {
+                buildingAvoidanceX /= buildingAvoidanceLength;
+                buildingAvoidanceY /= buildingAvoidanceLength;
+            }
+        }
+
         const asteroidAvoidanceLength = Math.sqrt(asteroidAvoidanceX * asteroidAvoidanceX + asteroidAvoidanceY * asteroidAvoidanceY);
         if (asteroidAvoidanceLength > 0) {
             asteroidAvoidanceX /= asteroidAvoidanceLength;
@@ -404,6 +460,8 @@ export class Unit {
         directionY += avoidanceY * Constants.UNIT_AVOIDANCE_STRENGTH;
         directionX += asteroidAvoidanceX * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
         directionY += asteroidAvoidanceY * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
+        directionX += buildingAvoidanceX * Constants.UNIT_BUILDING_AVOIDANCE_STRENGTH;
+        directionY += buildingAvoidanceY * Constants.UNIT_BUILDING_AVOIDANCE_STRENGTH;
 
         const directionLength = Math.sqrt(directionX * directionX + directionY * directionY);
         if (directionLength > 0) {
