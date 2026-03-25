@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude, Mortar, Preist, Spotlight, Tank, Dash, Blink } from './game-core';
 import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
 import { SelectionManager, SelectionManagerContext } from './input/selection-manager';
 import { InputController, InputControllerContext } from './input/input-controller';
@@ -96,8 +96,15 @@ class GameController {
             case 'Splendor':
             case 'Shroud':
             case 'Occlude':
+            case 'Spotlight':
+            case 'Mortar':
+            case 'Preist':
+            case 'Tank':
+            case 'Dash':
+            case 'Blink':
                 return heroName;
             case 'Influence Ball':
+            case 'Diplomat':
                 return 'InfluenceBall';
             case 'Turret Deployer':
                 return 'TurretDeployer';
@@ -140,6 +147,18 @@ class GameController {
                 return unit instanceof Shroud;
             case 'Occlude':
                 return unit instanceof Occlude;
+            case 'Mortar':
+                return unit instanceof Mortar;
+            case 'Preist':
+                return unit instanceof Preist;
+            case 'Spotlight':
+                return unit instanceof Spotlight;
+            case 'Tank':
+                return unit instanceof Tank;
+            case 'Dash':
+                return unit instanceof Dash;
+            case 'Blink':
+                return unit instanceof Blink;
             default:
                 return false;
         }

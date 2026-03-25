@@ -16,6 +16,7 @@ import { Building } from '../entities/buildings';
 import { WarpGate } from '../entities/warp-gate';
 import { SpaceDustParticle, SparkleParticle } from '../entities/particles';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
+import { Unit } from '../entities/unit';
 import { VisionSystem } from './vision-system';
 import { VelarisOrb, ShroudCube, OccludeShadowCone } from '../../game-core';
 import { createHeroUnit } from '../../game-core';
@@ -330,10 +331,15 @@ export class MirrorSystem {
                     const completedForgeItems = player.stellarForge.advanceProductionByEnergy(energyGenerated);
                     for (const completedItem of completedForgeItems) {
                         if (completedItem.productionType === 'hero' && completedItem.heroUnitType) {
-                            const spawnRadius = player.stellarForge.radius + Constants.UNIT_RADIUS_PX + 5;
-                            const spawnPosition = new Vector2D(
-                                player.stellarForge.position.x,
-                                player.stellarForge.position.y + spawnRadius
+                            const allUnits: Unit[] = [];
+                            for (const p of game.players) {
+                                for (const u of p.units) allUnits.push(u);
+                            }
+                            const spawnPosition = PhysicsSystem.findFreeSpawnPosition(
+                                player.stellarForge.position,
+                                player.stellarForge.radius,
+                                Constants.UNIT_RADIUS_PX,
+                                allUnits
                             );
                             const heroUnit = createHeroUnit(completedItem.heroUnitType, spawnPosition, player);
                             if (heroUnit) {

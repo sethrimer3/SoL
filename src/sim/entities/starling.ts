@@ -33,6 +33,7 @@ export class Starling extends Unit {
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
     public spriteLevel: number = 1; // Sprite level (1-4)
+    private circularObstaclesCache: Array<{ position: { x: number; y: number }; radius: number }> = [];
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
@@ -170,6 +171,23 @@ export class Starling extends Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(ctx: StarlingUpdateContext, enemies: CombatTarget[]): void {
+        // Refresh the circular obstacle cache so movement steering avoids buildings/forges.
+        this.circularObstaclesCache = [];
+        for (const player of ctx.players) {
+            if (player.stellarForge) {
+                this.circularObstaclesCache.push({
+                    position: player.stellarForge.position,
+                    radius: player.stellarForge.radius
+                });
+            }
+            for (const building of player.buildings) {
+                this.circularObstaclesCache.push({
+                    position: building.position,
+                    radius: building.radius
+                });
+            }
+        }
+
         if (this.hasManualOrder) {
             return;
         }
@@ -312,7 +330,8 @@ export class Starling extends Unit {
         deltaTime: number,
         moveSpeed: number,
         allUnits: Unit[],
-        asteroids: Asteroid[] = []
+        asteroids: Asteroid[] = [],
+        circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
     ): void {
         // Check if we should stop based on group arrival radius at the final waypoint
         // This only applies when we're heading to the final waypoint (not intermediate waypoints)
@@ -333,8 +352,9 @@ export class Starling extends Unit {
             }
         }
         
-        // Call parent implementation for normal movement
-        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids);
+        // Pass cached building/forge obstacles so movement steering avoids structures.
+        // The cache is refreshed every tick in updateAI from the full player context.
+        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids, this.circularObstaclesCache);
     }
 
     /**

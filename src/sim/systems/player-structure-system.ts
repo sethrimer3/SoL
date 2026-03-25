@@ -14,6 +14,7 @@
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import { Player } from '../entities/player';
+import { Unit } from '../entities/unit';
 import { Starling } from '../entities/starling';
 import { SolarMirror } from '../entities/solar-mirror';
 import { PhysicsSystem } from '../systems/physics-system';
@@ -113,15 +114,18 @@ export class PlayerStructureSystem {
                     }
 
                     if (numStarlings > 0) {
+                        // Collect all current units to avoid spawning on top of them
+                        const allUnits: Unit[] = [];
+                        for (const p of ctx.players) {
+                            for (const u of p.units) allUnits.push(u);
+                        }
+
                         for (let i = 0; i < numStarlings; i++) {
-                            const angle = (Math.PI * 2 * i) / numStarlings;
-                            const spawnRadius =
-                                player.stellarForge.radius +
-                                Constants.STARLING_COLLISION_RADIUS_PX +
-                                5;
-                            const spawnPosition = new Vector2D(
-                                player.stellarForge.position.x + Math.cos(angle) * spawnRadius,
-                                player.stellarForge.position.y + Math.sin(angle) * spawnRadius
+                            const spawnPosition = PhysicsSystem.findFreeSpawnPosition(
+                                player.stellarForge.position,
+                                player.stellarForge.radius,
+                                Constants.STARLING_COLLISION_RADIUS_PX,
+                                allUnits
                             );
                             const starling = new Starling(
                                 spawnPosition,
@@ -129,6 +133,7 @@ export class PlayerStructureSystem {
                                 player.stellarForge.minionPath ?? []
                             );
                             player.units.push(starling);
+                            allUnits.push(starling); // Track newly spawned units in this batch
                             player.unitsCreated++;
                         }
 

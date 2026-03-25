@@ -58,8 +58,15 @@ export function getHeroUnitType(heroName: string): string | null {
         case 'Chrono':
         case 'Shroud':
         case 'Occlude':
+        case 'Nova':
+        case 'Mortar':
+        case 'Preist':
+        case 'Tank':
+        case 'Dash':
+        case 'Blink':
             return heroName;
         case 'Influence Ball':
+        case 'Diplomat':
             return 'InfluenceBall';
         case 'Turret Deployer':
             return 'TurretDeployer';
