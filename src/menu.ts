@@ -261,7 +261,7 @@ export class MainMenu {
         menu.style.backgroundColor = 'transparent';
         menu.style.zIndex = '1000';
         menu.style.fontFamily = '"Doto", Arial, sans-serif';
-        menu.style.fontWeight = '300';
+        menu.style.fontWeight = 'bold';
         menu.style.fontSize = '24px';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
@@ -2248,7 +2248,7 @@ export class MainMenu {
         button.style.border = '2px solid transparent';
         button.style.borderRadius = '5px';
         button.style.cursor = 'pointer';
-        button.style.fontWeight = '300';
+        button.style.fontWeight = 'bold';
         button.style.fontFamily = 'inherit';
         button.style.transition = 'all 0.3s';
         button.dataset.particleBox = 'true';
@@ -2281,7 +2281,7 @@ export class MainMenu {
         input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
         input.style.borderRadius = '5px';
         input.style.fontFamily = 'inherit';
-        input.style.fontWeight = '300';
+        input.style.fontWeight = 'bold';
         input.style.minWidth = '200px';
         input.maxLength = 20;
         input.style.outline = 'none';

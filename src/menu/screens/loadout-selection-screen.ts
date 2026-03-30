@@ -70,19 +70,19 @@ export function renderLoadoutSelectionScreen(
     const factions: FactionCarouselOption[] = [
         { 
             id: Faction.RADIANT, 
-            name: 'Radiant Apotheosis', 
+            name: 'Radiant', 
             description: 'Well-Balanced, Ranged-Focused',
             color: '#FF5722'
         },
         { 
             id: Faction.AURUM, 
-            name: 'Aurum Imperium', 
+            name: 'Aurum', 
             description: 'Fast-Paced, Melee-Focused',
             color: '#FFD700'
         },
         { 
             id: Faction.VELARIS, 
-            name: 'Velaris Collective', 
+            name: 'Velaris', 
             description: 'Strategic, Ability-Heavy. Particles from Nebulae',
             color: '#9C27B0'
         }
@@ -103,13 +103,13 @@ export function renderLoadoutSelectionScreen(
 
     // Hero selection title
     const title = document.createElement('h2');
-    title.textContent = 'Radiant Apotheosis';
+    title.textContent = 'Radiant';
     title.style.fontSize = isCompactLayout ? '26px' : '36px';
     title.style.marginBottom = isCompactLayout ? '8px' : '12px';
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);
@@ -120,7 +120,7 @@ export function renderLoadoutSelectionScreen(
     counter.style.fontSize = isCompactLayout ? '24px' : '26px';
     counter.style.marginBottom = isCompactLayout ? '20px' : '30px';
     counter.style.color = selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
-    counter.style.fontWeight = '300';
+    counter.style.fontWeight = 'bold';
     counter.dataset.particleText = 'true';
     counter.dataset.particleColor = selectedHeroes.length === 4 ? '#00FF88' : '#CCCCCC';
     container.appendChild(counter);
@@ -163,7 +163,7 @@ export function renderLoadoutSelectionScreen(
         heroName.style.fontSize = '24px';
         heroName.style.marginBottom = '8px';
         heroName.style.color = '#E0F2FF';
-        heroName.style.fontWeight = '300';
+        heroName.style.fontWeight = 'bold';
         heroName.dataset.particleText = 'true';
         heroName.dataset.particleColor = '#E0F2FF';
         heroCard.appendChild(heroName);
@@ -175,7 +175,7 @@ export function renderLoadoutSelectionScreen(
         heroDesc.style.lineHeight = '1.4';
         heroDesc.style.color = '#AAAAAA';
         heroDesc.style.marginBottom = '10px';
-        heroDesc.style.fontWeight = '300';
+        heroDesc.style.fontWeight = 'bold';
         heroDesc.dataset.particleText = 'true';
         heroDesc.dataset.particleColor = '#AAAAAA';
         heroCard.appendChild(heroDesc);
@@ -186,7 +186,7 @@ export function renderLoadoutSelectionScreen(
         statsToggle.style.color = '#66B3FF';
         statsToggle.style.cursor = 'pointer';
         statsToggle.style.marginBottom = '8px';
-        statsToggle.style.fontWeight = '300';
+        statsToggle.style.fontWeight = 'bold';
         statsToggle.style.userSelect = 'none';
         statsToggle.dataset.particleText = 'true';
         statsToggle.dataset.particleColor = '#66B3FF';
@@ -210,7 +210,7 @@ export function renderLoadoutSelectionScreen(
         statsContainer.style.padding = '8px';
         statsContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
         statsContainer.style.borderRadius = '5px';
-        statsContainer.style.fontWeight = '300';
+        statsContainer.style.fontWeight = 'bold';
         statsContainer.style.display = 'none';
         statsContainer.style.overflow = 'hidden';
         statsContainer.style.transition = 'all 0.3s';

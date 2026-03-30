@@ -19,7 +19,7 @@ export function createSettingSection(label: string, control: HTMLElement): HTMLE
     labelElement.textContent = label;
     labelElement.style.fontSize = '24px';
     labelElement.style.color = '#FFFFFF';
-    labelElement.style.fontWeight = '300';
+    labelElement.style.fontWeight = 'bold';
     labelElement.dataset.particleText = 'true';
     labelElement.dataset.particleColor = '#FFFFFF';
 
@@ -42,7 +42,7 @@ export function createSelect(options: string[], currentValue: string, onChange: 
     select.style.borderRadius = '5px';
     select.style.cursor = 'pointer';
     select.style.fontFamily = 'inherit';
-    select.style.fontWeight = '300';
+    select.style.fontWeight = 'bold';
 
     for (const option of options) {
         const optionElement = document.createElement('option');
@@ -160,7 +160,7 @@ export function createTextInput(currentValue: string, onChange: (value: string) 
     input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
     input.style.borderRadius = '5px';
     input.style.fontFamily = 'inherit';
-    input.style.fontWeight = '300';
+    input.style.fontWeight = 'bold';
     input.style.minWidth = '200px';
     input.maxLength = 20; // DOM property for input validation
     input.style.outline = 'none';
@@ -204,7 +204,7 @@ export function createPercentSlider(currentValue: number, onChange: (value: numb
     valueLabel.style.textAlign = 'right';
     valueLabel.style.fontSize = '20px';
     valueLabel.style.color = '#FFFFFF';
-    valueLabel.style.fontWeight = '300';
+    valueLabel.style.fontWeight = 'bold';
 
     const updateLabel = () => {
         valueLabel.textContent = `${slider.value}%`;

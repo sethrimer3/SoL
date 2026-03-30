@@ -37,7 +37,7 @@ export function showMatchLoadingScreen(options: MatchLoadingScreenOptions): void
     gameModeContainer.style.left = '40px';
     gameModeContainer.style.fontSize = '36px';
     gameModeContainer.style.color = '#FFD700';
-    gameModeContainer.style.fontWeight = '300';
+    gameModeContainer.style.fontWeight = 'bold';
 
     const gameModeText = document.createElement('div');
     let displayMode = options.gameMode === 'ai' ? 'Vs. AI' : 
@@ -97,7 +97,7 @@ export function showMatchLoadingScreen(options: MatchLoadingScreenOptions): void
     loadingText.textContent = 'Loading...';
     loadingText.style.fontSize = '24px';
     loadingText.style.color = '#D0D0D0';
-    loadingText.style.fontWeight = '300';
+    loadingText.style.fontWeight = 'bold';
     loadingContainer.appendChild(loadingText);
 
     loadingOverlay.appendChild(loadingContainer);

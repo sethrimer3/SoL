@@ -28,7 +28,7 @@ export function renderOnlinePlaceholderScreen(
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);
@@ -81,7 +81,7 @@ export function renderOnlinePlaceholderScreen(
         rankedTitle.style.fontSize = '28px';
         rankedTitle.style.color = '#FFD700';
         rankedTitle.style.marginBottom = '20px';
-        rankedTitle.style.fontWeight = '300';
+        rankedTitle.style.fontWeight = 'bold';
         rankedSection.appendChild(rankedTitle);
 
         const ranked1v1Button = createButton('1v1 RANKED MATCHMAKING', onStartRankedMatchmaking, '#FF8800');
@@ -107,7 +107,7 @@ export function renderOnlinePlaceholderScreen(
         messageTitle.style.color = '#FFD700';
         messageTitle.style.textAlign = 'center';
         messageTitle.style.marginBottom = '20px';
-        messageTitle.style.fontWeight = '300';
+        messageTitle.style.fontWeight = 'bold';
         message.appendChild(messageTitle);
 
         const messageText = document.createElement('p');
