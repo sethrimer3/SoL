@@ -7,6 +7,9 @@ import { Faction } from '../../game-core';
 import { FactionCarouselOption, HeroUnit } from '../types';
 import { FactionCarouselView } from '../faction-carousel-view';
 
+/** Counter for unique CSS animation IDs (avoids wall-clock time) */
+let renderLoadoutAnimCounter = 0;
+
 export interface LoadoutSelectionScreenParams {
     selectedFaction: Faction | null;
     selectedHeroes: string[];
@@ -357,7 +360,7 @@ export function renderLoadoutSelectionScreen(
         orbit.appendChild(particle);
 
         // Inject keyframe animation for orbit
-        const animId = `orbit-${Date.now()}`;
+        const animId = `orbit-${++renderLoadoutAnimCounter}`;
         const styleEl = document.createElement('style');
         styleEl.textContent = `
             @keyframes ${animId} {
@@ -466,7 +469,7 @@ export function renderLoadoutSelectionScreen(
         const statFontSize = isCompactLayout ? '15px' : '17px';
         statsGrid.appendChild(createStatRow('HP', `${viewedHero.maxHealth}`, statFontSize));
         statsGrid.appendChild(createStatRow('DEF', `${viewedHero.defense}%`, statFontSize));
-        const atkLabel = viewedHero.attackIgnoresDefense ? `${viewedHero.attackDamage} (true)` : `${viewedHero.attackDamage}`;
+        const atkLabel = viewedHero.attackIgnoresDefense ? `${viewedHero.attackDamage} (ignores DEF)` : `${viewedHero.attackDamage}`;
         statsGrid.appendChild(createStatRow('ATK', atkLabel, statFontSize));
         statsGrid.appendChild(createStatRow('SPD', `${viewedHero.attackSpeed}/s`, statFontSize));
         statsGrid.appendChild(createStatRow('RNG', `${Math.round(viewedHero.attackRange)}`, statFontSize));

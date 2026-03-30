@@ -17,6 +17,16 @@ export class FactionCarouselView {
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
     private static readonly VELOCITY_DECAY_FACTOR = 0.9;
     private static readonly SWIPE_THRESHOLD_PX = 50;
+    // Scale by distance from center: [selected, adjacent, far]
+    private static readonly SCALE_CENTER = 1.0;
+    private static readonly SCALE_ADJACENT = 0.72;
+    private static readonly SCALE_FAR = 0.5;
+    private static readonly SCALE_MIN = 0.3;
+    // Opacity by distance from center
+    private static readonly OPACITY_CENTER = 1.0;
+    private static readonly OPACITY_ADJACENT = 0.85;
+    private static readonly OPACITY_FAR = 0.55;
+    private static readonly OPACITY_MIN = 0.3;
 
     private container: HTMLElement;
     private options: FactionCarouselOption[];
@@ -337,17 +347,17 @@ export class FactionCarouselView {
     }
 
     private getScaleForDistance(distance: number): number {
-        if (distance <= 0) return 1.0;
-        if (distance <= 1) return 1.0 + (0.72 - 1.0) * distance;
-        if (distance <= 2) return 0.72 + (0.5 - 0.72) * (distance - 1);
-        return Math.max(0.3, 0.5 - (distance - 2) * 0.2);
+        if (distance <= 0) return FactionCarouselView.SCALE_CENTER;
+        if (distance <= 1) return FactionCarouselView.SCALE_CENTER + (FactionCarouselView.SCALE_ADJACENT - FactionCarouselView.SCALE_CENTER) * distance;
+        if (distance <= 2) return FactionCarouselView.SCALE_ADJACENT + (FactionCarouselView.SCALE_FAR - FactionCarouselView.SCALE_ADJACENT) * (distance - 1);
+        return Math.max(FactionCarouselView.SCALE_MIN, FactionCarouselView.SCALE_FAR - (distance - 2) * 0.2);
     }
 
     private getOpacityForDistance(distance: number): number {
-        if (distance <= 0) return 1.0;
-        if (distance <= 1) return 1.0 + (0.85 - 1.0) * distance;
-        if (distance <= 2) return 0.85 + (0.55 - 0.85) * (distance - 1);
-        return Math.max(0.3, 0.55 - (distance - 2) * 0.25);
+        if (distance <= 0) return FactionCarouselView.OPACITY_CENTER;
+        if (distance <= 1) return FactionCarouselView.OPACITY_CENTER + (FactionCarouselView.OPACITY_ADJACENT - FactionCarouselView.OPACITY_CENTER) * distance;
+        if (distance <= 2) return FactionCarouselView.OPACITY_ADJACENT + (FactionCarouselView.OPACITY_FAR - FactionCarouselView.OPACITY_ADJACENT) * (distance - 1);
+        return Math.max(FactionCarouselView.OPACITY_MIN, FactionCarouselView.OPACITY_FAR - (distance - 2) * 0.25);
     }
 
     private render(): void {
