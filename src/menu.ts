@@ -149,6 +149,7 @@ export class MainMenu {
     };
     
     private heroUnits: HeroUnit[] = HERO_UNITS;
+    private viewedHeroId: string | null = null;
     private availableMaps: MapConfig[] = AVAILABLE_MAPS;
     private baseLoadouts: BaseLoadout[] = BASE_LOADOUTS;
     private spawnLoadouts: SpawnLoadout[] = SPAWN_LOADOUTS;
@@ -2197,11 +2198,13 @@ export class MainMenu {
         renderLoadoutSelectionScreen(container, {
             selectedFaction: this.settings.selectedFaction,
             selectedHeroes: this.settings.selectedHeroes,
+            viewedHeroId: this.viewedHeroId,
             heroUnits: this.heroUnits,
             onFactionChange: (faction: Faction) => {
                 if (this.settings.selectedFaction !== faction) {
                     this.settings.selectedFaction = faction;
                     this.settings.selectedHeroes = [];
+                    this.viewedHeroId = null;
                     this.ensureDefaultHeroSelection();
                     this.renderLoadoutSelectionScreen(this.contentElement);
                 }
@@ -2213,6 +2216,10 @@ export class MainMenu {
                     this.settings.selectedHeroes.push(heroId);
                 }
                 this.settings.selectedHeroNames = this.getSelectedHeroNames();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+            },
+            onHeroView: (heroId: string) => {
+                this.viewedHeroId = heroId;
                 this.renderLoadoutSelectionScreen(this.contentElement);
             },
             onCustomizeLoadout: () => {
