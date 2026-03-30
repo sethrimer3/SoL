@@ -46,6 +46,8 @@ export interface HeroUnit {
     regen: number; // percentage of health recovered in influence field (0-100)
     // Ability
     abilityDescription: string;
+    // Optional sprite path for menu display
+    spritePath?: string;
 }
 
 export interface BaseLoadout {

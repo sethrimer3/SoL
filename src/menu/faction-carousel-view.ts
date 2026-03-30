@@ -9,6 +9,7 @@ import * as Constants from '../constants';
 export class FactionCarouselView {
     private static readonly ITEM_SPACING_PX = 210;
     private static readonly BASE_SIZE_PX = 224;
+    private static readonly EDGE_GAP_PX = 24;
     private static readonly NAME_FONT_SIZE_RATIO = 0.14;
     private static readonly DESC_FONT_SIZE_RATIO = 0.08;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
@@ -335,6 +336,20 @@ export class FactionCarouselView {
         return !hasSettled;
     }
 
+    private getScaleForDistance(distance: number): number {
+        if (distance <= 0) return 1.0;
+        if (distance <= 1) return 1.0 + (0.72 - 1.0) * distance;
+        if (distance <= 2) return 0.72 + (0.5 - 0.72) * (distance - 1);
+        return Math.max(0.3, 0.5 - (distance - 2) * 0.2);
+    }
+
+    private getOpacityForDistance(distance: number): number {
+        if (distance <= 0) return 1.0;
+        if (distance <= 1) return 1.0 + (0.85 - 1.0) * distance;
+        if (distance <= 2) return 0.85 + (0.55 - 0.85) * (distance - 1);
+        return Math.max(0.3, 0.55 - (distance - 2) * 0.25);
+    }
+
     private render(): void {
         this.container.innerHTML = '';
 
@@ -345,38 +360,53 @@ export class FactionCarouselView {
         const layoutScale = this.getLayoutScale();
         const itemSpacingPx = this.getItemSpacingPx();
         const baseSizePx = FactionCarouselView.BASE_SIZE_PX * layoutScale;
+        const edgeGapPx = FactionCarouselView.EDGE_GAP_PX * layoutScale;
+
+        // Compute effective center as continuous float from scroll offset
+        const effectiveCenter = -this.scrollOffset / itemSpacingPx;
+
+        // Compute continuous scale, opacity, and size for each item
+        const itemSizes: number[] = [];
+        const itemScales: number[] = [];
+        const itemOpacities: number[] = [];
+        for (let i = 0; i < this.options.length; i++) {
+            const distance = Math.abs(i - effectiveCenter);
+            itemScales[i] = this.getScaleForDistance(distance);
+            itemOpacities[i] = this.getOpacityForDistance(distance);
+            itemSizes[i] = baseSizePx * itemScales[i];
+        }
+
+        // Compute relative positions using accumulated half-widths + fixed edge gaps
+        const relPositions: number[] = [0];
+        for (let i = 1; i < this.options.length; i++) {
+            relPositions[i] = relPositions[i - 1] + itemSizes[i - 1] / 2 + edgeGapPx + itemSizes[i] / 2;
+        }
+
+        // Compute relative position of the effective center point via interpolation
+        const floorIdx = Math.max(0, Math.min(this.options.length - 1, Math.floor(effectiveCenter)));
+        const ceilIdx = Math.max(0, Math.min(this.options.length - 1, Math.ceil(effectiveCenter)));
+        const frac = effectiveCenter - Math.floor(effectiveCenter);
+        const centerRelPos = floorIdx === ceilIdx
+            ? relPositions[floorIdx]
+            : relPositions[floorIdx] * (1 - frac) + relPositions[ceilIdx] * frac;
 
         for (let i = 0; i < this.options.length; i++) {
             const option = this.options[i];
-            const offsetFromCenter = i - this.currentIndex;
-            const distance = Math.abs(offsetFromCenter);
-            const x = centerX + this.scrollOffset + i * itemSpacingPx;
+            const distance = Math.abs(i - effectiveCenter);
+            const isSelected = distance < 0.5;
+            const scale = itemScales[i];
+            const opacity = itemOpacities[i];
+            const sizePx = itemSizes[i];
+            const x = centerX + (relPositions[i] - centerRelPos);
 
-            let scale = 1.0;
-            let opacity = 1.0;
-            if (distance === 0) {
-                scale = 1.0;
-                opacity = 1.0;
-            } else if (distance === 1) {
-                scale = 0.72;
-                opacity = 0.85;
-            } else if (distance === 2) {
-                scale = 0.5;
-                opacity = 0.55;
-            } else {
-                scale = Math.max(0.3, 1.0 - distance * 0.25);
-                opacity = Math.max(0.3, 1.0 - distance * 0.25);
-            }
-
-            const sizePx = baseSizePx * scale;
             const optionElement = document.createElement('div');
             optionElement.style.position = 'absolute';
             optionElement.style.left = `${x - sizePx / 2}px`;
             optionElement.style.top = `${centerY - sizePx / 2}px`;
             optionElement.style.width = `${sizePx}px`;
             optionElement.style.height = `${sizePx}px`;
-            optionElement.style.backgroundColor = distance === 0 ? 'rgba(12, 14, 22, 0.98)' : 'rgba(12, 14, 22, 0.85)';
-            optionElement.style.border = distance === 0 ? `2px solid ${option.color}` : '2px solid rgba(255, 255, 255, 0.2)';
+            optionElement.style.backgroundColor = isSelected ? 'rgba(12, 14, 22, 0.98)' : 'rgba(12, 14, 22, 0.85)';
+            optionElement.style.border = isSelected ? `2px solid ${option.color}` : '2px solid rgba(255, 255, 255, 0.2)';
             optionElement.style.borderRadius = '10px';
             optionElement.style.opacity = opacity.toString();
             optionElement.style.display = 'flex';
@@ -389,22 +419,22 @@ export class FactionCarouselView {
             optionElement.style.textAlign = 'center';
             optionElement.style.padding = `${24 * layoutScale}px`;
             optionElement.style.boxSizing = 'border-box';
-            optionElement.style.zIndex = (100 - distance).toString();
+            optionElement.style.zIndex = (100 - Math.round(distance)).toString();
             optionElement.style.overflow = 'hidden';
             optionElement.dataset.particleBox = 'true';
-            optionElement.dataset.particleColor = distance === 0 ? option.color : '#66B3FF';
+            optionElement.dataset.particleColor = isSelected ? option.color : '#66B3FF';
 
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name.toUpperCase();
             nameElement.style.fontSize = `${sizePx * FactionCarouselView.NAME_FONT_SIZE_RATIO}px`;
-            nameElement.style.marginBottom = distance === 0 ? '14px' : '0';
-            nameElement.style.color = distance === 0 ? '#FFFFFF' : '#E0F2FF';
+            nameElement.style.marginBottom = isSelected ? '14px' : '0';
+            nameElement.style.color = isSelected ? '#FFFFFF' : '#E0F2FF';
             nameElement.style.fontWeight = 'bold';
             nameElement.dataset.particleText = 'true';
-            nameElement.dataset.particleColor = distance === 0 ? '#FFFFFF' : '#E0F2FF';
+            nameElement.dataset.particleColor = isSelected ? '#FFFFFF' : '#E0F2FF';
             optionElement.appendChild(nameElement);
 
-            if (distance === 0) {
+            if (isSelected) {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
                 descElement.style.fontSize = `${sizePx * FactionCarouselView.DESC_FONT_SIZE_RATIO}px`;
