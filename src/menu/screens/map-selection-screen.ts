@@ -31,7 +31,7 @@ export function renderMapSelectionScreen(
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);
@@ -82,7 +82,7 @@ export function renderMapSelectionScreen(
         mapName.style.fontSize = '28px';
         mapName.style.marginBottom = '10px';
         mapName.style.color = map.id === selectedMap.id ? '#FFD700' : '#FFFFFF';
-        mapName.style.fontWeight = '300';
+        mapName.style.fontWeight = 'bold';
         mapName.dataset.particleText = 'true';
         mapName.dataset.particleColor = map.id === selectedMap.id ? '#FFF2B3' : '#E0F2FF';
         mapCard.appendChild(mapName);
@@ -94,7 +94,7 @@ export function renderMapSelectionScreen(
         mapDesc.style.lineHeight = '1.5';
         mapDesc.style.marginBottom = '15px';
         mapDesc.style.color = '#CCCCCC';
-        mapDesc.style.fontWeight = '300';
+        mapDesc.style.fontWeight = 'bold';
         mapDesc.dataset.particleText = 'true';
         mapDesc.dataset.particleColor = '#CCCCCC';
         mapCard.appendChild(mapDesc);

@@ -408,7 +408,7 @@ export class CarouselMenuView {
             optionElement.style.alignItems = 'center';
             optionElement.style.pointerEvents = 'none'; // Let container handle events
             optionElement.style.color = '#000000';
-            optionElement.style.fontWeight = '300';
+            optionElement.style.fontWeight = 'bold';
             optionElement.style.textAlign = 'center';
             optionElement.style.padding = '30px';
             optionElement.style.boxSizing = 'border-box';
@@ -421,7 +421,7 @@ export class CarouselMenuView {
             nameElement.style.fontSize = `${Math.max(14, 18 * scale) * textScale}px`;
             nameElement.style.marginBottom = option.subLabel ? '6px' : '15px';
             nameElement.style.color = distance === 0 ? '#FFF5C2' : '#E2F4FF';
-            nameElement.style.fontWeight = '300';
+            nameElement.style.fontWeight = 'bold';
             nameElement.dataset.particleText = 'true';
             nameElement.dataset.particleColor = distance === 0 ? '#FFF5C2' : '#E2F4FF';
             optionElement.appendChild(nameElement);
@@ -432,7 +432,7 @@ export class CarouselMenuView {
                 subLabelElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
                 subLabelElement.style.marginBottom = '10px';
                 subLabelElement.style.color = option.subLabelColor ?? '#D0D0D0';
-                subLabelElement.style.fontWeight = '300';
+                subLabelElement.style.fontWeight = 'bold';
                 subLabelElement.dataset.particleText = 'true';
                 subLabelElement.dataset.particleColor = option.subLabelColor ?? '#D0D0D0';
                 optionElement.appendChild(subLabelElement);
@@ -454,7 +454,7 @@ export class CarouselMenuView {
                 descElement.style.color = '#D0D0D0';
                 descElement.style.overflow = 'hidden';
                 descElement.style.textOverflow = 'ellipsis';
-                descElement.style.fontWeight = '300';
+                descElement.style.fontWeight = 'bold';
                 descElement.dataset.particleText = 'true';
                 descElement.dataset.particleColor = '#D0D0D0';
                 optionElement.appendChild(descElement);

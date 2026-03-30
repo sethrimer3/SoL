@@ -9,7 +9,8 @@ import * as Constants from '../constants';
 export class FactionCarouselView {
     private static readonly ITEM_SPACING_PX = 210;
     private static readonly BASE_SIZE_PX = 224;
-    private static readonly TEXT_SCALE = 2.4;
+    private static readonly NAME_FONT_SIZE_RATIO = 0.14;
+    private static readonly DESC_FONT_SIZE_RATIO = 0.08;
     private static readonly VELOCITY_MULTIPLIER = 0.1;
     private static readonly VELOCITY_FACTOR = 0.001;
     private static readonly SMOOTH_INTERPOLATION_FACTOR = 0.15;
@@ -344,7 +345,6 @@ export class FactionCarouselView {
         const layoutScale = this.getLayoutScale();
         const itemSpacingPx = this.getItemSpacingPx();
         const baseSizePx = FactionCarouselView.BASE_SIZE_PX * layoutScale;
-        const textScale = FactionCarouselView.TEXT_SCALE * layoutScale;
 
         for (let i = 0; i < this.options.length; i++) {
             const option = this.options[i];
@@ -385,7 +385,7 @@ export class FactionCarouselView {
             optionElement.style.alignItems = 'center';
             optionElement.style.pointerEvents = 'none';
             optionElement.style.color = '#FFFFFF';
-            optionElement.style.fontWeight = '300';
+            optionElement.style.fontWeight = 'bold';
             optionElement.style.textAlign = 'center';
             optionElement.style.padding = `${24 * layoutScale}px`;
             optionElement.style.boxSizing = 'border-box';
@@ -396,10 +396,10 @@ export class FactionCarouselView {
 
             const nameElement = document.createElement('div');
             nameElement.textContent = option.name.toUpperCase();
-            nameElement.style.fontSize = `${Math.max(16, 20 * scale) * textScale}px`;
+            nameElement.style.fontSize = `${sizePx * FactionCarouselView.NAME_FONT_SIZE_RATIO}px`;
             nameElement.style.marginBottom = distance === 0 ? '14px' : '0';
             nameElement.style.color = distance === 0 ? '#FFFFFF' : '#E0F2FF';
-            nameElement.style.fontWeight = '300';
+            nameElement.style.fontWeight = 'bold';
             nameElement.dataset.particleText = 'true';
             nameElement.dataset.particleColor = distance === 0 ? '#FFFFFF' : '#E0F2FF';
             optionElement.appendChild(nameElement);
@@ -407,10 +407,10 @@ export class FactionCarouselView {
             if (distance === 0) {
                 const descElement = document.createElement('div');
                 descElement.textContent = option.description;
-                descElement.style.fontSize = `${Math.max(10, 12 * scale) * textScale}px`;
+                descElement.style.fontSize = `${sizePx * FactionCarouselView.DESC_FONT_SIZE_RATIO}px`;
                 descElement.style.color = '#D0D0D0';
                 descElement.style.lineHeight = '1.4';
-                descElement.style.fontWeight = '300';
+                descElement.style.fontWeight = 'bold';
                 descElement.dataset.particleText = 'true';
                 descElement.dataset.particleColor = '#D0D0D0';
                 optionElement.appendChild(descElement);

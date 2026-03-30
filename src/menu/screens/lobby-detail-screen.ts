@@ -94,7 +94,7 @@ export function renderLobbyDetailScreen(
     title.style.fontSize = isCompactLayout ? '28px' : '40px';
     title.style.marginBottom = '10px';
     title.style.color = '#FFD700';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     titleSection.appendChild(title);
@@ -639,7 +639,7 @@ function renderLobbyMapPickerOverlay(
     title.textContent = 'Select Lobby Map';
     title.style.margin = '0 0 16px 0';
     title.style.color = '#FFD700';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     modal.appendChild(title);
 
     const grid = document.createElement('div');
