@@ -27,12 +27,24 @@ export interface PersistedSettings {
     isAdaptiveQualityEnabled: boolean;
     useSvgSprites: boolean;
     isPauseOnFocusLossEnabled: boolean;
+    resolution: string;
+    isPixelModeEnabled: boolean;
 }
 
 const VALID_GRAPHICS_QUALITIES: ReadonlyArray<string> = ['low', 'medium', 'high', 'ultra'];
 const VALID_DIFFICULTIES: ReadonlyArray<string> = ['easy', 'normal', 'hard'];
 const VALID_DAMAGE_MODES: ReadonlyArray<string> = ['damage', 'remaining-life'];
 const VALID_HEALTH_MODES: ReadonlyArray<string> = ['bar', 'number'];
+const VALID_RESOLUTIONS: ReadonlyArray<string> = [
+    'native',
+    '640x360',
+    '960x540',
+    '1280x720',
+    '1600x900',
+    '1920x1080',
+    '2560x1440',
+    '3840x2160',
+];
 
 /**
  * Load persisted settings from localStorage.
@@ -91,6 +103,8 @@ export function extractPersistedSettings(settings: PersistedSettings): Persisted
         isAdaptiveQualityEnabled: settings.isAdaptiveQualityEnabled,
         useSvgSprites: settings.useSvgSprites,
         isPauseOnFocusLossEnabled: settings.isPauseOnFocusLossEnabled,
+        resolution: settings.resolution,
+        isPixelModeEnabled: settings.isPixelModeEnabled,
     };
 }
 
@@ -166,6 +180,12 @@ function validatePersistedSettings(data: Record<string, unknown>): Partial<Persi
     }
     if (typeof data.isPauseOnFocusLossEnabled === 'boolean') {
         result.isPauseOnFocusLossEnabled = data.isPauseOnFocusLossEnabled;
+    }
+    if (typeof data.resolution === 'string' && VALID_RESOLUTIONS.indexOf(data.resolution) !== -1) {
+        result.resolution = data.resolution;
+    }
+    if (typeof data.isPixelModeEnabled === 'boolean') {
+        result.isPixelModeEnabled = data.isPixelModeEnabled;
     }
 
     return result;

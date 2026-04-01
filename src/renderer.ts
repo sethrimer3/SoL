@@ -115,6 +115,8 @@ export class GameRenderer {
     public damageDisplayMode: 'damage' | 'remaining-life' = 'damage'; // How to display damage numbers
     public healthDisplayMode: 'bar' | 'number' = 'bar'; // How to display unit health
     public graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra'; // Graphics quality setting
+    public resolution: string = 'native'; // Display resolution ('native', '640x360', '1280x720', etc.)
+    public isPixelModeEnabled: boolean = false; // Celeste-style 320x180 pixel art upscaling
     public isFancyGraphicsEnabled: boolean = false; // Fancy bloom and shader effects
     public isStarNestEnabled: boolean = false; // Star Nest flying-through-space star effect
     private readonly screenShake = new ScreenShakeController();
@@ -241,6 +243,8 @@ export class GameRenderer {
     private movementPointFramePaths: string[] = [];
     private sunAnimationFramePaths: string[] = [];
     private lastAppliedGraphicsQuality: 'low' | 'medium' | 'high' | 'ultra' | null = null;
+    private lastAppliedResolution: string = '';
+    private lastAppliedIsPixelModeEnabled: boolean = false;
     // Device pixel ratio is dimensionless and does not use a unit suffix.
     // Viewport dimensions represent pixels, so they continue to use the Px suffix.
     private lastAppliedDevicePixelRatio = 0;
@@ -344,7 +348,57 @@ export class GameRenderer {
         }
     }
 
+    private static readonly PIXEL_MODE_WIDTH = 320;
+    private static readonly PIXEL_MODE_HEIGHT = 180;
+
+    /** Parse a resolution string like "1280x720" into [width, height], or null for 'native'. */
+    private parseResolution(res: string): [number, number] | null {
+        if (res === 'native') return null;
+        const parts = res.split('x');
+        if (parts.length === 2) {
+            const w = parseInt(parts[0], 10);
+            const h = parseInt(parts[1], 10);
+            if (w > 0 && h > 0) return [w, h];
+        }
+        return null;
+    }
+
     private resizeCanvas(): void {
+        // PIXELS mode: render at Celeste's native 320×180, then CSS-upscale
+        // with nearest-neighbor for a crisp pixel-art look.
+        if (this.isPixelModeEnabled) {
+            this.canvas.width = GameRenderer.PIXEL_MODE_WIDTH;
+            this.canvas.height = GameRenderer.PIXEL_MODE_HEIGHT;
+
+            // CSS size fills the viewport (or chosen resolution if set)
+            const parsed = this.parseResolution(this.resolution);
+            const cssW = parsed ? parsed[0] : this.cachedViewportWidthPx;
+            const cssH = parsed ? parsed[1] : this.cachedViewportHeightPx;
+            this.canvas.style.width = `${cssW}px`;
+            this.canvas.style.height = `${cssH}px`;
+
+            // Disable smoothing so the upscale is sharp/pixelated
+            this.ctx.imageSmoothingEnabled = false;
+            // CSS image-rendering ensures the browser upscales with nearest-neighbor
+            this.canvas.style.imageRendering = 'pixelated';
+
+            // Identity transform – draw coordinates are in the 320×180 space
+            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+            this.lastAppliedGraphicsQuality = this.graphicsQuality;
+            this.lastAppliedResolution = this.resolution;
+            this.lastAppliedIsPixelModeEnabled = this.isPixelModeEnabled;
+            this.lastAppliedDevicePixelRatio = this.cachedDevicePixelRatio;
+            this.lastAppliedViewportWidthPx = this.cachedViewportWidthPx;
+            this.lastAppliedViewportHeightPx = this.cachedViewportHeightPx;
+            return;
+        }
+
+        // Non-pixel-mode: determine target CSS size from resolution setting
+        const parsed = this.parseResolution(this.resolution);
+        const cssW = parsed ? parsed[0] : this.cachedViewportWidthPx;
+        const cssH = parsed ? parsed[1] : this.cachedViewportHeightPx;
+
         // Cap render DPR to reduce fill-rate pressure on high-DPI devices.
         const cappedDpr = Math.min(this.cachedDevicePixelRatio || 1, this.MAX_RENDER_PIXEL_RATIO);
         
@@ -370,17 +424,23 @@ export class GameRenderer {
         );
         
         // Set canvas physical size to match display size * effective DPR
-        this.canvas.width = this.cachedViewportWidthPx * effectiveDpr;
-        this.canvas.height = this.cachedViewportHeightPx * effectiveDpr;
+        this.canvas.width = cssW * effectiveDpr;
+        this.canvas.height = cssH * effectiveDpr;
         
-        // Set canvas CSS size to match window size
-        this.canvas.style.width = `${this.cachedViewportWidthPx}px`;
-        this.canvas.style.height = `${this.cachedViewportHeightPx}px`;
+        // Set canvas CSS size
+        this.canvas.style.width = `${cssW}px`;
+        this.canvas.style.height = `${cssH}px`;
         
+        // Re-enable smoothing for normal rendering
+        this.ctx.imageSmoothingEnabled = true;
+        this.canvas.style.imageRendering = 'auto';
+
         // Reset transform and scale the context to match effective DPR
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         this.ctx.scale(effectiveDpr, effectiveDpr);
         this.lastAppliedGraphicsQuality = this.graphicsQuality;
+        this.lastAppliedResolution = this.resolution;
+        this.lastAppliedIsPixelModeEnabled = this.isPixelModeEnabled;
         this.lastAppliedDevicePixelRatio = this.cachedDevicePixelRatio;
         this.lastAppliedViewportWidthPx = this.cachedViewportWidthPx;
         this.lastAppliedViewportHeightPx = this.cachedViewportHeightPx;
@@ -393,10 +453,12 @@ export class GameRenderer {
     }
 
     private getViewportWidthPx(): number {
+        if (this.isPixelModeEnabled) return GameRenderer.PIXEL_MODE_WIDTH;
         return this.cachedViewportWidthPx;
     }
 
     private getViewportHeightPx(): number {
+        if (this.isPixelModeEnabled) return GameRenderer.PIXEL_MODE_HEIGHT;
         return this.cachedViewportHeightPx;
     }
 
@@ -407,10 +469,12 @@ export class GameRenderer {
     }
 
     private getCanvasScreenWidthPx(): number {
+        if (this.isPixelModeEnabled) return GameRenderer.PIXEL_MODE_WIDTH;
         return getCanvasScreenWidthPx(this.canvas);
     }
 
     private getCanvasScreenHeightPx(): number {
+        if (this.isPixelModeEnabled) return GameRenderer.PIXEL_MODE_HEIGHT;
         return getCanvasScreenHeightPx(this.canvas);
     }
 
@@ -434,6 +498,8 @@ export class GameRenderer {
         viewportHeightPx: number
     ): boolean {
         return this.lastAppliedGraphicsQuality !== this.graphicsQuality
+            || this.lastAppliedResolution !== this.resolution
+            || this.lastAppliedIsPixelModeEnabled !== this.isPixelModeEnabled
             || this.lastAppliedDevicePixelRatio !== devicePixelRatio
             || this.lastAppliedViewportWidthPx !== viewportWidthPx
             || this.lastAppliedViewportHeightPx !== viewportHeightPx;
