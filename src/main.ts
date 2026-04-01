@@ -1439,6 +1439,8 @@ class GameController {
         this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
+        
+        // Set local player using the found index
         this.localPlayerIndex = localPlayerIndex;
         const localPlayer = this.game.players[localPlayerIndex];
         
