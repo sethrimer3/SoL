@@ -730,6 +730,8 @@ class GameController {
     private syncAndPersistInGameSettings(): void {
         const settings = this.menu.getSettings();
         settings.graphicsQuality = this.renderer.graphicsQuality;
+        settings.resolution = this.renderer.resolution;
+        settings.isPixelModeEnabled = this.renderer.isPixelModeEnabled;
         savePersistedSettings(extractPersistedSettings(settings));
     }
 
@@ -1198,6 +1200,8 @@ class GameController {
         
         // Set graphics quality from settings
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.resolution = settings.resolution;
+        this.renderer.isPixelModeEnabled = settings.isPixelModeEnabled;
         this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         this.renderer.isStarNestEnabled = settings.isStarNestEnabled;
@@ -1430,6 +1434,8 @@ class GameController {
         this.game.damageDisplayMode = settings.damageDisplayMode;
         this.renderer.screenShakeEnabled = settings.screenShakeEnabled;
         this.renderer.graphicsQuality = settings.graphicsQuality;
+        this.renderer.resolution = settings.resolution;
+        this.renderer.isPixelModeEnabled = settings.isPixelModeEnabled;
         this.renderer.setUseSvgSprites(settings.useSvgSprites);
         this.renderer.isFancyGraphicsEnabled = settings.isExperimentalGraphicsEnabled;
         this.renderer.isStarNestEnabled = settings.isStarNestEnabled;

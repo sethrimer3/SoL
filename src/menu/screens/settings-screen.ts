@@ -26,6 +26,8 @@ export interface SettingsScreenParams {
     isAdaptiveQualityEnabled: boolean;
     useSvgSprites: boolean;
     isPauseOnFocusLossEnabled: boolean;
+    resolution: string;
+    isPixelModeEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -46,6 +48,8 @@ export interface SettingsScreenParams {
     onAdaptiveQualityEnabledChange: (value: boolean) => void;
     onUseSvgSpritesChange: (value: boolean) => void;
     onPauseOnFocusLossEnabledChange: (value: boolean) => void;
+    onResolutionChange: (value: string) => void;
+    onPixelModeEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -77,6 +81,8 @@ export function renderSettingsScreen(
         isAdaptiveQualityEnabled,
         useSvgSprites,
         isPauseOnFocusLossEnabled,
+        resolution,
+        isPixelModeEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -97,6 +103,8 @@ export function renderSettingsScreen(
         onAdaptiveQualityEnabledChange,
         onUseSvgSpritesChange,
         onPauseOnFocusLossEnabledChange,
+        onResolutionChange,
+        onPixelModeEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -235,6 +243,52 @@ export function renderSettingsScreen(
         )
     );
     settingsContainer.appendChild(graphicsQualitySection);
+
+    // Resolution setting
+    const resolutionOptions = [
+        'native',
+        '640x360',
+        '960x540',
+        '1280x720',
+        '1600x900',
+        '1920x1080',
+        '2560x1440',
+        '3840x2160',
+    ];
+    const resolutionLabels: Record<string, string> = {
+        'native': 'Native',
+        '640x360': '640 × 360 (nHD)',
+        '960x540': '960 × 540 (qHD)',
+        '1280x720': '1280 × 720 (720p)',
+        '1600x900': '1600 × 900 (HD+)',
+        '1920x1080': '1920 × 1080 (1080p)',
+        '2560x1440': '2560 × 1440 (1440p)',
+        '3840x2160': '3840 × 2160 (4K)',
+    };
+    const resolutionSelect = createSelect(
+        resolutionOptions,
+        resolution,
+        (value) => {
+            onResolutionChange(value);
+        }
+    );
+    // Override the default label formatting to use our custom labels
+    for (let i = 0; i < resolutionSelect.options.length; i++) {
+        const opt = resolutionSelect.options[i];
+        const label = resolutionLabels[opt.value];
+        if (label) {
+            opt.textContent = label;
+        }
+    }
+    const resolutionSection = createSettingSection('Resolution', resolutionSelect);
+    settingsContainer.appendChild(resolutionSection);
+
+    // PIXELS mode toggle (Celeste-style 320x180 upscale)
+    const pixelModeSection = createSettingSection(
+        'PIXELS (Retro)',
+        createToggle(isPixelModeEnabled, onPixelModeEnabledChange)
+    );
+    settingsContainer.appendChild(pixelModeSection);
 
     const adaptiveQualitySection = createSettingSection(
         'Adaptive Quality',
