@@ -150,11 +150,22 @@ export function renderLoadoutSelectionScreen(
     leftPanel.style.maxHeight = isCompactLayout ? '260px' : '520px';
     leftPanel.style.overflowY = 'auto';
     leftPanel.style.display = 'flex';
-    leftPanel.style.flexDirection = isCompactLayout ? 'row' : 'column';
+    leftPanel.style.flexDirection = 'row';
+    leftPanel.style.flexWrap = isCompactLayout ? 'nowrap' : 'wrap';
     leftPanel.style.gap = '10px';
+    leftPanel.style.paddingLeft = isCompactLayout ? '0' : '8px';
     leftPanel.style.paddingRight = isCompactLayout ? '0' : '4px';
+    leftPanel.style.alignContent = 'flex-start';
+    // Hide scrollbar (keep scroll functionality)
+    (leftPanel.style as CSSStyleDeclaration & { scrollbarWidth?: string; msOverflowStyle?: string }).scrollbarWidth = 'none';
+    (leftPanel.style as CSSStyleDeclaration & { msOverflowStyle?: string }).msOverflowStyle = 'none';
+    const scrollbarStyle = document.createElement('style');
+    scrollbarStyle.textContent = `
+        .hero-left-panel::-webkit-scrollbar { display: none; }
+    `;
+    document.head.appendChild(scrollbarStyle);
+    leftPanel.classList.add('hero-left-panel');
     if (isCompactLayout) {
-        leftPanel.style.flexWrap = 'nowrap';
         leftPanel.style.overflowX = 'auto';
         leftPanel.style.overflowY = 'hidden';
     }
