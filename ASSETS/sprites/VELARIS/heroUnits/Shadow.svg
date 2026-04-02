@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Primary figure (solid) -->
+  <!-- Head -->
+  <circle class="cls-1" cx="240" cy="150" r="62"/>
+  <!-- Body -->
+  <rect class="cls-1" x="190" y="220" width="100" height="220" rx="18"/>
+  <!-- Arms -->
+  <rect class="cls-1" x="110" y="230" width="90" height="36" rx="14"/>
+  <rect class="cls-1" x="280" y="230" width="90" height="36" rx="14"/>
+  <!-- Legs -->
+  <rect class="cls-1" x="196" y="430" width="42" height="110" rx="14"/>
+  <rect class="cls-1" x="248" y="430" width="42" height="110" rx="14"/>
+  <!-- Faint decoy (offset right, slightly transparent via opacity – still cls-1 fill) -->
+  <!-- Decoy head -->
+  <circle class="cls-1" cx="380" cy="160" r="48" opacity="0.45"/>
+  <!-- Decoy body -->
+  <rect class="cls-1" x="336" y="218" width="82" height="180" rx="14" opacity="0.45"/>
+</svg>

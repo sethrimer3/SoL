@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Sun with radiating rays -->
+  <!-- Central sun disc -->
+  <circle class="cls-1" cx="300" cy="300" r="110"/>
+  <!-- 8 rays -->
+  <rect class="cls-1" x="284" y="80" width="32" height="130" rx="14"/>
+  <rect class="cls-1" x="284" y="390" width="32" height="130" rx="14"/>
+  <rect class="cls-1" x="80" y="284" width="130" height="32" rx="14"/>
+  <rect class="cls-1" x="390" y="284" width="130" height="32" rx="14"/>
+  <!-- Diagonal rays -->
+  <rect class="cls-1" x="284" y="80" width="32" height="130" rx="14" transform="rotate(45 300 300)"/>
+  <rect class="cls-1" x="284" y="390" width="32" height="130" rx="14" transform="rotate(45 300 300)"/>
+  <rect class="cls-1" x="80" y="284" width="130" height="32" rx="14" transform="rotate(45 300 300)"/>
+  <rect class="cls-1" x="390" y="284" width="130" height="32" rx="14" transform="rotate(45 300 300)"/>
+</svg>

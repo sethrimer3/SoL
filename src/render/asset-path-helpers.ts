@@ -19,6 +19,18 @@ import {
     Preist,
     Tank,
     Spotlight,
+    Mothership,
+    Sly,
+    Chrono,
+    Shadow,
+    Occlude,
+    VelarisHero,
+    Splendor,
+    Dash,
+    Blink,
+    Shroud,
+    AurumHero,
+    Radiant,
     StellarForge,
     SolarMirror,
     Starling,
@@ -38,13 +50,10 @@ import type { GraphicKey } from './graphics-options';
 export type GraphicAssetPathResolver = (key: GraphicKey) => string | null;
 
 /**
- * Get the sprite path for a hero unit (Radiant faction only).
- * Returns null for non-Radiant factions or unrecognized hero types.
+ * Get the sprite path for a hero unit.
+ * Returns null for unrecognized hero types.
  */
 export function getHeroSpritePath(unit: Unit, getGraphicAssetPath: GraphicAssetPathResolver): string | null {
-    if (unit.owner.faction !== Faction.RADIANT) {
-        return null;
-    }
     if (unit instanceof Marine) {
         return getGraphicAssetPath('heroMarine');
     }
@@ -82,7 +91,43 @@ export function getHeroSpritePath(unit: Unit, getGraphicAssetPath: GraphicAssetP
         return getGraphicAssetPath('heroTank');
     }
     if (unit instanceof Spotlight) {
-        return getGraphicAssetPath('heroBeam');
+        return getGraphicAssetPath('heroSpotlight');
+    }
+    if (unit instanceof Mothership) {
+        return getGraphicAssetPath('heroMothership');
+    }
+    if (unit instanceof Sly) {
+        return getGraphicAssetPath('heroSly');
+    }
+    if (unit instanceof Chrono) {
+        return getGraphicAssetPath('heroChrono');
+    }
+    if (unit instanceof Shadow) {
+        return getGraphicAssetPath('heroShadow');
+    }
+    if (unit instanceof Occlude) {
+        return getGraphicAssetPath('heroOcclude');
+    }
+    if (unit instanceof VelarisHero) {
+        return getGraphicAssetPath('heroVelarisHero');
+    }
+    if (unit instanceof Splendor) {
+        return getGraphicAssetPath('heroSplendor');
+    }
+    if (unit instanceof Dash) {
+        return getGraphicAssetPath('heroDash');
+    }
+    if (unit instanceof Blink) {
+        return getGraphicAssetPath('heroBlink');
+    }
+    if (unit instanceof Shroud) {
+        return getGraphicAssetPath('heroShroud');
+    }
+    if (unit instanceof AurumHero) {
+        return getGraphicAssetPath('heroAurumHero');
+    }
+    if (unit instanceof Radiant) {
+        return getGraphicAssetPath('heroRadiant');
     }
     return null;
 }

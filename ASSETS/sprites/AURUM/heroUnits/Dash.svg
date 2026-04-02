@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Lightning bolt / dash slash -->
+  <polygon class="cls-1" points="
+    340,60   200,300  290,300
+    260,540  400,280  310,280"/>
+  <!-- Speed lines -->
+  <rect class="cls-1" x="380" y="130" width="100" height="22" rx="11" opacity="0.7"/>
+  <rect class="cls-1" x="400" y="190" width="80" height="18" rx="9" opacity="0.55"/>
+  <rect class="cls-1" x="390" y="245" width="90" height="14" rx="7" opacity="0.4"/>
+</svg>

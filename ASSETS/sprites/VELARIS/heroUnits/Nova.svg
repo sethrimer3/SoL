@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Void starburst – 12 tapered spikes from center -->
+  <polygon class="cls-1" points="
+    300,60  316,260  390,100  334,276
+    480,160  342,294  510,300  342,306
+    480,440  334,324  390,500  316,340
+    300,540  284,340  210,500  266,324
+    120,440  258,306  90,300   258,294
+    120,160  266,276  210,100  284,260"/>
+  <!-- Central collapsed core -->
+  <circle class="cls-1" cx="300" cy="300" r="46"/>
+</svg>

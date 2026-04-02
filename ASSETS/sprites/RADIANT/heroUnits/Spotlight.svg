@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Light cone / beam -->
+  <polygon class="cls-1" points="300,200 120,520 480,520"/>
+  <!-- Lamp body -->
+  <rect class="cls-1" x="230" y="120" width="140" height="110" rx="18"/>
+  <!-- Handle / mount -->
+  <rect class="cls-1" x="270" y="60" width="60" height="80" rx="12"/>
+  <!-- Lens circle -->
+  <circle class="cls-1" cx="300" cy="230" r="52"/>
+</svg>
