@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Body -->
+  <rect class="cls-1" x="240" y="220" width="120" height="280" rx="20"/>
+  <!-- Arms (horizontal bar) -->
+  <rect class="cls-1" x="100" y="300" width="400" height="80" rx="20"/>
+  <!-- Head -->
+  <circle class="cls-1" cx="300" cy="160" r="72"/>
+  <!-- Halo ring -->
+  <path class="cls-1" fill-rule="evenodd" d="M300,68 a92,92 0 1,1 0,0.01 Z M300,88 a72,72 0 1,0 0,-0.01 Z"/>
+</svg>

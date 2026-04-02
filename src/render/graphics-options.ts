@@ -21,7 +21,20 @@ export type GraphicKey =
     | 'heroTurretDeployer'
     | 'heroDriller'
     | 'heroPreist'
-    | 'heroTank';
+    | 'heroTank'
+    | 'heroSpotlight'
+    | 'heroMothership'
+    | 'heroSly'
+    | 'heroChrono'
+    | 'heroShadow'
+    | 'heroOcclude'
+    | 'heroVelarisHero'
+    | 'heroSplendor'
+    | 'heroDash'
+    | 'heroBlink'
+    | 'heroShroud'
+    | 'heroAurumHero'
+    | 'heroRadiant';
 
 export type GraphicOption = {
     key: GraphicKey;
@@ -130,5 +143,75 @@ export const graphicsOptions: GraphicOption[] = [
         label: 'Hero: Tank',
         svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.png'
+    },
+    {
+        key: 'heroMortar',
+        label: 'Hero: Mortar',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Mortar.svg'
+    },
+    {
+        key: 'heroSpotlight',
+        label: 'Hero: Spotlight',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Spotlight.svg'
+    },
+    {
+        key: 'heroMothership',
+        label: 'Hero: Mothership',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Mothership.svg'
+    },
+    {
+        key: 'heroRadiant',
+        label: 'Hero: Radiant',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Radiant.svg'
+    },
+    {
+        key: 'heroSly',
+        label: 'Hero: Sly',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Sly.svg'
+    },
+    {
+        key: 'heroChrono',
+        label: 'Hero: Chrono',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Chrono.svg'
+    },
+    {
+        key: 'heroShadow',
+        label: 'Hero: Shadow',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Shadow.svg'
+    },
+    {
+        key: 'heroOcclude',
+        label: 'Hero: Occlude',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Occlude.svg'
+    },
+    {
+        key: 'heroVelarisHero',
+        label: 'Hero: Velaris',
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/VelarisHero.svg'
+    },
+    {
+        key: 'heroSplendor',
+        label: 'Hero: Splendor',
+        svgPath: 'ASSETS/sprites/AURUM/heroUnits/Splendor.svg'
+    },
+    {
+        key: 'heroDash',
+        label: 'Hero: Dash',
+        svgPath: 'ASSETS/sprites/AURUM/heroUnits/Dash.svg'
+    },
+    {
+        key: 'heroBlink',
+        label: 'Hero: Blink',
+        svgPath: 'ASSETS/sprites/AURUM/heroUnits/Blink.svg'
+    },
+    {
+        key: 'heroShroud',
+        label: 'Hero: Shroud',
+        svgPath: 'ASSETS/sprites/AURUM/heroUnits/Shroud.svg'
+    },
+    {
+        key: 'heroAurumHero',
+        label: 'Hero: Aurum',
+        svgPath: 'ASSETS/sprites/AURUM/heroUnits/AurumHero.svg'
     }
 ];

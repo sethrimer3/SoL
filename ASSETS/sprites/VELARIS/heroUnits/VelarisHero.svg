@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Crystal / gem shape – faceted hexagonal gem -->
+  <!-- Main body hexagon -->
+  <polygon class="cls-1" points="300,80 460,180 460,420 300,520 140,420 140,180"/>
+  <!-- Top facet highlight lines (brighter inner gem feel via overlapping polygon) -->
+  <polygon class="cls-1" points="300,80 460,180 300,240 140,180" opacity="0.4"/>
+  <!-- Bottom inner -->
+  <polygon class="cls-1" points="300,520 460,420 300,360 140,420" opacity="0.4"/>
+  <!-- Center horizontal band -->
+  <polygon class="cls-1" points="140,300 300,240 460,300 300,360" opacity="0.55"/>
+</svg>

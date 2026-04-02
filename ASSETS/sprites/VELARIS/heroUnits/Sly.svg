@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Spider body (abdomen) -->
+  <ellipse class="cls-1" cx="300" cy="330" rx="80" ry="100"/>
+  <!-- Spider head (cephalothorax) -->
+  <circle class="cls-1" cx="300" cy="220" r="56"/>
+  <!-- Legs – 4 pairs -->
+  <!-- Left front -->
+  <rect class="cls-1" x="180" y="200" width="78" height="18" rx="9" transform="rotate(-30 219 209)"/>
+  <!-- Left mid-front -->
+  <rect class="cls-1" x="158" y="248" width="90" height="18" rx="9" transform="rotate(-10 203 257)"/>
+  <!-- Left mid-back -->
+  <rect class="cls-1" x="158" y="298" width="90" height="18" rx="9" transform="rotate(10 203 307)"/>
+  <!-- Left back -->
+  <rect class="cls-1" x="180" y="346" width="78" height="18" rx="9" transform="rotate(30 219 355)"/>
+  <!-- Right front -->
+  <rect class="cls-1" x="342" y="200" width="78" height="18" rx="9" transform="rotate(30 381 209)"/>
+  <!-- Right mid-front -->
+  <rect class="cls-1" x="352" y="248" width="90" height="18" rx="9" transform="rotate(10 397 257)"/>
+  <!-- Right mid-back -->
+  <rect class="cls-1" x="352" y="298" width="90" height="18" rx="9" transform="rotate(-10 397 307)"/>
+  <!-- Right back -->
+  <rect class="cls-1" x="342" y="346" width="78" height="18" rx="9" transform="rotate(-30 381 355)"/>
+</svg>
