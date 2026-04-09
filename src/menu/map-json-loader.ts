@@ -57,25 +57,59 @@ async function loadMapFile(filename: string): Promise<MapJSON | null> {
 
 /**
  * Very lightweight runtime validation for a MapJSON object.
+ * Validates top-level fields and basic structure of array elements.
  */
 function isValidMapJSON(data: unknown): data is MapJSON {
     if (typeof data !== 'object' || data === null) {
         return false;
     }
     const obj = data as Record<string, unknown>;
-    return (
-        typeof obj.id === 'string' &&
-        typeof obj.name === 'string' &&
-        typeof obj.description === 'string' &&
-        typeof obj.playerCount === 'number' &&
-        typeof obj.mapWidth === 'number' &&
-        typeof obj.mapHeight === 'number' &&
-        typeof obj.isLaD === 'boolean' &&
-        Array.isArray(obj.suns) &&
-        Array.isArray(obj.spawns) &&
-        Array.isArray(obj.asteroids) &&
-        typeof obj.randomAsteroidCount === 'number'
-    );
+    if (
+        typeof obj.id !== 'string' ||
+        typeof obj.name !== 'string' ||
+        typeof obj.description !== 'string' ||
+        typeof obj.playerCount !== 'number' ||
+        typeof obj.mapWidth !== 'number' ||
+        typeof obj.mapHeight !== 'number' ||
+        typeof obj.isLaD !== 'boolean' ||
+        !Array.isArray(obj.suns) ||
+        !Array.isArray(obj.spawns) ||
+        !Array.isArray(obj.asteroids) ||
+        typeof obj.randomAsteroidCount !== 'number'
+    ) {
+        return false;
+    }
+
+    // Validate sun entries
+    for (const sun of obj.suns) {
+        if (typeof sun !== 'object' || sun === null) { return false; }
+        const s = sun as Record<string, unknown>;
+        if (typeof s.x !== 'number' || typeof s.y !== 'number' ||
+            typeof s.radius !== 'number' || typeof s.intensity !== 'number') {
+            return false;
+        }
+    }
+
+    // Validate spawn entries
+    for (const spawn of obj.spawns) {
+        if (typeof spawn !== 'object' || spawn === null) { return false; }
+        const sp = spawn as Record<string, unknown>;
+        if (typeof sp.x !== 'number' || typeof sp.y !== 'number') {
+            return false;
+        }
+    }
+
+    // Validate asteroid entries
+    for (const asteroid of obj.asteroids) {
+        if (typeof asteroid !== 'object' || asteroid === null) { return false; }
+        const a = asteroid as Record<string, unknown>;
+        if (typeof a.x !== 'number' || typeof a.y !== 'number' ||
+            typeof a.size !== 'number' || typeof a.sides !== 'number') {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 /**

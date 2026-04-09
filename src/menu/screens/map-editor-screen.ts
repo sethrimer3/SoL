@@ -4,8 +4,7 @@
  * Only accessible when Developer Mode is enabled.
  */
 
-import { MapJSON, MapSunJSON, MapAsteroidJSON, MapSpawnJSON, MapConfig } from '../types';
-import { mapJSONToConfig } from '../map-json-loader';
+import { MapJSON } from '../types';
 import { createSettingSection, createSelect, createTextInput, createToggle } from '../ui-helpers';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -512,8 +511,9 @@ export function renderMapEditorScreen(
     // ─── Import / Export ────────────────────────────────────────────────────
 
     function exportMapJSON(m: MapJSON): void {
-        // Generate a slug id from name
-        m.id = m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'custom-map';
+        // Generate a slug id from name, ensuring it's never empty
+        const slug = m.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        m.id = slug.length > 0 ? slug : 'custom-map';
         const jsonStr = JSON.stringify(m, null, 4);
         const blob = new Blob([jsonStr], { type: 'application/json' });
         const url = URL.createObjectURL(blob);

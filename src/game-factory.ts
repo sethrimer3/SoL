@@ -25,7 +25,7 @@ function applySunsFromJSON(game: GameState, json: MapJSON): void {
                 new Vector2D(s.x, s.y),
                 s.intensity,
                 s.radius,
-                s.type ?? 'normal',
+                s.type,
                 new Vector2D(s.orbitCenterX, s.orbitCenterY),
                 s.orbitRadius,
                 s.orbitSpeed ?? 0,
@@ -36,7 +36,7 @@ function applySunsFromJSON(game: GameState, json: MapJSON): void {
                 new Vector2D(s.x, s.y),
                 s.intensity,
                 s.radius,
-                s.type ?? 'normal'
+                s.type
             ));
         }
     }
