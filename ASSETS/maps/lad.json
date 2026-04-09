@@ -1,0 +1,18 @@
+{
+    "id": "lad",
+    "name": "LaD",
+    "description": "Light and Dark - A split battlefield with a dual sun. White light on one side, black \"light\" on the other. Units are invisible until they cross into enemy territory.",
+    "playerCount": 2,
+    "mapWidth": 2000,
+    "mapHeight": 2000,
+    "isLaD": true,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "lad" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 8
+}

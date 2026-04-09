@@ -10,12 +10,14 @@ import { CarouselMenuView } from '../carousel-menu-view';
 export interface MainScreenParams {
     selectedFaction: Faction | null;
     selectedMap: MapConfig;
+    isDeveloperModeEnabled: boolean;
     resolveAssetPath: (path: string) => string;
     onLoadout: () => void;
     onStart: () => void;
     onMatchHistory: () => void;
     onMaps: () => void;
     onSettings: () => void;
+    onMapEditor?: () => void;
     onCarouselCreated: (carousel: CarouselMenuView) => void;
     menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
 }
@@ -40,12 +42,14 @@ export function renderMainScreen(
     const {
         selectedFaction,
         selectedMap,
+        isDeveloperModeEnabled,
         resolveAssetPath,
         onLoadout,
         onStart,
         onMatchHistory,
         onMaps,
         onSettings,
+        onMapEditor,
         onCarouselCreated,
         menuParticleLayer
     } = params;
@@ -109,6 +113,14 @@ export function renderMainScreen(
         }
     ];
 
+    if (isDeveloperModeEnabled && onMapEditor) {
+        menuOptions.push({
+            id: 'map-editor',
+            name: 'MAP EDITOR',
+            description: 'Create & edit maps'
+        });
+    }
+
     const carouselMenu = new CarouselMenuView(
         carouselContainer,
         menuOptions,
@@ -139,6 +151,9 @@ export function renderMainScreen(
                 break;
             case 'settings':
                 onSettings();
+                break;
+            case 'map-editor':
+                if (onMapEditor) { onMapEditor(); }
                 break;
         }
     });

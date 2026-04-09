@@ -1,0 +1,28 @@
+{
+    "id": "2v2-dual-umbra",
+    "name": "2v2 Dual Umbra",
+    "description": "Dedicated 2v2 arena with two suns. Symmetric asteroid cover creates consistent shadowed spawn lanes.",
+    "playerCount": 4,
+    "mapWidth": 2600,
+    "mapHeight": 2600,
+    "isLaD": false,
+    "suns": [
+        { "x": -260, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" },
+        { "x": 260, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -880, "y": -520 },
+        { "x": -880, "y": 520 },
+        { "x": 880, "y": -520 },
+        { "x": 880, "y": 520 }
+    ],
+    "asteroids": [
+        { "x": -520, "y": -260, "size": 138, "sides": 7 },
+        { "x": -520, "y": 260, "size": 138, "sides": 7 },
+        { "x": 520, "y": -260, "size": 138, "sides": 7 },
+        { "x": 520, "y": 260, "size": 138, "sides": 7 },
+        { "x": 0, "y": -220, "size": 138, "sides": 7 },
+        { "x": 0, "y": 220, "size": 138, "sides": 7 }
+    ],
+    "randomAsteroidCount": 0
+}

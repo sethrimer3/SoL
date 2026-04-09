@@ -1,0 +1,18 @@
+{
+    "id": "asteroid-field",
+    "name": "Asteroid Field",
+    "description": "Dense asteroid field creates tactical challenges. Careful mirror placement is crucial.",
+    "playerCount": 2,
+    "mapWidth": 2000,
+    "mapHeight": 2000,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 20
+}

@@ -1,6 +1,7 @@
 export type MenuScreenAudioState =
     | 'main'
     | 'maps'
+    | 'map-editor'
     | 'settings'
     | 'faction-select'
     | 'loadout-customization'

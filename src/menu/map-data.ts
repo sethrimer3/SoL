@@ -1,10 +1,19 @@
 /**
  * Map configuration data for the menu system
+ *
+ * The canonical source of truth is now the JSON files under ASSETS/maps/.
+ * This file provides a static fallback list used when the JSON files
+ * have not been fetched yet (e.g. during synchronous construction).
  */
 
 import { MapConfig, BaseLoadout, SpawnLoadout } from './types';
 import { Faction } from '../game-core';
 
+/**
+ * Static fallback maps – used before the async loader resolves.
+ * These do NOT carry the full `json` data; the game-factory
+ * falls back to legacy id-based branching when `json` is absent.
+ */
 export const AVAILABLE_MAPS: MapConfig[] = [
     {
         id: 'standard',
