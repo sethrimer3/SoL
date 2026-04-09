@@ -1,0 +1,19 @@
+{
+    "id": "twin-suns",
+    "name": "Twin Suns",
+    "description": "Two suns create complex lighting patterns. Control multiple light sources for economic dominance.",
+    "playerCount": 2,
+    "mapWidth": 2500,
+    "mapHeight": 2500,
+    "isLaD": false,
+    "suns": [
+        { "x": -300, "y": -300, "radius": 100, "intensity": 1.0, "type": "normal" },
+        { "x": 300, "y": 300, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 12
+}

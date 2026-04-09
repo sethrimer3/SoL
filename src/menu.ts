@@ -23,6 +23,7 @@ import { PlayerProfileManager } from './menu/player-profile-manager';
 import { MatchmakingController } from './menu/matchmaking-controller';
 import { loadPersistedSettings, savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
+import { renderMapEditorScreen } from './menu/screens/map-editor-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
 import { renderMatchHistoryScreen } from './menu/screens/match-history-screen';
@@ -61,6 +62,7 @@ import {
 } from './replay';
 import { HERO_UNITS } from './menu/hero-data';
 import { AVAILABLE_MAPS, BASE_LOADOUTS, SPAWN_LOADOUTS } from './menu/map-data';
+import { loadBuiltinMaps } from './menu/map-json-loader';
 
 // Re-export types for backward compatibility
 export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
@@ -111,7 +113,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
+    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -213,6 +215,19 @@ export class MainMenu {
         this.menuAudioController.setSoundVolume(this.settings.soundVolume / 100);
         this.menuAudioController.setVisible(true);
         this.updateMenuAudioState();
+
+        // Asynchronously load maps from JSON files; update the fallback list when ready.
+        void loadBuiltinMaps().then((loaded) => {
+            if (loaded.length > 0) {
+                this.availableMaps = loaded;
+                // Re-select current map with the JSON-enriched version if possible
+                const current = this.settings.selectedMap;
+                const match = this.availableMaps.find(m => m.id === current.id);
+                if (match) {
+                    this.settings.selectedMap = match;
+                }
+            }
+        });
 
         const unlockAudioOnGesture = (): void => {
             this.menuAudioController.unlockFromUserGesture();
@@ -848,6 +863,7 @@ export class MainMenu {
         renderMainScreen(container, {
             selectedFaction: this.settings.selectedFaction,
             selectedMap: this.settings.selectedMap,
+            isDeveloperModeEnabled: this.settings.developerModeEnabled,
             resolveAssetPath: this.resolveAssetPath.bind(this),
             onLoadout: () => {
                 this.currentScreen = 'loadout-select';
@@ -874,6 +890,11 @@ export class MainMenu {
                 this.startMenuTransition();
                 this.renderSettingsScreen(this.contentElement);
             },
+            onMapEditor: () => {
+                this.currentScreen = 'map-editor';
+                this.startMenuTransition();
+                this.renderMapEditorScreen(this.contentElement);
+            },
             onCarouselCreated: (carousel) => {
                 this.carouselMenu = carousel;
             },
@@ -892,6 +913,21 @@ export class MainMenu {
                 this.settings.selectedMap = map;
                 this.renderMapSelectionScreen(this.contentElement);
             },
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private renderMapEditorScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        renderMapEditorScreen(container, {
             onBack: () => {
                 this.currentScreen = 'main';
                 this.startMenuTransition();
@@ -1981,6 +2017,7 @@ export class MainMenu {
                     this.resetDeveloperMenuElementVisibility();
                 }
                 this.updateDeveloperMenuControlsVisibility();
+                this.persistSettings();
             },
             onPlayerColorChange: (value) => {
                 this.settings.playerColor = value;

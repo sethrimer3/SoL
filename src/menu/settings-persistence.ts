@@ -14,6 +14,7 @@ export interface PersistedSettings {
     musicVolume: number;
     isBattleStatsInfoEnabled: boolean;
     screenShakeEnabled: boolean;
+    developerModeEnabled: boolean;
     playerColor: string;
     enemyColor: string;
     allyColor: string;
@@ -90,6 +91,7 @@ export function extractPersistedSettings(settings: PersistedSettings): Persisted
         musicVolume: settings.musicVolume,
         isBattleStatsInfoEnabled: settings.isBattleStatsInfoEnabled,
         screenShakeEnabled: settings.screenShakeEnabled,
+        developerModeEnabled: settings.developerModeEnabled,
         playerColor: settings.playerColor,
         enemyColor: settings.enemyColor,
         allyColor: settings.allyColor,
@@ -141,6 +143,9 @@ function validatePersistedSettings(data: Record<string, unknown>): Partial<Persi
     }
     if (typeof data.screenShakeEnabled === 'boolean') {
         result.screenShakeEnabled = data.screenShakeEnabled;
+    }
+    if (typeof data.developerModeEnabled === 'boolean') {
+        result.developerModeEnabled = data.developerModeEnabled;
     }
     if (typeof data.playerColor === 'string') {
         result.playerColor = data.playerColor;

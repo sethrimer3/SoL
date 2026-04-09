@@ -1,0 +1,18 @@
+{
+    "id": "open-space",
+    "name": "Open Space",
+    "description": "Minimal obstacles in a vast arena. Pure strategic combat with fewer terrain advantages.",
+    "playerCount": 2,
+    "mapWidth": 3000,
+    "mapHeight": 3000,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 5
+}
