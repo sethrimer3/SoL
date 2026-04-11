@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Heavy cube in 3D isometric view -->
+  <!-- Top face -->
+  <polygon class="cls-1" points="300,80 500,200 300,320 100,200"/>
+  <!-- Left face -->
+  <polygon class="cls-1" points="100,200 300,320 300,520 100,400" opacity="0.75"/>
+  <!-- Right face -->
+  <polygon class="cls-1" points="500,200 300,320 300,520 500,400" opacity="0.55"/>
+</svg>

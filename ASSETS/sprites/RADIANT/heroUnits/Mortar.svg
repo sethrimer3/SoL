@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Base platform -->
+  <rect class="cls-1" x="140" y="450" width="320" height="60" rx="12"/>
+  <!-- Angled barrel -->
+  <rect class="cls-1" x="270" y="120" width="80" height="280" rx="16" transform="rotate(-30 310 260)"/>
+  <!-- Barrel mouth (circle) -->
+  <circle class="cls-1" cx="220" cy="150" r="44"/>
+  <!-- Muzzle inner (cut out via same color - just a ring effect via a smaller bg circle won't work, keep as is) -->
+  <!-- Support strut -->
+  <rect class="cls-1" x="280" y="370" width="60" height="90" rx="8"/>
+  <!-- Wheel left -->
+  <circle class="cls-1" cx="180" cy="490" r="42"/>
+  <!-- Wheel right -->
+  <circle class="cls-1" cx="420" cy="490" r="42"/>
+</svg>

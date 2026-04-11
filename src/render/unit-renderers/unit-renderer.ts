@@ -43,7 +43,15 @@ import { HeroRenderer } from './hero-renderer';
 export class UnitRenderer {
     private readonly starlingRenderer = new StarlingRenderer();
     private readonly heroRenderer = new HeroRenderer();
-    public drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean, sizeMultiplier: number = 1.0, context: UnitRendererContext): void {
+    public drawUnit(
+        unit: Unit,
+        color: string,
+        game: GameState,
+        isEnemy: boolean,
+        sizeMultiplier: number = 1.0,
+        context: UnitRendererContext,
+        useSimpleLod: boolean = false
+    ): void {
         const screenPos = context.worldToScreen(unit.position);
         const size = 8 * context.zoom * sizeMultiplier;
         const isSelected = context.selectedUnits.has(unit);
@@ -123,6 +131,7 @@ export class UnitRenderer {
             ? context.getTintedSprite(heroSpritePath, tintColor)
             : null;
         const heroSpriteSize = size * context.HERO_SPRITE_SCALE;
+        const shouldUseSimpleSprite = useSimpleLod || (context.graphicsQuality === 'low' && size <= 7);
 
         const glowColor = shouldDim
             ? context.darkenColor(displayColor, Constants.SHADE_OPACITY)
@@ -130,17 +139,19 @@ export class UnitRenderer {
         const glowAlphaScale = isSelected ? 1.3 : 1;
         const renderedUnitRadius = heroSprite ? heroSpriteSize * 0.5 : size;
         const shadeGlowBoost = 0.55 * shadeGlowAlpha;
-        context.drawCachedUnitGlow(
-            screenPos,
-            renderedUnitRadius * (context.ENTITY_SHADE_GLOW_SCALE + (isSelected ? 0.12 : 0.05)),
-            glowColor,
-            (glowAlphaScale + shadeGlowBoost) * visibilityAlpha
-        );
+        if (!shouldUseSimpleSprite) {
+            context.drawCachedUnitGlow(
+                screenPos,
+                renderedUnitRadius * (context.ENTITY_SHADE_GLOW_SCALE + (isSelected ? 0.12 : 0.05)),
+                glowColor,
+                (glowAlphaScale + shadeGlowBoost) * visibilityAlpha
+            );
+        }
 
         context.ctx.save();
         context.ctx.globalAlpha = visibilityAlpha;
 
-        if (heroSprite) {
+        if (!shouldUseSimpleSprite && heroSprite) {
             const rotationRad = unit.rotation;
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
@@ -163,7 +174,7 @@ export class UnitRenderer {
             context.ctx.stroke();
         }
 
-        if (context.isFancyGraphicsEnabled) {
+        if (!shouldUseSimpleSprite && context.isFancyGraphicsEnabled) {
             const bloomColor = shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor;
             const glowRadius = size * (isSelected ? 1.9 : 1.5);
             const glowIntensity = (isSelected ? 0.45 : 0.3) * visibilityAlpha;

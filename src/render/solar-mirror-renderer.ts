@@ -5,6 +5,34 @@
 import { SolarMirror, StellarForge, Vector2D, Faction, GameState, LightRay } from '../game-core';
 import * as Constants from '../constants';
 import { getRadialButtonOffsets } from './render-utilities';
+import { GradientCache } from './gradient-cache';
+
+/** Render-side state for the "To Sun" laser scan animation on a single mirror */
+interface ToSunLaser {
+    /** Angle in radians (0 = straight up, clockwise) */
+    angleRad: number;
+    /** Length of this laser in world pixels (until it hit sun or asteroid) */
+    lengthPx: number;
+    /** Whether this laser reached the sun */
+    isHitSun: boolean;
+    /** The time (in seconds since scan start) at which this laser fires */
+    fireTimeSec: number;
+}
+
+interface ToSunScanState {
+    /** Time elapsed since the scan started */
+    elapsedSec: number;
+    /** Pre-computed lasers */
+    lasers: ToSunLaser[];
+    /** Index of the best (shortest sun-touching) laser, or -1 if none hit sun */
+    bestLaserIndex: number;
+    /** The world position of the mirror when scan started */
+    originWorld: Vector2D;
+    /** Whether the scan is complete (all lasers fired + highlight + fade done) */
+    isComplete: boolean;
+    /** Last frame's timeSec for delta computation */
+    lastTimeSec: number;
+}
 
 export interface SolarMirrorRendererContext {
     ctx: CanvasRenderingContext2D;
@@ -21,7 +49,7 @@ export interface SolarMirrorRendererContext {
     hasActiveFoundry: boolean;
     highlightedButtonIndex: number;
     MIRROR_MAX_HEALTH: number;
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
     VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: string[];
     worldToScreen(worldPos: Vector2D): Vector2D;
     getEnemyVisibilityAlpha(entity: object, isVisible: boolean, gameTime: number): number;
@@ -79,6 +107,11 @@ export interface SolarMirrorRendererContext {
 export class SolarMirrorRenderer {
     private readonly velarisMirrorSeeds = new WeakMap<SolarMirror, number>();
 
+    // "To Sun" laser scan animation state
+    private readonly toSunScanStates = new WeakMap<SolarMirror, ToSunScanState>();
+    /** Whether a mirror was previously in isMovingToSun mode (for edge detection) */
+    private readonly wasMovingToSun = new WeakMap<SolarMirror, boolean>();
+
     private readonly VELARIS_MIRROR_WORD = 'VELARIS';
     private readonly VELARIS_MIRROR_CLOUD_GLYPH_COUNT = 18;
     private readonly VELARIS_MIRROR_CLOUD_PARTICLE_COUNT = 12;
@@ -88,6 +121,14 @@ export class SolarMirrorRenderer {
     private readonly INTENSITY_QUANTIZATION_FACTOR = 10;
     private readonly MIRROR_GLOW_INNER_ALPHA = 0.8;
     private readonly MIRROR_GLOW_MID_ALPHA = 0.4;
+
+    // "To Sun" scan constants
+    private readonly TO_SUN_LASER_COUNT = 16;
+    private readonly TO_SUN_LASER_ANGLE_STEP_RAD = (Math.PI * 2) / 16; // 22.5 degrees
+    private readonly TO_SUN_LASER_FIRE_INTERVAL_SEC = 0.04;   // Delay between each laser firing
+    private readonly TO_SUN_BEST_LASER_HIGHLIGHT_SEC = 0.5;    // Duration of the best laser highlight
+    private readonly TO_SUN_BEST_LASER_FADE_SEC = 1.0;        // Duration of the best laser fade
+    private readonly TO_SUN_LASER_MAX_LENGTH_PX = 2000;        // Maximum laser scan distance
 
     public drawSolarMirror(
         mirror: SolarMirror,
@@ -566,8 +607,16 @@ export class SolarMirrorRenderer {
         }
         
         // Draw move order indicator if mirror has one
-        if (mirror.moveOrder > 0 && mirror.targetPosition) {
-            context.drawMoveOrderIndicator(mirror.position, mirror.targetPosition, mirror.moveOrder, displayColor);
+        if (mirror.moveOrder > 0) {
+            const queuedPathPoints = mirror.getQueuedPathPoints();
+            let segmentStart = mirror.position;
+            let moveOrderNumber = mirror.moveOrder;
+            for (let pathPointIndex = 0; pathPointIndex < queuedPathPoints.length; pathPointIndex++) {
+                const segmentTarget = queuedPathPoints[pathPointIndex];
+                context.drawMoveOrderIndicator(segmentStart, segmentTarget, moveOrderNumber, displayColor);
+                segmentStart = segmentTarget;
+                moveOrderNumber += 1;
+            }
         }
 
         // Check if mirror is regenerating (within influence radius of forge and below max health)
@@ -617,6 +666,194 @@ export class SolarMirrorRenderer {
             context.ctx.textBaseline = 'middle';
             context.ctx.fillText(energyText, startX + iconSize + spacing, textY);
         }
+
+        // ── "To Sun" laser scan animation ─────────────────────────────────
+        this.updateAndDrawToSunScan(mirror, game, timeSec, screenPos, context);
+    }
+
+    /**
+     * Detect when a mirror starts a "To Sun" command, compute laser scan rays,
+     * and draw the animated scan effect.
+     */
+    private updateAndDrawToSunScan(
+        mirror: SolarMirror,
+        game: GameState,
+        timeSec: number,
+        screenPos: Vector2D,
+        context: SolarMirrorRendererContext
+    ): void {
+        const previouslyMoving = this.wasMovingToSun.get(mirror) ?? false;
+        const currentlyMoving = mirror.isMovingToSun;
+        this.wasMovingToSun.set(mirror, currentlyMoving);
+
+        // Detect rising edge: mirror just started "To Sun" mode
+        if (currentlyMoving && !previouslyMoving) {
+            const scanState = this.computeToSunScan(mirror, game);
+            this.toSunScanStates.set(mirror, scanState);
+        }
+
+        const scan = this.toSunScanStates.get(mirror);
+        if (!scan || scan.isComplete) return;
+
+        // Advance elapsed time using frame delta
+        if (scan.lastTimeSec === 0) {
+            scan.lastTimeSec = timeSec;
+            scan.elapsedSec = 0.001; // tiny initial value to start
+        } else {
+            const dt = Math.min(timeSec - scan.lastTimeSec, 0.1);
+            scan.elapsedSec += dt;
+            scan.lastTimeSec = timeSec;
+        }
+
+        const totalFireTimeSec = this.TO_SUN_LASER_COUNT * this.TO_SUN_LASER_FIRE_INTERVAL_SEC;
+        const highlightStartSec = totalFireTimeSec + 0.15; // small pause
+        const highlightEndSec = highlightStartSec + this.TO_SUN_BEST_LASER_HIGHLIGHT_SEC;
+        const fadeEndSec = highlightEndSec + this.TO_SUN_BEST_LASER_FADE_SEC;
+
+        if (scan.elapsedSec > fadeEndSec) {
+            scan.isComplete = true;
+            return;
+        }
+
+        const ctx = context.ctx;
+        ctx.save();
+
+        // Draw each laser that has fired
+        for (let i = 0; i < scan.lasers.length; i++) {
+            const laser = scan.lasers[i];
+            if (scan.elapsedSec < laser.fireTimeSec) continue;
+
+            const isBest = i === scan.bestLaserIndex;
+            const laserAge = scan.elapsedSec - laser.fireTimeSec;
+            let alpha: number;
+
+            if (isBest && scan.elapsedSec >= highlightStartSec) {
+                // Best laser: bright highlight then slow fade
+                if (scan.elapsedSec < highlightEndSec) {
+                    alpha = 0.9; // bright highlight
+                } else {
+                    const fadeProgress = (scan.elapsedSec - highlightEndSec) / this.TO_SUN_BEST_LASER_FADE_SEC;
+                    alpha = 0.9 * (1 - fadeProgress);
+                }
+            } else {
+                // Normal lasers flash briefly then fade
+                const flashDuration = 0.15;
+                if (laserAge < flashDuration) {
+                    alpha = 0.7;
+                } else {
+                    const fadeProgress = Math.min(1, (laserAge - flashDuration) / 0.3);
+                    alpha = 0.7 * (1 - fadeProgress);
+                }
+            }
+
+            if (alpha <= 0.01) continue;
+
+            const endWorldX = scan.originWorld.x + Math.cos(laser.angleRad) * laser.lengthPx;
+            const endWorldY = scan.originWorld.y + Math.sin(laser.angleRad) * laser.lengthPx;
+            const startScreen = context.worldToScreen(scan.originWorld);
+            const endScreen = context.worldToScreen(new Vector2D(endWorldX, endWorldY));
+
+            const lineWidth = isBest && scan.elapsedSec >= highlightStartSec
+                ? 3 * context.zoom
+                : 1.5 * context.zoom;
+
+            if (laser.isHitSun) {
+                ctx.strokeStyle = isBest
+                    ? `rgba(255, 255, 100, ${alpha})`
+                    : `rgba(255, 255, 180, ${alpha})`;
+            } else {
+                ctx.strokeStyle = `rgba(200, 200, 255, ${alpha * 0.5})`;
+            }
+
+            ctx.lineWidth = lineWidth;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(startScreen.x, startScreen.y);
+            ctx.lineTo(endScreen.x, endScreen.y);
+            ctx.stroke();
+
+            // Draw a small dot at the end point
+            if (alpha > 0.1) {
+                const dotRadius = isBest ? 3 * context.zoom : 2 * context.zoom;
+                ctx.fillStyle = laser.isHitSun
+                    ? `rgba(255, 255, 150, ${alpha})`
+                    : `rgba(180, 180, 255, ${alpha * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(endScreen.x, endScreen.y, dotRadius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        ctx.restore();
+    }
+
+    /**
+     * Pre-compute all 16 laser rays for a "To Sun" scan from a mirror's current position.
+     */
+    private computeToSunScan(mirror: SolarMirror, game: GameState): ToSunScanState {
+        const lasers: ToSunLaser[] = [];
+        const origin = mirror.position;
+        let bestIndex = -1;
+        let bestSunDist = Infinity;
+
+        for (let i = 0; i < this.TO_SUN_LASER_COUNT; i++) {
+            // Start straight up (-π/2) and go clockwise
+            const angleRad = -Math.PI / 2 + i * this.TO_SUN_LASER_ANGLE_STEP_RAD;
+            const dirX = Math.cos(angleRad);
+            const dirY = Math.sin(angleRad);
+
+            let lengthPx = this.TO_SUN_LASER_MAX_LENGTH_PX;
+            let isHitSun = false;
+
+            // Check intersection with asteroids
+            const ray = new LightRay(origin, new Vector2D(dirX, dirY));
+            for (const asteroid of game.asteroids) {
+                const d = ray.getIntersectionDistance(asteroid.getWorldVertices());
+                if (d !== null && d > 0 && d < lengthPx) {
+                    lengthPx = d;
+                }
+            }
+
+            // Check intersection with suns
+            for (const sun of game.suns) {
+                const ocX = origin.x - sun.position.x;
+                const ocY = origin.y - sun.position.y;
+                const b = 2 * (ocX * dirX + ocY * dirY);
+                const c = ocX * ocX + ocY * ocY - sun.radius * sun.radius;
+                const discriminant = b * b - 4 * c;
+                if (discriminant < 0) continue;
+                const sqrtDisc = Math.sqrt(discriminant);
+                const t0 = (-b - sqrtDisc) * 0.5;
+                const t1 = (-b + sqrtDisc) * 0.5;
+                const t = t0 > 0 ? t0 : (t1 > 0 ? t1 : -1);
+                if (t > 0 && t < lengthPx) {
+                    lengthPx = t;
+                    isHitSun = true;
+                }
+            }
+
+            lasers.push({
+                angleRad,
+                lengthPx,
+                isHitSun,
+                fireTimeSec: i * this.TO_SUN_LASER_FIRE_INTERVAL_SEC
+            });
+
+            // Track the shortest laser that hit the sun
+            if (isHitSun && lengthPx < bestSunDist) {
+                bestSunDist = lengthPx;
+                bestIndex = i;
+            }
+        }
+
+        return {
+            elapsedSec: 0,
+            lasers,
+            bestLaserIndex: bestIndex,
+            originWorld: new Vector2D(origin.x, origin.y),
+            isComplete: false,
+            lastTimeSec: 0,
+        };
     }
 
     public drawMirrorCommandButtons(

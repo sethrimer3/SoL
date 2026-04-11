@@ -64,3 +64,4 @@ test-binary-maps.ts
 test-mirrors.html
 test-pathfinding.js
 test-mirror-pathfinding-detailed.ts
+node_modules/

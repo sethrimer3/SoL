@@ -53,7 +53,7 @@ export function renderP2PHostScreen(
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);

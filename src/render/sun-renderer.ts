@@ -4,17 +4,42 @@
  * particle layers, shadow casting, and bloom effects.
  */
 
-import { Sun, Vector2D, GameState, Asteroid } from '../game-core';
+import { Sun, Vector2D } from '../game-core';
 import * as Constants from '../constants';
 import { ColorScheme } from '../menu';
 import { renderLensFlare } from '../rendering/LensFlare';
+import type { SpriteDrawSource } from './sprite-manager';
+
+// Canvas type shared across HTMLCanvasElement (main thread) and OffscreenCanvas (worker).
+type SunCanvasType = HTMLCanvasElement | OffscreenCanvas;
+type Sun2DContextType = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+/** Minimal sun data fields used by internal rendering helpers. */
+type SunLike = {
+    readonly type: string;
+    readonly position: { readonly x: number; readonly y: number };
+    readonly radius: number;
+};
+
+/**
+ * Minimal game data consumed by drawSunRays / drawUltraSunParticleLayers.
+ * Both the live GameState and the deserialized worker payload satisfy this interface.
+ */
+export interface SunRayGameData {
+    readonly suns: ReadonlyArray<SunLike>;
+    readonly asteroids: ReadonlyArray<{
+        readonly position: { readonly x: number; readonly y: number };
+        getWorldVertices(): ReadonlyArray<{ readonly x: number; readonly y: number }>;
+    }>;
+    readonly gameTime: number;
+}
 
 // Type definitions for sun rendering
 type SunRenderCache = {
-    plasmaLayerA: HTMLCanvasElement;
-    plasmaLayerB: HTMLCanvasElement;
-    shaftTextureOuter: HTMLCanvasElement;
-    shaftTextureInner: HTMLCanvasElement;
+    plasmaLayerA: SunCanvasType;
+    plasmaLayerB: SunCanvasType;
+    shaftTextureOuter: SunCanvasType;
+    shaftTextureInner: SunCanvasType;
 };
 
 type UltraSunEmberStatic = {
@@ -36,8 +61,8 @@ type UltraSunEmberStatic = {
     emberRed: number;
     emberGreen: number;
     emberBlue: number;
-    glowTexture: HTMLCanvasElement;
-    coreTexture: HTMLCanvasElement;
+    glowTexture: SunCanvasType;
+    coreTexture: SunCanvasType;
 };
 
 type UltraSunParticleCache = {
@@ -60,6 +85,14 @@ type ShaftGradientPair = {
     spine: CanvasGradient;
 };
 
+type SunBodyCacheEntry = {
+    canvas: SunCanvasType;
+    screenX: number;
+    screenY: number;
+    radiusPx: number;
+    lastRefreshMs: number;
+};
+
 export class SunRenderer {
     // Constants
     private readonly ULTRA_SUN_BLOOM_STEPS = 4;
@@ -69,23 +102,30 @@ export class SunRenderer {
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
+    private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
+        low: 100,
+        medium: 50,
+        high: 16,
+        ultra: 0,
+    };
     
     // Caches
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
-    private ultraSunParticleCacheBySun = new WeakMap<Sun, UltraSunParticleCache>();
-    private sunShadowQuadFrameCache = new WeakMap<Sun, ShadowQuad[]>();
+    private sunBodyCacheByKey = new Map<string, SunBodyCacheEntry>();
+    private ultraSunParticleCacheBySun = new Map<string, UltraSunParticleCache>();
+    private sunShadowQuadFrameCache = new Map<string, ShadowQuad[]>();
     private sunShaftGradientCache = new Map<string, ShaftGradientPair>();
     private shadowGradientColorStops = new Map<string, string[]>();
-    private ultraEmberGlowTextureByColor = new Map<string, HTMLCanvasElement>();
-    private ultraEmberCoreTextureByColor = new Map<string, HTMLCanvasElement>();
-    private ultraLightDustTextureByKey = new Map<string, HTMLCanvasElement>();
+    private ultraEmberGlowTextureByColor = new Map<string, SunCanvasType>();
+    private ultraEmberCoreTextureByColor = new Map<string, SunCanvasType>();
+    private ultraLightDustTextureByKey = new Map<string, SunCanvasType>();
     private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
     
     // Lighting layer canvases (offscreen compositing)
-    private lightingLayerCanvas: HTMLCanvasElement | null = null;
-    private lightingLayerCtx: CanvasRenderingContext2D | null = null;
-    private lightingSunPassCanvas: HTMLCanvasElement | null = null;
-    private lightingSunPassCtx: CanvasRenderingContext2D | null = null;
+    private lightingLayerCanvas: SunCanvasType | null = null;
+    private lightingLayerCtx: Sun2DContextType | null = null;
+    private lightingSunPassCanvas: SunCanvasType | null = null;
+    private lightingSunPassCtx: Sun2DContextType | null = null;
     
     // Reusable coordinate vectors for performance
     private sunRayScreenPosA = new Vector2D(0, 0);
@@ -93,20 +133,30 @@ export class SunRenderer {
     private sunRayScreenPosC = new Vector2D(0, 0);
     private sunRayScreenPosD = new Vector2D(0, 0);
     private ultraSunScreenPos = new Vector2D(0, 0);
+
+    constructor(
+        private readonly canvasFactory: (widthPx: number, heightPx: number) => SunCanvasType =
+            (w, h) => {
+                const c = document.createElement('canvas');
+                c.width = w;
+                c.height = h;
+                return c;
+            }
+    ) {}
     
     /**
      * Draw a sun (main entry point)
      */
     public drawSun(
-        ctx: CanvasRenderingContext2D,
-        sun: Sun,
+        ctx: Sun2DContextType,
+        sun: SunLike,
         screenPos: Vector2D,
         screenRadius: number,
         gameTimeSec: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         isFancyGraphicsEnabled: boolean,
         colorScheme: ColorScheme,
-        sunSprite: HTMLImageElement | null,
+        sunSprite: SpriteDrawSource | null,
         drawFancyBloom: (screenPos: Vector2D, radius: number, color: string, intensity: number) => void,
         withAlpha: (color: string, alpha: number) => string
     ): void {
@@ -121,14 +171,101 @@ export class SunRenderer {
                 screenPos,
                 screenRadius,
                 gameTimeSec,
-                sun
+                sun,
+                sunSprite
             );
             return;
         }
 
+        if (graphicsQuality === 'low' || graphicsQuality === 'medium') {
+            if (isFancyGraphicsEnabled) {
+                const bloomRadius = screenRadius * 1.35;
+                drawFancyBloom(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
+            }
+            this.drawCachedSunBody(ctx, sun, screenPos, screenRadius, graphicsQuality, colorScheme, sunSprite);
+            return;
+        }
+
+        this.drawStandardSunBody(ctx, screenPos, screenRadius, isFancyGraphicsEnabled, colorScheme, sunSprite, drawFancyBloom);
+    }
+
+    private drawCachedSunBody(
+        ctx: Sun2DContextType,
+        sun: SunLike,
+        screenPos: Vector2D,
+        screenRadius: number,
+        graphicsQuality: 'low' | 'medium',
+        colorScheme: ColorScheme,
+        sunSprite: SpriteDrawSource | null
+    ): void {
+        const cacheKey = this.getSunBodyCacheKey(sun);
+        let cacheEntry = this.sunBodyCacheByKey.get(cacheKey);
+        const nowMs = performance.now();
+        const refreshIntervalMs = this.SUN_BODY_CACHE_REFRESH_INTERVAL_Ms[graphicsQuality];
+        const needsRefresh = !cacheEntry
+            || Math.abs(screenPos.x - cacheEntry.screenX) > 1
+            || Math.abs(screenPos.y - cacheEntry.screenY) > 1
+            || Math.abs(screenRadius - cacheEntry.radiusPx) > 1
+            || nowMs - cacheEntry.lastRefreshMs >= refreshIntervalMs;
+
+        if (needsRefresh) {
+            const cacheDiameterPx = Math.max(1, Math.ceil(screenRadius * 2));
+            const cacheCanvas = cacheEntry?.canvas ?? this.canvasFactory(cacheDiameterPx, cacheDiameterPx);
+            if (cacheCanvas.width !== cacheDiameterPx || cacheCanvas.height !== cacheDiameterPx) {
+                cacheCanvas.width = cacheDiameterPx;
+                cacheCanvas.height = cacheDiameterPx;
+            }
+
+            const cacheContext = cacheCanvas.getContext('2d');
+            if (!cacheContext) {
+                this.drawStandardSunBody(ctx, screenPos, screenRadius, false, colorScheme, sunSprite);
+                return;
+            }
+
+            cacheContext.clearRect(0, 0, cacheCanvas.width, cacheCanvas.height);
+            this.drawStandardSunBody(
+                cacheContext,
+                new Vector2D(cacheCanvas.width * 0.5, cacheCanvas.height * 0.5),
+                screenRadius,
+                false,
+                colorScheme,
+                sunSprite
+            );
+
+            cacheEntry = {
+                canvas: cacheCanvas,
+                screenX: screenPos.x,
+                screenY: screenPos.y,
+                radiusPx: screenRadius,
+                lastRefreshMs: nowMs,
+            };
+            this.sunBodyCacheByKey.set(cacheKey, cacheEntry);
+        }
+
+        if (!cacheEntry) {
+            this.drawStandardSunBody(ctx, screenPos, screenRadius, false, colorScheme, sunSprite);
+            return;
+        }
+
+        ctx.drawImage(
+            cacheEntry.canvas,
+            screenPos.x - cacheEntry.canvas.width * 0.5,
+            screenPos.y - cacheEntry.canvas.height * 0.5
+        );
+    }
+
+    private drawStandardSunBody(
+        ctx: Sun2DContextType,
+        screenPos: Vector2D,
+        screenRadius: number,
+        isFancyGraphicsEnabled: boolean,
+        colorScheme: ColorScheme,
+        sunSprite: SpriteDrawSource | null,
+        drawFancyBloom?: (screenPos: Vector2D, radius: number, color: string, intensity: number) => void
+    ): void {
         if (isFancyGraphicsEnabled) {
             const bloomRadius = screenRadius * 1.35;
-            drawFancyBloom(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
+            drawFancyBloom?.(screenPos, bloomRadius, colorScheme.sunGlow.outerGlow1, 0.7);
         }
 
         // Draw sun glow (outer glow)
@@ -146,10 +283,14 @@ export class SunRenderer {
         ctx.arc(screenPos.x, screenPos.y, screenRadius, 0, Math.PI * 2);
         ctx.fill();
 
-        if (sunSprite && sunSprite.complete && sunSprite.naturalWidth > 0) {
+        if (sunSprite) {
             const diameterPx = screenRadius * 2;
             ctx.drawImage(
-                sunSprite,
+                sunSprite.image,
+                sunSprite.sourceX,
+                sunSprite.sourceY,
+                sunSprite.sourceWidth,
+                sunSprite.sourceHeight,
                 screenPos.x - screenRadius,
                 screenPos.y - screenRadius,
                 diameterPx,
@@ -166,15 +307,20 @@ export class SunRenderer {
         ctx.stroke();
     }
 
+    private getSunBodyCacheKey(sun: SunLike): string {
+        return `${sun.position.x}_${sun.position.y}`;
+    }
+
     /**
      * Draw ultra quality sun with animated plasma layers
      */
     private drawUltraSun(
-        ctx: CanvasRenderingContext2D,
+        ctx: Sun2DContextType,
         screenPos: Vector2D,
         screenRadius: number,
         gameTimeSec: number,
-        sun: Sun
+        sun: SunLike,
+        sunSprite: SpriteDrawSource | null
     ): void {
         const sunRenderCache = this.getOrCreateSunRenderCache(screenRadius);
         const pulseAmount = 1 + Math.sin(gameTimeSec * 1.2) * 0.012;
@@ -198,6 +344,23 @@ export class SunRenderer {
         ctx.beginPath();
         ctx.arc(screenPos.x, screenPos.y, animatedRadius, 0, Math.PI * 2);
         ctx.clip();
+
+        if (sunSprite) {
+            ctx.save();
+            ctx.globalAlpha = 0.92;
+            ctx.drawImage(
+                sunSprite.image,
+                sunSprite.sourceX,
+                sunSprite.sourceY,
+                sunSprite.sourceWidth,
+                sunSprite.sourceHeight,
+                screenPos.x - animatedRadius,
+                screenPos.y - animatedRadius,
+                animatedRadius * 2,
+                animatedRadius * 2
+            );
+            ctx.restore();
+        }
 
         ctx.save();
         ctx.translate(screenPos.x, screenPos.y);
@@ -264,7 +427,7 @@ export class SunRenderer {
      * Draw bloom layers around ultra sun
      */
     private drawUltraSunBloom(
-        ctx: CanvasRenderingContext2D,
+        ctx: Sun2DContextType,
         screenPos: Vector2D,
         screenRadius: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
@@ -283,8 +446,10 @@ export class SunRenderer {
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
         
-        for (let stepIndex = 0; stepIndex < this.ULTRA_SUN_BLOOM_STEPS; stepIndex++) {
-            const stepT = stepIndex / Math.max(1, this.ULTRA_SUN_BLOOM_STEPS - 1);
+        // Use fewer bloom steps on high quality to reduce draw calls
+        const bloomStepCount = graphicsQuality === 'ultra' ? this.ULTRA_SUN_BLOOM_STEPS : 3;
+        for (let stepIndex = 0; stepIndex < bloomStepCount; stepIndex++) {
+            const stepT = stepIndex / Math.max(1, bloomStepCount - 1);
             const radius = screenRadius * (1.15 + stepT * 2.65);
             const alpha = 0.2 * (1 - stepT);
             
@@ -384,11 +549,9 @@ export class SunRenderer {
         const hashSign = hashSigned || defaultHashSigned;
 
         const textureSize = Math.max(128, radiusBucket * 2);
-        const buildPlasmaLayer = (seedOffset: number): HTMLCanvasElement => {
-            const textureCanvas = document.createElement('canvas');
-            textureCanvas.width = textureSize;
-            textureCanvas.height = textureSize;
-            const textureContext = textureCanvas.getContext('2d');
+        const buildPlasmaLayer = (seedOffset: number): SunCanvasType => {
+            const textureCanvas = this.canvasFactory(textureSize, textureSize);
+            const textureContext = textureCanvas.getContext('2d') as Sun2DContextType | null;
             if (!textureContext) {
                 return textureCanvas;
             }
@@ -427,11 +590,9 @@ export class SunRenderer {
             return textureCanvas;
         };
 
-        const buildShaftTexture = (isOuterLayer: boolean): HTMLCanvasElement => {
-            const shaftTexture = document.createElement('canvas');
-            shaftTexture.width = 1024;
-            shaftTexture.height = 1024;
-            const shaftContext = shaftTexture.getContext('2d');
+        const buildShaftTexture = (isOuterLayer: boolean): SunCanvasType => {
+            const shaftTexture = this.canvasFactory(1024, 1024);
+            const shaftContext = shaftTexture.getContext('2d') as Sun2DContextType | null;
             if (!shaftContext) {
                 return shaftTexture;
             }
@@ -506,7 +667,7 @@ export class SunRenderer {
      * Draw Light and Dark (LaD) split sun
      */
     private drawLadSun(
-        ctx: CanvasRenderingContext2D,
+        ctx: Sun2DContextType,
         screenPos: Vector2D,
         screenRadius: number,
         withAlpha: (color: string, alpha: number) => string
@@ -560,7 +721,7 @@ export class SunRenderer {
      */
     public drawLensFlare(
         ctx: CanvasRenderingContext2D,
-        sun: Sun,
+        sun: SunLike,
         screenPos: Vector2D,
         screenRadius: number,
         canvasWidth: number,
@@ -587,8 +748,8 @@ export class SunRenderer {
      * Append shadow quads from vertices for shadow casting
      */
     private appendShadowQuadsFromVertices(
-        sun: Sun,
-        worldVertices: Vector2D[],
+        sun: SunLike,
+        worldVertices: ReadonlyArray<{ readonly x: number; readonly y: number }>,
         quads: ShadowQuad[],
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
     ): void {
@@ -650,8 +811,8 @@ export class SunRenderer {
      * Build sun shadow quads for all asteroids
      */
     private buildSunShadowQuads(
-        sun: Sun,
-        game: GameState,
+        sun: SunLike,
+        game: SunRayGameData,
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
     ): ShadowQuad[] {
         const quads: ShadowQuad[] = [];
@@ -668,23 +829,19 @@ export class SunRenderer {
      * Get cached sun shadow quads
      */
     public getSunShadowQuadsCached(
-        sun: Sun,
-        game: GameState,
+        sun: SunLike,
+        game: SunRayGameData,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
     ): ShadowQuad[] {
-        // Skip shadow calculations entirely on low quality for performance
-        if (graphicsQuality === 'low') {
-            return [];
-        }
-
-        const cached = this.sunShadowQuadFrameCache.get(sun);
+        const sunId = this.getSunBodyCacheKey(sun);
+        const cached = this.sunShadowQuadFrameCache.get(sunId);
         if (cached) {
             return cached;
         }
 
         const generated = this.buildSunShadowQuads(sun, game, worldToScreenCoords);
-        this.sunShadowQuadFrameCache.set(sun, generated);
+        this.sunShadowQuadFrameCache.set(sunId, generated);
         return generated;
     }
 
@@ -692,15 +849,15 @@ export class SunRenderer {
      * Draw sun rays with raytracing (brightens field and casts shadows)
      */
     public drawSunRays(
-        ctx: CanvasRenderingContext2D,
-        game: GameState,
+        ctx: Sun2DContextType,
+        game: SunRayGameData,
         canvasWidth: number,
         canvasHeight: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         isFancyGraphicsEnabled: boolean,
-        worldToScreen: (worldPos: Vector2D) => Vector2D,
+        worldToScreen: (worldPos: { x: number; y: number }) => Vector2D,
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void,
-        isWithinViewBounds: (worldPos: Vector2D, margin: number) => boolean,
+        isWithinViewBounds: (worldPos: { x: number; y: number }, margin: number) => boolean,
         getCachedRadialGradient: (
             cacheKey: string,
             x0: number, y0: number, r0: number,
@@ -736,13 +893,13 @@ export class SunRenderer {
      * Draw normal sun rays (not LaD)
      */
     private drawNormalSunRays(
-        targetCtx: CanvasRenderingContext2D,
-        game: GameState,
+        targetCtx: Sun2DContextType,
+        game: SunRayGameData,
         canvasWidth: number,
         canvasHeight: number,
         graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         isFancyGraphicsEnabled: boolean,
-        worldToScreen: (worldPos: Vector2D) => Vector2D,
+        worldToScreen: (worldPos: { x: number; y: number }) => Vector2D,
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void,
         getCachedRadialGradient: (
             cacheKey: string,
@@ -760,7 +917,10 @@ export class SunRenderer {
             const sunPassCtx = this.ensureLightingSunPassLayer(canvasWidth, canvasHeight);
 
             const sunScreenPos = worldToScreen(sun.position);
-            const maxRadius = Math.max(canvasWidth, canvasHeight) * 2;
+            // Use 3× the viewport dimension so the gradient reaches every corner of the
+            // playing field even at maximum zoom with the camera panned to the map edge,
+            // preventing the ambient glow from "popping" into existence as the camera moves.
+            const maxRadius = Math.max(canvasWidth, canvasHeight) * 3;
             const shadowQuads = this.getSunShadowQuadsCached(sun, game, graphicsQuality, worldToScreenCoords);
 
             // Create cached radial gradient centered on the sun using named constant for bucket size
@@ -842,11 +1002,11 @@ export class SunRenderer {
      * Draw ultra quality volumetric shafts
      */
     private drawUltraVolumetricShafts(
-        ctx: CanvasRenderingContext2D,
-        sun: Sun,
+        ctx: Sun2DContextType,
+        sun: SunLike,
         gameTimeSec: number,
         shadowQuads: ShadowQuad[],
-        worldToScreen: (worldPos: Vector2D) => Vector2D
+        worldToScreen: (worldPos: { x: number; y: number }) => Vector2D
     ): void {
         const sunScreenPos = worldToScreen(sun.position);
         const screenRadius = sun.radius; // Assumed to be already in screen space or needs zoom multiplier
@@ -896,12 +1056,12 @@ export class SunRenderer {
      * Draw LaD sun rays (split lighting)
      */
     private drawLadSunRays(
-        ctx: CanvasRenderingContext2D,
-        game: GameState,
-        sun: Sun,
-        worldToScreen: (worldPos: Vector2D) => Vector2D,
+        ctx: Sun2DContextType,
+        game: SunRayGameData,
+        sun: SunLike,
+        worldToScreen: (worldPos: { x: number; y: number }) => Vector2D,
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void,
-        isWithinViewBounds: (worldPos: Vector2D, margin: number) => boolean,
+        isWithinViewBounds: (worldPos: { x: number; y: number }, margin: number) => boolean,
         canvasWidth: number,
         canvasHeight: number
     ): void {
@@ -1057,7 +1217,7 @@ export class SunRenderer {
      * Fill a shadow quad with gradient fading
      */
     private fillSoftShadowQuad(
-        ctx: CanvasRenderingContext2D,
+        ctx: Sun2DContextType,
         nearA: { x: number; y: number },
         nearB: { x: number; y: number },
         farA: { x: number; y: number },
@@ -1107,8 +1267,8 @@ export class SunRenderer {
      * Draw ultra sun particle layers (embers and light dust)
      */
     public drawUltraSunParticleLayers(
-        ctx: CanvasRenderingContext2D,
-        game: GameState,
+        ctx: Sun2DContextType,
+        game: SunRayGameData,
         zoom: number,
         canvasWidth: number,
         canvasHeight: number,
@@ -1125,7 +1285,8 @@ export class SunRenderer {
         }
 
         const gameTimeSec = game.gameTime;
-        const dpr = window.devicePixelRatio || 1;
+        // Guard against worker context where `window` is not defined.
+        const dpr = (typeof window !== 'undefined' ? window.devicePixelRatio : 1) || 1;
         const viewportWidth = canvasWidth / dpr;
         const viewportHeight = canvasHeight / dpr;
 
@@ -1203,13 +1364,13 @@ export class SunRenderer {
      * Draw a single ultra sun ember particle
      */
     private drawUltraSunEmber(
-        ctx: CanvasRenderingContext2D,
+        ctx: Sun2DContextType,
         x: number,
         y: number,
         glowRadius: number,
         alpha: number,
-        glowTexture: HTMLCanvasElement,
-        coreTexture: HTMLCanvasElement
+        glowTexture: SunCanvasType,
+        coreTexture: SunCanvasType
     ): void {
         const glowSize = glowRadius * 4.8;
         const glowHalfSize = glowSize * 0.5;
@@ -1225,7 +1386,7 @@ export class SunRenderer {
      * Clear per-frame shadow cache
      */
     public clearFrameCache(): void {
-        this.sunShadowQuadFrameCache = new WeakMap<Sun, ShadowQuad[]>();
+        this.sunShadowQuadFrameCache.clear();
     }
 
     // ---- Cache management helpers (moved from GameRenderer) ----
@@ -1248,10 +1409,10 @@ export class SunRenderer {
         return this.hashNormalized(inputValue) * 2 - 1;
     }
 
-    private ensureLightingLayer(canvasWidth: number, canvasHeight: number): CanvasRenderingContext2D {
+    private ensureLightingLayer(canvasWidth: number, canvasHeight: number): Sun2DContextType {
         if (!this.lightingLayerCanvas) {
-            this.lightingLayerCanvas = document.createElement('canvas');
-            this.lightingLayerCtx = this.lightingLayerCanvas.getContext('2d');
+            this.lightingLayerCanvas = this.canvasFactory(canvasWidth, canvasHeight);
+            this.lightingLayerCtx = this.lightingLayerCanvas.getContext('2d') as Sun2DContextType | null;
         }
         if (!this.lightingLayerCtx || !this.lightingLayerCanvas) {
             throw new Error('Failed to initialize lighting layer context');
@@ -1264,10 +1425,10 @@ export class SunRenderer {
         return this.lightingLayerCtx;
     }
 
-    private ensureLightingSunPassLayer(canvasWidth: number, canvasHeight: number): CanvasRenderingContext2D {
+    private ensureLightingSunPassLayer(canvasWidth: number, canvasHeight: number): Sun2DContextType {
         if (!this.lightingSunPassCanvas) {
-            this.lightingSunPassCanvas = document.createElement('canvas');
-            this.lightingSunPassCtx = this.lightingSunPassCanvas.getContext('2d');
+            this.lightingSunPassCanvas = this.canvasFactory(canvasWidth, canvasHeight);
+            this.lightingSunPassCtx = this.lightingSunPassCanvas.getContext('2d') as Sun2DContextType | null;
         }
         if (!this.lightingSunPassCtx || !this.lightingSunPassCanvas) {
             throw new Error('Failed to initialize sun lighting pass context');
@@ -1280,8 +1441,9 @@ export class SunRenderer {
         return this.lightingSunPassCtx;
     }
 
-    private getOrCreateUltraSunParticleCache(sun: Sun, graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'): UltraSunParticleCache {
-        const cached = this.ultraSunParticleCacheBySun.get(sun);
+    private getOrCreateUltraSunParticleCache(sun: SunLike, graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'): UltraSunParticleCache {
+        const sunId = this.getSunBodyCacheKey(sun);
+        const cached = this.ultraSunParticleCacheBySun.get(sunId);
         if (cached) {
             return cached;
         }
@@ -1322,7 +1484,7 @@ export class SunRenderer {
         }
 
         const generated: UltraSunParticleCache = { emberStatics };
-        this.ultraSunParticleCacheBySun.set(sun, generated);
+        this.ultraSunParticleCacheBySun.set(sunId, generated);
         return generated;
     }
 
@@ -1351,7 +1513,7 @@ export class SunRenderer {
         return generatedStatics;
     }
 
-    private getOrCreateUltraEmberGlowTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
+    private getOrCreateUltraEmberGlowTexture(emberRed: number, emberGreen: number, emberBlue: number): SunCanvasType {
         const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
         const cached = this.ultraEmberGlowTextureByColor.get(colorKey);
         if (cached) {
@@ -1359,10 +1521,8 @@ export class SunRenderer {
         }
 
         const textureSize = 96;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
+        const textureCanvas = this.canvasFactory(textureSize, textureSize);
+        const textureContext = textureCanvas.getContext('2d') as Sun2DContextType | null;
         if (!textureContext) {
             return textureCanvas;
         }
@@ -1382,7 +1542,7 @@ export class SunRenderer {
         return textureCanvas;
     }
 
-    private getOrCreateUltraEmberCoreTexture(emberRed: number, emberGreen: number, emberBlue: number): HTMLCanvasElement {
+    private getOrCreateUltraEmberCoreTexture(emberRed: number, emberGreen: number, emberBlue: number): SunCanvasType {
         const colorKey = `${emberRed}:${emberGreen}:${emberBlue}`;
         const cached = this.ultraEmberCoreTextureByColor.get(colorKey);
         if (cached) {
@@ -1390,10 +1550,8 @@ export class SunRenderer {
         }
 
         const textureSize = 48;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
+        const textureCanvas = this.canvasFactory(textureSize, textureSize);
+        const textureContext = textureCanvas.getContext('2d') as Sun2DContextType | null;
         if (!textureContext) {
             return textureCanvas;
         }
@@ -1412,7 +1570,7 @@ export class SunRenderer {
         return textureCanvas;
     }
 
-    private getOrCreateUltraLightDustTexture(size: number, alpha: number): HTMLCanvasElement {
+    private getOrCreateUltraLightDustTexture(size: number, alpha: number): SunCanvasType {
         const color = '255,182,112';
         const alphaRounded = alpha.toFixed(4);
         const key = `${size.toFixed(2)}:${alphaRounded}`;
@@ -1423,10 +1581,8 @@ export class SunRenderer {
 
         const textureRadius = Math.max(1, Math.ceil(size + 1));
         const textureSize = textureRadius * 2;
-        const textureCanvas = document.createElement('canvas');
-        textureCanvas.width = textureSize;
-        textureCanvas.height = textureSize;
-        const textureContext = textureCanvas.getContext('2d');
+        const textureCanvas = this.canvasFactory(textureSize, textureSize);
+        const textureContext = textureCanvas.getContext('2d') as Sun2DContextType | null;
         if (!textureContext) {
             return textureCanvas;
         }
@@ -1448,5 +1604,5 @@ export type UltraLightDustStatic = {
     driftYSpeed: number;
     size: number;
     textureHalfSize: number;
-    texture: HTMLCanvasElement;
+    texture: SunCanvasType;
 };

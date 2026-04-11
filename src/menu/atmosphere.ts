@@ -3,6 +3,7 @@
  */
 
 import { MenuAsteroid, MenuAsteroidPoint } from './background-particles';
+import { StarNestRenderer } from '../render/star-nest-renderer';
 
 export class MenuAtmosphereLayer {
     private static readonly ASTEROID_COUNT = 14;
@@ -81,6 +82,8 @@ export class MenuAtmosphereLayer {
     private sunGlowGradient: CanvasGradient | null = null;
     private sunPlasmaGradient: CanvasGradient | null = null;
     private asteroidLightGradient: CanvasGradient | null = null;
+    private isStarNestEnabled: boolean = false;
+    private readonly starNestRenderer: StarNestRenderer = new StarNestRenderer();
 
     constructor(container: HTMLElement, sunSpritePath: string) {
         this.container = container;
@@ -120,6 +123,10 @@ export class MenuAtmosphereLayer {
         this.offscreenStarCanvas = null;
         this.offscreenStarContext = null;
         this.initializeStars();
+    }
+
+    public setStarNestEnabled(isEnabled: boolean): void {
+        this.isStarNestEnabled = isEnabled;
     }
 
     public start(): void {
@@ -359,7 +366,12 @@ export class MenuAtmosphereLayer {
 
     private render(nowMs: number): void {
         this.context.clearRect(0, 0, this.widthPx, this.heightPx);
-        this.renderStars(nowMs);
+        if (this.isStarNestEnabled) {
+            this.starNestRenderer.update(nowMs);
+            this.starNestRenderer.draw(this.context, this.widthPx, this.heightPx);
+        } else {
+            this.renderStars(nowMs);
+        }
         this.renderSunGlow();
         this.renderAsteroids();
     }

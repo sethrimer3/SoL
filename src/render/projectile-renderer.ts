@@ -695,4 +695,81 @@ export class ProjectileRenderer {
     public drawChronoFreezeCircle(freezeCircle: InstanceType<typeof ChronoFreezeCircle>, context: ProjectileRendererContext): void {
         this.factionRenderer.drawChronoFreezeCircle(freezeCircle, context);
     }
+
+    /**
+     * Draw all Shroud cubes (main cubes, small cubes, and tiny cubes).
+     * Main cubes are drawn as solid dark squares when moving, transitioning to translucent when stopped.
+     * Child cubes animate outward from the stopped position.
+     */
+    public drawShroudCubes(
+        game: GameState,
+        context: ProjectileRendererContext,
+        isWithinViewBounds: (worldPos: { x: number; y: number }, margin?: number) => boolean
+    ): void {
+        const { ctx, zoom } = context;
+
+        for (const cube of game.shroudCubes) {
+            if (!isWithinViewBounds(cube.position, cube.halfSizePx * 6)) continue;
+
+            const isStopped = cube.isStopped();
+            this.drawShroudCubeRect(ctx, cube.position.x, cube.position.y, cube.halfSizePx, isStopped, 1.0, zoom, context.worldToScreen);
+
+            if (isStopped) {
+                for (const small of cube.smallCubes) {
+                    const cx = small.currentX;
+                    const cy = small.currentY;
+                    const alpha = 0.85;
+                    this.drawShroudCubeRect(ctx, cx, cy, small.halfSizePx, true, alpha, zoom, context.worldToScreen);
+
+                    for (const tiny of small.tinyCubes) {
+                        const tcx = tiny.startPos.x + (tiny.finalPos.x - tiny.startPos.x) * tiny.unfoldProgress;
+                        const tcy = tiny.startPos.y + (tiny.finalPos.y - tiny.startPos.y) * tiny.unfoldProgress;
+                        this.drawShroudCubeRect(ctx, tcx, tcy, tiny.halfSizePx, true, 0.7, zoom, context.worldToScreen);
+                    }
+                }
+            }
+        }
+    }
+
+    private drawShroudCubeRect(
+        ctx: CanvasRenderingContext2D,
+        worldX: number,
+        worldY: number,
+        halfSizePx: number,
+        isStopped: boolean,
+        alpha: number,
+        zoom: number,
+        worldToScreen: (worldPos: Vector2D) => Vector2D
+    ): void {
+        const screenPos = worldToScreen(new Vector2D(worldX, worldY));
+        const halfScreen = halfSizePx * zoom;
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+
+        if (isStopped) {
+            ctx.fillStyle = 'rgba(20, 15, 35, 0.82)';
+            ctx.strokeStyle = '#6633AA';
+            ctx.lineWidth = Math.max(1, 1.5 * zoom);
+        } else {
+            ctx.fillStyle = 'rgba(80, 40, 120, 0.9)';
+            ctx.strokeStyle = '#CC88FF';
+            ctx.lineWidth = Math.max(1, 2 * zoom);
+        }
+
+        ctx.fillRect(
+            screenPos.x - halfScreen,
+            screenPos.y - halfScreen,
+            halfScreen * 2,
+            halfScreen * 2
+        );
+        ctx.strokeRect(
+            screenPos.x - halfScreen,
+            screenPos.y - halfScreen,
+            halfScreen * 2,
+            halfScreen * 2
+        );
+
+        ctx.restore();
+    }
 }

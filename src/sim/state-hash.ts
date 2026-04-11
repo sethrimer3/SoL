@@ -23,6 +23,7 @@ import {
     BouncingBullet,
     MinionProjectile,
 } from './entities/particles';
+import { Photon } from './entities/photon';
 import { Spotlight, Grave } from '../game-core';
 import * as Constants from '../constants';
 
@@ -35,6 +36,7 @@ export interface StateHashContext {
     suns: unknown[];
     asteroids: unknown[];
     spaceDust: SpaceDustParticle[];
+    photons: Photon[];
     players: Player[];
     starlingMergeGates: InstanceType<typeof StarlingMergeGate>[];
     warpGates: WarpGate[];
@@ -89,6 +91,7 @@ export function computeStateHash(state: StateHashContext): number {
 
     for (const player of state.players) {
         mix(player.energy);
+        mix(player.damageScore);
         mixInt(player.isAi ? 1 : 0);
         mix(player.aiNextMirrorCommandSec);
         mix(player.aiNextDefenseCommandSec);
@@ -157,6 +160,7 @@ export function computeStateHash(state: StateHashContext): number {
             }
             mix(mirror.velocity.x);
             mix(mirror.velocity.y);
+            mix(mirror.overchargeRemainingSec);
         }
 
         for (const unit of player.units) {
@@ -248,6 +252,16 @@ export function computeStateHash(state: StateHashContext): number {
         mix(bullet.maxLifetime);
     }
 
+    // Hash photon particles
+    mixInt(state.photons.length);
+    for (const photon of state.photons) {
+        mix(photon.position.x);
+        mix(photon.position.y);
+        mix(photon.velocity.x);
+        mix(photon.velocity.y);
+        mix(photon.lifetimeSec);
+    }
+
     return hash >>> 0;
 }
 
@@ -269,6 +283,7 @@ function mixUnitFields(
     mix(unit.rotation);
     mix(unit.health);
     mix(unit.isHero ? 1 : 0);
+    mixInt(unit.photonCount);
     mix(unit.collisionRadiusPx);
     mixInt(unit.moveOrder);
     if (unit.rallyPoint) {

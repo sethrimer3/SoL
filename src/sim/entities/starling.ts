@@ -32,8 +32,8 @@ export class Starling extends Unit {
     private lastShotLasers: LaserBeam[] = [];
     private pathHash: string = ''; // Unique identifier for the assigned path
     private hasReachedFinalWaypoint: boolean = false; // True when starling reaches the last waypoint
-    private currentMoveSpeedPxPerSec: number = Constants.STARLING_MOVE_SPEED;
     public spriteLevel: number = 1; // Sprite level (1-4)
+    private circularObstaclesCache: Array<{ position: { x: number; y: number }; radius: number }> = [];
     
     constructor(position: Vector2D, owner: Player, assignedPath: Vector2D[] = []) {
         super(
@@ -46,6 +46,12 @@ export class Starling extends Unit {
             Constants.STARLING_BLINK_COOLDOWN_SEC,
             Constants.STARLING_COLLISION_RADIUS_PX
         );
+        // Starling (light infantry) movement preset — starts from rest, accelerates briskly
+        this.maxSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
+        this.accelerationPxPerSec2 = Constants.STARLING_MOVE_ACCELERATION_PX_PER_SEC;
+        this.decelerationPxPerSec2 = Constants.STARLING_DECELERATION_PX_PER_SEC2;
+        this.arriveSlowdownRadiusPx = Constants.STARLING_ARRIVE_SLOWDOWN_RADIUS_PX;
+        // Use the default hero turn rate; starlings are nimble
         this.assignedPath = assignedPath.map((waypoint) => new Vector2D(waypoint.x, waypoint.y));
         this.pathHash = this.generatePathHash(this.assignedPath);
     }
@@ -136,7 +142,7 @@ export class Starling extends Unit {
     }
 
     getCurrentMoveSpeedPxPerSec(): number {
-        return this.currentMoveSpeedPxPerSec;
+        return this.currentSpeedPxPerSec;
     }
 
     hasActiveManualOrder(): boolean {
@@ -165,6 +171,23 @@ export class Starling extends Unit {
      * Update starling AI behavior (call this before regular update)
      */
     updateAI(ctx: StarlingUpdateContext, enemies: CombatTarget[]): void {
+        // Refresh the circular obstacle cache so movement steering avoids buildings/forges.
+        this.circularObstaclesCache = [];
+        for (const player of ctx.players) {
+            if (player.stellarForge) {
+                this.circularObstaclesCache.push({
+                    position: player.stellarForge.position,
+                    radius: player.stellarForge.radius
+                });
+            }
+            for (const building of player.buildings) {
+                this.circularObstaclesCache.push({
+                    position: building.position,
+                    radius: building.radius
+                });
+            }
+        }
+
         if (this.hasManualOrder) {
             return;
         }
@@ -186,12 +209,15 @@ export class Starling extends Unit {
                     // We've reached the end of the path, stay here (pile up)
                     this.rallyPoint = rallyTarget;
                     this.hasReachedFinalWaypoint = true;
+                    this.isIntermediateWaypoint = false;
                     return;
                 }
             } else {
                 // Set rally point to current waypoint
                 this.rallyPoint = rallyTarget;
             }
+            // Inform the base movement physics whether this is an intermediate stop or the final destination.
+            this.isIntermediateWaypoint = this.currentPathWaypointIndex < this.assignedPath.length - 1;
         } else {
             // No path defined, fall back to original AI behavior
             // No need to update exploration timer here, it's updated in the main update loop
@@ -304,7 +330,8 @@ export class Starling extends Unit {
         deltaTime: number,
         moveSpeed: number,
         allUnits: Unit[],
-        asteroids: Asteroid[] = []
+        asteroids: Asteroid[] = [],
+        circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
     ): void {
         // Check if we should stop based on group arrival radius at the final waypoint
         // This only applies when we're heading to the final waypoint (not intermediate waypoints)
@@ -317,6 +344,7 @@ export class Starling extends Unit {
 
             if (distanceToRally <= stopRadiusPx) {
                 this.rallyPoint = null;
+                this.currentSpeedPxPerSec = 0; // Immediate stop at group formation point
                 this.velocity.x = 0;
                 this.velocity.y = 0;
                 this.hasReachedFinalWaypoint = true;
@@ -324,8 +352,9 @@ export class Starling extends Unit {
             }
         }
         
-        // Call parent implementation for normal movement
-        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids);
+        // Pass cached building/forge obstacles so movement steering avoids structures.
+        // The cache is refreshed every tick in updateAI from the full player context.
+        super.moveTowardRallyPoint(deltaTime, moveSpeed, allUnits, asteroids, this.circularObstaclesCache);
     }
 
     /**
@@ -361,15 +390,13 @@ export class Starling extends Unit {
         }
 
         if (this.owner.hasStrafeUpgrade) {
-            this.currentMoveSpeedPxPerSec = Constants.STARLING_MOVE_SPEED;
-        } else if (this.currentMoveSpeedPxPerSec < Constants.STARLING_MOVE_SPEED) {
-            this.currentMoveSpeedPxPerSec = Math.min(
-                Constants.STARLING_MOVE_SPEED,
-                this.currentMoveSpeedPxPerSec + Constants.STARLING_MOVE_ACCELERATION_PX_PER_SEC * deltaTime
-            );
+            // Strafe upgrade: keep full speed at all times (no attack-induced slow)
+            this.currentSpeedPxPerSec = Math.max(this.currentSpeedPxPerSec, Constants.STARLING_MOVE_SPEED);
         }
+        // No else branch needed: the base class moveTowardRallyPoint handles acceleration from rest
+        // (attack() zeroes currentSpeedPxPerSec when no strafe upgrade, and the base re-accelerates)
 
-        this.moveTowardRallyPoint(deltaTime, this.currentMoveSpeedPxPerSec, allUnits, asteroids);
+        this.moveTowardRallyPoint(deltaTime, 0 /* ignored */, allUnits, asteroids);
 
         // Use base class methods for targeting and attacking
         // Find target if don't have one or current target is dead
@@ -470,7 +497,8 @@ export class Starling extends Unit {
         }
 
         if (!this.owner.hasStrafeUpgrade) {
-            this.currentMoveSpeedPxPerSec = 0;
+            // No strafe upgrade: stop moving when firing so the unit aims properly
+            this.currentSpeedPxPerSec = 0;
         }
     }
 }

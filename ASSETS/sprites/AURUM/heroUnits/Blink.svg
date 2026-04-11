@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Portal / blink ring -->
+  <!-- Outer ring -->
+  <path class="cls-1" fill-rule="evenodd" d="
+    M300,60 A240,240 0 1,1 299.99,60 Z
+    M300,120 A180,180 0 1,0 299.99,120 Z"/>
+  <!-- Shockwave arc hints (three arcs) -->
+  <path class="cls-1" d="M180,300 A130,130 0 0,1 420,300" stroke="#fefefe" stroke-width="20" fill="none" opacity="0.7"/>
+  <path class="cls-1" d="M150,300 A160,160 0 0,1 450,300" stroke="#fefefe" stroke-width="16" fill="none" opacity="0.45"/>
+  <!-- Entry/exit spark -->
+  <circle class="cls-1" cx="300" cy="300" r="30"/>
+</svg>

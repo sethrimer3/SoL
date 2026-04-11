@@ -4,7 +4,7 @@
 
 import * as Constants from './constants';
 import { Faction } from './game-core';
-import { NetworkManager, LANSignaling, LobbyInfo } from './network';
+import { NetworkManager, LANSignaling, LobbyInfo, NetworkEvent, MessageType } from './network';
 import { MenuOption, FactionCarouselOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
 import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
@@ -18,8 +18,12 @@ import {
     createTextInput 
 } from './menu/ui-helpers';
 import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
+import { MatchmakingController } from './menu/matchmaking-controller';
+import { loadPersistedSettings, savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
+import { renderMapEditorScreen } from './menu/screens/map-editor-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
 import { renderMatchHistoryScreen } from './menu/screens/match-history-screen';
@@ -38,8 +42,9 @@ import { renderMatchmaking2v2Screen } from './menu/screens/matchmaking-2v2-scree
 import { renderMatchmaking1v1Screen } from './menu/screens/matchmaking-1v1-screen';
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
+import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/screens/match-loading-screen';
 import { createMapPreviewCanvas } from './menu/map-preview';
-import { MenuAudioController } from './menu/menu-audio';
+import { MenuAudioController, UiSoundType } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
 import { FactionCarouselView } from './menu/faction-carousel-view';
 import { BUILD_NUMBER } from './build-info';
@@ -57,6 +62,7 @@ import {
 } from './replay';
 import { HERO_UNITS } from './menu/hero-data';
 import { AVAILABLE_MAPS, BASE_LOADOUTS, SPAWN_LOADOUTS } from './menu/map-data';
+import { loadBuiltinMaps } from './menu/map-json-loader';
 
 // Re-export types for backward compatibility
 export { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout, ColorScheme, COLOR_SCHEMES };
@@ -86,6 +92,13 @@ export interface GameSettings {
     damageDisplayMode: 'damage' | 'remaining-life'; // How to display damage numbers
     healthDisplayMode: 'bar' | 'number'; // How to display unit health
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'; // Graphics quality setting
+    isExperimentalGraphicsEnabled: boolean; // Enables atmospheric overlays (nebula haze, aurora ribbons, starlight veil)
+    isStarNestEnabled: boolean; // Enables Star Nest flying-through-space star effect on menus and playing field
+    isAdaptiveQualityEnabled: boolean; // Automatically lowers graphics quality when FPS drops
+    useSvgSprites: boolean; // Use SVG sprite variants when available (PNG remains default)
+    isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
+    resolution: string; // Display resolution setting ('native', '640x360', '1280x720', etc.)
+    isPixelModeEnabled: boolean; // Render at 320x180 (Celeste-style) then upscale with nearest-neighbor for crisp pixel art look
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -100,7 +113,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
+    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -113,17 +126,22 @@ export class MainMenu {
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
-    private matchmakingPollInterval: number | null = null; // Poll interval for matchmaking
+    private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private p2pMatchName: string = ''; // Track P2P match name
     private p2pMaxPlayers: number = 2; // Track P2P max players
     private mainScreenRenderToken: number = 0;
+    private lobbyDetailRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
+    private lobbyUpdateCallback: ((data?: any) => void) | null = null; // Listener for real-time lobby state changes
+    private lobbyGameStartCallback: ((data?: any) => void) | null = null; // Listener for game-start broadcast (non-host)
+    private static readonly LOBBY_REFRESH_DEBOUNCE_MS = 150;
     private visibilityHandler: (() => void) | null = null;
     private blurHandler: (() => void) | null = null;
     private focusHandler: (() => void) | null = null;
     private menuAudioController: MenuAudioController;
-    private isMatchmakingSearching = false;
+    private get isMatchmakingSearching(): boolean { return this.matchmakingController.isMatchmakingSearching; }
+    private set isMatchmakingSearching(value: boolean) { this.matchmakingController.isMatchmakingSearching = value; }
     private developerMenuElementVisibility = {
         isBackgroundLayerVisible: true,
         isAtmosphereLayerVisible: true,
@@ -135,6 +153,7 @@ export class MainMenu {
     };
     
     private heroUnits: HeroUnit[] = HERO_UNITS;
+    private viewedHeroId: string | null = null;
     private availableMaps: MapConfig[] = AVAILABLE_MAPS;
     private baseLoadouts: BaseLoadout[] = BASE_LOADOUTS;
     private spawnLoadouts: SpawnLoadout[] = SPAWN_LOADOUTS;
@@ -163,10 +182,24 @@ export class MainMenu {
             colorScheme: 'SpaceBlack', // Default color scheme
             damageDisplayMode: 'damage', // Default to showing damage numbers
             healthDisplayMode: 'bar', // Default to showing health bars
-            graphicsQuality: 'ultra', // Default to ultra graphics
+            graphicsQuality: 'high', // Default to high graphics for new players
+            isExperimentalGraphicsEnabled: false,
+            isStarNestEnabled: false,
+            isAdaptiveQualityEnabled: false, // Default to disabled
+            useSvgSprites: false, // Default to PNG sprites
+            isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
+            resolution: 'native', // Default to native browser resolution
+            isPixelModeEnabled: false, // Default to normal rendering (not pixel art mode)
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
+
+        // Restore any previously saved settings from localStorage
+        const saved = loadPersistedSettings();
+        if (saved) {
+            Object.assign(this.settings, saved);
+        }
+
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
@@ -178,8 +211,23 @@ export class MainMenu {
         document.body.appendChild(this.menuElement);
         this.menuAudioController.setMusicEnabled(this.settings.musicEnabled);
         this.menuAudioController.setMusicVolume(this.settings.musicVolume / 100);
+        this.menuAudioController.setSoundEnabled(this.settings.soundEnabled);
+        this.menuAudioController.setSoundVolume(this.settings.soundVolume / 100);
         this.menuAudioController.setVisible(true);
         this.updateMenuAudioState();
+
+        // Asynchronously load maps from JSON files; update the fallback list when ready.
+        void loadBuiltinMaps().then((loaded) => {
+            if (loaded.length > 0) {
+                this.availableMaps = loaded;
+                // Re-select current map with the JSON-enriched version if possible
+                const current = this.settings.selectedMap;
+                const match = this.availableMaps.find(m => m.id === current.id);
+                if (match) {
+                    this.settings.selectedMap = match;
+                }
+            }
+        });
 
         const unlockAudioOnGesture = (): void => {
             this.menuAudioController.unlockFromUserGesture();
@@ -190,6 +238,9 @@ export class MainMenu {
         document.addEventListener('keydown', unlockAudioOnGesture, { once: true });
 
         this.visibilityHandler = () => {
+            if (!this.settings.isPauseOnFocusLossEnabled) {
+                return;
+            }
             if (document.hidden || !document.hasFocus()) {
                 this.menuAudioController.setVisible(false);
                 this.pauseMenuAnimations();
@@ -199,11 +250,13 @@ export class MainMenu {
             this.resumeMenuAnimations();
         };
         this.blurHandler = () => {
-            this.menuAudioController.setVisible(false);
-            this.pauseMenuAnimations();
+            if (this.settings.isPauseOnFocusLossEnabled) {
+                this.menuAudioController.setVisible(false);
+                this.pauseMenuAnimations();
+            }
         };
         this.focusHandler = () => {
-            if (!document.hidden) {
+            if (this.settings.isPauseOnFocusLossEnabled && !document.hidden) {
                 this.menuAudioController.setVisible(true);
                 this.resumeMenuAnimations();
             }
@@ -228,7 +281,7 @@ export class MainMenu {
         menu.style.backgroundColor = 'transparent';
         menu.style.zIndex = '1000';
         menu.style.fontFamily = '"Doto", Arial, sans-serif';
-        menu.style.fontWeight = '300';
+        menu.style.fontWeight = 'bold';
         menu.style.fontSize = '24px';
         menu.style.color = '#FFFFFF';
         menu.style.overflowY = 'auto';
@@ -256,6 +309,7 @@ export class MainMenu {
             this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
         );
         this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
+        this.atmosphereLayer.setStarNestEnabled(this.settings.isStarNestEnabled);
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
@@ -638,6 +692,13 @@ export class MainMenu {
     }
 
     /**
+     * Save the current persistable settings to localStorage.
+     */
+    private persistSettings(): void {
+        savePersistedSettings(extractPersistedSettings(this.settings));
+    }
+
+    /**
      * Generate a random username in the format "player#XXXX"
      */
     private async clearPlayerDataAndCache(): Promise<void> {
@@ -733,78 +794,11 @@ export class MainMenu {
     }
 
     private renderLanLobbyList(listContainer: HTMLElement): void {
-        listContainer.innerHTML = '';
-        const entries = this.lanLobbyManager.getFreshLobbies();
-
-        if (entries.length === 0) {
-            const emptyState = document.createElement('p');
-            emptyState.textContent = 'No LAN lobbies detected yet. Host a game to make it appear here.';
-            emptyState.style.color = '#888888';
-            emptyState.style.fontSize = '16px';
-            emptyState.style.textAlign = 'center';
-            emptyState.style.margin = '0';
-            listContainer.appendChild(emptyState);
-            return;
-        }
-
-        for (const entry of entries) {
-            const entryCard = document.createElement('div');
-            entryCard.style.display = 'flex';
-            entryCard.style.flexDirection = 'row';
-            entryCard.style.alignItems = 'center';
-            entryCard.style.justifyContent = 'space-between';
-            entryCard.style.gap = '16px';
-            entryCard.style.padding = '14px 18px';
-            entryCard.style.borderRadius = '8px';
-            entryCard.style.backgroundColor = 'rgba(0, 0, 0, 0.4)';
-            entryCard.style.border = '1px solid rgba(255, 215, 0, 0.3)';
-            entryCard.style.cursor = 'pointer';
-            entryCard.style.transition = 'transform 0.15s ease, border-color 0.15s ease';
-            entryCard.addEventListener('mouseenter', () => {
-                entryCard.style.transform = 'translateY(-2px)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.6)';
-            });
-            entryCard.addEventListener('mouseleave', () => {
-                entryCard.style.transform = 'translateY(0)';
-                entryCard.style.borderColor = 'rgba(255, 215, 0, 0.3)';
-            });
-
-            const entryInfo = document.createElement('div');
-            entryInfo.style.display = 'flex';
-            entryInfo.style.flexDirection = 'column';
-            entryInfo.style.gap = '4px';
-            entryInfo.style.flex = '1';
-
-            const lobbyName = document.createElement('div');
-            lobbyName.textContent = entry.lobbyName;
-            lobbyName.style.color = '#FFD700';
-            lobbyName.style.fontSize = '18px';
-            lobbyName.style.fontWeight = '600';
-            entryInfo.appendChild(lobbyName);
-
-            const lobbyMeta = document.createElement('div');
-            lobbyMeta.textContent = `${entry.hostUsername} • ${entry.playerCount}/${entry.maxPlayerCount} players`;
-            lobbyMeta.style.color = '#CCCCCC';
-            lobbyMeta.style.fontSize = '14px';
-            entryInfo.appendChild(lobbyMeta);
-
-            const joinButton = this.createButton('JOIN', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            }, '#00AAFF');
-            joinButton.style.padding = '8px 18px';
-            joinButton.style.fontSize = '14px';
-            joinButton.addEventListener('click', (event) => {
-                event.stopPropagation();
-            });
-
-            entryCard.addEventListener('click', () => {
-                void this.joinLanLobbyWithCode(entry.connectionCode);
-            });
-
-            entryCard.appendChild(entryInfo);
-            entryCard.appendChild(joinButton);
-            listContainer.appendChild(entryCard);
-        }
+        renderLanLobbyListHelper(listContainer, {
+            entries: this.lanLobbyManager.getFreshLobbies(),
+            onJoinLobby: (code) => { void this.joinLanLobbyWithCode(code); },
+            createButton: this.createButton.bind(this)
+        });
     }
 
     private scheduleLanLobbyListRefresh(listContainer: HTMLElement): void {
@@ -869,6 +863,7 @@ export class MainMenu {
         renderMainScreen(container, {
             selectedFaction: this.settings.selectedFaction,
             selectedMap: this.settings.selectedMap,
+            isDeveloperModeEnabled: this.settings.developerModeEnabled,
             resolveAssetPath: this.resolveAssetPath.bind(this),
             onLoadout: () => {
                 this.currentScreen = 'loadout-select';
@@ -895,6 +890,11 @@ export class MainMenu {
                 this.startMenuTransition();
                 this.renderSettingsScreen(this.contentElement);
             },
+            onMapEditor: () => {
+                this.currentScreen = 'map-editor';
+                this.startMenuTransition();
+                this.renderMapEditorScreen(this.contentElement);
+            },
             onCarouselCreated: (carousel) => {
                 this.carouselMenu = carousel;
             },
@@ -913,6 +913,21 @@ export class MainMenu {
                 this.settings.selectedMap = map;
                 this.renderMapSelectionScreen(this.contentElement);
             },
+            onBack: () => {
+                this.currentScreen = 'main';
+                this.startMenuTransition();
+                this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private renderMapEditorScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        renderMapEditorScreen(container, {
             onBack: () => {
                 this.currentScreen = 'main';
                 this.startMenuTransition();
@@ -1159,31 +1174,7 @@ export class MainMenu {
     }
 
     private updatePlayersList(playersList: HTMLElement): void {
-        playersList.innerHTML = '';
-        
-        for (const player of this.p2pMatchPlayers) {
-            const playerItem = document.createElement('div');
-            playerItem.style.padding = '10px';
-            playerItem.style.backgroundColor = 'rgba(255, 255, 255, 0.05)';
-            playerItem.style.borderRadius = '5px';
-            playerItem.style.display = 'flex';
-            playerItem.style.justifyContent = 'space-between';
-            playerItem.style.alignItems = 'center';
-
-            const playerName = document.createElement('span');
-            playerName.textContent = player.username;
-            playerName.style.fontSize = '18px';
-            playerName.style.color = '#FFFFFF';
-            playerItem.appendChild(playerName);
-
-            const playerRole = document.createElement('span');
-            playerRole.textContent = player.role === 'host' ? '(Host)' : '(Player)';
-            playerRole.style.fontSize = '14px';
-            playerRole.style.color = player.role === 'host' ? '#FFD700' : '#CCCCCC';
-            playerItem.appendChild(playerRole);
-
-            playersList.appendChild(playerItem);
-        }
+        renderPlayersList(playersList, this.p2pMatchPlayers);
     }
 
     private async fetchAndUpdatePlayers(playersList: HTMLElement): Promise<void> {
@@ -1388,11 +1379,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1405,11 +1392,7 @@ export class MainMenu {
                 this.render2v2MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'game-mode-select';
                 this.startMenuTransition();
@@ -1420,80 +1403,18 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        // TODO: Replace with Supabase real-time subscriptions for better UX
-        console.log('Starting matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                // No longer in queue, stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential matches
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr2v2);
-            
-            if (candidates.length >= 3) {
-                // Found enough players for 2v2 (need 3 others + us = 4 total)
-                console.log('Match found! Candidates:', candidates);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Create balanced teams based on MMR
-                const allPlayers = [
-                    { username: this.settings.username, mmr: mmrData.mmr2v2, faction: this.settings.selectedFaction || Faction.RADIANT, isLocal: true },
-                    ...candidates.slice(0, 3).map(c => ({ username: c.username, mmr: c.mmr, faction: c.faction as Faction, isLocal: false }))
-                ];
-                
-                // Sort by MMR and alternate teams for balance
-                allPlayers.sort((a, b) => b.mmr - a.mmr);
-                
-                // Create player configs (highest MMR with lowest, etc.)
-                // Ensure we have exactly 4 players
-                if (allPlayers.length === 4) {
-                    const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [
-                        [allPlayers[0].username, allPlayers[0].faction, 0, 'player', 'normal', allPlayers[0].isLocal],
-                        [allPlayers[3].username, allPlayers[3].faction, 0, 'player', 'normal', allPlayers[3].isLocal],
-                        [allPlayers[1].username, allPlayers[1].faction, 1, 'player', 'normal', allPlayers[1].isLocal],
-                        [allPlayers[2].username, allPlayers[2].faction, 1, 'player', 'normal', allPlayers[2].isLocal]
-                    ];
-                    
-                    // Update settings
-                    this.settings.gameMode = '2v2-matchmaking';
-                    
-                    // Hide menu and start game
-                    this.hide();
-                    
-                    // Dispatch event to start 4-player game
-                    const event = new CustomEvent('start4PlayerGame', {
-                        detail: {
-                            playerConfigs: playerConfigs,
-                            settings: this.settings,
-                            roomId: null // No room for matchmaking
-                        }
-                    });
-                    window.dispatchEvent(event);
-                    
-                    return;
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+        this.matchmakingController.start2v2Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
+                this.hide();
+            },
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
     private render1v1MatchmakingScreen(container: HTMLElement): void {
@@ -1570,11 +1491,7 @@ export class MainMenu {
             onCancelMatchmaking: async () => {
                 console.log('Cancelling 1v1 matchmaking...');
                 
-                // Clear polling interval
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 
                 if (!this.onlineNetworkManager) {
                     return;
@@ -1586,11 +1503,7 @@ export class MainMenu {
                 this.render1v1MatchmakingScreen(this.contentElement);
             },
             onBack: () => {
-                // Clear polling if active
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
+                this.matchmakingController.stopPolling();
                 this.isMatchmakingSearching = false;
                 this.currentScreen = 'online';
                 this.startMenuTransition();
@@ -1601,53 +1514,128 @@ export class MainMenu {
         });
         
         // Start polling for matchmaking results
-        console.log('Starting 1v1 matchmaking search...');
-        
-        this.matchmakingPollInterval = window.setInterval(async () => {
-            if (!this.onlineNetworkManager) {
-                return;
-            }
-            
-            // Check if still in queue
-            const inQueue = await this.onlineNetworkManager.isInMatchmakingQueue();
-            if (!inQueue) {
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                return;
-            }
-            
-            // Find potential 1v1 match
-            const candidates = await this.onlineNetworkManager.findMatchmakingCandidates(mmrData.mmr, '1v1');
-            
-            if (candidates.length >= 1) {
-                // Found a 1v1 opponent
-                console.log('1v1 match found! Opponent:', candidates[0]);
-                
-                // Stop polling
-                if (this.matchmakingPollInterval !== null) {
-                    window.clearInterval(this.matchmakingPollInterval);
-                    this.matchmakingPollInterval = null;
-                }
-                
-                // Leave matchmaking queue
-                await this.onlineNetworkManager.leaveMatchmakingQueue();
-                
-                // Start a standard 1v1 online game
-                this.settings.gameMode = 'online';
-                this.onlineMode = 'ranked';
-                
+        this.matchmakingController.start1v1Polling({
+            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getSettings: () => this.settings,
+            getUsername: () => this.settings.username,
+            getSelectedFaction: () => this.settings.selectedFaction,
+            hideMenu: () => {
+                this.menuAudioController.playUiSound('match-found');
                 this.hide();
-                if (this.onStartCallback) {
-                    this.onStartCallback(this.settings);
-                }
-            }
-        }, 5000); // Poll every 5 seconds
+            },
+            onStartCallback: this.onStartCallback,
+            setOnlineMode: (mode) => { this.onlineMode = mode; }
+        });
     }
 
 
+    /** Clear the real-time lobby update listener, if one is registered. */
+    private clearLobbyUpdateListener(): void {
+        if (this.onlineNetworkManager) {
+            if (this.lobbyUpdateCallback) {
+                this.onlineNetworkManager.off(NetworkEvent.LOBBY_CHANGED, this.lobbyUpdateCallback);
+                this.onlineNetworkManager.off(NetworkEvent.PLAYER_JOINED, this.lobbyUpdateCallback);
+                this.onlineNetworkManager.off(NetworkEvent.PLAYER_LEFT, this.lobbyUpdateCallback);
+                this.lobbyUpdateCallback = null;
+            }
+            if (this.lobbyGameStartCallback) {
+                this.onlineNetworkManager.off(NetworkEvent.MESSAGE_RECEIVED, this.lobbyGameStartCallback);
+                this.lobbyGameStartCallback = null;
+            }
+        }
+    }
+
+    /**
+     * Register event listeners on the online network manager so that any
+     * real-time lobby change (player join/leave, ready toggle, AI added, etc.)
+     * automatically refreshes the lobby detail UI.
+     *
+     * For non-host clients, also listens for the game_start broadcast so that
+     * the game launches without any manual action from the client.
+     */
+    private setupLobbyUpdateListener(): void {
+        this.clearLobbyUpdateListener();
+        if (!this.onlineNetworkManager) return;
+
+        let refreshPending = false;
+        this.lobbyUpdateCallback = async () => {
+            if (this.currentScreen !== 'lobby-detail' || refreshPending) return;
+            refreshPending = true;
+            // Small debounce so rapid back-to-back events only trigger one refresh
+            await new Promise<void>(resolve => setTimeout(resolve, MainMenu.LOBBY_REFRESH_DEBOUNCE_MS));
+            refreshPending = false;
+            if (this.currentScreen === 'lobby-detail') {
+                await this.renderLobbyDetailScreen(this.contentElement);
+            }
+        };
+
+        this.onlineNetworkManager.on(NetworkEvent.LOBBY_CHANGED, this.lobbyUpdateCallback);
+        this.onlineNetworkManager.on(NetworkEvent.PLAYER_JOINED, this.lobbyUpdateCallback);
+        this.onlineNetworkManager.on(NetworkEvent.PLAYER_LEFT, this.lobbyUpdateCallback);
+
+        // Non-host clients: react to the game_start broadcast and launch the game
+        if (!this.onlineNetworkManager.isRoomHost()) {
+            this.lobbyGameStartCallback = async (message?: any) => {
+                if (message?.type !== MessageType.GAME_START) return;
+                await this.startClientGame();
+            };
+            this.onlineNetworkManager.on(NetworkEvent.MESSAGE_RECEIVED, this.lobbyGameStartCallback);
+        }
+    }
+
+    /**
+     * Start the game as a non-host client after receiving the game_start broadcast.
+     * Mirrors the host-side onStartGame logic to build player configs from room state.
+     */
+    private async startClientGame(): Promise<void> {
+        if (!this.onlineNetworkManager) return;
+        this.clearLobbyUpdateListener();
+
+        const room = this.onlineNetworkManager.getCurrentRoom();
+        if (!room) return;
+
+        const allPlayers = await this.onlineNetworkManager.getRoomPlayers();
+        const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
+        const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
+
+        const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+        const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+
+        for (const player of team0Players.slice(0, 2)) {
+            playerConfigs.push([
+                player.username,
+                (player.faction as Faction) || Faction.RADIANT,
+                0,
+                player.slot_type as 'player' | 'ai',
+                player.ai_difficulty || 'normal',
+                player.player_id === localPlayerId
+            ]);
+        }
+        for (const player of team1Players.slice(0, 2)) {
+            playerConfigs.push([
+                player.username,
+                (player.faction as Faction) || Faction.RADIANT,
+                1,
+                player.slot_type as 'player' | 'ai',
+                player.ai_difficulty || 'normal',
+                player.player_id === localPlayerId
+            ]);
+        }
+        while (playerConfigs.length < 4) {
+            const teamId = playerConfigs.length < 2 ? 0 : 1;
+            playerConfigs.push([`AI Player ${playerConfigs.length + 1}`, Faction.RADIANT, teamId, 'ai', 'normal', false]);
+        }
+
+        this.settings.gameMode = 'custom-lobby';
+        this.hide();
+
+        window.dispatchEvent(new CustomEvent('start4PlayerGame', {
+            detail: { playerConfigs, settings: this.settings, roomId: room.id }
+        }));
+    }
+
     private async renderLobbyDetailScreen(container: HTMLElement): Promise<void> {
+        const renderToken = ++this.lobbyDetailRenderToken;
         if (this.carouselMenu) {
             this.carouselMenu.destroy();
             this.carouselMenu = null;
@@ -1656,7 +1644,6 @@ export class MainMenu {
             this.factionCarousel.destroy();
             this.factionCarousel = null;
         }
-        container.innerHTML = '';
         this.setMenuParticleDensity(1.6);
 
         if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
@@ -1681,11 +1668,20 @@ export class MainMenu {
         const isHost = this.onlineNetworkManager.isRoomHost();
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
         const lobbyMaps = this.availableMaps;
         const roomSelectedMapId = room.game_settings?.selectedMapId;
         const selectedLobbyMap = lobbyMaps.find(map => map.id === roomSelectedMapId) || this.settings.selectedMap || lobbyMaps[0];
         this.settings.selectedMap = selectedLobbyMap;
 
+        if (this.currentScreen !== 'lobby-detail' || renderToken !== this.lobbyDetailRenderToken) {
+            return;
+        }
+
+        container.innerHTML = '';
         renderLobbyDetailScreen(container, {
             roomId: room.id,
             roomName: room.name,
@@ -1856,6 +1852,7 @@ export class MainMenu {
                 
                 // Hide menu and start game
                 this.hide();
+                this.clearLobbyUpdateListener();
                 
                 // Dispatch event to start 4-player game
                 const event = new CustomEvent('start4PlayerGame', {
@@ -1894,6 +1891,7 @@ export class MainMenu {
             onLeave: async () => {
                 if (!this.onlineNetworkManager) return;
                 await this.onlineNetworkManager.leaveRoom();
+                this.clearLobbyUpdateListener();
                 this.currentScreen = 'custom-lobby';
                 this.startMenuTransition();
                 await this.renderCustomLobbyScreen(this.contentElement);
@@ -1904,6 +1902,12 @@ export class MainMenu {
             createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer
         });
+
+        // Register real-time listener so all lobby changes (from host or peers)
+        // automatically refresh this screen without requiring manual interaction.
+        // Called after rendering so any re-render triggered by the listener finds
+        // a fully-initialised screen.
+        this.setupLobbyUpdateListener();
     }
 
     private renderMatchHistoryScreen(container: HTMLElement): void {
@@ -1962,9 +1966,17 @@ export class MainMenu {
             allyColor: this.settings.allyColor,
             enemy2Color: this.settings.enemy2Color,
             graphicsQuality: this.settings.graphicsQuality,
+            isExperimentalGraphicsEnabled: this.settings.isExperimentalGraphicsEnabled,
+            isStarNestEnabled: this.settings.isStarNestEnabled,
+            isAdaptiveQualityEnabled: this.settings.isAdaptiveQualityEnabled,
+            useSvgSprites: this.settings.useSvgSprites,
+            isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
+            resolution: this.settings.resolution,
+            isPixelModeEnabled: this.settings.isPixelModeEnabled,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
+                this.persistSettings();
             },
             onUsernameChange: (value) => {
                 this.playerProfileManager.saveUsername(value);
@@ -1972,23 +1984,32 @@ export class MainMenu {
             },
             onSoundEnabledChange: (value) => {
                 this.settings.soundEnabled = value;
+                this.menuAudioController.setSoundEnabled(value);
+                this.persistSettings();
             },
             onMusicEnabledChange: (value) => {
                 this.settings.musicEnabled = value;
                 this.menuAudioController.setMusicEnabled(value);
+                this.persistSettings();
             },
             onSoundVolumeChange: (value) => {
                 this.settings.soundVolume = value;
+                this.menuAudioController.setSoundVolume(value / 100);
+                this.menuAudioController.playUiSound('setting-change');
+                this.persistSettings();
             },
             onMusicVolumeChange: (value) => {
                 this.settings.musicVolume = value;
                 this.menuAudioController.setMusicVolume(value / 100);
+                this.persistSettings();
             },
             onBattleStatsInfoChange: (value) => {
                 this.settings.isBattleStatsInfoEnabled = value;
+                this.persistSettings();
             },
             onScreenShakeChange: (value) => {
                 this.settings.screenShakeEnabled = value;
+                this.persistSettings();
             },
             onDeveloperModeEnabledChange: (value) => {
                 this.settings.developerModeEnabled = value;
@@ -1996,27 +2017,63 @@ export class MainMenu {
                     this.resetDeveloperMenuElementVisibility();
                 }
                 this.updateDeveloperMenuControlsVisibility();
+                this.persistSettings();
             },
             onPlayerColorChange: (value) => {
                 this.settings.playerColor = value;
+                this.persistSettings();
             },
             onEnemyColorChange: (value) => {
                 this.settings.enemyColor = value;
+                this.persistSettings();
             },
             onAllyColorChange: (value) => {
                 this.settings.allyColor = value;
+                this.persistSettings();
             },
             onEnemy2ColorChange: (value) => {
                 this.settings.enemy2Color = value;
+                this.persistSettings();
             },
             onGraphicsQualityChange: (value) => {
                 this.settings.graphicsQuality = value;
                 this.backgroundParticleLayer?.setGraphicsQuality(value);
                 this.atmosphereLayer?.setGraphicsQuality(value);
                 this.menuParticleLayer?.setGraphicsQuality(value);
+                this.persistSettings();
+            },
+            onExperimentalGraphicsEnabledChange: (value) => {
+                this.settings.isExperimentalGraphicsEnabled = value;
+                this.persistSettings();
+            },
+            onStarNestEnabledChange: (value) => {
+                this.settings.isStarNestEnabled = value;
+                this.atmosphereLayer?.setStarNestEnabled(value);
+                this.persistSettings();
+            },
+            onAdaptiveQualityEnabledChange: (value) => {
+                this.settings.isAdaptiveQualityEnabled = value;
+                this.persistSettings();
+            },
+            onUseSvgSpritesChange: (value) => {
+                this.settings.useSvgSprites = value;
+                this.persistSettings();
+            },
+            onPauseOnFocusLossEnabledChange: (value) => {
+                this.settings.isPauseOnFocusLossEnabled = value;
+                this.persistSettings();
+            },
+            onResolutionChange: (value) => {
+                this.settings.resolution = value;
+                this.persistSettings();
+            },
+            onPixelModeEnabledChange: (value) => {
+                this.settings.isPixelModeEnabled = value;
+                this.persistSettings();
             },
             onColorSchemeChange: (value) => {
                 this.settings.colorScheme = value;
+                this.persistSettings();
             },
             onClearDataAndCache: () => this.clearPlayerDataAndCache(),
             onBack: () => {
@@ -2192,11 +2249,13 @@ export class MainMenu {
         renderLoadoutSelectionScreen(container, {
             selectedFaction: this.settings.selectedFaction,
             selectedHeroes: this.settings.selectedHeroes,
+            viewedHeroId: this.viewedHeroId,
             heroUnits: this.heroUnits,
             onFactionChange: (faction: Faction) => {
                 if (this.settings.selectedFaction !== faction) {
                     this.settings.selectedFaction = faction;
                     this.settings.selectedHeroes = [];
+                    this.viewedHeroId = null;
                     this.ensureDefaultHeroSelection();
                     this.renderLoadoutSelectionScreen(this.contentElement);
                 }
@@ -2208,6 +2267,10 @@ export class MainMenu {
                     this.settings.selectedHeroes.push(heroId);
                 }
                 this.settings.selectedHeroNames = this.getSelectedHeroNames();
+                this.renderLoadoutSelectionScreen(this.contentElement);
+            },
+            onHeroView: (heroId: string) => {
+                this.viewedHeroId = heroId;
                 this.renderLoadoutSelectionScreen(this.contentElement);
             },
             onCustomizeLoadout: () => {
@@ -2243,7 +2306,7 @@ export class MainMenu {
         button.style.border = '2px solid transparent';
         button.style.borderRadius = '5px';
         button.style.cursor = 'pointer';
-        button.style.fontWeight = '300';
+        button.style.fontWeight = 'bold';
         button.style.fontFamily = 'inherit';
         button.style.transition = 'all 0.3s';
         button.dataset.particleBox = 'true';
@@ -2276,7 +2339,7 @@ export class MainMenu {
         input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
         input.style.borderRadius = '5px';
         input.style.fontFamily = 'inherit';
-        input.style.fontWeight = '300';
+        input.style.fontWeight = 'bold';
         input.style.minWidth = '200px';
         input.maxLength = 20;
         input.style.outline = 'none';
@@ -2307,125 +2370,11 @@ export class MainMenu {
      * Show the match loading screen
      */
     showMatchLoadingScreen(): void {
-        // Create loading screen overlay
-        const loadingOverlay = document.createElement('div');
-        loadingOverlay.id = 'match-loading-screen';
-        loadingOverlay.style.position = 'fixed';
-        loadingOverlay.style.top = '0';
-        loadingOverlay.style.left = '0';
-        loadingOverlay.style.width = '100vw';
-        loadingOverlay.style.height = '100vh';
-        loadingOverlay.style.backgroundColor = '#000011';
-        loadingOverlay.style.zIndex = '2000';
-        loadingOverlay.style.display = 'flex';
-        loadingOverlay.style.flexDirection = 'column';
-        loadingOverlay.style.justifyContent = 'flex-start';
-        loadingOverlay.style.alignItems = 'flex-start';
-        loadingOverlay.style.padding = '40px';
-
-        // Game mode display in top left
-        const gameModeContainer = document.createElement('div');
-        gameModeContainer.style.position = 'absolute';
-        gameModeContainer.style.top = '40px';
-        gameModeContainer.style.left = '40px';
-        gameModeContainer.style.fontSize = '36px';
-        gameModeContainer.style.color = '#FFD700';
-        gameModeContainer.style.fontWeight = '300';
-
-        const gameModeText = document.createElement('div');
-        let displayMode = this.settings.gameMode === 'ai' ? 'Vs. AI' : 
-                          this.settings.gameMode === 'lan' ? 'LAN' : 
-                          this.settings.gameMode === 'online' ? (this.onlineMode === 'ranked' ? 'Ranked' : 'Unranked') : 'Vs. AI';
-        gameModeText.textContent = displayMode;
-        gameModeContainer.appendChild(gameModeText);
-
-        // For Ranked mode, show MMR and win/loss info
-        if (this.settings.gameMode === 'online' && this.onlineMode === 'ranked') {
-            const mmrData = getPlayerMMRData();
-            const currentMMR = mmrData.mmr;
-            const estimatedWin = calculateMMRChange(currentMMR, currentMMR, true);
-            const estimatedLoss = calculateMMRChange(currentMMR, currentMMR, false);
-
-            const mmrText = document.createElement('div');
-            mmrText.textContent = `MMR: ${currentMMR}`;
-            mmrText.style.fontSize = '24px';
-            mmrText.style.marginTop = '10px';
-            mmrText.style.color = '#D0D0D0';
-            gameModeContainer.appendChild(mmrText);
-
-            const winText = document.createElement('div');
-            winText.textContent = `Win: +${estimatedWin}`;
-            winText.style.fontSize = '20px';
-            winText.style.marginTop = '8px';
-            winText.style.color = '#00FF00';
-            gameModeContainer.appendChild(winText);
-
-            const lossText = document.createElement('div');
-            lossText.textContent = `Loss: ${estimatedLoss}`;
-            lossText.style.fontSize = '20px';
-            lossText.style.marginTop = '4px';
-            lossText.style.color = '#FF6666';
-            gameModeContainer.appendChild(lossText);
-        }
-
-        loadingOverlay.appendChild(gameModeContainer);
-
-        // Loading animation in bottom left
-        const loadingContainer = document.createElement('div');
-        loadingContainer.style.position = 'absolute';
-        loadingContainer.style.bottom = '40px';
-        loadingContainer.style.left = '40px';
-        loadingContainer.style.display = 'flex';
-        loadingContainer.style.alignItems = 'center';
-        loadingContainer.style.gap = '20px';
-
-        const loadingAnimation = document.createElement('img');
-        loadingAnimation.id = 'match-loading-animation';
-        loadingAnimation.src = this.resolveAssetPath('ASSETS/sprites/loadingScreen/loadingAnimation/frame (1).png');
-        loadingAnimation.style.width = '60px'; // 25% of 240px
-        loadingAnimation.style.height = 'auto';
-        loadingContainer.appendChild(loadingAnimation);
-
-        const loadingText = document.createElement('div');
-        loadingText.textContent = 'Loading...';
-        loadingText.style.fontSize = '24px';
-        loadingText.style.color = '#D0D0D0';
-        loadingText.style.fontWeight = '300';
-        loadingContainer.appendChild(loadingText);
-
-        loadingOverlay.appendChild(loadingContainer);
-
-        document.body.appendChild(loadingOverlay);
-
-        // Start animation at 60fps
-        const animationFrameCount = 25;
-        const animationFrameDurationMs = 1000 / 60;
-        let animationFrameIndex = 0;
-        let lastAnimationTimestamp = performance.now();
-        let animationRemainderMs = 0;
-
-        const updateAnimation = (timestamp: number) => {
-            if (!loadingAnimation.parentElement) {
-                return; // Animation stopped
-            }
-            const deltaMs = timestamp - lastAnimationTimestamp;
-            lastAnimationTimestamp = timestamp;
-            animationRemainderMs += deltaMs;
-            while (animationRemainderMs >= animationFrameDurationMs) {
-                animationFrameIndex = (animationFrameIndex + 1) % animationFrameCount;
-                animationRemainderMs -= animationFrameDurationMs;
-            }
-            const frameNumber = animationFrameIndex + 1;
-            loadingAnimation.src = this.resolveAssetPath(`ASSETS/sprites/loadingScreen/loadingAnimation/frame (${frameNumber}).png`);
-            requestAnimationFrame(updateAnimation);
-        };
-
-        requestAnimationFrame(updateAnimation);
-
-        // Remove loading screen after a short delay to allow game to initialize
-        setTimeout(() => {
-            loadingOverlay.remove();
-        }, 1500);
+        showMatchLoadingScreenImpl({
+            gameMode: this.settings.gameMode,
+            onlineMode: this.onlineMode,
+            resolveAssetPath: this.resolveAssetPath.bind(this),
+        });
     }
 
     /**

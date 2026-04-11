@@ -61,6 +61,7 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
                 Constants.PREIST_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
 
             // Initialize beam targets
             for (let i = 0; i < Constants.PREIST_NUM_BEAMS; i++) {
@@ -86,7 +87,7 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
                 this.abilityCooldown -= deltaTime;
             }
 
-            this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
+            this.moveTowardRallyPoint(deltaTime, 0 /* ignored */, allUnits, asteroids);
 
             // Handle healing beam targeting and healing
             const friendlyUnits = this.getFriendlyUnits(allUnits);
@@ -95,14 +96,14 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
             // Update healing bomb particles
             this.updateHealingBombParticles(deltaTime, allUnits);
 
-            // Rotate to face the primary healing target
+            // Rotate to face the primary healing target (overrides movement rotation)
             if (this.beamTargets[0].target && !this.isTargetDead(this.beamTargets[0].target)) {
                 const target = this.beamTargets[0].target;
                 const dx = target.position.x - this.position.x;
                 const dy = target.position.y - this.position.y;
                 const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
                 const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                const maxRotationStep = this.turnRateRadPerSec * deltaTime;
                 
                 if (Math.abs(rotationDelta) <= maxRotationStep) {
                     this.rotation = targetRotation;

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Main saucer hull -->
+  <ellipse class="cls-1" cx="300" cy="320" rx="230" ry="80"/>
+  <!-- Upper dome -->
+  <ellipse class="cls-1" cx="300" cy="270" rx="120" ry="80"/>
+  <!-- Left wing -->
+  <ellipse class="cls-1" cx="130" cy="340" rx="80" ry="28"/>
+  <!-- Right wing -->
+  <ellipse class="cls-1" cx="470" cy="340" rx="80" ry="28"/>
+  <!-- Engine glow left -->
+  <circle class="cls-1" cx="170" cy="360" r="22"/>
+  <!-- Engine glow right -->
+  <circle class="cls-1" cx="430" cy="360" r="22"/>
+  <!-- Cockpit window -->
+  <circle class="cls-1" cx="300" cy="255" r="34"/>
+</svg>

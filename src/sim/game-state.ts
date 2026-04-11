@@ -19,6 +19,7 @@ import { UnitEffectsSystem, UnitEffectsContext } from './systems/unit-effects-sy
 import { BuildingUpdateSystem, BuildingUpdateContext } from './systems/building-update-system';
 import { PlayerStructureSystem, PlayerStructureContext } from './systems/player-structure-system';
 import { UnitUpdateSystem, UnitUpdateContext } from './systems/unit-update-system';
+import { PhotonSystem, PhotonSystemContext } from './systems/photon-system';
 import * as Constants from '../constants';
 import { NetworkManager, GameCommand, NetworkEvent, MessageType } from '../network';
 import { GameCommand as P2PGameCommand } from '../transport';
@@ -34,6 +35,7 @@ import { Starling } from './entities/starling';
 import { StarlingMergeGate } from './entities/starling-merge-gate';
 import { WarpGate } from './entities/warp-gate';
 import { DamageNumber } from './entities/damage-number';
+import { Photon } from './entities/photon';
 import {
     SpaceDustParticle,
     SpaceDustPalette,
@@ -104,7 +106,7 @@ import {
 } from '../game-core';
 
 import { computeStateHash, StateHashContext } from './state-hash';
-export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext, PlayerStructureContext, UnitUpdateContext {
+export class GameState implements AIContext, PhysicsContext, ParticleContext, HeroAbilityContext, StarlingContext, HeroEntityContext, ProjectileCombatContext, SpaceDustContext, StateHashContext, MirrorSystemContext, UnitEffectsContext, BuildingUpdateContext, PlayerStructureContext, UnitUpdateContext, PhotonSystemContext {
     players: Player[] = [];
     playersByName: Map<string, Player> = new Map(); // For efficient P2P player lookup
     suns: Sun[] = [];
@@ -150,6 +152,10 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     sparkleParticles: SparkleParticle[] = [];
     deathParticles: DeathParticle[] = [];
     strikerTowerExplosions: { position: Vector2D; timestamp: number }[] = []; // Track striker tower explosions for rendering
+    photons: Photon[] = []; // Sun photon particles
+    photonSpawnAccumulator: number = 0; // Accumulator for photon spawn timing
+    photonSpawnIndex: number = 0; // Deterministic index for golden-angle photon spawning
+    isMatchTimerExpired: boolean = false; // Whether the 8-minute match timer has run out
     gameTime: number = 0.0;
     stateHash: number = 0;
     stateHashTickCounter: number = 0;
@@ -191,6 +197,20 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         this.gameTime += deltaTime;
         this.starlingMergeGateExplosions.length = 0;
 
+        // Snapshot alive entity counts per player for damage scoring
+        const preUpdateCounts: { unitCount: number; heroCount: number; buildingCount: number; mirrorCount: number; isForgeAlive: boolean }[] = [];
+        for (const player of this.players) {
+            let heroCount = 0;
+            for (const u of player.units) { if (u.isHero) heroCount++; }
+            preUpdateCounts.push({
+                unitCount: player.units.length,
+                heroCount,
+                buildingCount: player.buildings.length,
+                mirrorCount: player.solarMirrors.filter(m => m.health > 0).length,
+                isForgeAlive: player.stellarForge !== null && player.stellarForge.health > 0,
+            });
+        }
+
         // Process pending network commands from remote players
         if (this.networkManager) {
             this.processPendingNetworkCommands();
@@ -220,6 +240,11 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         // Update suns (for orbital motion)
         for (const sun of this.suns) {
             sun.update(deltaTime);
+        }
+
+        // Update photon particles (spawn, repel, absorb by heroes)
+        if (!this.isCountdownActive) {
+            PhotonSystem.update(this, deltaTime);
         }
 
         // Update asteroids
@@ -339,6 +364,51 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
 
         // Update damage numbers
         ParticleSystem.updateDamageNumbers(this, deltaTime);
+
+        // Resolve damage scores by comparing pre/post update entity counts
+        this.resolveDamageScores(preUpdateCounts);
+    }
+
+    /**
+     * Award damage score points to opposing players when entities are destroyed.
+     * Compares pre-update snapshots to current state.
+     */
+    private resolveDamageScores(
+        preUpdateCounts: { unitCount: number; heroCount: number; buildingCount: number; mirrorCount: number; isForgeAlive: boolean }[]
+    ): void {
+        for (let i = 0; i < this.players.length; i++) {
+            const player = this.players[i];
+            const pre = preUpdateCounts[i];
+
+            // Count current hero units
+            let currentHeroCount = 0;
+            for (const u of player.units) { if (u.isHero) currentHeroCount++; }
+
+            const preStarlingCount = pre.unitCount - pre.heroCount;
+            const currentStarlingCount = player.units.length - currentHeroCount;
+            const killedStarlings = Math.max(0, preStarlingCount - currentStarlingCount);
+            const killedHeroes = Math.max(0, pre.heroCount - currentHeroCount);
+            const destroyedBuildings = Math.max(0, pre.buildingCount - player.buildings.length);
+            const currentMirrorCount = player.solarMirrors.filter(m => m.health > 0).length;
+            const destroyedMirrors = Math.max(0, pre.mirrorCount - currentMirrorCount);
+            const isForgeDestroyed = pre.isForgeAlive && (player.stellarForge === null || player.stellarForge.health <= 0);
+
+            const totalScore = killedStarlings * Constants.DAMAGE_SCORE_STARLING
+                + killedHeroes * Constants.DAMAGE_SCORE_HERO
+                + destroyedBuildings * Constants.DAMAGE_SCORE_STRUCTURE
+                + destroyedMirrors * Constants.DAMAGE_SCORE_SOLAR_MIRROR
+                + (isForgeDestroyed ? Constants.DAMAGE_SCORE_FOUNDRY : 0);
+
+            if (totalScore > 0) {
+                // Award score to opposing players
+                for (const otherPlayer of this.players) {
+                    if (otherPlayer === player) continue;
+                    // In team games, skip teammates
+                    if (this.players.length >= 3 && otherPlayer.teamId === player.teamId) continue;
+                    otherPlayer.damageScore += totalScore;
+                }
+            }
+        }
     }
 
     /**
@@ -540,9 +610,20 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     checkVictoryConditions(): Player | null {
         const activePlayers = this.players.filter(p => !p.isDefeated());
         
-        // No winner yet if everyone is defeated (draw/error state) or no one is defeated yet
-        if (activePlayers.length === 0 || activePlayers.length === this.players.length) {
+        // No winner yet if everyone is defeated (draw/error state)
+        if (activePlayers.length === 0) {
             return null;
+        }
+
+        // Check if no one is defeated yet AND match timer hasn't expired
+        if (activePlayers.length === this.players.length && !this.isMatchTimerExpired) {
+            // Check if match timer just expired
+            if (this.gameTime >= Constants.MATCH_TIME_LIMIT_SEC) {
+                this.isMatchTimerExpired = true;
+                // Fall through to damage score resolution below
+            } else {
+                return null;
+            }
         }
         
         // Single survivor wins (handles both 1v1 and last-man-standing in team games)
@@ -551,8 +632,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         }
         
         // Multiple players remaining - check for team victory
-        // In 1v1, this means both players are still alive (already handled above)
-        // In team games (3+ total players), check if only one team has survivors
         if (this.players.length >= 3) {
             const activeTeams = new Set(activePlayers.map(p => p.teamId));
             
@@ -560,6 +639,19 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             if (activeTeams.size === 1) {
                 return activePlayers[0]; // Return any player from the winning team
             }
+        }
+
+        // Time-based victory: if match timer expired, highest damage score wins
+        if (this.isMatchTimerExpired && activePlayers.length > 1) {
+            let bestPlayer = activePlayers[0];
+            for (let i = 1; i < activePlayers.length; i++) {
+                if (activePlayers[i].damageScore > bestPlayer.damageScore ||
+                    (activePlayers[i].damageScore === bestPlayer.damageScore &&
+                     activePlayers[i].name < bestPlayer.name)) {
+                    bestPlayer = activePlayers[i];
+                }
+            }
+            return bestPlayer;
         }
         
         return null;

@@ -134,6 +134,10 @@
         animationRequestId = requestAnimationFrame(updateLoadingAnimation);
 
         // Preload all menu and game sprites during loading screen
+        const sunAnimationSprites = Array.from({ length: 300 }, (_, frameIndex) =>
+            `ASSETS/sprites/environment/sun/sun_animation/sun_animation_${frameIndex.toString().padStart(5, '0')}.png`
+        );
+
         const menuSprites = [
             // Menu images
             'ASSETS/SPRITES/menu/titleGraphic.png',
@@ -174,7 +178,8 @@
             'ASSETS/sprites/RADIANT/heroUnits/Artillery.svg',
             'ASSETS/sprites/RADIANT/heroUnits/Artillery.png',
             // Environment
-            'ASSETS/sprites/environment/centralSun.png'
+            'ASSETS/sprites/environment/centralSun.png',
+            ...sunAnimationSprites
         ];
         
         // Preload menu sprites (must complete before showing menu)

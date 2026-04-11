@@ -1,0 +1,18 @@
+{
+    "id": "test-level",
+    "name": "Test Level",
+    "description": "Minimal layout for AI testing with a single sun, mirrored bases, and no asteroids.",
+    "playerCount": 2,
+    "mapWidth": 2000,
+    "mapHeight": 2000,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 0 },
+        { "x": 700, "y": 0 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 0
+}

@@ -1,0 +1,19 @@
+{
+    "id": "binary-center",
+    "name": "Binary Center",
+    "description": "Two suns slowly orbit each other at the center of the map. Dynamic lighting creates shifting tactical opportunities.",
+    "playerCount": 2,
+    "mapWidth": 2500,
+    "mapHeight": 2500,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal", "orbitCenterX": 0, "orbitCenterY": 0, "orbitRadius": 150, "orbitSpeed": 0.05, "initialOrbitAngleRad": 0 },
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal", "orbitCenterX": 0, "orbitCenterY": 0, "orbitRadius": 150, "orbitSpeed": 0.05, "initialOrbitAngleRad": 3.141592653589793 }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 12
+}

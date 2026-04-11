@@ -1,5 +1,5 @@
 import * as Constants from './constants';
-import { Faction, GameState, GatlingTower, Marine, SubsidiaryFactory, Vector2D } from './game-core';
+import { Faction, GameState, GatlingTower, Marine, Minigun, LockOnLaserTower, SubsidiaryFactory, Vector2D } from './game-core';
 
 const FORGE_CHARGE_LEAD_TIME_SEC = 5;
 const STARLING_ATTACK_MIN_INTERVAL_SEC = 0.12;
@@ -12,6 +12,20 @@ const MARINE_LOOP_BASE_VOLUME = 0.4;
 const GATLING_LOOP_BASE_VOLUME = 0.35;
 const FORGE_CHARGE_BASE_VOLUME = 1 / 3;
 const BLOCKED_PING_BASE_VOLUME = 0.32;
+
+// Stub volumes – placeholder values until final assets are tuned
+const MINIGUN_LOOP_BASE_VOLUME = 0.35;
+const LOCK_ON_LASER_BASE_VOLUME = 0.45;
+const EXPLOSION_BASE_VOLUME = 0.5;
+const MORTAR_LAUNCH_BASE_VOLUME = 0.35;
+const CRESCENT_WAVE_BASE_VOLUME = 0.4;
+const UNIT_DEATH_BASE_VOLUME = 0.3;
+const UNIT_DEATH_MAX_SIMULTANEOUS = 3;
+const BUILDING_DESTROYED_BASE_VOLUME = 0.5;
+const WARP_GATE_BASE_VOLUME = 0.35;
+const COUNTDOWN_TICK_BASE_VOLUME = 0.7;
+const MATCH_START_BASE_VOLUME = 0.6;
+const EXPLOSION_MAX_SIMULTANEOUS = 4;
 
 export type AudioListenerView = {
     cameraWorld: Vector2D;
@@ -34,24 +48,46 @@ export class GameAudioController {
     private readonly starlingAttackAudioPoolByFaction = new Map<Faction, HTMLAudioElement[]>();
     private readonly marineFiringLoopState: LoopPairState;
     private readonly gatlingTowerFiringLoopState: LoopPairState;
+    private readonly minigunFiringLoopState: LoopPairState;
     private readonly forgeCrunchAudio: HTMLAudioElement;
     private readonly forgeChargeAudio: HTMLAudioElement;
     private readonly foundryPowerUpAudio: HTMLAudioElement;
     private readonly foundryPowerDownAudio: HTMLAudioElement;
     private readonly blockedPingAudioPool: HTMLAudioElement[];
+    // Stub SFX – mapped to existing assets as placeholders until dedicated sounds are created
+    private readonly lockOnLaserAudioPool: HTMLAudioElement[];
+    private readonly explosionAudioPool: HTMLAudioElement[];
+    private readonly mortarLaunchAudio: HTMLAudioElement;
+    private readonly crescentWaveAudio: HTMLAudioElement;
+    private readonly unitDeathAudioPool: HTMLAudioElement[];
+    private readonly buildingDestroyedAudio: HTMLAudioElement;
+    private readonly warpGateAudio: HTMLAudioElement;
+    private readonly countdownTickAudio: HTMLAudioElement;
+    private readonly matchStartAudio: HTMLAudioElement;
 
     private readonly playedBlockedDamageNumbers = new WeakSet<object>();
+    // Stub tracking – WeakSets so GC can reclaim removed entities automatically
+    private readonly playedLockOnLaserBeams = new WeakSet<object>();
+    private readonly playedStrikerExplosions = new WeakSet<object>();
+    private readonly playedMiniMothershipExplosions = new WeakSet<object>();
+    private readonly playedMortarProjectiles = new WeakSet<object>();
+    private readonly playedCrescentWaves = new WeakSet<object>();
 
     private readonly forgeChargePlayedByForge = new WeakMap<object, boolean>();
     private readonly forgeWasCrunchingByForge = new WeakMap<object, boolean>();
     private readonly foundryWasUpgrading = new WeakMap<object, boolean>();
+    private readonly prevUnitCountByPlayer = new WeakMap<object, number>();
+    private readonly prevBuildingCountByPlayer = new WeakMap<object, number>();
     private readonly spatialAudioNodesByElement = new WeakMap<HTMLAudioElement, SpatialAudioNodes>();
     private readonly baseVolumeByElement = new WeakMap<HTMLAudioElement, number>();
     private readonly loopBlendByElement = new WeakMap<HTMLAudioElement, number>();
 
     private marineLoopGraceRemainingSec = 0;
+    private minigunLoopGraceRemainingSec = 0;
     private starlingAttackCooldownRemainingSec = 0;
     private forgeCrunchCooldownRemainingSec = 0;
+    private prevCountdownSecond = 4;
+    private wasCountdownActive = true;
     private isSoundEnabled = true;
     private soundVolume = 1;
     private audioContext: AudioContext | null = null;
@@ -72,6 +108,8 @@ export class GameAudioController {
 
         this.marineFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', MARINE_LOOP_BASE_VOLUME);
         this.gatlingTowerFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/gatling_firing.ogg', GATLING_LOOP_BASE_VOLUME);
+        // Stub: minigun uses the marine firing sound as a placeholder until a dedicated asset exists
+        this.minigunFiringLoopState = this.createCrossfadeLoopPair('ASSETS/SFX/radiantSFX/hero_marine_firing.ogg', MINIGUN_LOOP_BASE_VOLUME);
         this.forgeCrunchAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_crunch.ogg');
         this.forgeChargeAudio = this.createAudio('ASSETS/SFX/radiantSFX/forge_charge.ogg');
         this.baseVolumeByElement.set(this.forgeChargeAudio, FORGE_CHARGE_BASE_VOLUME);
@@ -91,6 +129,30 @@ export class GameAudioController {
         for (const pingAudio of this.blockedPingAudioPool) {
             this.baseVolumeByElement.set(pingAudio, BLOCKED_PING_BASE_VOLUME);
         }
+
+        // Stub SFX – each references an existing asset as a placeholder.
+        // Replace with dedicated audio files when available.
+        this.lockOnLaserAudioPool = this.createOneShotPool(
+            'ASSETS/SFX/radiantSFX/forge_charge.ogg', 2, LOCK_ON_LASER_BASE_VOLUME
+        );
+        this.explosionAudioPool = this.createOneShotPool(
+            'ASSETS/SFX/Echo_Sound_Effects.mp3', EXPLOSION_MAX_SIMULTANEOUS, EXPLOSION_BASE_VOLUME
+        );
+        this.mortarLaunchAudio = this.createAudio('ASSETS/SFX/environment/lordsonny-punch-a-rock-161647.mp3');
+        this.baseVolumeByElement.set(this.mortarLaunchAudio, MORTAR_LAUNCH_BASE_VOLUME);
+        this.crescentWaveAudio = this.createAudio('ASSETS/SFX/Echo_Sound_Effects (2).mp3');
+        this.baseVolumeByElement.set(this.crescentWaveAudio, CRESCENT_WAVE_BASE_VOLUME);
+        this.unitDeathAudioPool = this.createOneShotPool(
+            'ASSETS/SFX/environment/lordsonny-small-rock-break-194553.mp3', UNIT_DEATH_MAX_SIMULTANEOUS, UNIT_DEATH_BASE_VOLUME
+        );
+        this.buildingDestroyedAudio = this.createAudio('ASSETS/SFX/environment/lordsonny-rock-cinematic-161648.mp3');
+        this.baseVolumeByElement.set(this.buildingDestroyedAudio, BUILDING_DESTROYED_BASE_VOLUME);
+        this.warpGateAudio = this.createAudio('ASSETS/SFX/THERO/note_D#.mp3');
+        this.baseVolumeByElement.set(this.warpGateAudio, WARP_GATE_BASE_VOLUME);
+        this.countdownTickAudio = this.createAudio('ASSETS/SFX/SFX_Timer_Tick.m4a');
+        this.baseVolumeByElement.set(this.countdownTickAudio, COUNTDOWN_TICK_BASE_VOLUME);
+        this.matchStartAudio = this.createAudio('ASSETS/SFX/THERO/enterGameMode.mp3');
+        this.baseVolumeByElement.set(this.matchStartAudio, MATCH_START_BASE_VOLUME);
     }
 
     setSoundEnabled(isEnabled: boolean): void {
@@ -114,6 +176,8 @@ export class GameAudioController {
         let starlingSoundSource: Vector2D | null = null;
         let didGatlingTowerFireThisFrame = false;
         let gatlingSoundSource: Vector2D | null = null;
+        let didMinigunFireThisFrame = false;
+        let minigunSoundSource: Vector2D | null = null;
 
         for (const player of game.players) {
             const forge = player.stellarForge;
@@ -150,6 +214,14 @@ export class GameAudioController {
                     }
                 }
 
+                if (building instanceof Minigun && building.target) {
+                    const distanceToTarget = building.position.distanceTo(building.target.position);
+                    if (distanceToTarget <= building.attackRange + 1) {
+                        didMinigunFireThisFrame = true;
+                        minigunSoundSource = building.position;
+                    }
+                }
+
                 if (!(building instanceof SubsidiaryFactory)) {
                     continue;
                 }
@@ -179,6 +251,19 @@ export class GameAudioController {
                     break;
                 }
             }
+
+            // Unit and building death detection
+            const prevUnitCount = this.prevUnitCountByPlayer.get(player) ?? player.units.length;
+            if (player.units.length < prevUnitCount) {
+                this.playOneShotFromPool(this.unitDeathAudioPool, null, listenerView);
+            }
+            this.prevUnitCountByPlayer.set(player, player.units.length);
+
+            const prevBuildingCount = this.prevBuildingCountByPlayer.get(player) ?? player.buildings.length;
+            if (player.buildings.length < prevBuildingCount) {
+                this.playOneShot(this.buildingDestroyedAudio, null, listenerView);
+            }
+            this.prevBuildingCountByPlayer.set(player, player.buildings.length);
         }
 
         for (const laserBeam of game.laserBeams) {
@@ -186,6 +271,14 @@ export class GameAudioController {
                 starlingFactionWithAttack = laserBeam.owner.faction;
                 starlingSoundSource = laserBeam.startPos;
                 break;
+            }
+        }
+
+        // LockOnLaserTower fires beams with a distinctive wider width
+        for (const laserBeam of game.laserBeams) {
+            if (laserBeam.widthPx === Constants.LOCKON_TOWER_LASER_WIDTH_PX && !this.playedLockOnLaserBeams.has(laserBeam)) {
+                this.playedLockOnLaserBeams.add(laserBeam);
+                this.playOneShotFromPool(this.lockOnLaserAudioPool, laserBeam.startPos, listenerView);
             }
         }
 
@@ -209,6 +302,52 @@ export class GameAudioController {
             this.playOneShot(pingAudio, damageNumber.position, listenerView, true);
         }
 
+        // Striker tower missile explosions
+        for (const explosion of game.strikerTowerExplosions) {
+            if (!this.playedStrikerExplosions.has(explosion)) {
+                this.playedStrikerExplosions.add(explosion);
+                this.playOneShotFromPool(this.explosionAudioPool, explosion.position, listenerView);
+            }
+        }
+
+        // Mini-mothership explosions
+        for (const explosion of game.miniMothershipExplosions) {
+            if (!this.playedMiniMothershipExplosions.has(explosion)) {
+                this.playedMiniMothershipExplosions.add(explosion);
+                this.playOneShotFromPool(this.explosionAudioPool, explosion.position, listenerView);
+            }
+        }
+
+        // Mortar projectile launches (new projectile objects)
+        for (const mortar of game.mortarProjectiles) {
+            if (!this.playedMortarProjectiles.has(mortar)) {
+                this.playedMortarProjectiles.add(mortar);
+                this.playOneShot(this.mortarLaunchAudio, mortar.position, listenerView);
+            }
+        }
+
+        // Crescent wave casts
+        for (const wave of game.crescentWaves) {
+            if (!this.playedCrescentWaves.has(wave)) {
+                this.playedCrescentWaves.add(wave);
+                this.playOneShot(this.crescentWaveAudio, wave.position, listenerView);
+            }
+        }
+
+        // Countdown ticks (3, 2, 1) and match-start sound
+        if (game.isCountdownActive) {
+            const currentSecond = Math.ceil(game.countdownTime);
+            if (currentSecond < this.prevCountdownSecond && currentSecond >= 1) {
+                this.playOneShot(this.countdownTickAudio, null, null);
+            }
+            this.prevCountdownSecond = currentSecond;
+            this.wasCountdownActive = true;
+        } else if (this.wasCountdownActive) {
+            this.wasCountdownActive = false;
+            this.prevCountdownSecond = 4;
+            this.playOneShot(this.matchStartAudio, null, null);
+        }
+
         if (didMarineFireThisFrame) {
             this.marineLoopGraceRemainingSec = 0.2;
             this.applySpatialAudioToLoopPair(this.marineFiringLoopState, marineSoundSource, listenerView);
@@ -227,6 +366,18 @@ export class GameAudioController {
             this.updateLoopCrossfade(this.gatlingTowerFiringLoopState);
         } else {
             this.stopLoopPair(this.gatlingTowerFiringLoopState);
+        }
+
+        if (didMinigunFireThisFrame) {
+            this.minigunLoopGraceRemainingSec = 0.2;
+            this.applySpatialAudioToLoopPair(this.minigunFiringLoopState, minigunSoundSource, listenerView);
+            this.ensureLoopPairPlaying(this.minigunFiringLoopState);
+            this.updateLoopCrossfade(this.minigunFiringLoopState);
+        } else {
+            this.minigunLoopGraceRemainingSec = Math.max(0, this.minigunLoopGraceRemainingSec - deltaTimeSec);
+            if (this.minigunLoopGraceRemainingSec <= 0) {
+                this.stopLoopPair(this.minigunFiringLoopState);
+            }
         }
     }
 
@@ -467,14 +618,30 @@ export class GameAudioController {
     private stopAllAudio(): void {
         this.stopLoopPair(this.marineFiringLoopState);
         this.stopLoopPair(this.gatlingTowerFiringLoopState);
+        this.stopLoopPair(this.minigunFiringLoopState);
         this.stopLoop(this.forgeCrunchAudio);
         this.stopLoop(this.forgeChargeAudio);
         this.stopLoop(this.foundryPowerUpAudio);
         this.stopLoop(this.foundryPowerDownAudio);
+        this.stopLoop(this.mortarLaunchAudio);
+        this.stopLoop(this.crescentWaveAudio);
+        this.stopLoop(this.buildingDestroyedAudio);
+        this.stopLoop(this.warpGateAudio);
+        this.stopLoop(this.countdownTickAudio);
+        this.stopLoop(this.matchStartAudio);
         for (const pool of this.starlingAttackAudioPoolByFaction.values()) {
             for (const audio of pool) {
                 this.stopLoop(audio);
             }
+        }
+        for (const audio of this.lockOnLaserAudioPool) {
+            this.stopLoop(audio);
+        }
+        for (const audio of this.explosionAudioPool) {
+            this.stopLoop(audio);
+        }
+        for (const audio of this.unitDeathAudioPool) {
+            this.stopLoop(audio);
         }
     }
 }

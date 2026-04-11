@@ -1,0 +1,19 @@
+{
+    "id": "binary-ring",
+    "name": "Binary Ring",
+    "description": "Two suns orbit around a dense asteroid field. Players spawn inside the field while suns circle the perimeter.",
+    "playerCount": 2,
+    "mapWidth": 3500,
+    "mapHeight": 3500,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal", "orbitCenterX": 0, "orbitCenterY": 0, "orbitRadius": 1400, "orbitSpeed": 0.08, "initialOrbitAngleRad": 0 },
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal", "orbitCenterX": 0, "orbitCenterY": 0, "orbitRadius": 1400, "orbitSpeed": 0.08, "initialOrbitAngleRad": 3.141592653589793 }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [],
+    "randomAsteroidCount": 30
+}

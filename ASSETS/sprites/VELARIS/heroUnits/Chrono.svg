@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Hourglass shape -->
+  <!-- Top glass bulb -->
+  <path class="cls-1" d="M160,80 Q300,80 440,80 L380,270 Q300,320 220,270 Z"/>
+  <!-- Bottom glass bulb -->
+  <path class="cls-1" d="M160,520 Q300,520 440,520 L380,330 Q300,280 220,330 Z"/>
+  <!-- Top rim -->
+  <rect class="cls-1" x="140" y="68" width="320" height="32" rx="14"/>
+  <!-- Bottom rim -->
+  <rect class="cls-1" x="140" y="500" width="320" height="32" rx="14"/>
+  <!-- Center neck -->
+  <ellipse class="cls-1" cx="300" cy="300" rx="30" ry="18"/>
+</svg>

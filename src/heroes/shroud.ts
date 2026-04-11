@@ -312,6 +312,7 @@ export const createShroudHero = (deps: ShroudHeroDeps) => {
                 Constants.SHROUD_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
         }
 
         // Shroud does not attack normally

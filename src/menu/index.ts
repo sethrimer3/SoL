@@ -10,3 +10,4 @@ export * from './color-schemes';
 export * from './ui-helpers';
 export * from './lan-lobby-manager';
 export * from './player-profile-manager';
+export * from './matchmaking-controller';

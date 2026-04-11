@@ -149,6 +149,7 @@ export const createShadowHero = (deps: ShadowHeroDeps) => {
                 Constants.SHADOW_COLLISION_RADIUS_PX
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
         }
 
         /**

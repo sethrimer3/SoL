@@ -1,0 +1,25 @@
+{
+    "id": "2v2-umbra",
+    "name": "2v2 Umbra Basin",
+    "description": "Dedicated 2v2 arena with one sun. Fixed giant asteroids cast consistent spawn shadows for all four players.",
+    "playerCount": 4,
+    "mapWidth": 2400,
+    "mapHeight": 2400,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -880, "y": -520 },
+        { "x": -880, "y": 520 },
+        { "x": 880, "y": -520 },
+        { "x": 880, "y": 520 }
+    ],
+    "asteroids": [
+        { "x": -320, "y": -220, "size": 138, "sides": 7 },
+        { "x": -320, "y": 220, "size": 138, "sides": 7 },
+        { "x": 320, "y": -220, "size": 138, "sides": 7 },
+        { "x": 320, "y": 220, "size": 138, "sides": 7 }
+    ],
+    "randomAsteroidCount": 0
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Eclipse: full circle with a smaller circle cut-out offset to create crescent.
+       We represent this as a ring/crescent using two overlapping shapes.
+       Since SVG fill-rule can't easily cut out, use a thick arc path instead. -->
+  <!-- Outer circle (solid crescent region) -->
+  <circle class="cls-1" cx="300" cy="300" r="220"/>
+  <!-- Inner dark "occluding" circle – represented as a slightly offset circle
+       in the same color to hint at eclipse. We use a ring approach. -->
+  <!-- Shadow beam weapon: two parallel elongated ovals -->
+  <ellipse class="cls-1" cx="300" cy="300" rx="60" ry="200" opacity="0.6"/>
+  <!-- Crescent cut represented by a thick arc path -->
+  <path class="cls-1" d="
+    M300,80
+    A220,220 0 1,0 300,520
+    A150,150 0 1,1 300,80 Z"/>
+</svg>

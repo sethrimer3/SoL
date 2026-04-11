@@ -1,0 +1,21 @@
+{
+    "id": "standard",
+    "name": "Standard Battle",
+    "description": "Classic 1v1 map with a single sun at the center. Balanced gameplay with moderate obstacles.",
+    "playerCount": 2,
+    "mapWidth": 2000,
+    "mapHeight": 2000,
+    "isLaD": false,
+    "suns": [
+        { "x": 0, "y": 0, "radius": 100, "intensity": 1.0, "type": "normal" }
+    ],
+    "spawns": [
+        { "x": -700, "y": 700 },
+        { "x": 700, "y": -700 }
+    ],
+    "asteroids": [
+        { "x": 177, "y": -177, "size": 120, "sides": 6 },
+        { "x": -177, "y": 177, "size": 120, "sides": 6 }
+    ],
+    "randomAsteroidCount": 10
+}

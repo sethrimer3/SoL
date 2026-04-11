@@ -3,6 +3,8 @@
  */
 
 import { Vector2D, Unit } from '../../game-core';
+import * as Constants from '../../constants';
+import { GradientCache } from '../gradient-cache';
 
 /**
  * Interface for accessing renderer context and state.
@@ -75,7 +77,7 @@ export interface UnitRendererContext {
     ): CanvasGradient;
 
     // Gradient cache (direct Map access for explosion effect)
-    gradientCache: Map<string, CanvasGradient>;
+    gradientCache: GradientCache;
 
     // Screen shake
     triggerScreenShake(intensity?: number): void;
@@ -108,7 +110,7 @@ export interface UnitRendererContext {
     camera: { x: number; y: number };
 
     // Unit drawing (needed by HeroRenderer)
-    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext): void;
+    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext, useSimpleLod?: boolean): void;
 }
 
 /**
@@ -124,6 +126,12 @@ export function drawAbilityCooldownBar(
     barWidth: number,
     context: UnitRendererContext
 ): void {
+    // Hero units show photon count instead of time-based cooldown
+    if (unit.isHero) {
+        drawPhotonCountIndicator(screenPos, unit, yOffset, barWidth, context);
+        return;
+    }
+
     if (unit.abilityCooldownTime <= 0) {
         return;
     }
@@ -146,4 +154,66 @@ export function drawAbilityCooldownBar(
     context.ctx.fillRect(barX, barY, barWidth, barHeight);
     context.ctx.fillStyle = fillColor;
     context.ctx.fillRect(barX, barY, barWidth * cooldownPercent, barHeight);
+}
+
+/**
+ * Draw ability charge indicator below a hero unit.
+ * Shows circles representing charges. Each circle fills progressively
+ * as photons are collected (partial fill for incomplete charges).
+ */
+function drawPhotonCountIndicator(
+    screenPos: Vector2D,
+    unit: Unit,
+    yOffset: number,
+    barWidth: number,
+    context: UnitRendererContext
+): void {
+    const maxCharges = unit.maxCharges;
+    const photonsPerCharge = unit.photonsPerCharge;
+    const photonCount = Math.min(unit.photonCount, maxCharges * photonsPerCharge);
+    const dotRadius = Math.max(2, 3 * context.zoom);
+    const spacing = dotRadius * 2.5;
+    const totalWidth = (maxCharges - 1) * spacing;
+    const startX = screenPos.x - totalWidth / 2;
+    const y = screenPos.y + yOffset + dotRadius;
+
+    for (let i = 0; i < maxCharges; i++) {
+        const cx = startX + i * spacing;
+        // Calculate how many photons apply to this charge
+        const chargeStart = i * photonsPerCharge;
+        const photonsInThisCharge = Math.max(0, Math.min(photonsPerCharge, photonCount - chargeStart));
+        const fillFraction = photonsInThisCharge / photonsPerCharge;
+
+        if (fillFraction >= 1) {
+            // Fully charged - bright filled circle
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
+            context.ctx.fillStyle = '#FFE680';
+            context.ctx.fill();
+        } else if (fillFraction > 0) {
+            // Partially charged - draw empty ring then filled arc (pie slice)
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
+            context.ctx.strokeStyle = '#665500';
+            context.ctx.lineWidth = 1;
+            context.ctx.stroke();
+
+            // Draw filled pie slice for partial charge (clockwise from top)
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + fillFraction * Math.PI * 2;
+            context.ctx.beginPath();
+            context.ctx.moveTo(cx, y);
+            context.ctx.arc(cx, y, dotRadius, startAngle, endAngle);
+            context.ctx.closePath();
+            context.ctx.fillStyle = '#998844';
+            context.ctx.fill();
+        } else {
+            // Empty - outline only
+            context.ctx.beginPath();
+            context.ctx.arc(cx, y, dotRadius, 0, Math.PI * 2);
+            context.ctx.strokeStyle = '#665500';
+            context.ctx.lineWidth = 1;
+            context.ctx.stroke();
+        }
+    }
 }

@@ -124,6 +124,7 @@ export const createOccludeHero = (deps: OccludeHeroDeps) => {
                 Constants.OCCLUDE_ABILITY_COOLDOWN
             );
             this.isHero = true;
+            this.photonsPerCharge = 2;
         }
 
         /**

@@ -80,7 +80,7 @@ export const DUST_SHADOW_MAX_DISTANCE_PX = 420;
 export const DUST_SHADOW_FAR_MAX_DISTANCE_PX = 900;
 export const DUST_SHADOW_FAR_MIN_INTENSITY = 0.08;
 export const DUST_SHADOW_LENGTH_PX = 18;
-export const DUST_SHADOW_OPACITY = 0.14;
+export const DUST_SHADOW_OPACITY = 0.28;
 export const DUST_SHADOW_WIDTH_PX = 0.45;
 export const DUST_TRAIL_MIN_SPEED_PX_PER_SEC = 2;
 export const DUST_TRAIL_MIN_LENGTH_PX = 2;
@@ -393,15 +393,39 @@ export const CASING_SPACEDUST_FORCE = 50;
 export const CASING_COLLISION_DAMPING = 0.3;
 
 // Unit movement constants
-export const UNIT_MOVE_SPEED = 100; // Pixels per second
-export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning
+export const UNIT_MOVE_SPEED = 100; // Pixels per second (hero agile default max speed)
+export const UNIT_TURN_SPEED_RAD_PER_SEC = 8.0; // Radians per second - quick turning (hero agile default)
 export const UNIT_ARRIVAL_THRESHOLD = 5; // Distance to consider unit arrived at destination
+
+// Movement inertia parameters (StarCraft 2 style: crisp but physically grounded)
+// Units accelerate to max speed and decelerate smoothly rather than snapping instantly.
+// Velocity is derived from current facing direction, producing natural arcing on sharp turns.
+export const UNIT_ACCELERATION_PX_PER_SEC2 = 500;   // px/s² — default acceleration (reaches max in ~0.2 s)
+export const UNIT_DECELERATION_PX_PER_SEC2 = 800;   // px/s² — default deceleration (stops from max in ~0.125 s)
+export const UNIT_ARRIVE_SLOWDOWN_RADIUS_PX = 40;   // px — begin tapering speed within this distance of destination
+export const UNIT_WAYPOINT_TRANSIT_TURN_RATE_MULTIPLIER = 4.0; // Faster turn rate at intermediate (non-final) waypoints
+
+// Starling minion (light infantry) inertia tuning
+// Acceleration already defined as STARLING_MOVE_ACCELERATION_PX_PER_SEC (120 px/s²)
+export const STARLING_DECELERATION_PX_PER_SEC2 = 240;  // px/s² — 2× acceleration for responsive stop
+export const STARLING_ARRIVE_SLOWDOWN_RADIUS_PX = 20;  // px — tighter arrival footprint for small units
+
+// Hero tanky preset (Tank hero) — slower, harder to redirect
+export const HERO_TANKY_MOVE_SPEED = 80;                   // px/s
+export const HERO_TANKY_ACCELERATION_PX_PER_SEC2 = 300;    // px/s²
+export const HERO_TANKY_DECELERATION_PX_PER_SEC2 = 600;    // px/s²
+export const HERO_TANKY_TURN_RATE_RAD_PER_SEC = 5.0;       // rad/s
+export const HERO_TANKY_ARRIVE_SLOWDOWN_RADIUS_PX = 50;    // px
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
 export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)
-export const UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX = 140; // Distance ahead to check for asteroids
-export const UNIT_ASTEROID_AVOIDANCE_BUFFER_PX = 12; // Buffer distance around asteroids
-export const UNIT_ASTEROID_AVOIDANCE_STRENGTH = 1.1; // Blend factor for asteroid avoidance
+export const UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX = 160; // Distance ahead to check for asteroids
+export const UNIT_ASTEROID_AVOIDANCE_BUFFER_PX = 20; // Buffer distance around asteroids
+export const UNIT_ASTEROID_AVOIDANCE_STRENGTH = 1.5; // Blend factor for asteroid avoidance
+export const UNIT_ASTEROID_AVOIDANCE_RADIUS_MULTIPLIER = 1.35; // Accounts for polygon vertex extent beyond nominal size
+export const UNIT_BUILDING_AVOIDANCE_BUFFER_PX = 15; // Buffer distance around buildings for movement steering
+export const UNIT_BUILDING_AVOIDANCE_LOOKAHEAD_PX = 100; // Distance ahead to check for buildings
+export const UNIT_BUILDING_AVOIDANCE_STRENGTH = 1.3; // Blend factor for building avoidance in movement
 export const UNIT_HERO_AVOIDANCE_MULTIPLIER = 0.3; // Heroes ignore some avoidance (unitless)
 export const UNIT_MINION_YIELD_MULTIPLIER = 1.4; // Minions yield more to heroes (unitless)
 export const UNIT_STRUCTURE_STANDOFF_PX = 4; // Extra spacing to keep units outside structures
@@ -790,6 +814,44 @@ export const SHROUD_TINY_CUBE_HALF_SIZE_PX = 7;   // Half-size of tiny cubes (14
 export const SHROUD_UNFOLD_DURATION_SEC = 0.6;    // Duration of unfolding animation
 export const SHROUD_SMALL_UNFOLD_DELAY_SEC = 0.0; // Delay before small cubes start unfolding
 export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spawns before tiny cubes unfold
+
+// ─── Photon System Constants ───
+export const PHOTON_MAX_COUNT = 500;                     // Maximum photons on the field
+export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 1.5;       // Initial time between spawns (seconds)
+export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.15;       // Fastest spawn interval at end of match
+export const PHOTON_SPEED_MIN = 30;                      // Minimum photon ejection speed (px/sec)
+export const PHOTON_SPEED_MAX = 80;                      // Maximum photon ejection speed (px/sec)
+export const PHOTON_RADIUS_PX = 4;                       // Visual/collision radius
+export const PHOTON_REPULSION_RANGE_PX = 80;             // Range at which photons repel each other
+export const PHOTON_REPULSION_STRENGTH = 40;             // Repulsion force magnitude
+export const PHOTON_HERO_ABSORB_RANGE_PX = 200;          // Range at which heroes suck in photons
+export const PHOTON_HERO_ABSORB_STRENGTH = 3000;         // Gravity pull strength (stronger when closer)
+export const PHOTON_HERO_CAPTURE_RANGE_PX = 12;          // Distance to actually absorb a photon
+export const PHOTON_LIFETIME_SEC = 60;                   // How long a photon lives before fading
+export const PHOTON_AGING_START_SEC = 50;                // Seconds into lifetime when aging visuals begin (last 10 seconds)
+export const PHOTON_WALL_BOUNCE_RESTITUTION = 0.65;      // Speed retained after bouncing off a map wall (0..1)
+export const PHOTON_FRICTION_PX_PER_SEC_SQ = 6;          // Deceleration applied to photons each second (px/s²)
+export const PHOTON_GOLDEN_ANGLE_RAD = 2.39996323;       // Golden angle ≈ 137.508° in radians
+export const PHOTON_ABILITY_COST = 3;                    // Default photons needed to cast an ability
+export const PHOTON_MIRROR_ABSORB_RANGE_PX = 120;        // Range at which mirrors suck in photons
+export const PHOTON_MIRROR_ABSORB_STRENGTH = 250;        // Gravity pull strength for mirrors
+export const PHOTON_MIRROR_CAPTURE_RANGE_PX = 15;        // Distance to actually absorb a photon into a mirror
+export const PHOTON_SUN_REPULSION_RANGE_PX = 90;         // Distance from sun center at which photons start being repelled
+export const PHOTON_SUN_REPULSION_STRENGTH = 120;        // Repulsion force that pushes photons away from the sun
+export const PHOTON_UNIT_TAP_DESELECT_RADIUS_PX = 24;   // World-space tap radius for deselecting an individual unit by tapping it
+export const MIRROR_OVERCHARGE_DURATION_SEC = 5.0;       // How long a mirror stays overcharged after absorbing a photon
+export const MIRROR_OVERCHARGE_ENERGY_MULTIPLIER = 2.0;  // Energy rate multiplier when mirror is overcharged
+
+// ─── Match Timer Constants ───
+export const MATCH_TIME_LIMIT_SEC = 480;                 // 8-minute match time limit
+
+// ─── Damage Score Constants (for time-based victory) ───
+export const DAMAGE_SCORE_STARLING = 1;
+export const DAMAGE_SCORE_STRUCTURE = 3;
+export const DAMAGE_SCORE_SOLAR_MIRROR = 5;
+export const DAMAGE_SCORE_HERO = 5;
+export const DAMAGE_SCORE_FOUNDRY = 7;
+export const DAMAGE_SCORE_DISPLAY_THRESHOLD_SEC = 120;   // Show damage scores when this many seconds remain
 
 // AI Strategy types
 export enum AIStrategy {

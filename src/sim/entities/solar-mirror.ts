@@ -34,6 +34,7 @@ export class SolarMirror {
     closestSunDistance: number = Infinity; // Distance to closest visible sun
     moveOrder: number = 0; // Movement order indicator (0 = no order)
     isMovingToSun: boolean = false; // True when mirror was commanded to find nearest sunlight
+    overchargeRemainingSec: number = 0; // Remaining overcharge duration after absorbing a photon
 
     // Pathfinding waypoints for obstacle avoidance
     private waypoints: Vector2D[] = [];
@@ -45,6 +46,7 @@ export class SolarMirror {
     private readonly ACCELERATION = 25; // Pixels per second squared
     private readonly DECELERATION = 50; // Pixels per second squared
     private readonly ARRIVAL_THRESHOLD = 2; // Distance to consider arrived at target
+    private readonly INTERMEDIATE_WAYPOINT_ARRIVAL_THRESHOLD_PX = 12; // Looser arrival radius for non-final waypoints
     private readonly SLOW_RADIUS_PX = 60; // Distance to begin slow approach
     private readonly AVOIDANCE_BLEND_FACTOR = 0.6; // How much to blend avoidance with direct path
     private readonly ROTATION_SPEED_RAD_PER_SEC = Math.PI * 0.25; // Radians per second
@@ -60,6 +62,7 @@ export class SolarMirror {
     private readonly REACTIVE_AVOIDANCE_RANGE = 60; // Look ahead distance for reactive avoidance
     private readonly SUN_RECHECK_INTERVAL_MS = 1500; // How often to re-evaluate sun target when isMovingToSun
     private readonly SUN_ORBIT_DISTANCE_PX = 180; // How far from a sun's edge to target when moving to sunlight
+    private readonly SUN_ORBIT_SAMPLE_COUNT = 36; // Number of evenly-spaced orbit positions sampled around the sun
 
     constructor(
         public position: Vector2D,
@@ -251,7 +254,22 @@ export class SolarMirror {
         // At distance 0: MIRROR_PROXIMITY_MULTIPLIER, at MIRROR_MAX_GLOW_DISTANCE: 1x multiplier
         const distanceMultiplier = Math.max(1.0, Constants.MIRROR_PROXIMITY_MULTIPLIER - (this.closestSunDistance / Constants.MIRROR_MAX_GLOW_DISTANCE));
 
-        return baseGenerationRatePerSec * this.efficiency * distanceMultiplier;
+        const overchargeMultiplier = this.isOvercharged() ? Constants.MIRROR_OVERCHARGE_ENERGY_MULTIPLIER : 1.0;
+        return baseGenerationRatePerSec * this.efficiency * distanceMultiplier * overchargeMultiplier;
+    }
+
+    /**
+     * Whether the mirror is currently overcharged (absorbed a photon recently)
+     */
+    isOvercharged(): boolean {
+        return this.overchargeRemainingSec > 0;
+    }
+
+    /**
+     * Called when the mirror absorbs a photon – triggers overcharge for a fixed duration
+     */
+    absorbPhoton(): void {
+        this.overchargeRemainingSec = Constants.MIRROR_OVERCHARGE_DURATION_SEC;
     }
 
     /**
@@ -423,6 +441,22 @@ export class SolarMirror {
         this.computePathWithWaypoints(target, gameState);
     }
 
+    getQueuedPathPoints(): Vector2D[] {
+        if (!this.targetPosition) {
+            return [];
+        }
+
+        const queuedPathPoints: Vector2D[] = [this.targetPosition];
+        if (this.waypoints.length > 1) {
+            queuedPathPoints.push(...this.waypoints.slice(1));
+        }
+        if (this.finalTarget) {
+            queuedPathPoints.push(this.finalTarget);
+        }
+
+        return queuedPathPoints;
+    }
+
     /**
      * Set the mirror moving toward the nearest available sunlight position.
      * Each call finds the best candidate from this mirror's current position.
@@ -463,11 +497,21 @@ export class SolarMirror {
     }
 
     /**
-     * Find the nearest position around the closest sun that:
-     *  1. Has line-of-sight to the sun
-     *  2. Does not collide with any obstacle
-     *  3. Preferentially has line-of-sight to the player's forge (base)
-     * Returns null when no valid position is found.
+     * Find the nearest available sunlight orbit position for this mirror.
+     *
+     * Samples 36 evenly-spaced positions around the sun's orbit circle (sun.radius +
+     * SUN_ORBIT_DISTANCE_PX) and returns the closest one (by direct distance from the
+     * mirror's current position) that is both unobstructed and has line-of-sight to the
+     * sun.  Sampling the orbit circle directly ensures that all positions around the sun
+     * are considered regardless of how far away the mirror is, which fixes the previous
+     * ray-cast approach that could produce only a single candidate when the mirror is far
+     * from the sun (the sun's angular width from ~900 px away is only ~±6°, so a 12°
+     * ray step often yielded at most one hit).  With 36 samples the positions are spaced
+     * ~58 px apart on a typical orbit circle, guaranteeing that if one spot is occupied
+     * the next nearest is always available.
+     *
+     * Returns null only when every orbit position is blocked (e.g. all occupied by
+     * mirrors or hidden behind asteroids).
      */
     findNearestSunlightPosition(gameState: MirrorMovementContext): Vector2D | null {
         if (gameState.suns.length === 0) return null;
@@ -483,52 +527,34 @@ export class SolarMirror {
         }
         if (!nearestSun) return null;
 
-        const forge = this.owner.stellarForge;
-        const targetDist = nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX;
-        const baseAngle = Math.atan2(
-            this.position.y - nearestSun.position.y,
-            this.position.x - nearestSun.position.x
-        );
-        const sampleCount = 24;
-        let fallback: Vector2D | null = null;
+        const orbitRadiusPx = nearestSun.radius + this.SUN_ORBIT_DISTANCE_PX;
+        const sampleCount = this.SUN_ORBIT_SAMPLE_COUNT;
+
+        // Collect every orbit position that is unblocked and has line-of-sight to the sun.
+        const candidates: { distancePx: number; target: Vector2D }[] = [];
 
         for (let i = 0; i < sampleCount; i++) {
-            const angle = baseAngle + (Math.PI * 2 * i) / sampleCount;
-            const candidate = new Vector2D(
-                nearestSun.position.x + Math.cos(angle) * targetDist,
-                nearestSun.position.y + Math.sin(angle) * targetDist
+            const angle = (Math.PI * 2 * i) / sampleCount;
+            const target = new Vector2D(
+                nearestSun.position.x + Math.cos(angle) * orbitRadiusPx,
+                nearestSun.position.y + Math.sin(angle) * orbitRadiusPx
             );
-            if (gameState.checkCollision(candidate, 20)) continue;
-            if (!SolarMirror.positionHasLineOfSightToSun(candidate, gameState.suns, gameState.asteroids)) continue;
 
-            if (!fallback) fallback = candidate;
-
-            if (forge) {
-                // Prefer positions that also have LOS to the player's forge
-                const fdx = forge.position.x - candidate.x;
-                const fdy = forge.position.y - candidate.y;
-                const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
-                if (fdist > 0) {
-                    const fdir = new Vector2D(fdx / fdist, fdy / fdist);
-                    const fray = new LightRay(candidate, fdir);
-                    let forgeBlocked = false;
-                    for (const asteroid of gameState.asteroids) {
-                        const d = fray.getIntersectionDistance(asteroid.getWorldVertices());
-                        if (d !== null && d < fdist) {
-                            forgeBlocked = true;
-                            break;
-                        }
-                    }
-                    if (!forgeBlocked) return candidate;
-                } else {
-                    return candidate;
-                }
-            } else {
-                return candidate;
+            if (
+                !gameState.checkCollision(target, Constants.SOLAR_MIRROR_COLLISION_RADIUS) &&
+                SolarMirror.positionHasLineOfSightToSun(target, gameState.suns, gameState.asteroids)
+            ) {
+                candidates.push({
+                    distancePx: this.position.distanceTo(target),
+                    target,
+                });
             }
         }
 
-        return fallback; // Return sunniest spot found even without forge LOS
+        // Prefer the orbit position closest to the mirror so it travels the shortest path.
+        candidates.sort((a, b) => a.distancePx - b.distancePx);
+
+        return candidates.length > 0 ? candidates[0].target : null;
     }
 
     setLinkedStructure(structure: StellarForge | Building | WarpGate | null): void {
@@ -607,6 +633,11 @@ export class SolarMirror {
      * Update mirror position based on target and velocity with obstacle avoidance
      */
     update(deltaTime: number, gameState: MirrorMovementContext | null = null): void {
+        // Decay overcharge timer
+        if (this.overchargeRemainingSec > 0) {
+            this.overchargeRemainingSec = Math.max(0, this.overchargeRemainingSec - deltaTime);
+        }
+
         // Apply knockback velocity from asteroid rotation
         updateKnockbackMotion(
             this.position,
@@ -650,8 +681,12 @@ export class SolarMirror {
         const dy = this.targetPosition.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
         
+        const arrivalThresholdPx = this.waypoints.length > 0
+            ? this.INTERMEDIATE_WAYPOINT_ARRIVAL_THRESHOLD_PX
+            : this.ARRIVAL_THRESHOLD;
+
         // If we're close enough to current target (waypoint or final target)
-        if (distanceToTarget < this.ARRIVAL_THRESHOLD) {
+        if (distanceToTarget < arrivalThresholdPx) {
             // Check if there are more waypoints to navigate through
             if (this.waypoints.length > 0) {
                 // Remove the waypoint we just reached

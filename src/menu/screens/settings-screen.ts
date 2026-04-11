@@ -21,6 +21,13 @@ export interface SettingsScreenParams {
     allyColor: string;
     enemy2Color: string;
     graphicsQuality: 'low' | 'medium' | 'high' | 'ultra';
+    isExperimentalGraphicsEnabled: boolean;
+    isStarNestEnabled: boolean;
+    isAdaptiveQualityEnabled: boolean;
+    useSvgSprites: boolean;
+    isPauseOnFocusLossEnabled: boolean;
+    resolution: string;
+    isPixelModeEnabled: boolean;
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -36,6 +43,13 @@ export interface SettingsScreenParams {
     onAllyColorChange: (value: string) => void;
     onEnemy2ColorChange: (value: string) => void;
     onGraphicsQualityChange: (value: 'low' | 'medium' | 'high' | 'ultra') => void;
+    onExperimentalGraphicsEnabledChange: (value: boolean) => void;
+    onStarNestEnabledChange: (value: boolean) => void;
+    onAdaptiveQualityEnabledChange: (value: boolean) => void;
+    onUseSvgSpritesChange: (value: boolean) => void;
+    onPauseOnFocusLossEnabledChange: (value: boolean) => void;
+    onResolutionChange: (value: string) => void;
+    onPixelModeEnabledChange: (value: boolean) => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -62,6 +76,13 @@ export function renderSettingsScreen(
         allyColor,
         enemy2Color,
         graphicsQuality,
+        isExperimentalGraphicsEnabled,
+        isStarNestEnabled,
+        isAdaptiveQualityEnabled,
+        useSvgSprites,
+        isPauseOnFocusLossEnabled,
+        resolution,
+        isPixelModeEnabled,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -77,6 +98,13 @@ export function renderSettingsScreen(
         onAllyColorChange,
         onEnemy2ColorChange,
         onGraphicsQualityChange,
+        onExperimentalGraphicsEnabledChange,
+        onStarNestEnabledChange,
+        onAdaptiveQualityEnabledChange,
+        onUseSvgSpritesChange,
+        onPauseOnFocusLossEnabledChange,
+        onResolutionChange,
+        onPixelModeEnabledChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -95,7 +123,7 @@ export function renderSettingsScreen(
     title.style.color = '#FFD700';
     title.style.textAlign = 'center';
     title.style.maxWidth = '100%';
-    title.style.fontWeight = '300';
+    title.style.fontWeight = 'bold';
     title.dataset.particleText = 'true';
     title.dataset.particleColor = '#FFD700';
     container.appendChild(title);
@@ -215,6 +243,82 @@ export function renderSettingsScreen(
         )
     );
     settingsContainer.appendChild(graphicsQualitySection);
+
+    // Resolution setting
+    const resolutionOptions = [
+        'native',
+        '640x360',
+        '960x540',
+        '1280x720',
+        '1600x900',
+        '1920x1080',
+        '2560x1440',
+        '3840x2160',
+    ];
+    const resolutionLabels: Record<string, string> = {
+        'native': 'Native',
+        '640x360': '640 × 360 (nHD)',
+        '960x540': '960 × 540 (qHD)',
+        '1280x720': '1280 × 720 (720p)',
+        '1600x900': '1600 × 900 (HD+)',
+        '1920x1080': '1920 × 1080 (1080p)',
+        '2560x1440': '2560 × 1440 (1440p)',
+        '3840x2160': '3840 × 2160 (4K)',
+    };
+    const resolutionSelect = createSelect(
+        resolutionOptions,
+        resolution,
+        (value) => {
+            onResolutionChange(value);
+        }
+    );
+    // Override the default label formatting to use our custom labels
+    for (let i = 0; i < resolutionSelect.options.length; i++) {
+        const opt = resolutionSelect.options[i];
+        const label = resolutionLabels[opt.value];
+        if (label) {
+            opt.textContent = label;
+        }
+    }
+    const resolutionSection = createSettingSection('Resolution', resolutionSelect);
+    settingsContainer.appendChild(resolutionSection);
+
+    // PIXELS mode toggle (Celeste-style 320x180 upscale)
+    const pixelModeSection = createSettingSection(
+        'PIXELS (Retro)',
+        createToggle(isPixelModeEnabled, onPixelModeEnabledChange)
+    );
+    settingsContainer.appendChild(pixelModeSection);
+
+    const adaptiveQualitySection = createSettingSection(
+        'Adaptive Quality',
+        createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
+    );
+    settingsContainer.appendChild(adaptiveQualitySection);
+
+    const svgSpriteSection = createSettingSection(
+        'Use SVG Sprites',
+        createToggle(useSvgSprites, onUseSvgSpritesChange)
+    );
+    settingsContainer.appendChild(svgSpriteSection);
+
+    const pauseOnFocusLossSection = createSettingSection(
+        'Pause When Unfocused',
+        createToggle(isPauseOnFocusLossEnabled, onPauseOnFocusLossEnabledChange)
+    );
+    settingsContainer.appendChild(pauseOnFocusLossSection);
+
+    const experimentalGraphicsSection = createSettingSection(
+        'Experimental Graphics',
+        createToggle(isExperimentalGraphicsEnabled, onExperimentalGraphicsEnabledChange)
+    );
+    settingsContainer.appendChild(experimentalGraphicsSection);
+
+    const starNestSection = createSettingSection(
+        'Star Nest Effects',
+        createToggle(isStarNestEnabled, onStarNestEnabledChange)
+    );
+    settingsContainer.appendChild(starNestSection);
 
     // Color Scheme setting
     const colorSchemeSection = createSettingSection(

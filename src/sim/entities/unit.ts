@@ -1,6 +1,37 @@
 /**
  * Unit base class for SoL game
  * Base class for all combat units (heroes and minions)
+ *
+ * --- Movement inertia system (build 470) ---
+ * What changed:
+ *   Units now have StarCraft-2-style movement inertia. Rather than snapping instantly to
+ *   max speed or stopping dead, they accelerate, decelerate, and arc into new headings.
+ *
+ * Files touched:
+ *   src/constants.ts                  — added inertia constants (accel, decel, arrive radius, tanky preset)
+ *   src/sim/entities/unit.ts          — this file: movement state fields, rewritten moveTowardRallyPoint
+ *   src/sim/entities/starling.ts      — migrated to base-class movement params; removed manual accel code
+ *   src/heroes/tank.ts                — applies tanky movement preset in constructor
+ *   src/heroes/blink.ts, dash.ts,     — removed now-redundant duplicate rotation code
+ *   src/heroes/preist.ts              — uses this.turnRateRadPerSec for healing-target rotation
+ *
+ * How to tune acceleration / deceleration / turn rate:
+ *   Each unit archetype sets its own values in the constructor:
+ *     this.maxSpeedPxPerSec         — top movement speed (px/s)
+ *     this.accelerationPxPerSec2    — rate of speed increase (px/s²)
+ *     this.decelerationPxPerSec2    — rate of speed decrease (px/s²); usually >= acceleration
+ *     this.turnRateRadPerSec        — max angular speed when rotating toward desired heading (rad/s)
+ *     this.arriveSlowdownRadiusPx   — distance at which the unit begins slowing for arrival (px)
+ *   Default constants in src/constants.ts define the "hero agile" preset.
+ *   Tank uses HERO_TANKY_* constants. Starlings use STARLING_* constants.
+ *   For crisp feel: keep acceleration >= 400 px/s² and deceleration >= acceleration.
+ *   For floaty feel: lower acceleration and deceleration values.
+ *
+ * Edge cases to monitor:
+ *   - Units with very low acceleration may circle waypoints slightly on arrival (see arriveSlowdownRadiusPx).
+ *   - Preist's healing-target facing overrides movement rotation; this is intentional.
+ *   - The group-stop check in Starling.moveTowardRallyPoint instantly zeroes speed (correct).
+ *   - currentSpeedPxPerSec is public for debug overlays (render reads it safely; sim writes it).
  */
 
 import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
@@ -34,6 +65,22 @@ export class Unit {
     stunDuration: number = 0; // Duration of stun effect in seconds
     isFrozen: boolean = false; // Flag to mark unit as frozen (immune to damage, can't be targeted)
     lineOfSight: number; // Line of sight range (calculated from attack range)
+    photonCount: number = 0; // Absorbed photons available for abilities (hero units only)
+    photonsPerCharge: number = 1; // Number of photons needed to fill one ability charge
+    maxCharges: number = 3; // Maximum ability charges a hero can hold
+
+    // --- Movement inertia state (SC2-style: crisp but physically grounded) ---
+    // Subclasses set these protected fields in their constructors to tune per-archetype feel.
+    // Debug: read currentSpeedPxPerSec / velocity / rotation from outside for overlays.
+    currentSpeedPxPerSec: number = 0;           // Current movement speed (actual, not max)
+    protected maxSpeedPxPerSec: number;         // Maximum movement speed
+    protected accelerationPxPerSec2: number;    // Rate of speed increase (px/s²)
+    protected decelerationPxPerSec2: number;    // Rate of speed decrease (px/s²)
+    protected turnRateRadPerSec: number;        // Max angular speed when rotating toward desired heading (rad/s)
+    protected arriveSlowdownRadiusPx: number;   // Distance at which the unit begins slowing for arrival (px)
+    protected isIntermediateWaypoint: boolean = false; // When true, the current rallyPoint is a pass-through waypoint rather than the final destination.
+    // Can be set by subclasses that manage their own path arrays, or detected automatically by Unit
+    // from its own this.waypoints / this.currentWaypointIndex state.
     
     constructor(
         public position: Vector2D,
@@ -50,6 +97,12 @@ export class Unit {
         this.collisionRadiusPx = collisionRadiusPx;
         // Line of sight is 20% more than attack range
         this.lineOfSight = attackRange * Constants.UNIT_LINE_OF_SIGHT_MULTIPLIER;
+        // Default movement params (hero agile preset); subclasses override in their constructors
+        this.maxSpeedPxPerSec = Constants.UNIT_MOVE_SPEED;
+        this.accelerationPxPerSec2 = Constants.UNIT_ACCELERATION_PX_PER_SEC2;
+        this.decelerationPxPerSec2 = Constants.UNIT_DECELERATION_PX_PER_SEC2;
+        this.turnRateRadPerSec = Constants.UNIT_TURN_SPEED_RAD_PER_SEC;
+        this.arriveSlowdownRadiusPx = Constants.UNIT_ARRIVE_SLOWDOWN_RADIUS_PX;
     }
 
     setManualTarget(target: CombatTarget, rallyPoint: Vector2D | null): void {
@@ -74,6 +127,9 @@ export class Unit {
         this.rallyPoint = null;
         this.waypoints = [];
         this.currentWaypointIndex = 0;
+        // NOTE: currentSpeedPxPerSec is intentionally NOT zeroed here.
+        // When no rallyPoint is set, the "no destination" branch of moveTowardRallyPoint
+        // decelerates the unit over the next few ticks for a responsive-but-not-instant stop.
         this.velocity.x = 0;
         this.velocity.y = 0;
     }
@@ -112,7 +168,7 @@ export class Unit {
             return;
         }
 
-        this.moveTowardRallyPoint(deltaTime, Constants.UNIT_MOVE_SPEED, allUnits, asteroids);
+        this.moveTowardRallyPoint(deltaTime, 0 /* ignored — uses this.maxSpeedPxPerSec */, allUnits, asteroids);
 
         if (this.manualTarget && this.isTargetDead(this.manualTarget)) {
             this.manualTarget = null;
@@ -146,7 +202,7 @@ export class Unit {
                 const dy = this.target.position.y - this.position.y;
                 const targetRotation = Math.atan2(dy, dx) + Math.PI / 2;
                 const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-                const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
+                const maxRotationStep = this.turnRateRadPerSec * deltaTime;
                 
                 if (Math.abs(rotationDelta) <= maxRotationStep) {
                     this.rotation = targetRotation;
@@ -208,13 +264,31 @@ export class Unit {
 
     protected moveTowardRallyPoint(
         deltaTime: number,
-        moveSpeed: number,
+        _moveSpeed: number, // Kept for signature compatibility with subclass overrides; ignored — uses instance fields (maxSpeedPxPerSec, etc.) instead
         allUnits: Unit[],
-        asteroids: Asteroid[] = []
+        asteroids: Asteroid[] = [],
+        circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
     ): void {
+        // ── Branch 1: No destination — decelerate to a stop ────────────────────────
         if (!this.rallyPoint) {
-            this.velocity.x = 0;
-            this.velocity.y = 0;
+            if (this.currentSpeedPxPerSec > 0) {
+                this.currentSpeedPxPerSec = Math.max(
+                    0,
+                    this.currentSpeedPxPerSec - this.decelerationPxPerSec2 * deltaTime
+                );
+                // Continue coasting in the current facing direction while slowing down
+                const facingRad = this.rotation - Math.PI / 2;
+                this.velocity.x = Math.cos(facingRad) * this.currentSpeedPxPerSec;
+                this.velocity.y = Math.sin(facingRad) * this.currentSpeedPxPerSec;
+                this.position.x += this.velocity.x * deltaTime;
+                this.position.y += this.velocity.y * deltaTime;
+                const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
+                this.position.x = Math.max(-boundary, Math.min(boundary, this.position.x));
+                this.position.y = Math.max(-boundary, Math.min(boundary, this.position.y));
+            } else {
+                this.velocity.x = 0;
+                this.velocity.y = 0;
+            }
             return;
         }
 
@@ -222,24 +296,23 @@ export class Unit {
         const dy = this.rallyPoint.y - this.position.y;
         const distanceToTarget = Math.sqrt(dx * dx + dy * dy);
 
+        // ── Branch 2: Arrival check ───────────────────────────────────────────────
         if (distanceToTarget <= Constants.UNIT_ARRIVAL_THRESHOLD) {
-            // Check if there are more waypoints to follow
             if (this.waypoints.length > 0 && this.currentWaypointIndex < this.waypoints.length - 1) {
-                // Move to next waypoint
+                // Advance to next waypoint in the path
                 this.currentWaypointIndex++;
                 this.rallyPoint = this.waypoints[this.currentWaypointIndex];
                 return;
             } else {
-                // No more waypoints, clear everything
+                // Final destination reached — clear path; speed decelerates via Branch 1 next tick
                 this.rallyPoint = null;
                 this.waypoints = [];
                 this.currentWaypointIndex = 0;
-                this.velocity.x = 0;
-                this.velocity.y = 0;
                 return;
             }
         }
 
+        // ── Compute desired direction (toward rally point + avoidance steering) ───
         let directionX = dx / distanceToTarget;
         let directionY = dy / distanceToTarget;
 
@@ -284,13 +357,14 @@ export class Unit {
         let asteroidAvoidanceY = 0;
         const lookaheadPx = Constants.UNIT_ASTEROID_AVOIDANCE_LOOKAHEAD_PX;
         const bufferPx = Constants.UNIT_ASTEROID_AVOIDANCE_BUFFER_PX;
+        const radiusMultiplier = Constants.UNIT_ASTEROID_AVOIDANCE_RADIUS_MULTIPLIER;
 
         for (let i = 0; i < asteroids.length; i++) {
             const asteroid = asteroids[i];
             const toAsteroidX = asteroid.position.x - this.position.x;
             const toAsteroidY = asteroid.position.y - this.position.y;
             const projection = toAsteroidX * directionX + toAsteroidY * directionY;
-            const avoidanceRadius = asteroid.size + this.collisionRadiusPx + bufferPx;
+            const avoidanceRadius = asteroid.size * radiusMultiplier + this.collisionRadiusPx + bufferPx;
             const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
 
             if (projection > 0 && projection < lookaheadPx) {
@@ -322,6 +396,60 @@ export class Unit {
             }
         }
 
+        // ── Building / structure circular obstacle avoidance ────────────────────
+        // Uses the same lookahead + close-range push pattern as asteroid avoidance.
+        // Applied with its own accumulator and UNIT_BUILDING_AVOIDANCE_STRENGTH.
+        let buildingAvoidanceX = 0;
+        let buildingAvoidanceY = 0;
+        if (circularObstacles.length > 0) {
+            const buildingLookaheadPx = Constants.UNIT_BUILDING_AVOIDANCE_LOOKAHEAD_PX;
+            const buildingBufferPx = Constants.UNIT_BUILDING_AVOIDANCE_BUFFER_PX;
+
+            for (let i = 0; i < circularObstacles.length; i++) {
+                const obs = circularObstacles[i];
+                const toObsX = obs.position.x - this.position.x;
+                const toObsY = obs.position.y - this.position.y;
+                const projection = toObsX * directionX + toObsY * directionY;
+                const avoidanceRadius = obs.radius + this.collisionRadiusPx + buildingBufferPx;
+                const avoidanceRadiusSq = avoidanceRadius * avoidanceRadius;
+
+                // Lookahead steer
+                if (projection > 0 && projection < buildingLookaheadPx) {
+                    const perpendicularX = toObsX - directionX * projection;
+                    const perpendicularY = toObsY - directionY * projection;
+                    const perpendicularDistanceSq = perpendicularX * perpendicularX + perpendicularY * perpendicularY;
+
+                    if (perpendicularDistanceSq < avoidanceRadiusSq) {
+                        const cross = directionX * toObsY - directionY * toObsX;
+                        const steerX = cross > 0 ? directionY : -directionY;
+                        const steerY = cross > 0 ? -directionX : directionX;
+                        const strength = (avoidanceRadius - Math.sqrt(perpendicularDistanceSq)) / avoidanceRadius;
+                        buildingAvoidanceX += steerX * strength;
+                        buildingAvoidanceY += steerY * strength;
+                    }
+                }
+
+                // Close-range push
+                const offsetX = this.position.x - obs.position.x;
+                const offsetY = this.position.y - obs.position.y;
+                const distanceSq = offsetX * offsetX + offsetY * offsetY;
+                if (distanceSq < avoidanceRadiusSq) {
+                    const distance = Math.sqrt(distanceSq);
+                    if (distance > 0) {
+                        const pushStrength = (avoidanceRadius - distance) / avoidanceRadius;
+                        buildingAvoidanceX += (offsetX / distance) * pushStrength;
+                        buildingAvoidanceY += (offsetY / distance) * pushStrength;
+                    }
+                }
+            }
+
+            const buildingAvoidanceLength = Math.sqrt(buildingAvoidanceX * buildingAvoidanceX + buildingAvoidanceY * buildingAvoidanceY);
+            if (buildingAvoidanceLength > 0) {
+                buildingAvoidanceX /= buildingAvoidanceLength;
+                buildingAvoidanceY /= buildingAvoidanceLength;
+            }
+        }
+
         const asteroidAvoidanceLength = Math.sqrt(asteroidAvoidanceX * asteroidAvoidanceX + asteroidAvoidanceY * asteroidAvoidanceY);
         if (asteroidAvoidanceLength > 0) {
             asteroidAvoidanceX /= asteroidAvoidanceLength;
@@ -332,6 +460,8 @@ export class Unit {
         directionY += avoidanceY * Constants.UNIT_AVOIDANCE_STRENGTH;
         directionX += asteroidAvoidanceX * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
         directionY += asteroidAvoidanceY * Constants.UNIT_ASTEROID_AVOIDANCE_STRENGTH;
+        directionX += buildingAvoidanceX * Constants.UNIT_BUILDING_AVOIDANCE_STRENGTH;
+        directionY += buildingAvoidanceY * Constants.UNIT_BUILDING_AVOIDANCE_STRENGTH;
 
         const directionLength = Math.sqrt(directionX * directionX + directionY * directionY);
         if (directionLength > 0) {
@@ -339,30 +469,79 @@ export class Unit {
             directionY /= directionLength;
         }
 
-        // Update rotation to face movement direction with smooth turning
+        // ── Rotate facing toward desired heading using per-unit turn rate ─────────
+        // This produces smooth visual arcing; velocity is later derived from this facing.
+        // At intermediate waypoints, a faster turn rate is applied so units quickly align with
+        // the new heading instead of sweeping through a wide arc before each waypoint.
+
+        // Detect whether the current rally point is an intermediate waypoint (not the final destination).
+        // For Unit-managed waypoints: check if more waypoints remain after the current one.
+        // For subclass-managed paths (e.g. Starling): isIntermediateWaypoint is set by the subclass.
+        const isIntermediate = this.isIntermediateWaypoint ||
+            (this.waypoints.length > 0 && this.currentWaypointIndex >= 0 && this.currentWaypointIndex < this.waypoints.length - 1);
+
         if (directionLength > 0) {
-            // Add π/2 so the TOP of the sprite is treated as the FRONT (not the bottom/right side)
+            // Add π/2 so the TOP of the sprite is treated as the FRONT
             const targetRotation = Math.atan2(directionY, directionX) + Math.PI / 2;
             const rotationDelta = this.getShortestAngleDelta(this.rotation, targetRotation);
-            const maxRotationStep = Constants.UNIT_TURN_SPEED_RAD_PER_SEC * deltaTime;
-            
+            // Intermediate waypoints use a faster turn rate so the unit snaps to the new heading quickly.
+            const effectiveTurnRate = isIntermediate
+                ? this.turnRateRadPerSec * Constants.UNIT_WAYPOINT_TRANSIT_TURN_RATE_MULTIPLIER
+                : this.turnRateRadPerSec;
+            const maxRotationStep = effectiveTurnRate * deltaTime;
+
             if (Math.abs(rotationDelta) <= maxRotationStep) {
                 this.rotation = targetRotation;
             } else {
                 this.rotation += Math.sign(rotationDelta) * maxRotationStep;
             }
-            
+
             // Normalize rotation to [0, 2π) using modulo
             this.rotation = ((this.rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
         }
 
-        const moveDistance = moveSpeed * deltaTime;
-        const moveX = directionX * moveDistance;
-        const moveY = directionY * moveDistance;
-        this.position.x += moveX;
-        this.position.y += moveY;
-        this.velocity.x = directionX * moveSpeed;
-        this.velocity.y = directionY * moveSpeed;
+        // ── Desired speed with arrival slowdown ───────────────────────────────────
+        // Only taper speed for the final destination — intermediate waypoints are passed
+        // at full speed so the unit never decelerates mid-path.
+        let desiredSpeed = this.maxSpeedPxPerSec;
+        if (!isIntermediate && distanceToTarget < this.arriveSlowdownRadiusPx) {
+            desiredSpeed = this.maxSpeedPxPerSec * (distanceToTarget / this.arriveSlowdownRadiusPx);
+        }
+
+        // ── Accelerate / decelerate current speed toward desired speed ────────────
+        if (this.currentSpeedPxPerSec < desiredSpeed) {
+            this.currentSpeedPxPerSec = Math.min(
+                desiredSpeed,
+                this.currentSpeedPxPerSec + this.accelerationPxPerSec2 * deltaTime
+            );
+        } else if (this.currentSpeedPxPerSec > desiredSpeed) {
+            this.currentSpeedPxPerSec = Math.max(
+                desiredSpeed,
+                this.currentSpeedPxPerSec - this.decelerationPxPerSec2 * deltaTime
+            );
+        }
+
+        // ── Derive velocity and update position ───────────────────────────────────
+        // Intermediate waypoints: velocity points directly in the desired direction so the unit
+        // can start moving toward the next point before it finishes turning (the sprite rotates
+        // to face the direction over time).
+        // Final approach: velocity also points directly toward target to prevent orbiting.
+        // Further from final destination: velocity follows current facing for a natural arc.
+        let velDirX: number;
+        let velDirY: number;
+        if (isIntermediate || distanceToTarget <= this.arriveSlowdownRadiusPx) {
+            velDirX = directionX;
+            velDirY = directionY;
+        } else {
+            const facingRad = this.rotation - Math.PI / 2;
+            velDirX = Math.cos(facingRad);
+            velDirY = Math.sin(facingRad);
+        }
+
+        this.velocity.x = velDirX * this.currentSpeedPxPerSec;
+        this.velocity.y = velDirY * this.currentSpeedPxPerSec;
+        this.position.x += this.velocity.x * deltaTime;
+        this.position.y += this.velocity.y * deltaTime;
 
         // Clamp position to playable map boundaries (keep units out of dark border fade zone)
         const boundary = Constants.MAP_PLAYABLE_BOUNDARY;
@@ -428,7 +607,19 @@ export class Unit {
      * @returns true if ability was used, false if on cooldown
      */
     useAbility(direction: Vector2D): boolean {
-        // Check if ability is ready
+        // Hero units require photons to cast abilities (charge-based system)
+        if (this.isHero) {
+            if (this.photonCount < this.photonsPerCharge) {
+                return false;
+            }
+            // Spend one charge worth of photons
+            this.photonCount -= this.photonsPerCharge;
+            // Set a short visual cooldown so the bar shows briefly
+            this.abilityCooldown = 0.5;
+            return true;
+        }
+
+        // Non-hero units use time-based cooldown
         if (this.abilityCooldown > 0) {
             return false;
         }

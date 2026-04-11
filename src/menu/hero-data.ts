@@ -12,14 +12,16 @@ export const HERO_UNITS: HeroUnit[] = [
         id: 'radiant-marine', name: 'Marine', description: 'Rapid-fire ranged specialist', faction: Faction.RADIANT,
         maxHealth: Constants.MARINE_MAX_HEALTH, attackDamage: Constants.MARINE_ATTACK_DAMAGE, attackSpeed: Constants.MARINE_ATTACK_SPEED,
         attackRange: Constants.MARINE_ATTACK_RANGE, attackIgnoresDefense: false, defense: 10, regen: 4,
-        abilityDescription: 'Bullet storm: fires a spread of shots toward a target direction'
+        abilityDescription: 'Bullet storm: fires a spread of shots toward a target direction',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.png'
     },
     { 
         id: 'velaris-grave', name: 'Grave', description: 'Gravitic sentinel with orbiting projectiles', faction: Faction.VELARIS,
         maxHealth: Constants.GRAVE_MAX_HEALTH, attackDamage: Constants.GRAVE_ATTACK_DAMAGE, attackSpeed: Constants.GRAVE_ATTACK_SPEED,
         attackRange: Constants.GRAVE_ATTACK_RANGE * Constants.GRAVE_HERO_ATTACK_RANGE_MULTIPLIER,
         attackIgnoresDefense: false, defense: 18, regen: 3,
-        abilityDescription: 'Black Hole: launches a vortex that attracts all small particles for 5 seconds'
+        abilityDescription: 'Black Hole: launches a vortex that attracts all small particles for 5 seconds',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.png'
     },
     {
         id: 'velaris-nova', name: 'Nova', description: 'Remote bomb specialist with bouncing projectile', faction: Faction.VELARIS,
@@ -37,37 +39,43 @@ export const HERO_UNITS: HeroUnit[] = [
         id: 'radiant-ray', name: 'Ray', description: 'Bouncing beam marks targets', faction: Faction.RADIANT,
         maxHealth: Constants.RAY_MAX_HEALTH, attackDamage: Constants.RAY_ATTACK_DAMAGE, attackSpeed: Constants.RAY_ATTACK_SPEED,
         attackRange: Constants.RAY_ATTACK_RANGE, attackIgnoresDefense: true, defense: 8, regen: 5,
-        abilityDescription: 'Solar ricochet: beam bounces between multiple enemies'
+        abilityDescription: 'Solar ricochet: beam bounces between multiple enemies',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
     },
     {
         id: 'velaris-diplomat', name: 'Diplomat', description: 'Deploys temporary influence zones', faction: Faction.VELARIS,
         maxHealth: Constants.INFLUENCE_BALL_MAX_HEALTH, attackDamage: Constants.INFLUENCE_BALL_ATTACK_DAMAGE, attackSpeed: Constants.INFLUENCE_BALL_ATTACK_SPEED,
         attackRange: Constants.INFLUENCE_BALL_ATTACK_RANGE, attackIgnoresDefense: false, defense: 12, regen: 6,
-        abilityDescription: 'Influence surge: expand an influence zone at target location'
+        abilityDescription: 'Influence surge: expand an influence zone at target location',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.png'
     },
     {
         id: 'radiant-turret-deployer', name: 'Turret Deployer', description: 'Deploys automated turrets on asteroids', faction: Faction.RADIANT,
         maxHealth: Constants.TURRET_DEPLOYER_MAX_HEALTH, attackDamage: Constants.TURRET_DEPLOYER_ATTACK_DAMAGE, attackSpeed: Constants.TURRET_DEPLOYER_ATTACK_SPEED,
         attackRange: Constants.TURRET_DEPLOYER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 4,
-        abilityDescription: 'Deploy turret: places a turret on a nearby asteroid'
+        abilityDescription: 'Deploy turret: places a turret on a nearby asteroid',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.png'
     },
     {
         id: 'aurum-driller', name: 'Driller', description: 'Burrows through asteroids to flank', faction: Faction.AURUM,
         maxHealth: Constants.DRILLER_MAX_HEALTH, attackDamage: Constants.DRILLER_ATTACK_DAMAGE, attackSpeed: Constants.DRILLER_ATTACK_SPEED,
         attackRange: Constants.DRILLER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 16, regen: 3,
-        abilityDescription: 'Drill charge: tunnels through an asteroid toward the target'
+        abilityDescription: 'Drill charge: tunnels through an asteroid toward the target',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.png'
     },
     {
         id: 'velaris-dagger', name: 'Dagger', description: 'Cloaked assassin with burst damage', faction: Faction.VELARIS,
         maxHealth: Constants.DAGGER_MAX_HEALTH, attackDamage: Constants.DAGGER_ATTACK_DAMAGE, attackSpeed: Constants.DAGGER_ATTACK_SPEED,
         attackRange: Constants.DAGGER_ATTACK_RANGE, attackIgnoresDefense: false, defense: 5, regen: 3,
-        abilityDescription: 'Shadow strike: short-range burst attack, reveals Dagger for 8 seconds'
+        abilityDescription: 'Shadow strike: short-range burst attack, reveals Dagger for 8 seconds',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.png'
     },
     {
         id: 'radiant-beam', name: 'Beam', description: 'Sniper with distance-based damage multiplier', faction: Faction.RADIANT,
         maxHealth: Constants.BEAM_MAX_HEALTH, attackDamage: Constants.BEAM_ATTACK_DAMAGE, attackSpeed: Constants.BEAM_ATTACK_SPEED,
         attackRange: Constants.BEAM_ATTACK_RANGE, attackIgnoresDefense: true, defense: 6, regen: 3,
-        abilityDescription: 'Precision shot: long-range beam that does more damage at greater distances'
+        abilityDescription: 'Precision shot: long-range beam that does more damage at greater distances',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
     },
     {
         id: 'radiant-spotlight', name: 'Spotlight', description: 'Reveals enemies in a razor-thin cone', faction: Faction.RADIANT,
@@ -79,7 +87,8 @@ export const HERO_UNITS: HeroUnit[] = [
         id: 'radiant-mortar', name: 'Mortar', description: 'Siege unit with splash damage', faction: Faction.RADIANT,
         maxHealth: Constants.MORTAR_MAX_HEALTH, attackDamage: Constants.MORTAR_ATTACK_DAMAGE, attackSpeed: Constants.MORTAR_ATTACK_SPEED,
         attackRange: Constants.MORTAR_ATTACK_RANGE, attackIgnoresDefense: false, defense: 14, regen: 2,
-        abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage'
+        abilityDescription: 'Siege mode: temporarily becomes immobile but gains increased range and damage',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Artillery.png'
     },
     {
         id: 'radiant-mothership', name: 'Mothership', description: 'Command carrier that launches mini-mothership escorts', faction: Faction.RADIANT,
@@ -91,7 +100,8 @@ export const HERO_UNITS: HeroUnit[] = [
         id: 'aurum-preist', name: 'Preist', description: 'Support healer with dual beams', faction: Faction.AURUM,
         maxHealth: Constants.PREIST_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
         attackRange: Constants.PREIST_HEALING_RANGE, attackIgnoresDefense: false, defense: 18, regen: 4,
-        abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles'
+        abilityDescription: 'Healing bomb: launches a projectile that explodes into healing particles',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/priest.png'
     },
     {
         id: 'aurum-splendor', name: 'Splendor', description: 'Sunlight laser caster with bouncing sun sphere', faction: Faction.AURUM,
@@ -103,7 +113,8 @@ export const HERO_UNITS: HeroUnit[] = [
         id: 'aurum-tank', name: 'Tank', description: 'Extremely tough defensive unit with projectile shield', faction: Faction.AURUM,
         maxHealth: Constants.TANK_MAX_HEALTH, attackDamage: 0, attackSpeed: 0,
         attackRange: 0, attackIgnoresDefense: false, defense: Constants.TANK_DEFENSE, regen: 3,
-        abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles'
+        abilityDescription: 'Crescent wave: sends a slow 90-degree wave that stuns all units and erases projectiles',
+        spritePath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.png'
     },
     {
         id: 'velaris-chrono', name: 'Chrono', description: 'Area-control specialist that freezes units over time', faction: Faction.VELARIS,

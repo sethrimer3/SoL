@@ -20,6 +20,7 @@ import {
 import { SelectionManager } from './selection-manager';
 import { WarpGateManager } from './warp-gate-manager';
 import { GameRenderer } from '../renderer';
+import { InGameMenuAction } from '../render/in-game-menu';
 import * as Constants from '../constants';
 
 export interface InputControllerContext {
@@ -71,6 +72,7 @@ export interface InputControllerContext {
     getBuildingAbilityAnchorScreen: () => Vector2D | null;
     cancelMirrorWarpGateModeAndDeselectMirrors: () => void;
     clearPathPreview: () => void;
+    onInGameSettingsChanged: () => void;
 }
 
 export class InputController {
@@ -80,6 +82,7 @@ export class InputController {
     public selectionStartScreen: Vector2D | null = null;
     public isDraggingHeroArrow: boolean = false;
     public isDraggingBuildingArrow: boolean = false;
+    public isDraggingMenuSlider: boolean = false;
     public isDrawingPath: boolean = false;
     public pathPoints: Vector2D[] = [];
     public moveOrderCounter: number = 0;
@@ -90,6 +93,45 @@ export class InputController {
     public abilityArrowStarts: Vector2D[] = [];
 
     private ctx: InputControllerContext;
+
+    private isFoundryBuilding(building: Building): building is SubsidiaryFactory {
+        return building instanceof SubsidiaryFactory || building.constructor.name === 'SubsidiaryFactory';
+    }
+
+    private isSliderAction(action: InGameMenuAction): boolean {
+        return action.type === 'offscreenIndicatorOpacity'
+            || action.type === 'infoBoxOpacity'
+            || action.type === 'infoBoxSizePercent'
+            || action.type === 'soundVolume'
+            || action.type === 'musicVolume';
+    }
+
+    private applyMenuAction(action: InGameMenuAction): void {
+        switch (action.type) {
+            case 'offscreenIndicatorOpacity':
+                this.ctx.renderer.offscreenIndicatorOpacity = action.opacityPercent / 100;
+                break;
+            case 'infoBoxOpacity':
+                this.ctx.renderer.infoBoxOpacity = action.opacityPercent / 100;
+                break;
+            case 'infoBoxSizePercent':
+                this.ctx.renderer.infoBoxSize = action.sizePercent / 100;
+                break;
+            case 'soundVolume':
+                this.ctx.renderer.soundVolume = action.volumePercent / 100;
+                this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
+                this.ctx.setSettingsSoundVolume(action.volumePercent);
+                this.ctx.onInGameSettingsChanged();
+                break;
+            case 'musicVolume':
+                this.ctx.renderer.musicVolume = action.volumePercent / 100;
+                this.ctx.setSettingsMusicVolume(action.volumePercent);
+                this.ctx.onInGameSettingsChanged();
+                break;
+            default:
+                break;
+        }
+    }
 
     constructor(canvas: HTMLCanvasElement, context: InputControllerContext) {
         this.ctx = context;
@@ -172,6 +214,16 @@ export class InputController {
             lastY = y;
             this.selectionStartScreen = new Vector2D(x, y);
             this.isSelecting = false;
+
+            // Check if clicking on an in-game menu slider — start dragging
+            if (this.ctx.getShowInGameMenu()) {
+                const menuAction = this.ctx.renderer.getInGameMenuAction(x, y);
+                if (menuAction && this.isSliderAction(menuAction)) {
+                    this.isDraggingMenuSlider = true;
+                    this.applyMenuAction(menuAction);
+                    return;
+                }
+            }
             
             // Start warp gate hold timer
             const worldPos = this.ctx.renderer.screenToWorld(x, y);
@@ -181,6 +233,17 @@ export class InputController {
         const moveDrag = (x: number, y: number, isTwoFinger: boolean = false) => {
             if (!isMouseDown) {
                 // Not dragging, just tracking mouse position
+                lastX = x;
+                lastY = y;
+                return;
+            }
+
+            // Handle in-game menu slider dragging
+            if (this.isDraggingMenuSlider) {
+                const menuAction = this.ctx.renderer.getInGameMenuAction(x, y);
+                if (menuAction && this.isSliderAction(menuAction)) {
+                    this.applyMenuAction(menuAction);
+                }
                 lastX = x;
                 lastY = y;
                 return;
@@ -254,7 +317,7 @@ export class InputController {
                     } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                         // Check if a foundry is selected
                         const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                        if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                        if (this.isFoundryBuilding(selectedBuilding) && selectedBuilding.isComplete) {
                             // Foundry is selected - use building arrow mode
                             this.isDraggingBuildingArrow = true;
                             this.cancelHold();
@@ -384,7 +447,7 @@ export class InputController {
                     } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                         // Foundry building has 4 buttons
                         const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                        if (selectedBuilding instanceof SubsidiaryFactory) {
+                        if (this.isFoundryBuilding(selectedBuilding)) {
                             this.ctx.renderer.highlightedButtonIndex = dragDirection
                                 ? this.ctx.getNearestButtonIndexFromAngle(angle, 4)
                                 : -1;
@@ -418,6 +481,19 @@ export class InputController {
         };
 
         const endDrag = () => {
+            // If we were dragging a menu slider, just stop
+            if (this.isDraggingMenuSlider) {
+                this.isDraggingMenuSlider = false;
+                isPanning = false;
+                isMouseDown = false;
+                this.isSelecting = false;
+                this.selectionStartScreen = null;
+                this.ctx.renderer.selectionStart = null;
+                this.ctx.renderer.selectionEnd = null;
+                this.endHold();
+                return;
+            }
+
             // Check if this was a simple click (no dragging)
             const wasClick = this.selectionStartScreen && 
                              Math.abs(lastX - this.selectionStartScreen.x) < Constants.CLICK_DRAG_THRESHOLD && 
@@ -465,35 +541,25 @@ export class InputController {
                                 if (this.ctx.getGame()) {
                                     this.ctx.getGame()!.damageDisplayMode = menuAction.mode;
                                 }
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'healthDisplayMode':
                                 this.ctx.renderer.healthDisplayMode = menuAction.mode;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'fancyGraphics':
                                 this.ctx.renderer.isFancyGraphicsEnabled = menuAction.isEnabled;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'graphicsQuality':
                                 this.ctx.renderer.graphicsQuality = menuAction.quality;
+                                this.ctx.onInGameSettingsChanged();
                                 break;
                             case 'colorblindMode':
                                 this.ctx.renderer.colorblindMode = menuAction.isEnabled;
                                 break;
-                            case 'offscreenIndicatorOpacity':
-                                this.ctx.renderer.offscreenIndicatorOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'infoBoxOpacity':
-                                this.ctx.renderer.infoBoxOpacity = menuAction.opacityPercent / 100;
-                                break;
-                            case 'soundVolume':
-                                this.ctx.renderer.soundVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSoundVolume(this.ctx.renderer.soundVolume);
-                                this.ctx.setSettingsSoundVolume(menuAction.volumePercent);
-                                break;
-                            case 'musicVolume':
-                                this.ctx.renderer.musicVolume = menuAction.volumePercent / 100;
-                                this.ctx.setSettingsMusicVolume(menuAction.volumePercent);
-                                break;
                             default:
+                                this.applyMenuAction(menuAction);
                                 break;
                         }
 
@@ -642,7 +708,7 @@ export class InputController {
                 const targetableStructure = friendlySacrificeTarget ?? this.ctx.getTargetableStructureAtPosition(worldPos, player);
                 if (this.ctx.getSelectionManager().selectedUnits.size > 0 && targetableStructure) {
                     this.moveOrderCounter++;
-                    const isFriendlySacrificeTarget = targetableStructure.target instanceof SubsidiaryFactory &&
+                    const isFriendlySacrificeTarget = this.isFoundryBuilding(targetableStructure.target) &&
                         targetableStructure.target.owner === player;
                     const targetRadiusPx = this.ctx.getTargetStructureRadiusPx(targetableStructure.target);
 
@@ -803,7 +869,7 @@ export class InputController {
                     const isCompatibleMirrorTarget = clickedBuilding instanceof Minigun ||
                         clickedBuilding instanceof GatlingTower ||
                         clickedBuilding instanceof SpaceDustSwirler ||
-                        clickedBuilding instanceof SubsidiaryFactory ||
+                        this.isFoundryBuilding(clickedBuilding) ||
                         clickedBuilding instanceof StrikerTower ||
                         clickedBuilding instanceof LockOnLaserTower ||
                         clickedBuilding instanceof ShieldTower;
@@ -824,6 +890,15 @@ export class InputController {
                             });
                         }
                         this.ctx.getSelectionManager().selectedMirrors.clear();
+
+                        isPanning = false;
+                        isMouseDown = false;
+                        this.isSelecting = false;
+                        this.selectionStartScreen = null;
+                        this.ctx.renderer.selectionStart = null;
+                        this.ctx.renderer.selectionEnd = null;
+                        this.endHold();
+                        return;
                     }
                     
                     // Check if this is a double-tap
@@ -863,6 +938,20 @@ export class InputController {
                         console.log('Building selected');
                     }
                     
+                    isPanning = false;
+                    isMouseDown = false;
+                    this.isSelecting = false;
+                    this.selectionStartScreen = null;
+                    this.ctx.renderer.selectionStart = null;
+                    this.ctx.renderer.selectionEnd = null;
+                    this.endHold();
+                    return;
+                }
+
+                // Tap-deselect: if multiple things are selected and the player taps directly
+                // on one of the selected units, deselect that unit and keep others selected
+                // (do not issue a move order).
+                if (this.ctx.getSelectionManager().tryDeselectUnitAtPosition(worldPos)) {
                     isPanning = false;
                     isMouseDown = false;
                     this.isSelecting = false;
@@ -948,7 +1037,7 @@ export class InputController {
 
                         if (i === 2 && shouldShowFoundryButton) {
                             if (this.ctx.getHasActiveFoundry()) {
-                                const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
+                                const foundry = player.buildings.find((building) => this.isFoundryBuilding(building));
                                 if (foundry) {
                                     for (const mirror of this.ctx.getSelectionManager().selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
@@ -1039,7 +1128,7 @@ export class InputController {
 
                 if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                     const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                    if (selectedBuilding instanceof SubsidiaryFactory && selectedBuilding.isComplete) {
+                    if (this.isFoundryBuilding(selectedBuilding) && selectedBuilding.isComplete) {
                         const clickedFoundryButtonIndex = this.ctx.getClickedFoundryButtonIndex(
                             lastX,
                             lastY,
@@ -1365,7 +1454,7 @@ export class InputController {
                                     console.log('Radial selection: Mirror command mode set to warpgate');
                                 }
                             } else if (isMirrorInSunlight && this.ctx.renderer.highlightedButtonIndex === 2 && this.ctx.getHasActiveFoundry()) {
-                                const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
+                                const foundry = player.buildings.find((building) => this.isFoundryBuilding(building));
                                 if (foundry) {
                                     for (const mirror of this.ctx.getSelectionManager().selectedMirrors) {
                                         mirror.setLinkedStructure(foundry);
@@ -1395,7 +1484,7 @@ export class InputController {
                         } else if (this.ctx.getSelectionManager().selectedBuildings.size === 1) {
                             // Foundry building button selected
                             const selectedBuilding = Array.from(this.ctx.getSelectionManager().selectedBuildings)[0];
-                            if (selectedBuilding instanceof SubsidiaryFactory) {
+                            if (this.isFoundryBuilding(selectedBuilding)) {
                                 this.ctx.handleFoundryButtonPress(player, selectedBuilding, this.ctx.renderer.highlightedButtonIndex);
                             }
                         }
@@ -1843,7 +1932,7 @@ export class InputController {
         }
 
         const selectedStarlings = this.ctx.getSelectionManager().getSelectedStarlings(player);
-        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (hasFoundry && selectedStarlings.length >= Constants.STARLING_MERGE_COUNT) {
             const closestStarling = this.ctx.getSelectionManager().getClosestSelectedStarling(worldPos);
             if (closestStarling) {
@@ -1900,7 +1989,7 @@ export class InputController {
             return;
         }
 
-        const hasFoundry = player.buildings.some((building) => building instanceof SubsidiaryFactory);
+        const hasFoundry = player.buildings.some((building) => this.isFoundryBuilding(building));
         if (!hasFoundry) {
             this.cancelHold();
             return;

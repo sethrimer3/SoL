@@ -68,6 +68,7 @@ export enum NetworkEvent {
     MESSAGE_RECEIVED = 'message_received',
     PLAYER_JOINED = 'player_joined',
     PLAYER_LEFT = 'player_left',
+    LOBBY_CHANGED = 'lobby_changed',
     ERROR = 'error'
 }
 
@@ -441,6 +442,7 @@ export class NetworkManager {
                 if (this.lobby) {
                     this.lobby.gameStarted = true;
                 }
+                this.emit(NetworkEvent.MESSAGE_RECEIVED, message);
                 break;
 
             case MessageType.GAME_COMMAND:

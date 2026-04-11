@@ -21,7 +21,7 @@ export class Asteroid {
         this.sides = Math.max(12, Math.min(24, Math.floor(this.sides)));
         this.generateVertices();
         const rng = getGameRNG();
-        this.rotationSpeed = rng.nextFloat(-0.25, 0.25); // Random rotation speed
+        this.rotationSpeed = rng.nextFloat(-0.025, 0.025); // Random rotation speed (slow drift)
     }
 
     /**

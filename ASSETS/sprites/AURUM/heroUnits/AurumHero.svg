@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600">
+  <defs>
+    <style>.cls-1 { fill: #fefefe; }</style>
+  </defs>
+  <!-- Aurum shield / crest shape -->
+  <!-- Shield outline -->
+  <path class="cls-1" d="
+    M300,60
+    L500,140
+    L500,340
+    Q500,480 300,560
+    Q100,480 100,340
+    L100,140 Z"/>
+  <!-- Inner shield decoration – smaller inset shield -->
+  <path class="cls-1" d="
+    M300,120
+    L440,186
+    L440,340
+    Q440,440 300,500
+    Q160,440 160,340
+    L160,186 Z" opacity="0.4"/>
+  <!-- Gold coin center symbol -->
+  <circle class="cls-1" cx="300" cy="310" r="66"/>
+  <circle class="cls-1" cx="300" cy="310" r="46" opacity="0.4"/>
+</svg>

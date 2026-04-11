@@ -31,6 +31,7 @@ export const createBeamHero = (deps: BeamHeroDeps) => {
                 Constants.BEAM_ABILITY_COOLDOWN
             );
             this.isHero = true; // Beam is a hero unit for Radiant faction
+            this.photonsPerCharge = 2;
         }
 
         /**
