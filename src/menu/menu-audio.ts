@@ -79,6 +79,9 @@ interface AudioTrack {
 const LOOP_CROSSFADE_DURATION_SEC = 2;
 const FALLBACK_LOOP_DURATION_SEC = 26;
 
+// -6 dB master gain applied to all music tracks (10^(-6/20) ≈ 0.5012)
+const MUSIC_MASTER_GAIN = Math.pow(10, -6 / 20);
+
 export class MenuAudioController {
     private readonly resolveAssetPath: (path: string) => string;
     private readonly tracksById: Record<TrackId, AudioTrack>;
@@ -326,7 +329,7 @@ export class MenuAudioController {
         targetVolumesById['sun-rumble-right'] = rumbleTotalVolume * rightGain;
 
         for (const trackId of Object.keys(targetVolumesById) as TrackId[]) {
-            targetVolumesById[trackId] *= this.musicVolume;
+            targetVolumesById[trackId] *= this.musicVolume * MUSIC_MASTER_GAIN;
         }
 
         this.applyTargetVolumes(targetVolumesById);

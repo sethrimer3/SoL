@@ -203,11 +203,32 @@ export function createPercentSlider(currentValue: number, onChange: (value: numb
     valueLabel.style.minWidth = '52px';
     valueLabel.style.textAlign = 'right';
     valueLabel.style.fontSize = '20px';
-    valueLabel.style.color = '#FFFFFF';
     valueLabel.style.fontWeight = 'bold';
+    valueLabel.style.transition = 'color 0.2s, text-shadow 0.2s';
 
-    const updateLabel = () => {
-        valueLabel.textContent = `${slider.value}%`;
+    const updateSliderGlow = (pct: number): void => {
+        // Interpolate between dark gold (0%) and bright gold (100%)
+        const t = pct / 100;
+        // Dark gold: rgb(122, 92, 0)  →  Bright gold: rgb(255, 215, 0)
+        const r = Math.round(0x7A + (0xFF - 0x7A) * t);
+        const g = Math.round(0x5C + (0xD7 - 0x5C) * t);
+        const b = 0;
+        const color = `rgb(${r},${g},${b})`;
+        const glowAlpha = 0.2 + 0.8 * t;
+        const glowBlurPx = Math.round(2 + 8 * t);
+        const glowStr = `rgba(${r},${g},${b},${glowAlpha.toFixed(2)})`;
+        const outlineGlowStr = `rgba(${r},${g},${b},${(glowAlpha * 0.5).toFixed(2)})`;
+        valueLabel.style.color = color;
+        valueLabel.style.textShadow = `0 0 ${glowBlurPx}px ${glowStr}`;
+        slider.style.outline = `2px solid ${color}`;
+        slider.style.boxShadow = `0 0 ${glowBlurPx}px ${outlineGlowStr}`;
+        slider.style.borderRadius = '4px';
+    };
+
+    const updateLabel = (): void => {
+        const pct = parseInt(slider.value, 10);
+        valueLabel.textContent = `${pct}%`;
+        updateSliderGlow(pct);
     };
 
     slider.addEventListener('input', () => {

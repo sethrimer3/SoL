@@ -303,7 +303,7 @@ export function renderSettingsScreen(
     settingsContainer.appendChild(svgSpriteSection);
 
     const pauseOnFocusLossSection = createSettingSection(
-        'Pause When Unfocused',
+        'Music/SFX Only When Focused',
         createToggle(isPauseOnFocusLossEnabled, onPauseOnFocusLossEnabledChange)
     );
     settingsContainer.appendChild(pauseOnFocusLossSection);
