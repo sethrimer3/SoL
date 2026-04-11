@@ -165,8 +165,8 @@ export class MainMenu {
             difficulty: 'normal',
             soundEnabled: true,
             musicEnabled: true,
-            soundVolume: 100,
-            musicVolume: 100,
+            soundVolume: 50,
+            musicVolume: 50,
             isBattleStatsInfoEnabled: false,
             screenShakeEnabled: true, // Default to enabled
             developerModeEnabled: false,

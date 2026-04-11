@@ -89,6 +89,7 @@ export class GameAudioController {
     private prevCountdownSecond = 4;
     private wasCountdownActive = true;
     private isSoundEnabled = true;
+    private isFocusMuted = false;
     private soundVolume = 1;
     private audioContext: AudioContext | null = null;
 
@@ -164,6 +165,14 @@ export class GameAudioController {
 
     setSoundVolume(volume: number): void {
         this.soundVolume = Math.max(0, Math.min(1, volume));
+    }
+
+    /** Silently mute/unmute all in-game audio (e.g. when the tab loses focus). */
+    setFocusMuted(isMuted: boolean): void {
+        if (isMuted) {
+            this.stopAllAudio();
+        }
+        this.isFocusMuted = isMuted;
     }
 
     update(game: GameState, deltaTimeSec: number, listenerView: AudioListenerView | null = null): void {
@@ -422,7 +431,7 @@ export class GameAudioController {
         listenerView: AudioListenerView | null,
         forceIgnoreCooldown: boolean = false
     ): void {
-        if (!this.isSoundEnabled) {
+        if (!this.isSoundEnabled || this.isFocusMuted) {
             return;
         }
         if (audio === this.forgeCrunchAudio && !forceIgnoreCooldown && this.forgeCrunchCooldownRemainingSec > 0) {

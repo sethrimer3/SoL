@@ -52,6 +52,11 @@ class GameController {
     private tickAccumulator: number = 0;
     private readonly TICK_INTERVAL_MS: number = 1000 / 30; // 30 ticks/second (33.333... ms)
 
+    // Focus-loss audio muting (only active during a game session)
+    private gameAudioFocusBlurHandler: (() => void) | null = null;
+    private gameAudioVisibilityHandler: (() => void) | null = null;
+    private gameAudioFocusHandler: (() => void) | null = null;
+
     // Replay system properties
     private replayRecorder: ReplayRecorder | null = null;
     private replayPlayer: ReplayPlayer | null = null;
@@ -1894,11 +1899,55 @@ class GameController {
         this.adaptiveQualityAccumulatedFrameTimeMs = 0;
         this.lastAdaptiveQualityChangeTimeMs = 0;
         this.adaptiveQualitySampledQuality = this.renderer.graphicsQuality;
+        this.registerGameAudioFocusHandlers();
         requestAnimationFrame((time) => this.gameLoop(time));
     }
 
     stop(): void {
         this.isRunning = false;
+        this.unregisterGameAudioFocusHandlers();
+        this.gameAudioController.setFocusMuted(false);
+    }
+
+    private registerGameAudioFocusHandlers(): void {
+        this.unregisterGameAudioFocusHandlers();
+
+        this.gameAudioVisibilityHandler = () => {
+            if (!this.menu.getSettings().isPauseOnFocusLossEnabled) {
+                return;
+            }
+            const shouldMute = document.hidden || !document.hasFocus();
+            this.gameAudioController.setFocusMuted(shouldMute);
+        };
+        this.gameAudioFocusBlurHandler = () => {
+            if (this.menu.getSettings().isPauseOnFocusLossEnabled) {
+                this.gameAudioController.setFocusMuted(true);
+            }
+        };
+        this.gameAudioFocusHandler = () => {
+            if (this.menu.getSettings().isPauseOnFocusLossEnabled && !document.hidden) {
+                this.gameAudioController.setFocusMuted(false);
+            }
+        };
+
+        document.addEventListener('visibilitychange', this.gameAudioVisibilityHandler);
+        window.addEventListener('blur', this.gameAudioFocusBlurHandler);
+        window.addEventListener('focus', this.gameAudioFocusHandler);
+    }
+
+    private unregisterGameAudioFocusHandlers(): void {
+        if (this.gameAudioVisibilityHandler) {
+            document.removeEventListener('visibilitychange', this.gameAudioVisibilityHandler);
+            this.gameAudioVisibilityHandler = null;
+        }
+        if (this.gameAudioFocusBlurHandler) {
+            window.removeEventListener('blur', this.gameAudioFocusBlurHandler);
+            this.gameAudioFocusBlurHandler = null;
+        }
+        if (this.gameAudioFocusHandler) {
+            window.removeEventListener('focus', this.gameAudioFocusHandler);
+            this.gameAudioFocusHandler = null;
+        }
     }
 
     public destroy(): void {
