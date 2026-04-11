@@ -212,11 +212,12 @@ export function createPercentSlider(currentValue: number, onChange: (value: numb
         // Dark gold: rgb(122, 92, 0)  →  Bright gold: rgb(255, 215, 0)
         const r = Math.round(0x7A + (0xFF - 0x7A) * t);
         const g = Math.round(0x5C + (0xD7 - 0x5C) * t);
-        const color = `rgb(${r},${g},0)`;
+        const b = 0;
+        const color = `rgb(${r},${g},${b})`;
         const glowAlpha = 0.2 + 0.8 * t;
         const glowBlurPx = Math.round(2 + 8 * t);
-        const glowStr = `rgba(${r},${g},0,${glowAlpha.toFixed(2)})`;
-        const outlineGlowStr = `rgba(${r},${g},0,${(glowAlpha * 0.5).toFixed(2)})`;
+        const glowStr = `rgba(${r},${g},${b},${glowAlpha.toFixed(2)})`;
+        const outlineGlowStr = `rgba(${r},${g},${b},${(glowAlpha * 0.5).toFixed(2)})`;
         valueLabel.style.color = color;
         valueLabel.style.textShadow = `0 0 ${glowBlurPx}px ${glowStr}`;
         slider.style.outline = `2px solid ${color}`;

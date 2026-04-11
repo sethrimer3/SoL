@@ -1916,7 +1916,7 @@ class GameController {
             if (!this.menu.getSettings().isPauseOnFocusLossEnabled) {
                 return;
             }
-            const shouldMute = document.hidden || !document.hasFocus();
+            const shouldMute = document.hidden;
             this.gameAudioController.setFocusMuted(shouldMute);
         };
         this.gameAudioFocusBlurHandler = () => {
