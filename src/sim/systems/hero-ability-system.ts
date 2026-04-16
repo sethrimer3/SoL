@@ -5,7 +5,7 @@
  * Extracted from game-state.ts as part of Phase 3 refactoring
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import { Player } from '../entities/player';
 import { Asteroid } from '../entities/asteroid';

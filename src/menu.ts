@@ -2,22 +2,14 @@
  * Main Menu for SoL game
  */
 
-import * as Constants from './constants';
 import { Faction } from './game-core';
 import { NetworkManager, LANSignaling, LobbyInfo, NetworkEvent, MessageType } from './network';
-import { MenuOption, FactionCarouselOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
+import { MenuOption, MapConfig, HeroUnit, BaseLoadout, SpawnLoadout } from './menu/types';
 import { BackgroundParticleLayer } from './menu/background-particles';
 import { MenuAtmosphereLayer } from './menu/atmosphere';
 import { ParticleMenuLayer } from './menu/particle-layer';
 import { ColorScheme, COLOR_SCHEMES } from './menu/color-schemes';
-import { 
-    createSettingSection, 
-    createSelect, 
-    createToggle, 
-    createColorPicker, 
-    createTextInput 
-} from './menu/ui-helpers';
-import { LanLobbyManager, LanLobbyEntry } from './menu/lan-lobby-manager';
+import { LanLobbyManager } from './menu/lan-lobby-manager';
 import { renderLanLobbyList as renderLanLobbyListHelper, renderPlayersList } from './menu/lan-lobby-helpers';
 import { PlayerProfileManager } from './menu/player-profile-manager';
 import { MatchmakingController } from './menu/matchmaking-controller';
@@ -43,22 +35,18 @@ import { renderMatchmaking1v1Screen } from './menu/screens/matchmaking-1v1-scree
 import { renderLobbyDetailScreen } from './menu/screens/lobby-detail-screen';
 import { renderMainScreen } from './menu/screens/main-screen';
 import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/screens/match-loading-screen';
-import { createMapPreviewCanvas } from './menu/map-preview';
-import { MenuAudioController, UiSoundType } from './menu/menu-audio';
+import { MenuAudioController } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
 import { FactionCarouselView } from './menu/faction-carousel-view';
 import { BUILD_NUMBER } from './build-info';
-import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from './multiplayer-network';
+import { MultiplayerNetworkManager, MatchPlayer } from './multiplayer-network';
 import { OnlineNetworkManager } from './online-network';
 import { getSupabaseConfig } from '../Supabase/supabase-config';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { 
-    getMatchHistory, 
     MatchHistoryEntry, 
     loadReplayFromStorage, 
-    ReplayData,
     getPlayerMMRData,
-    calculateMMRChange
 } from './replay';
 import { HERO_UNITS } from './menu/hero-data';
 import { AVAILABLE_MAPS, BASE_LOADOUTS, SPAWN_LOADOUTS } from './menu/map-data';
@@ -128,8 +116,6 @@ export class MainMenu {
     private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
     private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
-    private p2pMatchName: string = ''; // Track P2P match name
-    private p2pMaxPlayers: number = 2; // Track P2P max players
     private mainScreenRenderToken: number = 0;
     private lobbyDetailRenderToken: number = 0;
     private onlineMode: 'ranked' | 'unranked' = 'ranked'; // Track which online mode is selected
@@ -668,19 +654,6 @@ export class MainMenu {
         return defaultHero ? [defaultHero.id] : [];
     }
 
-    private getFactionLabelAndColor(faction: Faction | null): { label: string; color: string } {
-        switch (faction) {
-            case Faction.RADIANT:
-                return { label: 'Radiant', color: '#FF5722' }; // Deep yet bright reddish-orange (like glowing embers)
-            case Faction.AURUM:
-                return { label: 'Aurum', color: '#FFD700' }; // Bright gold
-            case Faction.VELARIS:
-                return { label: 'Velaris', color: '#9C27B0' }; // Purple
-            default:
-                return { label: 'Unselected', color: '#999999' };
-        }
-    }
-
     private ensureDefaultHeroSelection(): void {
         if (this.settings.selectedHeroes.length === 0) {
             const defaultHeroes = this.getDefaultHeroIdsForFaction(this.settings.selectedFaction);
@@ -1135,8 +1108,8 @@ export class MainMenu {
             },
             setMultiplayerNetworkManager: (manager) => { this.multiplayerNetworkManager = manager; },
             getMultiplayerNetworkManager: () => this.multiplayerNetworkManager,
-            setP2PMatchName: (name) => { this.p2pMatchName = name; },
-            setP2PMaxPlayers: (max) => { this.p2pMaxPlayers = max; },
+            setP2PMatchName: (_name) => { },
+            setP2PMaxPlayers: (_max) => { },
             setP2PMatchPlayers: (players) => { this.p2pMatchPlayers = players; },
             getP2PMatchPlayers: () => this.p2pMatchPlayers,
             updatePlayersList: (el) => this.updatePlayersList(el),
@@ -2091,7 +2064,7 @@ export class MainMenu {
         this.setMenuParticleDensity(1.6);
         
         renderGameModeSelectionScreen(container, {
-            onGameModeSelect: (mode, option) => {
+            onGameModeSelect: (mode, _option) => {
                 this.settings.gameMode = mode;
                 
                 switch (mode) {
@@ -2325,38 +2298,6 @@ export class MainMenu {
         button.addEventListener('click', onClick);
         
         return button;
-    }
-
-    private createTextInput(currentValue: string, onChange: (value: string) => void, placeholder: string = ''): HTMLElement {
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = currentValue;
-        input.placeholder = placeholder;
-        input.style.fontSize = '20px';
-        input.style.padding = '8px 15px';
-        input.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
-        input.style.color = '#FFFFFF';
-        input.style.border = '2px solid rgba(255, 255, 255, 0.3)';
-        input.style.borderRadius = '5px';
-        input.style.fontFamily = 'inherit';
-        input.style.fontWeight = 'bold';
-        input.style.minWidth = '200px';
-        input.maxLength = 20;
-        input.style.outline = 'none';
-
-        // Update on blur instead of every keystroke for efficiency
-        input.addEventListener('blur', () => {
-            const validatedValue = this.playerProfileManager.validateUsername(input.value);
-            input.value = validatedValue;
-            input.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-            onChange(validatedValue);
-        });
-
-        input.addEventListener('focus', () => {
-            input.style.borderColor = 'rgba(255, 255, 255, 0.6)';
-        });
-
-        return input;
     }
 
     /**

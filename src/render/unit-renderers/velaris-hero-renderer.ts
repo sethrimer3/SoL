@@ -24,7 +24,6 @@ import {
     ShadowDecoy,
     ShadowDecoyParticle,
     Occlude,
-    OccludeShadowBeam,
     OccludeShadowCone,
 } from '../../game-core';
 import * as Constants from '../../constants';
@@ -197,7 +196,6 @@ export class VelarisHeroRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(ray.position, context.viewingPlayer);
@@ -208,7 +206,6 @@ export class VelarisHeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(ray.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }
@@ -256,7 +253,6 @@ export class VelarisHeroRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(nova.position, context.viewingPlayer);
@@ -267,7 +263,6 @@ export class VelarisHeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(nova.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }
@@ -307,7 +302,6 @@ export class VelarisHeroRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(ball.position, context.viewingPlayer);
@@ -318,7 +312,6 @@ export class VelarisHeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(ball.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }
@@ -349,7 +342,6 @@ export class VelarisHeroRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(deployer.position, context.viewingPlayer);
@@ -360,7 +352,6 @@ export class VelarisHeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(deployer.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }
@@ -387,7 +378,6 @@ export class VelarisHeroRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(shadow.position, context.viewingPlayer);
@@ -398,7 +388,6 @@ export class VelarisHeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(shadow.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }

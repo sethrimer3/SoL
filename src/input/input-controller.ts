@@ -1,8 +1,6 @@
 import {
     GameState,
     Vector2D,
-    WarpGate,
-    Unit,
     Minigun,
     GatlingTower,
     SpaceDustSwirler,
@@ -10,7 +8,6 @@ import {
     StrikerTower,
     LockOnLaserTower,
     ShieldTower,
-    LightRay,
     Starling,
     StellarForge,
     SolarMirror,
@@ -578,7 +575,6 @@ export class InputController {
                 if (winner) {
                     const dpr = window.devicePixelRatio || 1;
                     const screenWidth = this.ctx.renderer.canvas.width / dpr;
-                    const screenHeight = this.ctx.renderer.canvas.height / dpr;
                     const panelHeight = 450;
                     const panelY = 130;
                     const buttonWidth = 300;

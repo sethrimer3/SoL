@@ -3,8 +3,6 @@
  * Displays lobby creation/joining interface for 2v2 games
  */
 
-import { MenuOption } from '../types';
-
 export interface GameRoom {
     id: string;
     name: string;

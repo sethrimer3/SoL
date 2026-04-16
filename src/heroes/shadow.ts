@@ -1,5 +1,4 @@
 import type { CombatTarget, Player, Unit, Vector2D, Asteroid } from '../game-core';
-import { getGameRNG } from '../seeded-random';
 
 type ShadowHeroDeps = {
     Unit: typeof Unit;

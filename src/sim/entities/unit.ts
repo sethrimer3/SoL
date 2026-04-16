@@ -34,7 +34,7 @@
  *   - currentSpeedPxPerSec is public for debug overlays (render reads it safely; sim writes it).
  */
 
-import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
+import { Vector2D, updateKnockbackMotion } from '../math';
 import * as Constants from '../../constants';
 import type { Player } from './player';
 import type { Asteroid } from './asteroid';

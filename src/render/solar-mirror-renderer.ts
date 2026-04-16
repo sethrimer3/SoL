@@ -247,8 +247,6 @@ export class SolarMirrorRenderer {
             // Find the closest visible sun to determine reflection direction
             const closestSun = mirror.getClosestVisibleSun(game.suns, game.asteroids);
             if (closestSun) {
-                const forge = mirror.owner.stellarForge;
-                const linkedStructure = mirror.getLinkedStructure(forge);
                 const sunDir = new Vector2D(
                     closestSun.position.x - mirror.position.x,
                     closestSun.position.y - mirror.position.y
@@ -679,7 +677,7 @@ export class SolarMirrorRenderer {
         mirror: SolarMirror,
         game: GameState,
         timeSec: number,
-        screenPos: Vector2D,
+        _screenPos: Vector2D,
         context: SolarMirrorRendererContext
     ): void {
         const previouslyMoving = this.wasMovingToSun.get(mirror) ?? false;

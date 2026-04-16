@@ -4,7 +4,7 @@
  */
 
 import { Faction } from '../../game-core';
-import { MatchHistoryEntry, getMatchHistory, getPlayerMMRData, loadReplayFromStorage } from '../../replay';
+import { MatchHistoryEntry, getMatchHistory, getPlayerMMRData } from '../../replay';
 
 export interface MatchHistoryScreenParams {
     onBack: () => void;

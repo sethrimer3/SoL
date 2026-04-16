@@ -3,7 +3,6 @@
  */
 
 import { Vector2D, Unit } from '../../game-core';
-import * as Constants from '../../constants';
 import { GradientCache } from '../gradient-cache';
 
 /**
@@ -119,7 +118,7 @@ export interface UnitRendererContext {
  */
 export function drawAbilityCooldownBar(
     screenPos: Vector2D,
-    size: number,
+    _size: number,
     unit: Unit,
     fillColor: string,
     yOffset: number,
@@ -165,7 +164,7 @@ function drawPhotonCountIndicator(
     screenPos: Vector2D,
     unit: Unit,
     yOffset: number,
-    barWidth: number,
+    _barWidth: number,
     context: UnitRendererContext
 ): void {
     const maxCharges = unit.maxCharges;

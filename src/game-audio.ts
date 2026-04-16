@@ -1,5 +1,5 @@
 import * as Constants from './constants';
-import { Faction, GameState, GatlingTower, Marine, Minigun, LockOnLaserTower, SubsidiaryFactory, Vector2D } from './game-core';
+import { Faction, GameState, GatlingTower, Marine, Minigun, SubsidiaryFactory, Vector2D } from './game-core';
 
 const FORGE_CHARGE_LEAD_TIME_SEC = 5;
 const STARLING_ATTACK_MIN_INTERVAL_SEC = 0.12;

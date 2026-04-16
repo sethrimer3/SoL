@@ -13,7 +13,7 @@ import { adjustColorBrightness } from './color-utilities';
  * to the given player's units/structures.
  * Returns a factor from 0 (no boost) to 1 (maximum boost).
  */
-export function getShadeBrightnessBoost(position: Vector2D, game: GameState, player: Player): number {
+export function getShadeBrightnessBoost(position: Vector2D, _game: GameState, player: Player): number {
     if (!player) {
         return 0;
     }

@@ -363,7 +363,6 @@ export class TowerRenderer {
         }
 
         // Check visibility for enemy buildings
-        let shouldDim = false;
         let displayColor = buildingColor;
         const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && context.viewingPlayer) {
@@ -375,7 +374,6 @@ export class TowerRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(building.position);
                 if (inShadow) {
-                    shouldDim = true;
                     displayColor = context.darkenColor(buildingColor, Constants.SHADE_OPACITY);
                 }
             }
@@ -618,7 +616,6 @@ export class TowerRenderer {
         }
 
         // Check visibility for enemy buildings
-        let shouldDim = false;
         let displayColor = buildingColor;
         const isInShadow = !ladSun && game.isPointInShadow(building.position);
         if (isEnemy && context.viewingPlayer) {
@@ -628,7 +625,6 @@ export class TowerRenderer {
             }
 
             if (!ladSun && isInShadow) {
-                shouldDim = true;
                 displayColor = context.darkenColor(buildingColor, Constants.SHADE_OPACITY);
             }
         }
@@ -743,7 +739,7 @@ export class TowerRenderer {
     /**
      * Draw a Shield Tower building
      */
-    public drawShieldTower(building: ShieldTower, color: string, game: GameState, isEnemy: boolean, context: BuildingRendererContext): void {
+    public drawShieldTower(building: ShieldTower, color: string, game: GameState, _isEnemy: boolean, context: BuildingRendererContext): void {
         const screenPos = context.worldToScreen(building.position);
         const radius = building.radius * context.zoom;
         const displayColor = building.isComplete ? color : '#666666';

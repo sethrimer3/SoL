@@ -74,9 +74,6 @@ export class StarfieldWorkerBridge {
 
     private readonly worker: Worker | null;
     private latestFrame: StarfieldWorkerFrame | null = null;
-    private lastSentCameraX = Number.NaN;
-    private lastSentCameraY = Number.NaN;
-    private lastSentQuality: GraphicsQuality | '' = '';
     private lastSentWidthPx = 0;
     private lastSentHeightPx = 0;
     private isWorkerOperational = false;
@@ -158,9 +155,6 @@ export class StarfieldWorkerBridge {
             viewportHeightPx: screenHeightPx,
         };
         this.worker.postMessage(renderMessage);
-        this.lastSentCameraX = cameraX;
-        this.lastSentCameraY = cameraY;
-        this.lastSentQuality = graphicsQuality;
         this.lastSentWidthPx  = workerWidthPx;
         this.lastSentHeightPx = workerHeightPx;
     }

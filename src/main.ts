@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude, Mortar, Preist, Spotlight, Tank, Dash, Blink } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude, Mortar, Preist, Spotlight, Tank, Dash, Blink } from './game-core';
 import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
 import { SelectionManager, SelectionManagerContext } from './input/selection-manager';
 import { InputController, InputControllerContext } from './input/input-controller';
@@ -18,7 +18,6 @@ import {
     ReplayRecorder, 
     ReplayPlayer, 
     ReplayData, 
-    ReplaySpeed, 
     downloadReplay, 
     saveReplayToStorage,
     saveMatchToHistory,
@@ -563,69 +562,6 @@ class GameController {
         return false;
     }
 
-    private hasLineOfSightToAnySun(point: Vector2D): boolean {
-        if (!this.game || this.game.suns.length === 0) {
-            return false;
-        }
-        for (const sun of this.game.suns) {
-            const direction = new Vector2D(sun.position.x - point.x, sun.position.y - point.y).normalize();
-            const ray = new LightRay(point, direction);
-            const distanceToSun = point.distanceTo(sun.position);
-            let isBlocked = false;
-            for (const asteroid of this.game.asteroids) {
-                const intersectionDist = ray.getIntersectionDistance(asteroid.getWorldVertices());
-                if (intersectionDist !== null && intersectionDist < distanceToSun) {
-                    isBlocked = true;
-                    break;
-                }
-            }
-            if (!isBlocked) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private findNearestSunlightTarget(fromPos: Vector2D): Vector2D | null {
-        if (!this.game || this.game.suns.length === 0) {
-            return null;
-        }
-
-        let nearestSun: Sun | null = null;
-        let minDistance = Infinity;
-        for (const sun of this.game.suns) {
-            const distance = fromPos.distanceTo(sun.position);
-            if (distance < minDistance) {
-                minDistance = distance;
-                nearestSun = sun;
-            }
-        }
-        if (!nearestSun) {
-            return null;
-        }
-
-        const targetDistance = nearestSun.radius + 180;
-        const baseAngleRad = Math.atan2(fromPos.y - nearestSun.position.y, fromPos.x - nearestSun.position.x);
-        const sampleCount = 24;
-
-        for (let i = 0; i < sampleCount; i++) {
-            const angleOffset = (Math.PI * 2 * i) / sampleCount;
-            const angleRad = baseAngleRad + angleOffset;
-            const candidate = new Vector2D(
-                nearestSun.position.x + Math.cos(angleRad) * targetDistance,
-                nearestSun.position.y + Math.sin(angleRad) * targetDistance
-            );
-            if (this.game.checkCollision(candidate, 20)) {
-                continue;
-            }
-            if (!this.hasLineOfSightToAnySun(candidate)) {
-                continue;
-            }
-            return candidate;
-        }
-
-        return null;
-    }
 
     private moveSelectedMirrorsToNearestSunlight(player: Player): void {
         if (this.selectionManager.selectedMirrors.size === 0 || !this.game) {
@@ -1274,7 +1210,7 @@ class GameController {
     private start4PlayerGame(
         playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]>,
         settings: GameSettings,
-        roomId: string | null
+        _roomId: string | null
     ): void {
         console.log('[GameController] Starting 4-player game from lobby...');
         
@@ -1393,7 +1329,7 @@ class GameController {
         // Configure players based on lobby settings and find local player index
         let localPlayerIndex = 0;
         for (let i = 0; i < playerConfigs.length && i < this.game.players.length; i++) {
-            const [name, faction, teamId, slotType, aiDifficulty, isLocal] = playerConfigs[i];
+            const [_name, _faction, teamId, slotType, aiDifficulty, isLocal] = playerConfigs[i];
             const player = this.game.players[i];
             
             // Track local player index

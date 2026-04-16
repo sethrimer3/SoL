@@ -7,7 +7,7 @@ type TurretDeployerHeroDeps = {
 };
 
 export const createTurretDeployerHero = (deps: TurretDeployerHeroDeps) => {
-    const { Unit, Vector2D, Constants } = deps;
+    const { Unit, Constants } = deps;
 
     /**
      * Deployed turret that attaches to asteroids

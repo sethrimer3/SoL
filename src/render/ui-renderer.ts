@@ -7,7 +7,7 @@ import {
 } from '../game-core';
 import { GameState } from '../game-core';
 import * as Constants from '../constants';
-import { getInGameMenuLayout, getGraphicsMenuMaxScroll, InGameMenuTab, InGameMenuAction, RenderLayerKey } from './in-game-menu';
+import { InGameMenuTab, InGameMenuAction, RenderLayerKey } from './in-game-menu';
 import { InGameMenuRenderer } from './in-game-menu-renderer';
 import { HUDRenderer } from './hud-renderer';
 

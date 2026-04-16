@@ -36,7 +36,7 @@ export const createDrillerHero = (deps: DrillerHeroDeps) => {
         /**
          * Driller has no normal attack - only the drilling ability
          */
-        attack(target: CombatTarget): void {
+        attack(_target: CombatTarget): void {
             // Driller does not have a normal attack - it only attacks via drilling ability
             // This is intentional per the unit design
         }

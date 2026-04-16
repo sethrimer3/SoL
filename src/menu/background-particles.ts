@@ -75,14 +75,8 @@ export class BackgroundParticleLayer {
     private static readonly EDGE_REPULSION_DISTANCE = 300;
     private static readonly EDGE_REPULSION_STRENGTH = 0.05;
     private static readonly EDGE_GLOW_DISTANCE = 400;
-    // Normalization factor for edge glow intensity scaled by particle count
-    // Higher particle count requires higher normalization to maintain visual consistency
-    private static readonly EDGE_GLOW_NORMALIZATION = BackgroundParticleLayer.PARTICLE_COUNT * 350;
-    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
-    private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
-    private static readonly COLOR_CACHE_QUANTIZATION_STEP = 8;
     
     private canvas: HTMLCanvasElement;
     private context: CanvasRenderingContext2D;
@@ -102,10 +96,6 @@ export class BackgroundParticleLayer {
     private cachedWidthPx: number = 0;
     private cachedHeightPx: number = 0;
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
-    // Cached gradients for particles to reduce per-frame allocation
-    private particleGradientCache: Map<string, CanvasGradient> = new Map();
-    // Cached edge glow gradients to avoid per-frame gradient creation
-    private edgeGlowGradientCache: Map<string, CanvasGradient> = new Map();
     
     private readonly gradientColors = [
         [138, 43, 226],   // Blue Violet
@@ -417,11 +407,6 @@ export class BackgroundParticleLayer {
             return BackgroundParticleLayer.PARTICLE_RADIUS_DESKTOP_PX;
         }
         return BackgroundParticleLayer.PARTICLE_RADIUS_MOBILE_PX;
-    }
-
-    private quantizeColorChannel(channel: number): number {
-        const step = BackgroundParticleLayer.COLOR_CACHE_QUANTIZATION_STEP;
-        return Math.min(255, Math.max(0, Math.round(channel / step) * step));
     }
     
     private render(): void {

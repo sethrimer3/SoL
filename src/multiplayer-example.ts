@@ -6,7 +6,7 @@
  */
 
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
-import { getGameRNG, isGameRNGInitialized } from './seeded-random';
+import { isGameRNGInitialized } from './seeded-random';
 
 /**
  * Example: Game controller with multiplayer support
@@ -187,7 +187,7 @@ class MultiplayerGameController {
     /**
      * Update single-player game
      */
-    private updateSinglePlayer(deltaTime: number): void {
+    private updateSinglePlayer(_deltaTime: number): void {
         if (!this.gameState) return;
 
         // Normal game update
@@ -249,9 +249,6 @@ class MultiplayerGameController {
      */
     private executeCommand(cmd: any): void {
         console.log('[Game] Executing command:', cmd.commandType, cmd);
-
-        // Use seeded RNG if needed
-        const rng = getGameRNG();
 
         switch (cmd.commandType) {
             case 'move_unit':
@@ -481,7 +478,7 @@ function testDeterminism() {
     }
 }
 
-function simulateGame(seed: number, commands: any[]): any {
+function simulateGame(_seed: number, _commands: any[]): any {
     // Initialize RNG with seed
     // Create game state
     // Execute commands in order

@@ -50,7 +50,6 @@ export class ForgeRenderer {
     // Aurum forge animation constants
     private readonly AURUM_FORGE_SHAPE_COUNT = 8;
     private readonly AURUM_EDGE_DETECTION_FILL_COLOR = '#FFFFFF';
-    private readonly AURUM_EDGE_DETECTION_THRESHOLD = 128;
 
     // Sunlight ring indicator animation constants
     /** Energy units drained per second during crunch animation */

@@ -16,7 +16,7 @@
  */
 
 import { ITransport, GameCommand, TransportStats } from './transport';
-import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
 /**
  * WebRTC P2P connection wrapper

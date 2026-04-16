@@ -4,7 +4,7 @@
  * particle layers, shadow casting, and bloom effects.
  */
 
-import { Sun, Vector2D } from '../game-core';
+import { Vector2D } from '../game-core';
 import * as Constants from '../constants';
 import { ColorScheme } from '../menu';
 import { renderLensFlare } from '../rendering/LensFlare';
@@ -721,7 +721,7 @@ export class SunRenderer {
      */
     public drawLensFlare(
         ctx: CanvasRenderingContext2D,
-        sun: SunLike,
+        _sun: SunLike,
         screenPos: Vector2D,
         screenRadius: number,
         canvasWidth: number,
@@ -831,7 +831,7 @@ export class SunRenderer {
     public getSunShadowQuadsCached(
         sun: SunLike,
         game: SunRayGameData,
-        graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
+        _graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
     ): ShadowQuad[] {
         const sunId = this.getSunBodyCacheKey(sun);

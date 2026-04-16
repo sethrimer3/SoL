@@ -39,7 +39,7 @@ export const createSpotlightHero = (deps: SpotlightHeroDeps) => {
         /**
          * Spotlight has no normal attack.
          */
-        override attack(target: CombatTarget): void {
+        override attack(_target: CombatTarget): void {
             // No-op: Spotlight relies on its ability cone.
         }
 

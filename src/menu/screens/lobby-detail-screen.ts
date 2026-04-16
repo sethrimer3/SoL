@@ -54,7 +54,6 @@ export function renderLobbyDetailScreen(
     params: LobbyDetailScreenParams
 ): void {
     const {
-        roomId,
         roomName,
         isHost,
         players,
@@ -316,7 +315,7 @@ export function renderLobbyDetailScreen(
 function renderSlot(
     player: LobbyPlayer | null,
     teamId: number,
-    slotIdx: number,
+    _slotIdx: number,
     isHost: boolean,
     localPlayerId: string,
     callbacks: {

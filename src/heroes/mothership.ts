@@ -21,7 +21,7 @@ type MothershipHeroDeps = {
 };
 
 export const createMothershipHero = (deps: MothershipHeroDeps) => {
-    const { Unit, Vector2D, Constants, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet } = deps;
+    const { Unit, Vector2D, Constants, MuzzleFlash, BulletCasing, BouncingBullet } = deps;
 
     /**
      * MiniMothership - Small autonomous units spawned by Mothership ability

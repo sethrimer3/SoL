@@ -42,11 +42,11 @@ export class StrikerTower extends Building {
      */
     update(
         deltaTime: number,
-        enemies: CombatTarget[],
-        allUnits: Unit[],
-        asteroids: Asteroid[] = [],
-        structures: CombatTarget[] = [],
-        mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
+        _enemies: CombatTarget[],
+        _allUnits: Unit[],
+        _asteroids: Asteroid[] = [],
+        _structures: CombatTarget[] = [],
+        _mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
     ): void {
         // Don't call super.update() as we don't want auto-attack behavior
         
@@ -206,7 +206,7 @@ export class LockOnLaserTower extends Building {
     update(
         deltaTime: number,
         enemies: CombatTarget[],
-        allUnits: Unit[],
+        _allUnits: Unit[],
         asteroids: Asteroid[] = [],
         structures: CombatTarget[] = [],
         mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY

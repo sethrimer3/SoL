@@ -7,10 +7,7 @@ import { createClient, SupabaseClient, RealtimeChannel, PostgrestError } from '@
 import { getSupabaseConfig, isSupabaseConfigured } from '../Supabase/supabase-config';
 import { 
     GameCommand, 
-    NetworkMessage, 
     MessageType, 
-    PlayerInfo, 
-    LobbyInfo,
     NetworkEvent,
     NetworkEventCallback
 } from './network';
@@ -72,9 +69,7 @@ export class OnlineNetworkManager {
     private isHost: boolean = false;
     private connected: boolean = false;
     private commandQueue: GameCommand[] = [];
-    private lastSyncTime: number = 0;
     private lastErrorMessage: string | null = null;
-    private readonly SYNC_INTERVAL_MS = 50; // 20 updates per second for RTS
 
     constructor(playerId: string) {
         this.localPlayerId = playerId;
