@@ -66,8 +66,7 @@ function getSunGradients(
 ): CanvasGradient[] {
     const cachedSunGradientState = cachedSunGradientByContext.get(ctx);
     if (
-        cachedSunGradientState &&
-        cachedSunGradientState.x === sunX &&
+        cachedSunGradientState?.x === sunX &&
         cachedSunGradientState.y === sunY &&
         cachedSunGradientState.radius === sunRadius
     ) {

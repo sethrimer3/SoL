@@ -95,11 +95,7 @@ export function renderHostLobbyScreen(
         try {
             await navigator.clipboard.writeText(codeText.value);
             alert('Connection code copied to clipboard!');
-        } catch (err) {
-            // Fallback for older browsers
-            codeText.select();
-            document.execCommand('copy');
-            alert('Connection code copied to clipboard!');
+        } catch (_err) {
         }
     }, '#008800');
     copyButton.style.marginTop = '10px';

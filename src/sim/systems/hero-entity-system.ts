@@ -261,7 +261,7 @@ export class HeroEntitySystem {
                     }
 
                     // Clear bomb reference from Nova hero
-                    if (bomb.novaUnit && bomb.novaUnit.getActiveBomb() === bomb) {
+                    if (bomb.novaUnit?.getActiveBomb() === bomb) {
                         bomb.novaUnit.clearActiveBomb();
                     }
                 }

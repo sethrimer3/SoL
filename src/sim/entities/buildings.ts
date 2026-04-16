@@ -11,8 +11,7 @@ import type { Asteroid } from './asteroid';
 import type { StellarForge } from './stellar-forge';
 import type { SolarMirror } from './solar-mirror';
 import type { StarlingMergeGate } from './starling-merge-gate';
-import { BulletCasing, BouncingBullet, LaserBeam, MuzzleFlash } from './particles';
-import type { SpaceDustParticle } from './particles';
+import { BulletCasing, BouncingBullet, LaserBeam, MuzzleFlash, type SpaceDustParticle } from './particles';
 import { getGameRNG } from '../../seeded-random';
 
 export type CombatTarget = Unit | StellarForge | Building | SolarMirror | StarlingMergeGate;

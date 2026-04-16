@@ -262,7 +262,7 @@ export class PeerConnection {
      * Send message to peer
      */
     sendMessage(message: NetworkMessage): void {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        if (this.dataChannel?.readyState !== 'open') {
             console.warn('Data channel not open, cannot send message');
             return;
         }
@@ -656,7 +656,7 @@ export class LANSignaling {
                 playerId: data.playerId || 'host',
                 username: data.username || 'Host'
             };
-        } catch (error) {
+        } catch (_error) {
             throw new Error('Invalid connection code format');
         }
     }
@@ -688,7 +688,7 @@ export class LANSignaling {
                 playerId: data.playerId || 'client',
                 username: data.username || 'Client'
             };
-        } catch (error) {
+        } catch (_error) {
             throw new Error('Invalid connection code format');
         }
     }

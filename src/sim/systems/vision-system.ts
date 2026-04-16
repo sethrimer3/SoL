@@ -177,7 +177,7 @@ export class VisionSystem {
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
             // Type narrowing: object is now known to be Dagger
-            const dagger = object as InstanceType<typeof Dagger>;
+            const dagger = object;
             // Dagger is only visible to enemies if not cloaked
             if (dagger.isCloakedToEnemies() && dagger.owner !== player) {
                 return false; // Cloaked Daggers are invisible to enemies
@@ -240,7 +240,7 @@ export class VisionSystem {
     ): boolean {
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
-            const dagger = object as InstanceType<typeof Dagger>;
+            const dagger = object;
             if (dagger.isCloakedToEnemies() && dagger.owner !== player) {
                 return false;
             }
@@ -257,7 +257,7 @@ export class VisionSystem {
         
         // If object has an owner
         if (object && 'owner' in object && object.owner) {
-            const objectOwner = object.owner as Player;
+            const objectOwner = object.owner;
             // Own units are always visible
             if (objectOwner === player) {
                 return true;
@@ -284,7 +284,7 @@ export class VisionSystem {
                 continue;
             }
             // Type narrowing: unit is now known to be Spotlight
-            const spotlight = unit as InstanceType<typeof Spotlight>;
+            const spotlight = unit;
             if (!spotlight.isSpotlightActive() || !spotlight.spotlightDirection) {
                 continue;
             }

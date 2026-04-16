@@ -4,6 +4,7 @@
 
 import { MenuAsteroid, MenuAsteroidPoint } from './background-particles';
 import { StarNestRenderer } from '../render/star-nest-renderer';
+import { valueNoise2D } from '../render/noise-utilities';
 
 export class MenuAtmosphereLayer {
     private static readonly ASTEROID_COUNT = 14;
@@ -674,42 +675,15 @@ export class MenuAtmosphereLayer {
     private sampleDensityNoise(x: number, y: number, widthPx: number, heightPx: number): number {
         const nx = x * MenuAtmosphereLayer.STAR_DENSITY_NOISE_SCALE;
         const ny = y * MenuAtmosphereLayer.STAR_DENSITY_NOISE_SCALE;
-        const octave1 = this.valueNoise2D(nx, ny);
-        const octave2 = this.valueNoise2D(nx * 2.05, ny * 2.05) * 0.5;
-        const octave3 = this.valueNoise2D(nx * 4.1, ny * 4.1) * 0.25;
-        const ridge = 1 - Math.abs(this.valueNoise2D(nx * 0.55 + 11.7, ny * 0.55 - 7.3) * 2 - 1);
+        const octave1 = valueNoise2D(nx, ny);
+        const octave2 = valueNoise2D(nx * 2.05, ny * 2.05) * 0.5;
+        const octave3 = valueNoise2D(nx * 4.1, ny * 4.1) * 0.25;
+        const ridge = 1 - Math.abs(valueNoise2D(nx * 0.55 + 11.7, ny * 0.55 - 7.3) * 2 - 1);
         const edgeDistanceX = Math.min(x / widthPx, (widthPx - x) / widthPx);
         const edgeDistanceY = Math.min(y / heightPx, (heightPx - y) / heightPx);
         const edgeFadeX = Math.min(1, Math.max(0.22, edgeDistanceX) * 2.1);
         const edgeFadeY = Math.min(1, Math.max(0.22, edgeDistanceY) * 2.1);
         return Math.min(1, (octave1 + octave2 + octave3) / 1.75 * 0.8 + ridge * 0.2) * edgeFadeX * edgeFadeY;
-    }
-
-    private valueNoise2D(x: number, y: number): number {
-        const x0 = Math.floor(x);
-        const y0 = Math.floor(y);
-        const x1 = x0 + 1;
-        const y1 = y0 + 1;
-        const sx = x - x0;
-        const sy = y - y0;
-        const fx = sx * sx * (3 - 2 * sx);
-        const fy = sy * sy * (3 - 2 * sy);
-
-        const n00 = this.hashNoise(x0, y0);
-        const n10 = this.hashNoise(x1, y0);
-        const n01 = this.hashNoise(x0, y1);
-        const n11 = this.hashNoise(x1, y1);
-
-        const ix0 = n00 + (n10 - n00) * fx;
-        const ix1 = n01 + (n11 - n01) * fx;
-        return ix0 + (ix1 - ix0) * fy;
-    }
-
-    private hashNoise(x: number, y: number): number {
-        let hash = x * 374761393 + y * 668265263;
-        hash = (hash ^ (hash >> 13)) * 1274126177;
-        hash ^= hash >> 16;
-        return (hash >>> 0) / 4294967295;
     }
 
     private renderSunGlow(): void {

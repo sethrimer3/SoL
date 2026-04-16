@@ -13,8 +13,7 @@ import {
 } from '../../game-core';
 import * as Constants from '../../constants';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from '../canvas-metrics';
-import type { UnitRendererContext } from './shared-utilities';
-import { drawAbilityCooldownBar } from './shared-utilities';
+import { drawAbilityCooldownBar, type UnitRendererContext } from './shared-utilities';
 
 export class StarlingRenderer {
     /**

@@ -389,7 +389,7 @@ export class SolarMirror {
         }
 
         let currentStart = this.position;
-        let currentEnd = target;
+        const currentEnd = target;
         const maxIterations = this.MAX_PATHFINDING_ITERATIONS;
         let iteration = 0;
 

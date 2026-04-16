@@ -1186,7 +1186,7 @@ export class MainMenu {
             onCreateLobby: async (lobbyName: string) => {
                 console.log('Creating lobby:', lobbyName);
                 
-                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                if (!this.onlineNetworkManager?.isAvailable()) {
                     this.offerOfflineAILobby(lobbyName);
                     return;
                 }
@@ -1215,7 +1215,7 @@ export class MainMenu {
             onJoinLobby: async (lobbyId: string) => {
                 console.log('Joining lobby:', lobbyId);
                 
-                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                if (!this.onlineNetworkManager?.isAvailable()) {
                     alert('Online networking not available. Please check your Supabase configuration.');
                     return;
                 }
@@ -1293,7 +1293,7 @@ export class MainMenu {
             onStartMatchmaking: async () => {
                 console.log('Starting 2v2 matchmaking...');
                 
-                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                if (!this.onlineNetworkManager?.isAvailable()) {
                     alert('Online networking not available. Please check your Supabase configuration.');
                     return;
                 }
@@ -1406,7 +1406,7 @@ export class MainMenu {
             onStartMatchmaking: async () => {
                 console.log('Starting 1v1 matchmaking...');
                 
-                if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+                if (!this.onlineNetworkManager?.isAvailable()) {
                     alert('Online networking not available. Please check your Supabase configuration.');
                     return;
                 }
@@ -1619,7 +1619,7 @@ export class MainMenu {
         }
         this.setMenuParticleDensity(1.6);
 
-        if (!this.onlineNetworkManager || !this.onlineNetworkManager.isAvailable()) {
+        if (!this.onlineNetworkManager?.isAvailable()) {
             alert('Online networking not available.');
             this.currentScreen = 'custom-lobby';
             this.startMenuTransition();

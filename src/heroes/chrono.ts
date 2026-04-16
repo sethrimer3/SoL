@@ -77,7 +77,7 @@ export const createChronoHero = (deps: ChronoDeps) => {
             // Only units can be frozen (not buildings)
             if ('stunDuration' in target && typeof target.stunDuration === 'number') {
                 // Apply freeze (using stun duration) to units
-                const unit = target as Unit;
+                const unit = target;
                 unit.stunDuration = Math.max(
                     unit.stunDuration,
                     Constants.CHRONO_FREEZE_DURATION

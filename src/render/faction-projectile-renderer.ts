@@ -9,7 +9,6 @@
 
 import {
     Vector2D,
-    Faction,
     RadiantOrb,
     VelarisOrb,
     AurumOrb,
@@ -30,7 +29,7 @@ import type { ProjectileRendererContext } from './projectile-renderer';
 export class FactionProjectileRenderer {
     public drawRadiantOrb(orb: InstanceType<typeof RadiantOrb>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(orb.position);
-        const color = getFactionColor(orb.owner.faction as Faction);
+        const color = getFactionColor(orb.owner.faction);
 
         const currentRange = orb.getRange();
         const speedRatio = orb.getCurrentSpeed() / Constants.RADIANT_ORB_MAX_SPEED;
@@ -66,7 +65,7 @@ export class FactionProjectileRenderer {
 
     public drawVelarisOrb(orb: InstanceType<typeof VelarisOrb>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(orb.position);
-        const color = getFactionColor(orb.owner.faction as Faction);
+        const color = getFactionColor(orb.owner.faction);
 
         const currentRange = orb.getRange();
         const speedRatio = orb.getCurrentSpeed() / Constants.VELARIS_ORB_MAX_SPEED;
@@ -161,7 +160,7 @@ export class FactionProjectileRenderer {
 
     public drawAurumOrb(orb: InstanceType<typeof AurumOrb>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(orb.position);
-        const color = getFactionColor(orb.owner.faction as Faction);
+        const color = getFactionColor(orb.owner.faction);
 
         const currentRange = orb.getRange();
         const speedRatio = orb.getCurrentSpeed() / Constants.AURUM_ORB_MAX_SPEED;
@@ -214,7 +213,7 @@ export class FactionProjectileRenderer {
     public drawRadiantLaserField(orb1: InstanceType<typeof RadiantOrb>, orb2: InstanceType<typeof RadiantOrb>, context: ProjectileRendererContext): void {
         const screenPos1 = context.worldToScreen(orb1.position);
         const screenPos2 = context.worldToScreen(orb2.position);
-        const color = getFactionColor(orb1.owner.faction as Faction);
+        const color = getFactionColor(orb1.owner.faction);
 
         context.ctx.strokeStyle = color;
         context.ctx.lineWidth = 3;
@@ -246,7 +245,7 @@ export class FactionProjectileRenderer {
     public drawVelarisLightBlockingField(orb1: InstanceType<typeof VelarisOrb>, orb2: InstanceType<typeof VelarisOrb>, gameTime: number, context: ProjectileRendererContext): void {
         const screenPos1 = context.worldToScreen(orb1.position);
         const screenPos2 = context.worldToScreen(orb2.position);
-        const color = getFactionColor(orb1.owner.faction as Faction);
+        const color = getFactionColor(orb1.owner.faction);
 
         context.ctx.strokeStyle = '#000000';
         context.ctx.lineWidth = 4;
@@ -288,7 +287,7 @@ export class FactionProjectileRenderer {
     }
 
     public drawAurumShieldField(orb1: InstanceType<typeof AurumOrb>, orb2: InstanceType<typeof AurumOrb>, context: ProjectileRendererContext): void {
-        const color = getFactionColor(orb1.owner.faction as Faction);
+        const color = getFactionColor(orb1.owner.faction);
 
         const dx = orb2.position.x - orb1.position.x;
         const dy = orb2.position.y - orb1.position.y;
@@ -334,7 +333,7 @@ export class FactionProjectileRenderer {
 
     public drawAurumShieldHit(hit: InstanceType<typeof AurumShieldHit>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(hit.position);
-        const color = getFactionColor(hit.owner.faction as Faction);
+        const color = getFactionColor(hit.owner.faction);
         const progress = hit.getProgress();
 
         const radius = 20 + progress * 30;
@@ -357,7 +356,7 @@ export class FactionProjectileRenderer {
 
     public drawCrescentWave(wave: InstanceType<typeof CrescentWave>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(wave.position);
-        const color = getFactionColor(wave.owner.faction as Faction);
+        const color = getFactionColor(wave.owner.faction);
 
         context.ctx.save();
 
@@ -418,7 +417,7 @@ export class FactionProjectileRenderer {
 
     public drawDashSlash(slash: InstanceType<typeof DashSlash>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(slash.position);
-        const color = getFactionColor(slash.owner.faction as Faction);
+        const color = getFactionColor(slash.owner.faction);
 
         context.ctx.save();
 
@@ -465,7 +464,7 @@ export class FactionProjectileRenderer {
 
     public drawBlinkShockwave(shockwave: InstanceType<typeof BlinkShockwave>, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(shockwave.position);
-        const color = getFactionColor(shockwave.owner.faction as Faction);
+        const color = getFactionColor(shockwave.owner.faction);
         const progress = shockwave.getVisualProgress();
 
         context.ctx.save();

@@ -70,11 +70,7 @@ export function renderClientAnswerScreen(
         try {
             await navigator.clipboard.writeText(codeText.value);
             alert('Answer code copied to clipboard!');
-        } catch (err) {
-            // Fallback for older browsers
-            codeText.select();
-            document.execCommand('copy');
-            alert('Answer code copied to clipboard!');
+        } catch (_err) {
         }
     }, '#0088FF');
     copyButton.style.marginTop = '10px';
@@ -95,7 +91,7 @@ export function renderClientAnswerScreen(
 
     // Listen for game start
     networkManager?.on(NetworkEvent.MESSAGE_RECEIVED, (data) => {
-        if (data && data.type === MessageType.GAME_START) {
+        if (data?.type === MessageType.GAME_START) {
             onGameStarted(networkManager);
         }
     });

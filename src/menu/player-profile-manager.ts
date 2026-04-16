@@ -62,7 +62,7 @@ export class PlayerProfileManager {
      */
     validateUsername(username: string): string {
         // Trim and limit length
-        let sanitized = username.trim().substring(0, 20);
+        const sanitized = username.trim().substring(0, 20);
         
         // If empty or invalid, generate random username
         if (sanitized.length < 1) {

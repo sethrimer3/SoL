@@ -3,9 +3,8 @@
  */
 
 import {
-    Vector2D, Player, StellarForge, Unit, Building,
+    Vector2D, Player, StellarForge, Unit, Building, GameState,
 } from '../game-core';
-import { GameState } from '../game-core';
 import * as Constants from '../constants';
 import { InGameMenuTab, InGameMenuAction, RenderLayerKey } from './in-game-menu';
 import { InGameMenuRenderer } from './in-game-menu-renderer';

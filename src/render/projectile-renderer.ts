@@ -122,7 +122,7 @@ export class ProjectileRenderer {
         const size = 4 * context.zoom;
         const opacity = bullet.lifetime / bullet.maxLifetime;
 
-        const color = getFactionColor(bullet.owner.faction as Faction);
+        const color = getFactionColor(bullet.owner.faction);
         context.ctx.fillStyle = `${color}`;
         context.ctx.globalAlpha = opacity;
         if (bullet.isSpotlightBullet) {
@@ -145,7 +145,7 @@ export class ProjectileRenderer {
     public drawMinionProjectile(projectile: MinionProjectile, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(projectile.position);
         const size = 2.5 * context.zoom;
-        const color = getFactionColor(projectile.owner.faction as Faction);
+        const color = getFactionColor(projectile.owner.faction);
 
         context.ctx.fillStyle = color;
         context.ctx.globalAlpha = 0.9;
@@ -494,7 +494,7 @@ export class ProjectileRenderer {
 
     public drawImpactParticle(particle: ImpactParticle, context: ProjectileRendererContext): void {
         const screenPos = context.worldToScreen(particle.position);
-        const color = getFactionColor(particle.faction as Faction);
+        const color = getFactionColor(particle.faction);
         const alpha = 1.0 - (particle.lifetime / particle.maxLifetime);
         const size = 1 * context.zoom;
 
@@ -582,7 +582,7 @@ export class ProjectileRenderer {
         const radius = zone.radius * context.zoom;
         const opacity = Math.max(0.1, 1.0 - (zone.lifetime / zone.duration));
 
-        const color = getFactionColor(zone.owner.faction as Faction);
+        const color = getFactionColor(zone.owner.faction);
 
         context.ctx.strokeStyle = color;
         context.ctx.globalAlpha = opacity * 0.6;
@@ -619,7 +619,7 @@ export class ProjectileRenderer {
         const screenPos = context.worldToScreen(projectile.position);
         const size = 12 * context.zoom;
 
-        const color = getFactionColor(projectile.owner.faction as Faction);
+        const color = getFactionColor(projectile.owner.faction);
 
         const gradient = context.ctx.createRadialGradient(screenPos.x, screenPos.y, 0, screenPos.x, screenPos.y, size);
         gradient.addColorStop(0, color);

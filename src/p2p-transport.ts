@@ -252,7 +252,7 @@ class PeerConnection {
      * Optimized: Reuse stringified data for better performance
      */
     send(data: any): void {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        if (this.dataChannel?.readyState !== 'open') {
             console.warn('[P2P] Cannot send: data channel not open');
             return;
         }
@@ -271,7 +271,7 @@ class PeerConnection {
      * Send pre-serialized data (optimization for batched sends)
      */
     sendRaw(message: string): void {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        if (this.dataChannel?.readyState !== 'open') {
             console.warn('[P2P] Cannot send: data channel not open');
             return;
         }
@@ -334,7 +334,7 @@ class PeerConnection {
      * Send a ping to measure latency
      */
     sendPing(): void {
-        if (!this.dataChannel || this.dataChannel.readyState !== 'open') {
+        if (this.dataChannel?.readyState !== 'open') {
             return;
         }
         
@@ -603,7 +603,7 @@ export class P2PTransport implements ITransport {
     private checkIfReady(): void {
         const allReady = this.expectedPeerIds.every(id => {
             const peer = this.peers.get(id);
-            return peer && peer.isReady();
+            return peer?.isReady();
         });
 
         if (allReady && !this.ready) {
