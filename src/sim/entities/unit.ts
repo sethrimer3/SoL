@@ -606,7 +606,7 @@ export class Unit {
      * @param direction The normalized direction vector for the ability
      * @returns true if ability was used, false if on cooldown
      */
-    useAbility(direction: Vector2D): boolean {
+    useAbility(_direction: Vector2D): boolean {
         // Hero units require photons to cast abilities (charge-based system)
         if (this.isHero) {
             if (this.photonCount < this.photonsPerCharge) {

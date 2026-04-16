@@ -73,7 +73,6 @@ export class StateVerifier {
     private eventListeners: Map<StateVerificationEvent, StateVerificationCallback[]> = new Map();
     
     // Configuration
-    private readonly HASH_TIMEOUT_TICKS = 10; // Wait max 10 ticks for all hashes
     private readonly MAX_STORED_TICKS = 100;  // Keep only last 100 ticks
     
     // Statistics

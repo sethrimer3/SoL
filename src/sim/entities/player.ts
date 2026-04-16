@@ -2,7 +2,6 @@
  * Player entity - Represents a player in the game
  */
 
-import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import type { StellarForge } from './stellar-forge';
 import type { SolarMirror } from './solar-mirror';

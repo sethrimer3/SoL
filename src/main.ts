@@ -2,7 +2,7 @@
  * Main entry point for SoL game
  */
 
-import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, SubsidiaryFactory, LightRay, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude, Mortar, Preist, Spotlight, Tank, Dash, Blink } from './game-core';
+import { createStandardGame, Faction, GameState, Vector2D, WarpGate, Unit, Sun, Asteroid, SubsidiaryFactory, Starling, StellarForge, SolarMirror, Marine, Mothership, Grave, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Player, Building, Nova, Sly, Shadow, Chrono, Splendor, Shroud, Occlude, Mortar, Preist, Spotlight, Tank, Dash, Blink } from './game-core';
 import { WarpGateManager, WarpGateManagerContext } from './input/warp-gate-manager';
 import { SelectionManager, SelectionManagerContext } from './input/selection-manager';
 import { InputController, InputControllerContext } from './input/input-controller';

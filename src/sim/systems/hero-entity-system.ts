@@ -39,8 +39,6 @@ import {
     ShadowDecoyParticle,
     ChronoFreezeCircle,
     Dash,
-    Nova,
-    Sly,
     MortarProjectile,
     InfluenceBallProjectile,
     ShroudCube,

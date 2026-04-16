@@ -52,7 +52,7 @@ export class Building {
     update(
         deltaTime: number,
         enemies: CombatTarget[],
-        allUnits: Unit[],
+        _allUnits: Unit[],
         asteroids: Asteroid[] = [],
         structures: CombatTarget[] = [],
         mapBoundaryPx: number = Constants.MAP_PLAYABLE_BOUNDARY
@@ -593,7 +593,7 @@ export class SpaceDustSwirler extends Building {
     /**
      * Apply swirling force to space dust particles within influence radius
      */
-    applyDustSwirl(particles: SpaceDustParticle[], deltaTime: number): void {
+    applyDustSwirl(particles: SpaceDustParticle[], _deltaTime: number): void {
         if (!this.isComplete) return;
 
         for (const particle of particles) {
@@ -693,7 +693,7 @@ export class SubsidiaryFactory extends Building {
      * Note: SubsidiaryFactory is a production building with no attack capability,
      * so we don't call super.update() which handles attack logic.
      */
-    update(deltaTime: number, enemies: CombatTarget[], allUnits: Unit[]): void {
+    update(deltaTime: number, _enemies: CombatTarget[], _allUnits: Unit[]): void {
         // Only produce when complete
         if (!this.isComplete) return;
 

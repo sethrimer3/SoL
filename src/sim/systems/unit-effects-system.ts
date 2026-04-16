@@ -13,7 +13,7 @@ import * as Constants from '../../constants';
 import { Player } from '../entities/player';
 import { Unit } from '../entities/unit';
 import { Starling } from '../entities/starling';
-import { Building, SpaceDustSwirler, CombatTarget } from '../entities/buildings';
+import { SpaceDustSwirler, CombatTarget } from '../entities/buildings';
 import {
     MuzzleFlash,
     BulletCasing,

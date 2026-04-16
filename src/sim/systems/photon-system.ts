@@ -12,9 +12,7 @@ import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import { Sun } from '../entities/sun';
 import { Player } from '../entities/player';
-import { Unit } from '../entities/unit';
 import { Photon } from '../entities/photon';
-import { SolarMirror } from '../entities/solar-mirror';
 import { Asteroid } from '../entities/asteroid';
 
 /**

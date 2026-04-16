@@ -16,7 +16,6 @@ import * as Constants from '../../constants';
 import { Player } from '../entities/player';
 import { Unit } from '../entities/unit';
 import { Starling } from '../entities/starling';
-import { SolarMirror } from '../entities/solar-mirror';
 import { PhysicsSystem } from '../systems/physics-system';
 import { ParticleSystem, ParticleContext } from '../systems/particle-system';
 import { MirrorSystem, MirrorSystemContext } from '../systems/mirror-system';

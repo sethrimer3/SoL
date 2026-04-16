@@ -14,7 +14,7 @@ import { SolarMirror, MirrorMovementContext } from '../entities/solar-mirror';
 import { StellarForge } from '../entities/stellar-forge';
 import { Building } from '../entities/buildings';
 import { WarpGate } from '../entities/warp-gate';
-import { SpaceDustParticle, SparkleParticle } from '../entities/particles';
+import { SparkleParticle } from '../entities/particles';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
 import { Unit } from '../entities/unit';
 import { VisionSystem } from './vision-system';

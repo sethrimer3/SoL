@@ -356,7 +356,7 @@ export class CommandValidator {
     /**
      * TODO Phase 2: Verify command signature (anti-cheat)
      */
-    verifySignature?(command: GameCommand, signature: string): boolean {
+    verifySignature?(_command: GameCommand, _signature: string): boolean {
         // Future implementation
         return true;
     }
@@ -366,7 +366,7 @@ export class CommandValidator {
      * @param command - Command to verify
      * @param gameState - Current game state (use proper GameState interface in implementation)
      */
-    verifyLegality?(command: GameCommand, gameState: unknown): boolean {
+    verifyLegality?(_command: GameCommand, _gameState: unknown): boolean {
         // Future implementation
         return true;
     }
