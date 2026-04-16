@@ -22,17 +22,14 @@ import {
     Dagger,
     Beam,
     Spotlight,
-    Mortar,
     Preist,
     Tank,
     Shadow,
     ShadowDecoy,
     ShadowDecoyParticle,
-    Chrono,
     Occlude,
     OccludeShadowCone,
 } from '../../game-core';
-import * as Constants from '../../constants';
 import { RadiantHeroRenderer } from './radiant-hero-renderer';
 import { VelarisHeroRenderer } from './velaris-hero-renderer';
 import type { UnitRendererContext } from './shared-utilities';
@@ -89,7 +86,6 @@ export class HeroRenderer {
         }
         
         // Check visibility for enemy units
-        let shouldDim = false;
         let displayColor = color;
         if (isEnemy && context.viewingPlayer) {
             const isVisible = game.isObjectVisibleToPlayer(driller.position, context.viewingPlayer);
@@ -100,7 +96,6 @@ export class HeroRenderer {
             if (!ladSun) {
                 const inShadow = game.isPointInShadow(driller.position);
                 if (inShadow) {
-                    shouldDim = false;
                     displayColor = color;
                 }
             }

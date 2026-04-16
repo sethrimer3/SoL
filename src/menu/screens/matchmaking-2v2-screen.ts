@@ -3,8 +3,6 @@
  * Displays matchmaking interface for ranked 2v2 games
  */
 
-import { MenuOption } from '../types';
-
 export interface Matchmaking2v2ScreenParams {
     onStartMatchmaking: () => void;
     onCancelMatchmaking: () => void;

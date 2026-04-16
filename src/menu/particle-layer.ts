@@ -16,7 +16,6 @@ export class ParticleMenuLayer {
     private static readonly RELOCATE_MAX_DISTANCE_PX = 12;
     private static readonly BASE_PARTICLE_OPACITY = 0.15;
     private static readonly PEAK_PARTICLE_OPACITY = 0.4;
-    private static readonly BASE_PARTICLE_OPACITY_STRING = '0.150';
     private static readonly FULL_OPACITY_STRING = '1.000';
     private static readonly TRANSITION_DURATION_MS = 600;
     private static readonly SPEED_MULTIPLIER_MIN = 1.8;
@@ -26,9 +25,7 @@ export class ParticleMenuLayer {
     private static readonly ULTRA_HALO_RADIUS_MULTIPLIER_MAX = 5.2;
     private static readonly HALO_COLOR_CACHE_QUANTIZATION_STEP = 8;
     private static readonly HALO_ALPHA_CACHE_PRECISION = 20; // 0.05 precision
-    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
-    private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
     private static readonly LOW_QUALITY_RENDER_SCALE = 0.55;
     private static readonly MEDIUM_QUALITY_RENDER_SCALE = 0.7;
@@ -60,8 +57,6 @@ export class ParticleMenuLayer {
     private graphicsQuality: 'low' | 'medium' | 'high' | 'ultra' = 'ultra';
     // Cache for gradient templates to avoid per-particle string allocation
     private haloGradientCache: Map<string, CanvasGradient> = new Map();
-    // Pre-formatted opacity strings to avoid toFixed() calls
-    private cachedOpacityString: string = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
     private cachedMenuOpacityString: string = ParticleMenuLayer.FULL_OPACITY_STRING;
     private lastAppliedMenuOpacityString: string = '';
     // Cached canvas dimensions to avoid getBoundingRect() every frame
@@ -91,9 +86,6 @@ export class ParticleMenuLayer {
             throw new Error('Unable to create offscreen particle canvas context.');
         }
         this.offscreenContext = offscreenContext;
-
-        // Initialize cached opacity string after particleOpacity is set
-        this.cachedOpacityString = this.particleOpacity.toFixed(3);
 
         this.container.appendChild(this.canvas);
         // Defer initial resize to ensure container has layout dimensions
@@ -345,7 +337,6 @@ export class ParticleMenuLayer {
         if (this.transitionStartMs === null) {
             if (this.particleOpacity !== ParticleMenuLayer.BASE_PARTICLE_OPACITY) {
                 this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
-                this.cachedOpacityString = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
             }
             if (this.menuOpacity !== 1) {
                 this.menuOpacity = 1;
@@ -363,7 +354,6 @@ export class ParticleMenuLayer {
             this.transitionStartMs = null;
             this.particleOpacity = ParticleMenuLayer.BASE_PARTICLE_OPACITY;
             this.menuOpacity = 1;
-            this.cachedOpacityString = ParticleMenuLayer.BASE_PARTICLE_OPACITY_STRING;
             this.cachedMenuOpacityString = ParticleMenuLayer.FULL_OPACITY_STRING;
             this.applyMenuOpacity();
             return;
@@ -381,7 +371,6 @@ export class ParticleMenuLayer {
             this.menuOpacity = progress;
         }
 
-        this.cachedOpacityString = this.particleOpacity.toFixed(3);
         this.cachedMenuOpacityString = this.menuOpacity.toFixed(3);
         this.applyMenuOpacity();
     }

@@ -21,7 +21,7 @@ export class StarlingRenderer {
      * Draw merged attack-range circles for all selected friendly starlings.
      * Only the outer boundary of overlapping circles is shown.
      */
-    public drawMergedStarlingRanges(game: GameState, context: UnitRendererContext): void {
+    public drawMergedStarlingRanges(_game: GameState, context: UnitRendererContext): void {
         // Collect all selected friendly starlings
         const selectedStarlings: Starling[] = [];
         for (const unit of context.selectedUnits) {

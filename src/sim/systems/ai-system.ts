@@ -5,14 +5,13 @@
  * Extracted from game-state.ts as part of Phase 3 refactoring
  */
 
-import { Vector2D, LightRay } from '../math';
+import { Vector2D } from '../math';
 import * as Constants from '../../constants';
 import { Player, Faction } from '../entities/player';
 import { Sun } from '../entities/sun';
 import { Asteroid } from '../entities/asteroid';
-import { SolarMirror } from '../entities/solar-mirror';
 import { StellarForge } from '../entities/stellar-forge';
-import { Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, CombatTarget } from '../entities/buildings';
+import { Building, CombatTarget } from '../entities/buildings';
 import { Unit } from '../entities/unit';
 import { Starling } from '../entities/starling';
 import { StarlingMergeGate } from '../entities/starling-merge-gate';
@@ -74,7 +73,7 @@ export class AISystem {
     /**
      * Main AI update orchestrator
      */
-    static updateAi(deltaTime: number, context: AIContext): void {
+    static updateAi(_deltaTime: number, context: AIContext): void {
         for (const player of context.players) {
             if (!player.isAi || player.isDefeated()) {
                 continue;

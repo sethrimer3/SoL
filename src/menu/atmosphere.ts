@@ -33,12 +33,8 @@ export class MenuAtmosphereLayer {
     private static readonly STAR_LAYER_PARALLAX_SCALE = [0.02, 0.04, 0.07, 0.11] as const;
     private static readonly SUN_OFFSET_X_PX = -28;
     private static readonly SUN_OFFSET_Y_PX = -22;
-    private static readonly SHADOW_LENGTH_BASE_PX = 120;
-    private static readonly SHADOW_LENGTH_MULTIPLIER = 7.5;
     private static readonly BOUNDS_MARGIN_PX = 80;
-    private static readonly LOW_QUALITY_TARGET_FPS = 30; // Target 30 FPS on low quality
     private static readonly LOW_QUALITY_FRAME_TIME_MS = 1000 / 30;
-    private static readonly MEDIUM_QUALITY_TARGET_FPS = 45; // Target 45 FPS on medium quality
     private static readonly MEDIUM_QUALITY_FRAME_TIME_MS = 1000 / 45;
     private static readonly OPACITY_PRECISION_DIGITS = 3;
     // Refresh the offscreen star cache at ~12.5 fps; drift is imperceptible over 80 ms on low quality
@@ -790,37 +786,6 @@ export class MenuAtmosphereLayer {
         }
     }
 
-    private renderAsteroidShadow(
-        asteroid: MenuAsteroid,
-        points: { x: number; y: number }[],
-        sunCenter: { x: number; y: number }
-    ): void {
-        const shadowOffset = this.getShadowOffset(asteroid, sunCenter);
-        const shadowLength =
-            MenuAtmosphereLayer.SHADOW_LENGTH_BASE_PX +
-            asteroid.radiusPx * MenuAtmosphereLayer.SHADOW_LENGTH_MULTIPLIER;
-
-        this.context.fillStyle = 'rgba(20, 14, 12, 0.45)';
-        this.context.beginPath();
-        for (let i = 0; i < points.length; i++) {
-            const point = points[i];
-            if (i === 0) {
-                this.context.moveTo(point.x, point.y);
-            } else {
-                this.context.lineTo(point.x, point.y);
-            }
-        }
-        for (let i = points.length - 1; i >= 0; i--) {
-            const point = points[i];
-            this.context.lineTo(
-                point.x + shadowOffset.x * shadowLength,
-                point.y + shadowOffset.y * shadowLength
-            );
-        }
-        this.context.closePath();
-        this.context.fill();
-    }
-
     private renderAsteroidBody(asteroid: MenuAsteroid): void {
         // Save context and apply transform for the gradient
         this.context.save();
@@ -865,17 +830,6 @@ export class MenuAtmosphereLayer {
         };
     }
 
-    private getShadowOffset(asteroid: MenuAsteroid, sunCenter: { x: number; y: number }): { x: number; y: number } {
-        const deltaX = asteroid.x - sunCenter.x;
-        const deltaY = asteroid.y - sunCenter.y;
-        const distance = Math.max(1, Math.hypot(deltaX, deltaY));
-        const normX = deltaX / distance;
-        const normY = deltaY / distance;
-        return {
-            x: normX,
-            y: normY,
-        };
-    }
 
     private randomRange(min: number, max: number): number {
         return min + Math.random() * (max - min);

@@ -2,12 +2,12 @@
  * Game Renderer - Handles visualization on HTML5 Canvas
  */
 
-import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Asteroid, Unit, Marine, Grave, Starling, MuzzleFlash, BulletCasing, BouncingBullet, AbilityBullet, MinionProjectile, LaserBeam, ImpactParticle, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, InfluenceBall, InfluenceZone, InfluenceBallProjectile, TurretDeployer, Driller, Dagger, Beam, Mortar, Preist, Spotlight, Tank, CrescentWave, Nova, NovaBomb, NovaScatterBullet, Sly, Radiant, RadiantOrb, VelarisHero, VelarisOrb, AurumHero, AurumOrb, AurumShieldHit, DashSlash, Blink, BlinkShockwave, Shadow, ShadowDecoy, ShadowDecoyParticle, Chrono, ChronoFreezeCircle, Splendor, SplendorSunSphere, SplendorSunlightZone, SplendorLaserSegment, Shroud, Occlude, OccludeShadowCone } from './game-core';
+import { GameState, Player, SolarMirror, StellarForge, Sun, Vector2D, Faction, SpaceDustParticle, WarpGate, Unit, Grave, Starling, Building, Minigun, GatlingTower, SpaceDustSwirler, SubsidiaryFactory, StrikerTower, LockOnLaserTower, ShieldTower, Ray, InfluenceBall, TurretDeployer, Driller, Dagger, Beam, Mortar, Preist, Spotlight, Tank, Nova, Sly, Radiant, VelarisHero, AurumHero, Shadow, Chrono, Splendor, Shroud, Occlude } from './game-core';
 import * as Constants from './constants';
 import { ColorScheme, COLOR_SCHEMES } from './menu';
-import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, InGameMenuLayout, RenderLayerKey, getInGameMenuLayout, getGraphicsMenuMaxScroll } from './render';
+import { GraphicVariant, GraphicKey, GraphicOption, graphicsOptions as defaultGraphicsOptions, InGameMenuTab, InGameMenuAction, RenderLayerKey } from './render';
 
-import { darkenColor, adjustColorBrightness, brightenAndPaleColor, withAlpha, interpolateHexColor } from './render/color-utilities';
+import { darkenColor, brightenAndPaleColor, withAlpha, interpolateHexColor } from './render/color-utilities';
 import { ScreenShakeController } from './render/screen-shake';
 import { getFactionColor } from './render/faction-utilities';
 import { clampCameraToLevelBounds as _clampCameraToLevelBounds, getMinZoomForBounds as _getMinZoomForBounds } from './render/camera-controller';
@@ -130,9 +130,7 @@ export class GameRenderer {
     public colorblindMode: boolean = true; // Colorblind mode - shows enemies as diamonds instead of circles
 
     private readonly HERO_SPRITE_SCALE = 4.2;
-    private readonly FORGE_SPRITE_SCALE = 2.64;
     private readonly AURUM_EDGE_ALPHA_THRESHOLD = 128; // Alpha threshold for detecting filled pixels in edge detection
-    private readonly VELARIS_FORGE_PARTICLE_RADIUS_PX = 1.6;
     private readonly VELARIS_STARLING_PARTICLE_COUNT = 24;
     private readonly VELARIS_STARLING_PARTICLE_RADIUS_PX = 1.2;
     private readonly VELARIS_STARLING_CLOUD_RADIUS_SCALE = 2.1;
@@ -159,7 +157,6 @@ export class GameRenderer {
     private readonly spriteManager = new SpriteManager();
     private starlingParticleStates = new WeakMap<Starling, {shapeBlend: number; polygonBlend: number; lastTimeSec: number; pentagonRotationRad: number}>();
     private starlingParticleSeeds = new WeakMap<Starling, number>();
-    private aurumOffscreenCanvas: HTMLCanvasElement | null = null;
     private viewMinX: number = 0;
     private viewMaxX: number = 0;
     private viewMinY: number = 0;
@@ -218,7 +215,6 @@ export class GameRenderer {
     private readonly UNIT_BASE_SIZE_PX = 8;
     private readonly LOW_QUALITY_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 9;
     private readonly STANDARD_SIMPLE_UNIT_LOD_THRESHOLD_RADIUS_PX = 6.5;
-    private readonly FORGE_MAX_HEALTH = 1000;
     private readonly MIRROR_MAX_HEALTH = Constants.MIRROR_MAX_HEALTH;
     
     // Starfield renderer for background stars and nebula
@@ -922,10 +918,6 @@ export class GameRenderer {
         return this.spriteManager.getGraphemeMaskData(spritePath);
     }
 
-    private isPointInsideGraphemeMask(x: number, y: number, mask: ImageData): boolean {
-        return this.spriteManager.isPointInsideGraphemeMask(x, y, mask);
-    }
-
     private drawVelarisGraphemeSprite(
         spritePath: string,
         centerX: number,
@@ -964,27 +956,6 @@ export class GameRenderer {
 
     public setInGameMenuTab(tab: InGameMenuTab): void {
         this.inGameMenuTab = tab;
-    }
-
-    private isRenderLayerEnabled(layer: RenderLayerKey): boolean {
-        switch (layer) {
-            case 'suns':
-                return this.isSunsLayerEnabled;
-            case 'stars':
-                return this.isStarsLayerEnabled;
-            case 'asteroids':
-                return this.isAsteroidsLayerEnabled;
-            case 'spaceDust':
-                return this.isSpaceDustLayerEnabled;
-            case 'buildings':
-                return this.isBuildingsLayerEnabled;
-            case 'units':
-                return this.isUnitsLayerEnabled;
-            case 'projectiles':
-                return this.isProjectilesLayerEnabled;
-            default:
-                return true;
-        }
     }
 
     public setRenderLayerEnabled(layer: RenderLayerKey, isEnabled: boolean): void {
@@ -1028,10 +999,6 @@ export class GameRenderer {
             return option.pngPath ?? null;
         }
         return null;
-    }
-
-    private getForgeSpritePath(forge: StellarForge): string | null {
-        return _getForgeSpritePath(forge, (key) => this.getGraphicAssetPath(key as any));
     }
 
     private getSolarMirrorSpritePath(mirror: SolarMirror): string | null {
@@ -1348,14 +1315,6 @@ export class GameRenderer {
     /**
      * Adjust color brightness by a given factor (1.0 is original color, >1.0 is brighter, <1.0 is darker)
      */
-    private adjustColorBrightness(color: string, factor: number): string {
-        return adjustColorBrightness(color, factor);
-    }
-
-    private getShadeBrightnessBoost(position: Vector2D, game: GameState, player: Player): number {
-        return _getShadeBrightnessBoost(position, game, player);
-    }
-
     private applyShadeBrightening(color: string, position: Vector2D, game: GameState, isInShade: boolean): string {
         return _applyShadeBrightening(color, position, game, isInShade, this.viewingPlayer);
     }
@@ -1416,20 +1375,6 @@ export class GameRenderer {
     /**
      * Get quality-adjusted particle count for ultra effects
      */
-    private getQualityAdjustedParticleCount(baseCount: number): number {
-        switch (this.graphicsQuality) {
-            case 'low':
-                return Math.floor(baseCount * 0.25);
-            case 'medium':
-                return Math.floor(baseCount * 0.5);
-            case 'high':
-                return Math.floor(baseCount * 0.75);
-            case 'ultra':
-            default:
-                return baseCount;
-        }
-    }
-
     private getCachedRadialGradient(
         key: string,
         x0: number, y0: number, r0: number,
@@ -1437,15 +1382,6 @@ export class GameRenderer {
         stops: Array<{offset: number, color: string}>
     ): CanvasGradient {
         return this.gradientCache.getCachedRadialGradient(this.ctx, key, x0, y0, r0, x1, y1, r1, stops);
-    }
-
-    private getCachedLinearGradient(
-        key: string,
-        x0: number, y0: number,
-        x1: number, y1: number,
-        stops: Array<{offset: number, color: string}>
-    ): CanvasGradient {
-        return this.gradientCache.getCachedLinearGradient(this.ctx, key, x0, y0, x1, y1, stops);
     }
 
     /**
@@ -2636,19 +2572,6 @@ export class GameRenderer {
         return _getProductionDisplayName(unitType);
     }
 
-    private getInGameMenuLayout(): InGameMenuLayout {
-        return getInGameMenuLayout(this.getViewportWidthPx(), this.getViewportHeightPx());
-    }
-
-    /**
-     * Draw all Shroud cubes (main cubes, small cubes, and tiny cubes).
-     * Main cubes are drawn as solid dark squares when moving, transitioning to translucent when stopped.
-     * Child cubes animate outward from the stopped position.
-     */
-    private getGraphicsMenuMaxScroll(layout: InGameMenuLayout): number {
-        return getGraphicsMenuMaxScroll(this.renderLayerOptions.length, layout);
-    }
-
     public handleInGameMenuScroll(screenX: number, screenY: number, deltaY: number): boolean {
         const result = this.uiRenderer.handleInGameMenuScroll(this.getUIRendererContext(), screenX, screenY, deltaY);
         if (result.consumed) {
@@ -2895,7 +2818,7 @@ export class GameRenderer {
         }
     }
 
-    private updateAndDrawFizzleSparks(gameTime: number): void {
+    private updateAndDrawFizzleSparks(_gameTime: number): void {
         if (this._photonFizzleSparks.length === 0) return;
 
         // Use a fixed dt approximation (render-side only, not sim-critical)

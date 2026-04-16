@@ -1,5 +1,4 @@
 import type { Player, Unit, Vector2D, Asteroid } from '../game-core';
-import { getGameRNG } from '../seeded-random';
 
 type RadiantHeroDeps = {
     Unit: typeof Unit;
@@ -117,7 +116,7 @@ export const createRadiantHero = (deps: RadiantHeroDeps) => {
         }
 
         // Override attack to do nothing
-        attack(target: any): void {
+        attack(_target: any): void {
             // Radiant doesn't attack
         }
 

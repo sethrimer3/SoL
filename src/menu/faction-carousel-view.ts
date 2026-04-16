@@ -31,7 +31,6 @@ export class FactionCarouselView {
     private container: HTMLElement;
     private options: FactionCarouselOption[];
     private currentIndex: number;
-    private targetIndex: number;
     private scrollOffset: number = 0;
     private isDragging: boolean = false;
     private dragStartX: number = 0;
@@ -55,7 +54,6 @@ export class FactionCarouselView {
         this.container = container;
         this.options = options;
         this.currentIndex = Math.max(0, Math.min(options.length - 1, initialIndex));
-        this.targetIndex = this.currentIndex;
         this.setupContainer();
         this.setupEventHandlers();
         this.scrollOffset = -this.currentIndex * this.getItemSpacingPx();
@@ -261,11 +259,9 @@ export class FactionCarouselView {
     private setCurrentIndex(nextIndex: number): void {
         const clampedIndex = Math.max(0, Math.min(this.options.length - 1, nextIndex));
         if (clampedIndex === this.currentIndex) {
-            this.targetIndex = clampedIndex;
             return;
         }
 
-        this.targetIndex = clampedIndex;
         this.currentIndex = clampedIndex;
         if (this.onSelectionChangeCallback) {
             this.onSelectionChangeCallback(this.options[this.currentIndex]);
@@ -404,7 +400,6 @@ export class FactionCarouselView {
             const option = this.options[i];
             const distance = Math.abs(i - effectiveCenter);
             const isSelected = distance < 0.5;
-            const scale = itemScales[i];
             const opacity = itemOpacities[i];
             const sizePx = itemSizes[i];
             const x = centerX + (relPositions[i] - centerRelPos);

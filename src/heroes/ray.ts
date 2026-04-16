@@ -7,7 +7,7 @@ type RayHeroDeps = {
 };
 
 export const createRayHero = (deps: RayHeroDeps) => {
-    const { Unit, Vector2D, Constants } = deps;
+    const { Unit, Constants } = deps;
 
     /**
      * Ray beam segment for bouncing beam ability

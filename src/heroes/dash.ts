@@ -1,4 +1,4 @@
-import type { Player, Unit, Vector2D, Asteroid } from '../game-core';
+import type { Player, Unit, Vector2D } from '../game-core';
 
 type DashHeroDeps = {
     Unit: typeof Unit;
@@ -28,13 +28,13 @@ export const createDashHero = (deps: DashHeroDeps) => {
             this.isHero = true;
         }
 
-        attack(target: any): void {
+        attack(_target: any): void {
             // Dash hero doesn't have normal attacks
         }
 
         update(
             deltaTime: number,
-            enemies: any[],
+            _enemies: any[],
             allUnits: Unit[],
             asteroids: any[] = []
         ): void {

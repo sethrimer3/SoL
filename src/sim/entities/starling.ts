@@ -8,7 +8,6 @@ import * as Constants from '../../constants';
 import { Unit } from './unit';
 import { LaserBeam, MinionProjectile } from './particles';
 import { StellarForge } from './stellar-forge';
-import { Building } from './buildings';
 import type { Player } from './player';
 import type { CombatTarget } from './buildings';
 import type { Asteroid } from './asteroid';
@@ -331,10 +330,8 @@ export class Starling extends Unit {
         moveSpeed: number,
         allUnits: Unit[],
         asteroids: Asteroid[] = [],
-        circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
+        _circularObstacles: Array<{ position: { x: number; y: number }; radius: number }> = []
     ): void {
-        // Check if we should stop based on group arrival radius at the final waypoint
-        // This only applies when we're heading to the final waypoint (not intermediate waypoints)
         if (this.assignedPath.length > 0 &&
             this.currentPathWaypointIndex === this.assignedPath.length - 1 &&
             !this.hasReachedFinalWaypoint &&

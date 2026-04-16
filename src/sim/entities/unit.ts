@@ -34,7 +34,7 @@
  *   - currentSpeedPxPerSec is public for debug overlays (render reads it safely; sim writes it).
  */
 
-import { Vector2D, LightRay, updateKnockbackMotion } from '../math';
+import { Vector2D, updateKnockbackMotion } from '../math';
 import * as Constants from '../../constants';
 import type { Player } from './player';
 import type { Asteroid } from './asteroid';
@@ -606,7 +606,7 @@ export class Unit {
      * @param direction The normalized direction vector for the ability
      * @returns true if ability was used, false if on cooldown
      */
-    useAbility(direction: Vector2D): boolean {
+    useAbility(_direction: Vector2D): boolean {
         // Hero units require photons to cast abilities (charge-based system)
         if (this.isHero) {
             if (this.photonCount < this.photonsPerCharge) {

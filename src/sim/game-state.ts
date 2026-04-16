@@ -8,15 +8,15 @@ import { CommandProcessor } from './systems/command-processor';
 import { AISystem, AIContext } from './systems/ai-system';
 import { PhysicsSystem, PhysicsContext } from './systems/physics-system';
 import { ParticleSystem, ParticleContext } from './systems/particle-system';
-import { HeroAbilitySystem, HeroAbilityContext } from './systems/hero-ability-system';
-import { StarlingSystem, StarlingContext } from './systems/starling-system';
+import { HeroAbilityContext } from './systems/hero-ability-system';
+import { StarlingContext } from './systems/starling-system';
 import { HeroEntitySystem, HeroEntityContext } from './systems/hero-entity-system';
 import { ProjectileCombatSystem, ProjectileCombatContext } from './systems/projectile-combat-system';
 import { SpaceDustSystem, SpaceDustContext } from './systems/space-dust-system';
 import { MirrorSystem, MirrorSystemContext } from './systems/mirror-system';
 import { WorldInitializationSystem } from './systems/world-initialization-system';
-import { UnitEffectsSystem, UnitEffectsContext } from './systems/unit-effects-system';
-import { BuildingUpdateSystem, BuildingUpdateContext } from './systems/building-update-system';
+import { UnitEffectsContext } from './systems/unit-effects-system';
+import { BuildingUpdateContext } from './systems/building-update-system';
 import { PlayerStructureSystem, PlayerStructureContext } from './systems/player-structure-system';
 import { UnitUpdateSystem, UnitUpdateContext } from './systems/unit-update-system';
 import { PhotonSystem, PhotonSystemContext } from './systems/photon-system';
@@ -39,7 +39,6 @@ import { Photon } from './entities/photon';
 import {
     SpaceDustParticle,
     SpaceDustPalette,
-    ForgeCrunch,
     MuzzleFlash,
     BulletCasing,
     BouncingBullet,
@@ -52,56 +51,29 @@ import {
 } from './entities/particles';
 import {
     MiniMothership,
-    GraveBlackHole,
-    GraveSmallParticle,
-    Ray,
-    RayBeamSegment,
-    InfluenceBall,
     InfluenceZone,
     InfluenceBallProjectile,
-    TurretDeployer,
     DeployedTurret,
-    Driller,
-    Dagger,
-    Beam,
-    Mortar,
     MortarProjectile,
-    Preist,
-    HealingBombParticle,
-    Spotlight,
-    Tank,
     CrescentWave,
-    Nova,
     NovaBomb,
     NovaScatterBullet,
-    Sly,
     StickyBomb,
     StickyLaser,
     DisintegrationParticle,
-    Radiant,
     RadiantOrb,
-    VelarisHero,
     VelarisOrb,
-    AurumHero,
     AurumOrb,
     AurumShieldHit,
-    Dash,
     DashSlash,
-    Blink,
     BlinkShockwave,
-    Shadow,
     ShadowDecoy,
     ShadowDecoyParticle,
-    Chrono,
     ChronoFreezeCircle,
-    Splendor,
     SplendorSunSphere,
     SplendorSunlightZone,
     SplendorLaserSegment,
     ShroudCube,
-    createHeroUnit,
-    Occlude,
-    OccludeShadowBeam,
     OccludeShadowCone,
 } from '../game-core';
 
@@ -171,9 +143,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     localPlayerIndex: number = 0; // Index of the local player (0 or 1)
     pendingCommands: GameCommand[] = []; // Commands from network to be processed
 
-    // Collision resolution constants
-    private readonly MAX_PUSH_DISTANCE = 10; // Maximum push distance for collision resolution
-    private readonly PUSH_MULTIPLIER = 15; // Multiplier for push strength calculation
     readonly dustSpatialHash: Map<number, number[]> = new Map();
     readonly dustSpatialHashKeys: number[] = [];
 
@@ -492,16 +461,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
         MirrorSystem.initializeMirrorMovement(this);
     }
 
-    private isUnitInSunlight(unit: Unit): boolean {
-        return VisionSystem.isUnitInSunlight(
-            unit.position,
-            unit.owner,
-            this.suns,
-            this.asteroids,
-            this.splendorSunlightZones
-        );
-    }
-
     getSplendorSphereObstacles(): { position: Vector2D; radius: number }[] {
         const obstacles: { position: Vector2D; radius: number }[] = [];
 
@@ -796,17 +755,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
     }
 
     /**
-     * Execute a command for a specific player using the shared routing logic
-     * @param player - Player to execute command for
-     * @param commandType - Type of command
-     * @param payload - Command payload/data
-     * Wrapper for CommandProcessor - maintains backward compatibility
-     */
-    private executePlayerCommand(player: Player, commandType: string, payload: any): void {
-        CommandProcessor.executePlayerCommand(player, commandType, payload, this);
-    }
-
-    /**
      * Execute a P2P transport command (deterministic)
      * This method accepts commands from the P2P multiplayer system
      * @param cmd - Command from P2P transport system
@@ -837,23 +785,6 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
             return target.radius;
         }
         return 0;
-    }
-
-    /**
-     * Check if a line segment (light path) is blocked by Velaris orb light-blocking fields
-     */
-    private isLightBlockedByVelarisField(start: Vector2D, end: Vector2D): boolean {
-        return VisionSystem.isLightBlockedByVelarisField(start, end, this.velarisOrbs);
-    }
-
-    /**
-     * Check if two line segments intersect
-     */
-    private lineSegmentsIntersect(
-        p1: Vector2D, p2: Vector2D,
-        p3: Vector2D, p4: Vector2D
-    ): boolean {
-        return VisionSystem.lineSegmentsIntersect(p1, p2, p3, p4);
     }
 
     /**

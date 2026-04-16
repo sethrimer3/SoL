@@ -7,7 +7,7 @@
 
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
-import { GameCommand, NetworkEvent } from '../../network';
+import { GameCommand } from '../../network';
 import { GameCommand as P2PGameCommand } from '../../transport';
 import { Player, Faction } from '../entities/player';
 import { StellarForge } from '../entities/stellar-forge';
@@ -283,7 +283,7 @@ export class CommandProcessor {
     /**
      * Execute building purchase command
      */
-    private static executeBuildingPurchaseCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeBuildingPurchaseCommand(player: Player, data: any, _context: CommandContext): void {
         const { buildingType, positionX, positionY } = data;
         const position = new Vector2D(positionX, positionY);
         
@@ -342,7 +342,7 @@ export class CommandProcessor {
     /**
      * Execute mirror purchase command
      */
-    private static executeMirrorPurchaseCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeMirrorPurchaseCommand(player: Player, data: any, _context: CommandContext): void {
         const requiredIncomingLight = typeof data?.cost === 'number' ? data.cost : Constants.STELLAR_FORGE_SOLAR_MIRROR_COST;
         const positionX = typeof data?.positionX === 'number' ? data.positionX : player.stellarForge?.position.x;
         const positionY = typeof data?.positionY === 'number' ? data.positionY : player.stellarForge?.position.y;
@@ -464,7 +464,7 @@ export class CommandProcessor {
     /**
      * Execute mirror link command
      */
-    private static executeMirrorLinkCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeMirrorLinkCommand(player: Player, data: any, _context: CommandContext): void {
         const { mirrorIndices, structureType, buildingIndex } = data;
         let targetStructure: StellarForge | Building | null = null;
 
@@ -497,7 +497,7 @@ export class CommandProcessor {
     /**
      * Execute foundry production command
      */
-    private static executeFoundryProductionCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeFoundryProductionCommand(player: Player, data: any, _context: CommandContext): void {
         const { buildingId, itemType } = data;
         const building = player.buildings[buildingId];
         if (!(building instanceof SubsidiaryFactory)) {
@@ -518,7 +518,7 @@ export class CommandProcessor {
         player: Player,
         data: any,
         upgradeType: 'strafe' | 'regen' | 'blink' | 'attack',
-        context: CommandContext
+        _context: CommandContext
     ): void {
         const { buildingId } = data;
         const building = player.buildings[buildingId];
@@ -554,7 +554,7 @@ export class CommandProcessor {
     /**
      * Execute forge move command
      */
-    private static executeForgeMoveCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeForgeMoveCommand(player: Player, data: any, _context: CommandContext): void {
         const { targetX, targetY, moveOrder } = data;
         const target = new Vector2D(targetX, targetY);
         
@@ -569,7 +569,7 @@ export class CommandProcessor {
     /**
      * Execute set rally path command
      */
-    private static executeSetRallyPathCommand(player: Player, data: any, context: CommandContext): void {
+    private static executeSetRallyPathCommand(player: Player, data: any, _context: CommandContext): void {
         const { waypoints } = data;
         const path = waypoints.map((wp: any) => new Vector2D(wp.x, wp.y));
         

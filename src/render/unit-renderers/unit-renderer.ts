@@ -7,7 +7,6 @@
 
 import {
     Vector2D,
-    Faction,
     GameState,
     Unit,
     Starling,
@@ -24,13 +23,11 @@ import {
     Dagger,
     Beam,
     Spotlight,
-    Mortar,
     Preist,
     Tank,
     Shadow,
     ShadowDecoy,
     ShadowDecoyParticle,
-    Chrono,
     Occlude,
     OccludeShadowCone,
 } from '../../game-core';
@@ -261,7 +258,7 @@ export class UnitRenderer {
     /**
      * Draw move order indicator (dot and line)
      */
-    public drawMoveOrderIndicator(position: Vector2D, target: Vector2D, order: number, color: string, context: UnitRendererContext): void {
+    public drawMoveOrderIndicator(position: Vector2D, target: Vector2D, _order: number, color: string, context: UnitRendererContext): void {
         const screenPos = context.worldToScreen(position);
         const targetScreenPos = context.worldToScreen(target);
         
@@ -392,7 +389,7 @@ export class UnitRenderer {
      * Draw queued move-order lines for selected starlings.
      * Shared paths are rendered once to avoid duplicate overlays.
      */
-    public drawStarlingMoveLines(game: GameState, context: UnitRendererContext): void {
+    public drawStarlingMoveLines(_game: GameState, context: UnitRendererContext): void {
         if (!context.viewingPlayer) return;
 
         const color = context.getFactionColor(context.viewingPlayer.faction);

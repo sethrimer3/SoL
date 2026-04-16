@@ -5,7 +5,6 @@
 
 import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from '../../multiplayer-network';
 import { getSupabaseConfig } from '../../../Supabase/supabase-config';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 export interface P2PHostScreenParams {
     username: string;

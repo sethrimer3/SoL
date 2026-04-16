@@ -95,7 +95,7 @@ export const createTankHero = (deps: TankHeroDeps) => {
         /**
          * Tank doesn't attack
          */
-        attack(target: CombatTarget): void {
+        attack(_target: CombatTarget): void {
             // Tank doesn't attack
         }
 

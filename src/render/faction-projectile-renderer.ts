@@ -9,7 +9,6 @@
 
 import {
     Vector2D,
-    Sun,
     Faction,
     RadiantOrb,
     VelarisOrb,

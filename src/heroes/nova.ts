@@ -9,7 +9,7 @@ type NovaHeroDeps = {
 };
 
 export const createNovaHero = (deps: NovaHeroDeps) => {
-    const { Unit, Vector2D, Constants, AbilityBullet } = deps;
+    const { Unit, Vector2D, Constants } = deps;
 
     /**
      * Scatter bullet fired from Nova bomb explosion

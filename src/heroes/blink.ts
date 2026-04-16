@@ -71,7 +71,7 @@ export const createBlinkHero = (deps: BlinkHeroDeps) => {
         /**
          * Blink hero doesn't attack normally
          */
-        attack(target: any): void {
+        attack(_target: any): void {
             // Blink hero doesn't have normal attacks
         }
 
@@ -80,7 +80,7 @@ export const createBlinkHero = (deps: BlinkHeroDeps) => {
          */
         update(
             deltaTime: number,
-            enemies: any[],
+            _enemies: any[],
             allUnits: Unit[],
             asteroids: any[] = []
         ): void {

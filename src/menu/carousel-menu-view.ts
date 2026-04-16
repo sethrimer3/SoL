@@ -21,7 +21,6 @@ export class CarouselMenuView {
     private container: HTMLElement;
     private options: MenuOption[];
     private currentIndex: number = 0;
-    private targetIndex: number = 0;
     private scrollOffset: number = 0;
     private isDragging: boolean = false;
     private dragStartX: number = 0;
@@ -54,7 +53,6 @@ export class CarouselMenuView {
         // Validate and clamp initialIndex to valid range
         const validatedIndex = Math.max(0, Math.min(initialIndex, options.length - 1));
         this.currentIndex = validatedIndex;
-        this.targetIndex = validatedIndex;
         this.setupContainer();
         this.setupEventHandlers();
         this.startAnimation();
@@ -257,11 +255,9 @@ export class CarouselMenuView {
 
     private setCurrentIndex(nextIndex: number): void {
         if (nextIndex === this.currentIndex) {
-            this.targetIndex = nextIndex;
             return;
         }
 
-        this.targetIndex = nextIndex;
         this.currentIndex = nextIndex;
         if (this.onNavigateCallback) {
             this.onNavigateCallback(nextIndex);

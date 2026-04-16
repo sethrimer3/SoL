@@ -10,7 +10,7 @@ import * as Constants from '../../constants';
 import { Player, Faction } from '../entities/player';
 import { StellarForge } from '../entities/stellar-forge';
 import { SolarMirror } from '../entities/solar-mirror';
-import { Building, Minigun, SpaceDustSwirler, SubsidiaryFactory, CombatTarget } from '../entities/buildings';
+import { Minigun, SpaceDustSwirler, SubsidiaryFactory, CombatTarget } from '../entities/buildings';
 import type { AIContext } from './ai-system';
 import { AiMirrorSystem } from './ai-mirror-system';
 

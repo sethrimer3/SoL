@@ -1,5 +1,4 @@
 import type { Player, Unit, Vector2D, Asteroid } from '../game-core';
-import { getGameRNG } from '../seeded-random';
 
 type AurumHeroDeps = {
     Unit: typeof Unit;
@@ -151,7 +150,7 @@ export const createAurumHero = (deps: AurumHeroDeps) => {
         }
 
         // Override attack to do nothing
-        attack(target: any): void {
+        attack(_target: any): void {
             // Aurum hero doesn't attack
         }
 

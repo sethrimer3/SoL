@@ -174,8 +174,6 @@ export class SolarMirror {
             }
         }
 
-        const mirrorRadiusPx = 20;
-
         for (const player of players) {
             // Skip mirror-to-mirror blocking checks as mirrors are transparent to each other's light rays
 
@@ -346,14 +344,6 @@ export class SolarMirror {
             obstaclePos = obstacle.position;
             obstacleRadius = obstacle.radius + this.BUILDING_CLEARANCE;
         }
-
-        // Vector from obstacle to start
-        const toStartX = start.x - obstaclePos.x;
-        const toStartY = start.y - obstaclePos.y;
-        
-        // Vector from obstacle to end
-        const toEndX = end.x - obstaclePos.x;
-        const toEndY = end.y - obstaclePos.y;
 
         // Calculate perpendicular offsets (left and right of obstacle)
         const midX = (start.x + end.x) / 2;

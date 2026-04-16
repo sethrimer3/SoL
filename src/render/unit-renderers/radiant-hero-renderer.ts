@@ -11,7 +11,6 @@ import {
     Dagger,
     Beam,
     Spotlight,
-    Mortar,
     Preist,
     Tank,
 } from '../../game-core';

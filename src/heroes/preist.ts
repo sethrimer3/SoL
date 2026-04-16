@@ -74,7 +74,7 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
          */
         update(
             deltaTime: number,
-            enemies: CombatTarget[],
+            _enemies: CombatTarget[],
             allUnits: Unit[],
             asteroids: any[] = []
         ): void {
@@ -321,7 +321,7 @@ export const createPreistHero = (deps: PreistHeroDeps) => {
         /**
          * Override attack to do nothing (Preist doesn't attack)
          */
-        attack(target: CombatTarget): void {
+        attack(_target: CombatTarget): void {
             // Preist doesn't attack, only heals
         }
     }

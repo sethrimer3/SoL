@@ -7,8 +7,6 @@
 
 import { Vector2D } from '../math';
 import * as Constants from '../../constants';
-import { Player } from '../entities/player';
-import { SpaceDustParticle } from '../entities/particles';
 import { Building, SpaceDustSwirler } from '../entities/buildings';
 import { StellarForge } from '../entities/stellar-forge';
 import { WarpGate } from '../entities/warp-gate';

@@ -420,7 +420,7 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
         /**
          * Grave doesn't use the base attack (projectiles do the damage)
          */
-        attack(target: CombatTarget): void {
+        attack(_target: CombatTarget): void {
             // Projectiles handle the actual attacking
         }
 

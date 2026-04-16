@@ -107,7 +107,7 @@ export class StarlingSystem {
         }
     }
 
-    static releaseStarlingMergeGate(context: StarlingContext, gate: StarlingMergeGate, player: Player): void {
+    static releaseStarlingMergeGate(_context: StarlingContext, gate: StarlingMergeGate, player: Player): void {
         const releaseCount = gate.absorbedCount;
         if (releaseCount > 0) {
             const currentStarlingCount = StarlingSystem.getStarlingCountForPlayer(player);

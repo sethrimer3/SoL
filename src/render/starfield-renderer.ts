@@ -14,7 +14,7 @@
  * - Nebula gradient backgrounds
  */
 
-import { Vector2D, GameState, Asteroid } from '../game-core';
+import { Vector2D, GameState } from '../game-core';
 import * as Constants from '../constants';
 import { getCanvasScreenHeightPx, getCanvasScreenWidthPx } from './canvas-metrics';
 import { valueNoise2D, fractalNoise2D } from './noise-utilities';
