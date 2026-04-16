@@ -678,14 +678,14 @@ function renderLobbyMapPickerOverlay(
 
         card.onclick = async () => {
             for (const element of Array.from(grid.querySelectorAll('button'))) {
-                (element as HTMLButtonElement).disabled = true;
+                (element).disabled = true;
             }
             const changed = await onSelectMap(map.id);
             if (changed) {
                 document.body.removeChild(overlay);
             } else {
                 for (const element of Array.from(grid.querySelectorAll('button'))) {
-                    (element as HTMLButtonElement).disabled = false;
+                    (element).disabled = false;
                 }
             }
         };

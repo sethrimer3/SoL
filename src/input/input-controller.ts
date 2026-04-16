@@ -276,8 +276,7 @@ export class InputController {
                 
                 if (!this.isSelecting && !isPanning && !this.isDraggingHeroArrow && !this.isDraggingBuildingArrow && !this.isDrawingPath) {
                     const isDragStartOnSelectedBase = Boolean(
-                        this.ctx.getSelectionManager().selectedBase &&
-                        this.ctx.getSelectionManager().selectedBase.isSelected &&
+                        this.ctx.getSelectionManager().selectedBase?.isSelected &&
                         dragStartWorld &&
                         this.ctx.getSelectionManager().selectedBase.containsPoint(dragStartWorld)
                     );

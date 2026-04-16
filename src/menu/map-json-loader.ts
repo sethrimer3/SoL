@@ -49,7 +49,7 @@ async function loadMapFile(filename: string): Promise<MapJSON | null> {
         if (!isValidMapJSON(data)) {
             return null;
         }
-        return data as MapJSON;
+        return data;
     } catch {
         return null;
     }
@@ -137,7 +137,7 @@ export function importMapFromJSON(jsonString: string): MapConfig | null {
         if (!isValidMapJSON(data)) {
             return null;
         }
-        return mapJSONToConfig(data as MapJSON);
+        return mapJSONToConfig(data);
     } catch {
         return null;
     }

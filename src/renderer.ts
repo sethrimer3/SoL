@@ -34,14 +34,11 @@ import { ForgeRenderer } from './render/building-renderers/forge-renderer';
 import { FoundryRenderer } from './render/building-renderers/foundry-renderer';
 import { TowerRenderer } from './render/building-renderers/tower-renderer';
 import type { BuildingRendererContext } from './render/building-renderers/shared-utilities';
-import { ProjectileRenderer } from './render/projectile-renderer';
-import type { ProjectileRendererContext } from './render/projectile-renderer';
+import { ProjectileRenderer, type ProjectileRendererContext } from './render/projectile-renderer';
 import { UnitRenderer } from './render/unit-renderers/unit-renderer';
 import type { UnitRendererContext } from './render/unit-renderers/shared-utilities';
-import { SolarMirrorRenderer } from './render/solar-mirror-renderer';
-import type { SolarMirrorRendererContext } from './render/solar-mirror-renderer';
-import { WarpGateRenderer } from './render/warp-gate-renderer';
-import type { WarpGateRendererContext } from './render/warp-gate-renderer';
+import { SolarMirrorRenderer, type SolarMirrorRendererContext } from './render/solar-mirror-renderer';
+import { WarpGateRenderer, type WarpGateRendererContext } from './render/warp-gate-renderer';
 import { UIRenderer, UIRendererContext } from './render/ui-renderer';
 import { EnvironmentRenderer, EnvironmentRendererContext } from './render/environment-renderer';
 import { GlowRenderer } from './render/glow-renderer';
@@ -264,7 +261,7 @@ export class GameRenderer {
     private readonly _boundWorldToScreenCoords = (x: number, y: number, out?: Vector2D) => this.worldToScreenCoords(x, y, out as Vector2D);
     private readonly _boundIsWithinViewBounds = (pos: { x: number; y: number }, margin?: number) => this.isWithinViewBounds(pos as Vector2D, margin);
     private readonly _boundGetCachedRadialGradient = (key: string, x0: number, y0: number, r0: number, x1: number, y1: number, r1: number, stops: Array<{ offset: number; color: string }>) => this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops);
-    private readonly _boundInterpolateHexColor = (startHex: string, endHex: string, t: number): string => this.interpolateHexColor(startHex, endHex, t);
+    private readonly _boundInterpolateHexColor = interpolateHexColor;
     private readonly _boundDrawFancyBloom = (screenPos: Vector2D, radius: number, color: string, intensity: number) => this.drawFancyBloom(screenPos, radius, color, intensity);
 
     // Reusable per-frame arrays to avoid GC pressure from per-frame allocations
@@ -1033,13 +1030,6 @@ export class GameRenderer {
     }
 
     /**
-     * Darken a color by a given factor (0-1, where 0 is black and 1 is original color)
-     */
-    private darkenColor(color: string, factor: number): string {
-        return darkenColor(color, factor);
-    }
-
-    /**
      * Creates a BuildingRendererContext object for use by extracted building renderers.
      */
     private getBuildingRendererContext(): BuildingRendererContext {
@@ -1063,7 +1053,7 @@ export class GameRenderer {
                     // Signature mismatch: context interface uses simplified form; caller handles directly
                     throw new Error('getCachedRadialGradient not supported via context');
                 },
-                darkenColor: (color, opacity) => this.darkenColor(color, opacity),
+                darkenColor: (color, opacity) => darkenColor(color, opacity),
                 applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
                 getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
                 drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
@@ -1125,9 +1115,9 @@ export class GameRenderer {
                 VELARIS_FORGE_GRAPHEME_SPRITE_PATHS: VELARIS_FORGE_GRAPHEME_SPRITE_PATHS,
                 worldToScreen: (worldPos) => this.worldToScreen(worldPos),
                 getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
-                darkenColor: (color, factor) => this.darkenColor(color, factor),
+                darkenColor: (color, factor) => darkenColor(color, factor),
                 applyShadeBrightening: (color, pos, game, isInShade) => this.applyShadeBrightening(color, pos, game, isInShade),
-                brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
+                brightenAndPaleColor,
                 drawStructureShadeGlow: (entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected) =>
                     this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
                 drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
@@ -1254,10 +1244,10 @@ export class GameRenderer {
                 getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
                 getGraphemeMaskData: (path) => this.getGraphemeMaskData(path),
                 drawVelarisGraphemeSprite: (path, x, y, size, color) => this.drawVelarisGraphemeSprite(path, x, y, size, color),
-                darkenColor: (color, opacity) => this.darkenColor(color, opacity),
+                darkenColor,
                 getFactionColor: (faction) => this.getFactionColor(faction),
                 applyShadeBrightening: (color, pos, game, isBuilding) => this.applyShadeBrightening(color, pos, game, isBuilding),
-                brightenAndPaleColor: (color) => this.brightenAndPaleColor(color),
+                brightenAndPaleColor,
                 getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
                 getShadeGlowAlpha: (entity, shouldGlow) => this.getShadeGlowAlpha(entity, shouldGlow),
                 drawCachedUnitGlow: (screenPos, radiusPx, color, alphaScale) => this.drawCachedUnitGlow(screenPos, radiusPx, color, alphaScale),
@@ -1317,14 +1307,6 @@ export class GameRenderer {
      */
     private applyShadeBrightening(color: string, position: Vector2D, game: GameState, isInShade: boolean): string {
         return _applyShadeBrightening(color, position, game, isInShade, this.viewingPlayer);
-    }
-
-    /**
-     * Brighten and pale a color (make it lighter and more desaturated)
-     * Used for solar mirrors to make them slightly brighter and paler than player color
-     */
-    private brightenAndPaleColor(color: string): string {
-        return brightenAndPaleColor(color);
     }
 
     /**
@@ -2635,10 +2617,6 @@ export class GameRenderer {
 
     private getMinZoomForBounds(): number {
         return _getMinZoomForBounds(this.getViewportWidthPx(), this.getViewportHeightPx());
-    }
-
-    private interpolateHexColor(startHex: string, endHex: string, t: number): string {
-        return interpolateHexColor(startHex, endHex, t);
     }
 
     // ─── Photon Rendering ───

@@ -882,7 +882,7 @@ class GameController {
     }
 
     private stopReplayRecording(): void {
-        if (!this.replayRecorder || !this.replayRecorder.isActive()) {
+        if (!this.replayRecorder?.isActive()) {
             return;
         }
 

@@ -1620,7 +1620,7 @@ export class OnlineNetworkManager {
             }
 
             return data !== null;
-        } catch (error) {
+        } catch (_error) {
             return false;
         }
     }

@@ -224,7 +224,7 @@ export class AISystem {
         
         player.aiNextHeroCommandSec = context.gameTime + heroProductionInterval;
 
-        if (!player.stellarForge || !player.stellarForge.canProduceUnits()) {
+        if (!player.stellarForge?.canProduceUnits()) {
             return;
         }
 

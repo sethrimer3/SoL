@@ -40,7 +40,7 @@ export function showMatchLoadingScreen(options: MatchLoadingScreenOptions): void
     gameModeContainer.style.fontWeight = 'bold';
 
     const gameModeText = document.createElement('div');
-    let displayMode = options.gameMode === 'ai' ? 'Vs. AI' : 
+    const displayMode = options.gameMode === 'ai' ? 'Vs. AI' : 
                       options.gameMode === 'lan' ? 'LAN' : 
                       options.gameMode === 'online' ? (options.onlineMode === 'ranked' ? 'Ranked' : 'Unranked') : 'Vs. AI';
     gameModeText.textContent = displayMode;

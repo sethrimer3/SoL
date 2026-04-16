@@ -698,7 +698,7 @@ export class HUDRenderer {
             }
         }
 
-        const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory) as SubsidiaryFactory | undefined;
+        const foundry = player.buildings.find((building) => building instanceof SubsidiaryFactory);
         if (foundry) {
             const foundryProductionEntries: ProductionEntry[] = [];
 

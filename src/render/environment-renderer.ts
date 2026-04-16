@@ -776,7 +776,7 @@ export class EnvironmentRenderer {
         ctx.globalCompositeOperation = 'multiply';
 
         const coolKey = `cool-vignette-${Math.round(width / 50)}-${Math.round(height / 50)}`;
-        let coolVignette = gradientCache.get(coolKey) as CanvasGradient | undefined;
+        let coolVignette = gradientCache.get(coolKey);
         if (!coolVignette) {
             coolVignette = ctx.createRadialGradient(width * 0.5, height * 0.5, Math.min(width, height) * 0.2, width * 0.5, height * 0.5, Math.max(width, height) * 0.85);
             coolVignette.addColorStop(0, 'rgba(255, 255, 255, 1)');
@@ -795,7 +795,7 @@ export class EnvironmentRenderer {
 
             const maxDimension = Math.max(width, height);
             const warmKey = `warm-gradient-${Math.round(maxDimension / 100)}`;
-            let warmGradient = gradientCache.get(warmKey) as CanvasGradient | undefined;
+            let warmGradient = gradientCache.get(warmKey);
             if (!warmGradient) {
                 warmGradient = ctx.createRadialGradient(0, 0, 0, 0, 0, maxDimension * 0.45);
                 warmGradient.addColorStop(0, 'rgba(255, 178, 74, 0.28)');

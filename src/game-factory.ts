@@ -7,9 +7,7 @@
 
 import { GameSettings } from './menu';
 import { COLOR_SCHEMES } from './menu/color-schemes';
-import { createStandardGame, GameState, Vector2D } from './game-core';
-import { Sun, Asteroid } from './game-core';
-import { Faction } from './game-core';
+import { createStandardGame, GameState, Vector2D, Sun, Asteroid, Faction } from './game-core';
 import * as Constants from './constants';
 import { MapJSON } from './menu/types';
 
@@ -105,7 +103,7 @@ export function createGameFromSettings(settings: GameSettings): GameState {
     }
 
     // ── Player spawns (test-level has special handling) ──────────────────
-    if (json && json.id === 'test-level') {
+    if (json?.id === 'test-level') {
         // Test-level specific init with mirrored bases and no asteroids
         const leftForgePosition = json.spawns[0]
             ? new Vector2D(json.spawns[0].x, json.spawns[0].y)

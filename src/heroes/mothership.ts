@@ -174,7 +174,7 @@ export const createMothershipHero = (deps: MothershipHeroDeps) => {
 
             // Check asteroids
             for (const asteroid of asteroids) {
-                if (asteroid.containsPoint && asteroid.containsPoint(this.position)) {
+                if (asteroid.containsPoint?.(this.position)) {
                     return true;
                 }
             }

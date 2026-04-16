@@ -308,7 +308,7 @@ function mixUnitFields(
         mix(manualTarget.position.x);
         mix(manualTarget.position.y);
         if ('owner' in manualTarget && manualTarget.owner) {
-            mixInt(state.players.indexOf(manualTarget.owner as Player));
+            mixInt(state.players.indexOf(manualTarget.owner));
         } else {
             mixInt(-1);
         }

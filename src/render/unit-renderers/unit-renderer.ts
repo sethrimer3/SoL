@@ -32,8 +32,7 @@ import {
     OccludeShadowCone,
 } from '../../game-core';
 import * as Constants from '../../constants';
-import type { UnitRendererContext } from './shared-utilities';
-import { drawAbilityCooldownBar } from './shared-utilities';
+import { drawAbilityCooldownBar, type UnitRendererContext } from './shared-utilities';
 import { StarlingRenderer } from './starling-renderer';
 import { HeroRenderer } from './hero-renderer';
 
@@ -74,8 +73,8 @@ export class UnitRenderer {
         }
 
         // Check visibility for enemy units
-        let shouldDim = false;
-        let displayColor = unitColor;
+        const shouldDim = false;
+        const displayColor = unitColor;
         let visibilityAlpha = 1;
         let shadeGlowAlpha = 0;
         const isInShadow = !ladSun && game.isPointInShadow(unit.position);

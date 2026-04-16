@@ -501,7 +501,7 @@ export class ProjectileCombatSystem {
                         // Shield blocks enemy projectiles but not friendly fire
                         if (projectile.owner !== player && building.isEnemyBlocked(projectile.position)) {
                             // Damage the shield instead of letting projectile through
-                            const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : Constants.DEFAULT_PROJECTILE_DAMAGE;
+                            const projectileDamage = 'damage' in projectile ? (projectile.damage) : Constants.DEFAULT_PROJECTILE_DAMAGE;
                             building.damageShield(projectileDamage);
                             projectile.distanceTraveledPx = projectile.maxRangePx; // Mark for removal
                             blockedByShield = true;
@@ -553,7 +553,7 @@ export class ProjectileCombatSystem {
 
                 const distance = projectile.position.distanceTo(orb.position);
                 if (distance < Constants.AURUM_ORB_RADIUS) {
-                    const projectileDamage = 'damage' in projectile ? (projectile.damage as number) : Constants.DEFAULT_PROJECTILE_DAMAGE;
+                    const projectileDamage = 'damage' in projectile ? (projectile.damage) : Constants.DEFAULT_PROJECTILE_DAMAGE;
                     orb.takeDamage(projectileDamage);
                     ctx.damageNumbers.push(new DamageNumber(
                         orb.position,

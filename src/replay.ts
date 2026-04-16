@@ -443,7 +443,7 @@ export function uploadReplay(file: File): Promise<ReplayData> {
                 const json = e.target?.result as string;
                 const replay = deserializeReplay(json);
                 resolve(replay);
-            } catch (error) {
+            } catch (_error) {
                 reject(new Error('Invalid replay file format'));
             }
         };

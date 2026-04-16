@@ -18,8 +18,7 @@ import { SparkleParticle } from '../entities/particles';
 import { PhysicsContext, PhysicsSystem } from './physics-system';
 import { Unit } from '../entities/unit';
 import { VisionSystem } from './vision-system';
-import { VelarisOrb, ShroudCube, OccludeShadowCone } from '../../game-core';
-import { createHeroUnit } from '../../game-core';
+import { VelarisOrb, ShroudCube, OccludeShadowCone, createHeroUnit } from '../../game-core';
 import { getGameRNG } from '../../seeded-random';
 
 /**

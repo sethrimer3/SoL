@@ -520,7 +520,7 @@ export class MultiplayerNetworkManager {
     private handleReceivedCommand(command: GameCommand): void {
         // Check if this is a state hash message
         if (command.commandType === '__state_hash__' && this.stateVerifier) {
-            const message = command.payload as any;
+            const message = command.payload;
             this.stateVerifier.receiveHash(message.tick, message.playerId, message.hash);
             return; // Don't add to command queue
         }
@@ -557,7 +557,7 @@ export class MultiplayerNetworkManager {
         }
 
         // If transport is not ready, queue the command
-        if (!this.transport || !this.transport.isReady()) {
+        if (!this.transport?.isReady()) {
             console.warn('[MultiplayerNetworkManager] Transport not ready, queuing command');
             this.pendingCommands.push(command);
             return;
