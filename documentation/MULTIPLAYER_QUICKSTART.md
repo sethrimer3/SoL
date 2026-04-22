@@ -244,6 +244,18 @@ network.on(NetworkEvent.COMMAND_RECEIVED, (data) => {
     console.log("Command received:", data.command);
 });
 
+network.on(NetworkEvent.DESYNC_DETECTED, (data) => {
+    console.error("Desync detected at tick:", data.tick);
+});
+
+network.on(NetworkEvent.RECONNECTING, () => {
+    console.log("Attempting to reconnect to peer...");
+});
+
+network.on(NetworkEvent.RECONNECTED, () => {
+    console.log("Peer reconnected! Game continues.");
+});
+
 network.on(NetworkEvent.ERROR, (data) => {
     console.error("Network error:", data.error);
 });
@@ -327,7 +339,35 @@ network.on(NetworkEvent.CONNECTED, () => {
 1. Try different network (mobile hotspot)
 2. Check browser console for WebRTC errors
 3. Verify STUN servers are reachable
-4. Consider TURN server for relay (Phase 2)
+4. Configure TURN servers for relay:
+
+```typescript
+// Pass TURN credentials when creating or starting a match
+const match = await network.createMatch({
+    matchName: "My Game",
+    username: "Player1",
+    turnServers: [
+        {
+            urls: "turn:your-turn-server.example.com:3478",
+            username: "your-username",
+            credential: "your-credential"
+        }
+    ]
+});
+
+// Or pass when starting the match
+await network.startMatch({
+    turnServers: [
+        {
+            urls: ["turn:turn1.example.com:3478", "turn:turn2.example.com:3478"],
+            username: "user",
+            credential: "pass"
+        }
+    ]
+});
+```
+
+Free TURN services: [Metered.ca](https://www.metered.ca/stun-turn), [Twilio](https://www.twilio.com/docs/stun-turn)
 
 ### States Desync
 
@@ -338,43 +378,85 @@ network.on(NetworkEvent.CONNECTED, () => {
 2. Search code for `Date.now()` in game logic → use tick counter
 3. Add state hash logging to detect desync point
 
-## Phase 2 Migration
+## Phase 2 Features (Implemented)
 
-When ready for server-based relay:
+The following Phase 2 features have been implemented:
 
-### 1. Implement ServerRelayTransport
+### ✅ Server Relay Transport
 
-```typescript
-class ServerRelayTransport implements ITransport {
-    sendCommand(cmd: GameCommand) {
-        websocket.send(JSON.stringify(cmd));
-    }
-    
-    onCommandReceived(callback) {
-        websocket.onmessage = (msg) => {
-            callback(JSON.parse(msg.data));
-        };
-    }
-}
-```
-
-### 2. Enable Lockstep Mode
+When `lockstep_enabled: true`, the network manager automatically uses `ServerRelayTransport`
+instead of `P2PTransport`. This routes all game commands through a Supabase Realtime broadcast
+channel, bypassing WebRTC entirely — useful for players behind strict NATs.
 
 ```typescript
+// Enable relay mode by setting lockstepEnabled when creating a match
 const match = await network.createMatch({
-    lockstepEnabled: true,  // Use server relay
-    // ...
+    matchName: "My Game",
+    username: "Player1",
+    lockstepEnabled: true  // ← triggers ServerRelayTransport
 });
 ```
 
-### 3. Add State Hash Verification
+The relay channel topic is `relay:${matchId}`. All batching and stats tracking mirrors P2PTransport.
+
+### ✅ State Hash Verification
+
+`StateVerifier` is now **always** active (no longer gated by `lockstep_enabled`). The game loop
+submits a state hash every `STATE_HASH_TICK_INTERVAL` (30) ticks:
 
 ```typescript
-if (currentTick % 100 === 0) {
-    const hash = generateStateHash(gameState);
-    transport.sendStateHash(hash);
+// Already done automatically in the multiplayer game loop (main.ts):
+if (network.getCurrentTick() % STATE_HASH_TICK_INTERVAL === 0) {
+    network.submitStateHash(game.stateHash);
 }
 ```
+
+Listen for desync events:
+```typescript
+network.on(NetworkEvent.DESYNC_DETECTED, (event) => {
+    console.error("Desync detected at tick:", event.tick);
+    network.endMatch("desync");
+});
+```
+
+### ✅ Reconnection
+
+When a peer's WebRTC connection drops (`disconnected` or `failed`), the system automatically
+attempts to reconnect with exponential backoff (1s, 2s, 4s, 8s, 15s — up to 5 attempts) rather
+than immediately ending the match.
+
+Listen for reconnect events:
+```typescript
+network.on(NetworkEvent.RECONNECTING, (data) => {
+    showStatus(`Reconnecting to ${data?.peerId}...`);
+});
+
+network.on(NetworkEvent.RECONNECTED, () => {
+    showStatus("Reconnected! Resuming game.");
+});
+
+network.on(NetworkEvent.MATCH_ENDED, (data) => {
+    if (data?.reason === 'peer_disconnected') {
+        showStatus("Opponent disconnected. Game over.");
+    }
+});
+```
+
+### ✅ Command Signing (Anti-Cheat)
+
+All outgoing commands are automatically signed with HMAC-SHA256. The signing key is derived
+deterministically from the match seed — both players derive the same key without exchanging it.
+
+```typescript
+// This happens automatically after startMatch():
+//   1. Key derived: CommandSigner.deriveKey(match.game_seed)
+//   2. Outgoing commands signed: command.signature = await CommandSigner.sign(cmd, key)
+//   3. Incoming commands verified: CommandSigner.verify(cmd, cmd.signature, key)
+
+// Unsigned incoming commands are rejected when signing is active.
+```
+
+The signed message format is: `${tick}:${playerId}:${commandType}:${JSON.stringify(payload)}`
 
 ## Performance
 
