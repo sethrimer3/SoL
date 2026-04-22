@@ -201,8 +201,8 @@ class PeerConnection {
 
     /**
      * Setup connection state handlers.
-     * On disconnection or failure, starts exponential-backoff reconnect attempts
-     * instead of immediately calling the disconnect callback.
+     * On disconnection or failure, notifies the transport layer (via onStateChangeCallback)
+     * so P2PTransport can schedule the exponential-backoff reconnect attempt.
      */
     private setupConnectionHandlers(): void {
         if (!this.connection) return;
@@ -213,13 +213,18 @@ class PeerConnection {
             const state = this.connection.connectionState;
             console.log(`[P2P] Connection state: ${state}`);
             
-            if (this.onStateChangeCallback) {
-                this.onStateChangeCallback(state);
+            if (state === 'connected') {
+                // If we had in-flight reconnect attempts, this is a successful reconnect
+                if (this.reconnectAttempts > 0) {
+                    this.resetReconnectAttempts();
+                    if (this.onReconnectCallback) {
+                        this.onReconnectCallback();
+                    }
+                }
             }
 
-            if (state === 'disconnected' || state === 'failed') {
-                // Start reconnect backoff rather than immediately ending the match
-                this.scheduleReconnect();
+            if (this.onStateChangeCallback) {
+                this.onStateChangeCallback(state);
             }
         };
 
@@ -233,44 +238,21 @@ class PeerConnection {
     }
 
     /**
-     * Schedule the next reconnect attempt with exponential backoff.
-     * If all attempts are exhausted, calls onDisconnectedCallback.
-     */
-    private scheduleReconnect(): void {
-        if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
-            console.warn(`[P2P] Reconnect attempts exhausted for peer ${this.peerId}`);
-            if (this.onReconnectFailedCallback) {
-                this.onReconnectFailedCallback();
-            }
-            if (this.onDisconnectedCallback) {
-                this.onDisconnectedCallback();
-            }
-            return;
-        }
-
-        const delayMs = this.RECONNECT_BACKOFF_MS[
-            Math.min(this.reconnectAttempts, this.RECONNECT_BACKOFF_MS.length - 1)
-        ];
-        console.log(`[P2P] Scheduling reconnect attempt ${this.reconnectAttempts + 1}/${this.MAX_RECONNECT_ATTEMPTS} for peer ${this.peerId} in ${delayMs}ms`);
-
-        // Notify transport layer that a reconnect is in progress
-        if (this.onStateChangeCallback) {
-            this.onStateChangeCallback('connecting');
-        }
-
-        this.reconnectTimer = setTimeout(() => {
-            this.reconnectTimer = null;
-            // The actual reconnect logic is delegated to P2PTransport via attemptReconnect()
-        }, delayMs);
-    }
-
-    /**
      * Attempt to re-establish the WebRTC connection.
      * Closes the old RTCPeerConnection, creates a fresh one, then re-runs the
      * offer/answer handshake via the provided signaling function.
      *
+     * On success the caller (P2PTransport) must call `resetReconnectAttempts()` after
+     * the connection state reaches 'connected' — not here — so the reset only happens
+     * when the channel is truly usable again.
+     *
      * @param isHost      - true if this peer is the match host (creates a new offer)
      * @param signalingFn - async function that sends a signaling message (type + data)
+     *
+     * Client-side peers: isHost = false. In that case we only need to clean up the stale
+     * connection; the host will send a new offer which will be handled by `handleOffer()`
+     * in P2PTransport. We do NOT call `onReconnectCallback` here — that is triggered by
+     * `setupConnectionHandlers()` once the connection state reaches 'connected'.
      */
     async attemptReconnect(
         isHost: boolean,
@@ -289,23 +271,33 @@ class PeerConnection {
             this.connection = null;
         }
 
-        try {
-            if (isHost) {
-                // Host creates a fresh offer
+        if (isHost) {
+            // Host creates a fresh offer and sends it via signaling.
+            // The counter reset and onReconnectCallback are triggered later, in
+            // setupConnectionHandlers(), once the state changes to 'connected'.
+            try {
                 const offer = await this.createOffer();
                 await signalingFn('offer', offer);
+            } catch (error) {
+                console.error(`[P2P] Reconnect offer failed for peer ${this.peerId}:`, error);
+                // Failure: notify the caller so the next backoff can be scheduled
+                if (this.onReconnectFailedCallback && this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                    this.onReconnectFailedCallback();
+                    if (this.onDisconnectedCallback) {
+                        this.onDisconnectedCallback();
+                    }
+                }
             }
-            // Client side: wait for the host to send a new offer (handled by P2PTransport signaling)
-
-            // Success — reset counter and notify
-            this.reconnectAttempts = 0;
-            if (this.onReconnectCallback) {
-                this.onReconnectCallback();
-            }
-        } catch (error) {
-            console.error(`[P2P] Reconnect attempt failed for peer ${this.peerId}:`, error);
-            this.scheduleReconnect();
         }
+        // Client: just reset the stale connection and wait for the host's new offer.
+    }
+
+    /**
+     * Called by P2PTransport when the connection state reaches 'connected' after a
+     * reconnect attempt, to confirm success and reset the counter.
+     */
+    resetReconnectAttempts(): void {
+        this.reconnectAttempts = 0;
     }
 
     /**
@@ -740,6 +732,8 @@ export class P2PTransport implements ITransport {
         peer.onStateChange((state: RTCPeerConnectionState) => {
             if (state === 'connected') {
                 console.log('[P2PTransport] Peer connected:', peer.getPeerId());
+                // onReconnectCallback is triggered inside PeerConnection.setupConnectionHandlers()
+                // when reconnectAttempts > 0; here we just re-check transport readiness.
                 this.checkIfReady();
             } else if (state === 'connecting') {
                 // Reconnect attempt in progress — do not mark ready
@@ -747,12 +741,24 @@ export class P2PTransport implements ITransport {
             } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
                 console.log('[P2PTransport] Peer disconnected:', peer.getPeerId());
                 this.ready = false;
-                // PeerConnection.scheduleReconnect() handles the backoff;
-                // trigger the actual reconnect attempt here
+
+                // Check if all attempts are exhausted before scheduling another
+                if (peer.reconnectAttempts >= peer.MAX_RECONNECT_ATTEMPTS) {
+                    console.warn('[P2PTransport] All reconnect attempts exhausted for peer', peer.getPeerId());
+                    return;
+                }
+
+                // Schedule reconnect with exponential backoff
                 const delayMs = peer.RECONNECT_BACKOFF_MS[
                     Math.min(peer.reconnectAttempts, peer.RECONNECT_BACKOFF_MS.length - 1)
                 ];
-                setTimeout(() => {
+                console.log(`[P2PTransport] Scheduling reconnect for peer ${peer.getPeerId()} in ${delayMs}ms`);
+
+                if (peer.reconnectTimer) {
+                    clearTimeout(peer.reconnectTimer);
+                }
+                peer.reconnectTimer = setTimeout(() => {
+                    peer.reconnectTimer = null;
                     peer.attemptReconnect(this.isHost, (type, data) =>
                         this.sendSignalingMessage(peer.getPeerId(), type, data)
                     );
@@ -760,9 +766,9 @@ export class P2PTransport implements ITransport {
             }
         });
 
-        // Called when a reconnect attempt succeeds
+        // Called when reconnect succeeds (set inside PeerConnection.setupConnectionHandlers)
         peer.onReconnect(() => {
-            console.log('[P2PTransport] Peer reconnected:', peer.getPeerId());
+            console.log('[P2PTransport] Peer reconnected successfully:', peer.getPeerId());
             this.checkIfReady();
             if (this.onReconnectedCallback) {
                 this.onReconnectedCallback();

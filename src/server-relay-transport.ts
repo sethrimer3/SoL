@@ -185,13 +185,15 @@ export class ServerRelayTransport implements ITransport {
         this.stats.bytesSent += serialized.length;
         this.stats.packetsSent++;
 
-        this.relayChannel!.send({
-            type: 'broadcast',
-            event: RELAY_EVENT,
-            payload: message
-        }).catch((err: unknown) => {
-            console.error('[ServerRelayTransport] Failed to send batch:', err);
-        });
+        if (this.relayChannel) {
+            this.relayChannel.send({
+                type: 'broadcast',
+                event: RELAY_EVENT,
+                payload: message
+            }).catch((err: unknown) => {
+                console.error('[ServerRelayTransport] Failed to send batch:', err);
+            });
+        }
     }
 
     /**

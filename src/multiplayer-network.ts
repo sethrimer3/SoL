@@ -592,26 +592,30 @@ export class MultiplayerNetworkManager {
             return;
         }
 
-        // Fast-path signature check: reject commands missing a required signature
+        // Fast-path sync signature check: reject if key is set but signature is missing
         if (this.signingEnabled && !this.commandValidator.verifySignature(command)) {
             console.error('[MultiplayerNetworkManager] Command rejected — missing signature:', command.commandType);
             return;
         }
 
-        // Async signature verification (runs in background; invalid commands are dropped)
+        // Async full signature verification — add to queue only after it passes
         if (this.signingEnabled && this.signingKey && command.signature) {
             CommandSigner.verify(command, command.signature, this.signingKey).then(valid => {
-                if (!valid) {
-                    console.error('[MultiplayerNetworkManager] Command failed signature verification:', command.commandType);
-                    // Remove from queue if already added
-                    // (best-effort; determinism is protected by both sides verifying)
+                if (valid) {
+                    if (this.commandQueue) {
+                        this.commandQueue.addCommand(command);
+                    }
+                    this.emit(NetworkEvent.COMMAND_RECEIVED, { command });
+                } else {
+                    console.error('[MultiplayerNetworkManager] Command failed HMAC verification, dropping:', command.commandType);
                 }
             }).catch(err => {
                 console.warn('[MultiplayerNetworkManager] Signature verification error:', err);
             });
+            return; // Do not fall through to synchronous add
         }
 
-        // Add to queue
+        // Signing not enabled — add to queue immediately
         if (this.commandQueue) {
             this.commandQueue.addCommand(command);
         }
