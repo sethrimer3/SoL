@@ -22,6 +22,7 @@ export interface GameCommand {
     payload: any;          // Command-specific data (use discriminated union in game code)
     // NOTE: payload is 'any' for flexibility. Game code should use proper types:
     // type MoveCommand = GameCommand & { commandType: 'move_unit', payload: { unitId: number, x: number, y: number } };
+    signature?: string;     // Optional HMAC-SHA256 signature for anti-cheat (Phase 2)
 }
 
 /**
@@ -282,10 +283,6 @@ export class CommandQueue {
  * OPTIMIZATIONS:
  * - Efficient rate limit tracking with periodic cleanup
  * - Optimized payload size checking
- * 
- * TODO Phase 2: Add cryptographic signatures for anti-cheat
- * TODO Phase 2: Add rate limiting per player
- * TODO Phase 2: Add command hash for verification
  */
 export class CommandValidator {
     private readonly MAX_PAYLOAD_SIZE = 1024; // Max payload size in bytes
@@ -293,6 +290,9 @@ export class CommandValidator {
     private readonly COMMANDS_PER_TICK_LIMIT = 100; // Rate limit
     private lastCleanupTick = 0;
     private readonly CLEANUP_INTERVAL = 100; // Clean up every 100 ticks
+    
+    // Signing key for anti-cheat verification (Phase 2)
+    private signingKey: CryptoKey | null = null;
 
     /**
      * Validate a command before adding to queue
@@ -354,10 +354,23 @@ export class CommandValidator {
     }
 
     /**
-     * TODO Phase 2: Verify command signature (anti-cheat)
+     * Set the HMAC signing key for command signature verification (Phase 2)
+     * @param key - CryptoKey derived from the match seed
      */
-    verifySignature?(_command: GameCommand, _signature: string): boolean {
-        // Future implementation
+    setSigningKey(key: CryptoKey): void {
+        this.signingKey = key;
+    }
+
+    /**
+     * Synchronous fast-path check: reject commands that are missing a signature
+     * when a signing key is configured. Async verification is handled by CommandSigner.
+     * @returns false if signing is enabled and signature is absent; true otherwise
+     */
+    verifySignature(command: GameCommand, _signature?: string): boolean {
+        if (this.signingKey && !command.signature) {
+            console.error('[CommandValidator] Command missing required signature:', command.commandType);
+            return false;
+        }
         return true;
     }
 

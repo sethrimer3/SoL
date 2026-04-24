@@ -19,6 +19,17 @@ import { ITransport, GameCommand, TransportStats } from './transport';
 import { SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 
 /**
+ * Optional TURN server configuration for relay support behind strict NATs.
+ * Pass one or more entries to `P2PTransport` constructor to supplement the
+ * built-in STUN servers with credential-based relay servers.
+ */
+export interface TurnServerConfig {
+    urls: string | string[];
+    username?: string;
+    credential?: string;
+}
+
+/**
  * WebRTC P2P connection wrapper
  * Handles one peer connection and its data channel
  */
@@ -28,6 +39,9 @@ class PeerConnection {
     private peerId: string;
     private onMessageCallback: ((data: any) => void) | null = null;
     private onStateChangeCallback: ((state: RTCPeerConnectionState) => void) | null = null;
+
+    // Optional TURN servers merged into ICE configuration
+    private turnServers: TurnServerConfig[] = [];
 
     // Statistics
     private stats = {
@@ -42,23 +56,49 @@ class PeerConnection {
     private pendingPings: Map<number, number> = new Map(); // pingId -> timestamp
     private nextPingId: number = 0;
 
-    constructor(peerId: string) {
+    // Reconnection state
+    reconnectAttempts: number = 0;
+    readonly MAX_RECONNECT_ATTEMPTS = 5;
+    readonly RECONNECT_BACKOFF_MS = [1000, 2000, 4000, 8000, 15000];
+    reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    onReconnectCallback: (() => void) | null = null;
+    onReconnectFailedCallback: (() => void) | null = null;
+    private onDisconnectedCallback: (() => void) | null = null;
+
+    constructor(peerId: string, turnServers: TurnServerConfig[] = []) {
         this.peerId = peerId;
+        this.turnServers = turnServers;
     }
 
+    /** Register callback for successful reconnection */
+    onReconnect(cb: () => void): void { this.onReconnectCallback = cb; }
+
+    /** Register callback for when all reconnect attempts are exhausted */
+    onReconnectFailed(cb: () => void): void { this.onReconnectFailedCallback = cb; }
+
+    /** Register callback for final disconnection (after all reconnect attempts fail) */
+    onDisconnected(cb: () => void): void { this.onDisconnectedCallback = cb; }
+
     /**
-     * Initialize RTCPeerConnection with STUN servers for NAT traversal
+     * Initialize RTCPeerConnection with STUN servers for NAT traversal.
+     * TURN servers are merged in when provided.
      */
     private createConnection(): RTCPeerConnection {
-        const configuration: RTCConfiguration = {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' }
-            ]
-        };
-        
-        return new RTCPeerConnection(configuration);
+        const iceServers: RTCIceServer[] = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' }
+        ];
+
+        for (const turn of this.turnServers) {
+            iceServers.push({
+                urls: turn.urls,
+                username: turn.username,
+                credential: turn.credential
+            });
+        }
+
+        return new RTCPeerConnection({ iceServers });
     }
 
     /**
@@ -160,7 +200,9 @@ class PeerConnection {
     }
 
     /**
-     * Setup connection state handlers
+     * Setup connection state handlers.
+     * On disconnection or failure, notifies the transport layer (via onStateChangeCallback)
+     * so P2PTransport can schedule the exponential-backoff reconnect attempt.
      */
     private setupConnectionHandlers(): void {
         if (!this.connection) return;
@@ -168,10 +210,21 @@ class PeerConnection {
         this.connection.onconnectionstatechange = () => {
             if (!this.connection) return;
             
-            console.log(`[P2P] Connection state: ${this.connection.connectionState}`);
+            const state = this.connection.connectionState;
+            console.log(`[P2P] Connection state: ${state}`);
             
+            if (state === 'connected') {
+                // If we had in-flight reconnect attempts, this is a successful reconnect
+                if (this.reconnectAttempts > 0) {
+                    this.resetReconnectAttempts();
+                    if (this.onReconnectCallback) {
+                        this.onReconnectCallback();
+                    }
+                }
+            }
+
             if (this.onStateChangeCallback) {
-                this.onStateChangeCallback(this.connection.connectionState);
+                this.onStateChangeCallback(state);
             }
         };
 
@@ -182,6 +235,80 @@ class PeerConnection {
                 console.log('[P2P] New ICE candidate generated');
             }
         };
+    }
+
+    /**
+     * Attempt to re-establish the WebRTC connection.
+     * Closes the old RTCPeerConnection, creates a fresh one, then re-runs the
+     * offer/answer handshake via the provided signaling function.
+     *
+     * On success the caller (P2PTransport) must call `resetReconnectAttempts()` after
+     * the connection state reaches 'connected' — not here — so the reset only happens
+     * when the channel is truly usable again.
+     *
+     * @param isHost      - true if this peer is the match host (creates a new offer)
+     * @param signalingFn - async function that sends a signaling message (type + data)
+     *
+     * Client-side peers: isHost = false. In that case we only need to clean up the stale
+     * connection; the host will send a new offer which will be handled by `handleOffer()`
+     * in P2PTransport. We do NOT call `onReconnectCallback` here — that is triggered by
+     * `setupConnectionHandlers()` once the connection state reaches 'connected'.
+     */
+    async attemptReconnect(
+        isHost: boolean,
+        signalingFn: (type: string, data: any) => Promise<void>
+    ): Promise<void> {
+        this.reconnectAttempts++;
+        console.log(`[P2P] Attempting reconnect ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} for peer ${this.peerId}`);
+
+        // Close the stale connection cleanly
+        if (this.dataChannel) {
+            this.dataChannel.close();
+            this.dataChannel = null;
+        }
+        if (this.connection) {
+            this.connection.close();
+            this.connection = null;
+        }
+
+        if (isHost) {
+            // Host creates a fresh offer and sends it via signaling.
+            // The counter reset and onReconnectCallback are triggered later, in
+            // setupConnectionHandlers(), once the state changes to 'connected'.
+            try {
+                const offer = await this.createOffer();
+                await signalingFn('offer', offer);
+            } catch (error) {
+                console.error(`[P2P] Reconnect offer failed for peer ${this.peerId}:`, error);
+                // Failure: notify the caller so the next backoff can be scheduled
+                if (this.onReconnectFailedCallback && this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+                    this.onReconnectFailedCallback();
+                    if (this.onDisconnectedCallback) {
+                        this.onDisconnectedCallback();
+                    }
+                }
+            }
+        }
+        // Client: just reset the stale connection and wait for the host's new offer.
+    }
+
+    /**
+     * Called by P2PTransport when the connection state reaches 'connected' after a
+     * reconnect attempt, to confirm success and reset the counter.
+     */
+    resetReconnectAttempts(): void {
+        this.reconnectAttempts = 0;
+    }
+
+    /**
+     * Cancel any pending reconnect timer.
+     */
+    cancelReconnect(): void {
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        this.reconnectAttempts = 0;
     }
 
     /**
@@ -376,6 +503,12 @@ export class P2PTransport implements ITransport {
     private ready: boolean = false;
     private expectedPeerIds: string[] = [];
     
+    // TURN server configuration
+    private turnServers: TurnServerConfig[] = [];
+    
+    // Reconnect callback for external consumers
+    private onReconnectedCallback: (() => void) | null = null;
+    
     // Latency measurement
     private pingInterval: NodeJS.Timeout | null = null;
     private readonly PING_INTERVAL_MS = 2000; // Ping every 2 seconds
@@ -391,20 +524,30 @@ export class P2PTransport implements ITransport {
         matchId: string,
         localPlayerId: string,
         isHost: boolean,
-        otherPlayerIds: string[]
+        otherPlayerIds: string[],
+        turnServers: TurnServerConfig[] = []
     ) {
         this.supabase = supabase;
         this.matchId = matchId;
         this.localPlayerId = localPlayerId;
         this.isHost = isHost;
         this.expectedPeerIds = otherPlayerIds;
+        this.turnServers = turnServers;
         
         console.log('[P2PTransport] Created', {
             matchId,
             localPlayerId,
             isHost,
-            otherPlayers: otherPlayerIds
+            otherPlayers: otherPlayerIds,
+            turnServers: turnServers.length
         });
+    }
+
+    /**
+     * Register a callback invoked when a peer successfully reconnects.
+     */
+    onReconnected(callback: () => void): void {
+        this.onReconnectedCallback = callback;
     }
 
     /**
@@ -464,7 +607,7 @@ export class P2PTransport implements ITransport {
      * Create WebRTC offer for a peer
      */
     private async createOfferForPeer(peerId: string): Promise<void> {
-        const peer = new PeerConnection(peerId);
+        const peer = new PeerConnection(peerId, this.turnServers);
         this.setupPeerHandlers(peer);
         this.peers.set(peerId, peer);
         
@@ -513,7 +656,7 @@ export class P2PTransport implements ITransport {
     private async handleOffer(peerId: string, offer: RTCSessionDescriptionInit): Promise<void> {
         let peer = this.peers.get(peerId);
         if (!peer) {
-            peer = new PeerConnection(peerId);
+            peer = new PeerConnection(peerId, this.turnServers);
             this.setupPeerHandlers(peer);
             this.peers.set(peerId, peer);
         }
@@ -589,11 +732,53 @@ export class P2PTransport implements ITransport {
         peer.onStateChange((state: RTCPeerConnectionState) => {
             if (state === 'connected') {
                 console.log('[P2PTransport] Peer connected:', peer.getPeerId());
+                // onReconnectCallback is triggered inside PeerConnection.setupConnectionHandlers()
+                // when reconnectAttempts > 0; here we just re-check transport readiness.
                 this.checkIfReady();
+            } else if (state === 'connecting') {
+                // Reconnect attempt in progress — do not mark ready
+                this.ready = false;
             } else if (state === 'failed' || state === 'disconnected' || state === 'closed') {
                 console.log('[P2PTransport] Peer disconnected:', peer.getPeerId());
                 this.ready = false;
+
+                // Check if all attempts are exhausted before scheduling another
+                if (peer.reconnectAttempts >= peer.MAX_RECONNECT_ATTEMPTS) {
+                    console.warn('[P2PTransport] All reconnect attempts exhausted for peer', peer.getPeerId());
+                    return;
+                }
+
+                // Schedule reconnect with exponential backoff
+                const delayMs = peer.RECONNECT_BACKOFF_MS[
+                    Math.min(peer.reconnectAttempts, peer.RECONNECT_BACKOFF_MS.length - 1)
+                ];
+                console.log(`[P2PTransport] Scheduling reconnect for peer ${peer.getPeerId()} in ${delayMs}ms`);
+
+                if (peer.reconnectTimer) {
+                    clearTimeout(peer.reconnectTimer);
+                }
+                peer.reconnectTimer = setTimeout(() => {
+                    peer.reconnectTimer = null;
+                    peer.attemptReconnect(this.isHost, (type, data) =>
+                        this.sendSignalingMessage(peer.getPeerId(), type, data)
+                    );
+                }, delayMs);
             }
+        });
+
+        // Called when reconnect succeeds (set inside PeerConnection.setupConnectionHandlers)
+        peer.onReconnect(() => {
+            console.log('[P2PTransport] Peer reconnected successfully:', peer.getPeerId());
+            this.checkIfReady();
+            if (this.onReconnectedCallback) {
+                this.onReconnectedCallback();
+            }
+        });
+
+        // Called when all reconnect attempts are exhausted
+        peer.onReconnectFailed(() => {
+            console.warn('[P2PTransport] Peer reconnect failed permanently:', peer.getPeerId());
+            this.ready = false;
         });
     }
 
@@ -736,8 +921,11 @@ export class P2PTransport implements ITransport {
             this.pingInterval = null;
         }
         
-        // Close all peer connections
-        this.peers.forEach(peer => peer.close());
+        // Cancel any pending reconnect timers and close all peer connections
+        this.peers.forEach(peer => {
+            peer.cancelReconnect();
+            peer.close();
+        });
         this.peers.clear();
         
         // Unsubscribe from signaling

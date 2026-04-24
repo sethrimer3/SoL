@@ -134,10 +134,10 @@ SUPABASE_ANON_KEY=your-anon-public-key-here
 ### 🚧 Pending
 - [ ] P2P connection test (2 browser windows)
 - [ ] Command synchronization test
-- [ ] Determinism test (same seed = same result)
-- [ ] Multi-player gameplay test (2-8 players)
-- [ ] Network latency simulation
-- [ ] Reconnection handling
+- [ ] Determinism test suite
+- [ ] Multi-player gameplay test (4-8 players)
+- [ ] Network latency simulation / poor network conditions test
+- [ ] Bandwidth monitoring
 
 ## 📋 Testing Instructions
 
@@ -197,27 +197,27 @@ python3 -m http.server 8080
 
 ## 🐛 Known Limitations
 
-1. **No reconnection handling** - If a player disconnects, game ends (Phase 2 feature)
-2. **No state hash verification** - Desync detection not implemented yet (Phase 2)
-3. **No server relay option** - Only P2P transport available (Phase 2 feature)
-4. **No anti-cheat** - Trust-based system for Phase 1 (Phase 2 feature)
+1. ~~**No reconnection handling**~~ ✅ Implemented — exponential-backoff reconnect with up to 5 attempts
+2. ~~**No state hash verification**~~ ✅ Implemented — `StateVerifier` always enabled (was gated by `lockstep_enabled`)
+3. ~~**No server relay option**~~ ✅ Implemented — `ServerRelayTransport` routes via Supabase Realtime when `lockstep_enabled: true`
+4. ~~**No anti-cheat**~~ ✅ Implemented — HMAC-SHA256 command signing via `CommandSigner`, key derived from match seed
 
-## 🚀 What's Next (Phase 2)
+## 🚀 What's Next (Remaining Phase 2 Items)
 
 As outlined in `MULTIPLAYER_INTEGRATION_TODO.md`:
 
-### Testing & Validation
+### Testing & Validation (Still Pending)
 - [ ] Create determinism test suite
 - [ ] Test with 4-8 players
 - [ ] Monitor bandwidth usage
 - [ ] Test with poor network conditions
 
-### Advanced Features
-- [ ] Server relay transport (for players behind strict NATs)
-- [ ] State hash verification (desync detection)
-- [ ] Reconnection handling
-- [ ] Anti-cheat system
-- [ ] Command signature verification
+### Advanced Features (Implemented ✅)
+- [x] Server relay transport (for players behind strict NATs) — `ServerRelayTransport`
+- [x] State hash verification (desync detection) — always on
+- [x] Reconnection handling — exponential backoff in `PeerConnection`
+- [x] Anti-cheat system — HMAC-SHA256 command signing
+- [x] Command signature verification — `CommandSigner` + `CommandValidator`
 
 ### Performance
 - [ ] Profile command serialization

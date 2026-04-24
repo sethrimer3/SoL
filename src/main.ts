@@ -1585,6 +1585,11 @@ class GameController {
                 // Advance to next tick
                 this.network.advanceTick();
 
+                // Submit state hash for desync detection every STATE_HASH_TICK_INTERVAL ticks
+                if (this.network.getCurrentTick() % Constants.STATE_HASH_TICK_INTERVAL === 0) {
+                    this.network.submitStateHash(this.game.stateHash);
+                }
+
                 // Check if game has ended
                 const winner = this.game.checkVictoryConditions();
                 if (winner && this.game.isRunning) {

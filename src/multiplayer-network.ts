@@ -20,7 +20,8 @@
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { P2PTransport } from './p2p-transport';
+import { P2PTransport, TurnServerConfig } from './p2p-transport';
+import { ServerRelayTransport } from './server-relay-transport';
 import { 
     ITransport, 
     GameCommand, 
@@ -37,6 +38,7 @@ import {
     StateVerificationEvent, 
     DesyncEvent 
 } from './state-verification';
+import { CommandSigner } from './command-signer';
 
 /**
  * Match metadata stored in Supabase
@@ -78,6 +80,8 @@ export interface CreateMatchOptions {
     lockstepEnabled?: boolean;
     gameSeed?: number;
     gameSettings?: any;
+    /** Optional TURN servers for relay support behind strict NATs */
+    turnServers?: TurnServerConfig[];
 }
 
 /**
@@ -94,6 +98,8 @@ export enum NetworkEvent {
     MATCH_ENDED = 'match_ended',
     COMMAND_RECEIVED = 'command_received',
     DESYNC_DETECTED = 'desync_detected',
+    RECONNECTING = 'reconnecting',
+    RECONNECTED = 'reconnected',
     ERROR = 'error'
 }
 
@@ -115,11 +121,15 @@ export class MultiplayerNetworkManager {
     private commandQueue: CommandQueue | null = null;
     private commandValidator: CommandValidator = new CommandValidator();
     
-    // State verification
+    // State verification (always enabled — not gated by lockstep_enabled)
     private stateVerifier: StateVerifier | null = null;
     
     // RNG for determinism
     private gameRNG: SeededRandom | null = null;
+    
+    // Anti-cheat: HMAC signing key derived from match seed
+    private signingKey: CryptoKey | null = null;
+    private signingEnabled: boolean = false;
     
     // Event listeners
     private eventListeners: Map<NetworkEvent, NetworkEventCallback[]> = new Map();
@@ -364,7 +374,7 @@ export class MultiplayerNetworkManager {
     /**
      * Start the match - establish P2P connections
      */
-    async startMatch(): Promise<boolean> {
+    async startMatch(options: { turnServers?: TurnServerConfig[] } = {}): Promise<boolean> {
         if (!this.currentMatch) {
             console.error('[MultiplayerNetworkManager] No active match');
             return false;
@@ -403,57 +413,108 @@ export class MultiplayerNetworkManager {
             const allPlayerIds = players.map(p => p.player_id);
             this.commandQueue = new CommandQueue(allPlayerIds);
 
-            // Initialize P2P transport
-            // TODO Phase 2: Replace with ServerRelayTransport based on match settings
-            this.transport = new P2PTransport(
-                this.supabase,
-                this.currentMatch.id,
-                this.localPlayerId,
-                this.isHost,
-                otherPlayerIds
-            );
+            // Select transport based on match settings:
+            // - lockstep_enabled → ServerRelayTransport (routes through Supabase for NAT-hostile environments)
+            // - otherwise       → P2PTransport (WebRTC direct connection)
+            if (this.currentMatch.lockstep_enabled) {
+                console.log('[MultiplayerNetworkManager] Using ServerRelayTransport (lockstep mode)');
+                const relay = new ServerRelayTransport(
+                    this.supabase,
+                    this.currentMatch.id,
+                    this.localPlayerId
+                );
+                this.transport = relay;
 
-            // Setup command handling
-            this.transport.onCommandReceived((command: GameCommand) => {
-                this.handleReceivedCommand(command);
-            });
+                // Setup command handling
+                this.transport.onCommandReceived((command: GameCommand) => {
+                    this.handleReceivedCommand(command);
+                });
 
-            // Initialize P2P connections
-            await (this.transport as P2PTransport).initialize();
+                await relay.initialize();
 
-            // Set connection timeout
-            this.connectionTimeout = setTimeout(() => {
-                if (!this.isTransportReady) {
-                    console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
-                    const userMessage = 'Connection timeout. Unable to establish P2P connections. Please check your network and try again.';
-                    this.emit(NetworkEvent.ERROR, { 
-                        error: new Error('Connection timeout - failed to establish P2P connections'),
-                        message: userMessage
-                    });
-                    this.endMatch('connection_timeout');
+                // Relay is immediately ready after subscription
+                relay.onReady(() => {
+                    this.onTransportReady();
+                });
+
+                // If already ready (synchronous path), trigger manually
+                if (relay.isReady()) {
+                    this.onTransportReady();
                 }
-            }, this.CONNECTION_TIMEOUT_MS);
+            } else {
+                const turnServers = options.turnServers || [];
+                console.log('[MultiplayerNetworkManager] Using P2PTransport', { turnServers: turnServers.length });
+                const p2p = new P2PTransport(
+                    this.supabase,
+                    this.currentMatch.id,
+                    this.localPlayerId,
+                    this.isHost,
+                    otherPlayerIds,
+                    turnServers
+                );
+                this.transport = p2p;
 
-            // Wait for connections to establish
-            (this.transport as P2PTransport).onReady(() => {
-                this.onTransportReady();
+                // Setup command handling
+                this.transport.onCommandReceived((command: GameCommand) => {
+                    this.handleReceivedCommand(command);
+                });
+
+                // Wire reconnect events
+                p2p.onReconnected(() => {
+                    console.log('[MultiplayerNetworkManager] Peer reconnected — re-checking transport ready');
+                    this.emit(NetworkEvent.RECONNECTED);
+                    // Re-check if transport is now fully ready
+                    if (p2p.isReady()) {
+                        this.onTransportReady();
+                    }
+                });
+
+                // Initialize P2P connections
+                await p2p.initialize();
+
+                // Set connection timeout
+                this.connectionTimeout = setTimeout(() => {
+                    if (!this.isTransportReady) {
+                        console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
+                        const userMessage = 'Connection timeout. Unable to establish P2P connections. Please check your network and try again.';
+                        this.emit(NetworkEvent.ERROR, { 
+                            error: new Error('Connection timeout - failed to establish P2P connections'),
+                            message: userMessage
+                        });
+                        this.endMatch('connection_timeout');
+                    }
+                }, this.CONNECTION_TIMEOUT_MS);
+
+                // Wait for connections to establish
+                p2p.onReady(() => {
+                    this.onTransportReady();
+                });
+            }
+            
+            // Always enable state verification (not gated by lockstep_enabled)
+            this.stateVerifier = new StateVerifier(
+                this.transport,
+                this.localPlayerId,
+                allPlayerIds
+            );
+            
+            // Listen for desync events
+            this.stateVerifier.on(StateVerificationEvent.DESYNC, (event: DesyncEvent) => {
+                console.error('[MultiplayerNetworkManager] Desync detected!', event);
+                this.emit(NetworkEvent.DESYNC_DETECTED, event);
             });
             
-            // Initialize state verifier if lockstep is enabled
-            if (this.currentMatch.lockstep_enabled) {
-                this.stateVerifier = new StateVerifier(
-                    this.transport,
-                    this.localPlayerId,
-                    allPlayerIds
-                );
-                
-                // Listen for desync events
-                this.stateVerifier.on(StateVerificationEvent.DESYNC, (event: DesyncEvent) => {
-                    console.error('[MultiplayerNetworkManager] Desync detected!', event);
-                    this.emit(NetworkEvent.DESYNC_DETECTED, event);
-                });
-                
-                console.log('[MultiplayerNetworkManager] State verification enabled');
+            console.log('[MultiplayerNetworkManager] State verification enabled');
+
+            // Derive command signing key from match seed for anti-cheat
+            try {
+                this.signingKey = await CommandSigner.deriveKey(this.currentMatch.game_seed);
+                this.commandValidator.setSigningKey(this.signingKey);
+                this.signingEnabled = true;
+                console.log('[MultiplayerNetworkManager] Command signing enabled');
+            } catch (signingError) {
+                console.warn('[MultiplayerNetworkManager] Failed to derive signing key:', signingError);
+                this.signingEnabled = false;
             }
 
             return true;
@@ -525,13 +586,36 @@ export class MultiplayerNetworkManager {
             return; // Don't add to command queue
         }
         
-        // Validate command
+        // Validate command structure and rate limit
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Invalid command received:', command);
             return;
         }
 
-        // Add to queue
+        // Fast-path sync signature check: reject if key is set but signature is missing
+        if (this.signingEnabled && !this.commandValidator.verifySignature(command)) {
+            console.error('[MultiplayerNetworkManager] Command rejected — missing signature:', command.commandType);
+            return;
+        }
+
+        // Async full signature verification — add to queue only after it passes
+        if (this.signingEnabled && this.signingKey && command.signature) {
+            CommandSigner.verify(command, command.signature, this.signingKey).then(valid => {
+                if (valid) {
+                    if (this.commandQueue) {
+                        this.commandQueue.addCommand(command);
+                    }
+                    this.emit(NetworkEvent.COMMAND_RECEIVED, { command });
+                } else {
+                    console.error('[MultiplayerNetworkManager] Command failed HMAC verification, dropping:', command.commandType);
+                }
+            }).catch(err => {
+                console.warn('[MultiplayerNetworkManager] Signature verification error:', err);
+            });
+            return; // Do not fall through to synchronous add
+        }
+
+        // Signing not enabled — add to queue immediately
         if (this.commandQueue) {
             this.commandQueue.addCommand(command);
         }
@@ -556,6 +640,25 @@ export class MultiplayerNetworkManager {
             return;
         }
 
+        // Sign command for anti-cheat if signing is enabled
+        if (this.signingEnabled && this.signingKey) {
+            CommandSigner.sign(command, this.signingKey).then(signature => {
+                command.signature = signature;
+                this.dispatchCommand(command);
+            }).catch(err => {
+                console.warn('[MultiplayerNetworkManager] Failed to sign command, sending unsigned:', err);
+                this.dispatchCommand(command);
+            });
+            return;
+        }
+
+        this.dispatchCommand(command);
+    }
+
+    /**
+     * Internal helper: add command to own queue and send to peers.
+     */
+    private dispatchCommand(command: GameCommand): void {
         // If transport is not ready, queue the command
         if (!this.transport?.isReady()) {
             console.warn('[MultiplayerNetworkManager] Transport not ready, queuing command');
@@ -651,6 +754,10 @@ export class MultiplayerNetworkManager {
         
         // Clear state verifier
         this.stateVerifier = null;
+        
+        // Clear signing state
+        this.signingKey = null;
+        this.signingEnabled = false;
 
         this.emit(NetworkEvent.MATCH_ENDED, { reason });
     }

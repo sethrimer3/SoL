@@ -35,10 +35,12 @@ export class Camera {
         let shakeOffsetX = 0;
         let shakeOffsetY = 0;
         if (this.screenShakeEnabled && this.screenShakeIntensity > 0) {
-            // Random shake direction
-            const angle = Math.random() * Math.PI * 2;
-            shakeOffsetX = Math.cos(angle) * this.screenShakeIntensity;
-            shakeOffsetY = Math.sin(angle) * this.screenShakeIntensity;
+            // Time-based deterministic shake using sinusoidal functions.
+            // Intentionally NOT using getGameRNG() — screen shake is purely cosmetic
+            // and must not affect simulation state or RNG sequence.
+            const t = performance.now() * 0.05;
+            shakeOffsetX = Math.sin(t) * this.screenShakeIntensity;
+            shakeOffsetY = Math.cos(t + 1.3) * this.screenShakeIntensity;
         }
         
         return new Vector2D(
