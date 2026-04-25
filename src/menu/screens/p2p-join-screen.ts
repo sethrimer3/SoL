@@ -151,7 +151,7 @@ export function renderP2PJoinScreen(
         statusMessage.style.color = '#FFD700';
         statusMessage.style.display = 'block';
 
-        const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const playerId = crypto.randomUUID();
         const manager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
         setMultiplayerNetworkManager(manager);
 
