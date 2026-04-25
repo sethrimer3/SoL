@@ -220,7 +220,7 @@ export function renderP2PHostScreen(
         setP2PMatchName(matchName);
         setP2PMaxPlayers(maxPlayers);
 
-        const playerId = `player_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+        const playerId = crypto.randomUUID();
         const manager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
         setMultiplayerNetworkManager(manager);
 

@@ -111,6 +111,7 @@ export type NetworkEventCallback = (data?: any) => void;
 export class MultiplayerNetworkManager {
     private supabase: SupabaseClient;
     private localPlayerId: string;
+    private databasePlayerId: string | null = null;
     private currentMatch: Match | null = null;
     private isHost: boolean = false;
     
@@ -159,11 +160,50 @@ export class MultiplayerNetworkManager {
     }
 
     /**
+     * Ensure we have an authenticated Supabase UUID for UUID-backed schemas.
+     */
+    private async ensureDatabaseIdentity(): Promise<string | null> {
+        if (this.databasePlayerId) {
+            return this.databasePlayerId;
+        }
+
+        const { data: userData, error: userError } = await this.supabase.auth.getUser();
+        if (userError) {
+            console.warn('[MultiplayerNetworkManager] Failed to fetch Supabase user, attempting anonymous auth:', userError);
+        }
+
+        if (userData.user?.id) {
+            this.databasePlayerId = userData.user.id;
+            this.localPlayerId = userData.user.id;
+            return this.databasePlayerId;
+        }
+
+        const { data: signInData, error: signInError } = await this.supabase.auth.signInAnonymously();
+        if (signInError || !signInData.user?.id) {
+            console.error('[MultiplayerNetworkManager] Failed to establish Supabase identity:', signInError);
+            this.emit(NetworkEvent.ERROR, {
+                error: signInError,
+                message: 'Failed to authenticate with Supabase. Enable anonymous auth or sign in before hosting.'
+            });
+            return null;
+        }
+
+        this.databasePlayerId = signInData.user.id;
+        this.localPlayerId = signInData.user.id;
+        return this.databasePlayerId;
+    }
+
+    /**
      * Create a new match (host)
      */
     async createMatch(options: CreateMatchOptions): Promise<Match | null> {
         try {
             console.log('[MultiplayerNetworkManager] Creating match...', options);
+
+            const databasePlayerId = await this.ensureDatabaseIdentity();
+            if (!databasePlayerId) {
+                return null;
+            }
             
             this.isHost = true;
             const gameSeed = options.gameSeed || generateMatchSeed();
@@ -173,7 +213,7 @@ export class MultiplayerNetworkManager {
                 .from('matches')
                 .insert([{
                     status: 'open',
-                    host_player_id: this.localPlayerId,
+                    host_player_id: databasePlayerId,
                     game_seed: gameSeed,
                     tick_rate: options.tickRate || 30,
                     lockstep_enabled: options.lockstepEnabled || false,
@@ -198,7 +238,7 @@ export class MultiplayerNetworkManager {
                 .from('match_players')
                 .insert([{
                     match_id: match.id,
-                    player_id: this.localPlayerId,
+                    player_id: databasePlayerId,
                     role: 'host',
                     connected: false,
                     username: options.username
@@ -255,6 +295,11 @@ export class MultiplayerNetworkManager {
     async joinMatch(matchId: string, username: string): Promise<boolean> {
         try {
             console.log('[MultiplayerNetworkManager] Joining match:', matchId);
+
+            const databasePlayerId = await this.ensureDatabaseIdentity();
+            if (!databasePlayerId) {
+                return false;
+            }
             
             // Get match info
             const { data: match, error: matchError } = await this.supabase
@@ -304,7 +349,7 @@ export class MultiplayerNetworkManager {
                 .from('match_players')
                 .insert([{
                     match_id: matchId,
-                    player_id: this.localPlayerId,
+                    player_id: databasePlayerId,
                     role: 'client',
                     connected: false,
                     username: username
@@ -322,7 +367,7 @@ export class MultiplayerNetworkManager {
             setGameRNG(this.gameRNG);
 
             console.log('[MultiplayerNetworkManager] Joined match:', matchId);
-            this.emit(NetworkEvent.PLAYER_JOINED, { matchId, playerId: this.localPlayerId });
+            this.emit(NetworkEvent.PLAYER_JOINED, { matchId, playerId: databasePlayerId });
 
             return true;
         } catch (error) {
