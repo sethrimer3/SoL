@@ -44,6 +44,8 @@ export class EnvironmentRenderer {
     // Influence animation state (moved from GameRenderer)
     private influenceRadiusBySource: WeakMap<object, number> = new WeakMap();
     private readonly SPACE_DUST_VIEWPORT_MARGIN_PX = 100;
+    // Reusable batch map to avoid per-frame Map allocation in drawSpaceDustBatch.
+    private readonly _dustBatchByColor = new Map<string, number[]>();
 
     public drawSpaceDustBatch(
         particles: SpaceDustParticle[],
@@ -62,7 +64,12 @@ export class EnvironmentRenderer {
         const ladSun = game.suns.find(s => s.type === 'lad');
         const viewportWidth = canvas.clientWidth > 0 ? canvas.clientWidth : canvas.width;
         const viewportHeight = canvas.clientHeight > 0 ? canvas.clientHeight : canvas.height;
-        const circleBatchByColor = new Map<string, number[]>();
+        const circleBatchByColor = this._dustBatchByColor;
+        // Clear the map entries (reuse the arrays to reduce GC pressure in LaD mode
+        // which only ever has two colors and avoids reallocating the Map itself).
+        for (const arr of circleBatchByColor.values()) {
+            arr.length = 0;
+        }
 
         for (const particle of particles) {
             const screenPos = context.worldToScreen(particle.position);
