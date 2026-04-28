@@ -1541,9 +1541,13 @@ export class GameRenderer {
         // Draw environment stack between shadow-star overlay and influence circles.
         // Back -> Front: suns -> reworked parallax stars -> asteroids -> space dust.
 
-        // Draw suns
+        // Draw suns (skip LaD-type suns here; they are drawn after the sun ray background
+        // so the circle outline is visible on top of the white/black fill).
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
+                if (sun.type === 'lad') {
+                    continue; // drawn after sun rays
+                }
                 if (this.isWithinViewBounds(sun.position, sun.radius * 12)) {
                     const sunScreenPos = this.worldToScreen(sun.position);
                     const sunScreenRadius = sun.radius * this.zoom;
@@ -1723,9 +1727,38 @@ export class GameRenderer {
 
         const shouldSkipFancyFieldEffects = this.shouldSkipFancyFieldEffects();
 
-        // Draw lens flare effects for visible suns
+        // Draw LaD sun overlay on top of the white/black background.  The sun body was
+        // intentionally deferred from the normal sun-body loop so the circle is not
+        // obscured by the opaque ray fill that covers the entire screen.
+        if (this.isSunsLayerEnabled && ladSun) {
+            if (this.isWithinViewBounds(ladSun.position, ladSun.radius * 12)) {
+                const ladSunScreenPos = this.worldToScreen(ladSun.position);
+                const ladSunScreenRadius = ladSun.radius * this.zoom;
+                const sunSprite = this.getSunSpriteDrawSource(game.gameTime);
+                this.sunRenderer.drawSun(
+                    this.ctx,
+                    ladSun,
+                    ladSunScreenPos,
+                    ladSunScreenRadius,
+                    game.gameTime,
+                    this.graphicsQuality,
+                    this.isFancyGraphicsEnabled,
+                    this.colorScheme,
+                    sunSprite,
+                    this._boundDrawFancyBloom,
+                    withAlpha
+                );
+            }
+        }
+
+        // Draw lens flare effects for visible suns.
+        // Lens flares are skipped for the LaD split-sun; it is a conceptual boundary
+        // marker, not a physical light source, so a flare would look out of place.
         if (this.isSunsLayerEnabled) {
             for (const sun of game.suns) {
+                if (sun.type === 'lad') {
+                    continue;
+                }
                 if (this.isWithinViewBounds(sun.position, sun.radius * 5)) {
                     const flareScreenPos = this.worldToScreen(sun.position);
                     const flareScreenRadius = sun.radius * this.zoom;
@@ -1743,7 +1776,10 @@ export class GameRenderer {
         }
 
         // Draw reworked parallax stars right behind asteroid silhouettes.
-        if (this.isStarsLayerEnabled) {
+        // In LaD mode the background is a stark white/black split; rendering a starfield
+        // over it would look wrong on the white side and create visual noise on the dark
+        // side.  Skip the starfield entirely to preserve the clean LaD aesthetic.
+        if (this.isStarsLayerEnabled && !ladSun) {
             if (this.isStarNestEnabled) {
                 const nowMs = performance.now();
                 this.starNestRenderer.update(nowMs);
@@ -1916,7 +1952,7 @@ export class GameRenderer {
             this.environmentRenderer.applyUltraWarmCoolGrade(game, envCtx);
         }
 
-        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects) {
+        if (this.isFancyGraphicsEnabled && this.isStarsLayerEnabled && !shouldSkipFancyFieldEffects && !ladSun) {
             this.environmentRenderer.drawExperimentalFieldAtmospherics(game, screenWidth, screenHeight, envCtx);
         }
 
