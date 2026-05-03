@@ -21,6 +21,7 @@ export interface WarpGateManagerContext {
     renderer: GameRenderer;
     getGame: () => GameState | null;
     getLocalPlayer: () => Player | null;
+    getIsMultiplayer: () => boolean;
     getSelectedMirrors: () => Set<SolarMirror>;
     setSelectedMirrors: (mirrors: Set<SolarMirror>) => void;
     getRadialButtonOffsets: (buttonCount: number) => Array<{ x: number; y: number }>;
@@ -43,6 +44,19 @@ export class WarpGateManager {
 
     constructor(context: WarpGateManagerContext) {
         this.ctx = context;
+    }
+
+    private canAffordBuilding(player: Player, costEnergy: number): boolean {
+        if (this.ctx.getIsMultiplayer()) {
+            return player.energy >= costEnergy;
+        }
+        return player.spendEnergy(costEnergy);
+    }
+
+    private addBuildingIfSinglePlayer(player: Player, building: Minigun | GatlingTower | SpaceDustSwirler | SubsidiaryFactory | StrikerTower | LockOnLaserTower | ShieldTower): void {
+        if (!this.ctx.getIsMultiplayer()) {
+            player.buildings.push(building);
+        }
     }
 
     public clearWarpGateSelection(): void {
@@ -171,12 +185,12 @@ export class WarpGateManager {
                 console.log('Only one Foundry can exist at a time');
                 return;
             }
-            if (!player.spendEnergy(Constants.SUBSIDIARY_FACTORY_COST)) {
+            if (!this.canAffordBuilding(player, Constants.SUBSIDIARY_FACTORY_COST)) {
                 console.log('Not enough energy to build Foundry');
                 return;
             }
             const subFactory = new SubsidiaryFactory(gatePosition, player);
-            player.buildings.push(subFactory);
+            this.addBuildingIfSinglePlayer(player, subFactory);
             console.log(`Foundry building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
             this.ctx.sendNetworkCommand('building_purchase', {
                 buildingType: 'SubsidiaryFactory',
@@ -185,12 +199,12 @@ export class WarpGateManager {
             });
         } else if (buttonIndex === 1) {
             if (player.faction === Faction.RADIANT) {
-                if (!player.spendEnergy(Constants.MINIGUN_COST)) {
+                if (!this.canAffordBuilding(player, Constants.MINIGUN_COST)) {
                     console.log('Not enough energy to build Cannon');
                     return;
                 }
                 const minigun = new Minigun(gatePosition, player);
-                player.buildings.push(minigun);
+                this.addBuildingIfSinglePlayer(player, minigun);
                 console.log(`Cannon building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'Minigun',
@@ -198,12 +212,12 @@ export class WarpGateManager {
                     positionY: gate.position.y
                 });
             } else if (player.faction === Faction.VELARIS) {
-                if (!player.spendEnergy(Constants.STRIKER_TOWER_COST)) {
+                if (!this.canAffordBuilding(player, Constants.STRIKER_TOWER_COST)) {
                     console.log('Not enough energy to build Striker Tower');
                     return;
                 }
                 const striker = new StrikerTower(gatePosition, player);
-                player.buildings.push(striker);
+                this.addBuildingIfSinglePlayer(player, striker);
                 console.log(`Striker Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'StrikerTower',
@@ -213,12 +227,12 @@ export class WarpGateManager {
             }
         } else if (buttonIndex === 2) {
             if (player.faction === Faction.RADIANT) {
-                if (!player.spendEnergy(Constants.GATLING_COST)) {
+                if (!this.canAffordBuilding(player, Constants.GATLING_COST)) {
                     console.log('Not enough energy to build Gatling Tower');
                     return;
                 }
                 const gatling = new GatlingTower(gatePosition, player);
-                player.buildings.push(gatling);
+                this.addBuildingIfSinglePlayer(player, gatling);
                 console.log(`Gatling Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'Gatling',
@@ -226,12 +240,12 @@ export class WarpGateManager {
                     positionY: gate.position.y
                 });
             } else if (player.faction === Faction.VELARIS) {
-                if (!player.spendEnergy(Constants.LOCKON_TOWER_COST)) {
+                if (!this.canAffordBuilding(player, Constants.LOCKON_TOWER_COST)) {
                     console.log('Not enough energy to build Lock-on Laser Tower');
                     return;
                 }
                 const lockon = new LockOnLaserTower(gatePosition, player);
-                player.buildings.push(lockon);
+                this.addBuildingIfSinglePlayer(player, lockon);
                 console.log(`Lock-on Laser Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'LockOnLaserTower',
@@ -241,12 +255,12 @@ export class WarpGateManager {
             }
         } else if (buttonIndex === 3) {
             if (player.faction === Faction.RADIANT) {
-                if (!player.spendEnergy(Constants.SHIELD_TOWER_COST)) {
+                if (!this.canAffordBuilding(player, Constants.SHIELD_TOWER_COST)) {
                     console.log('Not enough energy to build Shield Tower');
                     return;
                 }
                 const shield = new ShieldTower(gatePosition, player);
-                player.buildings.push(shield);
+                this.addBuildingIfSinglePlayer(player, shield);
                 console.log(`Shield Tower building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'ShieldTower',
@@ -254,12 +268,12 @@ export class WarpGateManager {
                     positionY: gate.position.y
                 });
             } else if (player.faction === Faction.VELARIS) {
-                if (!player.spendEnergy(Constants.SWIRLER_COST)) {
+                if (!this.canAffordBuilding(player, Constants.SWIRLER_COST)) {
                     console.log('Not enough energy to build Cyclone');
                     return;
                 }
                 const swirler = new SpaceDustSwirler(gatePosition, player);
-                player.buildings.push(swirler);
+                this.addBuildingIfSinglePlayer(player, swirler);
                 console.log(`Cyclone building queued at warp gate (${gate.position.x.toFixed(0)}, ${gate.position.y.toFixed(0)})`);
                 this.ctx.sendNetworkCommand('building_purchase', {
                     buildingType: 'SpaceDustSwirler',
@@ -271,8 +285,10 @@ export class WarpGateManager {
             return;
         }
 
-        this.ctx.scatterParticles(gate.position);
-        this.removeWarpGate(gate);
+        if (!this.ctx.getIsMultiplayer()) {
+            this.ctx.scatterParticles(gate.position);
+            this.removeWarpGate(gate);
+        }
     }
 
     public removeWarpGate(gate: WarpGate): void {

@@ -16,6 +16,7 @@ export interface SelectionManagerContext {
     renderer: GameRenderer;
     getGame: () => GameState | null;
     getLocalPlayer: () => Player | null;
+    getIsMultiplayer: () => boolean;
     getWarpGateManager: () => WarpGateManager;
     sendNetworkCommand: (command: string, data: Record<string, unknown>) => void;
     isDoubleTap: (screenX: number, screenY: number) => boolean;
@@ -69,7 +70,9 @@ export class SelectionManager {
         }
         const mergeStarlings = starlings.slice(0, Constants.STARLING_MERGE_COUNT);
         const unitIds = mergeStarlings.map((unit) => game.getUnitNetworkId(unit));
-        game.applyStarlingMerge(player, unitIds, targetPosition);
+        if (!this.ctx.getIsMultiplayer()) {
+            game.applyStarlingMerge(player, unitIds, targetPosition);
+        }
         this.ctx.sendNetworkCommand('starling_merge', {
             unitIds,
             targetX: targetPosition.x,

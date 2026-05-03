@@ -290,6 +290,34 @@ export class MultiplayerNetworkManager {
     }
 
     /**
+     * Resolve a visible short match code to its full match id.
+     */
+    async findMatchByShortId(shortMatchId: string): Promise<Match | null> {
+        const normalizedShortMatchId = shortMatchId.trim().toUpperCase();
+        if (normalizedShortMatchId.length < 6) {
+            return null;
+        }
+
+        const matches = await this.listMatches();
+        const matchingMatches = matches.filter((match) =>
+            match.id.toUpperCase().startsWith(normalizedShortMatchId)
+        );
+
+        if (matchingMatches.length === 0) {
+            return null;
+        }
+
+        if (matchingMatches.length > 1) {
+            const userMessage = 'Match code is ambiguous. Enter more characters from the host code.';
+            console.error('[MultiplayerNetworkManager] Ambiguous short match code:', normalizedShortMatchId);
+            this.emit(NetworkEvent.ERROR, { error: 'Ambiguous match code', message: userMessage });
+            return null;
+        }
+
+        return matchingMatches[0];
+    }
+
+    /**
      * Join an existing match
      */
     async joinMatch(matchId: string, username: string): Promise<boolean> {

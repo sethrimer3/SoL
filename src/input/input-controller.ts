@@ -24,6 +24,7 @@ export interface InputControllerContext {
     renderer: GameRenderer;
     getGame: () => GameState | null;
     getLocalPlayer: () => Player | null;
+    getIsMultiplayer: () => boolean;
     getSelectionManager: () => SelectionManager;
     getWarpGateManager: () => WarpGateManager;
     sendNetworkCommand: (command: string, data: Record<string, unknown>) => void;
@@ -714,8 +715,10 @@ export class InputController {
                                 targetableStructure.target.position,
                                 targetRadiusPx
                             );
-                        unit.setManualTarget(targetableStructure.target, rallyPoint);
-                        unit.moveOrder = this.moveOrderCounter;
+                        if (!this.ctx.getIsMultiplayer()) {
+                            unit.setManualTarget(targetableStructure.target, rallyPoint);
+                            unit.moveOrder = this.moveOrderCounter;
+                        }
                     }
 
                     const unitIds = this.ctx.getGame()
@@ -1085,7 +1088,11 @@ export class InputController {
                                     `Hero button clicked: ${clickedHeroName} | unitType=${heroUnitType} | energy=${player.energy.toFixed(1)}`
                                 );
                                 const heroCost = this.ctx.getHeroUnitCost(player);
-                                const wasQueued = player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                const wasQueued = this.ctx.getIsMultiplayer()
+                                    ? !this.ctx.isHeroUnitAlive(player, heroUnitType)
+                                        && !this.ctx.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType)
+                                        && player.energy >= heroCost
+                                    : player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
                                 if (wasQueued) {
                                     console.log(`Queued hero ${clickedHeroName} for forging`);
                                     didTriggerForgeAction = true;
@@ -1156,9 +1163,11 @@ export class InputController {
                 
                 // If forge is selected and clicked elsewhere, move it
                 if (player.stellarForge && player.stellarForge.isSelected) {
-                    player.stellarForge.setTarget(worldPos);
                     this.moveOrderCounter++;
-                    player.stellarForge.moveOrder = this.moveOrderCounter;
+                    if (!this.ctx.getIsMultiplayer()) {
+                        player.stellarForge.setTarget(worldPos);
+                        player.stellarForge.moveOrder = this.moveOrderCounter;
+                    }
                     this.ctx.sendNetworkCommand('forge_move', {
                         targetX: worldPos.x,
                         targetY: worldPos.y,
@@ -1189,9 +1198,11 @@ export class InputController {
                 // If a mirror is selected and clicked elsewhere, move it
                 const { mirror: selectedMirror, mirrorIndex } = this.ctx.getClosestSelectedMirror(player, worldPos);
                 if (selectedMirror && this.ctx.getWarpGateManager().mirrorCommandMode !== 'warpgate') {
-                    selectedMirror.setTarget(worldPos, this.ctx.getGame());
                     this.moveOrderCounter++;
-                    selectedMirror.moveOrder = this.moveOrderCounter;
+                    if (!this.ctx.getIsMultiplayer()) {
+                        selectedMirror.setTarget(worldPos, this.ctx.getGame());
+                        selectedMirror.moveOrder = this.moveOrderCounter;
+                    }
                     this.ctx.sendNetworkCommand('mirror_move', {
                         mirrorIndices: mirrorIndex >= 0 ? [mirrorIndex] : [],
                         targetX: worldPos.x,
@@ -1223,8 +1234,10 @@ export class InputController {
                 // Finalize the path drawing
                 if (this.ctx.getSelectionManager().selectedBase) {
                     // Path for base (minion spawning)
-                    this.ctx.getSelectionManager().selectedBase.setMinionPath(this.pathPoints);
                     console.log(`Base path set with ${this.pathPoints.length} waypoints`);
+                    if (!this.ctx.getIsMultiplayer()) {
+                        this.ctx.getSelectionManager().selectedBase.setMinionPath(this.pathPoints);
+                    }
                     this.ctx.sendNetworkCommand('set_rally_path', {
                         waypoints: this.pathPoints.map((point) => ({ x: point.x, y: point.y }))
                     });
@@ -1239,8 +1252,10 @@ export class InputController {
                         const mirrorIndices: number[] = [];
 
                         for (const mirror of this.ctx.getSelectionManager().selectedMirrors) {
-                            mirror.setTarget(lastWaypoint, this.ctx.getGame());
-                            mirror.moveOrder = this.moveOrderCounter;
+                            if (!this.ctx.getIsMultiplayer()) {
+                                mirror.setTarget(lastWaypoint, this.ctx.getGame());
+                                mirror.moveOrder = this.moveOrderCounter;
+                            }
                             mirror.isSelected = false;
                             const mirrorIndex = player.solarMirrors.indexOf(mirror);
                             if (mirrorIndex >= 0) {
@@ -1278,9 +1293,11 @@ export class InputController {
                     // Set path for all selected units
                     for (const unit of this.ctx.getSelectionManager().selectedUnits) {
                         // All units now support path following
-                        unit.clearManualTarget();
-                        unit.setPath(this.pathPoints);
-                        unit.moveOrder = this.moveOrderCounter;
+                        if (!this.ctx.getIsMultiplayer()) {
+                            unit.clearManualTarget();
+                            unit.setPath(this.pathPoints);
+                            unit.moveOrder = this.moveOrderCounter;
+                        }
                     }
                     const unitIds = this.ctx.getGame()
                         ? Array.from(this.ctx.getSelectionManager().selectedUnits).map((unit) => this.ctx.getGame()!.getUnitNetworkId(unit))
@@ -1362,7 +1379,10 @@ export class InputController {
                         // Activate ability for all selected units
                         let anyAbilityUsed = false;
                         for (const unit of this.ctx.getSelectionManager().selectedUnits) {
-                            if (unit.useAbility(direction)) {
+                            const canUseAbility = this.ctx.getIsMultiplayer()
+                                ? (unit.isHero ? unit.photonCount >= unit.photonsPerCharge : unit.abilityCooldown <= 0)
+                                : unit.useAbility(direction);
+                            if (canUseAbility) {
                                 anyAbilityUsed = true;
                                 if (this.ctx.getGame()) {
                                     this.ctx.sendNetworkCommand('unit_ability', {
@@ -1402,7 +1422,11 @@ export class InputController {
                                     const heroUnitType = this.ctx.getHeroUnitType(selectedLabel);
                                     if (heroUnitType) {
                                         const heroCost = this.ctx.getHeroUnitCost(player);
-                                        const wasQueued = player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
+                                        const wasQueued = this.ctx.getIsMultiplayer()
+                                            ? !this.ctx.isHeroUnitAlive(player, heroUnitType)
+                                                && !this.ctx.isHeroUnitQueuedOrProducing(player.stellarForge, heroUnitType)
+                                                && player.energy >= heroCost
+                                            : player.stellarForge.enqueueHeroUnit(heroUnitType, heroCost);
                                         if (wasQueued) {
                                             console.log(`Radial selection: Queued hero ${selectedLabel} for forging`);
                                             this.ctx.sendNetworkCommand('hero_purchase', {
@@ -1529,14 +1553,16 @@ export class InputController {
                         
                         // Set rally point for all selected units
                         for (const unit of this.ctx.getSelectionManager().selectedUnits) {
-                            const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
-                            unit.clearManualTarget();
-                            if (unit instanceof Starling) {
-                                unit.setManualRallyPoint(rallyPoint);
-                            } else {
-                                unit.rallyPoint = rallyPoint;
+                            if (!this.ctx.getIsMultiplayer()) {
+                                const rallyPoint = new Vector2D(worldPos.x, worldPos.y);
+                                unit.clearManualTarget();
+                                if (unit instanceof Starling) {
+                                    unit.setManualRallyPoint(rallyPoint);
+                                } else {
+                                    unit.rallyPoint = rallyPoint;
+                                }
+                                unit.moveOrder = this.moveOrderCounter;
                             }
-                            unit.moveOrder = this.moveOrderCounter;
                         }
                         const unitIds = this.ctx.getGame()
                             ? Array.from(this.ctx.getSelectionManager().selectedUnits).map((unit) => this.ctx.getGame()!.getUnitNetworkId(unit))
@@ -1553,8 +1579,10 @@ export class InputController {
                         if (player) {
                             const { mirror: closestMirror, mirrorIndex } = this.ctx.getClosestSelectedMirror(player, worldPos);
                             if (closestMirror && mirrorIndex >= 0) {
-                                closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y), this.ctx.getGame());
-                                closestMirror.moveOrder = this.moveOrderCounter;
+                                if (!this.ctx.getIsMultiplayer()) {
+                                    closestMirror.setTarget(new Vector2D(worldPos.x, worldPos.y), this.ctx.getGame());
+                                    closestMirror.moveOrder = this.moveOrderCounter;
+                                }
                                 // Only deselect the mirror that received the move order; others stay selected
                                 closestMirror.isSelected = false;
                                 this.ctx.getSelectionManager().selectedMirrors.delete(closestMirror);
@@ -1569,8 +1597,10 @@ export class InputController {
                         
                         // Set target for selected base
                         if (this.ctx.getSelectionManager().selectedBase) {
-                            this.ctx.getSelectionManager().selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
-                            this.ctx.getSelectionManager().selectedBase.moveOrder = this.moveOrderCounter;
+                            if (!this.ctx.getIsMultiplayer()) {
+                                this.ctx.getSelectionManager().selectedBase.setTarget(new Vector2D(worldPos.x, worldPos.y));
+                                this.ctx.getSelectionManager().selectedBase.moveOrder = this.moveOrderCounter;
+                            }
                             this.ctx.getSelectionManager().selectedBase.isSelected = false;
                             this.ctx.sendNetworkCommand('forge_move', {
                                 targetX: worldPos.x,

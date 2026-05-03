@@ -443,7 +443,9 @@ class GameController {
             return false;
         }
 
-        player.stellarForge.enqueueMirror(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST, spawnPosition);
+        if (!this.isMultiplayer) {
+            player.stellarForge.enqueueMirror(Constants.STELLAR_FORGE_SOLAR_MIRROR_COST, spawnPosition);
+        }
         this.sendNetworkCommand('mirror_purchase', {
             positionX: spawnPosition.x,
             positionY: spawnPosition.y,
@@ -681,6 +683,7 @@ class GameController {
             renderer: this.renderer,
             getGame: () => this.game,
             getLocalPlayer: () => this.getLocalPlayer(),
+            getIsMultiplayer: () => this.isMultiplayer,
             getSelectedMirrors: () => this.selectionManager.selectedMirrors,
             setSelectedMirrors: (mirrors) => { this.selectionManager.selectedMirrors = mirrors; },
             getRadialButtonOffsets: (count) => this.inputController.getRadialButtonOffsets(count),
@@ -696,6 +699,7 @@ class GameController {
             renderer: this.renderer,
             getGame: () => this.game,
             getLocalPlayer: () => this.getLocalPlayer(),
+            getIsMultiplayer: () => this.isMultiplayer,
             getWarpGateManager: () => this.warpGateManager,
             sendNetworkCommand: (cmd, data) => this.sendNetworkCommand(cmd, data),
             isDoubleTap: (screenX, screenY) => this.inputController.isDoubleTap(screenX, screenY),
@@ -707,6 +711,7 @@ class GameController {
             renderer: this.renderer,
             getGame: () => this.game,
             getLocalPlayer: () => this.getLocalPlayer(),
+            getIsMultiplayer: () => this.isMultiplayer,
             getSelectionManager: () => this.selectionManager,
             getWarpGateManager: () => this.warpGateManager,
             sendNetworkCommand: (cmd, data) => this.sendNetworkCommand(cmd, data),

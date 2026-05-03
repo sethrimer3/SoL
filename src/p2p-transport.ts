@@ -39,6 +39,7 @@ class PeerConnection {
     private peerId: string;
     private onMessageCallback: ((data: any) => void) | null = null;
     private onStateChangeCallback: ((state: RTCPeerConnectionState) => void) | null = null;
+    private onOpenCallback: (() => void) | null = null;
 
     // Optional TURN servers merged into ICE configuration
     private turnServers: TurnServerConfig[] = [];
@@ -319,6 +320,9 @@ class PeerConnection {
 
         this.dataChannel.onopen = () => {
             console.log(`[P2P] Data channel opened with peer: ${this.peerId}`);
+            if (this.onOpenCallback) {
+                this.onOpenCallback();
+            }
         };
 
         this.dataChannel.onclose = () => {
@@ -431,6 +435,13 @@ class PeerConnection {
      */
     onStateChange(callback: (state: RTCPeerConnectionState) => void): void {
         this.onStateChangeCallback = callback;
+    }
+
+    /**
+     * Register data channel open callback.
+     */
+    onOpen(callback: () => void): void {
+        this.onOpenCallback = callback;
     }
 
     /**
@@ -764,6 +775,11 @@ export class P2PTransport implements ITransport {
                     );
                 }, delayMs);
             }
+        });
+
+        peer.onOpen(() => {
+            console.log('[P2PTransport] Peer data channel open:', peer.getPeerId());
+            this.checkIfReady();
         });
 
         // Called when reconnect succeeds (set inside PeerConnection.setupConnectionHandlers)

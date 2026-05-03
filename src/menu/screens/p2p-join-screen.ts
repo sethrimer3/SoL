@@ -179,8 +179,7 @@ export function renderP2PJoinScreen(
         });
 
         // Find match by short ID prefix
-        const matches = await manager.listMatches();
-        const match = matches.find(m => m.id.toUpperCase().startsWith(matchIdShort));
+        const match = await manager.findMatchByShortId(matchIdShort);
 
         if (!match) {
             statusMessage.textContent = 'Match not found. Please check the match ID.';
