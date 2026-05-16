@@ -38,6 +38,12 @@ import { showMatchLoadingScreen as showMatchLoadingScreenImpl } from './menu/scr
 import { MenuAudioController } from './menu/menu-audio';
 import { CarouselMenuView } from './menu/carousel-menu-view';
 import { FactionCarouselView } from './menu/faction-carousel-view';
+import {
+    createBuildNumberLabel,
+    createDeveloperMenuControlsPanel,
+    createQuickLaunchButton,
+    DeveloperMenuElementVisibility
+} from './menu/developer-menu-controls';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, MatchPlayer } from './multiplayer-network';
 import { OnlineNetworkManager } from './online-network';
@@ -128,7 +134,7 @@ export class MainMenu {
     private menuAudioController: MenuAudioController;
     private get isMatchmakingSearching(): boolean { return this.matchmakingController.isMatchmakingSearching; }
     private set isMatchmakingSearching(value: boolean) { this.matchmakingController.isMatchmakingSearching = value; }
-    private developerMenuElementVisibility = {
+    private developerMenuElementVisibility: DeveloperMenuElementVisibility = {
         isBackgroundLayerVisible: true,
         isAtmosphereLayerVisible: true,
         isParticleLayerVisible: true,
@@ -299,13 +305,48 @@ export class MainMenu {
         this.menuParticleLayer = new ParticleMenuLayer(menu);
         this.menuParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.menuParticleLayer.setMenuContentElement(content);
-        this.buildNumberLabel = this.createBuildNumberLabel();
+        this.buildNumberLabel = createBuildNumberLabel(BUILD_NUMBER);
         menu.appendChild(this.buildNumberLabel);
-        this.testLevelButton = this.createTestLevelButton();
+        this.testLevelButton = createQuickLaunchButton({
+            text: 'TEST LEVEL',
+            rightPx: 20,
+            onClick: () => {
+                const testMap = this.availableMaps.find(map => map.id === 'test-level');
+                if (!testMap) {
+                    return;
+                }
+                this.settings.selectedMap = testMap;
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            }
+        });
         menu.appendChild(this.testLevelButton);
-        this.ladButton = this.createLadButton();
+        this.ladButton = createQuickLaunchButton({
+            text: 'LaD',
+            rightPx: 140,
+            onClick: () => {
+                const ladMap = this.availableMaps.find(map => map.id === 'lad');
+                if (!ladMap) {
+                    return;
+                }
+                this.settings.selectedMap = ladMap;
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            }
+        });
         menu.appendChild(this.ladButton);
-        this.developerMenuControlsPanel = this.createDeveloperMenuControlsPanel();
+        this.developerMenuControlsPanel = createDeveloperMenuControlsPanel({
+            visibility: this.developerMenuElementVisibility,
+            onVisibilityChange: () => {
+                this.applyDeveloperMenuElementVisibility();
+            }
+        });
         menu.appendChild(this.developerMenuControlsPanel);
         this.updateDeveloperMenuControlsVisibility();
 
@@ -351,118 +392,6 @@ export class MainMenu {
         this.factionCarousel?.resumeAnimation();
     }
 
-    private createBuildNumberLabel(): HTMLDivElement {
-        const label = document.createElement('div');
-        label.textContent = `BUILD ${BUILD_NUMBER}`;
-        label.style.position = 'absolute';
-        label.style.top = '16px';
-        label.style.left = '16px';
-        label.style.padding = '6px 10px';
-        label.style.borderRadius = '6px';
-        label.style.border = '1px solid rgba(255, 255, 255, 0.4)';
-        label.style.backgroundColor = 'rgba(10, 10, 10, 0.6)';
-        label.style.color = '#FFFFFF';
-        label.style.fontFamily = '"Doto", Arial, sans-serif';
-        label.style.fontWeight = '500';
-        label.style.fontSize = '12px';
-        label.style.letterSpacing = '0.18em';
-        label.style.textTransform = 'uppercase';
-        label.style.zIndex = '2';
-        label.style.pointerEvents = 'none';
-        return label;
-    }
-
-    private createTestLevelButton(): HTMLButtonElement {
-        const button = document.createElement('button');
-        button.textContent = 'TEST LEVEL';
-        button.type = 'button';
-        button.style.position = 'absolute';
-        button.style.top = '20px';
-        button.style.right = '20px';
-        button.style.padding = '10px 16px';
-        button.style.borderRadius = '6px';
-        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
-        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
-        button.style.color = '#FFFFFF';
-        button.style.fontFamily = 'Arial, sans-serif';
-        button.style.fontWeight = '500';
-        button.style.fontSize = '14px';
-        button.style.letterSpacing = '0.08em';
-        button.style.cursor = 'pointer';
-        button.style.zIndex = '2';
-        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
-
-        button.addEventListener('mouseenter', () => {
-            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
-            button.style.borderColor = '#FFD700';
-        });
-
-        button.addEventListener('mouseleave', () => {
-            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
-            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
-        });
-
-        button.addEventListener('click', () => {
-            const testMap = this.availableMaps.find(map => map.id === 'test-level');
-            if (!testMap) {
-                return;
-            }
-            this.settings.selectedMap = testMap;
-            this.hide();
-            if (this.onStartCallback) {
-                this.ensureDefaultHeroSelection();
-                this.onStartCallback(this.settings);
-            }
-        });
-
-        return button;
-    }
-
-    private createLadButton(): HTMLButtonElement {
-        const button = document.createElement('button');
-        button.textContent = 'LaD';
-        button.type = 'button';
-        button.style.position = 'absolute';
-        button.style.top = '20px';
-        button.style.right = '140px';  // Position to the left of TEST LEVEL button
-        button.style.padding = '10px 16px';
-        button.style.borderRadius = '6px';
-        button.style.border = '1px solid rgba(255, 255, 255, 0.6)';
-        button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
-        button.style.color = '#FFFFFF';
-        button.style.fontFamily = 'Arial, sans-serif';
-        button.style.fontWeight = '500';
-        button.style.fontSize = '14px';
-        button.style.letterSpacing = '0.08em';
-        button.style.cursor = 'pointer';
-        button.style.zIndex = '2';
-        button.style.transition = 'background-color 0.2s ease, border-color 0.2s ease';
-
-        button.addEventListener('mouseenter', () => {
-            button.style.backgroundColor = 'rgba(60, 60, 60, 0.85)';
-            button.style.borderColor = '#FFD700';
-        });
-
-        button.addEventListener('mouseleave', () => {
-            button.style.backgroundColor = 'rgba(20, 20, 20, 0.7)';
-            button.style.borderColor = 'rgba(255, 255, 255, 0.6)';
-        });
-
-        button.addEventListener('click', () => {
-            const ladMap = this.availableMaps.find(map => map.id === 'lad');
-            if (!ladMap) {
-                return;
-            }
-            this.settings.selectedMap = ladMap;
-            this.hide();
-            if (this.onStartCallback) {
-                this.ensureDefaultHeroSelection();
-                this.onStartCallback(this.settings);
-            }
-        });
-
-        return button;
-    }
 
     private setTestLevelButtonVisible(isVisible: boolean): void {
         if (!this.testLevelButton) {
@@ -541,91 +470,6 @@ export class MainMenu {
         this.developerMenuElementVisibility.isLadButtonVisible = true;
         this.developerMenuElementVisibility.isMainMenuContentVisible = true;
         this.applyDeveloperMenuElementVisibility();
-    }
-
-    private createDeveloperToggleControl(
-        labelText: string,
-        isChecked: boolean,
-        onChange: (isEnabled: boolean) => void
-    ): HTMLDivElement {
-        const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.alignItems = 'center';
-        row.style.justifyContent = 'space-between';
-        row.style.gap = '8px';
-
-        const label = document.createElement('span');
-        label.textContent = labelText;
-        label.style.fontSize = '12px';
-        label.style.color = '#FFFFFF';
-        label.style.fontFamily = 'Arial, sans-serif';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = isChecked;
-        checkbox.style.cursor = 'pointer';
-        checkbox.addEventListener('change', () => {
-            onChange(checkbox.checked);
-        });
-
-        row.appendChild(label);
-        row.appendChild(checkbox);
-        return row;
-    }
-
-    private createDeveloperMenuControlsPanel(): HTMLDivElement {
-        const panel = document.createElement('div');
-        panel.style.position = 'absolute';
-        panel.style.top = '64px';
-        panel.style.right = '20px';
-        panel.style.width = '220px';
-        panel.style.padding = '10px';
-        panel.style.borderRadius = '8px';
-        panel.style.border = '1px solid rgba(255, 255, 255, 0.5)';
-        panel.style.backgroundColor = 'rgba(12, 12, 12, 0.82)';
-        panel.style.zIndex = '3';
-        panel.style.display = 'none';
-
-        const title = document.createElement('div');
-        title.textContent = 'DEV MENU ELEMENTS';
-        title.style.color = '#FFD700';
-        title.style.fontFamily = 'Arial, sans-serif';
-        title.style.fontSize = '11px';
-        title.style.fontWeight = '600';
-        title.style.letterSpacing = '0.1em';
-        title.style.marginBottom = '8px';
-        panel.appendChild(title);
-
-        panel.appendChild(this.createDeveloperToggleControl('Background Layer', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isBackgroundLayerVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('Atmosphere Layer', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isAtmosphereLayerVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('Particle Layer', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isParticleLayerVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('Build Label', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isBuildLabelVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('Test Button', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isTestLevelButtonVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('LaD Button', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isLadButtonVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-        panel.appendChild(this.createDeveloperToggleControl('Main Content', true, (isEnabled) => {
-            this.developerMenuElementVisibility.isMainMenuContentVisible = isEnabled;
-            this.applyDeveloperMenuElementVisibility();
-        }));
-
-        return panel;
     }
 
     private updateDeveloperMenuControlsVisibility(): void {
