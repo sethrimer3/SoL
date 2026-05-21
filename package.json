@@ -2,10 +2,12 @@
   "name": "sol",
   "version": "1.0.0",
   "description": "A 2D real-time strategy game set in space with unique light-based mechanics.",
-  "main": "index.js",
+  "main": "electron/main.cjs",
   "scripts": {
     "build": "webpack --mode production",
     "dev": "webpack --mode development --watch",
+    "electron": "electron .",
+    "desktop": "npm run build && electron .",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -17,6 +19,7 @@
     "@types/node": "^25.0.10",
     "@typescript-eslint/eslint-plugin": "^8.58.2",
     "@typescript-eslint/parser": "^8.58.2",
+    "electron": "^42.2.0",
     "eslint": "^10.2.0",
     "html-webpack-plugin": "^5.6.6",
     "ts-loader": "^9.5.4",
