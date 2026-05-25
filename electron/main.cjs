@@ -7,6 +7,7 @@ const APP_SCHEME = 'sol';
 const APP_HOST = 'game';
 const distPath = path.resolve(__dirname, '..', 'dist');
 const distIndexPath = path.join(distPath, 'index.html');
+const appIconPath = path.resolve(__dirname, '..', 'ASSETS', 'icon', 'SoL_Icon.ico');
 const devServerUrl = process.env.ELECTRON_DEV_SERVER_URL || '';
 
 const productionCsp = [
@@ -113,6 +114,7 @@ function createWindow() {
     minWidth: 1280,
     minHeight: 720,
     backgroundColor: '#000011',
+    icon: appIconPath,
     show: false,
     webPreferences: {
       contextIsolation: true,
