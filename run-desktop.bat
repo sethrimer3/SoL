@@ -19,11 +19,12 @@ npm run build
 if errorlevel 1 goto error
 
 echo Launching Electron...
-npm run electron
+powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'npm.cmd' -ArgumentList @('run','electron') -WorkingDirectory '%CD%' -WindowStyle Hidden"
 if errorlevel 1 goto error
 
+timeout /t 1 /nobreak >nul
+
 echo Done.
-pause
 exit /b 0
 
 :error
