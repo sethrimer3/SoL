@@ -2,8 +2,18 @@
  * Shared utilities and type definitions for unit renderers
  */
 
-import { Vector2D, Unit } from '../../game-core';
+import { Faction, GameState, Player, Unit, Vector2D } from '../../game-core';
+import type { Building } from '../../sim/entities/buildings';
+import type { Starling } from '../../sim/entities/starling';
 import { GradientCache } from '../gradient-cache';
+
+type RenderableEntity = Unit | Building;
+type StarlingParticleState = {
+    shapeBlend: number;
+    polygonBlend: number;
+    lastTimeSec: number;
+    pentagonRotationRad: number;
+};
 
 /**
  * Interface for accessing renderer context and state.
@@ -17,8 +27,8 @@ export interface UnitRendererContext {
     isFancyGraphicsEnabled: boolean;
     playerColor: string;
     enemyColor: string;
-    viewingPlayer: any | null;
-    selectedUnits: Set<any>;
+    viewingPlayer: Player | null;
+    selectedUnits: Set<Unit>;
 
     // Constants stored on renderer
     HERO_SPRITE_SCALE: number;
@@ -35,9 +45,9 @@ export interface UnitRendererContext {
     isScreenPosWithinViewBounds(screenPos: { x: number; y: number }, margin?: number): boolean;
 
     // Sprite access
-    getHeroSpritePath(unit: any): string | null;
-    getStarlingSpritePath(starling: any): string | null;
-    getStarlingFacingRotationRad(starling: any): number | null;
+    getHeroSpritePath(unit: Unit): string | null;
+    getStarlingSpritePath(starling: Starling): string | null;
+    getStarlingFacingRotationRad(starling: Starling): number | null;
     getTintedSprite(path: string, color: string): HTMLCanvasElement | null;
     getSpriteImage(path: string): HTMLImageElement;
 
@@ -48,13 +58,13 @@ export interface UnitRendererContext {
 
     // Color manipulation
     darkenColor(color: string, opacity: number): string;
-    getFactionColor(faction: any): string;
-    applyShadeBrightening(color: string, position: Vector2D, game: any, isBuilding: boolean): string;
+    getFactionColor(faction: Faction): string;
+    applyShadeBrightening(color: string, position: Vector2D, game: GameState, isBuilding: boolean): string;
     brightenAndPaleColor(color: string): string;
 
     // Visibility/shadow helpers
-    getEnemyVisibilityAlpha(entity: any, isVisible: boolean, gameTime: number): number;
-    getShadeGlowAlpha(entity: any, shouldGlowInShade: boolean): number;
+    getEnemyVisibilityAlpha(entity: RenderableEntity, isVisible: boolean, gameTime: number): number;
+    getShadeGlowAlpha(entity: RenderableEntity, shouldGlowInShade: boolean): number;
 
     // Drawing helpers
     drawCachedUnitGlow(screenPos: Vector2D, radiusPx: number, color: string, alphaScale?: number): void;
@@ -65,7 +75,7 @@ export interface UnitRendererContext {
 
     // Seed/random
     getPseudoRandom(seed: number): number;
-    getStarlingParticleSeed(starling: any): number;
+    getStarlingParticleSeed(starling: Starling): number;
 
     // Gradient caching
     getCachedRadialGradient(
@@ -82,7 +92,7 @@ export interface UnitRendererContext {
     triggerScreenShake(intensity?: number): void;
 
     // Velaris starling particle state
-    starlingParticleStates: WeakMap<any, any>;
+    starlingParticleStates: WeakMap<Starling, StarlingParticleState>;
     VELARIS_STARLING_SHAPE_BLEND_SPEED: number;
     VELARIS_STARLING_PARTICLE_RADIUS_PX: number;
     VELARIS_STARLING_GRAPHEME_PULSE_SPEED: number;
@@ -109,7 +119,7 @@ export interface UnitRendererContext {
     camera: { x: number; y: number };
 
     // Unit drawing (needed by HeroRenderer)
-    drawUnit(unit: any, color: string, game: any, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext, useSimpleLod?: boolean): void;
+    drawUnit(unit: Unit, color: string, game: GameState, isEnemy: boolean, sizeMultiplier: number, context: UnitRendererContext, useSimpleLod?: boolean): void;
 }
 
 /**

@@ -11,7 +11,7 @@ export class ScreenShakeController {
     public isEnabled: boolean = true;
     private intensity: number = 0;
     private timer: number = 0;
-    private readonly shakenExplosions: WeakSet<any> = new WeakSet();
+    private readonly shakenExplosions: WeakSet<object> = new WeakSet();
 
     /** Current shake intensity (0 when not shaking). */
     getIntensity(): number {
@@ -19,17 +19,17 @@ export class ScreenShakeController {
     }
 
     /** Check if an explosion has already triggered shake. */
-    hasShaken(explosion: any): boolean {
+    hasShaken(explosion: object): boolean {
         return this.shakenExplosions.has(explosion);
     }
 
     /** Mark an explosion as having triggered shake. */
-    markShaken(explosion: any): void {
+    markShaken(explosion: object): void {
         this.shakenExplosions.add(explosion);
     }
 
     /** Get the underlying WeakSet for passing to external render contexts. */
-    getShakenExplosions(): WeakSet<any> {
+    getShakenExplosions(): WeakSet<object> {
         return this.shakenExplosions;
     }
 

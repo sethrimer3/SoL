@@ -33,7 +33,12 @@ export class StarlingRenderer {
             return;
         }
 
-        const color = context.getFactionColor(context.viewingPlayer!.faction);
+        const viewingPlayer = context.viewingPlayer;
+        if (!viewingPlayer) {
+            return;
+        }
+
+        const color = context.getFactionColor(viewingPlayer.faction);
         
         // For merged ranges, draw only the outer boundary of overlapping circles
         context.ctx.strokeStyle = color;

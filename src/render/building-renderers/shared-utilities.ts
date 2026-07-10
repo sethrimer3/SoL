@@ -2,7 +2,12 @@
  * Shared utilities and type definitions for building renderers
  */
 
-import { Vector2D } from '../../game-core';
+import { GameState, Player, Vector2D } from '../../game-core';
+import type { Building } from '../../sim/entities/buildings';
+import type { StellarForge } from '../../sim/entities/stellar-forge';
+
+type RenderableStructure = Building | StellarForge;
+type RenderExplosion = { position: Vector2D; timestamp: number };
 
 /**
  * State for animated forge flames
@@ -50,7 +55,7 @@ export interface BuildingRendererContext {
     enemyColor: string;
     canvasWidth: number;
     canvasHeight: number;
-    viewingPlayer: any | null; // Player or null for spectator mode
+    viewingPlayer: Player | null; // Player or null for spectator mode
     highlightedButtonIndex: number; // Index of highlighted production button (-1 = none)
     
     // Coordinate transformation
@@ -67,12 +72,12 @@ export interface BuildingRendererContext {
     
     // Color manipulation
     darkenColor(color: string, opacity: number): string;
-    applyShadeBrightening(color: string, position: Vector2D, game: any, isBuilding: boolean): string;
+    applyShadeBrightening(color: string, position: Vector2D, game: GameState, isBuilding: boolean): string;
     
     // Visibility and shadow effects
-    getEnemyVisibilityAlpha(entity: any, isVisible: boolean, gameTime: number): number;
+    getEnemyVisibilityAlpha(entity: RenderableStructure, isVisible: boolean, gameTime: number): number;
     drawStructureShadeGlow(
-        entity: any,
+        entity: RenderableStructure,
         screenPos: Vector2D,
         size: number,
         color: string,
@@ -86,14 +91,14 @@ export interface BuildingRendererContext {
         worldPos: Vector2D,
         screenPos: Vector2D,
         size: number,
-        game: any,
+        game: GameState,
         options: { isBuilding?: boolean; direction?: string; opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
     ): void;
     drawBuildingSelectionIndicator(screenPos: Vector2D, radius: number): void;
     drawHealthDisplay(screenPos: Vector2D, currentHealth: number, maxHealth: number, size: number, yOffset: number): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
-    drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: any, color: string): void;
+    drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, color: string): void;
     
     // Viewport culling
     isWithinViewBounds(worldPos: Vector2D, margin?: number): boolean;
@@ -110,6 +115,6 @@ export interface BuildingRendererContext {
     getPseudoRandom(seed: number): number;
 
     // Screen shake for explosions
-    shakenExplosions: WeakSet<any>;
+    shakenExplosions: WeakSet<RenderExplosion>;
     triggerScreenShake(intensity: number): void;
 }

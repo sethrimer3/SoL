@@ -564,7 +564,7 @@ export class TowerRenderer {
                 if (distance > range) continue;
 
                 const inShadow = game.isPointInShadow(testPos);
-                const visibleByUnits = game.isPositionVisibleByPlayerUnits(testPos, context.viewingPlayer!.units);
+                const visibleByUnits = game.isPositionVisibleByPlayerUnits(testPos, context.viewingPlayer.units);
 
                 if (inShadow && !visibleByUnits) {
                     // Valid target - draw highlight
