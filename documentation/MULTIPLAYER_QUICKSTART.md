@@ -9,7 +9,7 @@ SoL uses **Colyseus** as its multiplayer backend and session authority with a **
 ✅ **Colyseus Session Authority**: Room lifecycle, membership, matchmaking, synchronized match start  
 ✅ **Deterministic Simulation**: Fixed timestep, seeded RNG, command-based synchronization  
 ✅ **Transport Abstraction**: `ColyseusTransport` implements `ITransport`  
-✅ **Anti-Cheat & Verification**: HMAC-SHA256 command signing and periodic state hash verification  
+✅ **Session Ownership & Verification**: Server-side sender validation and periodic state hash verification  
 ✅ **Zero Database Dependency**: Pure in-memory room management  
 
 ## Quick Setup

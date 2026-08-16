@@ -9,7 +9,10 @@
  * 5. Synchronized match start with identical game seed and tick rate
  * 6. Bi-directional GameCommand transmission and CommandQueue deterministic ordering
  * 7. State hash exchange and verification (no desync)
- * 8. Clean match teardown and server disposal
+ * 8. Reconnection within grace window (Colyseus 0.17 onDrop / onReconnect lifecycle)
+ * 9. Rejection of malformed & unauthorized commands (sender mismatch, negative tick, oversized payload, malformed batch)
+ * 10. Room resiliency: valid commands succeed immediately after malformed traffic
+ * 11. Clean match teardown and server disposal
  */
 
 import { startServer, gameServer } from './server/src/index';
@@ -17,6 +20,7 @@ import { MultiplayerNetworkManager, NetworkEvent } from './src/multiplayer-netwo
 import { GameCommand } from './src/transport';
 import { SeededRandom } from './src/seeded-random';
 import { getOrCreatePlayerId } from './src/player-identity';
+import { ProtocolMessage } from './src/shared/multiplayer-protocol';
 
 const TEST_PORT = 2569;
 const SERVER_URL = `ws://localhost:${TEST_PORT}`;
@@ -93,7 +97,7 @@ async function runTests() {
         let clientJoined = false;
         let hostSawClientJoin = false;
 
-        hostManager.on(NetworkEvent.PLAYER_JOINED, (data) => {
+        hostManager.on(NetworkEvent.PLAYER_JOINED, () => {
             hostSawClientJoin = true;
         });
 
@@ -199,13 +203,171 @@ async function runTests() {
         await new Promise(resolve => setTimeout(resolve, 80));
         assert(!desyncDetected, 'No desync detected when state hashes match');
 
-        // 9. Clean Match Teardown
-        console.log('\n--- Step 9: Clean Match Teardown ---');
+        // 9. Malformed & Unauthorized Command Rejection Tests (Issue 3)
+        console.log('\n--- Step 9: Malformed & Unauthorized Command Rejection ---');
+        const clientRawRoom = clientManager.getRoom();
+        assert(clientRawRoom !== null, 'Client raw room connection available');
+
+        let hostReceivedAfterMalformed = 0;
+        hostReceivedCommands = [];
+
+        // Test 9a: Missing / empty playerId
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: 1,
+            playerId: '',
+            commandType: 'test_attack',
+            payload: { target: 1 }
+        });
+
+        // Test 9b: Unauthorized playerId (Client spoofing Host's playerId)
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: 1,
+            playerId: hostPlayerId, // Spoofed!
+            commandType: 'spoofed_surrender',
+            payload: {}
+        });
+
+        // Test 9c: Negative / invalid tick
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: -5,
+            playerId: clientPlayerId,
+            commandType: 'invalid_tick_action',
+            payload: {}
+        });
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: NaN,
+            playerId: clientPlayerId,
+            commandType: 'nan_tick_action',
+            payload: {}
+        });
+
+        // Test 9d: Malformed commandType (empty or non-string)
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: 1,
+            playerId: clientPlayerId,
+            commandType: '',
+            payload: {}
+        });
+
+        // Test 9e: Oversized payload (> 4096 bytes)
+        const hugePayload = 'X'.repeat(6000);
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: 1,
+            playerId: clientPlayerId,
+            commandType: 'oversized_command',
+            payload: { bigData: hugePayload }
+        });
+
+        // Test 9f: Malformed command batch (non-array, invalid commands, oversized batch)
+        clientRawRoom!.send(ProtocolMessage.COMMAND_BATCH, {
+            from: clientPlayerId,
+            commands: 'not-an-array'
+        });
+        clientRawRoom!.send(ProtocolMessage.COMMAND_BATCH, {
+            from: clientPlayerId,
+            commands: [
+                { tick: -1, playerId: clientPlayerId, commandType: 'bad_batch_cmd' },
+                { tick: 1, playerId: hostPlayerId, commandType: 'spoofed_batch_cmd' }
+            ]
+        });
+
+        // Wait for all invalid messages to reach server and be filtered out
+        await new Promise(resolve => setTimeout(resolve, 120));
+
+        assert(hostReceivedCommands.length === 0, 'All malformed & spoofed commands rejected by server without relaying');
+
+        // Test 9g: Resiliency check - immediately send a valid command
+        console.log('\n--- Step 10: Resiliency Check - Valid Command Succeeds After Malformed Traffic ---');
+        clientRawRoom!.send(ProtocolMessage.COMMAND, {
+            tick: 1,
+            playerId: clientPlayerId,
+            commandType: 'legitimate_ability',
+            payload: { abilityId: 42 }
+        });
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        assert(hostReceivedCommands.length === 1, 'Valid command delivered successfully to host');
+        assert(hostReceivedCommands[0]?.commandType === 'legitimate_ability', 'Delivered command matches expected legitimate payload');
+
+        // 11. Reconnection within Grace Window Tests (Issue 1)
+        console.log('\n--- Step 11: Reconnection within Grace Window ---');
+        // Teardown first match cleanly
         await hostManager.disconnect();
         await clientManager.disconnect();
 
-        assert(!hostManager.isInMatch(), 'Host cleanly left match');
-        assert(!clientManager.isInMatch(), 'Client cleanly left match');
+        // Create a new match specifically for reconnection test
+        const hostReconnectId = 'reconnect-host-' + Math.random().toString(36).substring(2, 8);
+        const clientReconnectId = 'reconnect-client-' + Math.random().toString(36).substring(2, 8);
+
+        const host2 = new MultiplayerNetworkManager(SERVER_URL, hostReconnectId);
+        const client2 = new MultiplayerNetworkManager(SERVER_URL, clientReconnectId);
+
+        const match2 = await host2.createMatch({
+            matchName: 'Reconnection Test Match',
+            username: 'PersistentHost',
+            maxPlayers: 2,
+            tickRate: 30,
+            gameSeed: 777888
+        });
+
+        assert(match2 !== null, 'Reconnection test match created');
+        const join2 = await client2.joinMatch(match2!.matchCode, 'DroppingClient');
+        assert(join2, 'Client joined reconnection test match');
+
+        await host2.startMatch();
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        const originalClientRoom = client2.getRoom();
+        assert(originalClientRoom !== null, 'Client room is active before drop');
+        const reconnectionToken = originalClientRoom!.reconnectionToken;
+        assert(typeof reconnectionToken === 'string' && reconnectionToken.length > 0, 'Client possesses valid reconnectionToken');
+
+        // Simulate unexpected connection loss (dropping connection without sending leave)
+        console.log('  -> Simulating unexpected connection drop on client...');
+        originalClientRoom!.connection.close();
+
+        // Wait a short moment for server onDrop to fire
+        await new Promise(resolve => setTimeout(resolve, 150));
+
+        // Attempt reconnection using the token
+        console.log('  -> Reconnecting using token within grace window...');
+        const reconnectSuccess = await client2.reconnectMatch(reconnectionToken);
+        assert(reconnectSuccess, 'Client reconnected successfully within grace window');
+
+        const reconnectedRoom = client2.getRoom();
+        assert(reconnectedRoom !== null, 'Client has active reconnected room');
+        assert(client2.isInMatch(), 'Client state reflects active match after reconnection');
+
+        // Verify multiplayer communication continues normally after reconnection
+        let hostSawPostReconnectCmd = false;
+        let clientSawPostReconnectCmd = false;
+
+        host2.on(NetworkEvent.COMMAND_RECEIVED, (data) => {
+            if (data.command.commandType === 'post_reconnect_from_client') {
+                hostSawPostReconnectCmd = true;
+            }
+        });
+
+        client2.on(NetworkEvent.COMMAND_RECEIVED, (data) => {
+            if (data.command.commandType === 'post_reconnect_from_host') {
+                clientSawPostReconnectCmd = true;
+            }
+        });
+
+        // Host sends command to client
+        host2.sendCommand('post_reconnect_from_host', { message: 'Welcome back!' });
+        // Reconnected client sends command to host
+        client2.sendCommand('post_reconnect_from_client', { message: 'I am back!' });
+
+        await new Promise(resolve => setTimeout(resolve, 120));
+
+        assert(clientSawPostReconnectCmd, 'Reconnected client received command from host');
+        assert(hostSawPostReconnectCmd, 'Host received command from reconnected client');
+
+        // Clean match teardown
+        await host2.disconnect();
+        await client2.disconnect();
 
     } catch (error) {
         console.error('Test execution error:', error);

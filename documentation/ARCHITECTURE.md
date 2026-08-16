@@ -516,11 +516,11 @@ if (tickCounter % STATE_HASH_TICK_INTERVAL === 0) {
 
 ### Security Considerations
 
-1. **Determinism = Anti-Cheat**: Identical inputs must produce identical outputs
-2. **Server Message Validation**: Colyseus server validates command structure, sender identity, and payload size
-3. **Command HMAC Signing**: Cryptographic HMAC verification prevents command spoofing
-4. **State Hash Verification**: Periodic hash exchange detects desynchronization or tampering
-5. **Rate Limiting**: Command rate limits prevent spamming
+1. **Determinism = Baseline Integrity**: Identical inputs produce identical outputs across all peers
+2. **Server Message Validation**: Colyseus server validates command structure, sender identity, tick validity, and payload size
+3. **Session-to-Player Ownership**: Colyseus server binds WebSocket sessions to authenticated player identities to prevent command spoofing
+4. **State Hash Verification**: Periodic hash exchange detects desynchronization or simulation tampering
+5. **Rate Limiting**: Command rate limits prevent queue spamming
 
 See `MULTIPLAYER_SECURITY.md` for detailed security design.
 

@@ -19,10 +19,7 @@ export interface GameCommand {
     tick: number;           // Which game tick this command applies to
     playerId: string;       // Who issued this command
     commandType: string;    // Type of command (e.g., 'move_unit', 'build', 'attack')
-    payload: any;          // Command-specific data (use discriminated union in game code)
-    // NOTE: payload is 'any' for flexibility. Game code should use proper types:
-    // type MoveCommand = GameCommand & { commandType: 'move_unit', payload: { unitId: number, x: number, y: number } };
-    signature?: string;     // Optional HMAC-SHA256 signature for anti-cheat (Phase 2)
+    payload: any;          // Command-specific data
 }
 
 /**
@@ -290,9 +287,6 @@ export class CommandValidator {
     private readonly COMMANDS_PER_TICK_LIMIT = 100; // Rate limit
     private lastCleanupTick = 0;
     private readonly CLEANUP_INTERVAL = 100; // Clean up every 100 ticks
-    
-    // Signing key for anti-cheat verification (Phase 2)
-    private signingKey: CryptoKey | null = null;
 
     /**
      * Validate a command before adding to queue
@@ -354,33 +348,9 @@ export class CommandValidator {
     }
 
     /**
-     * Set the HMAC signing key for command signature verification (Phase 2)
-     * @param key - CryptoKey derived from the match seed
-     */
-    setSigningKey(key: CryptoKey): void {
-        this.signingKey = key;
-    }
-
-    /**
-     * Synchronous fast-path check: reject commands that are missing a signature
-     * when a signing key is configured. Async verification is handled by CommandSigner.
-     * @returns false if signing is enabled and signature is absent; true otherwise
-     */
-    verifySignature(command: GameCommand, _signature?: string): boolean {
-        if (this.signingKey && !command.signature) {
-            console.error('[CommandValidator] Command missing required signature:', command.commandType);
-            return false;
-        }
-        return true;
-    }
-
-    /**
-     * TODO Phase 2: Verify command is legal in current game state
-     * @param command - Command to verify
-     * @param gameState - Current game state (use proper GameState interface in implementation)
+     * Phase 2 Roadmap: Verify command is legal in current game state
      */
     verifyLegality?(_command: GameCommand, _gameState: unknown): boolean {
-        // Future implementation
         return true;
     }
 }

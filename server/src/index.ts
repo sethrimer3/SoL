@@ -8,7 +8,9 @@ const port = Number(process.env.PORT || 2567);
 
 // Create Colyseus Server with Express callback
 export const gameServer = new Server({
-    transport: new WebSocketTransport(),
+    transport: new WebSocketTransport({
+        maxPayload: 64 * 1024 // 64KB frame limit; application validates <= 4KB
+    }),
     express: (app) => {
         app.use(cors());
         app.use(express.json());

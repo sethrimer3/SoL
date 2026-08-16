@@ -2,30 +2,40 @@
 
 ## Overview
 
-This document outlines the security considerations and mitigations for SoL's Colyseus-backed deterministic multiplayer architecture.
+This document outlines the security model, trust boundary, and mitigations for SoL's Colyseus-backed deterministic multiplayer architecture.
 
 ## Trust Model & Architecture
 
-### Current Implementation: Deterministic Lockstep with Colyseus Authority
+### Phase 1: Deterministic Lockstep with Colyseus Session Authority
 
-- **Session Authority**: The Colyseus server (`SoLRoom`) is the sole authority for room creation, joining, match metadata, and synchronized start.
-- **Command Relay**: All commands are routed through Colyseus (`ColyseusTransport`), allowing basic message structure and payload size validation on the server.
-- **Command Integrity**: HMAC-SHA256 command signing prevents spoofing of commands by unauthorized peers.
-- **Desync Detection**: Clients exchange periodic state hashes (`__state_hash__`) to detect desyncs and tampering.
+In Phase 1, game simulation runs deterministically on all connected clients. The Colyseus server (`SoLRoom`) acts as the authoritative gatekeeper for match sessions:
 
-### Security Layers
+- **Session-to-Player Ownership**: The Colyseus server securely binds each WebSocket connection (`client.sessionId`) to that client's authenticated `playerId`. Clients cannot send commands claiming to originate from other players.
+- **Server-Side Command Gatekeeping**: `SoLRoom` inspects every incoming command (single or batched). If `command.playerId !== sessionPlayerId`, or if the payload is oversized (>4KB), or if the tick is invalid/negative, the server rejects the command immediately without broadcasting it to peers.
+- **Desync & Tampering Detection**: Clients periodically compute a hash of their deterministic simulation state and relay it via `ProtocolMessage.STATE_HASH`. `StateVerifier` alerts players immediately if simulation states diverge.
 
-#### 1. Command Validation & Rate Limiting
-- **Client & Server Validation**: `CommandValidator` and `SoLRoom` validate structure, non-negative tick numbers, sender identity, and maximum payload size (≤4KB).
-- **Rate Limiting**: Limits per-player command frequency to prevent buffer exhaustion.
+### Security Layers (Phase 1)
 
-#### 2. Anti-Cheat via HMAC-SHA256 Signing
-- **Key Derivation**: `CommandSigner.deriveKey(gameSeed)` deterministically derives a shared signing key from the match seed using the Web Crypto API.
-- **Sign & Verify**: Each command carries a signature of `${tick}:${playerId}:${commandType}:${JSON.stringify(payload)}`.
+#### 1. Server Session Ownership & Sender Authentication
+- The Colyseus WebSocket connection is the identity boundary.
+- Server validates:
+  - `command.playerId === expectedPlayerId` (enforced per connection)
+  - `command.tick >= 0` and is an integer
+  - `command.commandType` is a non-empty string
+  - `command.payload` length does not exceed 4096 bytes
+  - `batch.commands` length does not exceed 100
+
+#### 2. Client Command Validation & Rate Limiting
+- `CommandValidator` validates structure, tick timestamps, payload sizes, and per-player rate limits (≤100 commands/tick) to prevent queue exhaustion.
 
 #### 3. State Hash Verification
-- **Cadence**: At regular tick intervals (`STATE_HASH_TICK_INTERVAL`), each client computes a hash of its simulation state and broadcasts it.
-- **Desync Event**: `StateVerifier` triggers a `DESYNC_DETECTED` event if peer hashes differ.
+- At fixed tick intervals, each client computes a hash of its simulation state and broadcasts it via `SoLRoom`.
+- `StateVerifier` triggers a `DESYNC_DETECTED` event if peer hashes differ, identifying desynchronization or client-side tampering.
 
-## Future: Server-Authoritative Simulation
-In future phases, the Colyseus server will run the full deterministic simulation headlessly to validate all game actions authoritatively without trusting client simulation state.
+---
+
+### Phase 2 Roadmap: Server-Authoritative Simulation
+
+In Phase 2, the Colyseus server will execute a headless instance of the deterministic simulation directly in Node.js:
+- **Authoritative Game Rules**: The server will simulate unit movements, combat, economy, and construction legality authoritatively.
+- **Fog-of-War Enforcement**: The server will filter state updates so clients only receive information within their units' line of sight, preventing maphack exploits.

@@ -29,7 +29,6 @@ import {
     StateVerificationEvent, 
     DesyncEvent 
 } from './state-verification';
-import { CommandSigner } from './command-signer';
 import { getOrCreatePlayerId, getOrGenerateUsername } from './player-identity';
 import { 
     ProtocolMessage, 
@@ -112,10 +111,6 @@ export class MultiplayerNetworkManager {
 
     // Deterministic RNG
     private gameRNG: SeededRandom | null = null;
-
-    // Anti-cheat HMAC signing
-    private signingKey: CryptoKey | null = null;
-    private signingEnabled: boolean = false;
 
     // Event listeners
     private eventListeners: Map<NetworkEvent, NetworkEventCallback[]> = new Map();
@@ -238,6 +233,24 @@ export class MultiplayerNetworkManager {
             console.error('[MultiplayerNetworkManager] Error joining match:', error);
             const userMessage = 'Failed to join match. It may be full or no longer available.';
             this.emit(NetworkEvent.ERROR, { error, message: userMessage });
+            return false;
+        }
+    }
+
+    /**
+     * Reconnect to an in-progress match using a reconnection token
+     */
+    async reconnectMatch(reconnectionToken: string): Promise<boolean> {
+        try {
+            console.log(`[MultiplayerNetworkManager] Reconnecting with token: ${reconnectionToken}`);
+            this.room = await this.client.reconnect(reconnectionToken);
+            this.transport = new ColyseusTransport(this.room, this.localPlayerId);
+            this.setupRoomHandlers(this.room);
+            this.isTransportReady = true;
+            this.isActive = true;
+            return true;
+        } catch (error) {
+            console.error('[MultiplayerNetworkManager] Reconnection failed:', error);
             return false;
         }
     }
@@ -412,16 +425,6 @@ export class MultiplayerNetworkManager {
             });
         }
 
-        // Derive anti-cheat signing key
-        try {
-            this.signingKey = await CommandSigner.deriveKey(payload.gameSeed);
-            this.commandValidator.setSigningKey(this.signingKey);
-            this.signingEnabled = true;
-        } catch (err) {
-            console.warn('[MultiplayerNetworkManager] Failed to derive command signing key:', err);
-            this.signingEnabled = false;
-        }
-
         // Flush any pending commands
         if (this.pendingCommands.length > 0 && this.transport) {
             for (const cmd of this.pendingCommands) {
@@ -452,32 +455,9 @@ export class MultiplayerNetworkManager {
             return;
         }
 
-        // Validate command structure and rate limit
+        // Validate command structure, tick, and rate limit
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Invalid command received, dropping:', command);
-            return;
-        }
-
-        // Fast-path signature check
-        if (this.signingEnabled && !this.commandValidator.verifySignature(command)) {
-            console.error('[MultiplayerNetworkManager] Command rejected (missing signature):', command.commandType);
-            return;
-        }
-
-        // Async cryptographic HMAC verification if signing is enabled
-        if (this.signingEnabled && this.signingKey && command.signature) {
-            CommandSigner.verify(command, command.signature, this.signingKey).then(valid => {
-                if (valid) {
-                    if (this.commandQueue) {
-                        this.commandQueue.addCommand(command);
-                    }
-                    this.emit(NetworkEvent.COMMAND_RECEIVED, { command });
-                } else {
-                    console.error('[MultiplayerNetworkManager] Command failed HMAC verification, dropping:', command.commandType);
-                }
-            }).catch(err => {
-                console.warn('[MultiplayerNetworkManager] Signature verification error:', err);
-            });
             return;
         }
 
@@ -504,21 +484,6 @@ export class MultiplayerNetworkManager {
             return;
         }
 
-        if (this.signingEnabled && this.signingKey) {
-            CommandSigner.sign(command, this.signingKey).then(signature => {
-                command.signature = signature;
-                this.dispatchCommand(command);
-            }).catch(err => {
-                console.warn('[MultiplayerNetworkManager] Failed to sign command, sending unsigned:', err);
-                this.dispatchCommand(command);
-            });
-            return;
-        }
-
-        this.dispatchCommand(command);
-    }
-
-    private dispatchCommand(command: GameCommand): void {
         if (!this.transport?.isReady()) {
             this.pendingCommands.push(command);
             return;
@@ -596,8 +561,6 @@ export class MultiplayerNetworkManager {
         }
 
         this.stateVerifier = null;
-        this.signingKey = null;
-        this.signingEnabled = false;
 
         this.emit(NetworkEvent.MATCH_ENDED, { reason });
     }
@@ -635,6 +598,20 @@ export class MultiplayerNetworkManager {
 
     getLocalPlayerId(): string {
         return this.localPlayerId;
+    }
+
+    /**
+     * Get underlying Colyseus Room instance
+     */
+    getRoom(): Room | null {
+        return this.room;
+    }
+
+    /**
+     * Get underlying Colyseus Client instance
+     */
+    getClient(): ColyseusClient {
+        return this.client;
     }
 
     /**

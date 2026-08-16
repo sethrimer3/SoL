@@ -16,32 +16,30 @@ import { GameCommand } from '../../../src/transport';
 const MAX_COMMAND_PAYLOAD_SIZE = 4096;
 
 /**
+ * Maximum commands allowed in a single batch
+ */
+const MAX_BATCH_COMMANDS = 100;
+
+/**
  * Colyseus SoLRoom
  * 
- * Session authority for SoL RTS matches.
- * Manages match lifecycle, player presence, synchronized start, and command relay.
+ * Manages multiplayer match session lifecycle, room membership, short match codes,
+ * game seed / settings synchronization, and command validation/relaying.
  */
 export class SoLRoom extends Room {
-    // In-memory match info
-    public matchInfo!: MatchInfo;
-
-    // Map client.sessionId -> playerId
+    private matchInfo!: MatchInfo;
+    private players: Map<string, PlayerMetadata> = new Map();
     private sessionToPlayerId: Map<string, string> = new Map();
 
-    // Map playerId -> PlayerMetadata
-    private players: Map<string, PlayerMetadata> = new Map();
-
-    // Reconnection timeout in seconds
+    /** Reconnection grace window in seconds */
     private readonly RECONNECTION_TIMEOUT_SEC = 20;
 
     onCreate(options: CreateRoomOptions): void {
+        const gameSeed = options.gameSeed || Math.floor(Math.random() * 1000000000);
         const matchCode = this.generateShortMatchCode(this.roomId);
-        const gameSeed = typeof options.gameSeed === 'number' 
-            ? options.gameSeed 
-            : Math.floor(Math.random() * 2147483647);
 
-        const maxPlayers = Math.max(2, Math.min(8, options.maxPlayers || 2));
-        this.maxClients = maxPlayers;
+        this.maxClients = options.maxPlayers || 2;
+        this.autoDispose = true;
 
         this.matchInfo = {
             id: this.roomId,
@@ -50,21 +48,19 @@ export class SoLRoom extends Room {
             status: 'open',
             gameSeed: gameSeed,
             tickRate: options.tickRate || 30,
-            maxPlayers: maxPlayers,
+            maxPlayers: this.maxClients,
             matchName: options.matchName || 'SoL Match',
             gameSettings: options.gameSettings || {},
             players: [],
             createdAt: Date.now()
         };
 
-        // Expose metadata for matchmaking listings
         this.setMetadata({
             matchCode: matchCode,
             matchName: this.matchInfo.matchName,
             hostPlayerId: this.matchInfo.hostPlayerId,
-            status: this.matchInfo.status,
-            maxPlayers: maxPlayers,
-            playerCount: 0
+            status: 'open',
+            maxPlayers: this.maxClients
         });
 
         this.setupMessageHandlers();
@@ -92,7 +88,7 @@ export class SoLRoom extends Room {
         // Handle batched commands relay
         this.onMessage(ProtocolMessage.COMMAND_BATCH, (client: Client, batch: { from: string; commands: GameCommand[] }) => {
             const playerId = this.sessionToPlayerId.get(client.sessionId);
-            if (!playerId || !Array.isArray(batch?.commands)) {
+            if (!playerId || !batch || !Array.isArray(batch.commands) || batch.commands.length > MAX_BATCH_COMMANDS) {
                 return;
             }
 
@@ -165,25 +161,25 @@ export class SoLRoom extends Room {
         });
     }
 
-    private validateCommand(command: GameCommand, expectedPlayerId: string): boolean {
+    private validateCommand(command: any, expectedPlayerId: string): boolean {
         if (!command || typeof command !== 'object') {
             return false;
         }
 
-        if (typeof command.tick !== 'number' || command.tick < 0) {
+        if (typeof command.tick !== 'number' || !Number.isFinite(command.tick) || command.tick < 0 || !Number.isInteger(command.tick)) {
             return false;
         }
 
-        if (typeof command.commandType !== 'string' || !command.commandType) {
+        if (typeof command.commandType !== 'string' || command.commandType.trim().length === 0) {
             return false;
         }
 
-        if (command.playerId !== expectedPlayerId) {
-            console.warn(`[SoLRoom] Command sender mismatch: ${command.playerId} vs session ${expectedPlayerId}`);
+        if (typeof command.playerId !== 'string' || !command.playerId || command.playerId !== expectedPlayerId) {
+            console.warn(`[SoLRoom] Command sender mismatch: ${command?.playerId} vs session ${expectedPlayerId}`);
             return false;
         }
 
-        if (command.payload) {
+        if (command.payload !== undefined && command.payload !== null) {
             try {
                 const serialized = JSON.stringify(command.payload);
                 if (serialized.length > MAX_COMMAND_PAYLOAD_SIZE) {
@@ -232,7 +228,10 @@ export class SoLRoom extends Room {
         this.broadcastMatchUpdate();
     }
 
-    async onLeave(client: Client, consented?: boolean): Promise<void> {
+    /**
+     * Called when a client connection drops unexpectedly (network loss / disconnect without leaving).
+     */
+    async onDrop(client: Client, code?: number): Promise<void> {
         const playerId = this.sessionToPlayerId.get(client.sessionId);
         if (!playerId) return;
 
@@ -242,30 +241,47 @@ export class SoLRoom extends Room {
         player.connected = false;
         this.broadcastMatchUpdate();
 
-        console.log(`[SoLRoom] Player ${player.username} left (consented: ${consented})`);
+        console.log(`[SoLRoom] Player ${player.username} (${playerId}) dropped (code: ${code}). Waiting for reconnection (${this.RECONNECTION_TIMEOUT_SEC}s)...`);
 
-        if (consented || this.matchInfo.status === 'open') {
-            // Graceful leave or lobby leave
-            this.removePlayer(playerId, client.sessionId);
+        try {
+            await this.allowReconnection(client, this.RECONNECTION_TIMEOUT_SEC);
+        } catch {
+            console.log(`[SoLRoom] Reconnection window expired for player ${player.username}`);
+        }
+    }
+
+    /**
+     * Called when a client successfully reconnects within the reconnection window.
+     */
+    async onReconnect(client: Client): Promise<void> {
+        const playerId = this.sessionToPlayerId.get(client.sessionId);
+        if (!playerId) {
+            console.warn(`[SoLRoom] onReconnect called but no playerId found for sessionId: ${client.sessionId}`);
             return;
         }
 
-        // Active game unexpected disconnect: allow reconnection window
-        try {
-            console.log(`[SoLRoom] Waiting for player ${player.username} to reconnect (${this.RECONNECTION_TIMEOUT_SEC}s)...`);
-            const reconnectedClient = await this.allowReconnection(client, this.RECONNECTION_TIMEOUT_SEC);
-            
-            // Reconnected successfully
-            this.sessionToPlayerId.delete(client.sessionId);
-            this.sessionToPlayerId.set(reconnectedClient.sessionId, playerId);
-            player.connected = true;
-            console.log(`[SoLRoom] Player ${player.username} successfully reconnected!`);
-            this.broadcastMatchUpdate();
-        } catch {
-            // Reconnection timed out
-            console.log(`[SoLRoom] Reconnection timed out for player ${player.username}`);
-            this.removePlayer(playerId, client.sessionId);
+        const player = this.players.get(playerId);
+        if (!player) {
+            console.warn(`[SoLRoom] onReconnect called but player not found: ${playerId}`);
+            return;
         }
+
+        player.connected = true;
+        console.log(`[SoLRoom] Player ${player.username} (${playerId}) successfully reconnected!`);
+        this.broadcastMatchUpdate();
+    }
+
+    /**
+     * Called when a client permanently leaves the room (consented departure or after reconnection window expired).
+     */
+    async onLeave(client: Client, code?: number): Promise<void> {
+        const playerId = this.sessionToPlayerId.get(client.sessionId);
+        if (!playerId) return;
+
+        const player = this.players.get(playerId);
+        console.log(`[SoLRoom] Player ${player?.username || playerId} left permanently (code: ${code})`);
+
+        this.removePlayer(playerId, client.sessionId);
     }
 
     private removePlayer(playerId: string, sessionId: string): void {
