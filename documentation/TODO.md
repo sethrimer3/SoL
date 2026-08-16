@@ -54,8 +54,8 @@
 - [x] Integrate network manager with game core
 - [x] Add command queue and processing
 - [x] Implement command execution for player actions
-- [x] Add online play framework with Supabase
-- [x] Implement Supabase Realtime integration
+- [x] Add online play framework with Colyseus
+- [x] Implement Colyseus Room integration
 - [x] Create room-based matchmaking system
 - [x] Add bandwidth-optimized command encoding
 - [x] Implement host/client architecture for online

@@ -32,8 +32,7 @@ the desktop build essentially exists. The gap is packaging, store paperwork, and
 Also confirm: no remote content loaded into the main window, `webSecurity` left on, and a CSP on `index.html`.
 
 ### 2.3 Secrets
-Supabase keys bundled into an Electron app are **trivially extractable** (unpack `app.asar`). Ship only the
-anon key and enforce Row-Level Security server-side. See `MULTIPLAYER_SECURITY.md`.
+Ensure `COLYSEUS_SERVER_URL` points to the production server endpoint. Do not bundle sensitive server keys into client builds.
 
 ### 2.4 Code signing (recommended, not required by Valve)
 Unsigned Windows binaries trigger SmartScreen warnings. An OV/EV code-signing certificate runs roughly
@@ -52,7 +51,7 @@ competitive RTS, integrate at least:
 - [ ] **Steam Input** — controller support, optional for an RTS.
 - [ ] **Rich Presence / Steam Overlay** — the overlay needs a compatible rendering path; test it, Electron overlay support is imperfect.
 - [ ] Strongly consider for multiplayer:
-  - **Steam Auth (session tickets)** — a real identity to bind to your Supabase accounts, which fixes a chunk of the account-spoofing surface.
+  - **Steam Auth (session tickets)** — a real identity to bind to multiplayer sessions, which fixes a chunk of the account-spoofing surface.
   - **Steam Networking Sockets / Relay** — solves NAT traversal for P2P far better than a hand-rolled solution (see `P2P_MULTIPLAYER_ARCHITECTURE.md`).
   - **Steam Lobbies / Matchmaking** — replaces custom matchmaking.
 

@@ -12,10 +12,9 @@
  * 5. End Match → Clean room teardown and resource disposal
  */
 
-import { Client as ColyseusClient, Room } from 'colyseus.js';
+import { Client as ColyseusClient, Room } from '@colyseus/sdk';
 import { ColyseusTransport } from './colyseus-transport';
 import { 
-    ITransport, 
     GameCommand, 
     CommandQueue, 
     CommandValidator 
@@ -164,10 +163,10 @@ export class MultiplayerNetworkManager {
 
             this.setupRoomHandlers(this.room);
 
-            // Construct initial match metadata
-            const matchCode = this.room.id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 6).padEnd(6, 'X');
+            const roomId = this.room.roomId || (this.room as any).id || '';
+            const matchCode = roomId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 6).padEnd(6, 'X');
             this.currentMatch = {
-                id: this.room.id,
+                id: roomId,
                 matchCode: matchCode,
                 hostPlayerId: this.localPlayerId,
                 status: 'open',
@@ -191,7 +190,7 @@ export class MultiplayerNetworkManager {
             this.gameRNG = new SeededRandom(gameSeed);
             setGameRNG(this.gameRNG);
 
-            console.log(`[MultiplayerNetworkManager] Match created: ${this.room.id} (code: ${matchCode}, seed: ${gameSeed})`);
+            console.log(`[MultiplayerNetworkManager] Match created: ${roomId} (code: ${matchCode}, seed: ${gameSeed})`);
             this.emit(NetworkEvent.MATCH_CREATED, { match: this.currentMatch });
 
             return this.currentMatch;
@@ -233,7 +232,7 @@ export class MultiplayerNetworkManager {
             this.isHost = false;
             this.setupRoomHandlers(this.room);
 
-            console.log('[MultiplayerNetworkManager] Successfully joined room:', this.room.id);
+            console.log('[MultiplayerNetworkManager] Successfully joined room:', this.room.roomId || (this.room as any).id);
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error joining match:', error);
@@ -248,12 +247,16 @@ export class MultiplayerNetworkManager {
      */
     async listMatches(): Promise<MatchInfo[]> {
         try {
-            const availableRooms = await this.client.getAvailableRooms('sol_room');
+            const httpUrl = this.serverUrl.replace(/^ws/, 'http');
+            const response = await fetch(`${httpUrl}/api/matches`);
+            if (!response.ok) return [];
+            const availableRooms: any[] = await response.json();
             return availableRooms.map(room => {
                 const metadata = room.metadata || {};
+                const roomId = room.roomId || room.id || '';
                 return {
-                    id: room.roomId,
-                    matchCode: metadata.matchCode || room.roomId.substring(0, 6).toUpperCase(),
+                    id: roomId,
+                    matchCode: metadata.matchCode || roomId.substring(0, 6).toUpperCase(),
                     hostPlayerId: metadata.hostPlayerId || '',
                     status: metadata.status || 'open',
                     gameSeed: 0,
@@ -444,6 +447,11 @@ export class MultiplayerNetworkManager {
      * Handle received command from network transport
      */
     private handleReceivedCommand(command: GameCommand): void {
+        // Internal state verification messages are handled directly by StateVerifier
+        if (command.commandType === '__state_hash__') {
+            return;
+        }
+
         // Validate command structure and rate limit
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Invalid command received, dropping:', command);
@@ -627,6 +635,13 @@ export class MultiplayerNetworkManager {
 
     getLocalPlayerId(): string {
         return this.localPlayerId;
+    }
+
+    /**
+     * Check if network transport is ready to send commands
+     */
+    isReady(): boolean {
+        return this.isTransportReady;
     }
 
     on(event: NetworkEvent, callback: NetworkEventCallback): void {

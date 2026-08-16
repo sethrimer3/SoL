@@ -11,7 +11,7 @@
  *  - Dispatches commands to deterministic CommandQueue
  */
 
-import { Room } from 'colyseus.js';
+import { Room } from '@colyseus/sdk';
 import { ITransport, GameCommand, TransportStats } from './transport';
 import { ProtocolMessage } from './shared/multiplayer-protocol';
 

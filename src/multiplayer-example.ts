@@ -98,7 +98,6 @@ class MultiplayerGameController {
             username,
             maxPlayers,
             tickRate: 30,
-            lockstepEnabled: false, // Phase 1: P2P only
             gameSettings: {
                 // Game-specific settings
                 mapSize: 'medium',

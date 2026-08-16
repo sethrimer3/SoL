@@ -139,7 +139,7 @@ multiplayerNetworkManager.on(NetworkEvent.DESYNC_DETECTED, (event) => {
 ## Next Steps
 
 ### For Deployment
-1. Test with real Supabase setup (manual testing)
+1. Test Colyseus multiplayer matches
 2. Monitor latency stats in production
 3. Tune verification interval based on network conditions
 4. Implement desync recovery (Phase 3)

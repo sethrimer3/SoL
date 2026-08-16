@@ -15,38 +15,30 @@ The game uses a seeded Mulberry32 PRNG algorithm that guarantees:
 
 ### 1. Seed Generation and Distribution
 
-#### Host Creates Match
+#### Host Creates Match & Server Broadcasts Seed
 ```typescript
-// src/multiplayer-network.ts:159
-const gameSeed = options.gameSeed || generateMatchSeed();
+// Colyseus SoLRoom creates seed and broadcasts on match_start
+// In SoLRoom:
+const startPayload: MatchStartPayload = {
+    matchId: this.roomId,
+    gameSeed: this.matchInfo.gameSeed,
+    tickRate: this.matchInfo.tickRate,
+    playerIds: Array.from(this.players.keys()),
+    players: Array.from(this.players.values()),
+    startTime: Date.now(),
+    gameSettings: this.matchInfo.gameSettings
+};
+this.broadcast(ProtocolMessage.MATCH_START, startPayload);
+```
 
-// Store in Supabase for all clients to retrieve
-await supabase.from('matches').insert([{
-    game_seed: gameSeed,
-    // ... other match data
-}]);
-
-// Initialize host's RNG
-this.gameRNG = new SeededRandom(gameSeed);
+#### Clients Initialize RNG
+```typescript
+// In MultiplayerNetworkManager:
+this.gameRNG = new SeededRandom(payload.gameSeed);
 setGameRNG(this.gameRNG);
 ```
 
-#### Client Joins Match
-```typescript
-// src/multiplayer-network.ts:311
-// Retrieve match data including seed from Supabase
-const { data: match } = await supabase
-    .from('matches')
-    .select('*')
-    .eq('id', matchId)
-    .single();
-
-// Initialize client's RNG with same seed
-this.gameRNG = new SeededRandom(match.game_seed);
-setGameRNG(this.gameRNG);
-```
-
-**Key Point**: All peers use the **exact same seed** stored in the Supabase `matches` table.
+**Key Point**: All peers receive the **exact same seed** synchronized by the Colyseus room authority.
 
 ### 2. Deterministic PRNG Algorithm
 
@@ -157,7 +149,7 @@ Example log output:
 
 ### ❌ Issue: Different Seed on Different Peers
 **Impact**: Complete desync from tick 0
-**Prevention**: Single source of truth (Supabase `game_seed`)
+**Prevention**: Single source of truth (Colyseus `match_start` synchronized broadcast)
 **Detection**: Immediate desync, game unplayable
 
 ### ❌ Issue: Non-deterministic Floating Point
@@ -171,10 +163,10 @@ Example log output:
 
 ## Conclusion
 
-✅ **The RNG is fully deterministic for P2P multiplayer**
+✅ **The RNG is fully deterministic for multiplayer**
 
 All peers:
-1. Receive the same seed from Supabase
+1. Receive the same seed from Colyseus server broadcast
 2. Initialize RNG with that seed
 3. Call RNG in the same order (deterministic command execution)
 4. Get identical random values

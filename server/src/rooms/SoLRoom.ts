@@ -7,8 +7,8 @@ import {
     JoinRoomOptions, 
     MatchStartPayload, 
     StateHashMessage 
-} from '../../src/shared/multiplayer-protocol';
-import { GameCommand } from '../../src/transport';
+} from '../../../src/shared/multiplayer-protocol';
+import { GameCommand } from '../../../src/transport';
 
 /**
  * Maximum command payload size allowed by the server (in characters/bytes)

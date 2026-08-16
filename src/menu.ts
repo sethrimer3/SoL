@@ -116,7 +116,7 @@ export class MainMenu {
     private playerProfileManager: PlayerProfileManager = new PlayerProfileManager(); // Player profile manager
     private networkManager: NetworkManager | null = null; // Network manager for LAN play
     private multiplayerNetworkManager: MultiplayerNetworkManager | null = null; // Network manager for P2P play
-    private onlineNetworkManager: OnlineNetworkManager | null = null; // Network manager for Online/Custom lobbies
+    private onlineNetworkManager: any = null; // Network manager for Online/Custom lobbies
     private readonly matchmakingController = new MatchmakingController();
     private p2pMatchPlayers: MatchPlayer[] = []; // Track players in P2P match
     private mainScreenRenderToken: number = 0;
@@ -192,9 +192,10 @@ export class MainMenu {
         this.ensureDefaultHeroSelection();
         this.menuAudioController = new MenuAudioController(this.resolveAssetPath.bind(this));
         
-        // Initialize online network manager for custom lobbies and matchmaking
+        // Initialize multiplayer network manager for matchmaking and rooms
         const playerId = this.playerProfileManager.getOrGeneratePlayerId();
-        this.onlineNetworkManager = new OnlineNetworkManager(playerId);
+        this.multiplayerNetworkManager = new MultiplayerNetworkManager(undefined, playerId);
+        this.onlineNetworkManager = this.multiplayerNetworkManager;
         
         this.menuElement = this.createMenuElement();
         document.body.appendChild(this.menuElement);
@@ -1207,7 +1208,7 @@ export class MainMenu {
         
         // Start polling for matchmaking results
         this.matchmakingController.start2v2Polling({
-            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getMultiplayerNetworkManager: () => this.multiplayerNetworkManager,
             getSettings: () => this.settings,
             getUsername: () => this.settings.username,
             getSelectedFaction: () => this.settings.selectedFaction,
@@ -1318,7 +1319,7 @@ export class MainMenu {
         
         // Start polling for matchmaking results
         this.matchmakingController.start1v1Polling({
-            getOnlineNetworkManager: () => this.onlineNetworkManager,
+            getMultiplayerNetworkManager: () => this.multiplayerNetworkManager,
             getSettings: () => this.settings,
             getUsername: () => this.settings.username,
             getSelectedFaction: () => this.settings.selectedFaction,
@@ -1401,8 +1402,8 @@ export class MainMenu {
         const localPlayerId = this.onlineNetworkManager.getLocalPlayerId();
         const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
 
-        const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
-        const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+        const team0Players = allPlayers.filter((p: any) => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+        const team1Players = allPlayers.filter((p: any) => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
 
         for (const player of team0Players.slice(0, 2)) {
             playerConfigs.push([
@@ -1588,15 +1589,15 @@ export class MainMenu {
                 const allPlayers = await this.onlineNetworkManager.getRoomPlayers();
                 
                 // Validate we have enough players
-                const activePlayers = allPlayers.filter(p => p.slot_type === 'player' || p.slot_type === 'ai');
+                const activePlayers = allPlayers.filter((p: any) => p.slot_type === 'player' || p.slot_type === 'ai');
                 if (activePlayers.length < 2) {
                     alert('Need at least 2 players to start the game');
                     return;
                 }
                 
                 // Verify all non-host human players are ready (host is always considered ready)
-                const humanPlayers = allPlayers.filter(p => p.slot_type === 'player' && !p.is_host);
-                const allReady = humanPlayers.every(p => p.is_ready);
+                const humanPlayers = allPlayers.filter((p: any) => p.slot_type === 'player' && !p.is_host);
+                const allReady = humanPlayers.every((p: any) => p.is_ready);
                 if (!allReady) {
                     alert('All players must be ready before starting');
                     return;
@@ -1606,8 +1607,8 @@ export class MainMenu {
                 const playerConfigs: Array<[string, Faction, number, 'player' | 'ai', 'easy' | 'normal' | 'hard', boolean]> = [];
                 
                 // Sort players by team for proper positioning
-                const team0Players = allPlayers.filter(p => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
-                const team1Players = allPlayers.filter(p => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                const team0Players = allPlayers.filter((p: any) => p.team_id === 0 && (p.slot_type === 'player' || p.slot_type === 'ai'));
+                const team1Players = allPlayers.filter((p: any) => p.team_id === 1 && (p.slot_type === 'player' || p.slot_type === 'ai'));
                 
                 // Add team 0 players
                 for (const player of team0Players.slice(0, 2)) {

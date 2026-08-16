@@ -45,9 +45,8 @@ P2P/online play (see `ONLINE_PLAY.md`, `P2P_MULTIPLAYER_ARCHITECTURE.md`) must s
 conditions: NAT traversal on cellular, background disconnects, reconnection. Decide now whether mobile
 players are matched against desktop players (input parity is a balance concern) or pooled separately.
 
-### 1.6 Supabase keys
-Anything in `Supabase/` or read from `dotenv` ships inside the APK and is **extractable**. Only the anon
-key may be embedded, and Row-Level Security must be enforced server-side. No service-role key in the build.
+### 1.6 Server Configuration
+Ensure `COLYSEUS_SERVER_URL` points to the production WebSocket server endpoint. Sensitive secrets should never be embedded in the client build.
 
 ---
 
@@ -89,7 +88,7 @@ key may be embedded, and Row-Level Security must be enforced server-side. No ser
 
 ## Phase 5 — Policy, declarations, compliance
 
-- [ ] **Privacy policy URL** — mandatory. Must cover Supabase data (accounts, match history, replays), what is collected, retention, deletion requests.
+- [ ] **Privacy policy URL** — mandatory. Must cover multiplayer data, what is collected, retention, deletion requests.
 - [ ] **Data safety form** — declare every data type collected/shared, encryption in transit, deletion mechanism. Must match actual app behavior; mismatches cause rejection.
 - [ ] **Account deletion**: if the game has accounts, you must provide an in-app deletion path *and* a public web URL for deletion requests.
 - [ ] **Content rating questionnaire** (IARC) — sci-fi combat, online interaction, user-to-user chat if present.

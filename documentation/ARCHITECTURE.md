@@ -24,8 +24,8 @@ clear module boundaries:
    - Handles menu screens (mode select, matchmaking, settings, lobbies, history).
    - Encapsulates menu particles/atmosphere effects and UI helpers.
 
-5. **Networking Layer (`src/multiplayer-network.ts`, `src/p2p-transport.ts`, `src/transport.ts`)**
-   - Uses Supabase for matchmaking/signaling and WebRTC data channels for live command traffic.
+5. **Networking Layer (`src/multiplayer-network.ts`, `src/colyseus-transport.ts`, `src/transport.ts`)**
+   - Uses Colyseus server for room authority and WebSocket command relay.
    - Synchronizes deterministic commands by tick (lockstep-style flow).
 
 6. **Replay/Verification Layer (`src/replay.ts`, `src/state-verification.ts`)**
@@ -527,9 +527,8 @@ See `MULTIPLAYER_SECURITY.md` for detailed security design.
 ### Performance Characteristics
 
 **Network Usage**:
-- Supabase (signaling): ~1-5 KB/s during connection, ~0.1 KB/s after
-- P2P (commands): ~0.5-2 KB/s per player connection
-- Total for 4 players: ~10-15 KB/s (very light)
+- Colyseus WebSocket: ~0.5-2 KB/s per active match connection
+- Total for 4 players: ~5-10 KB/s (very light)
 
 **Latency**:
 - Local network: <50ms

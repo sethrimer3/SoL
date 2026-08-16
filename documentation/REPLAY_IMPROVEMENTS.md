@@ -207,7 +207,7 @@ Where:
 
 Potential improvements for future iterations:
 
-1. **Cloud Sync**: Store match history in Supabase for cross-device access
+1. **Cloud Sync**: Store match history on cloud backend for cross-device access
 2. **Leaderboards**: Global MMR rankings for multiplayer
 3. **Advanced Filters**: Search by opponent, map, date range, etc.
 4. **Match Statistics**: Detailed stats (units created, energy gathered, etc.)

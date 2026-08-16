@@ -11,7 +11,7 @@ The game is automatically deployed to GitHub Pages via GitHub Actions whenever c
 1. **GitHub Actions Workflow** (`.github/workflows/build-and-deploy.yml`):
    - Automatically triggers on every push to `main`
    - Installs dependencies with `npm ci`
-   - Builds the project with `npm run build` (includes Supabase secrets if configured)
+   - Builds the project with `npm run build`
    - Uploads the built `dist/` folder as a GitHub Pages artifact
    - Deploys the artifact to GitHub Pages
 

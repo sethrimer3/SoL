@@ -101,10 +101,10 @@ Smaller automated units that form the backbone of your army:
 - 2D graphics with ray-traced lighting
 - Cross-platform (Mobile & Desktop)
 - Real-time multiplayer with crossplay
-  - P2P WebRTC for low-latency gameplay
+  - Colyseus WebSocket relay for low-latency gameplay
   - Deterministic lockstep synchronization
   - 2-8 players supported
-  - LAN and online play via Supabase matchmaking
+  - LAN and online play via Colyseus server
 - AI opponents
 
 ## Multiplayer Features
@@ -150,9 +150,8 @@ Smaller automated units that form the backbone of your army:
 
 **Network Efficiency**:
 - Only commands transmitted (not full game state)
-- Low bandwidth: ~10-15 KB/s for 4 players
-- Direct P2P: minimal latency (<100ms on good connections)
-- Supabase used only for matchmaking/signaling
+- Low bandwidth: ~5-10 KB/s for 4 players
+- Colyseus WebSocket command relay
 
 **Command Types**:
 - Unit movement and targeting
@@ -187,10 +186,9 @@ Smaller automated units that form the backbone of your army:
 ✅ Light-based mechanics with ray tracing
 ✅ Line-of-sight system for solar mirrors
 ✅ Cross-platform support (Mobile & Desktop)
-✅ P2P Multiplayer System
+✅ Multiplayer System
   - Deterministic lockstep simulation
-  - WebRTC P2P connections
-  - Supabase matchmaking and signaling
+  - Colyseus room authority and WebSocket relay
   - Command queue and synchronization
   - Match lobby and player management
   - Seeded RNG for determinism

@@ -635,7 +635,7 @@ export class InputCoordinator {
 
 | New Module | LOC Est. | Content |
 |---|---|---|
-| `online-auth.ts` | ~200 | `ensureDatabaseIdentity`, `databasePlayerId`, Supabase auth |
+| `online-auth.ts` | ~200 | `ensureDatabaseIdentity`, `databasePlayerId`, player identity |
 | `online-room-manager.ts` | ~400 | `createRoom`, `joinRoom`, `leaveRoom`, `listRooms`, realtime subscriptions |
 | `online-matchmaking.ts` | ~350 | MMR queries, 1v1/2v2 queue entry/exit, match found handlers |
 | `online-game-session.ts` | ~450 | `startGame`, tick command dispatch, `sendCommand`, ping tracking |
