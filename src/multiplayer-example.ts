@@ -26,10 +26,10 @@ class MultiplayerGameController {
     /**
      * Initialize multiplayer mode
      */
-    initializeMultiplayer(supabaseUrl: string, supabaseKey: string, playerId: string): void {
+    initializeMultiplayer(serverUrl?: string, playerId?: string): void {
         console.log('[Game] Initializing multiplayer...');
         
-        this.network = new MultiplayerNetworkManager(supabaseUrl, supabaseKey, playerId);
+        this.network = new MultiplayerNetworkManager(serverUrl, playerId);
         this.isMultiplayer = true;
 
         // Setup event listeners
@@ -410,24 +410,14 @@ class MultiplayerMenuUI {
  * Example initialization
  */
 function initializeGame() {
-    // Use hard-coded Supabase credentials
-    const SUPABASE_URL = 'https://ixweicxojgtcpajnfrww.supabase.co';
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml4d2VpY3hvamd0Y3Bham5mcnd3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1OTU4MzEsImV4cCI6MjA4NjE3MTgzMX0.ZuChgOFQf-ouThReLwlqAj3ZzcvZF8r0b78bu_CQcVc';
-    
     // Generate or retrieve player ID
     const playerId = localStorage.getItem('playerId') || generateUUID();
     localStorage.setItem('playerId', playerId);
 
     // Create game controller
     const controller = new MultiplayerGameController();
-    
-    // Initialize multiplayer if credentials available
-    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
-        controller.initializeMultiplayer(SUPABASE_URL, SUPABASE_ANON_KEY, playerId);
-        console.log('[Game] Multiplayer enabled');
-    } else {
-        console.log('[Game] Multiplayer disabled (no Supabase credentials)');
-    }
+    controller.initializeMultiplayer(undefined, playerId);
+    console.log('[Game] Multiplayer enabled');
 
     // Create UI
     const menuUI = new MultiplayerMenuUI(controller);

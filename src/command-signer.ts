@@ -24,7 +24,7 @@ export class CommandSigner {
      * Derive a shared HMAC-SHA256 signing key from the match seed.
      * Both host and client call this with the same seed, producing an identical key.
      *
-     * @param matchSeed - Integer match seed (game_seed column from Supabase)
+     * @param matchSeed - Integer match seed
      * @returns CryptoKey suitable for HMAC sign/verify operations
      */
     static async deriveKey(matchSeed: number): Promise<CryptoKey> {

@@ -1,27 +1,19 @@
 /**
  * Multiplayer Network Manager
  * 
- * High-level manager for P2P multiplayer with deterministic lockstep.
- * Handles match lifecycle, command synchronization, and network coordination.
+ * High-level manager for Colyseus-backed multiplayer with deterministic lockstep.
+ * Handles match lifecycle, room membership, command synchronization, and state verification.
  * 
  * MATCH LIFECYCLE:
- * 1. Create Match → Host creates match in Supabase
- * 2. Join Match → Clients join and exchange connection data
- * 3. Connect → P2P connections established via WebRTC signaling
- * 4. Start Match → Game begins with synchronized seed
- * 5. Play → Commands flow through P2P, simulation advances tick by tick
- * 6. End Match → Clean up and record results
- * 
- * PHASE 2 MIGRATION PATH:
- * - Replace P2PTransport with ServerRelayTransport
- * - Enable lockstep_enabled flag in match settings
- * - Add periodic state hash verification
- * - Implement cheat detection
+ * 1. Create Match → Host creates Colyseus room
+ * 2. Join Match → Clients join Colyseus room by ID / match code
+ * 3. Start Match → Host signals start, server broadcasts synchronized game seed and player list
+ * 4. Play → GameCommands flow through ColyseusTransport, deterministic simulation advances tick by tick
+ * 5. End Match → Clean room teardown and resource disposal
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { P2PTransport, TurnServerConfig } from './p2p-transport';
-import { ServerRelayTransport } from './server-relay-transport';
+import { Client as ColyseusClient, Room } from 'colyseus.js';
+import { ColyseusTransport } from './colyseus-transport';
 import { 
     ITransport, 
     GameCommand, 
@@ -39,49 +31,29 @@ import {
     DesyncEvent 
 } from './state-verification';
 import { CommandSigner } from './command-signer';
+import { getOrCreatePlayerId, getOrGenerateUsername } from './player-identity';
+import { 
+    ProtocolMessage, 
+    MatchInfo, 
+    PlayerMetadata, 
+    MatchStartPayload, 
+    StateHashMessage 
+} from './shared/multiplayer-protocol';
 
-/**
- * Match metadata stored in Supabase
- */
-export interface Match {
-    id: string;
-    created_at: string;
-    status: 'open' | 'connecting' | 'active' | 'ended';
-    host_player_id: string;
-    game_seed: number;
-    tick_rate: number;
-    lockstep_enabled: boolean;
-    max_players: number;
-    match_name: string;
-    game_settings: any;
-}
-
-/**
- * Player in a match
- */
-export interface MatchPlayer {
-    id: string;
-    match_id: string;
-    player_id: string;
-    role: 'host' | 'client';
-    connected: boolean;
-    username: string;
-    faction: string | null;
-}
+/** Type aliases for backward compatibility with UI components */
+export type Match = MatchInfo;
+export type MatchPlayer = PlayerMetadata;
 
 /**
  * Match creation options
  */
 export interface CreateMatchOptions {
     matchName: string;
-    username: string;
+    username?: string;
     maxPlayers?: number;
     tickRate?: number;
-    lockstepEnabled?: boolean;
     gameSeed?: number;
-    gameSettings?: any;
-    /** Optional TURN servers for relay support behind strict NATs */
-    turnServers?: TurnServerConfig[];
+    gameSettings?: Record<string, any>;
 }
 
 /**
@@ -106,572 +78,385 @@ export enum NetworkEvent {
 export type NetworkEventCallback = (data?: any) => void;
 
 /**
- * Main multiplayer network manager
+ * Default Colyseus server endpoint
  */
+function getDefaultServerUrl(): string {
+    if (typeof process !== 'undefined' && process.env && process.env.COLYSEUS_SERVER_URL) {
+        return process.env.COLYSEUS_SERVER_URL;
+    }
+    if (typeof window !== 'undefined' && window.location) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const hostname = window.location.hostname || 'localhost';
+        // If loaded from dev server on port 8080/etc., default Colyseus port is 2567
+        return `${protocol}//${hostname}:2567`;
+    }
+    return 'ws://localhost:2567';
+}
+
 export class MultiplayerNetworkManager {
-    private supabase: SupabaseClient;
+    private client: ColyseusClient;
+    private serverUrl: string;
     private localPlayerId: string;
-    private databasePlayerId: string | null = null;
-    private currentMatch: Match | null = null;
+    private localUsername: string;
+
+    private room: Room | null = null;
+    private currentMatch: MatchInfo | null = null;
     private isHost: boolean = false;
-    
-    // Transport layer (P2P or Server Relay)
-    private transport: ITransport | null = null;
-    
-    // Command management
+
+    // Transport layer
+    private transport: ColyseusTransport | null = null;
+
+    // Command queue and verification
     private commandQueue: CommandQueue | null = null;
     private commandValidator: CommandValidator = new CommandValidator();
-    
-    // State verification (always enabled — not gated by lockstep_enabled)
     private stateVerifier: StateVerifier | null = null;
-    
-    // RNG for determinism
+
+    // Deterministic RNG
     private gameRNG: SeededRandom | null = null;
-    
-    // Anti-cheat: HMAC signing key derived from match seed
+
+    // Anti-cheat HMAC signing
     private signingKey: CryptoKey | null = null;
     private signingEnabled: boolean = false;
-    
+
     // Event listeners
     private eventListeners: Map<NetworkEvent, NetworkEventCallback[]> = new Map();
-    
+
     // State
     private isActive: boolean = false;
     private currentTick: number = 0;
     private isTransportReady: boolean = false;
-    
-    // Supabase channel for cleanup
-    private playerListenerChannel: any = null;
-    
-    // Connection timeout
-    private connectionTimeout: NodeJS.Timeout | null = null;
-    private readonly CONNECTION_TIMEOUT_MS = 30000; // 30 seconds
-    
-    // Pending commands queue (before transport ready)
     private pendingCommands: GameCommand[] = [];
 
-    constructor(supabaseUrl: string, supabaseAnonKey: string, playerId: string) {
-        this.supabase = createClient(supabaseUrl, supabaseAnonKey);
-        this.localPlayerId = playerId;
-        
-        console.log('[MultiplayerNetworkManager] Initialized', {
-            playerId
+    constructor(serverUrl?: string, playerId?: string) {
+        this.serverUrl = serverUrl || getDefaultServerUrl();
+        this.localPlayerId = playerId || getOrCreatePlayerId();
+        this.localUsername = getOrGenerateUsername();
+        this.client = new ColyseusClient(this.serverUrl);
+
+        console.log('[MultiplayerNetworkManager] Initialized with Colyseus endpoint:', this.serverUrl, {
+            playerId: this.localPlayerId
         });
     }
 
     /**
-     * Ensure we have an authenticated Supabase UUID for UUID-backed schemas.
+     * Create a new match as host
      */
-    private async ensureDatabaseIdentity(): Promise<string | null> {
-        if (this.databasePlayerId) {
-            return this.databasePlayerId;
-        }
-
-        const { data: userData, error: userError } = await this.supabase.auth.getUser();
-        if (userError) {
-            console.warn('[MultiplayerNetworkManager] Failed to fetch Supabase user, attempting anonymous auth:', userError);
-        }
-
-        if (userData.user?.id) {
-            this.databasePlayerId = userData.user.id;
-            this.localPlayerId = userData.user.id;
-            return this.databasePlayerId;
-        }
-
-        const { data: signInData, error: signInError } = await this.supabase.auth.signInAnonymously();
-        if (signInError || !signInData.user?.id) {
-            console.error('[MultiplayerNetworkManager] Failed to establish Supabase identity:', signInError);
-            this.emit(NetworkEvent.ERROR, {
-                error: signInError,
-                message: 'Failed to authenticate with Supabase. Enable anonymous auth or sign in before hosting.'
-            });
-            return null;
-        }
-
-        this.databasePlayerId = signInData.user.id;
-        this.localPlayerId = signInData.user.id;
-        return this.databasePlayerId;
-    }
-
-    /**
-     * Create a new match (host)
-     */
-    async createMatch(options: CreateMatchOptions): Promise<Match | null> {
+    async createMatch(options: CreateMatchOptions): Promise<MatchInfo | null> {
         try {
-            console.log('[MultiplayerNetworkManager] Creating match...', options);
+            console.log('[MultiplayerNetworkManager] Creating match on Colyseus server...', options);
+            this.emit(NetworkEvent.CONNECTING);
 
-            const databasePlayerId = await this.ensureDatabaseIdentity();
-            if (!databasePlayerId) {
-                return null;
-            }
-            
+            const username = options.username || this.localUsername;
+            const gameSeed = typeof options.gameSeed === 'number' ? options.gameSeed : generateMatchSeed();
+
+            const createOptions = {
+                matchName: options.matchName || `${username}'s Match`,
+                username: username,
+                playerId: this.localPlayerId,
+                maxPlayers: options.maxPlayers || 2,
+                tickRate: options.tickRate || 30,
+                gameSeed: gameSeed,
+                gameSettings: options.gameSettings || {}
+            };
+
+            this.room = await this.client.create('sol_room', createOptions);
             this.isHost = true;
-            const gameSeed = options.gameSeed || generateMatchSeed();
-            
-            // Create match in Supabase
-            const { data: match, error: matchError } = await this.supabase
-                .from('matches')
-                .insert([{
-                    status: 'open',
-                    host_player_id: databasePlayerId,
-                    game_seed: gameSeed,
-                    tick_rate: options.tickRate || 30,
-                    lockstep_enabled: options.lockstepEnabled || false,
-                    max_players: options.maxPlayers || 2,
-                    match_name: options.matchName,
-                    game_settings: options.gameSettings || {}
-                }])
-                .select()
-                .single();
 
-            if (matchError) {
-                console.error('[MultiplayerNetworkManager] Failed to create match:', matchError);
-                const userMessage = 'Failed to create match. Please check your connection and try again.';
-                this.emit(NetworkEvent.ERROR, { error: matchError, message: userMessage });
-                return null;
-            }
+            this.setupRoomHandlers(this.room);
 
-            this.currentMatch = match;
-
-            // Add host as player
-            const { error: playerError } = await this.supabase
-                .from('match_players')
-                .insert([{
-                    match_id: match.id,
-                    player_id: databasePlayerId,
+            // Construct initial match metadata
+            const matchCode = this.room.id.replace(/[^a-zA-Z0-9]/g, '').toUpperCase().substring(0, 6).padEnd(6, 'X');
+            this.currentMatch = {
+                id: this.room.id,
+                matchCode: matchCode,
+                hostPlayerId: this.localPlayerId,
+                status: 'open',
+                gameSeed: gameSeed,
+                tickRate: options.tickRate || 30,
+                maxPlayers: options.maxPlayers || 2,
+                matchName: options.matchName || `${username}'s Match`,
+                gameSettings: options.gameSettings || {},
+                players: [{
+                    playerId: this.localPlayerId,
+                    username: username,
                     role: 'host',
-                    connected: false,
-                    username: options.username
-                }]);
-
-            if (playerError) {
-                console.error('[MultiplayerNetworkManager] Failed to add host player:', playerError);
-                const userMessage = 'Failed to join match as host. Please try again.';
-                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
-                return null;
-            }
+                    connected: true,
+                    isReady: true,
+                    faction: null
+                }],
+                createdAt: Date.now()
+            };
 
             // Initialize RNG with match seed
             this.gameRNG = new SeededRandom(gameSeed);
             setGameRNG(this.gameRNG);
 
-            console.log('[MultiplayerNetworkManager] Match created:', match.id, 'seed:', gameSeed);
-            this.emit(NetworkEvent.MATCH_CREATED, { match });
-            
-            // Start listening for players joining
-            this.startListeningForPlayers();
+            console.log(`[MultiplayerNetworkManager] Match created: ${this.room.id} (code: ${matchCode}, seed: ${gameSeed})`);
+            this.emit(NetworkEvent.MATCH_CREATED, { match: this.currentMatch });
 
-            return match;
+            return this.currentMatch;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error creating match:', error);
-            const userMessage = 'An unexpected error occurred while creating the match.';
+            const userMessage = 'Failed to create match on game server. Please ensure the Colyseus server is running.';
             this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return null;
         }
     }
 
     /**
-     * List available matches
+     * Join an existing match by Room ID or Match Code
      */
-    async listMatches(): Promise<Match[]> {
-        const { data, error } = await this.supabase
-            .from('matches')
-            .select('*')
-            .eq('status', 'open')
-            .order('created_at', { ascending: false })
-            .limit(20);
-
-        if (error) {
-            console.error('[MultiplayerNetworkManager] Failed to list matches:', error);
-            return [];
-        }
-
-        return data || [];
-    }
-
-    /**
-     * Resolve a visible short match code to its full match id.
-     */
-    async findMatchByShortId(shortMatchId: string): Promise<Match | null> {
-        const normalizedShortMatchId = shortMatchId.trim().toUpperCase();
-        if (normalizedShortMatchId.length < 6) {
-            return null;
-        }
-
-        const matches = await this.listMatches();
-        const matchingMatches = matches.filter((match) =>
-            match.id.toUpperCase().startsWith(normalizedShortMatchId)
-        );
-
-        if (matchingMatches.length === 0) {
-            return null;
-        }
-
-        if (matchingMatches.length > 1) {
-            const userMessage = 'Match code is ambiguous. Enter more characters from the host code.';
-            console.error('[MultiplayerNetworkManager] Ambiguous short match code:', normalizedShortMatchId);
-            this.emit(NetworkEvent.ERROR, { error: 'Ambiguous match code', message: userMessage });
-            return null;
-        }
-
-        return matchingMatches[0];
-    }
-
-    /**
-     * Join an existing match
-     */
-    async joinMatch(matchId: string, username: string): Promise<boolean> {
+    async joinMatch(roomIdOrCode: string, username?: string): Promise<boolean> {
         try {
-            console.log('[MultiplayerNetworkManager] Joining match:', matchId);
+            console.log('[MultiplayerNetworkManager] Joining match:', roomIdOrCode);
+            this.emit(NetworkEvent.CONNECTING);
 
-            const databasePlayerId = await this.ensureDatabaseIdentity();
-            if (!databasePlayerId) {
-                return false;
-            }
-            
-            // Get match info
-            const { data: match, error: matchError } = await this.supabase
-                .from('matches')
-                .select('*')
-                .eq('id', matchId)
-                .single();
+            const displayUsername = username || this.localUsername;
+            let targetRoomId = roomIdOrCode.trim();
 
-            if (matchError || !match) {
-                console.error('[MultiplayerNetworkManager] Match not found:', matchError);
-                const userMessage = 'Match not found. The match code may be incorrect or expired.';
-                this.emit(NetworkEvent.ERROR, { error: 'Match not found', message: userMessage });
-                return false;
+            // If a short match code was provided (length <= 6), look up the matching room
+            if (targetRoomId.length <= 6) {
+                const foundMatch = await this.findMatchByShortId(targetRoomId);
+                if (!foundMatch) {
+                    const userMessage = `Match code "${targetRoomId}" not found or expired.`;
+                    this.emit(NetworkEvent.ERROR, { error: 'Match not found', message: userMessage });
+                    return false;
+                }
+                targetRoomId = foundMatch.id;
             }
 
-            // Check if match is joinable
-            if (match.status !== 'open') {
-                console.error('[MultiplayerNetworkManager] Match not open for joining');
-                const userMessage = 'Match is not accepting new players. It may have already started.';
-                this.emit(NetworkEvent.ERROR, { error: 'Match not open', message: userMessage });
-                return false;
-            }
+            this.room = await this.client.joinById(targetRoomId, {
+                username: displayUsername,
+                playerId: this.localPlayerId
+            });
 
-            // Check player count
-            const { data: players, error: playersError } = await this.supabase
-                .from('match_players')
-                .select('*')
-                .eq('match_id', matchId);
-
-            if (playersError || !players) {
-                console.error('[MultiplayerNetworkManager] Failed to get players:', playersError);
-                return false;
-            }
-
-            if (players.length >= match.max_players) {
-                console.error('[MultiplayerNetworkManager] Match is full');
-                const userMessage = `Match is full (${match.max_players}/${match.max_players} players).`;
-                this.emit(NetworkEvent.ERROR, { error: 'Match is full', message: userMessage });
-                return false;
-            }
-
-            this.currentMatch = match;
             this.isHost = false;
+            this.setupRoomHandlers(this.room);
 
-            // Add player to match
-            const { error: playerError } = await this.supabase
-                .from('match_players')
-                .insert([{
-                    match_id: matchId,
-                    player_id: databasePlayerId,
-                    role: 'client',
-                    connected: false,
-                    username: username
-                }]);
-
-            if (playerError) {
-                console.error('[MultiplayerNetworkManager] Failed to join match:', playerError);
-                const userMessage = 'Failed to join match. Please try again.';
-                this.emit(NetworkEvent.ERROR, { error: playerError, message: userMessage });
-                return false;
-            }
-
-            // Initialize RNG with match seed
-            this.gameRNG = new SeededRandom(match.game_seed);
-            setGameRNG(this.gameRNG);
-
-            console.log('[MultiplayerNetworkManager] Joined match:', matchId);
-            this.emit(NetworkEvent.PLAYER_JOINED, { matchId, playerId: databasePlayerId });
-
+            console.log('[MultiplayerNetworkManager] Successfully joined room:', this.room.id);
             return true;
         } catch (error) {
             console.error('[MultiplayerNetworkManager] Error joining match:', error);
-            const userMessage = 'An unexpected error occurred while joining the match.';
+            const userMessage = 'Failed to join match. It may be full or no longer available.';
             this.emit(NetworkEvent.ERROR, { error, message: userMessage });
             return false;
         }
     }
 
     /**
-     * Start listening for players joining (host only)
+     * List open/available matches from Colyseus
      */
-    private startListeningForPlayers(): void {
-        if (!this.isHost || !this.currentMatch) return;
-
-        // Cleanup existing channel if any
-        this.stopListeningForPlayers();
-
-        // Subscribe to match_players changes
-        this.playerListenerChannel = this.supabase
-            .channel(`match:${this.currentMatch.id}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'match_players',
-                    filter: `match_id=eq.${this.currentMatch.id}`
-                },
-                (payload) => {
-                    console.log('[MultiplayerNetworkManager] Player joined:', payload.new);
-                    this.emit(NetworkEvent.PLAYER_JOINED, payload.new);
-                }
-            )
-            .subscribe();
-    }
-
-    /**
-     * Stop listening for players joining
-     */
-    private stopListeningForPlayers(): void {
-        if (this.playerListenerChannel) {
-            this.supabase.removeChannel(this.playerListenerChannel);
-            this.playerListenerChannel = null;
+    async listMatches(): Promise<MatchInfo[]> {
+        try {
+            const availableRooms = await this.client.getAvailableRooms('sol_room');
+            return availableRooms.map(room => {
+                const metadata = room.metadata || {};
+                return {
+                    id: room.roomId,
+                    matchCode: metadata.matchCode || room.roomId.substring(0, 6).toUpperCase(),
+                    hostPlayerId: metadata.hostPlayerId || '',
+                    status: metadata.status || 'open',
+                    gameSeed: 0,
+                    tickRate: 30,
+                    maxPlayers: room.maxClients || 2,
+                    matchName: metadata.matchName || 'SoL Match',
+                    gameSettings: {},
+                    players: [],
+                    createdAt: Date.now()
+                };
+            });
+        } catch (error) {
+            console.error('[MultiplayerNetworkManager] Failed to query available matches:', error);
+            return [];
         }
     }
 
     /**
-     * Start the match - establish P2P connections
+     * Resolve a short match code prefix to a matching room
      */
-    async startMatch(options: { turnServers?: TurnServerConfig[] } = {}): Promise<boolean> {
-        if (!this.currentMatch) {
-            console.error('[MultiplayerNetworkManager] No active match');
+    async findMatchByShortId(shortMatchId: string): Promise<MatchInfo | null> {
+        const normalized = shortMatchId.trim().toUpperCase();
+        if (normalized.length < 3) return null;
+
+        try {
+            const rooms = await this.listMatches();
+            const matching = rooms.filter(m => 
+                m.matchCode.toUpperCase().startsWith(normalized) || 
+                m.id.toUpperCase().startsWith(normalized)
+            );
+
+            if (matching.length === 0) return null;
+            if (matching.length > 1) {
+                this.emit(NetworkEvent.ERROR, {
+                    error: 'Ambiguous match code',
+                    message: 'Match code is ambiguous. Please enter more characters.'
+                });
+                return null;
+            }
+            return matching[0];
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Wire room listeners for state updates, match start, command relay, etc.
+     */
+    private setupRoomHandlers(room: Room): void {
+        // Create Colyseus transport
+        this.transport = new ColyseusTransport(room, this.localPlayerId);
+        this.transport.onCommandReceived((command: GameCommand) => {
+            this.handleReceivedCommand(command);
+        });
+
+        // Listen for match metadata updates (players joined, ready status, etc.)
+        room.onMessage(ProtocolMessage.MATCH_UPDATE, (payload: { match: MatchInfo }) => {
+            if (payload?.match) {
+                const prevCount = this.currentMatch?.players?.length || 0;
+                this.currentMatch = payload.match;
+
+                const newCount = this.currentMatch.players?.length || 0;
+                if (newCount > prevCount) {
+                    const latestPlayer = this.currentMatch.players[this.currentMatch.players.length - 1];
+                    this.emit(NetworkEvent.PLAYER_JOINED, latestPlayer);
+                } else if (newCount < prevCount) {
+                    this.emit(NetworkEvent.PLAYER_LEFT, { playerCount: newCount });
+                }
+            }
+        });
+
+        // Listen for synchronized match start broadcast from server
+        room.onMessage(ProtocolMessage.MATCH_START, (payload: MatchStartPayload) => {
+            this.handleMatchStarted(payload);
+        });
+
+        // Listen for state verification hash relay
+        room.onMessage(ProtocolMessage.STATE_HASH, (payload: StateHashMessage) => {
+            if (this.stateVerifier && payload && payload.playerId !== this.localPlayerId) {
+                this.stateVerifier.receiveHash(payload.tick, payload.playerId, payload.hash);
+            }
+        });
+
+        // Listen for server errors
+        room.onMessage(ProtocolMessage.ERROR, (payload: { message: string }) => {
+            this.emit(NetworkEvent.ERROR, { message: payload.message });
+        });
+
+        // Handle connection loss & reconnection
+        room.onLeave((code) => {
+            console.log(`[MultiplayerNetworkManager] Room left with code ${code}`);
+            this.emit(NetworkEvent.DISCONNECTED);
+        });
+
+        room.onError((code, message) => {
+            console.error(`[MultiplayerNetworkManager] Room error ${code}: ${message}`);
+            this.emit(NetworkEvent.ERROR, { code: String(code), message });
+        });
+    }
+
+    /**
+     * Start the match (Host triggers server broadcast)
+     */
+    async startMatch(): Promise<boolean> {
+        if (!this.room) {
+            console.error('[MultiplayerNetworkManager] Cannot start match: not in a room');
+            return false;
+        }
+
+        if (!this.isHost) {
+            console.warn('[MultiplayerNetworkManager] Only the host can trigger match start');
             return false;
         }
 
         try {
-            console.log('[MultiplayerNetworkManager] Starting match...');
-            
-            // Get all players
-            const { data: players, error: playersError } = await this.supabase
-                .from('match_players')
-                .select('*')
-                .eq('match_id', this.currentMatch.id);
+            console.log('[MultiplayerNetworkManager] Host requesting match start...');
+            this.room.send(ProtocolMessage.START_MATCH, {});
+            return true;
+        } catch (error) {
+            console.error('[MultiplayerNetworkManager] Error sending start match request:', error);
+            return false;
+        }
+    }
 
-            if (playersError || !players) {
-                console.error('[MultiplayerNetworkManager] Failed to get players:', playersError);
-                return false;
-            }
+    /**
+     * Handle synchronized match start payload
+     */
+    private async handleMatchStarted(payload: MatchStartPayload): Promise<void> {
+        console.log('[MultiplayerNetworkManager] Match started with synchronized seed:', payload.gameSeed);
 
-            // Update match status
-            if (this.isHost) {
-                await this.supabase
-                    .from('matches')
-                    .update({ status: 'connecting' })
-                    .eq('id', this.currentMatch.id);
-            }
+        // Initialize shared seed
+        this.gameRNG = new SeededRandom(payload.gameSeed);
+        setGameRNG(this.gameRNG);
 
-            this.emit(NetworkEvent.CONNECTING);
+        // Initialize command queue with all participating players
+        const allPlayerIds = payload.playerIds && payload.playerIds.length > 0
+            ? payload.playerIds
+            : payload.players.map(p => p.playerId);
 
-            // Get other player IDs
-            const otherPlayerIds = players
-                .filter(p => p.player_id !== this.localPlayerId)
-                .map(p => p.player_id);
+        this.commandQueue = new CommandQueue(allPlayerIds);
 
-            // Initialize command queue
-            const allPlayerIds = players.map(p => p.player_id);
-            this.commandQueue = new CommandQueue(allPlayerIds);
-
-            // Select transport based on match settings:
-            // - lockstep_enabled → ServerRelayTransport (routes through Supabase for NAT-hostile environments)
-            // - otherwise       → P2PTransport (WebRTC direct connection)
-            if (this.currentMatch.lockstep_enabled) {
-                console.log('[MultiplayerNetworkManager] Using ServerRelayTransport (lockstep mode)');
-                const relay = new ServerRelayTransport(
-                    this.supabase,
-                    this.currentMatch.id,
-                    this.localPlayerId
-                );
-                this.transport = relay;
-
-                // Setup command handling
-                this.transport.onCommandReceived((command: GameCommand) => {
-                    this.handleReceivedCommand(command);
-                });
-
-                await relay.initialize();
-
-                // Relay is immediately ready after subscription
-                relay.onReady(() => {
-                    this.onTransportReady();
-                });
-
-                // If already ready (synchronous path), trigger manually
-                if (relay.isReady()) {
-                    this.onTransportReady();
-                }
-            } else {
-                const turnServers = options.turnServers || [];
-                console.log('[MultiplayerNetworkManager] Using P2PTransport', { turnServers: turnServers.length });
-                const p2p = new P2PTransport(
-                    this.supabase,
-                    this.currentMatch.id,
-                    this.localPlayerId,
-                    this.isHost,
-                    otherPlayerIds,
-                    turnServers
-                );
-                this.transport = p2p;
-
-                // Setup command handling
-                this.transport.onCommandReceived((command: GameCommand) => {
-                    this.handleReceivedCommand(command);
-                });
-
-                // Wire reconnect events
-                p2p.onReconnected(() => {
-                    console.log('[MultiplayerNetworkManager] Peer reconnected — re-checking transport ready');
-                    this.emit(NetworkEvent.RECONNECTED);
-                    // Re-check if transport is now fully ready
-                    if (p2p.isReady()) {
-                        this.onTransportReady();
-                    }
-                });
-
-                // Initialize P2P connections
-                await p2p.initialize();
-
-                // Set connection timeout
-                this.connectionTimeout = setTimeout(() => {
-                    if (!this.isTransportReady) {
-                        console.error('[MultiplayerNetworkManager] Connection timeout - failed to establish connections');
-                        const userMessage = 'Connection timeout. Unable to establish P2P connections. Please check your network and try again.';
-                        this.emit(NetworkEvent.ERROR, { 
-                            error: new Error('Connection timeout - failed to establish P2P connections'),
-                            message: userMessage
-                        });
-                        this.endMatch('connection_timeout');
-                    }
-                }, this.CONNECTION_TIMEOUT_MS);
-
-                // Wait for connections to establish
-                p2p.onReady(() => {
-                    this.onTransportReady();
-                });
-            }
-            
-            // Always enable state verification (not gated by lockstep_enabled)
+        // Initialize StateVerifier for desync detection
+        if (this.transport) {
             this.stateVerifier = new StateVerifier(
                 this.transport,
                 this.localPlayerId,
                 allPlayerIds
             );
-            
-            // Listen for desync events
+
             this.stateVerifier.on(StateVerificationEvent.DESYNC, (event: DesyncEvent) => {
-                console.error('[MultiplayerNetworkManager] Desync detected!', event);
+                console.error('[MultiplayerNetworkManager] DESYNC DETECTED!', event);
                 this.emit(NetworkEvent.DESYNC_DETECTED, event);
             });
-            
-            console.log('[MultiplayerNetworkManager] State verification enabled');
-
-            // Derive command signing key from match seed for anti-cheat
-            try {
-                this.signingKey = await CommandSigner.deriveKey(this.currentMatch.game_seed);
-                this.commandValidator.setSigningKey(this.signingKey);
-                this.signingEnabled = true;
-                console.log('[MultiplayerNetworkManager] Command signing enabled');
-            } catch (signingError) {
-                console.warn('[MultiplayerNetworkManager] Failed to derive signing key:', signingError);
-                this.signingEnabled = false;
-            }
-
-            return true;
-        } catch (error) {
-            console.error('[MultiplayerNetworkManager] Error starting match:', error);
-            const userMessage = 'Failed to start match. Please try again.';
-            this.emit(NetworkEvent.ERROR, { error, message: userMessage });
-            return false;
         }
-    }
 
-    /**
-     * Called when transport is ready (all P2P connections established)
-     */
-    private async onTransportReady(): Promise<void> {
-        // Guard against duplicate calls
-        if (this.isTransportReady) {
-            console.warn('[MultiplayerNetworkManager] Transport already ready, ignoring duplicate call');
-            return;
-        }
-        
-        console.log('[MultiplayerNetworkManager] Transport ready!');
-        this.isTransportReady = true;
-        
-        // Clear connection timeout
-        if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-        }
-        
-        if (this.isHost && this.currentMatch) {
-            // Host updates match status to active
-            await this.supabase
-                .from('matches')
-                .update({ status: 'active' })
-                .eq('id', this.currentMatch.id);
+        // Derive anti-cheat signing key
+        try {
+            this.signingKey = await CommandSigner.deriveKey(payload.gameSeed);
+            this.commandValidator.setSigningKey(this.signingKey);
+            this.signingEnabled = true;
+        } catch (err) {
+            console.warn('[MultiplayerNetworkManager] Failed to derive command signing key:', err);
+            this.signingEnabled = false;
         }
 
         // Flush any pending commands
-        if (this.pendingCommands.length > 0) {
-            console.log(`[MultiplayerNetworkManager] Flushing ${this.pendingCommands.length} pending commands`);
-            for (const command of this.pendingCommands) {
-                if (this.commandQueue) {
-                    this.commandQueue.addCommand(command);
-                }
-                if (this.transport) {
-                    this.transport.sendCommand(command);
-                }
+        if (this.pendingCommands.length > 0 && this.transport) {
+            for (const cmd of this.pendingCommands) {
+                if (this.commandQueue) this.commandQueue.addCommand(cmd);
+                this.transport.sendCommand(cmd);
             }
             this.pendingCommands = [];
         }
 
         this.isActive = true;
+        this.isTransportReady = true;
+
         this.emit(NetworkEvent.CONNECTED);
-        this.emit(NetworkEvent.MATCH_STARTED, { 
-            matchId: this.currentMatch?.id,
-            seed: this.currentMatch?.game_seed
+        this.emit(NetworkEvent.MATCH_STARTED, {
+            matchId: payload.matchId,
+            seed: payload.gameSeed,
+            playerIds: allPlayerIds,
+            startTime: payload.startTime
         });
     }
 
     /**
-     * Handle received command from network
+     * Handle received command from network transport
      */
     private handleReceivedCommand(command: GameCommand): void {
-        // Check if this is a state hash message
-        if (command.commandType === '__state_hash__' && this.stateVerifier) {
-            const message = command.payload;
-            this.stateVerifier.receiveHash(message.tick, message.playerId, message.hash);
-            return; // Don't add to command queue
-        }
-        
         // Validate command structure and rate limit
         if (!this.commandValidator.validate(command)) {
-            console.error('[MultiplayerNetworkManager] Invalid command received:', command);
+            console.error('[MultiplayerNetworkManager] Invalid command received, dropping:', command);
             return;
         }
 
-        // Fast-path sync signature check: reject if key is set but signature is missing
+        // Fast-path signature check
         if (this.signingEnabled && !this.commandValidator.verifySignature(command)) {
-            console.error('[MultiplayerNetworkManager] Command rejected — missing signature:', command.commandType);
+            console.error('[MultiplayerNetworkManager] Command rejected (missing signature):', command.commandType);
             return;
         }
 
-        // Async full signature verification — add to queue only after it passes
+        // Async cryptographic HMAC verification if signing is enabled
         if (this.signingEnabled && this.signingKey && command.signature) {
             CommandSigner.verify(command, command.signature, this.signingKey).then(valid => {
                 if (valid) {
@@ -685,14 +470,13 @@ export class MultiplayerNetworkManager {
             }).catch(err => {
                 console.warn('[MultiplayerNetworkManager] Signature verification error:', err);
             });
-            return; // Do not fall through to synchronous add
+            return;
         }
 
-        // Signing not enabled — add to queue immediately
+        // Add to local command queue
         if (this.commandQueue) {
             this.commandQueue.addCommand(command);
         }
-
         this.emit(NetworkEvent.COMMAND_RECEIVED, { command });
     }
 
@@ -707,13 +491,11 @@ export class MultiplayerNetworkManager {
             payload: payload
         };
 
-        // Validate before sending
         if (!this.commandValidator.validate(command)) {
             console.error('[MultiplayerNetworkManager] Cannot send invalid command:', command);
             return;
         }
 
-        // Sign command for anti-cheat if signing is enabled
         if (this.signingEnabled && this.signingKey) {
             CommandSigner.sign(command, this.signingKey).then(signature => {
                 command.signature = signature;
@@ -728,107 +510,84 @@ export class MultiplayerNetworkManager {
         this.dispatchCommand(command);
     }
 
-    /**
-     * Internal helper: add command to own queue and send to peers.
-     */
     private dispatchCommand(command: GameCommand): void {
-        // If transport is not ready, queue the command
         if (!this.transport?.isReady()) {
-            console.warn('[MultiplayerNetworkManager] Transport not ready, queuing command');
             this.pendingCommands.push(command);
             return;
         }
 
-        // Add to own queue
         if (this.commandQueue) {
             this.commandQueue.addCommand(command);
         }
 
-        // Send to others via transport
         this.transport.sendCommand(command);
     }
 
     /**
-     * Get commands for next tick (for deterministic simulation)
-     * Returns null if not ready to advance (waiting for commands)
+     * Get deterministic commands for the next simulation tick
      */
     getNextTickCommands(): GameCommand[] | null {
         if (!this.commandQueue) {
             return [];
         }
-
         return this.commandQueue.getNextTickCommands();
     }
 
     /**
-     * Advance to next tick
+     * Advance simulation tick counter
      */
     advanceTick(): void {
         this.currentTick++;
     }
-    
+
     /**
-     * Submit state hash for verification (call periodically from game loop)
-     * @param stateHash - The current game state hash
+     * Submit state hash for periodic desync verification
      */
     submitStateHash(stateHash: number): void {
-        if (this.stateVerifier) {
+        if (this.stateVerifier && this.room) {
             this.stateVerifier.submitHash(this.currentTick, stateHash);
+            const message: StateHashMessage = {
+                tick: this.currentTick,
+                playerId: this.localPlayerId,
+                hash: stateHash
+            };
+            this.room.send(ProtocolMessage.STATE_HASH, message);
         }
     }
-    
-    /**
-     * Get state verification statistics
-     */
+
     getStateVerificationStats() {
         return this.stateVerifier?.getStats() || null;
     }
 
     /**
-     * End the match
+     * End match and clean up
      */
     async endMatch(reason?: string): Promise<void> {
         console.log('[MultiplayerNetworkManager] Ending match...', reason);
-        
         this.isActive = false;
         this.isTransportReady = false;
-
-        // Clear connection timeout if still pending
-        if (this.connectionTimeout) {
-            clearTimeout(this.connectionTimeout);
-            this.connectionTimeout = null;
-        }
-
-        // Clear pending commands
         this.pendingCommands = [];
 
-        // Stop listening for players (cleanup Supabase channel)
-        this.stopListeningForPlayers();
-
-        // Update match status
-        if (this.currentMatch && this.isHost) {
-            await this.supabase
-                .from('matches')
-                .update({ status: 'ended' })
-                .eq('id', this.currentMatch.id);
-        }
-
-        // Disconnect transport
         if (this.transport) {
             this.transport.disconnect();
             this.transport = null;
         }
 
-        // Clear command queue
+        if (this.room) {
+            try {
+                this.room.leave();
+            } catch {
+                // Ignore
+            }
+            this.room = null;
+        }
+
         if (this.commandQueue) {
             this.commandQueue.clear();
             this.commandQueue = null;
         }
-        
-        // Clear state verifier
+
         this.stateVerifier = null;
-        
-        // Clear signing state
         this.signingKey = null;
         this.signingEnabled = false;
 
@@ -842,51 +601,34 @@ export class MultiplayerNetworkManager {
         await this.endMatch('player_disconnect');
     }
 
-    /**
-     * Get current match info
-     */
-    getCurrentMatch(): Match | null {
+    getCurrentMatch(): MatchInfo | null {
         return this.currentMatch;
     }
 
-    /**
-     * Check if currently in an active match
-     */
     isInMatch(): boolean {
         return this.isActive;
     }
 
-    /**
-     * Get current game seed
-     */
     getGameSeed(): number | null {
-        return this.currentMatch?.game_seed || null;
+        return this.currentMatch?.gameSeed || null;
     }
 
-    /**
-     * Get current tick
-     */
     getCurrentTick(): number {
         return this.currentTick;
     }
 
-    /**
-     * Get command queue statistics
-     */
     getQueueStats() {
         return this.commandQueue?.getStats() || null;
     }
 
-    /**
-     * Get network statistics
-     */
     getNetworkStats() {
-        return this.transport?.getStats?.() || null;
+        return this.transport?.getStats() || null;
     }
 
-    /**
-     * Register event listener
-     */
+    getLocalPlayerId(): string {
+        return this.localPlayerId;
+    }
+
     on(event: NetworkEvent, callback: NetworkEventCallback): void {
         if (!this.eventListeners.has(event)) {
             this.eventListeners.set(event, []);
@@ -894,9 +636,6 @@ export class MultiplayerNetworkManager {
         this.eventListeners.get(event)!.push(callback);
     }
 
-    /**
-     * Unregister event listener
-     */
     off(event: NetworkEvent, callback: NetworkEventCallback): void {
         const listeners = this.eventListeners.get(event);
         if (listeners) {
@@ -907,9 +646,6 @@ export class MultiplayerNetworkManager {
         }
     }
 
-    /**
-     * Emit event to listeners
-     */
     private emit(event: NetworkEvent, data?: any): void {
         const listeners = this.eventListeners.get(event);
         if (listeners) {

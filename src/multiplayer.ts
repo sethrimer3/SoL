@@ -24,10 +24,26 @@ export {
     TransportStats
 } from './transport';
 
-// P2P implementation
+// Colyseus transport implementation
 export {
-    P2PTransport
-} from './p2p-transport';
+    ColyseusTransport
+} from './colyseus-transport';
+
+// Player identity
+export {
+    getOrCreatePlayerId,
+    getOrGenerateUsername,
+    setPlayerUsername
+} from './player-identity';
+
+// Shared protocol
+export {
+    ProtocolMessage,
+    MatchInfo,
+    PlayerMetadata,
+    MatchStatus,
+    MatchStartPayload
+} from './shared/multiplayer-protocol';
 
 // Deterministic RNG
 export {
@@ -37,43 +53,3 @@ export {
     isGameRNGInitialized,
     generateMatchSeed
 } from './seeded-random';
-
-/**
- * Quick start example:
- * 
- * ```typescript
- * import { 
- *     MultiplayerNetworkManager, 
- *     NetworkEvent 
- * } from './multiplayer';
- * 
- * const network = new MultiplayerNetworkManager(
- *     supabaseUrl, 
- *     supabaseKey, 
- *     playerId
- * );
- * 
- * // Host a match
- * const match = await network.createMatch({
- *     matchName: "My Game",
- *     username: "Player1",
- *     maxPlayers: 2
- * });
- * 
- * // Or join a match
- * await network.joinMatch(matchId, "Player2");
- * 
- * // Start the match
- * await network.startMatch();
- * 
- * // Send commands
- * network.sendCommand('move_unit', { unitId: 5, x: 100, y: 200 });
- * 
- * // Get commands for simulation
- * const commands = network.getNextTickCommands();
- * if (commands) {
- *     commands.forEach(cmd => executeCommand(cmd));
- *     network.advanceTick();
- * }
- * ```
- */

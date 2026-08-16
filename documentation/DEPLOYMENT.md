@@ -27,12 +27,9 @@ The game is automatically deployed to GitHub Pages via GitHub Actions whenever c
    - Source: Select "GitHub Actions" (not "Deploy from a branch")
    - The workflow will handle the rest automatically
 
-2. **Configure Secrets (Optional - for Multiplayer):**
-   - Go to Settings → Secrets and variables → Actions
-   - Add repository secrets:
-     - `SUPABASE_URL`: Your Supabase project URL
-     - `SUPABASE_ANON_KEY`: Your Supabase anonymous key
-   - These are injected during the build process
+2. **Multiplayer Server:**
+   - Run the Colyseus server using `npm run server` or deploy it to your preferred cloud host (e.g. Node.js / Docker).
+   - Set `COLYSEUS_SERVER_URL` in the client environment if connecting to a remote server.
 
 3. **The game will be available at:**
    ```
@@ -116,6 +113,6 @@ To use a custom domain:
 The build process:
 - Compiles TypeScript to JavaScript
 - Bundles all code using Webpack
-- Injects environment variables (Supabase credentials)
+- Injects environment variables (e.g. COLYSEUS_SERVER_URL)
 - Minifies for production
 - Outputs to `dist/` folder (excluded from git, deployed by Actions)

@@ -46,9 +46,6 @@ import {
 } from './menu/developer-menu-controls';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, MatchPlayer } from './multiplayer-network';
-import { OnlineNetworkManager } from './online-network';
-import { getSupabaseConfig } from '../Supabase/supabase-config';
-import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { 
     MatchHistoryEntry, 
     loadReplayFromStorage, 
@@ -1000,19 +997,8 @@ export class MainMenu {
         const match = this.multiplayerNetworkManager.getCurrentMatch();
         if (!match) return;
 
-        // Fetch players from Supabase
-        const config = getSupabaseConfig();
-        const supabase = createSupabaseClient(config.url, config.anonKey);
-        
-        const { data, error } = await supabase
-            .from('match_players')
-            .select('*')
-            .eq('match_id', match.id);
-
-        if (!error && data) {
-            this.p2pMatchPlayers = data as MatchPlayer[];
-            this.updatePlayersList(playersList);
-        }
+        this.p2pMatchPlayers = match.players || [];
+        this.updatePlayersList(playersList);
     }
 
     private async renderCustomLobbyScreen(container: HTMLElement): Promise<void> {
@@ -1060,7 +1046,7 @@ export class MainMenu {
                 console.log('Joining lobby:', lobbyId);
                 
                 if (!this.onlineNetworkManager?.isAvailable()) {
-                    alert('Online networking not available. Please check your Supabase configuration.');
+                    alert('Online networking not available. Please ensure the Colyseus game server is running.');
                     return;
                 }
                 
@@ -1138,7 +1124,7 @@ export class MainMenu {
                 console.log('Starting 2v2 matchmaking...');
                 
                 if (!this.onlineNetworkManager?.isAvailable()) {
-                    alert('Online networking not available. Please check your Supabase configuration.');
+                    alert('Online networking not available. Please ensure the Colyseus game server is running.');
                     return;
                 }
                 
@@ -1251,7 +1237,7 @@ export class MainMenu {
                 console.log('Starting 1v1 matchmaking...');
                 
                 if (!this.onlineNetworkManager?.isAvailable()) {
-                    alert('Online networking not available. Please check your Supabase configuration.');
+                    alert('Online networking not available. Please ensure the Colyseus game server is running.');
                     return;
                 }
                 

@@ -230,47 +230,48 @@ SoL/
 - **Architecture**: Object-oriented with dataclasses
 - **Testing**: unittest framework (22 passing tests)
 - **Security**: CodeQL verified (0 vulnerabilities)
-- **Multiplayer**: P2P WebRTC with Supabase signaling
+- **Multiplayer**: Deterministic Lockstep with Colyseus WebSocket Server
 
 ## Multiplayer Architecture
 
 ### Overview
 
-SoL uses a **deterministic lockstep P2P multiplayer** architecture with WebRTC for direct peer-to-peer communication and Supabase for matchmaking and signaling.
+SoL uses a **deterministic lockstep multiplayer** architecture with Colyseus as the session authority and WebSocket relay.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   P2P MULTIPLAYER SYSTEM                    │
+│                 COLYSEUS MULTIPLAYER SYSTEM                 │
 └─────────────────────────────────────────────────────────────┘
 
-Client 1                  Supabase                  Client 2
-┌────────┐              ┌──────────┐              ┌────────┐
-│ Game   │              │ Match    │              │ Game   │
-│ State  │              │ Database │              │ State  │
-└────────┘              └──────────┘              └────────┘
-    │                        │                        │
-    │  1. Create Match       │                        │
-    ├───────────────────────>│                        │
-    │  2. Match Code         │                        │
-    │<───────────────────────┤                        │
-    │                        │  3. Join Match         │
-    │                        │<───────────────────────┤
-    │                        │  4. Connection Info    │
-    │                        ├───────────────────────>│
-    │                        │                        │
-    │  5. WebRTC Signaling (ICE, SDP)                │
-    │<──────────────────────────────────────────────>│
-    │                        │                        │
-    │  6. Direct P2P Connection (WebRTC)             │
-    │<──────────────────────────────────────────────>│
-    │        Commands, not game state                │
-    │                                                 │
-    ▼                                                 ▼
-┌────────┐                                      ┌────────┐
-│Execute │                                      │Execute │
-│Command │  Same Seed + Same Commands          │Command │
-│Queue   │  ═══════════════════════════         │Queue   │
-└────────┘  Same Game State                    └────────┘
+Client 1                Colyseus Server (SoLRoom)       Client 2
+┌────────┐                    ┌──────────┐              ┌────────┐
+│ Game   │                    │ Match    │              │ Game   │
+│ State  │                    │ Authority│              │ State  │
+└────────┘                    └──────────┘              └────────┘
+    │                              │                        │
+    │  1. Create Match (Room)      │                        │
+    ├─────────────────────────────>│                        │
+    │  2. Room Code & Metadata     │                        │
+    │<─────────────────────────────┤                        │
+    │                              │  3. Join Room          │
+    │                              │<───────────────────────┤
+    │                              │  4. Match Metadata     │
+    │                              ├───────────────────────>│
+    │  5. Host Starts Match        │                        │
+    ├─────────────────────────────>│                        │
+    │  6. Broadcast Match Start (Shared Seed, Tick Rate)    │
+    │<─────────────────────────────┼───────────────────────>│
+    │                              │                        │
+    │  7. Command Relay via ColyseusTransport               │
+    │<═════════════════════════════╪═══════════════════════>│
+    │        Commands, not game state                       │
+    │                                                       │
+    ▼                                                       ▼
+┌────────┐                                            ┌────────┐
+│Execute │                                            │Execute │
+│Command │  Same Seed + Same Commands                 │Command │
+│Queue   │  ═══════════════════════════               │Queue   │
+└────────┘  Same Game State                           └────────┘
 ```
 
 ### Key Principles
@@ -278,7 +279,7 @@ Client 1                  Supabase                  Client 2
 1. **Deterministic Simulation**: All clients run identical game logic with the same random seed
 2. **Command-Based**: Only player commands are transmitted, never game state
 3. **Lockstep Synchronization**: All clients execute commands on the same tick
-4. **Direct P2P**: Low-latency WebRTC connections between players
+4. **Colyseus Relay**: Low-latency WebSocket command relay and room session authority
 5. **Seeded RNG**: All randomness uses `SeededRandom` for determinism
 
 ### Architecture Layers
@@ -298,13 +299,13 @@ Client 1                  Supabase                  Client 2
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Transport Layer                        │
-│        (P2PTransport, ServerRelayTransport - Phase 2)       │
+│                   (ColyseusTransport)                       │
 └─────────────────────────────────────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                      Network Layer                          │
-│              (WebRTC Data Channels, Supabase)               │
+│               (Colyseus WebSocket Server)                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -460,44 +461,47 @@ if (tickCounter % STATE_HASH_TICK_INTERVAL === 0) {
 
 ```
 1. HOST CREATES MATCH
-   ├─ Generate match code (6 chars)
-   ├─ Generate random seed
-   ├─ Insert match into Supabase
-   └─ Wait in lobby
+   ├─ Colyseus room created on game server
+   ├─ Server generates match code & shared seed
+   └─ Host waits in room lobby
 
 2. CLIENTS JOIN MATCH
-   ├─ Enter match code
-   ├─ Fetch match from Supabase
-   ├─ Add player to match
-   └─ Establish P2P connections
+   ├─ Enter match code or room ID
+   ├─ Colyseus client joins room
+   ├─ Receives match metadata & player list
+   └─ Ready status synchronized
 
 3. HOST STARTS MATCH
-   ├─ Broadcast match seed to all players
-   ├─ All clients initialize with same seed
+   ├─ Host triggers start_match
+   ├─ Server broadcasts match_start with shared seed & tick rate
+   ├─ All clients initialize deterministic RNG with seed
    ├─ Begin synchronized tick counter
-   └─ Game starts simultaneously
+   └─ Game simulation begins
 
 4. GAMEPLAY
    ├─ Players issue commands
-   ├─ Commands sent via P2P
-   ├─ Commands executed in lockstep
-   └─ State remains synchronized
+   ├─ Commands sent via ColyseusTransport
+   ├─ Commands buffered in deterministic CommandQueue
+   ├─ Commands executed on intended ticks in lockstep
+   └─ State remains perfectly synchronized
 
 5. MATCH ENDS
    ├─ Victory/defeat detected
-   ├─ Disconnect P2P connections
-   ├─ Clean up match in Supabase
+   ├─ Disconnect transport & leave room
+   ├─ Server disposes in-memory room
    └─ Return to menu
 ```
 
 ### Files and Components
 
 **Core Multiplayer Files**:
+- `src/player-identity.ts` - Persistent local player identity (✅ Complete)
 - `src/seeded-random.ts` - Deterministic RNG (✅ Complete)
 - `src/transport.ts` - Transport abstraction layer (✅ Complete)
-- `src/p2p-transport.ts` - WebRTC P2P implementation (✅ Complete)
+- `src/colyseus-transport.ts` - Colyseus ITransport implementation (✅ Complete)
 - `src/multiplayer-network.ts` - Network manager & command queue (✅ Complete)
-- `src/supabase-config.ts` - Supabase configuration (✅ Complete)
+- `server/src/rooms/SoLRoom.ts` - Colyseus room session authority (✅ Complete)
+- `server/src/index.ts` - Colyseus WebSocket server (✅ Complete)
 
 **Integration Points**:
 - `src/sim/game-state.ts` - Command execution methods (✅ Complete)
@@ -505,27 +509,18 @@ if (tickCounter % STATE_HASH_TICK_INTERVAL === 0) {
 - `src/menu.ts` - Multiplayer UI (host/join/lobby) (✅ Complete)
 
 **Testing & Documentation**:
+- `test-colyseus-multiplayer.ts` - Colyseus multiplayer test suite (✅ Complete)
 - `test-multiplayer-determinism.ts` - Determinism test suite (✅ Complete)
-- `MULTIPLAYER_INTEGRATION_TODO.md` - Integration checklist
-- `P2P_MULTIPLAYER_ARCHITECTURE.md` - Detailed architecture
+- `test-state-verification.ts` - State verification test suite (✅ Complete)
 - `MULTIPLAYER_QUICKSTART.md` - Quick start guide
-
-### Database Schema
-
-**Supabase Tables**:
-- `p2p_matches` - Match listings and metadata
-- `p2p_match_players` - Players in each match
-- `p2p_signaling` - WebRTC signaling messages (offers, answers, ICE)
-
-See `supabase.sql` for complete schema and RLS policies.
 
 ### Security Considerations
 
 1. **Determinism = Anti-Cheat**: Identical inputs must produce identical outputs
-2. **Client Validation**: Each client validates commands are legal
-3. **State Hash Verification**: Periodic hash exchange detects tampering (Phase 2)
-4. **Rate Limiting**: Command queue limits prevent spam
-5. **Supabase RLS**: Row-level security on match and player data
+2. **Server Message Validation**: Colyseus server validates command structure, sender identity, and payload size
+3. **Command HMAC Signing**: Cryptographic HMAC verification prevents command spoofing
+4. **State Hash Verification**: Periodic hash exchange detects desynchronization or tampering
+5. **Rate Limiting**: Command rate limits prevent spamming
 
 See `MULTIPLAYER_SECURITY.md` for detailed security design.
 

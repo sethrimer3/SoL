@@ -1056,12 +1056,12 @@ class GameController {
     }
 
     /**
-     * Initialize P2P multiplayer mode
+     * Initialize Colyseus multiplayer mode
      */
-    initializeMultiplayer(supabaseUrl: string, supabaseKey: string, playerId: string): void {
-        console.log('[GameController] Initializing P2P multiplayer...');
+    initializeMultiplayer(serverUrl?: string, playerId?: string): void {
+        console.log('[GameController] Initializing Colyseus multiplayer...');
         
-        this.network = new MultiplayerNetworkManager(supabaseUrl, supabaseKey, playerId);
+        this.network = new MultiplayerNetworkManager(serverUrl, playerId);
         this.isMultiplayer = true;
 
         this.setupNetworkEvents();

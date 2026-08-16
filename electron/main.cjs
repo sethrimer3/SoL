@@ -19,7 +19,7 @@ const productionCsp = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob:",
   "media-src 'self' data: blob:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "connect-src 'self' ws: wss: http: https:",
   "worker-src 'self' blob:",
 ].join('; ');
 
@@ -32,7 +32,7 @@ const developmentCsp = [
   "font-src 'self' https://fonts.gstatic.com data:",
   "img-src 'self' data: blob: http://localhost:* http://127.0.0.1:*",
   "media-src 'self' data: blob:",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
+  "connect-src 'self' ws: wss: http: https: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*",
   "worker-src 'self' blob:",
 ].join('; ');
 

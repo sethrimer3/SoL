@@ -1,10 +1,10 @@
 /**
- * P2P Host Screen Renderer
- * Allows the user to create and host a P2P multiplayer match
+ * Multiplayer Host Screen Renderer
+ * Allows the user to create and host a Colyseus multiplayer match
  */
 
-import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent, Match, MatchPlayer } from '../../multiplayer-network';
-import { getSupabaseConfig } from '../../../Supabase/supabase-config';
+import { MultiplayerNetworkManager, NetworkEvent, Match, MatchPlayer } from '../../multiplayer-network';
+import { getOrCreatePlayerId } from '../../player-identity';
 
 export interface P2PHostScreenParams {
     username: string;
@@ -36,7 +36,6 @@ export function renderP2PHostScreen(
         setP2PMaxPlayers,
         setP2PMatchPlayers,
         updatePlayersList,
-        fetchAndUpdatePlayers,
         createButton,
         menuParticleLayer,
     } = params;
@@ -46,7 +45,7 @@ export function renderP2PHostScreen(
 
     // Title
     const title = document.createElement('h2');
-    title.textContent = 'Host P2P Match';
+    title.textContent = 'Host Multiplayer Match';
     title.style.fontSize = isCompactLayout ? '32px' : '48px';
     title.style.marginBottom = isCompactLayout ? '20px' : '30px';
     title.style.color = '#FFD700';
@@ -204,15 +203,9 @@ export function renderP2PHostScreen(
 
     // Create match button
     const createMatchButton = createButton('CREATE MATCH', async () => {
-        const config = getSupabaseConfig();
-        if (!config.url || !config.anonKey) {
-            statusMessage.textContent = 'Supabase not configured. Cannot create P2P match.';
-            statusMessage.style.display = 'block';
-            return;
-        }
-
         createMatchButton.disabled = true;
         createMatchButton.textContent = 'CREATING...';
+        statusMessage.style.display = 'none';
 
         const matchName = matchNameInput.value.trim() || `${username}'s Match`;
         const maxPlayers = Math.max(2, Math.min(8, parseInt(maxPlayersInput.value) || 2));
@@ -220,41 +213,45 @@ export function renderP2PHostScreen(
         setP2PMatchName(matchName);
         setP2PMaxPlayers(maxPlayers);
 
-        const playerId = crypto.randomUUID();
-        const manager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
+        const playerId = getOrCreatePlayerId();
+        const manager = new MultiplayerNetworkManager(undefined, playerId);
         setMultiplayerNetworkManager(manager);
 
         // Set up event listeners
-        manager.on(P2PNetworkEvent.MATCH_CREATED, (data) => {
+        manager.on(NetworkEvent.MATCH_CREATED, (data) => {
             const match: Match = data.match;
-            matchIdText.textContent = match.id.substring(0, 8).toUpperCase();
+            matchIdText.textContent = match.matchCode || match.id.substring(0, 6).toUpperCase();
             matchInfoContainer.style.display = 'block';
             playersContainer.style.display = 'block';
             formContainer.style.display = 'none';
             createMatchButton.style.display = 'none';
             startButton.style.display = 'block';
 
-            setP2PMatchPlayers([{
-                id: playerId,
-                match_id: match.id,
-                player_id: playerId,
-                role: 'host',
-                connected: true,
-                username: username,
-                faction: null
-            }]);
+            setP2PMatchPlayers(match.players || []);
             updatePlayersList(playersList);
         });
 
-        manager.on(P2PNetworkEvent.PLAYER_JOINED, () => {
-            void fetchAndUpdatePlayers(playersList);
+        manager.on(NetworkEvent.PLAYER_JOINED, () => {
+            const currentMatch = manager.getCurrentMatch();
+            if (currentMatch) {
+                setP2PMatchPlayers(currentMatch.players || []);
+                updatePlayersList(playersList);
+            }
         });
 
-        manager.on(P2PNetworkEvent.MATCH_STARTED, () => {
+        manager.on(NetworkEvent.PLAYER_LEFT, () => {
+            const currentMatch = manager.getCurrentMatch();
+            if (currentMatch) {
+                setP2PMatchPlayers(currentMatch.players || []);
+                updatePlayersList(playersList);
+            }
+        });
+
+        manager.on(NetworkEvent.MATCH_STARTED, () => {
             onMatchStarted();
         });
 
-        manager.on(P2PNetworkEvent.ERROR, (data) => {
+        manager.on(NetworkEvent.ERROR, (data) => {
             const errorMsg = data.message || data.error?.message || data.error || 'Unknown error';
             statusMessage.textContent = `Error: ${errorMsg}`;
             statusMessage.style.display = 'block';

@@ -1,9 +1,13 @@
 /**
- * Type definitions for P2P Multiplayer System
+ * Type definitions for Multiplayer System
  * 
- * This file provides strong typing for command payloads and game settings
- * to replace 'any' types with proper discriminated unions.
+ * Provides strong typing for command payloads, game settings,
+ * network events, and match domain models.
  */
+
+import { MatchInfo, PlayerMetadata, MatchStatus } from './shared/multiplayer-protocol';
+
+export { MatchInfo, PlayerMetadata, MatchStatus };
 
 /**
  * Game settings that can be configured when creating a match
@@ -265,6 +269,7 @@ export interface PlayerLeftEventData {
 }
 
 export interface MatchStartedEventData {
+    matchId: string;
     gameSeed: number;
     playerIds: string[];
     startTime: number;
@@ -272,13 +277,14 @@ export interface MatchStartedEventData {
 
 export interface MatchEndedEventData {
     winnerId?: string;
-    reason: 'victory' | 'disconnect' | 'surrender' | 'timeout';
-    duration: number;
+    reason: string;
+    duration?: number;
 }
 
 export interface ErrorEventData {
-    code: string;
+    code?: string;
     message: string;
+    error?: any;
     details?: unknown;
 }
 
@@ -292,7 +298,7 @@ export type NetworkEventData =
     | { event: 'match_started'; data: MatchStartedEventData }
     | { event: 'match_ended'; data: MatchEndedEventData }
     | { event: 'error'; data: ErrorEventData }
-    | { event: 'connected' | 'disconnected' | 'connecting'; data?: undefined };
+    | { event: 'connected' | 'disconnected' | 'connecting' | 'reconnecting' | 'reconnected'; data?: undefined };
 
 /**
  * Type-safe network event callback
@@ -302,44 +308,16 @@ export type TypedNetworkEventCallback<T extends NetworkEventData['event']> = (
 ) => void;
 
 /**
- * Signaling message types for WebRTC
- */
-export interface SignalingMessage {
-    id: string;
-    match_id: string;
-    from_player: string;
-    to_player: string;
-    message_type: 'offer' | 'answer' | 'ice-candidate';
-    payload: RTCSessionDescriptionInit | RTCIceCandidateInit;
-    created_at: string;
-}
-
-/**
  * Transport statistics for monitoring
  */
 export interface TransportStatistics {
-    /** Is transport connected */
     connected: boolean;
-    
-    /** Round-trip latency in milliseconds */
     latencyMs: number;
-    
-    /** Total packets sent */
     packetsSent: number;
-    
-    /** Total packets received */
     packetsReceived: number;
-    
-    /** Total bytes sent */
     bytesOut: number;
-    
-    /** Total bytes received */
     bytesIn: number;
-    
-    /** Packet loss rate (0-1) */
     packetLossRate?: number;
-    
-    /** Current bandwidth usage (bytes per second) */
     currentBandwidth?: number;
 }
 
@@ -347,21 +325,10 @@ export interface TransportStatistics {
  * Command queue statistics
  */
 export interface CommandQueueStatistics {
-    /** Current tick being processed */
     currentTick: number;
-    
-    /** Number of commands waiting in queue */
     queueDepth: number;
-    
-    /** Number of commands processed so far */
     totalCommandsProcessed: number;
-    
-    /** Number of commands that timed out */
     missedCommandsCount: number;
-    
-    /** Expected players in this match */
     expectedPlayers: string[];
-    
-    /** Average commands per tick */
     averageCommandsPerTick: number;
 }

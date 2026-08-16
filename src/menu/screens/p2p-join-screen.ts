@@ -1,10 +1,10 @@
 /**
- * P2P Join Screen Renderer
- * Allows the user to join an existing P2P multiplayer match
+ * Multiplayer Join Screen Renderer
+ * Allows the user to join an existing Colyseus multiplayer match
  */
 
-import { MultiplayerNetworkManager, NetworkEvent as P2PNetworkEvent } from '../../multiplayer-network';
-import { getSupabaseConfig } from '../../../Supabase/supabase-config';
+import { MultiplayerNetworkManager, NetworkEvent } from '../../multiplayer-network';
+import { getOrCreatePlayerId } from '../../player-identity';
 
 export interface P2PJoinScreenParams {
     username: string;
@@ -37,7 +37,7 @@ export function renderP2PJoinScreen(
 
     // Title
     const title = document.createElement('h2');
-    title.textContent = 'Join P2P Match';
+    title.textContent = 'Join Multiplayer Match';
     title.style.fontSize = isCompactLayout ? '32px' : '48px';
     title.style.marginBottom = isCompactLayout ? '20px' : '30px';
     title.style.color = '#FFD700';
@@ -60,7 +60,7 @@ export function renderP2PJoinScreen(
     container.appendChild(inputContainer);
 
     const matchIdLabel = document.createElement('label');
-    matchIdLabel.textContent = 'Match ID:';
+    matchIdLabel.textContent = 'Match Code or Room ID:';
     matchIdLabel.style.fontSize = '20px';
     matchIdLabel.style.color = '#FFFFFF';
     matchIdLabel.style.marginBottom = '8px';
@@ -69,7 +69,7 @@ export function renderP2PJoinScreen(
 
     const matchIdInput = document.createElement('input');
     matchIdInput.type = 'text';
-    matchIdInput.placeholder = 'Enter 8-character match ID';
+    matchIdInput.placeholder = 'Enter match code (e.g. ABC123)';
     matchIdInput.style.fontSize = '24px';
     matchIdInput.style.padding = '12px 15px';
     matchIdInput.style.backgroundColor = 'rgba(255, 255, 255, 0.1)';
@@ -129,17 +129,9 @@ export function renderP2PJoinScreen(
 
     // Join button
     const joinButton = createButton('JOIN MATCH', async () => {
-        const config = getSupabaseConfig();
-        if (!config.url || !config.anonKey) {
-            statusMessage.textContent = 'Supabase not configured. Cannot join P2P match.';
-            statusMessage.style.color = '#FF6666';
-            statusMessage.style.display = 'block';
-            return;
-        }
-
-        const matchIdShort = matchIdInput.value.trim().toUpperCase();
-        if (!matchIdShort || matchIdShort.length < 6) {
-            statusMessage.textContent = 'Please enter a valid match ID (at least 6 characters).';
+        const matchCode = matchIdInput.value.trim().toUpperCase();
+        if (!matchCode || matchCode.length < 3) {
+            statusMessage.textContent = 'Please enter a valid match code.';
             statusMessage.style.color = '#FF6666';
             statusMessage.style.display = 'block';
             return;
@@ -151,12 +143,12 @@ export function renderP2PJoinScreen(
         statusMessage.style.color = '#FFD700';
         statusMessage.style.display = 'block';
 
-        const playerId = crypto.randomUUID();
-        const manager = new MultiplayerNetworkManager(config.url, config.anonKey, playerId);
+        const playerId = getOrCreatePlayerId();
+        const manager = new MultiplayerNetworkManager(undefined, playerId);
         setMultiplayerNetworkManager(manager);
 
         // Set up event listeners
-        manager.on(P2PNetworkEvent.PLAYER_JOINED, () => {
+        manager.on(NetworkEvent.PLAYER_JOINED, () => {
             statusMessage.textContent = 'Joined successfully!';
             statusMessage.style.color = '#00FF88';
             inputContainer.style.display = 'none';
@@ -165,11 +157,11 @@ export function renderP2PJoinScreen(
             void fetchAndUpdatePlayers(playersList);
         });
 
-        manager.on(P2PNetworkEvent.MATCH_STARTED, () => {
+        manager.on(NetworkEvent.MATCH_STARTED, () => {
             onMatchStarted();
         });
 
-        manager.on(P2PNetworkEvent.ERROR, (data) => {
+        manager.on(NetworkEvent.ERROR, (data) => {
             const errorMsg = data.message || data.error?.message || data.error || 'Failed to join match';
             statusMessage.textContent = `Error: ${errorMsg}`;
             statusMessage.style.color = '#FF6666';
@@ -178,26 +170,11 @@ export function renderP2PJoinScreen(
             joinButton.textContent = 'JOIN MATCH';
         });
 
-        // Find match by short ID prefix
-        const match = await manager.findMatchByShortId(matchIdShort);
-
-        if (!match) {
-            statusMessage.textContent = 'Match not found. Please check the match ID.';
-            statusMessage.style.color = '#FF6666';
-            statusMessage.style.display = 'block';
-            joinButton.disabled = false;
-            joinButton.textContent = 'JOIN MATCH';
-            return;
-        }
-
         // Join the match
-        const success = await manager.joinMatch(match.id, username);
+        const success = await manager.joinMatch(matchCode, username);
         if (!success) {
             joinButton.disabled = false;
             joinButton.textContent = 'JOIN MATCH';
-        } else {
-            // Start match connection
-            await manager.startMatch();
         }
     }, '#0088FF');
     joinButton.style.marginBottom = '20px';
