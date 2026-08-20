@@ -1064,6 +1064,7 @@ export class GameRenderer {
                 drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset) =>
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
@@ -1129,6 +1130,7 @@ export class GameRenderer {
                 drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor) =>
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
@@ -1254,6 +1256,7 @@ export class GameRenderer {
                 drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
                 drawHealthDisplay: (screenPos, current, max, size, yOffset) => this.drawHealthDisplay(screenPos, current, max, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
+                drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
                 getStarlingParticleSeed: (s) => this.getStarlingParticleSeed(s),
@@ -1320,6 +1323,18 @@ export class GameRenderer {
         unitSide: 'light' | 'dark'
     ): void {
         this.glowRenderer.drawLadAura(screenPos, radius, baseColor, unitSide, this.ctx);
+    }
+
+    /**
+     * Draw an inverted-color outline around a unit or structure in LaD mode so that
+     * white entities stay readable on the white half and black entities on the black half.
+     */
+    private drawLadOutline(
+        screenPos: { x: number, y: number },
+        radius: number,
+        unitSide: 'light' | 'dark'
+    ): void {
+        this.glowRenderer.drawLadOutline(screenPos, radius, unitSide, this.zoom, this.ctx);
     }
 
     private drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void {

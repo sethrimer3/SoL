@@ -101,6 +101,7 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
@@ -291,6 +292,7 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_bottom.png';
@@ -412,6 +414,7 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         // Draw tower body - hexagon shape
@@ -662,6 +665,7 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         // Draw tower body - octagon shape

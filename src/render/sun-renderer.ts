@@ -115,7 +115,6 @@ export class SunRenderer {
     private ultraSunParticleCacheBySun = new Map<string, UltraSunParticleCache>();
     private sunShadowQuadFrameCache = new Map<string, ShadowQuad[]>();
     private sunShaftGradientCache = new Map<string, ShaftGradientPair>();
-    private shadowGradientColorStops = new Map<string, string[]>();
     private ultraEmberGlowTextureByColor = new Map<string, SunCanvasType>();
     private ultraEmberCoreTextureByColor = new Map<string, SunCanvasType>();
     private ultraLightDustTextureByKey = new Map<string, SunCanvasType>();
@@ -1087,8 +1086,8 @@ export class SunRenderer {
         ctx.fillRect(0, 0, canvasWidth, canvasHeight);
         ctx.restore();
         
-        // Draw asteroid shadows - dark shadows on left (white) side, light shadows on right (dark) side.
-        // Each quad uses a directional gradient so shadow strength naturally fades with distance.
+        // Draw asteroid shadows - LaD shadows are the pure inverted color (solid black on the
+        // white side, solid white on the black side), never a soft grey falloff.
         ctx.save();
         const sunX = sun.position.x;
         const sunY = sun.position.y;
@@ -1148,7 +1147,7 @@ export class SunRenderer {
                         worldToScreenCoords(shadow1X, shadow1Y, ss1);
                         worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
-                        this.fillSoftShadowQuad(ctx, sv1, sv2, ss2, ss1, 'rgb(0, 0, 0)', 0.38, 0.14);
+                        this.fillSolidShadowQuad(ctx, sv1, sv2, ss2, ss1, '#000000');
                     }
                 }
             }
@@ -1205,7 +1204,7 @@ export class SunRenderer {
                         worldToScreenCoords(shadow1X, shadow1Y, ss1);
                         worldToScreenCoords(shadow2X, shadow2Y, ss2);
 
-                        this.fillSoftShadowQuad(ctx, sv1, sv2, ss2, ss1, 'rgb(255, 255, 255)', 0.36, 0.13);
+                        this.fillSolidShadowQuad(ctx, sv1, sv2, ss2, ss1, '#FFFFFF');
                     }
                 }
             }
@@ -1214,46 +1213,17 @@ export class SunRenderer {
     }
 
     /**
-     * Fill a shadow quad with gradient fading
+     * Fill a shadow quad with a flat, fully opaque color (LaD mode inverted shadows).
      */
-    private fillSoftShadowQuad(
+    private fillSolidShadowQuad(
         ctx: Sun2DContextType,
         nearA: { x: number; y: number },
         nearB: { x: number; y: number },
         farA: { x: number; y: number },
         farB: { x: number; y: number },
-        color: string,
-        nearAlpha: number,
-        midAlpha: number
+        color: string
     ): void {
-        const nearMidX = (nearA.x + nearB.x) * 0.5;
-        const nearMidY = (nearA.y + nearB.y) * 0.5;
-        const farMidX = (farA.x + farB.x) * 0.5;
-        const farMidY = (farA.y + farB.y) * 0.5;
-
-        // Cache key based on alpha values and color (gradient parameters)
-        // Length varies but alpha composition is consistent
-        const gradientKey = `shadow-gradient-${color}-${nearAlpha}-${midAlpha}`;
-        
-        // Check if we have the color stop configuration cached
-        let colorStops = this.shadowGradientColorStops.get(gradientKey);
-        if (!colorStops) {
-            const rgbaPrefix = color.replace('rgb(', 'rgba(').slice(0, -1);
-            colorStops = [
-                `${rgbaPrefix}, ${nearAlpha})`,
-                `${rgbaPrefix}, ${midAlpha})`,
-                `${rgbaPrefix}, 0)`
-            ];
-            this.shadowGradientColorStops.set(gradientKey, colorStops);
-        }
-        
-        // Create gradient at actual position (avoids complex transforms)
-        const gradient = ctx.createLinearGradient(nearMidX, nearMidY, farMidX, farMidY);
-        gradient.addColorStop(0, colorStops[0]);
-        gradient.addColorStop(0.6, colorStops[1]);
-        gradient.addColorStop(1, colorStops[2]);
-
-        ctx.fillStyle = gradient;
+        ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(nearA.x, nearA.y);
         ctx.lineTo(nearB.x, nearB.y);

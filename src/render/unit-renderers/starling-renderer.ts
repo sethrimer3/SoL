@@ -270,6 +270,7 @@ export class StarlingRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, size, ownerSide);
         }
         
         const shadeGlowBoost = 0.55 * shadeGlowAlpha;

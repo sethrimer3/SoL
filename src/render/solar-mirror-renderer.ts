@@ -94,6 +94,7 @@ export interface SolarMirrorRendererContext {
         playerColor?: string
     ): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
+    drawLadOutline(screenPos: Vector2D, size: number, side: 'light' | 'dark'): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     getVelarisGraphemeSpritePath(letter: string): string | null;
     getGraphemeMaskData(path: string): ImageData | null;
@@ -367,6 +368,7 @@ export class SolarMirrorRenderer {
             context.ctx.setTransform(1, 0, 0, 1, 0, 0);
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, size, ownerSide);
             context.ctx.restore();
         }
 

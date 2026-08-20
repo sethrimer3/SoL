@@ -116,6 +116,7 @@ export class UnitRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, size, ownerSide);
         }
 
         // Draw unit body (circle) - use darkened color if should dim

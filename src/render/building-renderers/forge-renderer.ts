@@ -123,6 +123,11 @@ export class ForgeRenderer {
         context.ctx.save();
         context.ctx.globalAlpha = visibilityAlpha;
 
+        // LaD mode: pure white/black forges need an inverted outline to stay readable.
+        if (ladSun && ownerSide) {
+            context.drawLadOutline(screenPos, size, ownerSide);
+        }
+
         const shouldGlowInShade = isEnemy
             ? (isInShadow && visibilityAlpha > 0.01)
             : isInShadow;

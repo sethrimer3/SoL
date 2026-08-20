@@ -110,6 +110,34 @@ export class GlowRenderer {
     }
 
     /**
+     * Draw a LaD contrast outline around an entity.
+     *
+     * In LaD mode entities are rendered in pure white (light side) or pure black (dark
+     * side), which makes them invisible against their own half of the field.  A ring in
+     * the inverted color keeps every entity readable on whichever background it sits on.
+     */
+    drawLadOutline(
+        screenPos: { x: number; y: number },
+        radius: number,
+        unitSide: 'light' | 'dark',
+        zoom: number,
+        ctx: CanvasRenderingContext2D
+    ): void {
+        const outlineColor = unitSide === 'light' ? '#000000' : '#FFFFFF';
+        const lineWidth = Math.max(1.5, zoom * 1.4);
+
+        ctx.save();
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth = lineWidth;
+        ctx.globalAlpha = 1;
+        ctx.beginPath();
+        // Ring sits fully outside the body so it stays visible regardless of draw order.
+        ctx.arc(screenPos.x, screenPos.y, radius + lineWidth, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    /**
      * Draw the universal unit/structure selection ring.
      */
     drawBuildingSelectionIndicator(

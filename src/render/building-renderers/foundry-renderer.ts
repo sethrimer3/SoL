@@ -114,6 +114,7 @@ export class FoundryRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
+            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         // Draw faction-specific foundry

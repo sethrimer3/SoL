@@ -255,24 +255,31 @@ export class VisionSystem {
         // Determine which side the object is on
         const objectSide = this.getLadSide(objectPos, ladSun);
         
-        // If object has an owner
-        if (object && 'owner' in object && object.owner) {
-            const objectOwner = object.owner;
-            // Own units are always visible
-            if (objectOwner === player) {
-                return true;
-            }
-            
-            // Enemy units are only visible if they're on the player's side
+        // Own entities are always visible to their owner.
+        if (object && 'owner' in object && object.owner === player) {
+            return true;
+        }
+
+        // Everything else (enemy units, enemy structures, and un-owned positions queried
+        // by the renderer) follows the LaD sight rule.
+        {
+            // Enemy units are only visible if they've crossed into the player's side
+            // (i.e. they are standing in the color opposite to their own).
             if (objectSide === playerSide) {
                 return true;
             }
 
+            // ...or if they are within sight range of one of the player's units.
+            for (const unit of player.units) {
+                const distance = unit.position.distanceTo(objectPos);
+                const visibilityRange = unit.lineOfSight || Constants.VISIBILITY_PROXIMITY_RANGE;
+                if (distance <= visibilityRange) {
+                    return true;
+                }
+            }
+
             return this.isObjectRevealedBySpotlight(objectPos, player);
         }
-        
-        // Non-owned objects (buildings, etc.) use default visibility
-        return true;
     }
 
     /**
