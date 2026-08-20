@@ -517,6 +517,34 @@ export interface PlayerMMRData {
     wins2v2: number;               // Total 2v2 wins
     losses2v2: number;             // Total 2v2 losses
     gamesPlayed2v2: number;        // Total 2v2 games played
+    aiRankedMmr: number;           // Current MMR rating for Ranked AI matches
+    aiRankedWins: number;          // Total Ranked AI wins
+    aiRankedLosses: number;        // Total Ranked AI losses
+    aiRankedGamesPlayed: number;   // Total Ranked AI games played
+}
+
+/** Difficulty tiers used for Ranked AI matches, ordered from weakest to strongest. */
+export type AIDifficultyTier = 'easy' | 'normal' | 'hard';
+
+/** Reference MMR value each AI difficulty tier represents, used as the "opponent" rating for Elo calculations. */
+const AI_RANKED_DIFFICULTY_MMR: Record<AIDifficultyTier, number> = {
+    easy: 800,
+    normal: 1000,
+    hard: 1300
+};
+
+/**
+ * Determine which AI difficulty tier the player should face next based on their current Ranked AI MMR.
+ * Higher MMR (earned by winning) faces tougher AI; losing lowers MMR and eases the difficulty back down.
+ */
+export function getAIDifficultyForMMR(mmr: number): AIDifficultyTier {
+    if (mmr >= AI_RANKED_DIFFICULTY_MMR.hard) {
+        return 'hard';
+    }
+    if (mmr >= AI_RANKED_DIFFICULTY_MMR.normal) {
+        return 'normal';
+    }
+    return 'easy';
 }
 
 /**
@@ -567,13 +595,17 @@ export function getPlayerMMRData(): PlayerMMRData {
                 gamesPlayed: parsed.gamesPlayed ?? 0,
                 wins2v2: parsed.wins2v2 ?? 0,
                 losses2v2: parsed.losses2v2 ?? 0,
-                gamesPlayed2v2: parsed.gamesPlayed2v2 ?? 0
+                gamesPlayed2v2: parsed.gamesPlayed2v2 ?? 0,
+                aiRankedMmr: parsed.aiRankedMmr ?? 1000,
+                aiRankedWins: parsed.aiRankedWins ?? 0,
+                aiRankedLosses: parsed.aiRankedLosses ?? 0,
+                aiRankedGamesPlayed: parsed.aiRankedGamesPlayed ?? 0
             };
         } catch {
             // Corrupted data, return default
         }
     }
-    
+
     // Default starting MMR
     return {
         mmr: 1000,
@@ -583,7 +615,11 @@ export function getPlayerMMRData(): PlayerMMRData {
         gamesPlayed: 0,
         wins2v2: 0,
         losses2v2: 0,
-        gamesPlayed2v2: 0
+        gamesPlayed2v2: 0,
+        aiRankedMmr: 1000,
+        aiRankedWins: 0,
+        aiRankedLosses: 0,
+        aiRankedGamesPlayed: 0
     };
 }
 
@@ -652,6 +688,31 @@ export function updatePlayer2v2MMR(enemyTeamMMR: number, isWin: boolean): { newM
     
     return {
         newMMR: mmrData.mmr2v2,
+        mmrChange: mmrChange
+    };
+}
+
+/**
+ * Update player's Ranked AI MMR after a match against a given AI difficulty tier.
+ * The AI's rating for Elo purposes is the reference MMR of the difficulty tier that was played.
+ */
+export function updateAIRankedMMR(difficultyPlayed: AIDifficultyTier, isWin: boolean): { newMMR: number; mmrChange: number } {
+    const mmrData = getPlayerMMRData();
+    const opponentMMR = AI_RANKED_DIFFICULTY_MMR[difficultyPlayed];
+    const mmrChange = calculateMMRChange(mmrData.aiRankedMmr, opponentMMR, isWin);
+
+    mmrData.aiRankedMmr += mmrChange;
+    mmrData.aiRankedGamesPlayed++;
+    if (isWin) {
+        mmrData.aiRankedWins++;
+    } else {
+        mmrData.aiRankedLosses++;
+    }
+
+    savePlayerMMRData(mmrData);
+
+    return {
+        newMMR: mmrData.aiRankedMmr,
         mmrChange: mmrChange
     };
 }

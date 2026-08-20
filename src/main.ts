@@ -23,7 +23,8 @@ import {
     saveMatchToHistory,
     MatchHistoryEntry,
     getPlayerMMRData,
-    updatePlayerMMR
+    updatePlayerMMR,
+    updateAIRankedMMR
 } from './replay';
 import { savePersistedSettings, extractPersistedSettings } from './menu/settings-persistence';
 
@@ -905,14 +906,24 @@ class GameController {
             const opponent = this.game.players.find(p => p !== localPlayer);
             
             if (opponent) {
+                const currentSettings = this.menu.getSettings();
+                const isRankedAiMatch = currentSettings.gameMode === 'ai' && currentSettings.isAiRanked;
+
                 // Get MMR data
                 const mmrData = getPlayerMMRData();
-                // For opponent MMR: use 1000 as default for AI opponents
-                // In multiplayer, the opponent's MMR would need to be passed from the network system
-                const opponentMMR = 1000; // Default starting MMR for AI opponents
-                
-                // Calculate MMR change
-                const { mmrChange } = updatePlayerMMR(opponentMMR, isVictory);
+
+                let opponentMMR: number;
+                let mmrChange: number;
+                if (isRankedAiMatch) {
+                    const difficultyPlayed = currentSettings.difficulty;
+                    opponentMMR = mmrData.aiRankedMmr;
+                    mmrChange = updateAIRankedMMR(difficultyPlayed, isVictory).mmrChange;
+                } else {
+                    // For opponent MMR: use 1000 as default for AI opponents
+                    // In multiplayer, the opponent's MMR would need to be passed from the network system
+                    opponentMMR = 1000; // Default starting MMR for AI opponents
+                    mmrChange = updatePlayerMMR(opponentMMR, isVictory).mmrChange;
+                }
                 
                 // Add match result to replay metadata
                 replayData.metadata.matchResult = {
@@ -924,9 +935,10 @@ class GameController {
                 };
                 
                 // Update player info with MMR
+                const preMatchMMR = (isRankedAiMatch ? mmrData.aiRankedMmr : mmrData.mmr) - mmrChange;
                 const localPlayerInfo = replayData.metadata.players.find(p => p.isLocal);
                 if (localPlayerInfo) {
-                    localPlayerInfo.mmr = mmrData.mmr - mmrChange; // MMR before match
+                    localPlayerInfo.mmr = preMatchMMR; // MMR before match
                     localPlayerInfo.mmrChange = mmrChange;
                 }
                 
@@ -958,7 +970,7 @@ class GameController {
                         gameMode: replayData.metadata.gameMode,
                         isVictory: isVictory,
                         duration: replayData.metadata.duration,
-                        localPlayerMMR: mmrData.mmr - mmrChange,
+                        localPlayerMMR: preMatchMMR,
                         opponentMMR: opponentMMR,
                         mmrChange: mmrChange
                     };

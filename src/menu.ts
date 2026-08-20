@@ -18,6 +18,7 @@ import { renderMapSelectionScreen } from './menu/screens/map-selection-screen';
 import { renderMapEditorScreen } from './menu/screens/map-editor-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
+import { renderAIModeSelectionScreen } from './menu/screens/ai-mode-selection-screen';
 import { renderMatchHistoryScreen } from './menu/screens/match-history-screen';
 import { renderOnlinePlaceholderScreen } from './menu/screens/online-placeholder-screen';
 import { renderFactionSelectionScreen } from './menu/screens/faction-selection-screen';
@@ -46,10 +47,11 @@ import {
 } from './menu/developer-menu-controls';
 import { BUILD_NUMBER } from './build-info';
 import { MultiplayerNetworkManager, MatchPlayer } from './multiplayer-network';
-import { 
-    MatchHistoryEntry, 
-    loadReplayFromStorage, 
+import {
+    MatchHistoryEntry,
+    loadReplayFromStorage,
     getPlayerMMRData,
+    getAIDifficultyForMMR,
 } from './replay';
 import { HERO_UNITS } from './menu/hero-data';
 import { AVAILABLE_MAPS, BASE_LOADOUTS, SPAWN_LOADOUTS } from './menu/map-data';
@@ -94,6 +96,7 @@ export interface GameSettings {
     replayRetentionLimit: '10' | '30' | '50' | 'never'; // How many saved replays to keep before deleting the oldest
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
+    isAiRanked: boolean; // Whether the current/next AI match is a Ranked AI match
     networkManager?: NetworkManager; // Network manager for LAN/online play
     multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
@@ -106,7 +109,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
+    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'ai-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -184,7 +187,8 @@ export class MainMenu {
             saveReplaysEnabled: true, // Default to automatically saving replays locally
             replayRetentionLimit: '30', // Default to keeping the 30 most recent replays
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
-            gameMode: 'ai' // Default to AI mode
+            gameMode: 'ai', // Default to AI mode
+            isAiRanked: false // Default to unranked AI matches
         };
 
         // Restore any previously saved settings from localStorage
@@ -1914,11 +1918,9 @@ export class MainMenu {
                 
                 switch (mode) {
                     case 'ai':
-                        this.hide();
-                        if (this.onStartCallback) {
-                            this.ensureDefaultHeroSelection();
-                            this.onStartCallback(this.settings);
-                        }
+                        this.currentScreen = 'ai-mode-select';
+                        this.startMenuTransition();
+                        this.renderAIModeSelectionScreen(this.contentElement);
                         break;
                     case 'online':
                         this.currentScreen = 'online';
@@ -1951,6 +1953,44 @@ export class MainMenu {
                 this.currentScreen = 'main';
                 this.startMenuTransition();
                 this.renderMainScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
+            createCarouselMenu: (container, options, initialIndex, onRender, onNavigate, onSelect) => {
+                this.carouselMenu = new CarouselMenuView(container, options, initialIndex, 'rgba(0, 0, 0, 0.5)');
+                this.carouselMenu.onRender(onRender);
+                this.carouselMenu.onNavigate(() => {
+                    this.startMenuTransition();
+                    onNavigate();
+                });
+                this.carouselMenu.onSelect(onSelect);
+            },
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private renderAIModeSelectionScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        const aiRankedMmr = getPlayerMMRData().aiRankedMmr;
+
+        renderAIModeSelectionScreen(container, {
+            aiRankedMmr,
+            onModeSelect: (mode) => {
+                this.settings.isAiRanked = mode === 'ranked';
+                if (mode === 'ranked') {
+                    this.settings.difficulty = getAIDifficultyForMMR(aiRankedMmr);
+                }
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            },
+            onBack: () => {
+                this.currentScreen = 'game-mode-select';
+                this.startMenuTransition();
+                this.renderGameModeSelectionScreen(this.contentElement);
             },
             createButton: this.createButton.bind(this),
             createCarouselMenu: (container, options, initialIndex, onRender, onNavigate, onSelect) => {
