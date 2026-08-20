@@ -156,9 +156,20 @@ export class UnitRenderer {
                     rotationRad
                 );
             }
-            // Selected units are marked with a gold outline tracing their own silhouette.
-            if (isSelected && heroSpritePath) {
-                context.drawSelectionSpriteOutline(
+            // In normal mode every unit gets a thin black outline tracing its own silhouette;
+            // selected units additionally get a gold outline drawn outside of it.
+            if (!ladSun && heroSpritePath) {
+                if (isSelected) {
+                    context.drawSelectionSpriteOutline(
+                        heroSpritePath,
+                        screenPos.x,
+                        screenPos.y,
+                        heroSpriteSize,
+                        heroSpriteSize,
+                        rotationRad
+                    );
+                }
+                context.drawNormalSpriteOutline(
                     heroSpritePath,
                     screenPos.x,
                     screenPos.y,
@@ -180,13 +191,29 @@ export class UnitRenderer {
             context.ctx.restore();
         } else {
             // The circle body is its own silhouette, so a stroke along it is already a
-            // shape-hugging outline: gold when selected, inverted color in LaD mode.
-            if (isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => {
-                    pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
-                });
+            // shape-hugging outline: thin black in normal mode (gold outside it when
+            // selected), inverted color in LaD mode.
+            const normalOutlineWidthPx = Math.max(1, context.zoom * 0.9);
+            if (!ladSun) {
+                if (isSelected) {
+                    context.drawSelectionShapeOutline((pathCtx) => {
+                        pathCtx.arc(screenPos.x, screenPos.y, size + normalOutlineWidthPx, 0, Math.PI * 2);
+                    });
+                }
+                context.drawShapeOutlineGlow(
+                    (pathCtx) => {
+                        pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                    },
+                    '#000000',
+                    normalOutlineWidthPx
+                );
             }
             if (ladSun && ownerSide) {
+                if (isSelected) {
+                    context.drawSelectionShapeOutline((pathCtx) => {
+                        pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                    });
+                }
                 context.drawShapeOutlineGlow(
                     (pathCtx) => {
                         pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
@@ -195,16 +222,9 @@ export class UnitRenderer {
                 );
             }
             context.ctx.fillStyle = displayColor;
-            context.ctx.strokeStyle = isSelected
-                ? displayColor
-                : (shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor);
-            context.ctx.lineWidth = isSelected ? 3 : 1;
             context.ctx.beginPath();
             context.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             context.ctx.fill();
-            if (!ladSun) {
-                context.ctx.stroke();
-            }
         }
 
         if (!shouldUseSimpleSprite && context.isFancyGraphicsEnabled) {

@@ -10,6 +10,26 @@ import { FactionCarouselView } from '../faction-carousel-view';
 /** Counter for unique CSS animation IDs (avoids wall-clock time) */
 let renderLoadoutAnimCounter = 0;
 
+/** Ensures the shared shake keyframe animation is present in the document. */
+let hasInjectedShakeStyle = false;
+function ensureShakeStyleInjected(): void {
+    if (hasInjectedShakeStyle) {
+        return;
+    }
+    hasInjectedShakeStyle = true;
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes hero-card-shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-6px); }
+            40% { transform: translateX(6px); }
+            60% { transform: translateX(-4px); }
+            80% { transform: translateX(4px); }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 export interface LoadoutSelectionScreenParams {
     selectedFaction: Faction | null;
     selectedHeroes: string[];
@@ -21,6 +41,7 @@ export interface LoadoutSelectionScreenParams {
     onCustomizeLoadout: () => void;
     onConfirm: () => void;
     onBack: () => void;
+    onMaxHeroesReached: () => void;
     createButton: (text: string, onClick: () => void, color?: string) => HTMLButtonElement;
     menuParticleLayer: { requestTargetRefresh: (element: HTMLElement) => void } | null;
     onCarouselCreated: (carousel: FactionCarouselView) => void;
@@ -49,6 +70,7 @@ export function renderLoadoutSelectionScreen(
         onCustomizeLoadout,
         onConfirm,
         onBack,
+        onMaxHeroesReached,
         createButton,
         menuParticleLayer,
         onCarouselCreated
@@ -275,6 +297,17 @@ export function renderLoadoutSelectionScreen(
         });
         heroSquare.addEventListener('click', () => {
             onHeroView(hero.id);
+        });
+        heroSquare.addEventListener('dblclick', () => {
+            if (!isInLoadout && selectedHeroes.length >= 4) {
+                ensureShakeStyleInjected();
+                heroSquare.style.animation = 'none';
+                void heroSquare.offsetWidth; // restart animation
+                heroSquare.style.animation = 'hero-card-shake 0.4s ease-in-out';
+                onMaxHeroesReached();
+                return;
+            }
+            onHeroToggle(hero.id, isInLoadout);
         });
 
         leftPanel.appendChild(heroSquare);

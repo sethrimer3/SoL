@@ -292,9 +292,20 @@ export class StarlingRenderer {
             if (starlingSprite) {
                 const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
                 const rotationRad = context.getStarlingFacingRotationRad(starling);
-                // Selected starlings get a gold outline tracing the sprite silhouette.
-                if (isSelected && starlingSpritePath) {
-                    context.drawSelectionSpriteOutline(
+                // In normal mode every starling gets a thin black outline tracing the sprite
+                // silhouette; selected starlings additionally get a gold outline outside it.
+                if (!ladSun && starlingSpritePath) {
+                    if (isSelected) {
+                        context.drawSelectionSpriteOutline(
+                            starlingSpritePath,
+                            screenPos.x,
+                            screenPos.y,
+                            spriteSize,
+                            spriteSize,
+                            rotationRad ?? 0
+                        );
+                    }
+                    context.drawNormalSpriteOutline(
                         starlingSpritePath,
                         screenPos.x,
                         screenPos.y,
@@ -337,19 +348,35 @@ export class StarlingRenderer {
                 }
             } else {
                 // Fallback to circle rendering if sprite not loaded
-                if (isSelected) {
+                const normalOutlineWidthPx = Math.max(1, context.zoom * 0.9);
+                if (!ladSun) {
+                    if (isSelected) {
+                        context.drawSelectionShapeOutline((pathCtx) => {
+                            pathCtx.arc(screenPos.x, screenPos.y, size + normalOutlineWidthPx, 0, Math.PI * 2);
+                        });
+                    }
+                    context.drawShapeOutlineGlow(
+                        (pathCtx) => {
+                            pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                        },
+                        '#000000',
+                        normalOutlineWidthPx
+                    );
+                } else if (isSelected) {
                     context.drawSelectionShapeOutline((pathCtx) => {
                         pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
                     });
                 }
                 context.ctx.fillStyle = displayColor;
-                const strokeColor = displayColor;
-                context.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? context.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
-                context.ctx.lineWidth = isSelected ? 3 : 1;
                 context.ctx.beginPath();
                 context.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
                 context.ctx.fill();
-                context.ctx.stroke();
+                if (ladSun) {
+                    const strokeColor = displayColor;
+                    context.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? context.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);
+                    context.ctx.lineWidth = isSelected ? 3 : 1;
+                    context.ctx.stroke();
+                }
             }
         }
         

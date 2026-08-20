@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, net, protocol, session } = require('electron');
+const { app, BrowserWindow, dialog, net, protocol, session, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -8,7 +8,41 @@ const APP_HOST = 'game';
 const distPath = path.resolve(__dirname, '..', 'dist');
 const distIndexPath = path.join(distPath, 'index.html');
 const appIconPath = path.resolve(__dirname, '..', 'ASSETS', 'icon', 'SoL_Icon.ico');
+const preloadPath = path.join(__dirname, 'preload.cjs');
 const devServerUrl = process.env.ELECTRON_DEV_SERVER_URL || '';
+
+function getReplaysDir() {
+  return path.join(app.getPath('documents'), 'SoL', 'Replays');
+}
+
+function pruneReplays(dir, retentionLimit) {
+  if (retentionLimit === 'never') {
+    return;
+  }
+  const limit = parseInt(retentionLimit, 10);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return;
+  }
+  const files = fs.readdirSync(dir)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) => ({ name, mtime: fs.statSync(path.join(dir, name)).mtimeMs }))
+    .sort((a, b) => b.mtime - a.mtime);
+  for (const file of files.slice(limit)) {
+    fs.unlinkSync(path.join(dir, file.name));
+  }
+}
+
+function registerReplayIpc() {
+  ipcMain.handle('replay:save', (_event, { filename, contents, retentionLimit }) => {
+    const dir = getReplaysDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const safeName = path.basename(String(filename));
+    const filePath = path.join(dir, safeName);
+    fs.writeFileSync(filePath, contents, 'utf-8');
+    pruneReplays(dir, retentionLimit);
+    return filePath;
+  });
+}
 
 const productionCsp = [
   "default-src 'self'",
@@ -123,6 +157,7 @@ function createWindow() {
       webSecurity: true,
       allowRunningInsecureContent: false,
       webviewTag: false,
+      preload: preloadPath,
     },
   });
 
@@ -142,6 +177,7 @@ function createWindow() {
 app.whenReady().then(() => {
   registerElectronCsp();
   registerAppProtocol();
+  registerReplayIpc();
   createWindow();
 
   app.on('activate', () => {

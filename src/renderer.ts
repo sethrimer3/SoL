@@ -344,6 +344,9 @@ export class GameRenderer {
     // Selected entities are marked with a gold outline hugging their own shape.
     private static readonly SELECTION_OUTLINE_COLOR = '#FFD700';
     private static readonly SELECTION_OUTLINE_THICKNESS_SCALE = 1.6;
+    // All units in normal (non-LaD) mode get a thin black outline hugging their own shape.
+    private static readonly NORMAL_OUTLINE_COLOR = '#000000';
+    private static readonly NORMAL_OUTLINE_THICKNESS_SCALE = 0.6;
     private static readonly PIXEL_MODE_WIDTH = 320;
     private static readonly PIXEL_MODE_HEIGHT = 180;
 
@@ -1273,6 +1276,8 @@ export class GameRenderer {
                     this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
                 drawSelectionSpriteOutline: (path, centerX, centerY, width, height, rotationRad) =>
                     this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
+                drawNormalSpriteOutline: (path, centerX, centerY, width, height, rotationRad) =>
+                    this.drawNormalSpriteOutline(path, centerX, centerY, width, height, rotationRad),
                 drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
                 drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
                 drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
@@ -1431,6 +1436,30 @@ export class GameRenderer {
      * dilated, blurred and stamped behind the sprite so the outline glows along the edge of
      * the artwork.
      */
+    /**
+     * Draw the thin black outline every unit gets in normal (non-LaD) mode, tracing the
+     * sprite's own silhouette.
+     */
+    private drawNormalSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad: number = 0
+    ): void {
+        this.drawSpriteOutlineGlow(
+            spritePath,
+            GameRenderer.NORMAL_OUTLINE_COLOR,
+            centerX,
+            centerY,
+            drawWidth,
+            drawHeight,
+            rotationRad,
+            GameRenderer.NORMAL_OUTLINE_THICKNESS_SCALE
+        );
+    }
+
     private drawSpriteOutlineGlow(
         spritePath: string,
         outlineColor: string,

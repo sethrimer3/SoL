@@ -2106,6 +2106,9 @@ export class MainMenu {
                 this.startMenuTransition();
                 this.renderMainScreen(this.contentElement);
             },
+            onMaxHeroesReached: () => {
+                this.menuAudioController.playUiSound('error');
+            },
             createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer,
             onCarouselCreated: (carousel) => {

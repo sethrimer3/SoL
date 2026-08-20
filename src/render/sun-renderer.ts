@@ -9,6 +9,7 @@ import * as Constants from '../constants';
 import { ColorScheme } from '../menu';
 import { renderLensFlare } from '../rendering/LensFlare';
 import type { SpriteDrawSource } from './sprite-manager';
+import { drawSoftBeam, DEFAULT_LAYERS, DEFAULT_FALLOFF_POWER } from './soft-light';
 
 // Canvas type shared across HTMLCanvasElement (main thread) and OffscreenCanvas (worker).
 type SunCanvasType = HTMLCanvasElement | OffscreenCanvas;
@@ -102,6 +103,12 @@ export class SunRenderer {
     private readonly ASTEROID_SHADOW_COLOR = 'rgba(13, 10, 25, 0.86)';
     private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
+    // Volumetric light fakery (soft-light.ts) tuning for ultra-quality sun shafts.
+    private readonly ULTRA_SOFT_SHAFT_COUNT = 14;
+    private readonly ULTRA_SOFT_SHAFT_LENGTH_SCALE = 5.5;
+    private readonly ULTRA_SOFT_SHAFT_BASE_ALPHA = 0.05;
+    private readonly ULTRA_SOFT_SHAFT_WIDTH_SCALE_MAX = 3.4;
+    private readonly ULTRA_SOFT_SHAFT_SWAY = 0.06;
     private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
         low: 100,
         medium: 50,
@@ -1068,6 +1075,39 @@ export class SunRenderer {
         const innerSize = shaftSize * 0.72;
         ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
+        ctx.restore();
+
+        // Volumetric light fakery pass: layer soft, nested-alpha shafts (see soft-light.ts)
+        // on top of the pre-baked texture shafts above so their edges read as diffuse
+        // volumetric light instead of a single hard blur radius.
+        ctx.save();
+        ctx.translate(sunScreenPos.x, sunScreenPos.y);
+        ctx.filter = 'none';
+        const softShaftCount = this.ULTRA_SOFT_SHAFT_COUNT;
+        const softShaftBaseLength = screenRadius * this.ULTRA_SOFT_SHAFT_LENGTH_SCALE;
+        for (let shaftIndex = 0; shaftIndex < softShaftCount; shaftIndex++) {
+            const seed = shaftIndex * 12.9898 + sun.position.x * 0.0007 + sun.position.y * 0.0011;
+            const angle = (Math.PI * 2 * shaftIndex) / softShaftCount + this.hashSigned(seed) * 0.12;
+            const lengthJitter = 0.55 + this.hashNormalized(seed + 3.1) * 0.85;
+            const widthJitter = 0.5 + this.hashNormalized(seed + 5.7) * 1.0;
+            drawSoftBeam(ctx, {
+                x: 0,
+                y: 0,
+                angle,
+                length: softShaftBaseLength * lengthJitter,
+                width: screenRadius * 0.09 * widthJitter,
+                color: 'rgba(255, 178, 70, 1)',
+                endColor: 'rgba(255, 120, 40, 0)',
+                layers: DEFAULT_LAYERS,
+                baseAlpha: this.ULTRA_SOFT_SHAFT_BASE_ALPHA,
+                widthScaleMax: this.ULTRA_SOFT_SHAFT_WIDTH_SCALE_MAX,
+                falloffPower: DEFAULT_FALLOFF_POWER,
+                time: gameTimeSec,
+                seed,
+                sway: this.ULTRA_SOFT_SHAFT_SWAY,
+                swaySpeed: 0.35 + this.hashNormalized(seed + 9.4) * 0.4,
+            });
+        }
         ctx.restore();
 
         if (shadowQuads.length === 0) {

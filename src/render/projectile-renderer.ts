@@ -35,6 +35,7 @@ import {
 import { SparkleParticle, DeathParticle } from '../sim/entities/particles';
 import { getFactionColor } from './faction-utilities';
 import { FactionProjectileRenderer } from './faction-projectile-renderer';
+import { drawSoftBeam, DEFAULT_LAYERS, DEFAULT_FALLOFF_POWER } from './soft-light';
 
 import * as Constants from '../constants';
 
@@ -401,37 +402,44 @@ export class ProjectileRenderer {
         const color = getFactionColor(laser.owner.faction as Faction);
 
         const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
+        const dx = endScreen.x - startScreen.x;
+        const dy = endScreen.y - startScreen.y;
+        const length = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        const width = Math.max(1, laser.width * context.zoom);
 
-        context.ctx.strokeStyle = color;
-        context.ctx.globalAlpha = alpha * 0.2;
-        context.ctx.lineWidth = laser.width * context.zoom * 2.5;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
-        context.ctx.globalAlpha = alpha * 0.5;
-        context.ctx.lineWidth = laser.width * context.zoom * 1.5;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
-        context.ctx.globalAlpha = alpha * 0.9;
-        context.ctx.lineWidth = laser.width * context.zoom;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
-        context.ctx.strokeStyle = '#FFFFFF';
-        context.ctx.globalAlpha = alpha * 0.7;
-        context.ctx.lineWidth = laser.width * context.zoom * 0.3;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
+        // Volumetric light fakery: nested soft-alpha layers instead of a handful of
+        // hard-edged strokes, softened further by a single blur pass over the whole group.
+        context.ctx.save();
+        context.ctx.filter = 'blur(4px)';
+        drawSoftBeam(context.ctx, {
+            x: startScreen.x,
+            y: startScreen.y,
+            angle,
+            length,
+            width: width * 1.4,
+            color,
+            layers: DEFAULT_LAYERS,
+            baseAlpha: 0.07 * alpha,
+            widthScaleMax: 2.6,
+            falloffPower: DEFAULT_FALLOFF_POWER,
+            blend: 'lighter',
+        });
+        // Bright, narrow core so the beam still reads as a laser at its center.
+        drawSoftBeam(context.ctx, {
+            x: startScreen.x,
+            y: startScreen.y,
+            angle,
+            length,
+            width: width * 0.35,
+            color: '#FFFFFF',
+            layers: 6,
+            baseAlpha: 0.09 * alpha,
+            widthScaleMax: 1.8,
+            falloffPower: 2,
+            blend: 'lighter',
+        });
+        context.ctx.restore();
         context.ctx.globalAlpha = 1.0;
     }
 
@@ -473,22 +481,43 @@ export class ProjectileRenderer {
         const color = laser.owner.faction === Faction.VELARIS ? '#EE44FF' : getFactionColor(laser.owner.faction as Faction);
 
         const alpha = 1.0 - (laser.lifetime / laser.maxLifetime);
+        const dx = endScreen.x - startScreen.x;
+        const dy = endScreen.y - startScreen.y;
+        const length = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
 
-        context.ctx.strokeStyle = color;
-        context.ctx.globalAlpha = alpha * 0.8;
-        context.ctx.lineWidth = laser.widthPx;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
-        context.ctx.globalAlpha = alpha * 0.3;
-        context.ctx.lineWidth = laser.widthPx * 2;
-        context.ctx.beginPath();
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-        context.ctx.lineTo(endScreen.x, endScreen.y);
-        context.ctx.stroke();
-
+        // Volumetric light fakery: soft nested-alpha outer glow plus a bright core,
+        // both blurred once so the beam's edges read as diffuse light rather than a
+        // hard-edged stroke. See src/render/soft-light.ts.
+        context.ctx.save();
+        context.ctx.filter = 'blur(3px)';
+        drawSoftBeam(context.ctx, {
+            x: startScreen.x,
+            y: startScreen.y,
+            angle,
+            length,
+            width: laser.widthPx * 2.2,
+            color,
+            layers: DEFAULT_LAYERS,
+            baseAlpha: 0.06 * alpha,
+            widthScaleMax: 2.4,
+            falloffPower: DEFAULT_FALLOFF_POWER,
+            blend: 'lighter',
+        });
+        drawSoftBeam(context.ctx, {
+            x: startScreen.x,
+            y: startScreen.y,
+            angle,
+            length,
+            width: laser.widthPx * 0.6,
+            color: '#FFFFFF',
+            layers: 6,
+            baseAlpha: 0.14 * alpha,
+            widthScaleMax: 1.6,
+            falloffPower: 2,
+            blend: 'lighter',
+        });
+        context.ctx.restore();
         context.ctx.globalAlpha = 1.0;
     }
 
