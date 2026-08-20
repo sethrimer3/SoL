@@ -77,9 +77,12 @@ export class UnitRenderer {
         const displayColor = unitColor;
         let visibilityAlpha = 1;
         let shadeGlowAlpha = 0;
-        const isInShadow = !ladSun && game.isPointInShadow(unit.position);
+        // Computed once and reused below for isObjectVisibleToPlayer, which would otherwise
+        // repeat the same sun/asteroid raycast for this position.
+        const sunShadow = !ladSun && game.isPointInSunShadow(unit.position);
+        const isInShadow = !ladSun && (sunShadow || game.isPointInOccludeCone(unit.position));
         if (isEnemy && context.viewingPlayer) {
-            const isVisible = game.isObjectVisibleToPlayer(unit.position, context.viewingPlayer, unit);
+            const isVisible = game.isObjectVisibleToPlayer(unit.position, context.viewingPlayer, unit, sunShadow);
             visibilityAlpha = context.getEnemyVisibilityAlpha(unit, isVisible, game.gameTime);
             if (visibilityAlpha <= 0.01) {
                 return;

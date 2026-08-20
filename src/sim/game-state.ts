@@ -485,11 +485,32 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      */
     isPointInShadow(point: Vector2D): boolean {
         // Occlude shadow cones force a point into shadow regardless of sunlight
+        if (this.isPointInOccludeCone(point)) {
+            return true;
+        }
+        return this.isPointInSunShadow(point);
+    }
+
+    /**
+     * Cheap containment check against active Occlude shadow cones only (no raycasting).
+     * Public so callers can combine it with a separately-cached isPointInSunShadow result
+     * instead of calling isPointInShadow and repeating the raycast.
+     */
+    isPointInOccludeCone(point: Vector2D): boolean {
         for (const cone of this.occludeShadowCones) {
             if (cone.containsPoint(point)) {
                 return true;
             }
         }
+        return false;
+    }
+
+    /**
+     * Shadow state from sun/asteroid occlusion alone, ignoring Occlude shadow cones.
+     * Exposed separately so callers that need to combine it with isObjectVisibleToPlayer
+     * (which also excludes Occlude cones) can reuse one raycast instead of two.
+     */
+    isPointInSunShadow(point: Vector2D): boolean {
         return VisionSystem.isPointInShadow(
             point,
             this.suns,
@@ -504,15 +525,19 @@ export class GameState implements AIContext, PhysicsContext, ParticleContext, He
      * - They are NOT in shadow (in light), OR
      * - They are in shadow but within proximity range of player unit, OR
      * - They are in shadow but within player's influence radius
+     *
+     * @param precomputedSunShadow Optional result of isPointInSunShadow(objectPos), if the
+     * caller already computed it, to avoid repeating the sun/asteroid raycast.
      */
-    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget): boolean {
+    isObjectVisibleToPlayer(objectPos: Vector2D, player: Player, object?: CombatTarget, precomputedSunShadow?: boolean): boolean {
         return VisionSystem.isObjectVisibleToPlayer(
             objectPos,
             player,
             this.suns,
             this.asteroids,
             this.splendorSunlightZones,
-            object
+            object,
+            precomputedSunShadow
         );
     }
 

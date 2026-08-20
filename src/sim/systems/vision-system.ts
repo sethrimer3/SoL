@@ -166,14 +166,15 @@ export class VisionSystem {
         suns: Sun[],
         asteroids: Asteroid[],
         splendorZones: SplendorSunlightZone[],
-        object?: CombatTarget
+        object?: CombatTarget,
+        precomputedInShadow?: boolean
     ): boolean {
         // Special LaD (Light and Dark) visibility logic
         const ladSun = suns.find(s => s.type === 'lad');
         if (ladSun) {
             return this.isObjectVisibleInLadMode(objectPos, player, object, ladSun);
         }
-        
+
         // Special case: if object is a Dagger unit and is cloaked
         if (object && object instanceof Dagger) {
             // Type narrowing: object is now known to be Dagger
@@ -183,10 +184,13 @@ export class VisionSystem {
                 return false; // Cloaked Daggers are invisible to enemies
             }
         }
-        
-        // Check if object is in shadow
-        const inShadow = this.isPointInShadow(objectPos, suns, asteroids, splendorZones);
-        
+
+        // Check if object is in shadow. Callers may pass a precomputed result (from the
+        // same suns/asteroids/splendorZones inputs) to avoid repeating the raycast.
+        const inShadow = precomputedInShadow !== undefined
+            ? precomputedInShadow
+            : this.isPointInShadow(objectPos, suns, asteroids, splendorZones);
+
         // If not in shadow, always visible
         if (!inShadow) {
             return true;
