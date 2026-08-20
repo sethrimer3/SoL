@@ -296,7 +296,7 @@ export class MainMenu {
         this.backgroundParticleLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.atmosphereLayer = new MenuAtmosphereLayer(
             menu,
-            this.resolveAssetPath('ASSETS/sprites/environment/centralSun.svg')
+            this.resolveAssetPath('ASSETS/sprites/environment/UNUSED&SVG/centralSun.svg')
         );
         this.atmosphereLayer.setGraphicsQuality(this.settings.graphicsQuality);
         this.atmosphereLayer.setStarNestEnabled(this.settings.isStarNestEnabled);

@@ -47,7 +47,7 @@ export const graphicsOptions: GraphicOption[] = [
     {
         key: 'centralSun',
         label: 'Central Sun',
-        svgPath: 'ASSETS/sprites/environment/centralSun.svg',
+        svgPath: 'ASSETS/sprites/environment/UNUSED&SVG/centralSun.svg',
         pngPath: 'ASSETS/sprites/environment/centralSun.png'
     },
     {
@@ -81,67 +81,66 @@ export const graphicsOptions: GraphicOption[] = [
     {
         key: 'heroMarine',
         label: 'Hero: Marine',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Marine.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Marine.png'
     },
     {
         key: 'heroGrave',
         label: 'Hero: Grave',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Grave.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Grave.png'
     },
     {
         key: 'heroRay',
         label: 'Hero: Ray',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Ray.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Ray.png'
     },
     {
         key: 'heroNova',
         label: 'Hero: Nova',
-        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Nova.svg',
-        pngPath: 'ASSETS/sprites/VELARIS/heroUnits/Nova.png'
+        svgPath: 'ASSETS/sprites/VELARIS/heroUnits/Nova.svg'
     },
     {
         key: 'heroInfluenceBall',
         label: 'Hero: Influence Ball',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Uniter.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Uniter.png'
     },
     {
         key: 'heroTurretDeployer',
         label: 'Hero: Turret Deployer',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Engineer.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Engineer.png'
     },
     {
         key: 'heroDriller',
         label: 'Hero: Driller',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Drill.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Drill.png'
     },
     {
         key: 'heroDagger',
         label: 'Hero: Dagger',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Dagger.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Dagger.png'
     },
     {
         key: 'heroBeam',
         label: 'Hero: Beam',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Beam.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Beam.png'
     },
     {
         key: 'heroPreist',
         label: 'Hero: Preist',
         svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.svg',
-        pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Preist.png'
+        pngPath: 'ASSETS/sprites/RADIANT/heroUnits/priest.png'
     },
     {
         key: 'heroTank',
         label: 'Hero: Tank',
-        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.svg',
+        svgPath: 'ASSETS/sprites/RADIANT/heroUnits/UNUSED&SVG/Tank.svg',
         pngPath: 'ASSETS/sprites/RADIANT/heroUnits/Tank.png'
     },
     {
