@@ -123,11 +123,6 @@ export class ForgeRenderer {
         context.ctx.save();
         context.ctx.globalAlpha = visibilityAlpha;
 
-        // LaD mode: pure white/black forges need an inverted outline to stay readable.
-        if (ladSun && ownerSide) {
-            context.drawLadOutline(screenPos, size, ownerSide);
-        }
-
         const shouldGlowInShade = isEnemy
             ? (isInShadow && visibilityAlpha > 0.01)
             : isInShadow;
@@ -198,6 +193,20 @@ export class ForgeRenderer {
 
         // Draw faction-specific forge
         const faction = forge.owner.faction;
+
+        // LaD mode: pure white/black forges need an inverted outline to stay readable.
+        // Radiant/Velaris forges share the stellarForge sprite, so their outline traces the
+        // sprite silhouette; the Aurum forge is a procedural edge-detect animation with no
+        // stable silhouette and falls back to a ring.
+        if (ladSun && ownerSide) {
+            const ladSpritePath = faction === Faction.AURUM ? null : context.getGraphicAssetPath('stellarForge');
+            if (ladSpritePath) {
+                context.drawLadSpriteOutline(ladSpritePath, ownerSide, screenPos.x, screenPos.y, size * 2, size * 2);
+            } else {
+                context.drawLadOutline(screenPos, size, ownerSide);
+            }
+        }
+
         if (faction === Faction.VELARIS) {
             this.drawVelarisForge(forge, screenPos, size, displayColor, game.gameTime, shouldDim, context);
         } else if (faction === Faction.AURUM) {

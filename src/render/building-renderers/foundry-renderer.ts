@@ -194,12 +194,23 @@ export class FoundryRenderer {
         const bottomRotationRad = gameTime * spinSpeedRad;
         const topRotationRad = -gameTime * spinSpeedRad;
 
-        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number, spritePath: string): void => {
             if (!sprite) {
                 return;
             }
             const spriteWidth = sprite.width * spriteScale;
             const spriteHeight = sprite.height * spriteScale;
+            if (ladOutlineSide) {
+                context.drawLadSpriteOutline(
+                    spritePath,
+                    ladOutlineSide,
+                    screenPos.x,
+                    screenPos.y,
+                    spriteWidth,
+                    spriteHeight,
+                    rotationRad
+                );
+            }
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
             context.ctx.rotate(rotationRad);
@@ -207,15 +218,15 @@ export class FoundryRenderer {
             context.ctx.restore();
         };
 
-        drawLayer(bottomSprite, bottomRotationRad);
+        drawLayer(bottomSprite, bottomRotationRad, bottomSpritePath);
 
         if (building.isSelected) {
             context.drawBuildingSelectionIndicator(screenPos, radius);
             this.drawFoundryButtons(building, screenPos, context);
         }
 
-        drawLayer(middleSprite, 0);
-        drawLayer(topSprite, topRotationRad);
+        drawLayer(middleSprite, 0, middleSpritePath);
+        drawLayer(topSprite, topRotationRad, topSpritePath);
     }
 
     /**
@@ -228,11 +239,12 @@ export class FoundryRenderer {
         displayColor: string,
         gameTime: number,
         shouldDim: boolean,
-        context: BuildingRendererContext
+        context: BuildingRendererContext,
+        ladOutlineSide?: 'light' | 'dark'
     ): void {
-        const bottomSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_bottom.png';
-        const middleSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_middle.png';
-        const topSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_top.png';
+        let bottomSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_bottom.png';
+        let middleSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_middle.png';
+        let topSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_top.png';
 
         let bottomSprite = context.getTintedSprite(bottomSpritePath, displayColor);
         let middleSprite = context.getTintedSprite(middleSpritePath, displayColor);
@@ -240,11 +252,15 @@ export class FoundryRenderer {
 
         // The Velaris foundry art does not exist yet; fall back to the Radiant
         // layers so the building stays visible. They are tinted by displayColor,
-        // so they still read as the owning player's colour.
+        // so they still read as the owning player's colour. Swap the paths too,
+        // otherwise the LaD outline pass traces sprites that never loaded.
         if (!bottomSprite && !middleSprite && !topSprite) {
-            bottomSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png', displayColor);
-            middleSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png', displayColor);
-            topSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png', displayColor);
+            bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
+            middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
+            topSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png';
+            bottomSprite = context.getTintedSprite(bottomSpritePath, displayColor);
+            middleSprite = context.getTintedSprite(middleSpritePath, displayColor);
+            topSprite = context.getTintedSprite(topSpritePath, displayColor);
         }
 
         const referenceSprite = bottomSprite || middleSprite || topSprite;
@@ -273,12 +289,23 @@ export class FoundryRenderer {
         const bottomRotationRad = gameTime * spinSpeedRad;
         const topRotationRad = -gameTime * spinSpeedRad;
 
-        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+        const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number, spritePath: string): void => {
             if (!sprite) {
                 return;
             }
             const spriteWidth = sprite.width * spriteScale;
             const spriteHeight = sprite.height * spriteScale;
+            if (ladOutlineSide) {
+                context.drawLadSpriteOutline(
+                    spritePath,
+                    ladOutlineSide,
+                    screenPos.x,
+                    screenPos.y,
+                    spriteWidth,
+                    spriteHeight,
+                    rotationRad
+                );
+            }
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
             context.ctx.rotate(rotationRad);
@@ -286,7 +313,7 @@ export class FoundryRenderer {
             context.ctx.restore();
         };
 
-        drawLayer(bottomSprite, bottomRotationRad);
+        drawLayer(bottomSprite, bottomRotationRad, bottomSpritePath);
 
         if (building.isSelected) {
             context.drawBuildingSelectionIndicator(screenPos, radius);
@@ -296,8 +323,8 @@ export class FoundryRenderer {
         // Draw Velaris script sigil on top
         this.drawVelarisFoundrySigil(building, screenPos, radius, displayColor, gameTime, shouldDim, context);
 
-        drawLayer(middleSprite, 0);
-        drawLayer(topSprite, topRotationRad);
+        drawLayer(middleSprite, 0, middleSpritePath);
+        drawLayer(topSprite, topRotationRad, topSpritePath);
     }
 
     /**

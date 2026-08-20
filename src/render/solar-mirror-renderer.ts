@@ -377,7 +377,6 @@ export class SolarMirrorRenderer {
             context.ctx.setTransform(1, 0, 0, 1, 0, 0);
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, size, ownerSide);
             context.ctx.restore();
         }
 
@@ -523,6 +522,23 @@ export class SolarMirrorRenderer {
                 const drawHeight = mirrorSprite.height * scale;
                 selectionWidth = drawWidth;
                 selectionHeight = drawHeight;
+                // LaD mode: trace the mirror silhouette in the inverted color.  The context
+                // is already translated/rotated to the mirror, so the outline is drawn in
+                // screen space with the same reflection angle.
+                if (ladSun && ownerSide) {
+                    context.ctx.save();
+                    context.ctx.setTransform(1, 0, 0, 1, 0, 0);
+                    context.drawLadSpriteOutline(
+                        mirrorSpritePath,
+                        ownerSide,
+                        screenPos.x,
+                        screenPos.y,
+                        drawWidth,
+                        drawHeight,
+                        mirror.reflectionAngle
+                    );
+                    context.ctx.restore();
+                }
                 context.ctx.drawImage(
                     mirrorSprite,
                     -drawWidth / 2,

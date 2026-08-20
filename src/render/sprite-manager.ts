@@ -61,7 +61,7 @@ export class SpriteManager {
 
     // Padding (in sprite-space pixels) reserved around outline canvases so the dilated
     // silhouette is not clipped at the sprite bounds.
-    private static readonly SPRITE_OUTLINE_PADDING_PX = 8;
+    private static readonly SPRITE_OUTLINE_PADDING_PX = 16;
 
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
