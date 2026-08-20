@@ -244,7 +244,7 @@ export class Minigun extends Building {
             dirY,
             mapBoundaryPx
         );
-        let stopDistance = boundaryDistance;
+        let stopDistance = Math.min(boundaryDistance, this.attackRange);
         let stopStructure: CombatTarget | null = null;
 
         for (const structure of structures) {
