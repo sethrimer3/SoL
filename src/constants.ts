@@ -201,8 +201,8 @@ export const STARLING_ATTACK_RANGE = 120;
 export const STARLING_ATTACK_DAMAGE = 5;
 export const STARLING_ATTACK_UPGRADE_BONUS = 1; // Bonus damage from foundry +1 ATK upgrade
 export const STARLING_ATTACK_SPEED = 2; // Attacks per second
-export const STARLING_MOVE_SPEED = 50; // Pixels per second (slower than regular units)
-export const STARLING_MOVE_ACCELERATION_PX_PER_SEC = 120; // Pixels per second squared
+export const STARLING_MOVE_SPEED = 90; // Pixels per second (medium — the baseline flock speed heroes are tuned against)
+export const STARLING_MOVE_ACCELERATION_PX_PER_SEC = 270; // Pixels per second squared (medium — reaches top speed in ~0.33s, like a starling breaking from rest)
 export const STARLING_SPAWN_INTERVAL = 10.0; // Seconds between spawns
 export const STARLING_EXPLORATION_CHANGE_INTERVAL = 5.0; // Change random direction every 5 seconds
 export const STARLING_PROJECTILE_SPEED = 320; // Pixels per second
@@ -406,16 +406,47 @@ export const UNIT_ARRIVE_SLOWDOWN_RADIUS_PX = 40;   // px — begin tapering spe
 export const UNIT_WAYPOINT_TRANSIT_TURN_RATE_MULTIPLIER = 4.0; // Faster turn rate at intermediate (non-final) waypoints
 
 // Starling minion (light infantry) inertia tuning
-// Acceleration already defined as STARLING_MOVE_ACCELERATION_PX_PER_SEC (120 px/s²)
-export const STARLING_DECELERATION_PX_PER_SEC2 = 240;  // px/s² — 2× acceleration for responsive stop
+// Acceleration already defined as STARLING_MOVE_ACCELERATION_PX_PER_SEC (270 px/s²)
+export const STARLING_DECELERATION_PX_PER_SEC2 = 450;  // px/s² — 1.67× acceleration for responsive stop
 export const STARLING_ARRIVE_SLOWDOWN_RADIUS_PX = 20;  // px — tighter arrival footprint for small units
 
-// Hero tanky preset (Tank hero) — slower, harder to redirect
-export const HERO_TANKY_MOVE_SPEED = 80;                   // px/s
+// Hero movement presets — each hero's top speed/acceleration are clean numbers tuned to its theme,
+// using Starling's 90/270/450 as the "medium" reference point (see unit.ts movement inertia docs).
+
+// Tank hero — armored bulwark: slow, sturdy, hard to redirect once moving
+export const HERO_TANKY_MOVE_SPEED = 80;                   // px/s — below medium
 export const HERO_TANKY_ACCELERATION_PX_PER_SEC2 = 300;    // px/s²
 export const HERO_TANKY_DECELERATION_PX_PER_SEC2 = 600;    // px/s²
-export const HERO_TANKY_TURN_RATE_RAD_PER_SEC = 5.0;       // rad/s
+export const HERO_TANKY_TURN_RATE_RAD_PER_SEC = 5.0;       // rad/s — slow, deliberate turning
 export const HERO_TANKY_ARRIVE_SLOWDOWN_RADIUS_PX = 50;    // px
+
+// Grave hero — gravity-wielder: heaviest hero, slow to get moving and slow to stop (feels weighty)
+export const GRAVE_HERO_MOVE_SPEED = 70;                   // px/s — slowest hero, below medium
+export const GRAVE_HERO_ACCELERATION_PX_PER_SEC2 = 140;    // px/s² — sluggish to start (reaches top in 0.5s)
+export const GRAVE_HERO_DECELERATION_PX_PER_SEC2 = 210;    // px/s² — momentum carries it past stops
+export const GRAVE_HERO_TURN_RATE_RAD_PER_SEC = 5.5;       // rad/s — lumbering turns
+export const GRAVE_HERO_ARRIVE_SLOWDOWN_RADIUS_PX = 45;    // px
+
+// Velaris hero — shadow-caster: floaty and unhurried, drifts toward its destination
+export const VELARIS_HERO_MOVE_SPEED = 90;                 // px/s — medium, same tier as Starling
+export const VELARIS_HERO_ACCELERATION_PX_PER_SEC2 = 180;  // px/s² — gentle, drifting acceleration
+export const VELARIS_HERO_DECELERATION_PX_PER_SEC2 = 360;  // px/s²
+export const VELARIS_HERO_TURN_RATE_RAD_PER_SEC = 6.5;     // rad/s
+export const VELARIS_HERO_ARRIVE_SLOWDOWN_RADIUS_PX = 40;  // px
+
+// Aurum hero — golden guardian: steady and dependable, brisk without being flashy
+export const AURUM_HERO_MOVE_SPEED = 110;                  // px/s — above medium
+export const AURUM_HERO_ACCELERATION_PX_PER_SEC2 = 440;    // px/s²
+export const AURUM_HERO_DECELERATION_PX_PER_SEC2 = 660;    // px/s²
+export const AURUM_HERO_TURN_RATE_RAD_PER_SEC = 7.5;       // rad/s
+export const AURUM_HERO_ARRIVE_SLOWDOWN_RADIUS_PX = 40;    // px
+
+// Radiant hero — living light: fastest and snappiest hero, darts to its destination
+export const RADIANT_HERO_MOVE_SPEED = 150;                // px/s — fastest hero, well above medium
+export const RADIANT_HERO_ACCELERATION_PX_PER_SEC2 = 600;  // px/s² — reaches top speed in 0.25s
+export const RADIANT_HERO_DECELERATION_PX_PER_SEC2 = 900;  // px/s²
+export const RADIANT_HERO_TURN_RATE_RAD_PER_SEC = 9.5;     // rad/s — snappiest turning
+export const RADIANT_HERO_ARRIVE_SLOWDOWN_RADIUS_PX = 40;  // px
 export const UNIT_RADIUS_PX = 10; // Approximate unit radius for collisions
 export const UNIT_AVOIDANCE_RANGE_PX = 40; // Range for unit avoidance steering
 export const UNIT_AVOIDANCE_STRENGTH = 0.7; // Blend factor for avoidance steering (unitless)

@@ -228,6 +228,15 @@ export class AISystem {
             return;
         }
 
+        // Never stack another hero on top of an in-progress one: the forge routes all
+        // incoming mirror energy into whatever is in its production queue first, and only
+        // spills the leftover into pendingEnergy for Starling crunch spawns once the queue
+        // is empty. Keeping the queue perpetually full (one hero after another) starves
+        // Starling production entirely, so we require the forge to be idle before queuing more.
+        if (player.stellarForge.hasQueuedProduction()) {
+            return;
+        }
+
         const heroTypes = this.getAiHeroTypesForFaction(player.faction);
         for (const heroType of heroTypes) {
             if (this.isHeroUnitAlive(player, heroType)) {

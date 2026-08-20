@@ -279,6 +279,12 @@ export const createGraveHero = (deps: GraveHeroDeps) => {
             );
             this.isHero = true; // Grave is a hero unit for Velaris faction
             this.photonsPerCharge = 3;
+            // Grave movement preset: gravity-wielder — heaviest hero, sluggish to start and slow to stop
+            this.maxSpeedPxPerSec = Constants.GRAVE_HERO_MOVE_SPEED;
+            this.accelerationPxPerSec2 = Constants.GRAVE_HERO_ACCELERATION_PX_PER_SEC2;
+            this.decelerationPxPerSec2 = Constants.GRAVE_HERO_DECELERATION_PX_PER_SEC2;
+            this.turnRateRadPerSec = Constants.GRAVE_HERO_TURN_RATE_RAD_PER_SEC;
+            this.arriveSlowdownRadiusPx = Constants.GRAVE_HERO_ARRIVE_SLOWDOWN_RADIUS_PX;
 
             // Initialize large projectiles in polygon formation
             for (let i = 0; i < Constants.GRAVE_NUM_PROJECTILES; i++) {

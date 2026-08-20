@@ -113,6 +113,12 @@ export const createRadiantHero = (deps: RadiantHeroDeps) => {
             );
             this.isHero = true;
             this.photonsPerCharge = 3;
+            // Radiant movement preset: living light — fastest, snappiest hero
+            this.maxSpeedPxPerSec = Constants.RADIANT_HERO_MOVE_SPEED;
+            this.accelerationPxPerSec2 = Constants.RADIANT_HERO_ACCELERATION_PX_PER_SEC2;
+            this.decelerationPxPerSec2 = Constants.RADIANT_HERO_DECELERATION_PX_PER_SEC2;
+            this.turnRateRadPerSec = Constants.RADIANT_HERO_TURN_RATE_RAD_PER_SEC;
+            this.arriveSlowdownRadiusPx = Constants.RADIANT_HERO_ARRIVE_SLOWDOWN_RADIUS_PX;
         }
 
         // Override attack to do nothing

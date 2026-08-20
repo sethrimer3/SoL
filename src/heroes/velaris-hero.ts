@@ -111,6 +111,12 @@ export const createVelarisHero = (deps: VelarisHeroDeps) => {
             );
             this.isHero = true;
             this.photonsPerCharge = 3;
+            // Velaris movement preset: floaty and unhurried, drifts toward its destination
+            this.maxSpeedPxPerSec = Constants.VELARIS_HERO_MOVE_SPEED;
+            this.accelerationPxPerSec2 = Constants.VELARIS_HERO_ACCELERATION_PX_PER_SEC2;
+            this.decelerationPxPerSec2 = Constants.VELARIS_HERO_DECELERATION_PX_PER_SEC2;
+            this.turnRateRadPerSec = Constants.VELARIS_HERO_TURN_RATE_RAD_PER_SEC;
+            this.arriveSlowdownRadiusPx = Constants.VELARIS_HERO_ARRIVE_SLOWDOWN_RADIUS_PX;
         }
 
         // Override attack to do nothing

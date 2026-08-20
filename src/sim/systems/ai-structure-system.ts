@@ -97,6 +97,14 @@ export class AiStructureSystem {
             return;
         }
 
+        // Wait for any in-progress hero production to finish before spending energy on a
+        // structure. This keeps hero and structure builds from landing on top of each other
+        // and preserves idle forge windows so surplus energy can spill into Starling crunch
+        // spawns instead of being immediately soaked up by back-to-back production.
+        if (player.stellarForge.hasQueuedProduction()) {
+            return;
+        }
+
         const minigunCount = player.buildings.filter((building) => building instanceof Minigun).length;
         const swirlerCount = player.buildings.filter((building) => building instanceof SpaceDustSwirler).length;
         const hasSubsidiaryFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
