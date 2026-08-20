@@ -107,6 +107,20 @@ export interface BuildingRendererContext {
         drawHeight: number,
         rotationRad?: number
     ): void;
+    drawSelectionSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
+    drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void;
+    drawShapeOutlineGlow(
+        buildPath: (pathCtx: CanvasRenderingContext2D) => void,
+        color: string,
+        lineWidthPx?: number
+    ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, color: string): void;
     

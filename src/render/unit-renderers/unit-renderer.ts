@@ -106,12 +106,6 @@ export class UnitRenderer {
             context.ctx.globalAlpha = 1.0;
         }
 
-        if (isSelected) {
-            const isStarling = unit instanceof Starling;
-            const selectionRadiusMultiplier = (unit.isHero || isStarling) ? 1.2 : 1.0;
-            context.drawBuildingSelectionIndicator(screenPos, size * selectionRadiusMultiplier);
-        }
-
         // Draw aura in LaD mode
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
@@ -162,6 +156,17 @@ export class UnitRenderer {
                     rotationRad
                 );
             }
+            // Selected units are marked with a gold outline tracing their own silhouette.
+            if (isSelected && heroSpritePath) {
+                context.drawSelectionSpriteOutline(
+                    heroSpritePath,
+                    screenPos.x,
+                    screenPos.y,
+                    heroSpriteSize,
+                    heroSpriteSize,
+                    rotationRad
+                );
+            }
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
             context.ctx.rotate(rotationRad);
@@ -174,9 +179,14 @@ export class UnitRenderer {
             );
             context.ctx.restore();
         } else {
+            // The circle body is its own silhouette, so a stroke along it is already a
+            // shape-hugging outline: gold when selected, inverted color in LaD mode.
+            if (isSelected) {
+                context.drawSelectionShapeOutline((pathCtx) => {
+                    pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                });
+            }
             context.ctx.fillStyle = displayColor;
-            // LaD mode: the circle body is its own silhouette, so stroking it in the
-            // inverted color is already a shape-hugging outline.
             const ladOutlineColor = ownerSide === 'light' ? '#000000' : '#FFFFFF';
             context.ctx.strokeStyle = (ladSun && ownerSide)
                 ? ladOutlineColor

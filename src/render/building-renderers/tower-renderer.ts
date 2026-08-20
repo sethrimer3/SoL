@@ -75,7 +75,7 @@ export class TowerRenderer {
             );
 
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             }
 
             // Draw progress bar
@@ -118,6 +118,11 @@ export class TowerRenderer {
                 context.drawLadSpriteOutline(bottomSpritePath, ownerSide, screenPos.x, screenPos.y, bottomWidth, bottomHeight);
             }
 
+            // Selected towers are marked with a gold outline hugging the tower base.
+            if (building.isSelected) {
+                context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, bottomWidth, bottomHeight);
+            }
+
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
             context.ctx.drawImage(
@@ -128,11 +133,6 @@ export class TowerRenderer {
                 bottomHeight
             );
             context.ctx.restore();
-
-            // Draw selection indicator if selected
-            if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
-            }
 
             let gunAngle = 0;
             if (building.target) {
@@ -180,7 +180,7 @@ export class TowerRenderer {
 
             // Draw selection indicator if selected
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             }
 
             // Draw turret base (smaller circle in center)
@@ -271,7 +271,7 @@ export class TowerRenderer {
             );
 
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             }
 
             // Draw progress bar
@@ -354,11 +354,15 @@ export class TowerRenderer {
                 context.ctx.restore();
             };
 
-            drawLayer(bottomSprite, 0, bottomSpritePath);
-
+            // Selected towers are marked with a gold outline hugging the tower base, drawn
+            // before the layers so the glow sits behind the artwork.
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                const selectionWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
+                const selectionHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
+                context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, selectionWidth, selectionHeight);
             }
+
+            drawLayer(bottomSprite, 0, bottomSpritePath);
 
             drawLayer(middleSprite, middleRotationRad, middleSpritePath);
             drawLayer(topSprite, topRotationRad, topSpritePath);
@@ -418,7 +422,7 @@ export class TowerRenderer {
             context.ctx.globalAlpha = 1.0;
 
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             }
 
             // Draw progress bar
@@ -539,7 +543,7 @@ export class TowerRenderer {
         }
 
         if (building.isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, radius);
+            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
 
             // Draw range indicator
             context.ctx.strokeStyle = displayColor;
@@ -671,7 +675,7 @@ export class TowerRenderer {
             context.ctx.globalAlpha = 1.0;
 
             if (building.isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, radius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             }
 
             // Draw progress bar
@@ -753,7 +757,7 @@ export class TowerRenderer {
         context.ctx.fill();
 
         if (building.isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, radius);
+            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
 
             // Draw range indicator
             context.ctx.strokeStyle = displayColor;
@@ -833,7 +837,7 @@ export class TowerRenderer {
         context.ctx.fill();
 
         if (building.isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, radius);
+            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
 
             // Draw shield radius indicator
             if (building.isComplete) {

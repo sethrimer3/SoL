@@ -81,6 +81,20 @@ export interface UnitRendererContext {
         drawHeight: number,
         rotationRad?: number
     ): void;
+    drawSelectionSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
+    drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void;
+    drawShapeOutlineGlow(
+        buildPath: (pathCtx: CanvasRenderingContext2D) => void,
+        color: string,
+        lineWidthPx?: number
+    ): void;
     drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void;
 
     // Seed/random

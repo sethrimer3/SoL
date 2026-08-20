@@ -34,6 +34,7 @@ export interface WarpGateRendererContext {
         options?: { opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
     ): void;
     drawBuildingSelectionIndicator(screenPos: { x: number; y: number }, radius: number): void;
+    drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void;
     drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, displayColor: string): void;
     getPseudoRandom(seed: number): number;
 }
@@ -106,7 +107,7 @@ export class WarpGateRenderer {
                 context.drawWarpGateProductionEffect(screenPos, maxRadius, game, displayColor);
             }
             if (isSelected) {
-                context.drawBuildingSelectionIndicator(screenPos, maxRadius);
+                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, maxRadius, 0, Math.PI * 2); });
             }
 
             const completionProgress = gate.completionRemainingSec / Constants.WARP_GATE_COMPLETION_WINDOW_SEC;

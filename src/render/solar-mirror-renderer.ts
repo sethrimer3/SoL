@@ -104,6 +104,20 @@ export interface SolarMirrorRendererContext {
         drawHeight: number,
         rotationRad?: number
     ): void;
+    drawSelectionSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
+    drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void;
+    drawShapeOutlineGlow(
+        buildPath: (pathCtx: CanvasRenderingContext2D) => void,
+        color: string,
+        lineWidthPx?: number
+    ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     getVelarisGraphemeSpritePath(letter: string): string | null;
     getGraphemeMaskData(path: string): ImageData | null;
@@ -370,14 +384,12 @@ export class SolarMirrorRenderer {
         context.ctx.translate(screenPos.x, screenPos.y);
         context.ctx.rotate(mirror.reflectionAngle);
 
-        // Draw aura in LaD mode (before sprite)
+        // Draw aura in LaD mode (before sprite).  The context is already translated to the
+        // mirror, so the aura is drawn at the local origin; resetting the transform here
+        // would drop the device-pixel-ratio scale and offset the aura from the mirror.
         if (ladSun && ownerSide) {
-            // Save current transform and reset to screen coordinates for aura
-            context.ctx.save();
-            context.ctx.setTransform(1, 0, 0, 1, 0, 0);
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
-            context.drawLadAura(screenPos, size, auraColor, ownerSide);
-            context.ctx.restore();
+            context.drawLadAura(new Vector2D(0, 0), size, auraColor, ownerSide);
         }
 
         const surfaceLength = size * 2;
@@ -523,21 +535,28 @@ export class SolarMirrorRenderer {
                 selectionWidth = drawWidth;
                 selectionHeight = drawHeight;
                 // LaD mode: trace the mirror silhouette in the inverted color.  The context
-                // is already translated/rotated to the mirror, so the outline is drawn in
-                // screen space with the same reflection angle.
+                // is already translated to the mirror and rotated to its reflection angle,
+                // so the outline is drawn at the local origin with no extra transform -
+                // exactly like the drawImage below it.
+                // Selected mirrors get a gold outline hugging the mirror sprite.
+                if (mirror.isSelected) {
+                    context.drawSelectionSpriteOutline(
+                        mirrorSpritePath,
+                        0,
+                        0,
+                        drawWidth,
+                        drawHeight
+                    );
+                }
                 if (ladSun && ownerSide) {
-                    context.ctx.save();
-                    context.ctx.setTransform(1, 0, 0, 1, 0, 0);
                     context.drawLadSpriteOutline(
                         mirrorSpritePath,
                         ownerSide,
-                        screenPos.x,
-                        screenPos.y,
+                        0,
+                        0,
                         drawWidth,
-                        drawHeight,
-                        mirror.reflectionAngle
+                        drawHeight
                     );
-                    context.ctx.restore();
                 }
                 context.ctx.drawImage(
                     mirrorSprite,
@@ -586,8 +605,12 @@ export class SolarMirrorRenderer {
         // Restore context state
         context.ctx.restore();
 
-        if (mirror.isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, Math.max(selectionWidth, selectionHeight) * 0.52);
+        // Sprite-drawn mirrors outline their own silhouette above; anything else (the flat
+        // fallback surface, Velaris particle mirrors) falls back to a circular outline.
+        if (mirror.isSelected && !drewSprite) {
+            context.drawSelectionShapeOutline((pathCtx) => {
+                pathCtx.arc(screenPos.x, screenPos.y, Math.max(selectionWidth, selectionHeight) * 0.52, 0, Math.PI * 2);
+            });
         }
 
         if (context.isWarpGatePlacementMode && mirror.isSelected) {

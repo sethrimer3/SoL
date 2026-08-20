@@ -61,7 +61,7 @@ export class SpriteManager {
 
     // Padding (in sprite-space pixels) reserved around outline canvases so the dilated
     // silhouette is not clipped at the sprite bounds.
-    private static readonly SPRITE_OUTLINE_PADDING_PX = 16;
+    private static readonly SPRITE_OUTLINE_PADDING_PX = 32;
 
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
@@ -217,7 +217,7 @@ export class SpriteManager {
         const resolvedPath = resolveAssetPath(path);
         const padding = SpriteManager.SPRITE_OUTLINE_PADDING_PX;
         // Bucket the thickness so slow zoom changes reuse cached canvases.
-        const thickness = Math.min(padding, Math.max(1, Math.round(thicknessSpritePx)));
+        const thickness = Math.min(padding / 3, Math.max(1, Math.round(thicknessSpritePx)));
         const cacheKey = `${resolvedPath}|${color}|${thickness}`;
         const cached = this.outlineSpriteCache.get(cacheKey);
         if (cached) {
@@ -237,12 +237,20 @@ export class SpriteManager {
             return null;
         }
 
-        // Stamp the sprite at every offset on a ring of radius `thickness`.  The union of
-        // the stamps is the silhouette grown outwards by the outline thickness.
+        // Build the dilated silhouette on a scratch canvas: stamping the sprite at every
+        // offset on a ring of radius `thickness` grows its shape outwards by that much.
+        const silhouetteCanvas = document.createElement('canvas');
+        silhouetteCanvas.width = canvas.width;
+        silhouetteCanvas.height = canvas.height;
+        const silhouetteCtx = silhouetteCanvas.getContext('2d');
+        if (!silhouetteCtx) {
+            return null;
+        }
+
         const stampCount = 16;
         for (let stampIndex = 0; stampIndex < stampCount; stampIndex++) {
             const angle = (stampIndex / stampCount) * Math.PI * 2;
-            ctx.drawImage(
+            silhouetteCtx.drawImage(
                 spriteSource.image,
                 spriteSource.sourceX,
                 spriteSource.sourceY,
@@ -256,10 +264,21 @@ export class SpriteManager {
         }
 
         // Flatten the accumulated alpha to a solid silhouette in the outline color.
-        ctx.globalCompositeOperation = 'source-in';
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.globalCompositeOperation = 'source-over';
+        silhouetteCtx.globalCompositeOperation = 'source-in';
+        silhouetteCtx.fillStyle = color;
+        silhouetteCtx.fillRect(0, 0, canvas.width, canvas.height);
+        silhouetteCtx.globalCompositeOperation = 'source-over';
+
+        // Blur the silhouette into the output canvas so the outline reads as a soft glow
+        // hugging the shape rather than a hard rim.  Two passes - a wide, faint halo and a
+        // tighter, brighter one - give the glow a falloff instead of a flat edge.
+        ctx.filter = `blur(${Math.max(1, thickness * 0.9)}px)`;
+        ctx.globalAlpha = 0.85;
+        ctx.drawImage(silhouetteCanvas, 0, 0);
+        ctx.filter = `blur(${Math.max(0.5, thickness * 0.35)}px)`;
+        ctx.globalAlpha = 1;
+        ctx.drawImage(silhouetteCanvas, 0, 0);
+        ctx.filter = 'none';
 
         this.outlineSpriteCache.set(cacheKey, canvas);
         return canvas;

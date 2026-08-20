@@ -243,9 +243,6 @@ export class StarlingRenderer {
         
         // Note: Range circles for starlings are drawn separately as merged outlines
         // in drawMergedStarlingRanges() before individual starlings are rendered
-        if (isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, size * 1.1);
-        }
         
         // Get starling sprite and color it with player color
         const starlingSpritePath = context.getStarlingSpritePath(starling);
@@ -295,6 +292,17 @@ export class StarlingRenderer {
             if (starlingSprite) {
                 const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
                 const rotationRad = context.getStarlingFacingRotationRad(starling);
+                // Selected starlings get a gold outline tracing the sprite silhouette.
+                if (isSelected && starlingSpritePath) {
+                    context.drawSelectionSpriteOutline(
+                        starlingSpritePath,
+                        screenPos.x,
+                        screenPos.y,
+                        spriteSize,
+                        spriteSize,
+                        rotationRad ?? 0
+                    );
+                }
                 if (ladSun && ownerSide && starlingSpritePath) {
                     context.drawLadSpriteOutline(
                         starlingSpritePath,
@@ -329,6 +337,11 @@ export class StarlingRenderer {
                 }
             } else {
                 // Fallback to circle rendering if sprite not loaded
+                if (isSelected) {
+                    context.drawSelectionShapeOutline((pathCtx) => {
+                        pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                    });
+                }
                 context.ctx.fillStyle = displayColor;
                 const strokeColor = displayColor;
                 context.ctx.strokeStyle = isSelected ? strokeColor : (shouldDim ? context.darkenColor(strokeColor, Constants.SHADE_OPACITY) : strokeColor);

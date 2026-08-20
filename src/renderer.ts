@@ -341,6 +341,9 @@ export class GameRenderer {
         }
     }
 
+    // Selected entities are marked with a gold outline hugging their own shape.
+    private static readonly SELECTION_OUTLINE_COLOR = '#FFD700';
+    private static readonly SELECTION_OUTLINE_THICKNESS_SCALE = 1.6;
     private static readonly PIXEL_MODE_WIDTH = 320;
     private static readonly PIXEL_MODE_HEIGHT = 180;
 
@@ -1067,6 +1070,10 @@ export class GameRenderer {
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
                     this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
+                drawSelectionSpriteOutline: (path, centerX, centerY, width, height, rotationRad) =>
+                    this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
+                drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
+                drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
@@ -1135,6 +1142,10 @@ export class GameRenderer {
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
                     this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
+                drawSelectionSpriteOutline: (path, centerX, centerY, width, height, rotationRad) =>
+                    this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
+                drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
+                drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
@@ -1263,6 +1274,10 @@ export class GameRenderer {
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
                 drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
                     this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
+                drawSelectionSpriteOutline: (path, centerX, centerY, width, height, rotationRad) =>
+                    this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
+                drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
+                drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
                 drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
                 getStarlingParticleSeed: (s) => this.getStarlingParticleSeed(s),
@@ -1358,6 +1373,77 @@ export class GameRenderer {
         rotationRad: number = 0
     ): void {
         const outlineColor = unitSide === 'light' ? '#000000' : '#FFFFFF';
+        this.drawSpriteOutlineGlow(spritePath, outlineColor, centerX, centerY, drawWidth, drawHeight, rotationRad);
+    }
+
+    /**
+     * Stroke a procedurally drawn body (circle, polygon) as a glow outline.  Pass the
+     * selection gold for selected entities, or the LaD inverted color for contrast.
+     */
+    private drawShapeOutlineGlow(
+        buildPath: (pathCtx: CanvasRenderingContext2D) => void,
+        color: string,
+        lineWidthPx?: number
+    ): void {
+        this.glowRenderer.strokeOutlineGlow(
+            this.ctx,
+            buildPath,
+            color,
+            lineWidthPx ?? Math.max(1.5, this.zoom * 1.4)
+        );
+    }
+
+    /**
+     * Draw the gold selection outline around a procedurally drawn body.
+     */
+    private drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void {
+        this.drawShapeOutlineGlow(
+            buildPath,
+            GameRenderer.SELECTION_OUTLINE_COLOR,
+            Math.max(1.5, this.zoom * 1.4) * GameRenderer.SELECTION_OUTLINE_THICKNESS_SCALE
+        );
+    }
+
+    /**
+     * Draw the gold selection outline for a sprite-based entity: the same shape-hugging
+     * glow used elsewhere, in the selection gold, so selected entities are marked by their
+     * own silhouette rather than by a ring around them.
+     */
+    private drawSelectionSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad: number = 0
+    ): void {
+        this.drawSpriteOutlineGlow(
+            spritePath,
+            GameRenderer.SELECTION_OUTLINE_COLOR,
+            centerX,
+            centerY,
+            drawWidth,
+            drawHeight,
+            rotationRad,
+            GameRenderer.SELECTION_OUTLINE_THICKNESS_SCALE
+        );
+    }
+
+    /**
+     * Shared implementation for shape-hugging sprite outlines.  The sprite's silhouette is
+     * dilated, blurred and stamped behind the sprite so the outline glows along the edge of
+     * the artwork.
+     */
+    private drawSpriteOutlineGlow(
+        spritePath: string,
+        outlineColor: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad: number = 0,
+        thicknessScale: number = 1
+    ): void {
         const spriteSource = this.spriteManager.getSpriteDrawSource(spritePath);
         if (!spriteSource || spriteSource.width === 0 || spriteSource.height === 0) {
             return;
@@ -1365,7 +1451,7 @@ export class GameRenderer {
 
         // Convert the desired on-screen outline thickness into sprite-space pixels so the
         // rim keeps a constant screen width at any zoom level.
-        const screenThicknessPx = Math.max(1.5, this.zoom * 1.4);
+        const screenThicknessPx = Math.max(1.5, this.zoom * 1.4) * thicknessScale;
         const screenToSpriteScale = spriteSource.width / Math.max(1, drawWidth);
         const outlineSprite = this.spriteManager.getSpriteOutline(
             spritePath,

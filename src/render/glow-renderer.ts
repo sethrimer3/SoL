@@ -126,14 +126,47 @@ export class GlowRenderer {
         const outlineColor = unitSide === 'light' ? '#000000' : '#FFFFFF';
         const lineWidth = Math.max(1.5, zoom * 1.4);
 
+        this.strokeOutlineGlow(
+            ctx,
+            (pathCtx) => {
+                // Ring sits fully outside the body so it stays visible regardless of draw order.
+                pathCtx.arc(screenPos.x, screenPos.y, radius + lineWidth, 0, Math.PI * 2);
+            },
+            outlineColor,
+            lineWidth
+        );
+    }
+
+    /**
+     * Stroke an arbitrary path as a soft glow outline: a wide, faint pass for the halo and
+     * a tighter, solid pass for the edge itself.  Used for LaD contrast outlines and gold
+     * selection outlines on procedurally drawn (non-sprite) bodies.
+     */
+    strokeOutlineGlow(
+        ctx: CanvasRenderingContext2D,
+        buildPath: (pathCtx: CanvasRenderingContext2D) => void,
+        color: string,
+        lineWidthPx: number
+    ): void {
         ctx.save();
-        ctx.strokeStyle = outlineColor;
-        ctx.lineWidth = lineWidth;
-        ctx.globalAlpha = 1;
+        ctx.strokeStyle = color;
+        ctx.shadowColor = color;
+        ctx.lineJoin = 'round';
+
+        ctx.globalAlpha = 0.45;
+        ctx.shadowBlur = lineWidthPx * 3.5;
+        ctx.lineWidth = lineWidthPx * 1.9;
         ctx.beginPath();
-        // Ring sits fully outside the body so it stays visible regardless of draw order.
-        ctx.arc(screenPos.x, screenPos.y, radius + lineWidth, 0, Math.PI * 2);
+        buildPath(ctx);
         ctx.stroke();
+
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = lineWidthPx * 1.2;
+        ctx.lineWidth = lineWidthPx;
+        ctx.beginPath();
+        buildPath(ctx);
+        ctx.stroke();
+
         ctx.restore();
     }
 
