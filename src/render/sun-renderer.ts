@@ -113,18 +113,24 @@ export class SunRenderer {
     private sunRenderCacheByRadiusBucket = new Map<number, SunRenderCache>();
     private sunBodyCacheByKey = new Map<string, SunBodyCacheEntry>();
     private ultraSunParticleCacheBySun = new Map<string, UltraSunParticleCache>();
-    private sunShadowQuadFrameCache = new Map<string, ShadowQuad[]>();
+    private sunShadowQuadFrameCache = new Map<string, ShadowQuad[][]>();
     private sunShaftGradientCache = new Map<string, ShaftGradientPair>();
     private ultraEmberGlowTextureByColor = new Map<string, SunCanvasType>();
     private ultraEmberCoreTextureByColor = new Map<string, SunCanvasType>();
     private ultraLightDustTextureByKey = new Map<string, SunCanvasType>();
     private ultraLightDustStatics: UltraLightDustStatic[] | null = null;
     
+    // Multiplicative darkening applied per overlapping asteroid shadow (each additional
+    // overlapping shadow makes the covered area this much darker than a single shadow).
+    private readonly SHADOW_OVERLAP_DARKEN_ALPHA = 0.15;
+
     // Lighting layer canvases (offscreen compositing)
     private lightingLayerCanvas: SunCanvasType | null = null;
     private lightingLayerCtx: Sun2DContextType | null = null;
     private lightingSunPassCanvas: SunCanvasType | null = null;
     private lightingSunPassCtx: Sun2DContextType | null = null;
+    private shadowDarknessLayerCanvas: SunCanvasType | null = null;
+    private shadowDarknessLayerCtx: Sun2DContextType | null = null;
     
     // Reusable coordinate vectors for performance
     private sunRayScreenPosA = new Vector2D(0, 0);
@@ -744,7 +750,10 @@ export class SunRenderer {
     }
 
     /**
-     * Append shadow quads from vertices for shadow casting
+     * Append shadow quads from vertices for shadow casting.
+     * All quads for a single asteroid are collected into one group so callers can
+     * render them as a single unioned path (no seams) and treat one asteroid's
+     * shadow as one darkening layer (for overlap compounding).
      */
     private appendShadowQuadsFromVertices(
         sun: SunLike,
@@ -807,32 +816,37 @@ export class SunRenderer {
     }
 
     /**
-     * Build sun shadow quads for all asteroids
+     * Build sun shadow quads for all asteroids, grouped per-asteroid so each
+     * asteroid's shadow can be filled as a single seamless path.
      */
     private buildSunShadowQuads(
         sun: SunLike,
         game: SunRayGameData,
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
-    ): ShadowQuad[] {
-        const quads: ShadowQuad[] = [];
+    ): ShadowQuad[][] {
+        const groups: ShadowQuad[][] = [];
 
         for (const asteroid of game.asteroids) {
             const worldVertices = asteroid.getWorldVertices();
+            const quads: ShadowQuad[] = [];
             this.appendShadowQuadsFromVertices(sun, worldVertices, quads, worldToScreenCoords);
+            if (quads.length > 0) {
+                groups.push(quads);
+            }
         }
 
-        return quads;
+        return groups;
     }
 
     /**
-     * Get cached sun shadow quads
+     * Get cached sun shadow quads, grouped per-asteroid.
      */
     public getSunShadowQuadsCached(
         sun: SunLike,
         game: SunRayGameData,
         _graphicsQuality: 'low' | 'medium' | 'high' | 'ultra',
         worldToScreenCoords: (worldX: number, worldY: number, out: Vector2D) => void
-    ): ShadowQuad[] {
+    ): ShadowQuad[][] {
         const sunId = this.getSunBodyCacheKey(sun);
         const cached = this.sunShadowQuadFrameCache.get(sunId);
         if (cached) {
@@ -889,6 +903,24 @@ export class SunRenderer {
     }
 
     /**
+     * Trace one or more shadow quads into ctx's current path as unioned subpaths.
+     * Filling all subpaths in a single fill() call (rather than one fill() per quad)
+     * avoids the thin seam lines that anti-aliasing leaves along shared quad edges.
+     */
+    private traceShadowQuadsPath(ctx: Sun2DContextType, quadGroups: ReadonlyArray<ReadonlyArray<ShadowQuad>>): void {
+        ctx.beginPath();
+        for (const quads of quadGroups) {
+            for (const quad of quads) {
+                ctx.moveTo(quad.sv1x, quad.sv1y);
+                ctx.lineTo(quad.sv2x, quad.sv2y);
+                ctx.lineTo(quad.ss2x, quad.ss2y);
+                ctx.lineTo(quad.ss1x, quad.ss1y);
+                ctx.closePath();
+            }
+        }
+    }
+
+    /**
      * Draw normal sun rays (not LaD)
      */
     private drawNormalSunRays(
@@ -910,6 +942,7 @@ export class SunRenderer {
         sunRayBloomRadiusMultiplier: number
     ): void {
         const lightingCtx = this.ensureLightingLayer(canvasWidth, canvasHeight);
+        const shadowDarknessCtx = this.ensureShadowDarknessLayer(canvasWidth, canvasHeight);
 
         // Draw ambient lighting layers for each sun (brighter closer to sun)
         for (const sun of game.suns) {
@@ -972,19 +1005,23 @@ export class SunRenderer {
 
             if (shadowQuads.length > 0) {
                 // Cut out any area occluded from this sun so the background remains visible through shadows.
+                // All quads are traced into one path and erased with a single fill() so shared
+                // quad edges don't leave faint anti-aliasing seams behind.
                 sunPassCtx.save();
                 sunPassCtx.globalCompositeOperation = 'destination-out';
                 sunPassCtx.fillStyle = 'rgba(0, 0, 0, 1)';
-                for (const quad of shadowQuads) {
-                    sunPassCtx.beginPath();
-                    sunPassCtx.moveTo(quad.sv1x, quad.sv1y);
-                    sunPassCtx.lineTo(quad.sv2x, quad.sv2y);
-                    sunPassCtx.lineTo(quad.ss2x, quad.ss2y);
-                    sunPassCtx.lineTo(quad.ss1x, quad.ss1y);
-                    sunPassCtx.closePath();
-                    sunPassCtx.fill();
-                }
+                this.traceShadowQuadsPath(sunPassCtx, shadowQuads);
+                sunPassCtx.fill();
                 sunPassCtx.restore();
+
+                // Compound darkening: each asteroid's shadow is filled as its own single
+                // seamless shape at a fixed alpha, so overlapping shadows stack multiplicatively
+                // (each additional overlapping shadow makes that area ~15% darker).
+                shadowDarknessCtx.fillStyle = `rgba(0, 0, 0, ${this.SHADOW_OVERLAP_DARKEN_ALPHA})`;
+                for (const quads of shadowQuads) {
+                    this.traceShadowQuadsPath(shadowDarknessCtx, [quads]);
+                    shadowDarknessCtx.fill();
+                }
             }
 
             lightingCtx.save();
@@ -995,6 +1032,8 @@ export class SunRenderer {
         }
 
         targetCtx.drawImage(lightingCtx.canvas, 0, 0);
+        // Darken the underlying scene under overlapping shadows (compounded per shadow layer).
+        targetCtx.drawImage(shadowDarknessCtx.canvas, 0, 0);
     }
 
     /**
@@ -1004,7 +1043,7 @@ export class SunRenderer {
         ctx: Sun2DContextType,
         sun: SunLike,
         gameTimeSec: number,
-        shadowQuads: ShadowQuad[],
+        shadowQuads: ShadowQuad[][],
         worldToScreen: (worldPos: { x: number; y: number }) => Vector2D
     ): void {
         const sunScreenPos = worldToScreen(sun.position);
@@ -1039,15 +1078,8 @@ export class SunRenderer {
         ctx.save();
         ctx.globalCompositeOperation = 'destination-out';
         ctx.fillStyle = 'rgba(0, 0, 0, 0.92)';
-        for (const quad of shadowQuads) {
-            ctx.beginPath();
-            ctx.moveTo(quad.sv1x, quad.sv1y);
-            ctx.lineTo(quad.sv2x, quad.sv2y);
-            ctx.lineTo(quad.ss2x, quad.ss2y);
-            ctx.lineTo(quad.ss1x, quad.ss1y);
-            ctx.closePath();
-            ctx.fill();
-        }
+        this.traceShadowQuadsPath(ctx, shadowQuads);
+        ctx.fill();
         ctx.restore();
     }
 
@@ -1409,6 +1441,22 @@ export class SunRenderer {
         }
         this.lightingSunPassCtx.clearRect(0, 0, canvasWidth, canvasHeight);
         return this.lightingSunPassCtx;
+    }
+
+    private ensureShadowDarknessLayer(canvasWidth: number, canvasHeight: number): Sun2DContextType {
+        if (!this.shadowDarknessLayerCanvas) {
+            this.shadowDarknessLayerCanvas = this.canvasFactory(canvasWidth, canvasHeight);
+            this.shadowDarknessLayerCtx = this.shadowDarknessLayerCanvas.getContext('2d') as Sun2DContextType | null;
+        }
+        if (!this.shadowDarknessLayerCtx || !this.shadowDarknessLayerCanvas) {
+            throw new Error('Failed to initialize shadow darkness layer context');
+        }
+        if (this.shadowDarknessLayerCanvas.width !== canvasWidth || this.shadowDarknessLayerCanvas.height !== canvasHeight) {
+            this.shadowDarknessLayerCanvas.width = canvasWidth;
+            this.shadowDarknessLayerCanvas.height = canvasHeight;
+        }
+        this.shadowDarknessLayerCtx.clearRect(0, 0, canvasWidth, canvasHeight);
+        return this.shadowDarknessLayerCtx;
     }
 
     private getOrCreateUltraSunParticleCache(sun: SunLike, graphicsQuality: 'low' | 'medium' | 'high' | 'ultra'): UltraSunParticleCache {

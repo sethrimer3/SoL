@@ -33,7 +33,6 @@ export interface WarpGateRendererContext {
         game: GameState,
         options?: { opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
     ): void;
-    drawBuildingSelectionIndicator(screenPos: { x: number; y: number }, radius: number): void;
     drawSelectionShapeOutline(buildPath: (pathCtx: CanvasRenderingContext2D) => void): void;
     drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, displayColor: string): void;
     getPseudoRandom(seed: number): number;

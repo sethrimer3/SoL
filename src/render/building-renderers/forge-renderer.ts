@@ -136,9 +136,20 @@ export class ForgeRenderer {
             forge.isSelected
         );
 
-        // Draw selection circle if selected
+        // Draw selection outline if selected.  Radiant/Velaris forges share the
+        // stellarForge sprite, so the outline hugs that silhouette; the Aurum forge is a
+        // procedural edge-detect animation and falls back to a circular outline.
         if (forge.isSelected) {
-            context.drawBuildingSelectionIndicator(screenPos, size * 1.45);
+            const selectionSpritePath = forge.owner.faction === Faction.AURUM
+                ? null
+                : context.getGraphicAssetPath('stellarForge');
+            if (selectionSpritePath) {
+                context.drawSelectionSpriteOutline(selectionSpritePath, screenPos.x, screenPos.y, size * 2, size * 2);
+            } else {
+                context.drawSelectionShapeOutline((pathCtx) => {
+                    pathCtx.arc(screenPos.x, screenPos.y, size * 1.45, 0, Math.PI * 2);
+                });
+            }
             
             // Draw minion path if it exists
             if (forge.minionPath.length > 0) {

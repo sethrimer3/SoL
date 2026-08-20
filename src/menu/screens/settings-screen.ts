@@ -28,6 +28,8 @@ export interface SettingsScreenParams {
     isPauseOnFocusLossEnabled: boolean;
     resolution: string;
     isPixelModeEnabled: boolean;
+    saveReplaysEnabled: boolean;
+    replayRetentionLimit: '10' | '30' | '50' | 'never';
     colorScheme: string;
     onDifficultyChange: (value: 'easy' | 'normal' | 'hard') => void;
     onUsernameChange: (value: string) => void;
@@ -50,6 +52,8 @@ export interface SettingsScreenParams {
     onPauseOnFocusLossEnabledChange: (value: boolean) => void;
     onResolutionChange: (value: string) => void;
     onPixelModeEnabledChange: (value: boolean) => void;
+    onSaveReplaysEnabledChange: (value: boolean) => void;
+    onReplayRetentionLimitChange: (value: '10' | '30' | '50' | 'never') => void;
     onColorSchemeChange: (value: string) => void;
     onClearDataAndCache: () => Promise<void>;
     onBack: () => void;
@@ -83,6 +87,8 @@ export function renderSettingsScreen(
         isPauseOnFocusLossEnabled,
         resolution,
         isPixelModeEnabled,
+        saveReplaysEnabled,
+        replayRetentionLimit,
         colorScheme,
         onDifficultyChange,
         onUsernameChange,
@@ -105,6 +111,8 @@ export function renderSettingsScreen(
         onPauseOnFocusLossEnabledChange,
         onResolutionChange,
         onPixelModeEnabledChange,
+        onSaveReplaysEnabledChange,
+        onReplayRetentionLimitChange,
         onColorSchemeChange,
         onClearDataAndCache,
         onBack,
@@ -329,6 +337,38 @@ export function renderSettingsScreen(
         createToggle(isPixelModeEnabled, onPixelModeEnabledChange)
     );
     settingsContainer.appendChild(pixelModeSection);
+
+    // Save Replays setting
+    const saveReplaysSection = createSettingSection(
+        'Save Replays',
+        createToggle(saveReplaysEnabled, onSaveReplaysEnabledChange)
+    );
+    settingsContainer.appendChild(saveReplaysSection);
+
+    // Replay retention setting
+    const replayRetentionOptions = ['10', '30', '50', 'never'];
+    const replayRetentionLabels: Record<string, string> = {
+        '10': 'Keep Last 10',
+        '30': 'Keep Last 30',
+        '50': 'Keep Last 50',
+        'never': 'Never Delete',
+    };
+    const replayRetentionSelect = createSelect(
+        replayRetentionOptions,
+        replayRetentionLimit,
+        (value) => {
+            onReplayRetentionLimitChange(value as '10' | '30' | '50' | 'never');
+        }
+    );
+    for (let i = 0; i < replayRetentionSelect.options.length; i++) {
+        const opt = replayRetentionSelect.options[i];
+        const label = replayRetentionLabels[opt.value];
+        if (label) {
+            opt.textContent = label;
+        }
+    }
+    const replayRetentionSection = createSettingSection('Delete Old Replays', replayRetentionSelect);
+    settingsContainer.appendChild(replayRetentionSection);
 
     const adaptiveQualitySection = createSettingSection(
         'Adaptive Quality',

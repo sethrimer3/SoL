@@ -14,11 +14,11 @@ import * as Constants from './constants';
 import { MultiplayerNetworkManager, NetworkEvent } from './multiplayer-network';
 import { setGameRNG, SeededRandom, generateMatchSeed } from './seeded-random';
 import { createGameFromSettings } from './game-factory';
-import { 
-    ReplayRecorder, 
-    ReplayPlayer, 
-    ReplayData, 
-    downloadReplay, 
+import {
+    ReplayRecorder,
+    ReplayPlayer,
+    ReplayData,
+    saveReplayToLocalFolder,
     saveReplayToStorage,
     saveMatchToHistory,
     MatchHistoryEntry,
@@ -969,12 +969,12 @@ class GameController {
                     console.error('[Match History] Failed to save match:', error);
                 }
 
-                // Also offer download
-                try {
-                    downloadReplay(replayData, `sol_replay_${replayName}.json`);
-                    console.log('[Replay] Download initiated');
-                } catch (error) {
-                    console.error('[Replay] Failed to download replay:', error);
+                // Save replay file to the local SoL folder if enabled in settings
+                const savedSettings = this.menu.getSettings();
+                if (savedSettings.saveReplaysEnabled) {
+                    saveReplayToLocalFolder(replayData, `sol_replay_${replayName}.json`, savedSettings.replayRetentionLimit)
+                        .then(() => console.log('[Replay] Saved to local SoL folder'))
+                        .catch((error) => console.error('[Replay] Failed to save replay file:', error));
                 }
             }
         } else {
@@ -989,11 +989,11 @@ class GameController {
                 console.error('[Replay] Failed to save to storage:', error);
             }
 
-            try {
-                downloadReplay(replayData, `sol_replay_${replayName}.json`);
-                console.log('[Replay] Download initiated');
-            } catch (error) {
-                console.error('[Replay] Failed to download replay:', error);
+            const settingsForForfeit = this.menu.getSettings();
+            if (settingsForForfeit.saveReplaysEnabled) {
+                saveReplayToLocalFolder(replayData, `sol_replay_${replayName}.json`, settingsForForfeit.replayRetentionLimit)
+                    .then(() => console.log('[Replay] Saved to local SoL folder'))
+                    .catch((error) => console.error('[Replay] Failed to save replay file:', error));
             }
         }
 

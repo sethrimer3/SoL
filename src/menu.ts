@@ -90,6 +90,8 @@ export interface GameSettings {
     isPauseOnFocusLossEnabled: boolean; // Pause music and rendering when window loses focus (only outside of matches)
     resolution: string; // Display resolution setting ('native', '640x360', '1280x720', etc.)
     isPixelModeEnabled: boolean; // Render at 320x180 (Celeste-style) then upscale with nearest-neighbor for crisp pixel art look
+    saveReplaysEnabled: boolean; // Automatically save match replays to a local SoL folder
+    replayRetentionLimit: '10' | '30' | '50' | 'never'; // How many saved replays to keep before deleting the oldest
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     networkManager?: NetworkManager; // Network manager for LAN/online play
@@ -179,6 +181,8 @@ export class MainMenu {
             isPauseOnFocusLossEnabled: true, // Default to pausing on focus loss (outside matches)
             resolution: 'native', // Default to native browser resolution
             isPixelModeEnabled: false, // Default to normal rendering (not pixel art mode)
+            saveReplaysEnabled: true, // Default to automatically saving replays locally
+            replayRetentionLimit: '30', // Default to keeping the 30 most recent replays
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai' // Default to AI mode
         };
@@ -1777,6 +1781,8 @@ export class MainMenu {
             isPauseOnFocusLossEnabled: this.settings.isPauseOnFocusLossEnabled,
             resolution: this.settings.resolution,
             isPixelModeEnabled: this.settings.isPixelModeEnabled,
+            saveReplaysEnabled: this.settings.saveReplaysEnabled,
+            replayRetentionLimit: this.settings.replayRetentionLimit,
             colorScheme: this.settings.colorScheme,
             onDifficultyChange: (value) => {
                 this.settings.difficulty = value;
@@ -1873,6 +1879,14 @@ export class MainMenu {
             },
             onPixelModeEnabledChange: (value) => {
                 this.settings.isPixelModeEnabled = value;
+                this.persistSettings();
+            },
+            onSaveReplaysEnabledChange: (value) => {
+                this.settings.saveReplaysEnabled = value;
+                this.persistSettings();
+            },
+            onReplayRetentionLimitChange: (value) => {
+                this.settings.replayRetentionLimit = value;
                 this.persistSettings();
             },
             onColorSchemeChange: (value) => {

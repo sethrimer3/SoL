@@ -83,7 +83,6 @@ export interface SolarMirrorRendererContext {
         r1: number,
         stops: Array<{ offset: number; color: string }>
     ): CanvasGradient;
-    drawBuildingSelectionIndicator(screenPos: { x: number; y: number }, radius: number): void;
     drawHealthDisplay(
         screenPos: { x: number; y: number },
         currentHealth: number,

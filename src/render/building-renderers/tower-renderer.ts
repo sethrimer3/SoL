@@ -445,27 +445,37 @@ export class TowerRenderer {
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
         }
 
-        // Draw tower body - hexagon shape.  In LaD mode the body outline is stroked in the
-        // inverted color so it hugs the hexagon itself.
+        // Draw tower body - hexagon shape.  In LaD mode the body edge is traced as a glow
+        // in the inverted color so the outline hugs the hexagon itself.
+        const buildHexagonPath = (pathCtx: CanvasRenderingContext2D): void => {
+            for (let i = 0; i < 6; i++) {
+                const angle = (Math.PI / 3) * i;
+                const x = screenPos.x + radius * Math.cos(angle);
+                const y = screenPos.y + radius * Math.sin(angle);
+                if (i === 0) {
+                    pathCtx.moveTo(x, y);
+                } else {
+                    pathCtx.lineTo(x, y);
+                }
+            }
+            pathCtx.closePath();
+        };
+
         context.ctx.fillStyle = displayColor;
-        context.ctx.strokeStyle = ownerSide
-            ? (ownerSide === 'light' ? '#000000' : '#FFFFFF')
-            : '#666666';
+        context.ctx.strokeStyle = '#666666';
         context.ctx.lineWidth = 2 * context.zoom;
         context.ctx.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const angle = (Math.PI / 3) * i;
-            const x = screenPos.x + radius * Math.cos(angle);
-            const y = screenPos.y + radius * Math.sin(angle);
-            if (i === 0) {
-                context.ctx.moveTo(x, y);
-            } else {
-                context.ctx.lineTo(x, y);
-            }
-        }
-        context.ctx.closePath();
+        buildHexagonPath(context.ctx);
         context.ctx.fill();
-        context.ctx.stroke();
+        if (ownerSide) {
+            context.drawShapeOutlineGlow(
+                buildHexagonPath,
+                ownerSide === 'light' ? '#000000' : '#FFFFFF',
+                2 * context.zoom
+            );
+        } else {
+            context.ctx.stroke();
+        }
 
         // Draw missile indicator in center
         if (building.isMissileReady()) {
@@ -698,27 +708,37 @@ export class TowerRenderer {
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
         }
 
-        // Draw tower body - octagon shape.  In LaD mode the body outline is stroked in the
-        // inverted color so it hugs the octagon itself.
+        // Draw tower body - octagon shape.  In LaD mode the body edge is traced as a glow
+        // in the inverted color so the outline hugs the octagon itself.
+        const buildOctagonPath = (pathCtx: CanvasRenderingContext2D): void => {
+            for (let i = 0; i < 8; i++) {
+                const angle = (Math.PI / 4) * i;
+                const x = screenPos.x + radius * Math.cos(angle);
+                const y = screenPos.y + radius * Math.sin(angle);
+                if (i === 0) {
+                    pathCtx.moveTo(x, y);
+                } else {
+                    pathCtx.lineTo(x, y);
+                }
+            }
+            pathCtx.closePath();
+        };
+
         context.ctx.fillStyle = displayColor;
-        context.ctx.strokeStyle = ownerSide
-            ? (ownerSide === 'light' ? '#000000' : '#FFFFFF')
-            : '#666666';
+        context.ctx.strokeStyle = '#666666';
         context.ctx.lineWidth = 2 * context.zoom;
         context.ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-            const angle = (Math.PI / 4) * i;
-            const x = screenPos.x + radius * Math.cos(angle);
-            const y = screenPos.y + radius * Math.sin(angle);
-            if (i === 0) {
-                context.ctx.moveTo(x, y);
-            } else {
-                context.ctx.lineTo(x, y);
-            }
-        }
-        context.ctx.closePath();
+        buildOctagonPath(context.ctx);
         context.ctx.fill();
-        context.ctx.stroke();
+        if (ownerSide) {
+            context.drawShapeOutlineGlow(
+                buildOctagonPath,
+                ownerSide === 'light' ? '#000000' : '#FFFFFF',
+                2 * context.zoom
+            );
+        } else {
+            context.ctx.stroke();
+        }
 
         // Draw lock-on indicator if targeting
         const lockedTarget = building.getLockedTarget();

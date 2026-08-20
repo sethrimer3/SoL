@@ -1063,7 +1063,6 @@ export class GameRenderer {
                     this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
                 drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
                     this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
-                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
                 drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset) =>
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
@@ -1135,7 +1134,6 @@ export class GameRenderer {
                 drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
                 getCachedRadialGradient: (key, x0, y0, r0, x1, y1, r1, stops) =>
                     this.getCachedRadialGradient(key, x0, y0, r0, x1, y1, r1, stops),
-                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
                 drawHealthDisplay: (screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor) =>
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
@@ -1192,7 +1190,7 @@ export class GameRenderer {
                     this.drawStructureShadeGlow(entity, screenPos, size, color, shouldGlow, visibilityAlpha, isSelected),
                 drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
                     this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
-                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
+                drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
                 drawWarpGateProductionEffect: (screenPos, radius, game, displayColor) =>
                     this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, displayColor, this.getUnitRendererContext()),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
@@ -1268,7 +1266,6 @@ export class GameRenderer {
                 getEnemyVisibilityAlpha: (entity, isVisible, gameTime) => this.getEnemyVisibilityAlpha(entity, isVisible, gameTime),
                 getShadeGlowAlpha: (entity, shouldGlow) => this.getShadeGlowAlpha(entity, shouldGlow),
                 drawCachedUnitGlow: (screenPos, radiusPx, color, alphaScale) => this.drawCachedUnitGlow(screenPos, radiusPx, color, alphaScale),
-                drawBuildingSelectionIndicator: (screenPos, radius) => this.drawBuildingSelectionIndicator(screenPos, radius),
                 drawHealthDisplay: (screenPos, current, max, size, yOffset) => this.drawHealthDisplay(screenPos, current, max, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
@@ -1527,15 +1524,6 @@ export class GameRenderer {
     /**
      * Draw the universal unit/structure selection ring.
      */
-    private drawBuildingSelectionIndicator(screenPos: { x: number, y: number }, radius: number): void {
-        // Viewport culling: skip if off-screen with margin for selection ring
-        const margin = radius + 20;
-        if (!this.isScreenPosWithinViewBounds(screenPos, margin)) {
-            return;
-        }
-        this.glowRenderer.drawBuildingSelectionIndicator(screenPos, radius, { ctx: this.ctx, zoom: this.zoom });
-    }
-
 
     private getPseudoRandom(seed: number): number {
         const value = Math.sin(seed) * 43758.5453;

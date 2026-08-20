@@ -171,48 +171,6 @@ export class GlowRenderer {
     }
 
     /**
-     * Draw the universal unit/structure selection ring.
-     */
-    drawBuildingSelectionIndicator(
-        screenPos: { x: number; y: number },
-        radius: number,
-        context: GlowRendererContext
-    ): void {
-        const { ctx, zoom } = context;
-
-        const selectionRadius = radius + Math.max(2, zoom * 2.5);
-        const ringThickness = Math.max(1.5, zoom * 1.8);
-
-        const radiusBucket = Math.round(selectionRadius / 5) * 5;
-        const thicknessBucket = Math.round(ringThickness * 10) / 10;
-        const cacheKey = `building-selection-${radiusBucket}-${thicknessBucket}`;
-
-        const innerR = Math.max(0, radiusBucket - thicknessBucket * 0.4);
-        const outerR = radiusBucket + thicknessBucket * 2.4;
-
-        const gradient = this.getCachedRadialGradient(
-            ctx,
-            cacheKey,
-            0, 0, innerR,
-            0, 0, outerR,
-            [
-                { offset: 0, color: 'rgba(255, 215, 0, 0.95)' },
-                { offset: 0.6, color: 'rgba(255, 255, 255, 0.85)' },
-                { offset: 1, color: 'rgba(255, 255, 255, 0)' }
-            ]
-        );
-
-        ctx.save();
-        ctx.translate(screenPos.x, screenPos.y);
-        ctx.strokeStyle = gradient;
-        ctx.lineWidth = thicknessBucket;
-        ctx.beginPath();
-        ctx.arc(0, 0, radiusBucket, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    /**
      * Get or create a cached radial gradient bound to the given canvas context.
      */
     getCachedRadialGradient(

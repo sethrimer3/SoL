@@ -30,12 +30,15 @@ export interface PersistedSettings {
     isPauseOnFocusLossEnabled: boolean;
     resolution: string;
     isPixelModeEnabled: boolean;
+    saveReplaysEnabled: boolean;
+    replayRetentionLimit: '10' | '30' | '50' | 'never';
 }
 
 const VALID_GRAPHICS_QUALITIES: ReadonlyArray<string> = ['low', 'medium', 'high', 'ultra'];
 const VALID_DIFFICULTIES: ReadonlyArray<string> = ['easy', 'normal', 'hard'];
 const VALID_DAMAGE_MODES: ReadonlyArray<string> = ['damage', 'remaining-life'];
 const VALID_HEALTH_MODES: ReadonlyArray<string> = ['bar', 'number'];
+const VALID_REPLAY_RETENTION_LIMITS: ReadonlyArray<string> = ['10', '30', '50', 'never'];
 const VALID_RESOLUTIONS: ReadonlyArray<string> = [
     'native',
     '640x360',
@@ -107,6 +110,8 @@ export function extractPersistedSettings(settings: PersistedSettings): Persisted
         isPauseOnFocusLossEnabled: settings.isPauseOnFocusLossEnabled,
         resolution: settings.resolution,
         isPixelModeEnabled: settings.isPixelModeEnabled,
+        saveReplaysEnabled: settings.saveReplaysEnabled,
+        replayRetentionLimit: settings.replayRetentionLimit,
     };
 }
 
@@ -191,6 +196,12 @@ function validatePersistedSettings(data: Record<string, unknown>): Partial<Persi
     }
     if (typeof data.isPixelModeEnabled === 'boolean') {
         result.isPixelModeEnabled = data.isPixelModeEnabled;
+    }
+    if (typeof data.saveReplaysEnabled === 'boolean') {
+        result.saveReplaysEnabled = data.saveReplaysEnabled;
+    }
+    if (typeof data.replayRetentionLimit === 'string' && VALID_REPLAY_RETENTION_LIMITS.indexOf(data.replayRetentionLimit) !== -1) {
+        result.replayRetentionLimit = data.replayRetentionLimit as PersistedSettings['replayRetentionLimit'];
     }
 
     return result;

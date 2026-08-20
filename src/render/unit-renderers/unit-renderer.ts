@@ -186,18 +186,25 @@ export class UnitRenderer {
                     pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
                 });
             }
+            if (ladSun && ownerSide) {
+                context.drawShapeOutlineGlow(
+                    (pathCtx) => {
+                        pathCtx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
+                    },
+                    ownerSide === 'light' ? '#000000' : '#FFFFFF'
+                );
+            }
             context.ctx.fillStyle = displayColor;
-            const ladOutlineColor = ownerSide === 'light' ? '#000000' : '#FFFFFF';
-            context.ctx.strokeStyle = (ladSun && ownerSide)
-                ? ladOutlineColor
-                : (isSelected ? displayColor : (shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor));
-            context.ctx.lineWidth = (ladSun && ownerSide)
-                ? Math.max(1.5, context.zoom * 1.4)
-                : (isSelected ? 3 : 1);
+            context.ctx.strokeStyle = isSelected
+                ? displayColor
+                : (shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor);
+            context.ctx.lineWidth = isSelected ? 3 : 1;
             context.ctx.beginPath();
             context.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             context.ctx.fill();
-            context.ctx.stroke();
+            if (!ladSun) {
+                context.ctx.stroke();
+            }
         }
 
         if (!shouldUseSimpleSprite && context.isFancyGraphicsEnabled) {

@@ -285,10 +285,8 @@ export class WarpGateManager {
             return;
         }
 
-        if (!this.ctx.getIsMultiplayer()) {
-            this.ctx.scatterParticles(gate.position);
-            this.removeWarpGate(gate);
-        }
+        this.ctx.scatterParticles(gate.position);
+        this.removeWarpGate(gate);
     }
 
     public removeWarpGate(gate: WarpGate): void {

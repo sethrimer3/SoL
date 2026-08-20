@@ -94,7 +94,6 @@ export interface BuildingRendererContext {
         game: GameState,
         options: { isBuilding?: boolean; direction?: string; opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
     ): void;
-    drawBuildingSelectionIndicator(screenPos: Vector2D, radius: number): void;
     drawHealthDisplay(screenPos: Vector2D, currentHealth: number, maxHealth: number, size: number, yOffset: number): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawLadOutline(screenPos: Vector2D, size: number, side: 'light' | 'dark'): void;

@@ -433,6 +433,38 @@ export function downloadReplay(replay: ReplayData, filename: string): void {
 }
 
 /**
+ * How many locally saved replay files to retain before deleting the oldest.
+ */
+export type ReplayRetentionLimit = '10' | '30' | '50' | 'never';
+
+interface ElectronReplayAPI {
+    saveReplay: (filename: string, contents: string, retentionLimit: ReplayRetentionLimit) => Promise<string>;
+}
+
+declare global {
+    interface Window {
+        electronReplayAPI?: ElectronReplayAPI;
+    }
+}
+
+/**
+ * Save a replay file directly to the local SoL replays folder, with no save dialog.
+ * Only available when running inside the Electron desktop app; a no-op otherwise.
+ */
+export async function saveReplayToLocalFolder(
+    replay: ReplayData,
+    filename: string,
+    retentionLimit: ReplayRetentionLimit
+): Promise<void> {
+    if (!window.electronReplayAPI) {
+        return;
+    }
+    const json = serializeReplay(replay);
+    const name = filename.endsWith('.json') ? filename : `${filename}.json`;
+    await window.electronReplayAPI.saveReplay(name, json, retentionLimit);
+}
+
+/**
  * Upload/load replay from file
  */
 export function uploadReplay(file: File): Promise<ReplayData> {
