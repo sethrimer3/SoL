@@ -334,6 +334,7 @@ export class EnvironmentRenderer {
             spriteMask?: HTMLCanvasElement;
             spriteSize?: number;
             spriteRotation?: number;
+            seed?: number;
         } | undefined,
         context: EnvironmentRendererContext
     ): void {
@@ -391,8 +392,12 @@ export class EnvironmentRenderer {
         const time = performance.now() * 0.001;
 
         ctx.save();
+        // Use a stable identity seed when provided so orbiting dust particles don't jump to a new
+        // pseudo-random position every frame as worldPos drifts while the entity is moving; the
+        // sin-based hash below is extremely sensitive to tiny input changes.
+        const identitySeed = options?.seed ?? (worldPos.x * 0.013 + worldPos.y * 0.017);
         for (let i = 0; i < particleCount; i++) {
-            const seed = worldPos.x * 0.013 + worldPos.y * 0.017 + i * 19.7;
+            const seed = identitySeed + i * 19.7;
             const baseAngle = context.getPseudoRandom(seed) * Math.PI * 2;
             const orbit = spread * (0.3 + context.getPseudoRandom(seed + 3.1) * 0.7);
             const drift = 0.65 + context.getPseudoRandom(seed + 7.2) * 0.75;

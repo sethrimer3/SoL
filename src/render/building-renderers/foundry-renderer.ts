@@ -89,9 +89,7 @@ export class FoundryRenderer {
         if (!building.isComplete) {
             context.drawWarpGateProductionEffect(screenPos, radius, game, displayColor);
 
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             const barWidth = radius * 2;
             const barHeight = 4;
@@ -124,7 +122,7 @@ export class FoundryRenderer {
             if (ladSun && ownerSide) {
                 context.drawLadOutline(screenPos, radius, ownerSide);
             }
-            this.drawAurumFoundry(building, screenPos, radius, displayColor, game.gameTime, context);
+            this.drawAurumFoundry(building, screenPos, radius, displayColor, game.gameTime, context, !!ladSun);
         } else if (isVelarisFoundry) {
             this.drawVelarisFoundry(building, screenPos, radius, displayColor, game.gameTime, shouldDim, context, ownerSide);
         } else {
@@ -218,12 +216,13 @@ export class FoundryRenderer {
             context.ctx.restore();
         };
 
-        // Selected foundries get a gold outline hugging the base sprite, drawn before the
-        // layers so the glow sits behind the artwork.
-        if (building.isSelected) {
-            const selectionWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
-            const selectionHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
-            context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, selectionWidth, selectionHeight);
+        // Foundries get a thin black outline hugging the base sprite, drawn before the
+        // layers so it sits behind the artwork, with a thicker gold ring outside it when
+        // selected.
+        {
+            const outlineWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
+            const outlineHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
+            context.drawStructureSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, outlineWidth, outlineHeight, building.isSelected, !!ladOutlineSide);
         }
 
         drawLayer(bottomSprite, bottomRotationRad, bottomSpritePath);
@@ -320,12 +319,13 @@ export class FoundryRenderer {
             context.ctx.restore();
         };
 
-        // Selected foundries get a gold outline hugging the base sprite, drawn before the
-        // layers so the glow sits behind the artwork.
-        if (building.isSelected) {
-            const selectionWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
-            const selectionHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
-            context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, selectionWidth, selectionHeight);
+        // Foundries get a thin black outline hugging the base sprite, drawn before the
+        // layers so it sits behind the artwork, with a thicker gold ring outside it when
+        // selected.
+        {
+            const outlineWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
+            const outlineHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
+            context.drawStructureSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, outlineWidth, outlineHeight, building.isSelected, !!ladOutlineSide);
         }
 
         drawLayer(bottomSprite, bottomRotationRad, bottomSpritePath);
@@ -350,12 +350,13 @@ export class FoundryRenderer {
         radius: number,
         displayColor: string,
         gameTime: number,
-        context: BuildingRendererContext
+        context: BuildingRendererContext,
+        isLadMode: boolean = false
     ): void {
         this.drawAurumFoundryOutline(building, screenPos, radius, displayColor, gameTime, context);
-        
+
+        context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, isLadMode);
         if (building.isSelected) {
-            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
             this.drawFoundryButtons(building, screenPos, context);
         }
     }

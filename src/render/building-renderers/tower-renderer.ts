@@ -544,9 +544,8 @@ export class TowerRenderer {
             }
         }
 
+        context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
         if (building.isSelected) {
-            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-
             // Draw range indicator
             context.ctx.strokeStyle = displayColor;
             context.ctx.globalAlpha = 0.3;
@@ -676,9 +675,7 @@ export class TowerRenderer {
             context.ctx.fill();
             context.ctx.globalAlpha = 1.0;
 
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -768,9 +765,8 @@ export class TowerRenderer {
         context.ctx.arc(screenPos.x, screenPos.y, radius * 0.3, 0, Math.PI * 2);
         context.ctx.fill();
 
+        context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
         if (building.isSelected) {
-            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-
             // Draw range indicator
             context.ctx.strokeStyle = displayColor;
             context.ctx.globalAlpha = 0.3;
@@ -848,9 +844,8 @@ export class TowerRenderer {
         context.ctx.arc(screenPos.x, screenPos.y, radius * 0.4, 0, Math.PI * 2);
         context.ctx.fill();
 
+        context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
         if (building.isSelected) {
-            context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-
             // Draw shield radius indicator
             if (building.isComplete) {
                 context.ctx.strokeStyle = displayColor;

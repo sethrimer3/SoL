@@ -104,10 +104,10 @@ export class SunRenderer {
     private readonly ULTRA_SOLAR_EMBER_COUNT = 32;
     private readonly ULTRA_LIGHT_DUST_COUNT = 180;
     // Volumetric light fakery (soft-light.ts) tuning for ultra-quality sun shafts.
-    private readonly ULTRA_SOFT_SHAFT_COUNT = 14;
-    private readonly ULTRA_SOFT_SHAFT_LENGTH_SCALE = 5.5;
-    private readonly ULTRA_SOFT_SHAFT_BASE_ALPHA = 0.05;
-    private readonly ULTRA_SOFT_SHAFT_WIDTH_SCALE_MAX = 3.4;
+    private readonly ULTRA_SOFT_SHAFT_COUNT = 9;
+    private readonly ULTRA_SOFT_SHAFT_LENGTH_SCALE = 3.0;
+    private readonly ULTRA_SOFT_SHAFT_BASE_ALPHA = 0.03;
+    private readonly ULTRA_SOFT_SHAFT_WIDTH_SCALE_MAX = 4.6;
     private readonly ULTRA_SOFT_SHAFT_SWAY = 0.06;
     private readonly SUN_BODY_CACHE_REFRESH_INTERVAL_Ms: Record<'low' | 'medium' | 'high' | 'ultra', number> = {
         low: 100,
@@ -622,12 +622,12 @@ export class SunRenderer {
             const shaftCenterY = shaftTexture.height / 2;
             shaftContext.translate(shaftCenterX, shaftCenterY);
             shaftContext.globalCompositeOperation = 'lighter';
-            const shaftCount = isOuterLayer ? 32 : 20;
+            const shaftCount = isOuterLayer ? 18 : 12;
             
             for (let shaftIndex = 0; shaftIndex < shaftCount; shaftIndex++) {
                 const angle = (Math.PI * 2 * shaftIndex) / shaftCount + hashSign(shaftIndex * 7.1 + (isOuterLayer ? 3 : 11)) * 0.09;
-                const shaftLength = (isOuterLayer ? 430 : 320) + hashNorm(shaftIndex * 17.9) * (isOuterLayer ? 300 : 220);
-                const shaftWidth = (isOuterLayer ? 22 : 16) + hashNorm(shaftIndex * 9.3 + 4.7) * (isOuterLayer ? 48 : 26);
+                const shaftLength = (isOuterLayer ? 340 : 260) + hashNorm(shaftIndex * 17.9) * (isOuterLayer ? 220 : 160);
+                const shaftWidth = (isOuterLayer ? 40 : 30) + hashNorm(shaftIndex * 9.3 + 4.7) * (isOuterLayer ? 70 : 42);
                 
                 // Bucket shaft length to reduce unique gradients using named constant
                 const lengthBucket = Math.round(shaftLength / this.SHAFT_LENGTH_BUCKET_SIZE) * this.SHAFT_LENGTH_BUCKET_SIZE;
@@ -1095,12 +1095,12 @@ export class SunRenderer {
         // Reduce blur on non-ultra quality settings for performance
         const blurAmount = 'blur(11px)';
         ctx.filter = blurAmount;
-        ctx.globalAlpha = 0.4;
+        ctx.globalAlpha = 0.26;
         const shaftSize = 1024 * shaftScale;
         ctx.drawImage(sunRenderCache.shaftTextureOuter, -shaftSize / 2, -shaftSize / 2, shaftSize, shaftSize);
 
         ctx.rotate(-gameTimeSec * 0.017);
-        ctx.globalAlpha = Math.min(0.4, 0.32 + shimmerAlpha);
+        ctx.globalAlpha = Math.min(0.26, 0.2 + shimmerAlpha);
         const innerSize = shaftSize * 0.72;
         ctx.drawImage(sunRenderCache.shaftTextureInner, -innerSize / 2, -innerSize / 2, innerSize, innerSize);
 
@@ -1124,7 +1124,7 @@ export class SunRenderer {
                 y: 0,
                 angle,
                 length: softShaftBaseLength * lengthJitter,
-                width: screenRadius * 0.09 * widthJitter,
+                width: screenRadius * 0.16 * widthJitter,
                 color: 'rgba(255, 178, 70, 1)',
                 endColor: 'rgba(255, 120, 40, 0)',
                 layers: DEFAULT_LAYERS,

@@ -70,7 +70,7 @@ export interface SolarMirrorRendererContext {
         screenPos: Vector2D,
         size: number,
         game: GameState,
-        options?: { opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number }
+        options?: { opacity?: number; widthScale?: number; particleCount?: number; particleSpread?: number; seed?: number }
     ): void;
     drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void;
     getCachedRadialGradient(
@@ -116,6 +116,23 @@ export interface SolarMirrorRendererContext {
         buildPath: (pathCtx: CanvasRenderingContext2D) => void,
         color: string,
         lineWidthPx?: number
+    ): void;
+    drawStructureCircleOutline(
+        centerX: number,
+        centerY: number,
+        radius: number,
+        isSelected: boolean,
+        isLadMode?: boolean
+    ): void;
+    drawStructureSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        isSelected: boolean,
+        isLadMode?: boolean,
+        rotationRad?: number
     ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     getVelarisGraphemeSpritePath(letter: string): string | null;
@@ -219,7 +236,8 @@ export class SolarMirrorRenderer {
             opacity: visibilityAlpha,
             widthScale: 0.78,
             particleCount: 4,
-            particleSpread: size * 0.7
+            particleSpread: size * 0.7,
+            seed: this.getVelarisMirrorSeed(mirror)
         });
 
         // Save context state
@@ -537,16 +555,9 @@ export class SolarMirrorRenderer {
                 // is already translated to the mirror and rotated to its reflection angle,
                 // so the outline is drawn at the local origin with no extra transform -
                 // exactly like the drawImage below it.
-                // Selected mirrors get a gold outline hugging the mirror sprite.
-                if (mirror.isSelected) {
-                    context.drawSelectionSpriteOutline(
-                        mirrorSpritePath,
-                        0,
-                        0,
-                        drawWidth,
-                        drawHeight
-                    );
-                }
+                // Mirrors get a thin black outline hugging the sprite, with a thicker gold
+                // ring outside it when selected.
+                context.drawStructureSpriteOutline(mirrorSpritePath, 0, 0, drawWidth, drawHeight, mirror.isSelected, !!ladSun);
                 if (ladSun && ownerSide) {
                     context.drawLadSpriteOutline(
                         mirrorSpritePath,
@@ -606,10 +617,14 @@ export class SolarMirrorRenderer {
 
         // Sprite-drawn mirrors outline their own silhouette above; anything else (the flat
         // fallback surface, Velaris particle mirrors) falls back to a circular outline.
-        if (mirror.isSelected && !drewSprite) {
-            context.drawSelectionShapeOutline((pathCtx) => {
-                pathCtx.arc(screenPos.x, screenPos.y, Math.max(selectionWidth, selectionHeight) * 0.52, 0, Math.PI * 2);
-            });
+        if (!drewSprite) {
+            context.drawStructureCircleOutline(
+                screenPos.x,
+                screenPos.y,
+                Math.max(selectionWidth, selectionHeight) * 0.52,
+                mirror.isSelected,
+                !!ladSun
+            );
         }
 
         if (context.isWarpGatePlacementMode && mirror.isSelected) {

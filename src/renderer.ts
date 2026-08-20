@@ -343,7 +343,7 @@ export class GameRenderer {
 
     // Selected entities are marked with a gold outline hugging their own shape.
     private static readonly SELECTION_OUTLINE_COLOR = '#FFD700';
-    private static readonly SELECTION_OUTLINE_THICKNESS_SCALE = 1.6;
+    private static readonly SELECTION_OUTLINE_THICKNESS_SCALE = 2.6;
     // All units in normal (non-LaD) mode get a thin black outline hugging their own shape.
     private static readonly NORMAL_OUTLINE_COLOR = '#000000';
     private static readonly NORMAL_OUTLINE_THICKNESS_SCALE = 0.6;
@@ -1151,6 +1151,10 @@ export class GameRenderer {
                     this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
                 drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
                 drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
+                drawStructureCircleOutline: (centerX, centerY, radius, isSelected, isLadMode) =>
+                    this.drawStructureCircleOutline(centerX, centerY, radius, isSelected, isLadMode),
+                drawStructureSpriteOutline: (path, centerX, centerY, width, height, isSelected, isLadMode, rotationRad) =>
+                    this.drawStructureSpriteOutline(path, centerX, centerY, width, height, isSelected, isLadMode, rotationRad),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
@@ -1198,6 +1202,8 @@ export class GameRenderer {
                 drawAestheticSpriteShadow: (worldPos, screenPos, size, game, options) =>
                     this.drawAestheticSpriteShadow(worldPos, screenPos, size, game, options),
                 drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
+                drawStructureCircleOutline: (centerX, centerY, radius, isSelected, isLadMode) =>
+                    this.drawStructureCircleOutline(centerX, centerY, radius, isSelected, isLadMode),
                 drawWarpGateProductionEffect: (screenPos, radius, game, displayColor) =>
                     this.unitRenderer.drawWarpGateProductionEffect(screenPos, radius, game, displayColor, this.getUnitRendererContext()),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
@@ -1645,6 +1651,7 @@ export class GameRenderer {
             spriteMask?: HTMLCanvasElement;
             spriteSize?: number;
             spriteRotation?: number;
+            seed?: number;
         }
     ): void {
         this.environmentRenderer.drawAestheticSpriteShadow(worldPos, screenPos, screenSize, game, options, this.getEnvironmentRendererContext());
