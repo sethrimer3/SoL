@@ -152,10 +152,20 @@ export class PhysicsSystem {
                 continue;
             }
 
+            // Keep structure collision disabled until the unit is fully clear of every
+            // building/forge footprint (handles units trapped by a structure built on top of them).
+            if (unit.structureCollisionDisabled) {
+                if (!this.isUnitInsideAnyStructure(context, unit)) {
+                    unit.structureCollisionDisabled = false;
+                }
+            } else if (this.isUnitInsideAnyStructure(context, unit)) {
+                unit.structureCollisionDisabled = true;
+            }
+
             const oldX = unit.position.x;
             const oldY = unit.position.y;
 
-            if (this.checkCollision(context, unit.position, unit.collisionRadiusPx)) {
+            if (this.checkUnitObstacleCollision(context, unit)) {
                 // Smooth collision: Find the nearest obstacle and push away from it gently
                 let pushX = 0;
                 let pushY = 0;
@@ -180,19 +190,21 @@ export class PhysicsSystem {
                     }
                 }
 
-                // Check stellar forges
-                for (const player of context.players) {
-                    if (player.stellarForge) {
-                        const forge = player.stellarForge;
-                        const dx = unit.position.x - forge.position.x;
-                        const dy = unit.position.y - forge.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = forge.radius + unit.collisionRadiusPx;
-                        if (dist < minDist) {
-                            const pushStrength = (minDist - dist) / minDist;
-                            pushX += (dx / dist) * pushStrength;
-                            pushY += (dy / dist) * pushStrength;
-                            pushCount++;
+                // Check stellar forges (skipped while unit is trapped inside a structure)
+                if (!unit.structureCollisionDisabled) {
+                    for (const player of context.players) {
+                        if (player.stellarForge) {
+                            const forge = player.stellarForge;
+                            const dx = unit.position.x - forge.position.x;
+                            const dy = unit.position.y - forge.position.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const minDist = forge.radius + unit.collisionRadiusPx;
+                            if (dist < minDist) {
+                                const pushStrength = (minDist - dist) / minDist;
+                                pushX += (dx / dist) * pushStrength;
+                                pushY += (dy / dist) * pushStrength;
+                                pushCount++;
+                            }
                         }
                     }
                 }
@@ -214,18 +226,20 @@ export class PhysicsSystem {
                     }
                 }
 
-                // Check buildings
-                for (const player of context.players) {
-                    for (const building of player.buildings) {
-                        const dx = unit.position.x - building.position.x;
-                        const dy = unit.position.y - building.position.y;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-                        const minDist = building.radius + unit.collisionRadiusPx;
-                        if (dist < minDist) {
-                            const pushStrength = (minDist - dist) / minDist;
-                            pushX += (dx / dist) * pushStrength;
-                            pushY += (dy / dist) * pushStrength;
-                            pushCount++;
+                // Check buildings (skipped while unit is trapped inside a structure)
+                if (!unit.structureCollisionDisabled) {
+                    for (const player of context.players) {
+                        for (const building of player.buildings) {
+                            const dx = unit.position.x - building.position.x;
+                            const dy = unit.position.y - building.position.y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            const minDist = building.radius + unit.collisionRadiusPx;
+                            if (dist < minDist) {
+                                const pushStrength = (minDist - dist) / minDist;
+                                pushX += (dx / dist) * pushStrength;
+                                pushY += (dy / dist) * pushStrength;
+                                pushCount++;
+                            }
                         }
                     }
                 }
@@ -242,10 +256,10 @@ export class PhysicsSystem {
                 }
 
                 // If still in collision after push, stop the unit
-                if (this.checkCollision(context, unit.position, unit.collisionRadiusPx)) {
+                if (this.checkUnitObstacleCollision(context, unit)) {
                     unit.position.x = oldX;
                     unit.position.y = oldY;
-                    if (unit.rallyPoint && this.checkCollision(context, unit.rallyPoint, unit.collisionRadiusPx)) {
+                    if (unit.rallyPoint && this.checkUnitObstacleCollision(context, unit, unit.rallyPoint)) {
                         unit.rallyPoint = null;
                     }
                 }
@@ -253,6 +267,66 @@ export class PhysicsSystem {
 
             this.clampUnitOutsideStructures(context, unit);
         }
+    }
+
+    /**
+     * Whether a unit's center currently lies inside a building or stellar forge's footprint
+     * (not merely within collision range of one — actually inside the structure's radius).
+     */
+    static isUnitInsideAnyStructure(context: PhysicsContext, unit: Unit): boolean {
+        for (const player of context.players) {
+            if (player.stellarForge) {
+                if (unit.position.distanceTo(player.stellarForge.position) < player.stellarForge.radius) {
+                    return true;
+                }
+            }
+            for (const building of player.buildings) {
+                if (unit.position.distanceTo(building.position) < building.radius) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Collision check for obstacle resolution that respects a unit's structureCollisionDisabled
+     * flag: buildings/forges are ignored while the unit is trapped inside one, but asteroids and
+     * enemy solar mirrors still block as normal.
+     */
+    static checkUnitObstacleCollision(context: PhysicsContext, unit: Unit, position: Vector2D = unit.position): boolean {
+        for (const asteroid of context.asteroids) {
+            if (asteroid.containsPoint(position)) {
+                return true;
+            }
+        }
+
+        for (const player of context.players) {
+            if (!unit.structureCollisionDisabled) {
+                if (player.stellarForge) {
+                    const distance = position.distanceTo(player.stellarForge.position);
+                    if (distance < player.stellarForge.radius + unit.collisionRadiusPx) {
+                        return true;
+                    }
+                }
+                for (const building of player.buildings) {
+                    const distance = position.distanceTo(building.position);
+                    if (distance < building.radius + unit.collisionRadiusPx) {
+                        return true;
+                    }
+                }
+            }
+
+            for (const mirror of player.solarMirrors) {
+                if (mirror.owner === unit.owner) continue;
+                const distance = position.distanceTo(mirror.position);
+                if (distance < 20 + unit.collisionRadiusPx) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -307,6 +381,9 @@ export class PhysicsSystem {
      * Clamp unit position to stay outside structures
      */
     static clampUnitOutsideStructures(context: PhysicsContext, unit: Unit): void {
+        if (unit.structureCollisionDisabled) {
+            return;
+        }
         for (const player of context.players) {
             if (player.stellarForge) {
                 this.pushUnitOutsideCircle(unit, player.stellarForge.position, player.stellarForge.radius);

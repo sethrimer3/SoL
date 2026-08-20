@@ -120,6 +120,23 @@ export interface BuildingRendererContext {
         color: string,
         lineWidthPx?: number
     ): void;
+    drawStructureCircleOutline(
+        centerX: number,
+        centerY: number,
+        radius: number,
+        isSelected: boolean,
+        isLadMode?: boolean
+    ): void;
+    drawStructureSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        isSelected: boolean,
+        isLadMode?: boolean,
+        rotationRad?: number
+    ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, color: string): void;
     

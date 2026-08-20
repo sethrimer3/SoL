@@ -1076,6 +1076,10 @@ export class GameRenderer {
                     this.drawSelectionSpriteOutline(path, centerX, centerY, width, height, rotationRad),
                 drawSelectionShapeOutline: (buildPath) => this.drawSelectionShapeOutline(buildPath),
                 drawShapeOutlineGlow: (buildPath, color, lineWidthPx) => this.drawShapeOutlineGlow(buildPath, color, lineWidthPx),
+                drawStructureCircleOutline: (centerX, centerY, radius, isSelected, isLadMode) =>
+                    this.drawStructureCircleOutline(centerX, centerY, radius, isSelected, isLadMode),
+                drawStructureSpriteOutline: (path, centerX, centerY, width, height, isSelected, isLadMode, rotationRad) =>
+                    this.drawStructureSpriteOutline(path, centerX, centerY, width, height, isSelected, isLadMode, rotationRad),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
@@ -1458,6 +1462,65 @@ export class GameRenderer {
             rotationRad,
             GameRenderer.NORMAL_OUTLINE_THICKNESS_SCALE
         );
+    }
+
+    /**
+     * Draw a structure's shape-hugging outline: a thin black outline in normal mode (with a
+     * thicker gold ring drawn outside it when selected), or just the gold selection ring in
+     * LaD mode (which already gets its own inverted-color outline elsewhere).
+     */
+    private drawStructureCircleOutline(
+        centerX: number,
+        centerY: number,
+        radius: number,
+        isSelected: boolean,
+        isLadMode: boolean = false
+    ): void {
+        if (isLadMode) {
+            if (isSelected) {
+                this.drawSelectionShapeOutline((pathCtx) => {
+                    pathCtx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                });
+            }
+            return;
+        }
+        const normalOutlineWidthPx = Math.max(1, this.zoom * 0.9);
+        if (isSelected) {
+            this.drawSelectionShapeOutline((pathCtx) => {
+                pathCtx.arc(centerX, centerY, radius + normalOutlineWidthPx, 0, Math.PI * 2);
+            });
+        }
+        this.drawShapeOutlineGlow(
+            (pathCtx) => { pathCtx.arc(centerX, centerY, radius, 0, Math.PI * 2); },
+            GameRenderer.NORMAL_OUTLINE_COLOR,
+            normalOutlineWidthPx
+        );
+    }
+
+    /**
+     * Sprite-based counterpart of drawStructureCircleOutline: traces the sprite's own
+     * silhouette instead of a synthetic circle.
+     */
+    private drawStructureSpriteOutline(
+        spritePath: string,
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        isSelected: boolean,
+        isLadMode: boolean = false,
+        rotationRad: number = 0
+    ): void {
+        if (isLadMode) {
+            if (isSelected) {
+                this.drawSelectionSpriteOutline(spritePath, centerX, centerY, drawWidth, drawHeight, rotationRad);
+            }
+            return;
+        }
+        if (isSelected) {
+            this.drawSelectionSpriteOutline(spritePath, centerX, centerY, drawWidth, drawHeight, rotationRad);
+        }
+        this.drawNormalSpriteOutline(spritePath, centerX, centerY, drawWidth, drawHeight, rotationRad);
     }
 
     private drawSpriteOutlineGlow(
@@ -2961,6 +3024,9 @@ export class GameRenderer {
                 this.ctx.fillStyle = '#FFFDE8';
             }
             this.ctx.fill();
+            this.ctx.lineWidth = Math.max(0.5, 0.5 * this.zoom);
+            this.ctx.strokeStyle = '#000000';
+            this.ctx.stroke();
         }
 
         this.ctx.globalAlpha = 1;

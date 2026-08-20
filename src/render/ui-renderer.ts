@@ -320,10 +320,7 @@ export class UIRenderer {
             context.ctx.setLineDash([dashSize, gapSize]);
             context.ctx.lineDashOffset = -progress * 80 * zoom;
             context.ctx.beginPath();
-            context.ctx.moveTo(pathPointsScreen[0].x, pathPointsScreen[0].y);
-            for (let i = 1; i < pathPointsScreen.length; i++) {
-                context.ctx.lineTo(pathPointsScreen[i].x, pathPointsScreen[i].y);
-            }
+            this.traceSmoothPath(context.ctx, pathPointsScreen);
             context.ctx.stroke();
             context.ctx.restore();
 
@@ -587,18 +584,8 @@ export class UIRenderer {
         context.ctx.lineDashOffset = -context.uiTimeSec * 90 * zoom;
         context.ctx.beginPath();
 
-        const startScreen = context.worldToScreen(startWorld);
-        context.ctx.moveTo(startScreen.x, startScreen.y);
-
-        for (let i = 0; i < waypoints.length; i++) {
-            const waypointScreen = context.worldToScreen(waypoints[i]);
-            context.ctx.lineTo(waypointScreen.x, waypointScreen.y);
-        }
-
-        if (endWorld) {
-            const endScreen = context.worldToScreen(endWorld);
-            context.ctx.lineTo(endScreen.x, endScreen.y);
-        }
+        const dashPointsScreen = pointsWorld.map((point) => context.worldToScreen(point));
+        this.traceSmoothPath(context.ctx, dashPointsScreen);
 
         context.ctx.stroke();
         context.ctx.setLineDash([]);
@@ -636,14 +623,43 @@ export class UIRenderer {
         context.ctx.lineCap = 'round';
         context.ctx.lineJoin = 'round';
         context.ctx.beginPath();
-        const firstPointScreen = context.worldToScreen(pointsWorld[0]);
-        context.ctx.moveTo(firstPointScreen.x, firstPointScreen.y);
-        for (let pointIndex = 1; pointIndex < pointsWorld.length; pointIndex++) {
-            const pointScreen = context.worldToScreen(pointsWorld[pointIndex]);
-            context.ctx.lineTo(pointScreen.x, pointScreen.y);
-        }
+        const pointsScreen = pointsWorld.map((point) => context.worldToScreen(point));
+        this.traceSmoothPath(context.ctx, pointsScreen);
         context.ctx.stroke();
         context.ctx.restore();
+    }
+
+    /**
+     * Traces a smooth Catmull-Rom spline through the given screen-space points via
+     * cubic Bezier segments (cheap to evaluate, no extra libraries). Purely visual —
+     * does not affect the underlying waypoints units actually move through.
+     * Assumes ctx.beginPath() was already called; issues moveTo/bezierCurveTo only.
+     */
+    private traceSmoothPath(ctx: CanvasRenderingContext2D, pointsScreen: {x: number, y: number}[]): void {
+        if (pointsScreen.length === 0) {
+            return;
+        }
+        ctx.moveTo(pointsScreen[0].x, pointsScreen[0].y);
+        if (pointsScreen.length < 3) {
+            for (let i = 1; i < pointsScreen.length; i++) {
+                ctx.lineTo(pointsScreen[i].x, pointsScreen[i].y);
+            }
+            return;
+        }
+
+        for (let i = 0; i < pointsScreen.length - 1; i++) {
+            const p0 = pointsScreen[Math.max(0, i - 1)];
+            const p1 = pointsScreen[i];
+            const p2 = pointsScreen[i + 1];
+            const p3 = pointsScreen[Math.min(pointsScreen.length - 1, i + 2)];
+
+            const cp1x = p1.x + (p2.x - p0.x) / 6;
+            const cp1y = p1.y + (p2.y - p0.y) / 6;
+            const cp2x = p2.x - (p3.x - p1.x) / 6;
+            const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+        }
     }
 
     /**

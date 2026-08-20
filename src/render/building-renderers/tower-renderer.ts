@@ -74,9 +74,7 @@ export class TowerRenderer {
                 displayColor
             );
 
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -118,10 +116,9 @@ export class TowerRenderer {
                 context.drawLadSpriteOutline(bottomSpritePath, ownerSide, screenPos.x, screenPos.y, bottomWidth, bottomHeight);
             }
 
-            // Selected towers are marked with a gold outline hugging the tower base.
-            if (building.isSelected) {
-                context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, bottomWidth, bottomHeight);
-            }
+            // Structures get a thin black outline hugging the tower base, with a thicker
+            // gold ring outside it when selected.
+            context.drawStructureSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, bottomWidth, bottomHeight, building.isSelected, !!ladSun);
 
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
@@ -179,9 +176,7 @@ export class TowerRenderer {
             context.ctx.stroke();
 
             // Draw selection indicator if selected
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             // Draw turret base (smaller circle in center)
             const turretBaseRadius = radius * 0.6;
@@ -270,9 +265,7 @@ export class TowerRenderer {
                 displayColor
             );
 
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             // Draw progress bar
             const barWidth = radius * 2;
@@ -354,12 +347,13 @@ export class TowerRenderer {
                 context.ctx.restore();
             };
 
-            // Selected towers are marked with a gold outline hugging the tower base, drawn
-            // before the layers so the glow sits behind the artwork.
-            if (building.isSelected) {
-                const selectionWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
-                const selectionHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
-                context.drawSelectionSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, selectionWidth, selectionHeight);
+            // Structures get a thin black outline hugging the tower base, drawn before the
+            // layers so it sits behind the artwork, with a thicker gold ring outside it
+            // when selected.
+            {
+                const outlineWidth = (bottomSprite ?? referenceSprite).width * spriteScale;
+                const outlineHeight = (bottomSprite ?? referenceSprite).height * spriteScale;
+                context.drawStructureSpriteOutline(bottomSpritePath, screenPos.x, screenPos.y, outlineWidth, outlineHeight, building.isSelected, !!ladSun);
             }
 
             drawLayer(bottomSprite, 0, bottomSpritePath);
@@ -421,9 +415,7 @@ export class TowerRenderer {
             context.ctx.fill();
             context.ctx.globalAlpha = 1.0;
 
-            if (building.isSelected) {
-                context.drawSelectionShapeOutline((pathCtx) => { pathCtx.arc(screenPos.x, screenPos.y, radius, 0, Math.PI * 2); });
-            }
+            context.drawStructureCircleOutline(screenPos.x, screenPos.y, radius, building.isSelected, !!ladSun);
 
             // Draw progress bar
             const barWidth = radius * 2;

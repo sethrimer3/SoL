@@ -851,8 +851,8 @@ export const SHROUD_TINY_UNFOLD_DELAY_SEC = 0.4;  // Delay after small cube spaw
 
 // ─── Photon System Constants ───
 export const PHOTON_MAX_COUNT = 500;                     // Maximum photons on the field
-export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 1.5;       // Initial time between spawns (seconds)
-export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.15;       // Fastest spawn interval at end of match
+export const PHOTON_BASE_SPAWN_INTERVAL_SEC = 7.5;       // Initial time between spawns (seconds) — 20% of original spawn rate
+export const PHOTON_MIN_SPAWN_INTERVAL_SEC = 0.75;       // Fastest spawn interval at end of match — 20% of original spawn rate
 export const PHOTON_SPEED_MIN = 30;                      // Minimum photon ejection speed (px/sec)
 export const PHOTON_SPEED_MAX = 80;                      // Maximum photon ejection speed (px/sec)
 export const PHOTON_RADIUS_PX = 4;                       // Visual/collision radius

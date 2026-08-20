@@ -68,6 +68,7 @@ export class Unit {
     photonCount: number = 0; // Absorbed photons available for abilities (hero units only)
     photonsPerCharge: number = 1; // Number of photons needed to fill one ability charge
     maxCharges: number = 3; // Maximum ability charges a hero can hold
+    structureCollisionDisabled: boolean = false; // True while trapped inside a building/forge footprint (e.g. built on top of the unit); re-enabled once fully clear
 
     // --- Movement inertia state (SC2-style: crisp but physically grounded) ---
     // Subclasses set these protected fields in their constructors to tune per-archetype feel.

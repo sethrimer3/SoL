@@ -550,14 +550,28 @@ export class ParticleMenuLayer {
         this.offscreenCanvas.width = sampleWidth;
         this.offscreenCanvas.height = sampleHeight;
 
+        let textAlign = computedStyle.textAlign;
+        if (textAlign === 'start' || textAlign === '') {
+            textAlign = computedStyle.direction === 'rtl' ? 'right' : 'left';
+        } else if (textAlign === 'end') {
+            textAlign = computedStyle.direction === 'rtl' ? 'left' : 'right';
+        }
+        const paddingLeftPx = Number.parseFloat(computedStyle.paddingLeft) || 0;
+        const paddingRightPx = Number.parseFloat(computedStyle.paddingRight) || 0;
+        const drawX = textAlign === 'left'
+            ? paddingLeftPx
+            : textAlign === 'right'
+                ? rect.width - paddingRightPx
+                : rect.width / 2;
+
         this.offscreenContext.setTransform(1, 0, 0, 1, 0, 0);
         this.offscreenContext.setTransform(sampleScale, 0, 0, sampleScale, 0, 0);
         this.offscreenContext.clearRect(0, 0, rect.width, rect.height);
         this.offscreenContext.font = `${fontWeight} ${fontSizePx}px ${fontFamily}`;
-        this.offscreenContext.textAlign = 'center';
+        this.offscreenContext.textAlign = textAlign as CanvasTextAlign;
         this.offscreenContext.textBaseline = 'middle';
         this.offscreenContext.fillStyle = '#FFFFFF';
-        this.offscreenContext.fillText(text, rect.width / 2, rect.height / 2);
+        this.offscreenContext.fillText(text, drawX, rect.height / 2);
 
         const imageData = this.offscreenContext.getImageData(
             0,
