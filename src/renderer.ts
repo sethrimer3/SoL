@@ -2518,6 +2518,12 @@ export class GameRenderer {
             }
 
             for (const sparkle of game.sparkleParticles) {
+                // Each sparkle allocates a fresh radial gradient; once its on-screen size
+                // drops below a couple pixels (common at low zoom) it's imperceptible, so
+                // skip the draw call entirely rather than paying for a sub-pixel gradient.
+                if (sparkle.size * this.zoom < 1.5) {
+                    continue;
+                }
                 if (this.isWithinViewBounds(sparkle.position, 50)) {
                     this.projectileRenderer.drawSparkleParticle(sparkle, projCtx);
                 }
