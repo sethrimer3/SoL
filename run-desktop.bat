@@ -7,9 +7,9 @@ echo Starting SoL desktop...
 if not exist node_modules (
   echo Installing dependencies...
   if exist package-lock.json (
-    npm ci
+    call npm ci
   ) else (
-    npm install
+    call npm install
   )
   if errorlevel 1 goto error
 )
@@ -26,7 +26,7 @@ if not exist "node_modules\electron\dist\electron.exe" (
 )
 
 echo Building SoL...
-npm run build
+call npm run build
 if errorlevel 1 goto error
 
 echo Launching Electron...
