@@ -14,15 +14,23 @@ if not exist node_modules (
   if errorlevel 1 goto error
 )
 
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo Electron binary is missing. Downloading it...
+  node "node_modules\electron\install.js"
+  if errorlevel 1 goto error
+)
+
+if not exist "node_modules\electron\dist\electron.exe" (
+  echo Electron binary still missing after download.
+  goto error
+)
+
 echo Building SoL...
 npm run build
 if errorlevel 1 goto error
 
 echo Launching Electron...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "Start-Process -FilePath 'npm.cmd' -ArgumentList @('run','electron') -WorkingDirectory '%CD%' -WindowStyle Hidden"
-if errorlevel 1 goto error
-
-timeout /t 1 /nobreak >nul
+start "SoL" /D "%~dp0" "%~dp0node_modules\electron\dist\electron.exe" .
 
 echo Done.
 exit /b 0
