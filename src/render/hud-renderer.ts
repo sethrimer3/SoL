@@ -494,6 +494,9 @@ export class HUDRenderer {
         const buttonSize = 50;
         const margin = 10;
 
+        context.ctx.save();
+        context.ctx.globalAlpha = 0.35;
+
         context.ctx.fillStyle = 'rgba(50, 50, 50, 0.8)';
         context.ctx.fillRect(margin, margin, buttonSize, buttonSize);
 
@@ -511,6 +514,8 @@ export class HUDRenderer {
         context.ctx.fillRect(startX, startY, lineWidth, lineHeight);
         context.ctx.fillRect(startX, startY + lineHeight + lineSpacing, lineWidth, lineHeight);
         context.ctx.fillRect(startX, startY + (lineHeight + lineSpacing) * 2, lineWidth, lineHeight);
+
+        context.ctx.restore();
     }
 
     public drawProductionProgress(game: GameState, context: HUDRendererContext): void {

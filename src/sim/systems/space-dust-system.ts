@@ -101,6 +101,12 @@ export class SpaceDustSystem {
             for (const building of player.buildings) {
                 if (building instanceof SpaceDustSwirler) {
                     building.applyDustSwirl(ctx.spaceDust, deltaTime);
+
+                    // Push nearby units (Starlings hard, heroes barely) away from center
+                    // with a slight counter-clockwise spin matching the dust swirl.
+                    for (const otherPlayer of ctx.players) {
+                        building.applyUnitPush(otherPlayer.units, deltaTime);
+                    }
                 }
             }
         }

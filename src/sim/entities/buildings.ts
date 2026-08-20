@@ -620,6 +620,41 @@ export class SpaceDustSwirler extends Building {
     }
 
     /**
+     * Push units caught in the swirl radially away from center, with a slight
+     * counter-clockwise spin matching the direction the space dust is swirling.
+     * Hero units get a much weaker push than regular (Starling) units.
+     */
+    applyUnitPush(units: Unit[], deltaTime: number): void {
+        if (!this.isComplete) return;
+
+        for (const unit of units) {
+            const dx = unit.position.x - this.position.x;
+            const dy = unit.position.y - this.position.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > this.currentInfluenceRadius || distance < 1) continue;
+
+            const invDist = 1 / distance;
+            const radialX = dx * invDist;
+            const radialY = dy * invDist;
+            // Counter-clockwise perpendicular, matching the dust swirl direction
+            const tangentX = dy * invDist;
+            const tangentY = -dx * invDist;
+
+            // Stronger push closer to the tower, fading to nothing at the edge
+            const normalizedDistance = distance / this.currentInfluenceRadius;
+            const falloff = 1 - normalizedDistance;
+
+            const unitMultiplier = unit.isHero ? Constants.SWIRLER_HERO_PUSH_MULTIPLIER : 1;
+            const radialForce = Constants.SWIRLER_UNIT_PUSH_FORCE * falloff * unitMultiplier;
+            const spinForce = radialForce * Constants.SWIRLER_UNIT_PUSH_SPIN_RATIO;
+
+            unit.knockbackVelocity.x += (radialX * radialForce + tangentX * spinForce) * deltaTime;
+            unit.knockbackVelocity.y += (radialY * radialForce + tangentY * spinForce) * deltaTime;
+        }
+    }
+
+    /**
      * Check if a projectile should be absorbed
      * Returns true if projectile was absorbed (should be removed from game)
      */

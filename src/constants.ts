@@ -271,6 +271,9 @@ export const SWIRLER_SHRINK_DAMAGE_MULTIPLIER = 0.5; // Additional shrink per po
 export const SWIRLER_MIN_INFLUENCE_RADIUS = 50; // Minimum radius the swirler can shrink to
 export const SWIRLER_DUST_ORBIT_SPEED_BASE = 80; // Base orbital speed at edge
 export const SWIRLER_DUST_SPEED_MULTIPLIER = 2.5; // Speed multiplier at center (faster closer)
+export const SWIRLER_UNIT_PUSH_FORCE = 90; // Radial push acceleration applied to Starlings at center, px/s^2 (falls off to 0 at edge)
+export const SWIRLER_UNIT_PUSH_SPIN_RATIO = 0.15; // Tangential (counter-clockwise) push as a fraction of the radial push
+export const SWIRLER_HERO_PUSH_MULTIPLIER = 0.08; // Hero units are pushed/spun far less than Starlings
 
 // Foundry building constants
 export const SUBSIDIARY_FACTORY_MAX_HEALTH = 500;

@@ -123,6 +123,26 @@ export function renderSettingsScreen(
     const screenWidth = window.innerWidth;
     const isCompactLayout = screenWidth < 600;
 
+    type SettingsTab = 'all' | 'gameplay' | 'controls' | 'audio' | 'visual';
+    const TABS: { id: SettingsTab; label: string }[] = [
+        { id: 'all', label: 'All' },
+        { id: 'gameplay', label: 'Gameplay' },
+        { id: 'controls', label: 'Controls' },
+        { id: 'audio', label: 'Audio' },
+        { id: 'visual', label: 'Visual' },
+    ];
+    let activeTab: SettingsTab = 'all';
+    const categorizedSections: { element: HTMLElement; category: SettingsTab }[] = [];
+    const registerSection = (element: HTMLElement, category: SettingsTab): HTMLElement => {
+        categorizedSections.push({ element, category });
+        return element;
+    };
+    const updateSectionVisibility = (): void => {
+        for (const { element, category } of categorizedSections) {
+            element.style.display = (activeTab === 'all' || activeTab === category) ? '' : 'none';
+        }
+    };
+
     // Title
     const title = document.createElement('h2');
     title.textContent = 'Settings';
@@ -182,6 +202,56 @@ export function renderSettingsScreen(
     });
     settingsContainer.appendChild(discordButton);
 
+    // Tab bar
+    const tabBar = document.createElement('div');
+    tabBar.style.display = 'flex';
+    tabBar.style.flexWrap = 'wrap';
+    tabBar.style.gap = '8px';
+    tabBar.style.justifyContent = 'center';
+    tabBar.style.marginBottom = '24px';
+
+    const tabButtons: Partial<Record<SettingsTab, HTMLButtonElement>> = {};
+    const updateTabButtonStyles = (): void => {
+        for (const tab of TABS) {
+            const button = tabButtons[tab.id];
+            if (!button) continue;
+            const isActive = tab.id === activeTab;
+            button.style.backgroundColor = isActive ? 'rgba(255, 215, 0, 0.2)' : 'rgba(255, 255, 255, 0.1)';
+            button.style.borderColor = isActive ? '#FFD700' : 'rgba(255, 255, 255, 0.3)';
+            button.style.color = isActive ? '#FFD700' : '#FFFFFF';
+        }
+    };
+
+    for (const tab of TABS) {
+        const tabButton = document.createElement('button');
+        tabButton.textContent = tab.label;
+        tabButton.style.fontSize = isCompactLayout ? '16px' : '18px';
+        tabButton.style.padding = isCompactLayout ? '8px 14px' : '10px 18px';
+        tabButton.style.border = '2px solid rgba(255, 255, 255, 0.3)';
+        tabButton.style.borderRadius = '8px';
+        tabButton.style.cursor = 'pointer';
+        tabButton.style.fontFamily = 'inherit';
+        tabButton.style.fontWeight = 'bold';
+        tabButton.addEventListener('click', () => {
+            activeTab = tab.id;
+            updateTabButtonStyles();
+            updateSectionVisibility();
+        });
+        tabButtons[tab.id] = tabButton;
+        tabBar.appendChild(tabButton);
+    }
+    updateTabButtonStyles();
+    settingsContainer.appendChild(tabBar);
+
+    const controlsEmptyState = document.createElement('div');
+    controlsEmptyState.textContent = 'No control settings yet.';
+    controlsEmptyState.style.color = 'rgba(255, 255, 255, 0.6)';
+    controlsEmptyState.style.fontSize = '18px';
+    controlsEmptyState.style.textAlign = 'center';
+    controlsEmptyState.style.marginBottom = '30px';
+    registerSection(controlsEmptyState, 'controls');
+    settingsContainer.appendChild(controlsEmptyState);
+
     // Difficulty setting
     const difficultySection = createSettingSection(
         'Difficulty',
@@ -193,7 +263,7 @@ export function renderSettingsScreen(
             }
         )
     );
-    settingsContainer.appendChild(difficultySection);
+    settingsContainer.appendChild(registerSection(difficultySection, 'gameplay'));
 
     // Username setting
     const usernameSection = createSettingSection(
@@ -204,80 +274,80 @@ export function renderSettingsScreen(
             'Enter your username'
         )
     );
-    settingsContainer.appendChild(usernameSection);
+    settingsContainer.appendChild(registerSection(usernameSection, 'gameplay'));
 
     // Sound setting
     const soundSection = createSettingSection(
         'Sound Effects',
         createToggle(soundEnabled, onSoundEnabledChange)
     );
-    settingsContainer.appendChild(soundSection);
+    settingsContainer.appendChild(registerSection(soundSection, 'audio'));
 
     const soundVolumeSection = createSettingSection(
         'Sound Effects Volume',
         createPercentSlider(soundVolume, onSoundVolumeChange)
     );
-    settingsContainer.appendChild(soundVolumeSection);
+    settingsContainer.appendChild(registerSection(soundVolumeSection, 'audio'));
 
     // Music setting
     const musicSection = createSettingSection(
         'Music',
         createToggle(musicEnabled, onMusicEnabledChange)
     );
-    settingsContainer.appendChild(musicSection);
+    settingsContainer.appendChild(registerSection(musicSection, 'audio'));
 
     const musicVolumeSection = createSettingSection(
         'Music Volume',
         createPercentSlider(musicVolume, onMusicVolumeChange)
     );
-    settingsContainer.appendChild(musicVolumeSection);
+    settingsContainer.appendChild(registerSection(musicVolumeSection, 'audio'));
 
     const battleStatsSection = createSettingSection(
         'Battle Stats Info',
         createToggle(isBattleStatsInfoEnabled, onBattleStatsInfoChange)
     );
-    settingsContainer.appendChild(battleStatsSection);
+    settingsContainer.appendChild(registerSection(battleStatsSection, 'gameplay'));
 
     // Screen shake setting
     const screenShakeSection = createSettingSection(
         'Screen Shake',
         createToggle(screenShakeEnabled, onScreenShakeChange)
     );
-    settingsContainer.appendChild(screenShakeSection);
+    settingsContainer.appendChild(registerSection(screenShakeSection, 'visual'));
 
     const developerModeSection = createSettingSection(
         'Developer Mode',
         createToggle(developerModeEnabled, onDeveloperModeEnabledChange)
     );
-    settingsContainer.appendChild(developerModeSection);
+    settingsContainer.appendChild(registerSection(developerModeSection, 'gameplay'));
 
     // Player Color setting
     const playerColorSection = createSettingSection(
         'Player Color',
         createColorPicker(playerColor, onPlayerColorChange)
     );
-    settingsContainer.appendChild(playerColorSection);
+    settingsContainer.appendChild(registerSection(playerColorSection, 'visual'));
 
     // Enemy Color setting
     const enemyColorSection = createSettingSection(
         'Enemy Color',
         createColorPicker(enemyColor, onEnemyColorChange)
     );
-    settingsContainer.appendChild(enemyColorSection);
+    settingsContainer.appendChild(registerSection(enemyColorSection, 'visual'));
 
     // Ally Color setting (for 2v2 games)
     const allyColorSection = createSettingSection(
         'Ally Color (2v2)',
         createColorPicker(allyColor, onAllyColorChange)
     );
-    settingsContainer.appendChild(allyColorSection);
+    settingsContainer.appendChild(registerSection(allyColorSection, 'visual'));
 
     // Second Enemy Color setting (for 2v2 games)
     const enemy2ColorSection = createSettingSection(
         'Enemy 2 Color (2v2)',
         createColorPicker(enemy2Color, onEnemy2ColorChange)
     );
-    settingsContainer.appendChild(enemy2ColorSection);
+    settingsContainer.appendChild(registerSection(enemy2ColorSection, 'visual'));
 
     // Graphics Quality setting
     const graphicsQualitySection = createSettingSection(
@@ -290,7 +360,7 @@ export function renderSettingsScreen(
             }
         )
     );
-    settingsContainer.appendChild(graphicsQualitySection);
+    settingsContainer.appendChild(registerSection(graphicsQualitySection, 'visual'));
 
     // Resolution setting
     const resolutionOptions = [
@@ -329,21 +399,21 @@ export function renderSettingsScreen(
         }
     }
     const resolutionSection = createSettingSection('Resolution', resolutionSelect);
-    settingsContainer.appendChild(resolutionSection);
+    settingsContainer.appendChild(registerSection(resolutionSection, 'visual'));
 
     // PIXELS mode toggle (Celeste-style 320x180 upscale)
     const pixelModeSection = createSettingSection(
         'PIXELS (Retro)',
         createToggle(isPixelModeEnabled, onPixelModeEnabledChange)
     );
-    settingsContainer.appendChild(pixelModeSection);
+    settingsContainer.appendChild(registerSection(pixelModeSection, 'visual'));
 
     // Save Replays setting
     const saveReplaysSection = createSettingSection(
         'Save Replays',
         createToggle(saveReplaysEnabled, onSaveReplaysEnabledChange)
     );
-    settingsContainer.appendChild(saveReplaysSection);
+    settingsContainer.appendChild(registerSection(saveReplaysSection, 'gameplay'));
 
     // Replay retention setting
     const replayRetentionOptions = ['10', '30', '50', 'never'];
@@ -368,37 +438,37 @@ export function renderSettingsScreen(
         }
     }
     const replayRetentionSection = createSettingSection('Delete Old Replays', replayRetentionSelect);
-    settingsContainer.appendChild(replayRetentionSection);
+    settingsContainer.appendChild(registerSection(replayRetentionSection, 'gameplay'));
 
     const adaptiveQualitySection = createSettingSection(
         'Adaptive Quality',
         createToggle(isAdaptiveQualityEnabled, onAdaptiveQualityEnabledChange)
     );
-    settingsContainer.appendChild(adaptiveQualitySection);
+    settingsContainer.appendChild(registerSection(adaptiveQualitySection, 'visual'));
 
     const svgSpriteSection = createSettingSection(
         'Use SVG Sprites',
         createToggle(useSvgSprites, onUseSvgSpritesChange)
     );
-    settingsContainer.appendChild(svgSpriteSection);
+    settingsContainer.appendChild(registerSection(svgSpriteSection, 'visual'));
 
     const pauseOnFocusLossSection = createSettingSection(
         'Music/SFX Only When Focused',
         createToggle(isPauseOnFocusLossEnabled, onPauseOnFocusLossEnabledChange)
     );
-    settingsContainer.appendChild(pauseOnFocusLossSection);
+    settingsContainer.appendChild(registerSection(pauseOnFocusLossSection, 'audio'));
 
     const experimentalGraphicsSection = createSettingSection(
         'Experimental Graphics',
         createToggle(isExperimentalGraphicsEnabled, onExperimentalGraphicsEnabledChange)
     );
-    settingsContainer.appendChild(experimentalGraphicsSection);
+    settingsContainer.appendChild(registerSection(experimentalGraphicsSection, 'visual'));
 
     const starNestSection = createSettingSection(
         'Star Nest Effects',
         createToggle(isStarNestEnabled, onStarNestEnabledChange)
     );
-    settingsContainer.appendChild(starNestSection);
+    settingsContainer.appendChild(registerSection(starNestSection, 'visual'));
 
     // Color Scheme setting
     const colorSchemeSection = createSettingSection(
@@ -409,7 +479,7 @@ export function renderSettingsScreen(
             onColorSchemeChange
         )
     );
-    settingsContainer.appendChild(colorSchemeSection);
+    settingsContainer.appendChild(registerSection(colorSchemeSection, 'visual'));
 
     const resetButton = createButton('DELETE DATA', async () => {
         const isConfirmed = window.confirm(
@@ -428,6 +498,7 @@ export function renderSettingsScreen(
     settingsContainer.appendChild(resetSection);
 
     container.appendChild(settingsContainer);
+    updateSectionVisibility();
 
     // Back button
     const backButton = createButton('BACK', onBack, '#666666');

@@ -110,11 +110,13 @@ export class AiStructureSystem {
         const hasSubsidiaryFactory = player.buildings.some((building) => building instanceof SubsidiaryFactory);
 
         let buildType: 'minigun' | 'swirler' | 'subsidiaryFactory' | null = null;
-        
+
         // Strategy-based building priorities
-        // Note: Radiant-specific buildings (minigun, swirler) are only available to Radiant faction
+        // Minigun/Gatling/ShieldTower are Radiant-only; SpaceDustSwirler (Cyclone) is Velaris-only.
+        // See the faction restrictions in CommandProcessor.executeBuildingPurchaseCommand.
         const canBuildRadiantStructures = player.faction === Faction.RADIANT;
-        
+        const canBuildSwirler = player.faction === Faction.VELARIS;
+
         switch (player.aiStrategy) {
             case Constants.AIStrategy.ECONOMIC:
                 // Economic: Build factory first, then minimal defenses
@@ -122,14 +124,14 @@ export class AiStructureSystem {
                     buildType = 'subsidiaryFactory';
                 } else if (canBuildRadiantStructures && minigunCount < 1 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
+                } else if (canBuildSwirler && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 }
                 break;
-                
+
             case Constants.AIStrategy.DEFENSIVE:
                 // Defensive: Prioritize defenses heavily
-                if (canBuildRadiantStructures && swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
+                if (canBuildSwirler && swirlerCount < 2 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
@@ -139,7 +141,7 @@ export class AiStructureSystem {
                     buildType = 'minigun';
                 }
                 break;
-                
+
             case Constants.AIStrategy.AGGRESSIVE:
                 // Aggressive: Build factory early, skip most defenses
                 if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
@@ -148,14 +150,14 @@ export class AiStructureSystem {
                     buildType = 'minigun';
                 }
                 break;
-                
+
             case Constants.AIStrategy.WAVES:
                 // Waves: Balanced approach with factory priority
                 if (!hasSubsidiaryFactory && player.energy >= Constants.SUBSIDIARY_FACTORY_COST) {
                     buildType = 'subsidiaryFactory';
                 } else if (canBuildRadiantStructures && minigunCount < 2 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';
-                } else if (canBuildRadiantStructures && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
+                } else if (canBuildSwirler && swirlerCount < 1 && player.energy >= Constants.SWIRLER_COST) {
                     buildType = 'swirler';
                 } else if (canBuildRadiantStructures && minigunCount < 3 && player.energy >= Constants.MINIGUN_COST) {
                     buildType = 'minigun';

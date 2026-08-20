@@ -293,7 +293,7 @@ export class CommandProcessor {
             // Aurum and Velaris cannot build Radiant-specific buildings
             return;
         }
-        
+
         // Check faction restrictions for Velaris-specific buildings
         const velarisOnlyBuildings = ['StrikerTower', 'LockOnLaserTower', 'SpaceDustSwirler'];
         if (velarisOnlyBuildings.includes(buildingType) && player.faction !== Faction.VELARIS) {

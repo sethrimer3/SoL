@@ -474,7 +474,7 @@ export class Starling extends Unit {
 
         let finalDamage = attackDamage;
         if (target instanceof StellarForge) {
-            finalDamage = Math.max(0, attackDamage - Constants.STELLAR_FORGE_STARLING_DEFENSE);
+            finalDamage = Math.max(0.1, attackDamage - Constants.STELLAR_FORGE_STARLING_DEFENSE);
         }
         
         // Create laser beam for visual effect
