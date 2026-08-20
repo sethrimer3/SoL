@@ -42,6 +42,11 @@ export class AsteroidRenderer {
     private readonly ASTEROID_RIM_HIGHLIGHT_WIDTH = 5;
     private readonly ASTEROID_RIM_SHADOW_WIDTH = 4;
     private readonly FACET_CULL_MARGIN_PX = 4;
+    // Below this on-screen radius (px), skip Delaunay facet shading and rim lighting
+    // entirely and draw a flat silhouette instead. At low zoom, hundreds of asteroids
+    // can be on-screen at once and per-facet fill/stroke calls dominate frame time
+    // while contributing negligible visual detail at that size.
+    private readonly SIMPLE_LOD_THRESHOLD_RADIUS_PX = 10;
 
     // Cache for generated asteroid facets (Delaunay triangulation is expensive)
     private asteroidRenderCache = new WeakMap<Asteroid, AsteroidRenderCache>();
@@ -87,6 +92,11 @@ export class AsteroidRenderer {
             sizeT
         );
 
+        if (asteroid.size * zoom <= this.SIMPLE_LOD_THRESHOLD_RADIUS_PX) {
+            this.drawAsteroidSimple(ctx, screenVertices, asteroidFill, asteroidStroke);
+            return;
+        }
+
         const lightDirection = this.getAsteroidLightDirection(asteroid, suns);
         this.drawAsteroidFacets(
             ctx,
@@ -108,6 +118,30 @@ export class AsteroidRenderer {
             graphicsQuality,
             worldToScreen
         );
+    }
+
+    /**
+     * Flat, single-pass silhouette used once an asteroid's on-screen radius drops
+     * below SIMPLE_LOD_THRESHOLD_RADIUS_PX. Skips facet triangulation and rim
+     * lighting, which are the expensive parts of drawAsteroid.
+     */
+    private drawAsteroidSimple(
+        ctx: CanvasRenderingContext2D,
+        screenVertices: Vector2D[],
+        asteroidFill: string,
+        asteroidStroke: string
+    ): void {
+        ctx.beginPath();
+        ctx.moveTo(screenVertices[0].x, screenVertices[0].y);
+        for (let i = 1; i < screenVertices.length; i++) {
+            ctx.lineTo(screenVertices[i].x, screenVertices[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle = asteroidFill;
+        ctx.fill();
+        ctx.strokeStyle = asteroidStroke;
+        ctx.lineWidth = 1;
+        ctx.stroke();
     }
 
     /**

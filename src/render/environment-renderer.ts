@@ -44,6 +44,9 @@ export class EnvironmentRenderer {
     // Influence animation state (moved from GameRenderer)
     private influenceRadiusBySource: WeakMap<object, number> = new WeakMap();
     private readonly SPACE_DUST_VIEWPORT_MARGIN_PX = 100;
+    // Below this on-screen size (px), a dust particle is sub-pixel and contributes
+    // nothing visually — skip shadow/visibility checks and the draw call entirely.
+    private readonly MIN_VISIBLE_DUST_SIZE_PX = 0.6;
     // Reusable batch map to avoid per-frame Map allocation in drawSpaceDustBatch.
     private readonly _dustBatchByColor = new Map<string, number[]>();
 
@@ -80,6 +83,11 @@ export class EnvironmentRenderer {
                 continue;
             }
 
+            const baseSize = Constants.DUST_PARTICLE_SIZE * zoom;
+            if (baseSize < this.MIN_VISIBLE_DUST_SIZE_PX) {
+                continue;
+            }
+
             const inShadow = game.isPointInShadow(particle.position);
             if (viewingPlayerIndex !== null && inShadow) {
                 const viewingPlayer = game.players[viewingPlayerIndex];
@@ -88,7 +96,6 @@ export class EnvironmentRenderer {
                 }
             }
 
-            const baseSize = Constants.DUST_PARTICLE_SIZE * zoom;
             const isOnLightSide = ladSun ? particle.position.x < ladSun.position.x : false;
             const dustColor = ladSun ? (isOnLightSide ? '#000000' : '#FFFFFF') : particle.currentColor;
             const velocityX = particle.velocity.x;
@@ -138,6 +145,14 @@ export class EnvironmentRenderer {
         }
 
         const baseSize = Constants.DUST_PARTICLE_SIZE * zoom;
+
+        // Sub-pixel dust is visually imperceptible once zoomed out, but the shadow/visibility
+        // checks below are relatively expensive (nearest-sun search, shadow polygon test) and
+        // dust particle counts can be in the thousands. Skip the rest of the work entirely.
+        if (baseSize < this.MIN_VISIBLE_DUST_SIZE_PX) {
+            return;
+        }
+
         const ladSun = game.suns.find(s => s.type === 'lad');
 
         // Check if particle is in shadow
