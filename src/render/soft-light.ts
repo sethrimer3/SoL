@@ -294,6 +294,74 @@ export function drawSoftBeam(ctx: SoftLight2DContextType, options: SoftBeamOptio
     ctx.restore();
 }
 
+export interface SoftPathEdgeOptions {
+    /** Base color for the feather, e.g. 'rgb(0,0,0)' for a shadow penumbra. Alpha is ignored/overridden per layer. */
+    color?: string;
+    layers?: number;
+    /** Alpha of the innermost (thinnest) stroke layer before falloff shaping. */
+    baseAlpha?: number;
+    /** Width (px) of the widest/faintest stroke layer; the feather band is centered on the traced path. */
+    maxWidth?: number;
+    falloffPower?: number;
+    blend?: GlobalCompositeOperation;
+}
+
+/**
+ * Feather an arbitrary filled shape's boundary by stroking the same path several times
+ * with nested, low-alpha, increasing-width strokes (alpha_t = baseAlpha * (1 - t)^falloffPower),
+ * straddling the crisp edge so it reads as a soft penumbra fringe rather than a hard cutoff.
+ * Unlike `drawSoftBeam`/`drawSoftGlow` (which build a shape from nothing), this is meant to be
+ * layered on top of an already-filled "core" shape drawn by the caller - the nested strokes add
+ * a soft fringe around whatever boundary `tracePath` traces without needing a separate blur pass.
+ * `tracePath` receives the context and must call `beginPath` plus its own moveTo/lineTo/closePath
+ * calls (mirroring how the caller built the core shape's path) so this can be re-traced per layer.
+ */
+export function drawSoftPathEdge(
+    ctx: SoftLight2DContextType,
+    tracePath: (ctx: SoftLight2DContextType) => void,
+    options: SoftPathEdgeOptions = {}
+): void {
+    const {
+        color = 'rgb(0, 0, 0)',
+        layers = DEFAULT_LAYERS,
+        baseAlpha = DEFAULT_BASE_ALPHA,
+        maxWidth = 16,
+        falloffPower = DEFAULT_FALLOFF_POWER,
+        blend = 'source-over',
+    } = options;
+
+    if (layers <= 0 || maxWidth <= 0) {
+        return;
+    }
+
+    const { r, g, b } = parseColorToRgb(color);
+
+    ctx.save();
+    ctx.globalCompositeOperation = blend;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+
+    for (let layerIndex = 0; layerIndex < layers; layerIndex++) {
+        const t = layerIndex / Math.max(1, layers - 1);
+        const layerAlpha = baseAlpha * Math.pow(1 - t, falloffPower);
+        if (layerAlpha <= 0.0002) {
+            continue;
+        }
+        // Thinnest stroke first (closest to the crisp edge), widening outward so the band
+        // straddles the boundary and fades out smoothly on both sides.
+        const layerWidth = maxWidth * (0.12 + 0.88 * t);
+
+        ctx.globalAlpha = layerAlpha;
+        ctx.strokeStyle = rgba(r, g, b, 1);
+        ctx.lineWidth = layerWidth;
+        tracePath(ctx);
+        ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
+    ctx.restore();
+}
+
 export interface SoftGlowOptions {
     x: number;
     y: number;

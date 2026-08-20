@@ -9,7 +9,7 @@ import * as Constants from '../constants';
 import { ColorScheme } from '../menu';
 import { renderLensFlare } from '../rendering/LensFlare';
 import type { SpriteDrawSource } from './sprite-manager';
-import { drawSoftBeam, DEFAULT_LAYERS, DEFAULT_FALLOFF_POWER } from './soft-light';
+import { drawSoftBeam, drawSoftPathEdge, DEFAULT_LAYERS, DEFAULT_FALLOFF_POWER } from './soft-light';
 
 // Canvas type shared across HTMLCanvasElement (main thread) and OffscreenCanvas (worker).
 type SunCanvasType = HTMLCanvasElement | OffscreenCanvas;
@@ -130,6 +130,15 @@ export class SunRenderer {
     // Multiplicative darkening applied per overlapping asteroid shadow (each additional
     // overlapping shadow makes the covered area this much darker than a single shadow).
     private readonly SHADOW_OVERLAP_DARKEN_ALPHA = 0.15;
+
+    // Soft penumbra fringe (soft-light.ts nested-stroke technique) feathered onto each
+    // asteroid shadow's crisp polygon edge in the normal (non-LaD) darkening path. Only
+    // affects the overlap-darkening layer - the LaD flat-color shadow mode intentionally
+    // stays a hard-edged inverted fill (see drawLadSunRays) and is left untouched.
+    private readonly SHADOW_EDGE_SOFT_LAYERS = 6;
+    private readonly SHADOW_EDGE_SOFT_BASE_ALPHA = 0.05;
+    private readonly SHADOW_EDGE_SOFT_MAX_WIDTH_PX = 14;
+    private readonly SHADOW_EDGE_SOFT_FALLOFF_POWER = 2.2;
 
     // Lighting layer canvases (offscreen compositing)
     private lightingLayerCanvas: SunCanvasType | null = null;
@@ -1028,6 +1037,26 @@ export class SunRenderer {
                 for (const quads of shadowQuads) {
                     this.traceShadowQuadsPath(shadowDarknessCtx, [quads]);
                     shadowDarknessCtx.fill();
+
+                    // Soft penumbra: feather the crisp polygon edge with a few nested,
+                    // low-alpha strokes straddling the boundary (see soft-light.ts
+                    // drawSoftPathEdge) instead of leaving a razor-sharp cutoff. Drawn
+                    // straight into the same shared per-frame shadowDarknessCtx with normal
+                    // alpha blending, so overlapping asteroid shadows still compound via
+                    // ordinary alpha stacking and no extra offscreen blur pass is needed -
+                    // the feather is built from nested alpha layers, not a canvas filter.
+                    drawSoftPathEdge(
+                        shadowDarknessCtx,
+                        (edgeCtx) => this.traceShadowQuadsPath(edgeCtx, [quads]),
+                        {
+                            color: 'rgb(0, 0, 0)',
+                            layers: this.SHADOW_EDGE_SOFT_LAYERS,
+                            baseAlpha: this.SHADOW_EDGE_SOFT_BASE_ALPHA,
+                            maxWidth: this.SHADOW_EDGE_SOFT_MAX_WIDTH_PX,
+                            falloffPower: this.SHADOW_EDGE_SOFT_FALLOFF_POWER,
+                            blend: 'source-over',
+                        }
+                    );
                 }
             }
 
