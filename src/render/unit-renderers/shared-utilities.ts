@@ -72,6 +72,15 @@ export interface UnitRendererContext {
     drawHealthDisplay(screenPos: Vector2D, currentHealth: number, maxHealth: number, size: number, yOffset: number): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawLadOutline(screenPos: Vector2D, size: number, side: 'light' | 'dark'): void;
+    drawLadSpriteOutline(
+        spritePath: string,
+        side: 'light' | 'dark',
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
     drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void;
 
     // Seed/random

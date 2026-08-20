@@ -98,6 +98,15 @@ export interface BuildingRendererContext {
     drawHealthDisplay(screenPos: Vector2D, currentHealth: number, maxHealth: number, size: number, yOffset: number): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawLadOutline(screenPos: Vector2D, size: number, side: 'light' | 'dark'): void;
+    drawLadSpriteOutline(
+        spritePath: string,
+        side: 'light' | 'dark',
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     drawWarpGateProductionEffect(screenPos: Vector2D, radius: number, game: GameState, color: string): void;
     

@@ -270,7 +270,11 @@ export class StarlingRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, size, ownerSide);
+            // Velaris starlings are a loose particle cloud with no single silhouette to
+            // trace, so they keep a ring; sprite starlings get a shape-hugging outline below.
+            if (isVelarisStarling) {
+                context.drawLadOutline(screenPos, size, ownerSide);
+            }
         }
         
         const shadeGlowBoost = 0.55 * shadeGlowAlpha;
@@ -291,6 +295,17 @@ export class StarlingRenderer {
             if (starlingSprite) {
                 const spriteSize = size * Constants.STARLING_SPRITE_SCALE_FACTOR;
                 const rotationRad = context.getStarlingFacingRotationRad(starling);
+                if (ladSun && ownerSide && starlingSpritePath) {
+                    context.drawLadSpriteOutline(
+                        starlingSpritePath,
+                        ownerSide,
+                        screenPos.x,
+                        screenPos.y,
+                        spriteSize,
+                        spriteSize,
+                        rotationRad ?? 0
+                    );
+                }
                 if (rotationRad !== null) {
                     context.ctx.save();
                     context.ctx.translate(screenPos.x, screenPos.y);

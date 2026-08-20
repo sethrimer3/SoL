@@ -59,8 +59,13 @@ export class SpriteManager {
     // rotated/minified draws (this was causing sun texels to leak onto mirrors/forge sprites).
     private static readonly SPRITE_ATLAS_PADDING_PX = 16;
 
+    // Padding (in sprite-space pixels) reserved around outline canvases so the dilated
+    // silhouette is not clipped at the sprite bounds.
+    private static readonly SPRITE_OUTLINE_PADDING_PX = 8;
+
     private spriteImageCache = new Map<string, HTMLImageElement>();
     private tintedSpriteCache = new Map<string, HTMLCanvasElement>();
+    private outlineSpriteCache = new Map<string, HTMLCanvasElement>();
     private graphemeMaskCache = new Map<string, ImageData>();
     private spriteAtlasRegionCache = new Map<string, SpriteAtlasRegion>();
     private solEnergyIcon: HTMLImageElement | null = null;
@@ -198,6 +203,70 @@ export class SpriteManager {
 
         this.tintedSpriteCache.set(cacheKey, canvas);
         return canvas;
+    }
+
+    /**
+     * Build (and cache) a solid silhouette of a sprite, dilated outwards by
+     * `thicknessSpritePx` and filled with `color`.  Drawing this behind the sprite
+     * produces a true shape-hugging outline rather than a bounding ring.
+     *
+     * The returned canvas is padded by SPRITE_OUTLINE_PADDING_PX on every side; use
+     * getSpriteOutlinePaddingPx() to work out the draw rectangle.
+     */
+    getSpriteOutline(path: string, color: string, thicknessSpritePx: number): HTMLCanvasElement | null {
+        const resolvedPath = resolveAssetPath(path);
+        const padding = SpriteManager.SPRITE_OUTLINE_PADDING_PX;
+        // Bucket the thickness so slow zoom changes reuse cached canvases.
+        const thickness = Math.min(padding, Math.max(1, Math.round(thicknessSpritePx)));
+        const cacheKey = `${resolvedPath}|${color}|${thickness}`;
+        const cached = this.outlineSpriteCache.get(cacheKey);
+        if (cached) {
+            return cached;
+        }
+
+        const spriteSource = this.getSpriteDrawSource(resolvedPath);
+        if (!spriteSource) {
+            return null;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = spriteSource.width + padding * 2;
+        canvas.height = spriteSource.height + padding * 2;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+            return null;
+        }
+
+        // Stamp the sprite at every offset on a ring of radius `thickness`.  The union of
+        // the stamps is the silhouette grown outwards by the outline thickness.
+        const stampCount = 16;
+        for (let stampIndex = 0; stampIndex < stampCount; stampIndex++) {
+            const angle = (stampIndex / stampCount) * Math.PI * 2;
+            ctx.drawImage(
+                spriteSource.image,
+                spriteSource.sourceX,
+                spriteSource.sourceY,
+                spriteSource.sourceWidth,
+                spriteSource.sourceHeight,
+                padding + Math.cos(angle) * thickness,
+                padding + Math.sin(angle) * thickness,
+                spriteSource.width,
+                spriteSource.height
+            );
+        }
+
+        // Flatten the accumulated alpha to a solid silhouette in the outline color.
+        ctx.globalCompositeOperation = 'source-in';
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.globalCompositeOperation = 'source-over';
+
+        this.outlineSpriteCache.set(cacheKey, canvas);
+        return canvas;
+    }
+
+    getSpriteOutlinePaddingPx(): number {
+        return SpriteManager.SPRITE_OUTLINE_PADDING_PX;
     }
 
     getVelarisGraphemeSpritePath(letter: string): string | null {

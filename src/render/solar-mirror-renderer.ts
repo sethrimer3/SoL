@@ -95,6 +95,15 @@ export interface SolarMirrorRendererContext {
     ): void;
     drawLadAura(screenPos: Vector2D, size: number, color: string, side: 'light' | 'dark'): void;
     drawLadOutline(screenPos: Vector2D, size: number, side: 'light' | 'dark'): void;
+    drawLadSpriteOutline(
+        spritePath: string,
+        side: 'light' | 'dark',
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad?: number
+    ): void;
     drawMoveOrderIndicator(fromPos: Vector2D, toPos: Vector2D, moveOrder: number, color: string): void;
     getVelarisGraphemeSpritePath(letter: string): string | null;
     getGraphemeMaskData(path: string): ImageData | null;

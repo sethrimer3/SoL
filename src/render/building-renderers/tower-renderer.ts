@@ -101,7 +101,6 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCannon_bottom.png';
@@ -114,6 +113,10 @@ export class TowerRenderer {
             const spriteScale = (radius * 2) / bottomSprite.width;
             const bottomWidth = bottomSprite.width * spriteScale;
             const bottomHeight = bottomSprite.height * spriteScale;
+
+            if (ladSun && ownerSide) {
+                context.drawLadSpriteOutline(bottomSpritePath, ownerSide, screenPos.x, screenPos.y, bottomWidth, bottomHeight);
+            }
 
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
@@ -140,6 +143,18 @@ export class TowerRenderer {
 
             const topWidth = topSprite.width * spriteScale;
             const topHeight = topSprite.height * spriteScale;
+
+            if (ladSun && ownerSide) {
+                context.drawLadSpriteOutline(
+                    topSpritePath,
+                    ownerSide,
+                    screenPos.x,
+                    screenPos.y,
+                    topWidth,
+                    topHeight,
+                    gunAngle + Math.PI / 2
+                );
+            }
 
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
@@ -292,7 +307,6 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantCyclone_bottom.png';
@@ -310,12 +324,23 @@ export class TowerRenderer {
             const middleRotationRad = -timeSec * 0.6;
             const topRotationRad = timeSec * 0.8;
 
-            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number): void => {
+            const drawLayer = (sprite: HTMLCanvasElement | null, rotationRad: number, spritePath: string): void => {
                 if (!sprite) {
                     return;
                 }
                 const spriteWidth = sprite.width * spriteScale;
                 const spriteHeight = sprite.height * spriteScale;
+                if (ladSun && ownerSide) {
+                    context.drawLadSpriteOutline(
+                        spritePath,
+                        ownerSide,
+                        screenPos.x,
+                        screenPos.y,
+                        spriteWidth,
+                        spriteHeight,
+                        rotationRad
+                    );
+                }
                 context.ctx.save();
                 context.ctx.translate(screenPos.x, screenPos.y);
                 context.ctx.rotate(rotationRad);
@@ -329,14 +354,14 @@ export class TowerRenderer {
                 context.ctx.restore();
             };
 
-            drawLayer(bottomSprite, 0);
+            drawLayer(bottomSprite, 0, bottomSpritePath);
 
             if (building.isSelected) {
                 context.drawBuildingSelectionIndicator(screenPos, radius);
             }
 
-            drawLayer(middleSprite, middleRotationRad);
-            drawLayer(topSprite, topRotationRad);
+            drawLayer(middleSprite, middleRotationRad, middleSpritePath);
+            drawLayer(topSprite, topRotationRad, topSpritePath);
         }
 
         // Draw health bar/number if damaged
@@ -414,12 +439,14 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
-        // Draw tower body - hexagon shape
+        // Draw tower body - hexagon shape.  In LaD mode the body outline is stroked in the
+        // inverted color so it hugs the hexagon itself.
         context.ctx.fillStyle = displayColor;
-        context.ctx.strokeStyle = '#666666';
+        context.ctx.strokeStyle = ownerSide
+            ? (ownerSide === 'light' ? '#000000' : '#FFFFFF')
+            : '#666666';
         context.ctx.lineWidth = 2 * context.zoom;
         context.ctx.beginPath();
         for (let i = 0; i < 6; i++) {
@@ -665,12 +692,14 @@ export class TowerRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
-        // Draw tower body - octagon shape
+        // Draw tower body - octagon shape.  In LaD mode the body outline is stroked in the
+        // inverted color so it hugs the octagon itself.
         context.ctx.fillStyle = displayColor;
-        context.ctx.strokeStyle = '#666666';
+        context.ctx.strokeStyle = ownerSide
+            ? (ownerSide === 'light' ? '#000000' : '#FFFFFF')
+            : '#666666';
         context.ctx.lineWidth = 2 * context.zoom;
         context.ctx.beginPath();
         for (let i = 0; i < 8; i++) {

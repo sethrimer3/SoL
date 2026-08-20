@@ -116,7 +116,6 @@ export class UnitRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, size, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, size, ownerSide);
         }
 
         // Draw unit body (circle) - use darkened color if should dim
@@ -150,6 +149,19 @@ export class UnitRenderer {
 
         if (!shouldUseSimpleSprite && heroSprite) {
             const rotationRad = unit.rotation;
+            // LaD mode: trace the sprite silhouette in the inverted color first so the
+            // outline hugs the artwork and the hero stays readable on its own background.
+            if (ladSun && ownerSide && heroSpritePath) {
+                context.drawLadSpriteOutline(
+                    heroSpritePath,
+                    ownerSide,
+                    screenPos.x,
+                    screenPos.y,
+                    heroSpriteSize,
+                    heroSpriteSize,
+                    rotationRad
+                );
+            }
             context.ctx.save();
             context.ctx.translate(screenPos.x, screenPos.y);
             context.ctx.rotate(rotationRad);
@@ -163,8 +175,15 @@ export class UnitRenderer {
             context.ctx.restore();
         } else {
             context.ctx.fillStyle = displayColor;
-            context.ctx.strokeStyle = isSelected ? displayColor : (shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor);
-            context.ctx.lineWidth = isSelected ? 3 : 1;
+            // LaD mode: the circle body is its own silhouette, so stroking it in the
+            // inverted color is already a shape-hugging outline.
+            const ladOutlineColor = ownerSide === 'light' ? '#000000' : '#FFFFFF';
+            context.ctx.strokeStyle = (ladSun && ownerSide)
+                ? ladOutlineColor
+                : (isSelected ? displayColor : (shouldDim ? context.darkenColor(displayColor, Constants.SHADE_OPACITY) : displayColor));
+            context.ctx.lineWidth = (ladSun && ownerSide)
+                ? Math.max(1.5, context.zoom * 1.4)
+                : (isSelected ? 3 : 1);
             context.ctx.beginPath();
             context.ctx.arc(screenPos.x, screenPos.y, size, 0, Math.PI * 2);
             context.ctx.fill();

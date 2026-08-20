@@ -114,17 +114,21 @@ export class FoundryRenderer {
         if (ladSun && ownerSide) {
             const auraColor = isEnemy ? context.enemyColor : context.playerColor;
             context.drawLadAura(screenPos, radius, auraColor, ownerSide);
-            context.drawLadOutline(screenPos, radius, ownerSide);
         }
 
         // Draw faction-specific foundry
         const isAurumFoundry = building.owner.faction === Faction.AURUM;
         if (isAurumFoundry) {
+            // The Aurum foundry is drawn as edge-detected outlines of a shifting triangle
+            // cluster, so there is no stable silhouette to trace; it keeps a ring instead.
+            if (ladSun && ownerSide) {
+                context.drawLadOutline(screenPos, radius, ownerSide);
+            }
             this.drawAurumFoundry(building, screenPos, radius, displayColor, game.gameTime, context);
         } else if (isVelarisFoundry) {
-            this.drawVelarisFoundry(building, screenPos, radius, displayColor, game.gameTime, shouldDim, context);
+            this.drawVelarisFoundry(building, screenPos, radius, displayColor, game.gameTime, shouldDim, context, ownerSide);
         } else {
-            this.drawRadiantFoundry(building, screenPos, radius, displayColor, game.gameTime, context);
+            this.drawRadiantFoundry(building, screenPos, radius, displayColor, game.gameTime, context, ownerSide);
         }
 
         // Draw production progress bar if producing
@@ -153,7 +157,8 @@ export class FoundryRenderer {
         radius: number,
         displayColor: string,
         gameTime: number,
-        context: BuildingRendererContext
+        context: BuildingRendererContext,
+        ladOutlineSide?: 'light' | 'dark'
     ): void {
         const bottomSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png';
         const middleSpritePath = 'ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png';
@@ -229,9 +234,18 @@ export class FoundryRenderer {
         const middleSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_middle.png';
         const topSpritePath = 'ASSETS/sprites/VELARIS/structures/velarisFoundry_top.png';
 
-        const bottomSprite = context.getTintedSprite(bottomSpritePath, displayColor);
-        const middleSprite = context.getTintedSprite(middleSpritePath, displayColor);
-        const topSprite = context.getTintedSprite(topSpritePath, displayColor);
+        let bottomSprite = context.getTintedSprite(bottomSpritePath, displayColor);
+        let middleSprite = context.getTintedSprite(middleSpritePath, displayColor);
+        let topSprite = context.getTintedSprite(topSpritePath, displayColor);
+
+        // The Velaris foundry art does not exist yet; fall back to the Radiant
+        // layers so the building stays visible. They are tinted by displayColor,
+        // so they still read as the owning player's colour.
+        if (!bottomSprite && !middleSprite && !topSprite) {
+            bottomSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_bottom.png', displayColor);
+            middleSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_middle.png', displayColor);
+            topSprite = context.getTintedSprite('ASSETS/sprites/RADIANT/structures/radiantFoundry_top.png', displayColor);
+        }
 
         const referenceSprite = bottomSprite || middleSprite || topSprite;
         if (!referenceSprite) {

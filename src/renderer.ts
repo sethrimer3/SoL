@@ -1065,6 +1065,8 @@ export class GameRenderer {
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
+                drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
+                    this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 drawWarpGateProductionEffect: (screenPos, radius, game, color) =>
@@ -1131,6 +1133,8 @@ export class GameRenderer {
                     this.drawHealthDisplay(screenPos, currentHealth, maxHealth, size, yOffset, isRegenerating, playerColor),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
+                drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
+                    this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
                 drawMoveOrderIndicator: (fromPos, toPos, moveOrder, color) =>
                     this.unitRenderer.drawMoveOrderIndicator(fromPos, toPos, moveOrder, color, this.getUnitRendererContext()),
                 getVelarisGraphemeSpritePath: (letter) => this.getVelarisGraphemeSpritePath(letter),
@@ -1257,6 +1261,8 @@ export class GameRenderer {
                 drawHealthDisplay: (screenPos, current, max, size, yOffset) => this.drawHealthDisplay(screenPos, current, max, size, yOffset),
                 drawLadAura: (screenPos, size, color, side) => this.drawLadAura(screenPos, size, color, side),
                 drawLadOutline: (screenPos, size, side) => this.drawLadOutline(screenPos, size, side),
+                drawLadSpriteOutline: (path, side, centerX, centerY, width, height, rotationRad) =>
+                    this.drawLadSpriteOutline(path, side, centerX, centerY, width, height, rotationRad),
                 drawFancyBloom: (screenPos, radius, color, intensity) => this.drawFancyBloom(screenPos, radius, color, intensity),
                 getPseudoRandom: (seed) => this.getPseudoRandom(seed),
                 getStarlingParticleSeed: (s) => this.getStarlingParticleSeed(s),
@@ -1335,6 +1341,57 @@ export class GameRenderer {
         unitSide: 'light' | 'dark'
     ): void {
         this.glowRenderer.drawLadOutline(screenPos, radius, unitSide, this.zoom, this.ctx);
+    }
+
+    /**
+     * Draw a shape-hugging inverted outline for a sprite-based entity in LaD mode.
+     * The sprite's own silhouette is dilated and stamped behind the sprite, so the
+     * outline follows the artwork exactly instead of enclosing it in a ring.
+     */
+    private drawLadSpriteOutline(
+        spritePath: string,
+        unitSide: 'light' | 'dark',
+        centerX: number,
+        centerY: number,
+        drawWidth: number,
+        drawHeight: number,
+        rotationRad: number = 0
+    ): void {
+        const outlineColor = unitSide === 'light' ? '#000000' : '#FFFFFF';
+        const spriteSource = this.spriteManager.getSpriteDrawSource(spritePath);
+        if (!spriteSource || spriteSource.width === 0 || spriteSource.height === 0) {
+            return;
+        }
+
+        // Convert the desired on-screen outline thickness into sprite-space pixels so the
+        // rim keeps a constant screen width at any zoom level.
+        const screenThicknessPx = Math.max(1.5, this.zoom * 1.4);
+        const screenToSpriteScale = spriteSource.width / Math.max(1, drawWidth);
+        const outlineSprite = this.spriteManager.getSpriteOutline(
+            spritePath,
+            outlineColor,
+            screenThicknessPx * screenToSpriteScale
+        );
+        if (!outlineSprite) {
+            return;
+        }
+
+        const paddedWidth = drawWidth * (outlineSprite.width / spriteSource.width);
+        const paddedHeight = drawHeight * (outlineSprite.height / spriteSource.height);
+
+        this.ctx.save();
+        this.ctx.translate(centerX, centerY);
+        if (rotationRad !== 0) {
+            this.ctx.rotate(rotationRad);
+        }
+        this.ctx.drawImage(
+            outlineSprite,
+            -paddedWidth / 2,
+            -paddedHeight / 2,
+            paddedWidth,
+            paddedHeight
+        );
+        this.ctx.restore();
     }
 
     private drawFancyBloom(screenPos: Vector2D, radius: number, color: string, intensity: number): void {
