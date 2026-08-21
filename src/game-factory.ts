@@ -11,6 +11,16 @@ import { createStandardGame, GameState, Vector2D, Sun, Asteroid, Faction } from 
 import * as Constants from './constants';
 import { MapJSON } from './menu/types';
 
+const RANDOMIZABLE_FACTIONS: Faction[] = [Faction.RADIANT, Faction.AURUM, Faction.VELARIS];
+
+/** Resolve an AI opponent faction choice, picking a random faction when 'random' is selected. */
+function resolveAiOpponentFaction(choice: Faction | 'random'): Faction {
+    if (choice === 'random') {
+        return RANDOMIZABLE_FACTIONS[Math.floor(Math.random() * RANDOMIZABLE_FACTIONS.length)];
+    }
+    return choice;
+}
+
 /**
  * Create suns from map JSON data.
  * Falls through to legacy id-based branching when JSON is absent.
@@ -54,12 +64,18 @@ function applyFixedAsteroidsFromJSON(game: GameState, json: MapJSON): void {
  */
 export function createGameFromSettings(settings: GameSettings): GameState {
     const playerFaction = settings.selectedFaction ?? Faction.RADIANT;
-    const aiFaction = Faction.RADIANT;
+    const aiFaction = resolveAiOpponentFaction(settings.aiOpponentFaction ?? 'random');
     const colorScheme = COLOR_SCHEMES[settings.colorScheme];
     const game = createStandardGame([
         ['Player 1', playerFaction],
         ['Player 2', aiFaction]
     ], colorScheme?.spaceDustPalette);
+
+    // Apply the selected AI difficulty to the AI opponent
+    const aiPlayer = game.players.find(p => p.isAi);
+    if (aiPlayer) {
+        aiPlayer.aiDifficulty = settings.difficulty as Constants.AIDifficulty;
+    }
 
     // Clear and recreate based on map settings
     const map = settings.selectedMap;

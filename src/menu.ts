@@ -19,6 +19,7 @@ import { renderMapEditorScreen } from './menu/screens/map-editor-screen';
 import { renderSettingsScreen } from './menu/screens/settings-screen';
 import { renderGameModeSelectionScreen } from './menu/screens/game-mode-selection-screen';
 import { renderAIModeSelectionScreen } from './menu/screens/ai-mode-selection-screen';
+import { renderAIUnrankedLobbyScreen, AIOpponentFactionChoice } from './menu/screens/ai-unranked-lobby-screen';
 import { renderMatchHistoryScreen } from './menu/screens/match-history-screen';
 import { renderOnlinePlaceholderScreen } from './menu/screens/online-placeholder-screen';
 import { renderFactionSelectionScreen } from './menu/screens/faction-selection-screen';
@@ -97,6 +98,7 @@ export interface GameSettings {
     username: string; // Player's username for multiplayer
     gameMode: 'ai' | 'online' | 'lan' | 'p2p' | 'custom-lobby' | '2v2-matchmaking'; // Game mode selection
     isAiRanked: boolean; // Whether the current/next AI match is a Ranked AI match
+    aiOpponentFaction: Faction | 'random'; // Chosen race for the AI opponent in Unranked AI matches
     networkManager?: NetworkManager; // Network manager for LAN/online play
     multiplayerNetworkManager?: MultiplayerNetworkManager; // Network manager for P2P play
 }
@@ -109,7 +111,7 @@ export class MainMenu {
     private menuParticleLayer: ParticleMenuLayer | null = null;
     private resizeHandler: (() => void) | null = null;
     private onStartCallback: ((settings: GameSettings) => void) | null = null;
-    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'ai-mode-select' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
+    private currentScreen: 'main' | 'maps' | 'map-editor' | 'settings' | 'faction-select' | 'loadout-customization' | 'loadout-select' | 'game-mode-select' | 'ai-mode-select' | 'ai-unranked-lobby' | 'lan' | 'online' | 'p2p' | 'p2p-host' | 'p2p-join' | 'match-history' | 'custom-lobby' | '2v2-matchmaking' | '1v1-matchmaking' | 'lobby-detail' = 'main';
     private settings: GameSettings;
     private carouselMenu: CarouselMenuView | null = null;
     private factionCarousel: FactionCarouselView | null = null;
@@ -188,7 +190,8 @@ export class MainMenu {
             replayRetentionLimit: '30', // Default to keeping the 30 most recent replays
             username: this.playerProfileManager.getOrGenerateUsername(), // Load or generate username
             gameMode: 'ai', // Default to AI mode
-            isAiRanked: false // Default to unranked AI matches
+            isAiRanked: false, // Default to unranked AI matches
+            aiOpponentFaction: 'random' // Default to a random AI race
         };
 
         // Restore any previously saved settings from localStorage
@@ -1980,11 +1983,15 @@ export class MainMenu {
                 this.settings.isAiRanked = mode === 'ranked';
                 if (mode === 'ranked') {
                     this.settings.difficulty = getAIDifficultyForMMR(aiRankedMmr);
-                }
-                this.hide();
-                if (this.onStartCallback) {
-                    this.ensureDefaultHeroSelection();
-                    this.onStartCallback(this.settings);
+                    this.hide();
+                    if (this.onStartCallback) {
+                        this.ensureDefaultHeroSelection();
+                        this.onStartCallback(this.settings);
+                    }
+                } else {
+                    this.currentScreen = 'ai-unranked-lobby';
+                    this.startMenuTransition();
+                    this.renderAIUnrankedLobbyScreen(this.contentElement);
                 }
             },
             onBack: () => {
@@ -2002,6 +2009,36 @@ export class MainMenu {
                 });
                 this.carouselMenu.onSelect(onSelect);
             },
+            menuParticleLayer: this.menuParticleLayer
+        });
+    }
+
+    private renderAIUnrankedLobbyScreen(container: HTMLElement): void {
+        this.clearMenu();
+        this.setMenuParticleDensity(1.6);
+
+        renderAIUnrankedLobbyScreen(container, {
+            selectedDifficulty: this.settings.difficulty,
+            selectedAiFaction: this.settings.aiOpponentFaction,
+            onDifficultyChange: (difficulty) => {
+                this.settings.difficulty = difficulty;
+            },
+            onAiFactionChange: (faction: AIOpponentFactionChoice) => {
+                this.settings.aiOpponentFaction = faction;
+            },
+            onStart: () => {
+                this.hide();
+                if (this.onStartCallback) {
+                    this.ensureDefaultHeroSelection();
+                    this.onStartCallback(this.settings);
+                }
+            },
+            onBack: () => {
+                this.currentScreen = 'ai-mode-select';
+                this.startMenuTransition();
+                this.renderAIModeSelectionScreen(this.contentElement);
+            },
+            createButton: this.createButton.bind(this),
             menuParticleLayer: this.menuParticleLayer
         });
     }

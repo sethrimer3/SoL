@@ -8,6 +8,7 @@ export type MenuScreenAudioState =
     | 'loadout-select'
     | 'game-mode-select'
     | 'ai-mode-select'
+    | 'ai-unranked-lobby'
     | 'lan'
     | 'online'
     | 'p2p'
